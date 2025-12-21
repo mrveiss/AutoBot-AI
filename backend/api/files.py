@@ -58,7 +58,8 @@ _DANGEROUS_CONTENT_PATTERNS = (
 ensure_data_directory()
 
 # Get sandboxed root using centralized path management
-SANDBOXED_ROOT = get_data_path("file_manager_root")
+# CRITICAL: Resolve to absolute path to prevent issues when CWD changes
+SANDBOXED_ROOT = get_data_path("file_manager_root").resolve()
 SANDBOXED_ROOT.mkdir(parents=True, exist_ok=True)
 
 # Maximum file size (50MB)
@@ -227,7 +228,8 @@ def validate_and_resolve_path(path: str) -> Path:
     except ValueError:
         raise HTTPException(status_code=400, detail="Path outside sandbox not allowed")
 
-    return full_path
+    # Return the canonical (absolute) path to prevent CWD-related issues
+    return canonical_full
 
 
 def get_file_info(file_path: Path, relative_path: str) -> FileInfo:

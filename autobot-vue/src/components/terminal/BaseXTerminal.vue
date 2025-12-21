@@ -46,7 +46,7 @@ const terminalRef = ref<HTMLElement>()
 const terminal = ref<Terminal>()
 const fitAddon = ref<FitAddon>()
 const webLinksAddon = ref<WebLinksAddon>()
-// Track if addons were successfully loaded
+// Track whether addons have been successfully loaded to prevent dispose errors
 const addonsLoaded = ref(false)
 
 // Theme configurations
@@ -126,7 +126,8 @@ const initTerminal = async () => {
     webLinksAddon.value = new WebLinksAddon()
     terminal.value.loadAddon(fitAddon.value)
     terminal.value.loadAddon(webLinksAddon.value)
-    addonsLoaded.value = true // Mark addons as successfully loaded
+    // Mark addons as successfully loaded
+    addonsLoaded.value = true
 
     // Open terminal in DOM
     terminal.value.open(terminalRef.value)
@@ -171,39 +172,31 @@ const initTerminal = async () => {
 const disposeTerminal = () => {
   if (terminal.value) {
     try {
-      // Only dispose addons if they were successfully loaded
-      // Disposing unloaded addons throws "Could not dispose an addon that has not been loaded" error
+      // IMPORTANT: Only dispose if addons were successfully loaded.
+      // xterm.js Terminal.dispose() internally disposes all loaded addons.
+      // If addons weren't loaded (e.g., init failed early), calling dispose()
+      // will throw "Could not dispose an addon that has not been loaded".
+      //
+      // We track addon loading state to prevent this error.
       if (addonsLoaded.value) {
-        if (fitAddon.value && typeof fitAddon.value.dispose === 'function') {
-          try {
-            fitAddon.value.dispose()
-          } catch (err) {
-            logger.warn('Error disposing fit addon:', err)
-          }
-        }
-
-        if (webLinksAddon.value && typeof webLinksAddon.value.dispose === 'function') {
-          try {
-            webLinksAddon.value.dispose()
-          } catch (err) {
-            logger.warn('Error disposing web links addon:', err)
-          }
-        }
+        terminal.value.dispose()
+      } else {
+        // If addons weren't loaded, just detach from DOM without dispose
+        logger.warn('Terminal addons not loaded, skipping full dispose')
       }
 
-      // Now dispose the terminal itself
-      terminal.value.dispose()
-
-      // Clear all refs
+      // Clear all refs after disposal attempt
       terminal.value = undefined
       fitAddon.value = undefined
       webLinksAddon.value = undefined
       addonsLoaded.value = false
 
       emit('disposed')
+      logger.debug('Terminal disposed successfully')
     } catch (error) {
-      logger.error('Error disposing terminal:', error)
-      // Continue cleanup despite error
+      // Log as warning since this is often expected during rapid navigation
+      logger.warn('Error disposing terminal (may be expected during navigation):', error)
+      // Continue cleanup despite error - clear refs to prevent memory leaks
       terminal.value = undefined
       fitAddon.value = undefined
       webLinksAddon.value = undefined

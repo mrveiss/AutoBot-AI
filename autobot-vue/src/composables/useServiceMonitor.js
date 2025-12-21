@@ -33,6 +33,9 @@ export function useServiceMonitor() {
   let refreshInterval = null
   const REFRESH_INTERVAL = 30000 // 30 seconds
 
+  // Track if component is still mounted to prevent updates after unmount
+  let isMounted = true
+
   // Computed properties
   const healthyServices = computed(() => {
     return serviceSummary.value.online || 0
@@ -123,6 +126,15 @@ export function useServiceMonitor() {
       }
 
     } catch (err) {
+      // Don't process errors if component is unmounted
+      if (!isMounted) return
+
+      // AbortError is expected during navigation - don't log as error
+      if (err.name === 'AbortError') {
+        logger.debug('Service monitoring request aborted (expected during navigation)')
+        return
+      }
+
       logger.error('Service monitoring error:', err)
       logger.error('Error stack:', err.stack)
       error.value = err.message
@@ -141,7 +153,9 @@ export function useServiceMonitor() {
       serviceSummary.value = { total: 1, online: 0, warning: 0, error: 1, offline: 0 }
 
     } finally {
-      isLoading.value = false
+      if (isMounted) {
+        isLoading.value = false
+      }
     }
   }
 
@@ -198,6 +212,7 @@ export function useServiceMonitor() {
 
   // Stop monitoring
   const stopMonitoring = () => {
+    isMounted = false
     if (refreshInterval) {
       clearInterval(refreshInterval)
       refreshInterval = null
