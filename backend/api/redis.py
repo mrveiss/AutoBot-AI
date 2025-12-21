@@ -85,3 +85,32 @@ async def test_redis_connection():
             "status": "disconnected",
             "message": f"Failed to connect to Redis: {str(e)}",
         }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_redis_health",
+    error_code_prefix="REDIS",
+)
+@router.get("/health")
+async def get_redis_health():
+    """Get Redis health status for frontend health checks"""
+    try:
+        result = ConnectionTester.test_redis_connection()
+        return {
+            "status": "healthy" if result.get("status") == "connected" else "unhealthy",
+            "redis_status": result.get("status"),
+            "message": result.get("message"),
+            "host": result.get("host"),
+            "port": result.get("port"),
+            "redis_search_module_loaded": result.get(
+                "redis_search_module_loaded", False
+            ),
+        }
+    except Exception as e:
+        logger.error("Redis health check failed: %s", str(e))
+        return {
+            "status": "unhealthy",
+            "redis_status": "disconnected",
+            "message": f"Failed to check Redis health: {str(e)}",
+        }
