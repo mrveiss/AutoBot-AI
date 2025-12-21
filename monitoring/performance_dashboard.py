@@ -24,6 +24,7 @@ from src.utils.html_dashboard_utils import (
     create_dashboard_header,
     create_metric_card,
 )
+from src.utils.template_loader import load_css, template_exists
 
 
 # ============================================================================
@@ -32,84 +33,35 @@ from src.utils.html_dashboard_utils import (
 
 
 def _get_dashboard_additional_css() -> str:
-    """Return additional CSS styles for the dashboard template (Issue #398: extracted)."""
-    return """        .services-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-        .service-card {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 0.5rem;
-            padding: 1rem;
-        }
-        .service-name {
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-        }
-        .service-status {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin-bottom: 0.5rem;
-        }
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-        }
+    """
+    Return additional CSS styles for the dashboard template.
+
+    Issue #398: Extracted from main template.
+    Issue #515: CSS moved to external template file for better maintainability.
+    """
+    template_path = "dashboards/styles/monitoring_dashboard.css"
+
+    if template_exists(template_path):
+        return load_css("monitoring_dashboard")
+
+    # Fallback for backwards compatibility
+    logger.warning("CSS template not found, using inline fallback: %s", template_path)
+    return _get_fallback_css()
+
+
+def _get_fallback_css() -> str:
+    """Fallback CSS if template file is not available (Issue #515)."""
+    return """
+        .services-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .service-card { background: #161b22; border: 1px solid #30363d; border-radius: 0.5rem; padding: 1rem; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; }
         .status-up { background: #238636; }
         .status-down { background: #da3633; }
-        .alerts-section {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 0.5rem;
-            padding: 1.5rem;
-        }
-        .alert-item {
-            padding: 0.75rem;
-            margin-bottom: 0.5rem;
-            border-radius: 0.375rem;
-            background: #3d1a00;
-            border-left: 3px solid #d29922;
-        }
-        .alert-item.critical {
-            background: #4c1519;
-            border-left-color: #da3633;
-        }
-        .vm-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-        .vm-card {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 0.5rem;
-            padding: 1rem;
-        }
-        .vm-name {
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-            color: #58a6ff;
-        }
-        .vm-ip {
-            font-family: monospace;
-            font-size: 0.875rem;
-            color: #8b949e;
-            margin-bottom: 0.5rem;
-        }
-        .vm-metrics {
-            font-size: 0.875rem;
-        }
-        .vm-metric {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 0.25rem;
-        }"""
+        .alerts-section { background: #161b22; border: 1px solid #30363d; border-radius: 0.5rem; padding: 1.5rem; }
+        .alert-item { padding: 0.75rem; margin-bottom: 0.5rem; border-radius: 0.375rem; background: #3d1a00; border-left: 3px solid #d29922; }
+        .vm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .vm-card { background: #161b22; border: 1px solid #30363d; border-radius: 0.5rem; padding: 1rem; }
+    """
 
 
 def _get_dashboard_javascript() -> str:
