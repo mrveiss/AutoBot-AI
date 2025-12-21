@@ -9,6 +9,7 @@ Includes:
 - Bug prediction integration (Issue #505)
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -298,9 +299,91 @@ def _get_risk_emoji(risk_level: str) -> str:
     }.get(risk_level.lower(), "⚪")
 
 
+def _generate_risk_overview(prediction: PredictionResult) -> List[str]:
+    """Generate bug risk overview section. Issue #484: Extracted from _generate_bug_risk_section."""
+    lines = [
+        "### Overview",
+        "",
+        "| Metric | Value |",
+        "|--------|-------|",
+        f"| Files Analyzed | {prediction.analyzed_files} |",
+        f"| High Risk Files | {prediction.high_risk_count} |",
+        f"| Predicted Bug Locations | {prediction.predicted_bugs} |",
+        "",
+    ]
+    return lines
+
+
+def _generate_risk_distribution(prediction: PredictionResult) -> List[str]:
+    """Generate risk distribution table. Issue #484: Extracted from _generate_bug_risk_section."""
+    lines = ["### Risk Distribution", "", "| Risk Level | Files |", "|------------|-------|"]
+    for level in ["critical", "high", "medium", "low", "minimal"]:
+        count = prediction.risk_distribution.get(level, 0)
+        emoji = _get_risk_emoji(level)
+        lines.append(f"| {emoji} {level.capitalize()} | {count} |")
+    lines.append("")
+    return lines
+
+
+def _generate_risk_factors(prediction: PredictionResult) -> List[str]:
+    """Generate top risk factors table. Issue #484: Extracted from _generate_bug_risk_section."""
+    if not prediction.top_risk_factors:
+        return []
+    lines = ["### Top Risk Factors", "", "| Factor | Total Score |", "|--------|-------------|"]
+    for factor, score in prediction.top_risk_factors:
+        display_factor = factor.replace("_", " ").title()
+        lines.append(f"| {display_factor} | {score:.1f} |")
+    lines.append("")
+    return lines
+
+
+def _generate_file_assessment_details(fa) -> List[str]:
+    """Generate details for a single file assessment. Issue #484: Extracted helper."""
+    lines = []
+    emoji = _get_risk_emoji(fa.risk_level.value)
+    lines.extend([f"#### {emoji} `{fa.file_path}` (Score: {fa.risk_score:.1f})", ""])
+
+    if fa.factor_scores:
+        top_factors = sorted(fa.factor_scores, key=lambda x: x.score, reverse=True)[:3]
+        lines.append("**Contributing Factors:**")
+        for fs in top_factors:
+            factor_name = fs.factor.value.replace("_", " ").title()
+            lines.append(f"- {factor_name}: {fs.score:.0f} ({fs.details})")
+        lines.append("")
+
+    if fa.prevention_tips:
+        lines.append("**Prevention Tips:**")
+        for tip in fa.prevention_tips[:3]:
+            lines.append(f"- {tip}")
+        lines.append("")
+
+    if fa.recommendation:
+        lines.append(f"**Recommendation:** {fa.recommendation}")
+        lines.append("")
+
+    return lines
+
+
+def _generate_high_risk_files(prediction: PredictionResult) -> List[str]:
+    """Generate high-risk files section. Issue #484: Extracted from _generate_bug_risk_section."""
+    high_risk_files = [
+        fa for fa in prediction.file_assessments
+        if fa.risk_level.value in ("critical", "high")
+    ][:TOP_HIGH_RISK_FILES_LIMIT]
+
+    if not high_risk_files:
+        return []
+
+    lines = ["### High-Risk Files", "", "> Files with the highest probability of containing bugs.", ""]
+    for fa in high_risk_files:
+        lines.extend(_generate_file_assessment_details(fa))
+    return lines
+
+
 def _generate_bug_risk_section(prediction: PredictionResult) -> List[str]:
     """
     Generate the Bug Risk Analysis section for the report (Issue #505).
+    Issue #484: Refactored to use extracted section builders.
 
     Args:
         prediction: PredictionResult from BugPredictor.analyze_directory()
@@ -322,128 +405,81 @@ def _generate_bug_risk_section(prediction: PredictionResult) -> List[str]:
         lines.append("**Prediction Accuracy:** *Historical accuracy data not yet available*")
     lines.append("")
 
-    # Summary statistics
-    lines.extend([
-        "### Overview",
-        "",
-        "| Metric | Value |",
-        "|--------|-------|",
-        f"| Files Analyzed | {prediction.analyzed_files} |",
-        f"| High Risk Files | {prediction.high_risk_count} |",
-        f"| Predicted Bug Locations | {prediction.predicted_bugs} |",
-        "",
-    ])
+    # Compose from extracted helpers (Issue #484)
+    lines.extend(_generate_risk_overview(prediction))
+    lines.extend(_generate_risk_distribution(prediction))
+    lines.extend(_generate_risk_factors(prediction))
+    lines.extend(_generate_high_risk_files(prediction))
 
-    # Risk distribution
-    lines.extend([
-        "### Risk Distribution",
-        "",
-        "| Risk Level | Files |",
-        "|------------|-------|",
-    ])
-
-    for level in ["critical", "high", "medium", "low", "minimal"]:
-        count = prediction.risk_distribution.get(level, 0)
-        emoji = _get_risk_emoji(level)
-        lines.append(f"| {emoji} {level.capitalize()} | {count} |")
-
-    lines.append("")
-
-    # Top risk factors
-    if prediction.top_risk_factors:
-        lines.extend([
-            "### Top Risk Factors",
-            "",
-            "| Factor | Total Score |",
-            "|--------|-------------|",
-        ])
-        for factor, score in prediction.top_risk_factors:
-            display_factor = factor.replace("_", " ").title()
-            lines.append(f"| {display_factor} | {score:.1f} |")
-        lines.append("")
-
-    # High risk files (top 10)
-    high_risk_files = [
-        fa for fa in prediction.file_assessments
-        if fa.risk_level.value in ("critical", "high")
-    ][:10]
-
-    if high_risk_files:
-        lines.extend([
-            "### High-Risk Files",
-            "",
-            "> Files with the highest probability of containing bugs.",
-            "",
-        ])
-
-        for fa in high_risk_files:
-            emoji = _get_risk_emoji(fa.risk_level.value)
-            lines.extend([
-                f"#### {emoji} `{fa.file_path}` (Score: {fa.risk_score:.1f})",
-                "",
-            ])
-
-            # Risk factors contributing to score
-            if fa.factor_scores:
-                top_factors = sorted(
-                    fa.factor_scores,
-                    key=lambda x: x.score,
-                    reverse=True
-                )[:3]
-                lines.append("**Contributing Factors:**")
-                for fs in top_factors:
-                    factor_name = fs.factor.value.replace("_", " ").title()
-                    lines.append(f"- {factor_name}: {fs.score:.0f} ({fs.details})")
-                lines.append("")
-
-            # Prevention tips
-            if fa.prevention_tips:
-                lines.append("**Prevention Tips:**")
-                for tip in fa.prevention_tips[:3]:
-                    lines.append(f"- {tip}")
-                lines.append("")
-
-            # Recommendation
-            if fa.recommendation:
-                lines.append(f"**Recommendation:** {fa.recommendation}")
-                lines.append("")
-
-    # Cross-reference section placeholder
     lines.extend([
         "### Correlation with Detected Issues",
         "",
         "> Files appearing in both static analysis issues AND high bug risk prediction.",
         "",
+        "---",
+        "",
     ])
-
-    lines.extend(["---", ""])
 
     return lines
 
 
-def _get_bug_prediction(project_root: Optional[str] = None) -> Optional[PredictionResult]:
+# Maximum files to analyze for bug prediction (Issue #505)
+BUG_PREDICTION_FILE_LIMIT = 100
+# Timeout for bug prediction analysis (seconds)
+BUG_PREDICTION_TIMEOUT = 30.0
+# Maximum high-risk files to show in report
+TOP_HIGH_RISK_FILES_LIMIT = 10
+
+
+async def _get_bug_prediction(
+    project_root: Optional[str] = None,
+    limit: int = BUG_PREDICTION_FILE_LIMIT,
+) -> Optional[PredictionResult]:
     """
     Get bug prediction data for the project (Issue #505).
 
+    Runs the analysis in a thread pool to avoid blocking the async event loop.
+
     Args:
         project_root: Root directory to analyze (defaults to current directory)
+        limit: Maximum number of files to analyze
 
     Returns:
-        PredictionResult or None if analysis fails
+        PredictionResult or None if analysis fails or times out
     """
     try:
         # Use project root or default to current working directory
         root = project_root or str(Path.cwd())
+
+        # Run in thread pool to avoid blocking the event loop
+        loop = asyncio.get_event_loop()
         predictor = BugPredictor(project_root=root)
-        result = predictor.analyze_directory(pattern="*.py", limit=100)
+
+        result = await asyncio.wait_for(
+            loop.run_in_executor(
+                None,  # Use default thread pool
+                lambda: predictor.analyze_directory(pattern="*.py", limit=limit),
+            ),
+            timeout=BUG_PREDICTION_TIMEOUT,
+        )
+
         logger.info(
             "Bug prediction completed: %s files analyzed, %s high-risk",
             result.analyzed_files,
             result.high_risk_count,
         )
         return result
+
+    except asyncio.TimeoutError:
+        logger.warning(
+            "Bug prediction timed out after %ss", BUG_PREDICTION_TIMEOUT
+        )
+        return None
+    except FileNotFoundError as e:
+        logger.warning("Project root not found for bug prediction: %s", e)
+        return None
     except Exception as e:
-        logger.warning("Bug prediction analysis failed: %s", e)
+        logger.error("Bug prediction analysis failed: %s", e, exc_info=True)
         return None
 
 
@@ -679,7 +715,7 @@ async def generate_analysis_report(format: str = "markdown"):
             logger.error("Failed to fetch problems from ChromaDB: %s", e)
 
     # Get bug prediction data (Issue #505)
-    bug_prediction = _get_bug_prediction()
+    bug_prediction = await _get_bug_prediction()
 
     if not problems:
         # Even with no issues, include bug prediction if available (Issue #505)
