@@ -475,13 +475,20 @@ async def _process_pattern_matches(
     pattern: str,
     declaration_stats: dict,
 ) -> None:
-    """Process matches for a single pattern (Issue #315)."""
+    """Process matches for a single pattern (Issue #315).
+
+    Issue #508: Optimized by precompiling regex pattern once instead of
+    per-iteration compilation.
+    """
     search_results = await search_codebase(
         query=pattern, search_type="regex", max_results=1000
     )
 
+    # Issue #508: Precompile pattern once - O(1) instead of O(n) compilations
+    compiled_pattern = re.compile(pattern, re.MULTILINE)
+
     for result in search_results:
-        matches = re.finditer(pattern, result.content, re.MULTILINE)
+        matches = compiled_pattern.finditer(result.content)
         for match in matches:
             match_text = match.group(1) if match.groups() else match.group(0)
             for name in _extract_declaration_names(match_text):

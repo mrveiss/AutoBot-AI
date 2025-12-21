@@ -76,13 +76,23 @@ async def get_recent_errors(limit: int = 20):
         manager = get_error_boundary_manager()
 
         # Issue #361 - avoid blocking - fetch errors in thread pool
+        # Issue #480 - fix N+1 query pattern using pipeline batching
         def _fetch_recent_errors():
             pattern = "autobot:errors:*"
             error_keys = manager.redis_client.keys(pattern)
 
+            if not error_keys:
+                return []
+
+            # Use pipeline to batch all GET operations (Issue #480)
+            keys_to_fetch = error_keys[-limit:]
+            pipe = manager.redis_client.pipeline()
+            for key in keys_to_fetch:
+                pipe.get(key)
+            results = pipe.execute()
+
             recent_errors = []
-            for key in error_keys[-limit:]:  # Get latest errors
-                error_data = manager.redis_client.get(key)
+            for error_data in results:
                 if error_data:
                     recent_errors.append(json.loads(error_data))
             return recent_errors

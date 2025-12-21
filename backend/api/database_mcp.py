@@ -235,7 +235,15 @@ def _execute_sqlite_statement_sync(
 
 
 def _list_tables_sync(db_path: Path) -> list[dict]:
-    """List tables with row counts synchronously (Issue #357: for use with asyncio.to_thread)."""
+    """List tables with row counts synchronously (Issue #357: for use with asyncio.to_thread).
+
+    Issue #480: N+1 pattern acknowledged but unavoidable in SQLite.
+    SQLite has no single query to get row counts for all tables.
+    Alternative approaches considered:
+    - dbstat virtual table: Not always enabled and doesn't provide exact counts
+    - sqlite_stat1: Requires ANALYZE and provides estimates only
+    The system tables are typically small, minimizing impact.
+    """
     conn = None
     try:
         conn = sqlite3.connect(str(db_path))
@@ -246,6 +254,8 @@ def _list_tables_sync(db_path: Path) -> list[dict]:
         )
         tables = cursor.fetchall()
 
+        # Issue #480: Each table requires a separate COUNT query in SQLite.
+        # This is unavoidable without approximate statistics.
         table_info = []
         for (table_name,) in tables:
             # nosec B608 - table_name comes from sqlite_master (system table), not user input
@@ -310,7 +320,11 @@ def _describe_schema_sync(db_path: Path, table: str | None) -> dict:
 
 
 def _get_db_statistics_sync(db_path: Path) -> dict:
-    """Get database statistics synchronously (Issue #357: for use with asyncio.to_thread)."""
+    """Get database statistics synchronously (Issue #357: for use with asyncio.to_thread).
+
+    Issue #480: N+1 pattern for row counts acknowledged but unavoidable in SQLite.
+    See _list_tables_sync docstring for detailed explanation.
+    """
     conn = None
     try:
         stat_info = db_path.stat()
@@ -323,6 +337,7 @@ def _get_db_statistics_sync(db_path: Path) -> dict:
         cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
         table_count = cursor.fetchone()[0]
 
+        # Issue #480: Each table requires a separate COUNT query in SQLite.
         total_rows = 0
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
         tables = cursor.fetchall()

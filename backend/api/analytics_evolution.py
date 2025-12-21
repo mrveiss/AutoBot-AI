@@ -60,17 +60,31 @@ def _get_snapshot_data(redis_client, keys: list) -> dict | None:
 
 
 def _get_pattern_snapshots(redis_client, pattern_keys: list) -> list:
-    """Get pattern snapshots from Redis keys (Issue #315)."""
-    snapshots = []
+    """Get pattern snapshots from Redis keys (Issue #315, #480: pipeline batching)."""
+    if not pattern_keys:
+        return []
+
+    # Filter out timeline keys first
+    valid_keys = []
     for key in pattern_keys:
         key = _decode_redis_value(key)
-        if ":timeline" in key:
-            continue
-        snapshot_json = redis_client.get(key)
-        if not snapshot_json:
-            continue
-        snapshot_json = _decode_redis_value(snapshot_json)
-        snapshots.append(json.loads(snapshot_json))
+        if ":timeline" not in key:
+            valid_keys.append(key)
+
+    if not valid_keys:
+        return []
+
+    # Issue #480: Use pipeline to batch all GET operations
+    pipe = redis_client.pipeline()
+    for key in valid_keys:
+        pipe.get(key)
+    results = pipe.execute()
+
+    snapshots = []
+    for snapshot_json in results:
+        if snapshot_json:
+            snapshot_json = _decode_redis_value(snapshot_json)
+            snapshots.append(json.loads(snapshot_json))
     return snapshots
 
 
@@ -90,6 +104,7 @@ def _fetch_timeline_snapshots(redis_client, start_ts: float, end_ts: float) -> l
     Fetch timeline snapshots from Redis within a date range.
 
     Issue #281: Extracted from get_evolution_timeline to reduce nesting.
+    Issue #480: Uses pipeline batching to avoid N+1 query pattern.
 
     Args:
         redis_client: Redis client instance
@@ -102,11 +117,24 @@ def _fetch_timeline_snapshots(redis_client, start_ts: float, end_ts: float) -> l
     snapshot_keys = redis_client.zrangebyscore(
         f"{EVOLUTION_PREFIX}timeline", start_ts, end_ts
     )
+
+    if not snapshot_keys:
+        return []
+
+    # Decode all keys first
+    decoded_keys = [
+        key.decode("utf-8") if isinstance(key, bytes) else key
+        for key in snapshot_keys
+    ]
+
+    # Issue #480: Use pipeline to batch all GET operations
+    pipe = redis_client.pipeline()
+    for key in decoded_keys:
+        pipe.get(key)
+    snapshot_data = pipe.execute()
+
     results = []
-    for key in snapshot_keys:
-        if isinstance(key, bytes):
-            key = key.decode("utf-8")
-        snapshot_json = redis_client.get(key)
+    for snapshot_json in snapshot_data:
         if snapshot_json:
             if isinstance(snapshot_json, bytes):
                 snapshot_json = snapshot_json.decode("utf-8")
@@ -247,6 +275,21 @@ async def store_pattern_snapshot(snapshot: PatternSnapshot) -> bool:
         return False
 
 
+def _parse_date_range(start_date: Optional[str], end_date: Optional[str]) -> tuple:
+    """Parse date range to timestamps (Issue #398: extracted)."""
+    start_ts = datetime.fromisoformat(start_date).timestamp() if start_date else (datetime.now() - timedelta(days=30)).timestamp()
+    end_ts = datetime.fromisoformat(end_date).timestamp() if end_date else datetime.now().timestamp()
+    return start_ts, end_ts
+
+
+def _build_timeline_response(timeline: list, start_date: str, end_date: str, granularity: str, metrics: list) -> dict:
+    """Build timeline success response (Issue #398: extracted)."""
+    return {
+        "status": "success", "timeline": timeline, "total_snapshots": len(timeline),
+        "date_range": {"start": start_date, "end": end_date}, "granularity": granularity, "metrics_available": metrics,
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_evolution_timeline",
@@ -254,84 +297,34 @@ async def store_pattern_snapshot(snapshot: PatternSnapshot) -> bool:
 )
 @router.get("/timeline")
 async def get_evolution_timeline(
-    start_date: Optional[str] = Query(
-        None, description="Start date (ISO format, e.g., 2025-01-01)"
-    ),
-    end_date: Optional[str] = Query(
-        None, description="End date (ISO format, e.g., 2025-12-31)"
-    ),
-    granularity: str = Query(
-        "daily", description="Data granularity: hourly, daily, weekly, monthly"
-    ),
-    metrics: str = Query(
-        "overall_score,complexity,maintainability",
-        description="Comma-separated list of metrics to include",
-    ),
+    start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
+    end_date: Optional[str] = Query(None, description="End date (ISO format)"),
+    granularity: str = Query("daily", description="Data granularity: hourly, daily, weekly, monthly"),
+    metrics: str = Query("overall_score,complexity,maintainability", description="Comma-separated metrics"),
 ):
-    """
-    Get code evolution timeline data for visualization.
-
-    Returns quality metrics over time for charting.
-    """
+    """Get code evolution timeline (Issue #398: refactored)."""
     redis_client = get_evolution_redis()
+    requested_metrics = metrics.split(",")
 
     if not redis_client:
-        # Return demo data if Redis unavailable
-        return JSONResponse(
-            {
-                "status": "demo",
-                "message": "Redis unavailable, returning demo timeline data",
-                "timeline": _generate_demo_timeline(start_date, end_date, granularity),
-                "metrics_available": metrics.split(","),
-            }
-        )
+        return JSONResponse({
+            "status": "demo", "message": "Redis unavailable, returning demo timeline data",
+            "timeline": _generate_demo_timeline(start_date, end_date, granularity), "metrics_available": requested_metrics,
+        })
 
     try:
-        # Parse date range
-        if start_date:
-            start_ts = datetime.fromisoformat(start_date).timestamp()
-        else:
-            start_ts = (datetime.now() - timedelta(days=30)).timestamp()
+        start_ts, end_ts = _parse_date_range(start_date, end_date)
+        timeline_data = await asyncio.to_thread(_fetch_timeline_snapshots, redis_client, start_ts, end_ts)
 
-        if end_date:
-            end_ts = datetime.fromisoformat(end_date).timestamp()
-        else:
-            end_ts = datetime.now().timestamp()
-
-        # Issue #361 - run Redis ops in thread pool to avoid blocking
-        # Issue #281 - Using extracted helper for timeline fetching
-        timeline_data = await asyncio.to_thread(
-            _fetch_timeline_snapshots, redis_client, start_ts, end_ts
-        )
-
-        # Apply granularity aggregation if needed
         if granularity in AGGREGATION_GRANULARITIES and len(timeline_data) > 1:
             timeline_data = _aggregate_by_granularity(timeline_data, granularity)
 
-        # Issue #281 - Using extracted helper for metrics filtering
-        requested_metrics = metrics.split(",")
         filtered_timeline = _filter_timeline_by_metrics(timeline_data, requested_metrics)
-
-        return JSONResponse(
-            {
-                "status": "success",
-                "timeline": filtered_timeline,
-                "total_snapshots": len(filtered_timeline),
-                "date_range": {"start": start_date, "end": end_date},
-                "granularity": granularity,
-                "metrics_available": requested_metrics,
-            }
-        )
+        return JSONResponse(_build_timeline_response(filtered_timeline, start_date, end_date, granularity, requested_metrics))
 
     except Exception as e:
-        logger.error(f"Error retrieving evolution timeline: {e}")
-        return JSONResponse(
-            {
-                "status": "error",
-                "message": str(e),
-                "timeline": _generate_demo_timeline(start_date, end_date, granularity),
-            }
-        )
+        logger.error("Error retrieving evolution timeline: %s", e)
+        return JSONResponse({"status": "error", "message": str(e), "timeline": _generate_demo_timeline(start_date, end_date, granularity)})
 
 
 @with_error_handling(
@@ -395,15 +388,28 @@ async def get_pattern_evolution(
 def _fetch_trend_snapshots_sync(
     redis_client, start_ts: float, end_ts: float
 ) -> List[Dict]:
-    """Fetch snapshots from Redis within timestamp range (Issue #398: extracted)."""
+    """Fetch snapshots from Redis within timestamp range (Issue #398, #480: pipeline batching)."""
     keys = redis_client.zrangebyscore(
         f"{EVOLUTION_PREFIX}timeline", start_ts, end_ts
     )
+
+    if not keys:
+        return []
+
+    # Decode all keys first
+    decoded_keys = [
+        key.decode("utf-8") if isinstance(key, bytes) else key
+        for key in keys
+    ]
+
+    # Issue #480: Use pipeline to batch all GET operations
+    pipe = redis_client.pipeline()
+    for key in decoded_keys:
+        pipe.get(key)
+    snapshot_data = pipe.execute()
+
     results = []
-    for key in keys:
-        if isinstance(key, bytes):
-            key = key.decode("utf-8")
-        snapshot_json = redis_client.get(key)
+    for snapshot_json in snapshot_data:
         if snapshot_json:
             if isinstance(snapshot_json, bytes):
                 snapshot_json = snapshot_json.decode("utf-8")
@@ -446,74 +452,50 @@ _TREND_METRICS = [
 ]
 
 
+def _calculate_all_trends(snapshots: list) -> dict:
+    """Calculate trends for all metrics (Issue #398: extracted)."""
+    return {metric: data for metric in _TREND_METRICS if (data := _calculate_metric_trend(snapshots, metric))}
+
+
+def _build_trends_success_response(trends: dict, days: int, snapshot_count: int) -> dict:
+    """Build trends success response (Issue #398: extracted)."""
+    return {
+        "status": "success", "trends": trends, "period_days": days,
+        "snapshot_count": snapshot_count, "analysis_timestamp": datetime.now().isoformat(),
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_quality_trends",
     error_code_prefix="EVOLUTION",
 )
 @router.get("/trends")
-async def get_quality_trends(
-    days: int = Query(30, description="Number of days to analyze", ge=1, le=365),
-):
-    """
-    Get quality trend analysis showing improvement/degradation over time.
-
-    Calculates trend direction, velocity, and predictions.
-    Issue #398: Refactored to use extracted helpers.
-    """
+async def get_quality_trends(days: int = Query(30, description="Number of days to analyze", ge=1, le=365)):
+    """Get quality trend analysis (Issue #398: refactored)."""
     redis_client = get_evolution_redis()
 
     if not redis_client:
-        return JSONResponse(
-            {
-                "status": "demo",
-                "message": "Redis unavailable, returning demo trend data",
-                "trends": _generate_demo_trends(days),
-            }
-        )
+        return JSONResponse({"status": "demo", "message": "Redis unavailable", "trends": _generate_demo_trends(days)})
 
     try:
-        end_ts = datetime.now().timestamp()
         start_ts = (datetime.now() - timedelta(days=days)).timestamp()
-
-        # Issue #361 - run Redis ops in thread pool to avoid blocking
-        snapshots = await asyncio.to_thread(
-            _fetch_trend_snapshots_sync, redis_client, start_ts, end_ts
-        )
+        end_ts = datetime.now().timestamp()
+        snapshots = await asyncio.to_thread(_fetch_trend_snapshots_sync, redis_client, start_ts, end_ts)
 
         if len(snapshots) < 2:
-            return JSONResponse(
-                {
-                    "status": "insufficient_data",
-                    "message": f"Need at least 2 snapshots for trend analysis, found {len(snapshots)}",
-                    "trends": _generate_demo_trends(days),
-                }
-            )
+            return JSONResponse({
+                "status": "insufficient_data",
+                "message": f"Need at least 2 snapshots, found {len(snapshots)}",
+                "trends": _generate_demo_trends(days),
+            })
 
         snapshots.sort(key=lambda x: x.get("timestamp", ""))
-
-        # Calculate trends for each metric using helper
-        trends = {}
-        for metric in _TREND_METRICS:
-            trend_data = _calculate_metric_trend(snapshots, metric)
-            if trend_data:
-                trends[metric] = trend_data
-
-        return JSONResponse(
-            {
-                "status": "success",
-                "trends": trends,
-                "period_days": days,
-                "snapshot_count": len(snapshots),
-                "analysis_timestamp": datetime.now().isoformat(),
-            }
-        )
+        return JSONResponse(_build_trends_success_response(_calculate_all_trends(snapshots), days, len(snapshots)))
 
     except Exception as e:
-        logger.error(f"Error calculating quality trends: {e}")
-        return JSONResponse(
-            {"status": "error", "message": str(e), "trends": _generate_demo_trends(days)}
-        )
+        logger.error("Error calculating quality trends: %s", e)
+        return JSONResponse({"status": "error", "message": str(e), "trends": _generate_demo_trends(days)})
 
 
 @with_error_handling(
@@ -580,6 +562,65 @@ async def record_pattern_snapshot(snapshot: PatternSnapshot):
         )
 
 
+def _parse_export_date_range(start_date: Optional[str], end_date: Optional[str]) -> tuple:
+    """Parse export date range with defaults (Issue #398: extracted)."""
+    start_ts = datetime.fromisoformat(start_date).timestamp() if start_date else 0
+    end_ts = datetime.fromisoformat(end_date).timestamp() if end_date else datetime.now().timestamp()
+    return start_ts, end_ts
+
+
+def _fetch_export_data_sync(redis_client, start_ts: float, end_ts: float) -> list:
+    """Fetch export data from Redis synchronously (Issue #398, #480: pipeline batching)."""
+    snapshot_keys = redis_client.zrangebyscore(f"{EVOLUTION_PREFIX}timeline", start_ts, end_ts)
+
+    if not snapshot_keys:
+        return []
+
+    # Decode all keys first
+    decoded_keys = [
+        key.decode("utf-8") if isinstance(key, bytes) else key
+        for key in snapshot_keys
+    ]
+
+    # Issue #480: Use pipeline to batch all GET operations
+    pipe = redis_client.pipeline()
+    for key in decoded_keys:
+        pipe.get(key)
+    snapshot_data = pipe.execute()
+
+    results = []
+    for snapshot_json in snapshot_data:
+        if snapshot_json:
+            snapshot_json = snapshot_json.decode("utf-8") if isinstance(snapshot_json, bytes) else snapshot_json
+            results.append(json.loads(snapshot_json))
+    return results
+
+
+def _generate_csv_response(timeline_data: list) -> StreamingResponse:
+    """Generate CSV streaming response (Issue #398: extracted)."""
+    import csv
+    import io
+    output = io.StringIO()
+    if timeline_data:
+        fieldnames = list(timeline_data[0].keys())
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(timeline_data)
+    csv_content = output.getvalue()
+    return StreamingResponse(
+        iter([csv_content]), media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=evolution_data_{datetime.now().strftime('%Y%m%d')}.csv"},
+    )
+
+
+def _generate_json_export_response(timeline_data: list) -> JSONResponse:
+    """Generate JSON export response (Issue #398: extracted)."""
+    return JSONResponse({
+        "status": "success", "export_format": "json", "data": timeline_data,
+        "record_count": len(timeline_data), "exported_at": datetime.now().isoformat(),
+    })
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_evolution_data",
@@ -591,82 +632,21 @@ async def export_evolution_data(
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
     end_date: Optional[str] = Query(None, description="End date (ISO format)"),
 ):
-    """
-    Export evolution data in JSON or CSV format.
-
-    Useful for external analysis or reporting.
-    """
+    """Export evolution data in JSON or CSV format (Issue #398: refactored)."""
     redis_client = get_evolution_redis()
-
-    # Get timeline data
     timeline_data = []
 
     if redis_client:
         try:
-            if start_date:
-                start_ts = datetime.fromisoformat(start_date).timestamp()
-            else:
-                start_ts = 0
-
-            if end_date:
-                end_ts = datetime.fromisoformat(end_date).timestamp()
-            else:
-                end_ts = datetime.now().timestamp()
-
-            # Issue #361 - avoid blocking - fetch export data in thread pool
-            def _fetch_export_data():
-                results = []
-                snapshot_keys = redis_client.zrangebyscore(
-                    f"{EVOLUTION_PREFIX}timeline", start_ts, end_ts
-                )
-                for key in snapshot_keys:
-                    key = key.decode("utf-8") if isinstance(key, bytes) else key
-                    snapshot_json = redis_client.get(key)
-                    if not snapshot_json:
-                        continue
-                    snapshot_json = snapshot_json.decode("utf-8") if isinstance(snapshot_json, bytes) else snapshot_json
-                    results.append(json.loads(snapshot_json))
-                return results
-
-            timeline_data = await asyncio.to_thread(_fetch_export_data)
-
+            start_ts, end_ts = _parse_export_date_range(start_date, end_date)
+            timeline_data = await asyncio.to_thread(_fetch_export_data_sync, redis_client, start_ts, end_ts)
         except Exception as e:
-            logger.error(f"Error exporting evolution data: {e}")
+            logger.error("Error exporting evolution data: %s", e)
             timeline_data = _generate_demo_timeline(start_date, end_date, "daily")
     else:
         timeline_data = _generate_demo_timeline(start_date, end_date, "daily")
 
-    if format == "csv":
-        # Generate CSV
-        import csv
-        import io
-
-        output = io.StringIO()
-        if timeline_data:
-            fieldnames = list(timeline_data[0].keys())
-            writer = csv.DictWriter(output, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(timeline_data)
-
-        csv_content = output.getvalue()
-        return StreamingResponse(
-            iter([csv_content]),
-            media_type="text/csv",
-            headers={
-                "Content-Disposition": f"attachment; filename=evolution_data_{datetime.now().strftime('%Y%m%d')}.csv"
-            },
-        )
-    else:
-        # Return JSON
-        return JSONResponse(
-            {
-                "status": "success",
-                "export_format": "json",
-                "data": timeline_data,
-                "record_count": len(timeline_data),
-                "exported_at": datetime.now().isoformat(),
-            }
-        )
+    return _generate_csv_response(timeline_data) if format == "csv" else _generate_json_export_response(timeline_data)
 
 
 @with_error_handling(
@@ -777,56 +757,44 @@ def _aggregate_by_granularity(
     return result
 
 
+def _get_granularity_step(granularity: str) -> timedelta:
+    """Get timedelta step for granularity (Issue #398: extracted)."""
+    steps = {"hourly": timedelta(hours=1), "weekly": timedelta(weeks=1), "monthly": timedelta(days=30)}
+    return steps.get(granularity, timedelta(days=1))
+
+
+def _create_demo_data_point(current: datetime, start: datetime, base_score: float) -> dict:
+    """Create a single demo data point (Issue #398: extracted)."""
+    import random
+    days_elapsed = (current - start).days
+    trend = days_elapsed * 0.1
+    return {
+        "timestamp": current.isoformat(),
+        "overall_score": min(100, max(0, base_score + trend + random.uniform(-3, 3))),
+        "maintainability": min(100, max(0, 75 + trend * 0.8 + random.uniform(-2, 2))),
+        "testability": min(100, max(0, 65 + trend * 0.5 + random.uniform(-2, 2))),
+        "documentation": min(100, max(0, 60 + trend * 0.3 + random.uniform(-2, 2))),
+        "complexity": min(100, max(0, 80 + trend * 0.6 + random.uniform(-2, 2))),
+        "security": min(100, max(0, 78 + trend * 0.4 + random.uniform(-1, 1))),
+        "performance": min(100, max(0, 72 + trend * 0.7 + random.uniform(-2, 2))),
+        "total_files": 350 + days_elapsed,
+        "total_lines": 65000 + days_elapsed * 100,
+    }
+
+
 def _generate_demo_timeline(
     start_date: Optional[str], end_date: Optional[str], granularity: str
 ) -> List[Dict[str, Any]]:
-    """Generate demo timeline data for visualization testing"""
-    import random
-
-    if start_date:
-        start = datetime.fromisoformat(start_date)
-    else:
-        start = datetime.now() - timedelta(days=30)
-
-    if end_date:
-        end = datetime.fromisoformat(end_date)
-    else:
-        end = datetime.now()
+    """Generate demo timeline data for visualization testing (Issue #398: refactored)."""
+    start = datetime.fromisoformat(start_date) if start_date else datetime.now() - timedelta(days=30)
+    end = datetime.fromisoformat(end_date) if end_date else datetime.now()
+    step = _get_granularity_step(granularity)
 
     timeline = []
     current = start
-    base_score = 70
-
     while current <= end:
-        # Simulate gradual improvement with some noise
-        days_elapsed = (current - start).days
-        trend = days_elapsed * 0.1  # Slight improvement over time
-        noise = random.uniform(-3, 3)
-
-        timeline.append(
-            {
-                "timestamp": current.isoformat(),
-                "overall_score": min(100, max(0, base_score + trend + noise)),
-                "maintainability": min(100, max(0, 75 + trend * 0.8 + random.uniform(-2, 2))),
-                "testability": min(100, max(0, 65 + trend * 0.5 + random.uniform(-2, 2))),
-                "documentation": min(100, max(0, 60 + trend * 0.3 + random.uniform(-2, 2))),
-                "complexity": min(100, max(0, 80 + trend * 0.6 + random.uniform(-2, 2))),
-                "security": min(100, max(0, 78 + trend * 0.4 + random.uniform(-1, 1))),
-                "performance": min(100, max(0, 72 + trend * 0.7 + random.uniform(-2, 2))),
-                "total_files": 350 + days_elapsed,
-                "total_lines": 65000 + days_elapsed * 100,
-            }
-        )
-
-        if granularity == "hourly":
-            current += timedelta(hours=1)
-        elif granularity == "weekly":
-            current += timedelta(weeks=1)
-        elif granularity == "monthly":
-            current += timedelta(days=30)
-        else:
-            current += timedelta(days=1)
-
+        timeline.append(_create_demo_data_point(current, start, base_score=70))
+        current += step
     return timeline
 
 
@@ -862,63 +830,27 @@ def _generate_demo_patterns() -> Dict[str, List[Dict[str, Any]]]:
     return patterns
 
 
+# Demo trend data configuration: (first_value, last_value, direction)
+_DEMO_TREND_CONFIG = {
+    "overall_score": (70.0, 75.5, "improving"),
+    "maintainability": (72.0, 78.0, "improving"),
+    "complexity": (65.0, 68.0, "improving"),
+    "testability": (60.0, 62.0, "improving"),
+    "documentation": (55.0, 58.0, "improving"),
+    "security": (80.0, 82.0, "improving"),
+    "performance": (75.0, 76.0, "stable"),
+}
+
+
+def _build_demo_trend_entry(first: float, last: float, direction: str, days: int) -> dict:
+    """Build a single demo trend entry (Issue #398: extracted)."""
+    change = last - first
+    percent_change = round((change / first * 100) if first > 0 else 0, 2)
+    return {"first_value": first, "last_value": last, "change": change,
+            "percent_change": percent_change, "direction": direction, "data_points": days}
+
+
 def _generate_demo_trends(days: int) -> Dict[str, Any]:
-    """Generate demo trend data"""
-    return {
-        "overall_score": {
-            "first_value": 70.0,
-            "last_value": 75.5,
-            "change": 5.5,
-            "percent_change": 7.86,
-            "direction": "improving",
-            "data_points": days,
-        },
-        "maintainability": {
-            "first_value": 72.0,
-            "last_value": 78.0,
-            "change": 6.0,
-            "percent_change": 8.33,
-            "direction": "improving",
-            "data_points": days,
-        },
-        "complexity": {
-            "first_value": 65.0,
-            "last_value": 68.0,
-            "change": 3.0,
-            "percent_change": 4.62,
-            "direction": "improving",
-            "data_points": days,
-        },
-        "testability": {
-            "first_value": 60.0,
-            "last_value": 62.0,
-            "change": 2.0,
-            "percent_change": 3.33,
-            "direction": "improving",
-            "data_points": days,
-        },
-        "documentation": {
-            "first_value": 55.0,
-            "last_value": 58.0,
-            "change": 3.0,
-            "percent_change": 5.45,
-            "direction": "improving",
-            "data_points": days,
-        },
-        "security": {
-            "first_value": 80.0,
-            "last_value": 82.0,
-            "change": 2.0,
-            "percent_change": 2.5,
-            "direction": "improving",
-            "data_points": days,
-        },
-        "performance": {
-            "first_value": 75.0,
-            "last_value": 76.0,
-            "change": 1.0,
-            "percent_change": 1.33,
-            "direction": "stable",
-            "data_points": days,
-        },
-    }
+    """Generate demo trend data (Issue #398: refactored)."""
+    return {metric: _build_demo_trend_entry(first, last, direction, days)
+            for metric, (first, last, direction) in _DEMO_TREND_CONFIG.items()}

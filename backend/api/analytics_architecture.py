@@ -634,16 +634,33 @@ class ArchitectureAnalyzer:
 
         return class_info
 
+    def _extract_functions_from_tree(self, tree: ast.AST) -> list:
+        """Extract top-level functions from AST (Issue #398: extracted)."""
+        funcs = []
+        for node in ast.iter_child_nodes(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                funcs.append({
+                    "name": node.name, "line": node.lineno,
+                    "is_async": isinstance(node, ast.AsyncFunctionDef),
+                    "decorators": [self._get_decorator_name(d) for d in node.decorator_list],
+                })
+        return funcs
+
+    def _detect_patterns_in_analysis(self, analysis: "FileAnalysis", content: str, target_patterns: list) -> None:
+        """Detect patterns and add to analysis (Issue #398: extracted)."""
+        for pattern_type in target_patterns:
+            if pattern_type in PATTERN_TEMPLATES:
+                matches = self._match_pattern(analysis, content, PATTERN_TEMPLATES[pattern_type])
+                analysis.patterns_found.extend(matches)
+
     async def _analyze_file(
         self, file_path: str, target_patterns: List[PatternType]
     ) -> Optional[FileAnalysis]:
-        """Analyze a single Python file."""
+        """Analyze a single Python file (Issue #398: refactored)."""
         try:
             async with aiofiles.open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = await f.read()
-        except OSError:
-            return None
-        except Exception:
+        except (OSError, Exception):
             return None
 
         try:
@@ -652,41 +669,12 @@ class ArchitectureAnalyzer:
             return None
 
         analysis = FileAnalysis(file_path=file_path)
-
-        # Extract imports
         for node in ast.walk(tree):
             self._extract_imports_from_node(node, analysis.imports)
-
-        # Extract classes
-        for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
-                class_info = self._extract_class_info(node)
-                analysis.classes.append(class_info)
-
-        # Extract top-level functions
-        for node in ast.iter_child_nodes(tree):
-            if isinstance(node, ast.FunctionDef) or isinstance(
-                node, ast.AsyncFunctionDef
-            ):
-                func_info = {
-                    "name": node.name,
-                    "line": node.lineno,
-                    "is_async": isinstance(node, ast.AsyncFunctionDef),
-                    "decorators": [
-                        self._get_decorator_name(d) for d in node.decorator_list
-                    ],
-                }
-                analysis.functions.append(func_info)
-
-        # Detect patterns
-        for pattern_type in target_patterns:
-            if pattern_type not in PATTERN_TEMPLATES:
-                continue
-
-            template = PATTERN_TEMPLATES[pattern_type]
-            matches = self._match_pattern(analysis, content, template)
-            analysis.patterns_found.extend(matches)
-
+                analysis.classes.append(self._extract_class_info(node))
+        analysis.functions = self._extract_functions_from_tree(tree)
+        self._detect_patterns_in_analysis(analysis, content, target_patterns)
         return analysis
 
     def _get_base_name(self, node: ast.expr) -> str:
@@ -797,10 +785,14 @@ class ArchitectureAnalyzer:
 
     def _build_class_match(
         self, template: PatternTemplate, analysis: FileAnalysis,
-        class_info: Dict[str, Any], score: float, indicators: List[str], content: str,
+        class_info: Dict[str, Any], score: float, indicators: List[str],
+        lines: List[str],
     ) -> PatternMatch:
-        """Build PatternMatch for class-level match (Issue #398: extracted)."""
-        lines = content.split("\n")
+        """Build PatternMatch for class-level match (Issue #398: extracted).
+
+        Issue #508: Optimized O(n³) → O(n²) by accepting pre-split lines
+        instead of splitting content on each call.
+        """
         start_line = max(0, class_info["line"] - 1)
         end_line = min(len(lines), class_info["line"] + 5)
         snippet = "\n".join(lines[start_line:end_line])
@@ -849,8 +841,13 @@ class ArchitectureAnalyzer:
     def _match_pattern(
         self, analysis: FileAnalysis, content: str, template: PatternTemplate,
     ) -> List[PatternMatch]:
-        """Match a pattern template against file analysis (Issue #398: refactored)."""
+        """Match a pattern template against file analysis (Issue #398: refactored).
+
+        Issue #508: Optimized O(n³) → O(n²) by caching content.split() result.
+        """
         matches = []
+        # Issue #508: Cache split lines - O(n) once instead of O(n) per class
+        lines = content.split("\n")
 
         for class_info in analysis.classes:
             score, indicators = self._score_class_indicators(class_info, template)
@@ -861,7 +858,7 @@ class ArchitectureAnalyzer:
 
             if score >= template.required_score:
                 matches.append(self._build_class_match(
-                    template, analysis, class_info, score, indicators, content
+                    template, analysis, class_info, score, indicators, lines
                 ))
 
         module_match = self._match_module_level_patterns(template, analysis, content)
@@ -971,79 +968,56 @@ class ArchitectureAnalyzer:
                 return True
         return False
 
-    async def _check_consistency(
-        self, matches: List[PatternMatch]
-    ) -> List[PatternConsistency]:
-        """Check consistency of pattern implementations."""
-        results = []
+    def _build_low_confidence_violation(self, low_confidence: list) -> dict:
+        """Build low confidence violation dict (Issue #398: extracted)."""
+        return {
+            "type": "low_confidence_matches",
+            "description": f"{len(low_confidence)} matches with low confidence",
+            "files": [m.file_path for m in low_confidence[:5]],
+            "severity": Severity.INFO.value,
+        }
 
-        # Group matches by pattern type
+    def _determine_consistency_level(self, violations: list, match_count: int) -> tuple:
+        """Determine consistency level from violations (Issue #398: extracted)."""
+        ratio = len(violations) / max(1, match_count)
+        if ratio == 0:
+            return ConsistencyLevel.CONSISTENT, match_count
+        if ratio < 0.3:
+            return ConsistencyLevel.MOSTLY_CONSISTENT, int(match_count * 0.7)
+        return ConsistencyLevel.INCONSISTENT, int(match_count * 0.3)
+
+    def _build_recommendations(self, pattern_type: PatternType, violations: list) -> list:
+        """Build recommendations list (Issue #398: extracted)."""
+        if not violations:
+            return []
+        recs = [f"Review {pattern_type.value} implementations for consistency"]
+        if any(v["type"] == "naming_inconsistency" for v in violations):
+            recs.append("Standardize naming convention across all implementations")
+        return recs
+
+    async def _check_consistency(self, matches: List[PatternMatch]) -> List[PatternConsistency]:
+        """Check consistency of pattern implementations (Issue #398: refactored)."""
         by_pattern: Dict[PatternType, List[PatternMatch]] = defaultdict(list)
         for match in matches:
             by_pattern[match.pattern_type].append(match)
 
+        results = []
         for pattern_type, pattern_matches in by_pattern.items():
             if len(pattern_matches) < 2:
                 continue
 
-            violations = []
-            consistent_count = 0
-
-            # Check naming consistency
-            naming_result = self._check_naming_consistency(
-                pattern_type, pattern_matches
-            )
-            if naming_result["violations"]:
-                violations.extend(naming_result["violations"])
-            consistent_count += naming_result["consistent_count"]
-
-            # Check confidence consistency
+            naming_result = self._check_naming_consistency(pattern_type, pattern_matches)
+            violations = list(naming_result["violations"])
             low_confidence = [m for m in pattern_matches if m.confidence < 0.5]
-
             if low_confidence:
-                violations.append(
-                    {
-                        "type": "low_confidence_matches",
-                        "description": f"{len(low_confidence)} matches with low confidence",
-                        "files": [m.file_path for m in low_confidence[:5]],
-                        "severity": Severity.INFO.value,
-                    }
-                )
+                violations.append(self._build_low_confidence_violation(low_confidence))
 
-            # Determine consistency level
-            violation_ratio = len(violations) / max(1, len(pattern_matches))
-            if violation_ratio == 0:
-                level = ConsistencyLevel.CONSISTENT
-                consistent_count = len(pattern_matches)
-            elif violation_ratio < 0.3:
-                level = ConsistencyLevel.MOSTLY_CONSISTENT
-                consistent_count = int(len(pattern_matches) * 0.7)
-            else:
-                level = ConsistencyLevel.INCONSISTENT
-                consistent_count = int(len(pattern_matches) * 0.3)
-
-            # Generate recommendations
-            recommendations = []
-            if violations:
-                recommendations.append(
-                    f"Review {pattern_type.value} implementations for consistency"
-                )
-                if any(v["type"] == "naming_inconsistency" for v in violations):
-                    recommendations.append(
-                        "Standardize naming convention across all implementations"
-                    )
-
-            results.append(
-                PatternConsistency(
-                    pattern_type=pattern_type,
-                    consistency_level=level,
-                    total_instances=len(pattern_matches),
-                    consistent_instances=consistent_count,
-                    violations=violations,
-                    recommendations=recommendations,
-                )
-            )
-
+            level, consistent_count = self._determine_consistency_level(violations, len(pattern_matches))
+            results.append(PatternConsistency(
+                pattern_type=pattern_type, consistency_level=level,
+                total_instances=len(pattern_matches), consistent_instances=consistent_count,
+                violations=violations, recommendations=self._build_recommendations(pattern_type, violations),
+            ))
         return results
 
     async def _detect_layers(self) -> List[ArchitectureLayer]:

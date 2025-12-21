@@ -112,22 +112,38 @@ class DevelopmentSpeedupAgent:
 
         self.cache_ttl = 7200  # 2 hours cache
 
+    def _build_analysis_report(
+        self, root_path: str, results: List[Any]
+    ) -> Dict[str, Any]:
+        """Build analysis report from task results (Issue #398: extracted)."""
+        report_keys = [
+            "duplicate_code", "code_patterns", "import_analysis",
+            "dead_code", "refactoring_opportunities", "quality_issues"
+        ]
+        report = {
+            "analysis_timestamp": asyncio.get_event_loop().time(),
+            "root_path": root_path,
+        }
+        for i, key in enumerate(report_keys):
+            result = results[i]
+            report[key] = result if not isinstance(result, Exception) else {"error": str(result)}
+        return report
+
+    async def _cache_analysis_report(self, root_path: str, report: Dict[str, Any]) -> None:
+        """Cache analysis report to Redis (Issue #398: extracted)."""
+        cache_key = (
+            f"{self.analysis_cache_prefix}{hashlib.md5(root_path.encode(), usedforsecurity=False).hexdigest()}"
+        )
+        await asyncio.to_thread(
+            self.redis_client.setex, cache_key, self.cache_ttl, json.dumps(report)
+        )
+
     async def analyze_codebase_comprehensive(self, root_path: str) -> Dict[str, Any]:
-        """
-        Perform comprehensive codebase analysis for development speedup.
+        """Perform comprehensive codebase analysis (Issue #398: refactored)."""
+        self.logger.info("Starting comprehensive codebase analysis: %s", root_path)
 
-        Args:
-            root_path: Root directory to analyze
-
-        Returns:
-            Comprehensive analysis results
-        """
-        self.logger.info(f"Starting comprehensive codebase analysis: {root_path}")
-
-        # First, ensure the codebase is indexed
         await self.npu_code_search.index_codebase(root_path, force_reindex=False)
 
-        # Run parallel analysis tasks
         analysis_tasks = [
             self.find_duplicate_code(root_path),
             self.identify_code_patterns(root_path),
@@ -138,54 +154,9 @@ class DevelopmentSpeedupAgent:
         ]
 
         results = await asyncio.gather(*analysis_tasks, return_exceptions=True)
-
-        # Compile comprehensive report
-        report = {
-            "analysis_timestamp": asyncio.get_event_loop().time(),
-            "root_path": root_path,
-            "duplicate_code": (
-                results[0]
-                if not isinstance(results[0], Exception)
-                else {"error": str(results[0])}
-            ),
-            "code_patterns": (
-                results[1]
-                if not isinstance(results[1], Exception)
-                else {"error": str(results[1])}
-            ),
-            "import_analysis": (
-                results[2]
-                if not isinstance(results[2], Exception)
-                else {"error": str(results[2])}
-            ),
-            "dead_code": (
-                results[3]
-                if not isinstance(results[3], Exception)
-                else {"error": str(results[3])}
-            ),
-            "refactoring_opportunities": (
-                results[4]
-                if not isinstance(results[4], Exception)
-                else {"error": str(results[4])}
-            ),
-            "quality_issues": (
-                results[5]
-                if not isinstance(results[5], Exception)
-                else {"error": str(results[5])}
-            ),
-        }
-
-        # Generate actionable recommendations
+        report = self._build_analysis_report(root_path, results)
         report["recommendations"] = self._generate_recommendations(report)
-
-        # Cache the results
-        cache_key = (
-            f"{self.analysis_cache_prefix}{hashlib.md5(root_path.encode(), usedforsecurity=False).hexdigest()}"
-        )
-        # Issue #361 - avoid blocking
-        await asyncio.to_thread(
-            self.redis_client.setex, cache_key, self.cache_ttl, json.dumps(report)
-        )
+        await self._cache_analysis_report(root_path, report)
 
         return report
 
@@ -315,85 +286,61 @@ class DevelopmentSpeedupAgent:
             },
         }
 
+    def _get_pattern_search_configs(self) -> List[Dict[str, str]]:
+        """Get anti-pattern search configurations (Issue #398: extracted)."""
+        return [
+            {"name": "Exception Handling Anti-pattern", "query": "except.*pass",
+             "type": "regex", "suggestion": "Consider logging exceptions or handling them specifically"},
+            {"name": "TODO/FIXME Comments", "query": "TODO|FIXME|HACK|XXX",
+             "type": "regex", "suggestion": "Address technical debt items"},
+            {"name": "Hardcoded Values", "query": "\\b(?:localhost|127\\.0\\.0\\.1|8080|3000|5432)\\b",
+             "type": "regex", "suggestion": "Move to configuration files"},
+            {"name": "Long Parameter Lists", "query": "def \\w+\\([^)]{50,}\\)",
+             "type": "regex", "suggestion": "Consider using dataclasses or configuration objects"},
+            {"name": "Deep Nesting", "query": "^\\s{16,}\\w",
+             "type": "regex", "suggestion": "Consider extracting functions to reduce complexity"},
+        ]
+
+    async def _search_single_pattern(
+        self, pattern_config: Dict[str, str]
+    ) -> Optional[CodePattern]:
+        """Search for a single pattern and return result (Issue #398: extracted)."""
+        try:
+            results = await self.npu_code_search.search_code(
+                query=pattern_config["query"],
+                search_type=pattern_config["type"],
+                max_results=50,
+            )
+            if results:
+                return CodePattern(
+                    pattern_type=pattern_config["name"],
+                    description=f"Found {len(results)} occurrences of {pattern_config['name']}",
+                    occurrences=[(r.file_path, r.line_number) for r in results],
+                    confidence=0.9,
+                    suggestion=pattern_config["suggestion"],
+                )
+        except Exception as e:
+            self.logger.error("Error searching for pattern %s: %s", pattern_config["name"], e)
+        return None
+
     async def identify_code_patterns(self, root_path: str) -> Dict[str, Any]:
-        """Identify recurring code patterns and suggest optimizations"""
+        """Identify recurring code patterns (Issue #398: refactored)."""
         self.logger.info("Identifying code patterns...")
 
         patterns = []
+        for pattern_config in self._get_pattern_search_configs():
+            pattern = await self._search_single_pattern(pattern_config)
+            if pattern:
+                patterns.append(pattern)
 
-        # Search for common anti-patterns and optimization opportunities
-        pattern_searches = [
-            {
-                "name": "Exception Handling Anti-pattern",
-                "query": "except.*pass",
-                "type": "regex",
-                "suggestion": (
-                    "Consider logging exceptions or handling them specifically"
-                ),
-            },
-            {
-                "name": "TODO/FIXME Comments",
-                "query": "TODO|FIXME|HACK|XXX",
-                "type": "regex",
-                "suggestion": "Address technical debt items",
-            },
-            {
-                "name": "Hardcoded Values",
-                "query": "\\b(?:localhost|127\\.0\\.0\\.1|8080|3000|5432)\\b",
-                "type": "regex",
-                "suggestion": "Move to configuration files",
-            },
-            {
-                "name": "Long Parameter Lists",
-                "query": "def \\w+\\([^)]{50,}\\)",
-                "type": "regex",
-                "suggestion": "Consider using dataclasses or configuration objects",
-            },
-            {
-                "name": "Deep Nesting",
-                "query": "^\\s{16,}\\w",  # 4+ levels of indentation
-                "type": "regex",
-                "suggestion": "Consider extracting functions to reduce complexity",
-            },
-        ]
-
-        for pattern_config in pattern_searches:
-            try:
-                results = await self.npu_code_search.search_code(
-                    query=pattern_config["query"],
-                    search_type=pattern_config["type"],
-                    max_results=50,
-                )
-
-                if results:
-                    pattern = CodePattern(
-                        pattern_type=pattern_config["name"],
-                        description=f"Found {len(results)} occurrences of {pattern_config['name']}",
-                        occurrences=[(r.file_path, r.line_number) for r in results],
-                        confidence=0.9,
-                        suggestion=pattern_config["suggestion"],
-                    )
-                    patterns.append(pattern)
-
-            except Exception as e:
-                self.logger.error(
-                    f"Error searching for pattern {pattern_config['name']}: {e}"
-                )
-
-        # Analyze import patterns
         import_patterns = await self._analyze_import_patterns(root_path)
         patterns.extend(import_patterns)
 
+        high_priority = len([p for p in patterns if "TODO" in p.pattern_type or "FIXME" in p.pattern_type])
         return {
             "total_patterns": len(patterns),
             "patterns": [self._pattern_to_dict(p) for p in patterns],
-            "high_priority_issues": len(
-                [
-                    p
-                    for p in patterns
-                    if "TODO" in p.pattern_type or "FIXME" in p.pattern_type
-                ]
-            ),
+            "high_priority_issues": high_priority,
         }
 
     def _extract_module_name(self, import_line: str) -> Optional[str]:

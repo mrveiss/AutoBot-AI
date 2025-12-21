@@ -283,128 +283,107 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 self.logger.error(f"Failed to index {file_path}: {e}")
         return indexed, skipped
 
-    async def index_codebase(
-        self, root_path: str, force_reindex: bool = False
+    def _get_index_key(self, root_path: str) -> str:
+        """Generate index key for root path (Issue #398: extracted)."""
+        return f"{self.index_prefix}meta:{hashlib.md5(root_path.encode(), usedforsecurity=False).hexdigest()}"
+
+    async def _store_index_metadata(self, index_key: str, root_path: str, indexed_files: int) -> None:
+        """Store indexing metadata to Redis (Issue #398: extracted)."""
+        metadata = {
+            "root_path": root_path, "indexed_files": indexed_files,
+            "timestamp": time.time(), "npu_available": self.npu_available,
+        }
+        await asyncio.to_thread(self.redis_client.setex, index_key, 86400, json.dumps(metadata))
+
+    def _build_index_result(
+        self, indexed_files: int, skipped_files: int, errors: list, execution_time: float, index_key: str
     ) -> Dict[str, Any]:
-        """
-        Index a codebase for fast searching.
+        """Build indexing result dict (Issue #398: extracted)."""
+        return {
+            "status": "success", "indexed_files": indexed_files, "skipped_files": skipped_files,
+            "errors": errors[:10], "execution_time": execution_time, "index_key": index_key,
+        }
 
-        Args:
-            root_path: Root directory to index
-            force_reindex: Force re-indexing even if already indexed
-
-        Returns:
-            Indexing results and statistics
-        """
+    async def index_codebase(self, root_path: str, force_reindex: bool = False) -> Dict[str, Any]:
+        """Index a codebase for fast searching (Issue #398: refactored)."""
         start_time = time.time()
         indexed_files = 0
         skipped_files = 0
         errors = []
 
         try:
-            self.logger.info(f"Starting codebase indexing: {root_path}")
+            self.logger.info("Starting codebase indexing: %s", root_path)
+            index_key = self._get_index_key(root_path)
 
-            index_key = (
-                f"{self.index_prefix}meta:{hashlib.md5(root_path.encode(), usedforsecurity=False).hexdigest()}"
-            )
-            # Issue #361 - avoid blocking
             already_indexed = await asyncio.to_thread(self.redis_client.exists, index_key)
             if not force_reindex and already_indexed:
-                self.logger.info(
-                    "Codebase already indexed, use force_reindex=True to re-index"
-                )
+                self.logger.info("Codebase already indexed, use force_reindex=True to re-index")
                 return {"status": "already_indexed", "index_key": index_key}
 
             for root, dirs, files in os.walk(root_path):
                 dirs[:] = [d for d in dirs if not self._is_ignored_dir(d)]
-                indexed, skipped = await self._index_directory_files(
-                    root, files, root_path, errors
-                )
+                indexed, skipped = await self._index_directory_files(root, files, root_path, errors)
                 indexed_files += indexed
                 skipped_files += skipped
 
-            metadata = {
-                "root_path": root_path,
-                "indexed_files": indexed_files,
-                "timestamp": time.time(),
-                "npu_available": self.npu_available,
-            }
-            # Issue #361 - avoid blocking
-            await asyncio.to_thread(
-                self.redis_client.setex, index_key, 86400, json.dumps(metadata)
-            )
-
+            await self._store_index_metadata(index_key, root_path, indexed_files)
             execution_time = time.time() - start_time
-            self.logger.info(
-                f"Indexing complete: {indexed_files} files in {execution_time:.2f}s"
-            )
-
-            return {
-                "status": "success",
-                "indexed_files": indexed_files,
-                "skipped_files": skipped_files,
-                "errors": errors[:10],
-                "execution_time": execution_time,
-                "index_key": index_key,
-            }
+            self.logger.info("Indexing complete: %d files in %.2fs", indexed_files, execution_time)
+            return self._build_index_result(indexed_files, skipped_files, errors, execution_time, index_key)
 
         except Exception as e:
-            self.logger.error(f"Codebase indexing failed: {e}")
+            self.logger.error("Codebase indexing failed: %s", e)
             return {"status": "error", "error": str(e), "indexed_files": indexed_files}
 
+    def _build_file_index_data(
+        self, relative_path: str, language: str, content: str, elements: Dict[str, List]
+    ) -> Dict[str, Any]:
+        """Build file index data dict (Issue #398: extracted)."""
+        return {
+            "file_path": relative_path, "language": language,
+            "content_hash": hashlib.sha256(content.encode()).hexdigest(),
+            "line_count": len(content.splitlines()), "elements": elements, "indexed_at": time.time(),
+        }
+
+    def _store_file_to_redis(
+        self, file_key: str, language_key: str, index_data_json: str,
+        relative_path: str, elements: Dict[str, List]
+    ) -> None:
+        """Store file index to Redis (Issue #398: extracted)."""
+        self.redis_client.setex(file_key, 86400, index_data_json)
+        self.redis_client.sadd(language_key, relative_path)
+        self.redis_client.expire(language_key, 86400)
+        for element_type, element_list in elements.items():
+            for element in element_list:
+                element_key = f"{self.index_prefix}element:{element_type}:{element['name']}"
+                element_data = {
+                    "file_path": relative_path, "line_number": element.get("line_number", 0),
+                    "context": element.get("context", ""),
+                }
+                self.redis_client.lpush(element_key, json.dumps(element_data))
+                self.redis_client.expire(element_key, 86400)
+
     async def _index_file(self, file_path: str, relative_path: str):
-        """Index a single file"""
+        """Index a single file (Issue #398: refactored)."""
         try:
-            async with aiofiles.open(
-                file_path, "r", encoding="utf-8", errors="ignore"
-            ) as f:
+            async with aiofiles.open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = await f.read()
 
             if not content.strip():
-                return  # Skip empty files
+                return
 
-            # Extract metadata
             file_ext = os.path.splitext(file_path)[1]
             language = self._detect_language(file_ext)
-
-            # Extract code elements (functions, classes, etc.)
             elements = self._extract_code_elements(content, language)
+            index_data = self._build_file_index_data(relative_path, language, content, elements)
 
-            # Create searchable index entry
-            index_data = {
-                "file_path": relative_path,
-                "language": language,
-                "content_hash": hashlib.sha256(content.encode()).hexdigest(),
-                "line_count": len(content.splitlines()),
-                "elements": elements,
-                "indexed_at": time.time(),
-            }
-
-            # Store in Redis with multiple access patterns (Issue #361 - avoid blocking)
             file_key = f"{self.index_prefix}file:{relative_path}"
             language_key = f"{self.index_prefix}lang:{language}"
             index_data_json = json.dumps(index_data)
 
-            def _store_file_index():
-                self.redis_client.setex(file_key, 86400, index_data_json)
-                self.redis_client.sadd(language_key, relative_path)
-                self.redis_client.expire(language_key, 86400)
-
-                # Index elements for fast lookup
-                for element_type, element_list in elements.items():
-                    for element in element_list:
-                        element_key = (
-                            f"{self.index_prefix}element:{element_type}:{element['name']}"
-                        )
-                        element_data = {
-                            "file_path": relative_path,
-                            "line_number": element.get("line_number", 0),
-                            "context": element.get("context", ""),
-                        }
-                        self.redis_client.lpush(element_key, json.dumps(element_data))
-                        self.redis_client.expire(element_key, 86400)
-
-            await asyncio.to_thread(_store_file_index)
+            await asyncio.to_thread(
+                self._store_file_to_redis, file_key, language_key, index_data_json, relative_path, elements
+            )
 
         except OSError as e:
             raise OSError(f"Failed to read file {file_path}: {e}")
@@ -513,32 +492,39 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
         return elements
 
-    async def search_code(
-        self,
-        query: str,
-        search_type: str = "semantic",
-        language: Optional[str] = None,
-        max_results: int = 20,
+    def _get_search_cache_key(self, query: str, search_type: str, language: Optional[str]) -> str:
+        """Generate search cache key (Issue #398: extracted)."""
+        cache_input = query + search_type + str(language)
+        return f"{self.search_cache_prefix}{hashlib.md5(cache_input.encode(), usedforsecurity=False).hexdigest()}"
+
+    def _serialize_results(self, results: List[CodeSearchResult]) -> List[Dict[str, Any]]:
+        """Serialize results for caching (Issue #398: extracted)."""
+        return [{
+            "file_path": r.file_path, "content": r.content, "line_number": r.line_number,
+            "confidence": r.confidence, "context_lines": r.context_lines, "metadata": r.metadata,
+        } for r in results]
+
+    async def _execute_search_by_type(
+        self, query: str, search_type: str, language: Optional[str], max_results: int
     ) -> List[CodeSearchResult]:
-        """
-        Search through indexed code.
+        """Execute search based on type (Issue #398: extracted)."""
+        if search_type == "element":
+            return await self._search_elements(query, language, max_results)
+        elif search_type == "exact":
+            return await self._search_exact(query, language, max_results)
+        elif search_type == "regex":
+            return await self._search_regex(query, language, max_results)
+        return await self._search_semantic(query, language, max_results)
 
-        Args:
-            query: Search query
-            search_type: Type of search ("semantic", "exact", "regex", "element")
-            language: Filter by programming language
-            max_results: Maximum number of results
-
-        Returns:
-            List of search results
-        """
+    async def search_code(
+        self, query: str, search_type: str = "semantic",
+        language: Optional[str] = None, max_results: int = 20,
+    ) -> List[CodeSearchResult]:
+        """Search through indexed code (Issue #398: refactored)."""
         start_time = time.time()
 
         try:
-            # Check cache first
-            cache_key = f"{self.search_cache_prefix}{hashlib.md5((query + search_type + str(language)).encode(), usedforsecurity=False).hexdigest()}"
-
-            # Issue #361 - avoid blocking
+            cache_key = self._get_search_cache_key(query, search_type, language)
             cached_result = await asyncio.to_thread(self.redis_client.get, cache_key)
 
             if cached_result:
@@ -548,46 +534,20 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 self.stats.results_count = len(results)
                 return results[:max_results]
 
-            # Perform search based on type
-            if search_type == "element":
-                results = await self._search_elements(query, language, max_results)
-            elif search_type == "exact":
-                results = await self._search_exact(query, language, max_results)
-            elif search_type == "regex":
-                results = await self._search_regex(query, language, max_results)
-            else:  # semantic (default)
-                results = await self._search_semantic(query, language, max_results)
-
-            # Cache results
-            serializable_results = [
-                {
-                    "file_path": r.file_path,
-                    "content": r.content,
-                    "line_number": r.line_number,
-                    "confidence": r.confidence,
-                    "context_lines": r.context_lines,
-                    "metadata": r.metadata,
-                }
-                for r in results
-            ]
-            # Issue #361 - avoid blocking
+            results = await self._execute_search_by_type(query, search_type, language, max_results)
+            serializable_results = self._serialize_results(results)
             await asyncio.to_thread(
-                self.redis_client.setex,
-                cache_key, self.cache_ttl, json.dumps(serializable_results)
+                self.redis_client.setex, cache_key, self.cache_ttl, json.dumps(serializable_results)
             )
 
-            # Update stats
             self.stats.search_time_ms = (time.time() - start_time) * 1000
-            self.stats.npu_acceleration_used = (
-                self.npu_available and search_type == "semantic"
-            )
+            self.stats.npu_acceleration_used = self.npu_available and search_type == "semantic"
             self.stats.redis_cache_hit = False
             self.stats.results_count = len(results)
-
             return results
 
         except Exception as e:
-            self.logger.error(f"Code search failed: {e}")
+            self.logger.error("Code search failed: %s", e)
             return []
 
     async def _search_elements(
@@ -856,96 +816,72 @@ class NPUCodeSearchAgent(StandardizedAgent):
             self.logger.error(f"Error processing file {file_path}: {e}")
         return []
 
+    async def _convert_npu_result(self, result: Any) -> CodeSearchResult:
+        """Convert NPU search result to CodeSearchResult (Issue #398: extracted)."""
+        file_path = result.metadata.get("file_path", "unknown")
+        line_number = result.metadata.get("line_number", 0)
+        context_lines = await self._get_file_context(file_path, line_number, context_size=3)
+        return CodeSearchResult(
+            file_path=file_path, content=result.content, line_number=line_number,
+            confidence=result.score, context_lines=context_lines,
+            metadata={
+                **result.metadata, "device_used": result.device_used,
+                "processing_time_ms": result.processing_time_ms, "embedding_model": result.embedding_model,
+            },
+        )
+
+    async def _run_npu_semantic_search(
+        self, query: str, language: Optional[str], max_results: int
+    ) -> List[CodeSearchResult]:
+        """Run NPU-accelerated semantic search (Issue #398: extracted)."""
+        await self._ensure_search_engine_initialized()
+        search_results, metrics = await self.npu_search_engine.enhanced_search(
+            query=query, similarity_top_k=max_results,
+            filters={"language": language} if language else None,
+            enable_npu_acceleration=self.npu_available,
+        )
+        code_results = [await self._convert_npu_result(r) for r in search_results]
+        self.stats = SearchStats(
+            total_files_indexed=len(code_results), search_time_ms=metrics.total_search_time_ms,
+            npu_acceleration_used=(metrics.device_used != "cpu_fallback"),
+            redis_cache_hit=False, results_count=len(code_results),
+        )
+        self.logger.info(
+            "✅ Semantic search: %d results in %.2fms using %s",
+            len(code_results), metrics.total_search_time_ms, metrics.device_used
+        )
+        return code_results
+
+    async def _fallback_semantic_search(
+        self, query: str, language: Optional[str], max_results: int
+    ) -> List[CodeSearchResult]:
+        """Fallback fuzzy matching when NPU search fails (Issue #398: extracted)."""
+        results = []
+        query_words = query.lower().split()
+        pattern = f"{self.index_prefix}file:*"
+        file_keys = await asyncio.to_thread(self.redis_client.keys, pattern)
+
+        for file_key in file_keys:
+            try:
+                file_data_raw = await asyncio.to_thread(self.redis_client.get, file_key)
+                file_data = json.loads(file_data_raw)
+                file_results = await self._search_file_semantic(file_data, query, query_words, language)
+                results.extend(file_results)
+            except Exception as file_error:
+                self.logger.error("Error processing file key %s: %s", file_key, file_error)
+
+        results.sort(key=lambda x: x.confidence, reverse=True)
+        return results[:max_results]
+
     async def _search_semantic(
         self, query: str, language: Optional[str], max_results: int
     ) -> List[CodeSearchResult]:
-        """
-        Perform semantic search using NPU acceleration and pre-computed embeddings.
-
-        Issue #68: Enhanced with NPUSemanticSearch engine for:
-        - Pre-computed embedding cache (60-80% improvement)
-        - NPU-accelerated embedding generation
-        - Proper semantic similarity scoring
-        """
+        """Perform semantic search with NPU acceleration (Issue #398: refactored)."""
         try:
-            # Initialize NPU search engine if needed
-            await self._ensure_search_engine_initialized()
-
-            # Use NPU semantic search for query
-            search_results, metrics = await self.npu_search_engine.enhanced_search(
-                query=query,
-                similarity_top_k=max_results,
-                filters={"language": language} if language else None,
-                enable_npu_acceleration=self.npu_available,
-            )
-
-            # Convert to CodeSearchResult format
-            code_results = []
-            for result in search_results:
-                # Extract file path and line number from metadata
-                file_path = result.metadata.get("file_path", "unknown")
-                line_number = result.metadata.get("line_number", 0)
-
-                # Get context lines
-                context_lines = await self._get_file_context(
-                    file_path, line_number, context_size=3
-                )
-
-                code_result = CodeSearchResult(
-                    file_path=file_path,
-                    content=result.content,
-                    line_number=line_number,
-                    confidence=result.score,
-                    context_lines=context_lines,
-                    metadata={
-                        **result.metadata,
-                        "device_used": result.device_used,
-                        "processing_time_ms": result.processing_time_ms,
-                        "embedding_model": result.embedding_model,
-                    },
-                )
-                code_results.append(code_result)
-
-            # Update stats
-            self.stats = SearchStats(
-                total_files_indexed=len(code_results),
-                search_time_ms=metrics.total_search_time_ms,
-                npu_acceleration_used=(metrics.device_used != "cpu_fallback"),
-                redis_cache_hit=False,  # NPU search has its own cache
-                results_count=len(code_results),
-            )
-
-            self.logger.info(
-                f"✅ Semantic search: {len(code_results)} results in {metrics.total_search_time_ms:.2f}ms using {metrics.device_used}"
-            )
-
-            return code_results
-
+            return await self._run_npu_semantic_search(query, language, max_results)
         except Exception as e:
-            self.logger.error(f"NPU semantic search failed: {e}, falling back to basic search")
-
-            # Fallback to basic fuzzy matching if NPU search fails
-            results = []
-            query_words = query.lower().split()
-            pattern = f"{self.index_prefix}file:*"
-            # Issue #361 - avoid blocking
-            file_keys = await asyncio.to_thread(self.redis_client.keys, pattern)
-
-            for file_key in file_keys:
-                try:
-                    # Issue #361 - avoid blocking
-                    file_data_raw = await asyncio.to_thread(self.redis_client.get, file_key)
-                    file_data = json.loads(file_data_raw)
-                    file_results = await self._search_file_semantic(
-                        file_data, query, query_words, language
-                    )
-                    results.extend(file_results)
-                except Exception as file_error:
-                    self.logger.error(f"Error processing file key {file_key}: {file_error}")
-
-            # Sort by confidence
-            results.sort(key=lambda x: x.confidence, reverse=True)
-            return results[:max_results]
+            self.logger.error("NPU semantic search failed: %s, falling back to basic search", e)
+            return await self._fallback_semantic_search(query, language, max_results)
 
     def _file_matches_language(self, file_path: str, language: str) -> bool:
         """Check if file matches the specified language"""

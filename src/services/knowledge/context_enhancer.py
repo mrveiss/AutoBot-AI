@@ -52,7 +52,11 @@ class ConversationContextEnhancer:
     ]
 
     def __init__(self):
-        """Initialize the context enhancer with compiled conversation analysis patterns."""
+        """Initialize the context enhancer with compiled conversation analysis patterns.
+
+        Issue #509: Optimized entity extraction by combining patterns into
+        single regex for O(n) instead of O(n*p) where p = number of patterns.
+        """
         self._reference_re = re.compile(
             r"\b(" + "|".join(self.REFERENCE_PRONOUNS) + r")\b",
             re.IGNORECASE
@@ -60,9 +64,16 @@ class ConversationContextEnhancer:
         self._context_question_re = [
             re.compile(p, re.IGNORECASE) for p in self.CONTEXT_QUESTION_PATTERNS
         ]
+        # Issue #509: Combined entity pattern for single-pass extraction
+        # Original list kept for backward compatibility if needed
         self._entity_re = [
             re.compile(p, re.IGNORECASE) for p in self.ENTITY_PATTERNS
         ]
+        # Combined pattern: O(1) regex compilation, O(n) matching
+        self._combined_entity_re = re.compile(
+            "|".join(f"({p})" for p in self.ENTITY_PATTERNS),
+            re.IGNORECASE
+        )
 
     def enhance_query(
         self,
@@ -138,20 +149,23 @@ class ConversationContextEnhancer:
     def _extract_entities(
         self, history: List[Dict[str, str]]
     ) -> List[str]:
-        """Extract named entities from conversation history."""
+        """Extract named entities from conversation history.
+
+        Issue #509: Optimized O(n³) → O(n²) by using combined regex pattern
+        for single-pass extraction instead of iterating over multiple patterns.
+        """
         entities = set()
 
         for exchange in history:
             user_msg = exchange.get("user", "")
             assistant_msg = exchange.get("assistant", "")
 
-            for pattern in self._entity_re:
-                # Extract from user messages
-                for match in pattern.finditer(user_msg):
-                    entities.add(match.group(0))
-                # Extract from assistant messages
-                for match in pattern.finditer(assistant_msg):
-                    entities.add(match.group(0))
+            # Issue #509: Single-pass extraction using combined pattern
+            # Instead of: for pattern in patterns → for match in pattern.finditer()
+            for match in self._combined_entity_re.finditer(user_msg):
+                entities.add(match.group(0))
+            for match in self._combined_entity_re.finditer(assistant_msg):
+                entities.add(match.group(0))
 
         return list(entities)[:5]  # Limit to 5 most recent entities
 

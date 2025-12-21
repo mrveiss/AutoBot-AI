@@ -397,17 +397,30 @@ class DataFlowAnalyzer(ast.NodeVisitor):
             self.current_graph.edges.append(edge)
 
     def _build_def_use_chains(self):
-        """Build def-use chains from definitions and uses."""
+        """Build def-use chains from definitions and uses.
+
+        Issue #508: Optimized O(n³) → O(n²) by pre-indexing uses by variable name.
+        """
         if not self.current_graph:
             return
 
+        # Issue #508: Pre-index uses by variable name - O(n) preprocessing
+        # instead of O(n) lookup per definition
+        uses_by_name: Dict[str, List] = {}
+        for use in self.uses:
+            if use.name not in uses_by_name:
+                uses_by_name[use.name] = []
+            uses_by_name[use.name].append(use)
+
         for var_name, defs in self.definitions.items():
+            # O(1) lookup instead of O(n) scan
+            var_uses = uses_by_name.get(var_name, [])
             for definition in defs:
                 chain = DefUseChain(definition=definition)
 
                 # Find all uses of this variable after this definition
-                for use in self.uses:
-                    if use.name == var_name and use.line >= definition.line:
+                for use in var_uses:
+                    if use.line >= definition.line:
                         chain.uses.append(use)
 
                 self.current_graph.def_use_chains.append(chain)

@@ -231,94 +231,33 @@ class ManPageParser:
 class ManPageKnowledgeIntegrator:
     """Main service for integrating man pages into machine-aware knowledge"""
 
+    def _get_priority_commands(self) -> list:
+        """Get priority commands list (Issue #398: extracted)."""
+        return [
+            # Network tools
+            "ping", "curl", "wget", "netstat", "ss", "nmap", "arp", "dig",
+            "nslookup", "traceroute", "ifconfig", "ip", "iptables", "ufw",
+            # File operations
+            "ls", "find", "grep", "cat", "head", "tail", "less", "more",
+            "wc", "sort", "uniq", "cut", "awk", "sed", "tar", "zip", "unzip", "gzip",
+            # System monitoring
+            "ps", "top", "htop", "d", "du", "free", "uname", "whoami", "id",
+            "groups", "sudo", "su", "systemctl", "service", "crontab",
+            # Development tools
+            "git", "python", "python3", "node", "npm", "docker", "docker-compose",
+            "vim", "nano", "emacs", "make", "gcc", "g++",
+            # Security tools
+            "ssh", "scp", "rsync", "gpg", "openssl", "chmod", "chown", "chgrp",
+            "passwd", "useradd", "usermod", "userdel", "groupadd",
+        ]
+
     def __init__(self):
-        """Initialize knowledge integrator with parser and storage paths."""
+        """Initialize knowledge integrator (Issue #398: refactored)."""
         self.parser = ManPageParser()
         self.knowledge_base_dir = Path("data/system_knowledge")
         self.man_cache_dir = self.knowledge_base_dir / "man_pages"
         self.man_cache_dir.mkdir(parents=True, exist_ok=True)
-
-        # Commands to prioritize for knowledge extraction
-        self.priority_commands = [
-            # Network tools
-            "ping",
-            "curl",
-            "wget",
-            "netstat",
-            "ss",
-            "nmap",
-            "arp",
-            "dig",
-            "nslookup",
-            "traceroute",
-            "ifconfig",
-            "ip",
-            "iptables",
-            "ufw",
-            # File operations
-            "ls",
-            "find",
-            "grep",
-            "cat",
-            "head",
-            "tail",
-            "less",
-            "more",
-            "wc",
-            "sort",
-            "uniq",
-            "cut",
-            "awk",
-            "sed",
-            "tar",
-            "zip",
-            "unzip",
-            "gzip",
-            # System monitoring
-            "ps",
-            "top",
-            "htop",
-            "d",
-            "du",
-            "free",
-            "uname",
-            "whoami",
-            "id",
-            "groups",
-            "sudo",
-            "su",
-            "systemctl",
-            "service",
-            "crontab",
-            # Development tools
-            "git",
-            "python",
-            "python3",
-            "node",
-            "npm",
-            "docker",
-            "docker-compose",
-            "vim",
-            "nano",
-            "emacs",
-            "make",
-            "gcc",
-            "g++",
-            # Security tools
-            "ssh",
-            "scp",
-            "rsync",
-            "gpg",
-            "openssl",
-            "chmod",
-            "chown",
-            "chgrp",
-            "passwd",
-            "useradd",
-            "usermod",
-            "userdel",
-            "groupadd",
-        ]
+        self.priority_commands = self._get_priority_commands()
 
     async def get_available_commands(self) -> Set[str]:
         """Get list of commands available on current machine"""
@@ -510,76 +449,48 @@ class ManPageKnowledgeIntegrator:
 
         return knowledge_data
 
+    async def _process_single_command(self, command: str, results: Dict[str, Any]) -> None:
+        """Process single command integration (Issue #398: extracted)."""
+        results["processed"] += 1
+        try:
+            cached_info = await self.load_cached_man_page(command)
+            if cached_info:
+                results["cached"] += 1
+                results["commands"][command] = "cached"
+                return
+            if not await self.check_man_page_exists(command):
+                results["failed"] += 1
+                results["commands"][command] = "no_man_page"
+                return
+            man_info = await self.extract_man_page(command)
+            if not man_info:
+                results["failed"] += 1
+                results["commands"][command] = "extraction_failed"
+                return
+            await self.cache_man_page(man_info)
+            await self._save_as_knowledge_yaml(man_info)
+            results["successful"] += 1
+            results["commands"][command] = "success"
+            logger.info("Successfully integrated man page for %s", command)
+        except Exception as e:
+            results["failed"] += 1
+            results["commands"][command] = f"error: {str(e)}"
+            logger.error("Failed to integrate man page for %s: %s", command, e)
+
     async def integrate_priority_commands(self) -> Dict[str, Any]:
-        """Extract and integrate man pages for priority commands"""
+        """Extract and integrate man pages (Issue #398: refactored)."""
         logger.info("Starting man page integration for priority commands...")
-
-        # Get available commands on this machine
         available_commands = await self.get_available_commands()
-
-        # Filter priority commands to only those available
-        commands_to_process = [
-            cmd for cmd in self.priority_commands if cmd in available_commands
-        ]
-
-        logger.info(
-            f"Processing {len(commands_to_process)} priority commands available on this machine"
-        )
-
-        integration_results = {
-            "processed": 0,
-            "successful": 0,
-            "failed": 0,
-            "cached": 0,
-            "commands": {},
-        }
-
+        commands_to_process = [cmd for cmd in self.priority_commands if cmd in available_commands]
+        logger.info("Processing %d priority commands available on this machine", len(commands_to_process))
+        results = {"processed": 0, "successful": 0, "failed": 0, "cached": 0, "commands": {}}
         for command in commands_to_process:
-            integration_results["processed"] += 1
-
-            try:
-                # Check if already cached
-                cached_info = await self.load_cached_man_page(command)
-                if cached_info:
-                    integration_results["cached"] += 1
-                    integration_results["commands"][command] = "cached"
-                    continue
-
-                # Check if man page exists
-                if not await self.check_man_page_exists(command):
-                    integration_results["failed"] += 1
-                    integration_results["commands"][command] = "no_man_page"
-                    continue
-
-                # Extract man page
-                man_info = await self.extract_man_page(command)
-                if not man_info:
-                    integration_results["failed"] += 1
-                    integration_results["commands"][command] = "extraction_failed"
-                    continue
-
-                # Cache the result
-                await self.cache_man_page(man_info)
-
-                # Convert to knowledge format and save
-                await self._save_as_knowledge_yaml(man_info)
-
-                integration_results["successful"] += 1
-                integration_results["commands"][command] = "success"
-
-                logger.info(f"Successfully integrated man page for {command}")
-
-            except Exception as e:
-                integration_results["failed"] += 1
-                integration_results["commands"][command] = f"error: {str(e)}"
-                logger.error(f"Failed to integrate man page for {command}: {e}")
-
+            await self._process_single_command(command, results)
         logger.info(
-            f"Man page integration complete: {integration_results['successful']} successful, "
-            f"{integration_results['failed']} failed, {integration_results['cached']} cached"
+            "Man page integration complete: %d successful, %d failed, %d cached",
+            results['successful'], results['failed'], results['cached']
         )
-
-        return integration_results
+        return results
 
     async def _save_as_knowledge_yaml(self, man_info: ManPageInfo):
         """Save man page as knowledge YAML file"""

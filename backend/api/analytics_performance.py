@@ -713,95 +713,49 @@ async def get_hotspots(
 
 
 # ============================================================================
-# Demo Data
+# Demo Data (Issue #398: Extracted to module-level for cleaner function)
 # ============================================================================
+
+# Demo issue data tuples: (id, pattern_id, name, category, impact, file, line, desc, suggestion, snippet, est_impact)
+_DEMO_ISSUE_DATA = (
+    ("demo-1", "PERF-Q001", "N+1 Query Pattern", PatternCategory.QUERY, ImpactLevel.CRITICAL,
+     "src/services/users.py", 45, "Database query inside loop - causes N+1 query problem",
+     "Use eager loading, batch queries, or SELECT ... IN (...)",
+     "44: for user in users:\n45:     orders = db.query(Order).filter_by(user_id=user.id)", "100 users = 101 queries"),
+    ("demo-2", "PERF-A001", "Sync Call in Async Function", PatternCategory.ASYNC, ImpactLevel.CRITICAL,
+     "src/api/endpoints.py", 78, "Blocking synchronous call in async function blocks event loop",
+     "Use async version or run_in_executor()",
+     "77: async def fetch_data():\n78:     response = requests.get(url)", None),
+    ("demo-3", "PERF-L001", "Nested Loop O(n²)", PatternCategory.LOOP, ImpactLevel.HIGH,
+     "src/utils/matcher.py", 23, "Nested loops with O(n²) complexity",
+     "Consider using dict/set for O(1) lookup", None, "O(n²)"),
+    ("demo-4", "PERF-C001", "Repeated Redis GET in Loop", PatternCategory.CACHE, ImpactLevel.HIGH,
+     "src/cache/session.py", 56, "Multiple Redis GET calls in loop",
+     "Use MGET for batch retrieval or pipeline", "55: for key in keys:\n56:     value = redis.get(key)", None),
+    ("demo-5", "PERF-M001", "Global Mutable Default", PatternCategory.MEMORY, ImpactLevel.HIGH,
+     "src/handlers/events.py", 12, "Mutable default argument causes shared state bug",
+     "Use None default and create mutable in function body", "12: def process_items(items=[]):", None),
+    ("demo-6", "PERF-A002", "Sequential Awaits", PatternCategory.ASYNC, ImpactLevel.HIGH,
+     "src/services/aggregator.py", 34, "Multiple awaits that could run concurrently",
+     "Use asyncio.gather() for concurrent execution",
+     "34:     user = await get_user(id)\n35:     orders = await get_orders(id)", None),
+    ("demo-7", "PERF-L002", "List Concatenation in Loop", PatternCategory.LOOP, ImpactLevel.MEDIUM,
+     "src/utils/collector.py", 67, "Repeated list concatenation in loop is O(n²)",
+     "Use list.append() or list comprehension", None, None),
+)
+
+
+def _create_demo_issue(data: tuple) -> PerformanceIssue:
+    """Create PerformanceIssue from data tuple (Issue #398: extracted)."""
+    id_, pattern_id, name, category, impact, file, line, desc, suggestion, snippet, est_impact = (
+        data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8],
+        data[9] if len(data) > 9 else None, data[10] if len(data) > 10 else None)
+    return PerformanceIssue(
+        id=id_, pattern_id=pattern_id, name=name, category=category, impact=impact,
+        file=file, line=line, description=desc, suggestion=suggestion,
+        code_snippet=snippet, estimated_impact=est_impact)
 
 
 def get_demo_issues() -> list[PerformanceIssue]:
-    """Get demo issues for testing."""
-    return [
-        PerformanceIssue(
-            id="demo-1",
-            pattern_id="PERF-Q001",
-            name="N+1 Query Pattern",
-            category=PatternCategory.QUERY,
-            impact=ImpactLevel.CRITICAL,
-            file="src/services/users.py",
-            line=45,
-            description="Database query inside loop - causes N+1 query problem",
-            suggestion="Use eager loading, batch queries, or SELECT ... IN (...)",
-            code_snippet="44: for user in users:\n45:     orders = db.query(Order).filter_by(user_id=user.id)",
-            estimated_impact="100 users = 101 queries",
-        ),
-        PerformanceIssue(
-            id="demo-2",
-            pattern_id="PERF-A001",
-            name="Sync Call in Async Function",
-            category=PatternCategory.ASYNC,
-            impact=ImpactLevel.CRITICAL,
-            file="src/api/endpoints.py",
-            line=78,
-            description="Blocking synchronous call in async function blocks event loop",
-            suggestion="Use async version or run_in_executor()",
-            code_snippet="77: async def fetch_data():\n78:     response = requests.get(url)",
-        ),
-        PerformanceIssue(
-            id="demo-3",
-            pattern_id="PERF-L001",
-            name="Nested Loop O(n²)",
-            category=PatternCategory.LOOP,
-            impact=ImpactLevel.HIGH,
-            file="src/utils/matcher.py",
-            line=23,
-            description="Nested loops with O(n²) complexity",
-            suggestion="Consider using dict/set for O(1) lookup",
-            estimated_impact="O(n²)",
-        ),
-        PerformanceIssue(
-            id="demo-4",
-            pattern_id="PERF-C001",
-            name="Repeated Redis GET in Loop",
-            category=PatternCategory.CACHE,
-            impact=ImpactLevel.HIGH,
-            file="src/cache/session.py",
-            line=56,
-            description="Multiple Redis GET calls in loop",
-            suggestion="Use MGET for batch retrieval or pipeline",
-            code_snippet="55: for key in keys:\n56:     value = redis.get(key)",
-        ),
-        PerformanceIssue(
-            id="demo-5",
-            pattern_id="PERF-M001",
-            name="Global Mutable Default",
-            category=PatternCategory.MEMORY,
-            impact=ImpactLevel.HIGH,
-            file="src/handlers/events.py",
-            line=12,
-            description="Mutable default argument causes shared state bug",
-            suggestion="Use None default and create mutable in function body",
-            code_snippet="12: def process_items(items=[]):",
-        ),
-        PerformanceIssue(
-            id="demo-6",
-            pattern_id="PERF-A002",
-            name="Sequential Awaits",
-            category=PatternCategory.ASYNC,
-            impact=ImpactLevel.HIGH,
-            file="src/services/aggregator.py",
-            line=34,
-            description="Multiple awaits that could run concurrently",
-            suggestion="Use asyncio.gather() for concurrent execution",
-            code_snippet="34:     user = await get_user(id)\n35:     orders = await get_orders(id)",
-        ),
-        PerformanceIssue(
-            id="demo-7",
-            pattern_id="PERF-L002",
-            name="List Concatenation in Loop",
-            category=PatternCategory.LOOP,
-            impact=ImpactLevel.MEDIUM,
-            file="src/utils/collector.py",
-            line=67,
-            description="Repeated list concatenation in loop is O(n²)",
-            suggestion="Use list.append() or list comprehension",
-        ),
-    ]
+    """Get demo issues for testing (Issue #398: refactored)."""
+    return [_create_demo_issue(data) for data in _DEMO_ISSUE_DATA]

@@ -50,6 +50,34 @@ ANALYTICS_REDIS_DATABASES = {RedisDatabase.METRICS, RedisDatabase.KNOWLEDGE, Red
 # ============================================================================
 
 
+def _handle_task_exception(result: Any, name: str) -> Any:
+    """Handle exception from asyncio task (Issue #398: extracted)."""
+    return {"error": str(result)} if isinstance(result, Exception) else result
+
+
+async def _get_realtime_metrics() -> Dict[str, Any]:
+    """Get real-time metrics from monitoring (Issue #398: extracted)."""
+    try:
+        current_metrics = await analytics_controller.metrics_collector.collect_all_metrics()
+        return {
+            name: {"value": metric.value, "unit": metric.unit, "category": metric.category}
+            for name, metric in current_metrics.items()
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+async def _get_code_analysis_status() -> Dict[str, Any]:
+    """Get code analysis tool status (Issue #398: extracted)."""
+    code_analysis_exists = await asyncio.to_thread(analytics_controller.code_analysis_path.exists)
+    code_index_exists = await asyncio.to_thread(analytics_controller.code_index_path.exists)
+    return {
+        "last_analysis": analytics_state.get("last_analysis_time"),
+        "cache_available": bool(analytics_state.get("code_analysis_cache")),
+        "tools_available": {"code_analysis_suite": code_analysis_exists, "code_index_mcp": code_index_exists},
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_dashboard_overview",
@@ -57,90 +85,29 @@ ANALYTICS_REDIS_DATABASES = {RedisDatabase.METRICS, RedisDatabase.KNOWLEDGE, Red
 )
 @router.get("/dashboard/overview", response_model=AnalyticsOverview)
 async def get_dashboard_overview():
-    """Get comprehensive dashboard overview combining all analytics data"""
+    """Get comprehensive dashboard overview (Issue #398: refactored)."""
     timestamp = datetime.now().isoformat()
 
-    # Collect all analytics data in parallel
-    system_health_task = hardware_monitor.get_system_health()
-    performance_task = analytics_controller.collect_performance_metrics()
-    communication_task = analytics_controller.analyze_communication_patterns()
-    usage_task = analytics_controller.get_usage_statistics()
-    trends_task = analytics_controller.detect_trends()
-
-    # Wait for all tasks to complete
-    (
-        system_health,
-        performance_metrics,
-        communication_patterns,
-        usage_statistics,
-        trends,
-    ) = await asyncio.gather(
-        system_health_task,
-        performance_task,
-        communication_task,
-        usage_task,
-        trends_task,
+    results = await asyncio.gather(
+        hardware_monitor.get_system_health(),
+        analytics_controller.collect_performance_metrics(),
+        analytics_controller.analyze_communication_patterns(),
+        analytics_controller.get_usage_statistics(),
+        analytics_controller.detect_trends(),
         return_exceptions=True,
     )
 
-    # Handle any exceptions
-    if isinstance(system_health, Exception):
-        system_health = {"error": str(system_health)}
-    if isinstance(performance_metrics, Exception):
-        performance_metrics = {"error": str(performance_metrics)}
-    if isinstance(communication_patterns, Exception):
-        communication_patterns = {"error": str(communication_patterns)}
-    if isinstance(usage_statistics, Exception):
-        usage_statistics = {"error": str(usage_statistics)}
-    if isinstance(trends, Exception):
-        trends = {"error": str(trends)}
+    system_health = _handle_task_exception(results[0], "system_health")
+    performance_metrics = _handle_task_exception(results[1], "performance")
+    communication_patterns = _handle_task_exception(results[2], "communication")
+    usage_statistics = _handle_task_exception(results[3], "usage")
+    trends = _handle_task_exception(results[4], "trends")
 
-    # Get real-time metrics from existing monitoring
-    realtime_metrics = {}
-    try:
-        current_metrics = (
-            await analytics_controller.metrics_collector.collect_all_metrics()
-        )
-        realtime_metrics = {
-            name: {
-                "value": metric.value,
-                "unit": metric.unit,
-                "category": metric.category,
-            }
-            for name, metric in current_metrics.items()
-        }
-    except Exception as e:
-        realtime_metrics = {"error": str(e)}
-
-    # Code analysis status
-    # Issue #358 - avoid blocking
-    code_analysis_exists = await asyncio.to_thread(
-        analytics_controller.code_analysis_path.exists
+    return AnalyticsOverview(
+        timestamp=timestamp, system_health=system_health, performance_metrics=performance_metrics,
+        communication_patterns=communication_patterns, code_analysis_status=await _get_code_analysis_status(),
+        usage_statistics=usage_statistics, realtime_metrics=await _get_realtime_metrics(), trends=trends,
     )
-    code_index_exists = await asyncio.to_thread(
-        analytics_controller.code_index_path.exists
-    )
-    code_analysis_status = {
-        "last_analysis": analytics_state.get("last_analysis_time"),
-        "cache_available": bool(analytics_state.get("code_analysis_cache")),
-        "tools_available": {
-            "code_analysis_suite": code_analysis_exists,
-            "code_index_mcp": code_index_exists,
-        },
-    }
-
-    overview = AnalyticsOverview(
-        timestamp=timestamp,
-        system_health=system_health,
-        performance_metrics=performance_metrics,
-        communication_patterns=communication_patterns,
-        code_analysis_status=code_analysis_status,
-        usage_statistics=usage_statistics,
-        realtime_metrics=realtime_metrics,
-        trends=trends,
-    )
-
-    return overview
 
 
 async def _check_redis_db(db) -> Tuple[str, str]:
@@ -746,17 +713,9 @@ async def stop_analytics_collection():
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_analytics_status",
-    error_code_prefix="ANALYTICS",
-)
-@router.get("/status")
-async def get_analytics_status():
-    """Get comprehensive analytics system status"""
-    collector = analytics_controller.metrics_collector
-
-    status = {
+def _build_analytics_status_base(collector) -> Dict[str, Any]:
+    """Build base analytics status dict (Issue #398: extracted)."""
+    return {
         "analytics_system": "operational",
         "timestamp": datetime.now().isoformat(),
         "collection_status": {
@@ -774,40 +733,40 @@ async def get_analytics_status():
             "communication_chains": len(analytics_controller.communication_chains),
             "cached_code_analysis": bool(analytics_state.get("code_analysis_cache")),
         },
-        "integration_status": {
-            "redis_connectivity": {},
-            "code_analysis_tools": {
-                # Issue #358 - avoid blocking (pre-computed below)
-                "code_analysis_suite": False,
-                "code_index_mcp": False,
-            },
-        },
+        "integration_status": {"redis_connectivity": {}, "code_analysis_tools": {}},
     }
 
-    # Issue #358 - avoid blocking
-    status["integration_status"]["code_analysis_tools"]["code_analysis_suite"] = (
-        await asyncio.to_thread(analytics_controller.code_analysis_path.exists)
-    )
-    status["integration_status"]["code_analysis_tools"]["code_index_mcp"] = (
-        await asyncio.to_thread(analytics_controller.code_index_path.exists)
-    )
 
-    # Check Redis connectivity
-    for db in ANALYTICS_REDIS_DATABASES:  # O(1) lookups for membership checks (Issue #326)
+async def _check_analytics_redis_connectivity() -> Dict[str, str]:
+    """Check Redis connectivity for analytics databases (Issue #398: extracted)."""
+    connectivity = {}
+    for db in ANALYTICS_REDIS_DATABASES:
         try:
             redis_conn = await analytics_controller.get_redis_connection(db)
             if redis_conn:
                 await redis_conn.ping()
-                status["integration_status"]["redis_connectivity"][
-                    db.name
-                ] = "connected"
+                connectivity[db.name] = "connected"
             else:
-                status["integration_status"]["redis_connectivity"][db.name] = "failed"
+                connectivity[db.name] = "failed"
         except Exception as e:
-            status["integration_status"]["redis_connectivity"][
-                db.name
-            ] = f"error: {str(e)}"
+            connectivity[db.name] = f"error: {str(e)}"
+    return connectivity
 
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_analytics_status",
+    error_code_prefix="ANALYTICS",
+)
+@router.get("/status")
+async def get_analytics_status():
+    """Get comprehensive analytics system status (Issue #398: refactored)."""
+    status = _build_analytics_status_base(analytics_controller.metrics_collector)
+    status["integration_status"]["code_analysis_tools"] = {
+        "code_analysis_suite": await asyncio.to_thread(analytics_controller.code_analysis_path.exists),
+        "code_index_mcp": await asyncio.to_thread(analytics_controller.code_index_path.exists),
+    }
+    status["integration_status"]["redis_connectivity"] = await _check_analytics_redis_connectivity()
     return status
 
 

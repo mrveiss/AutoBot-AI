@@ -185,6 +185,31 @@ async def get_monitoring_status():
     return status
 
 
+def _calculate_overall_health_score(performance_data: dict) -> float:
+    """Calculate overall health score from performance data (Issue #398: extracted)."""
+    cpu_health = 100 - performance_data.get("system_performance", {}).get("cpu_percent", 0)
+    memory_health = 100 - performance_data.get("system_performance", {}).get("memory_percent", 0)
+    gpu_health = 100 - performance_data.get("hardware_performance", {}).get("gpu_utilization", 0)
+    return (cpu_health + memory_health + gpu_health) / 3
+
+
+def _get_health_status(score: float) -> dict:
+    """Get health status dict from score (Issue #398: extracted)."""
+    if score > 80:
+        return {"score": round(score, 1), "status": "excellent", "text": "Excellent"}
+    if score > 60:
+        return {"score": round(score, 1), "status": "good", "text": "Good"}
+    if score > 40:
+        return {"score": round(score, 1), "status": "warning", "text": "Warning"}
+    return {"score": round(score, 1), "status": "critical", "text": "Critical"}
+
+
+def _count_recent_api_calls(patterns: list, minutes: int = 5) -> int:
+    """Count recent API calls within timeframe (Issue #398: extracted)."""
+    cutoff = datetime.now() - timedelta(minutes=minutes)
+    return sum(1 for call in patterns if datetime.fromisoformat(call["timestamp"]) > cutoff)
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_phase9_dashboard_data",
@@ -192,49 +217,14 @@ async def get_monitoring_status():
 )
 @router.get("/monitoring/phase9/dashboard")
 async def get_phase9_dashboard_data():
-    """Get comprehensive Phase 9 dashboard data"""
-    # Get performance metrics
+    """Get comprehensive Phase 9 dashboard data (Issue #398: refactored)."""
     performance_data = await analytics_controller.collect_performance_metrics()
-
-    # Get system health
     system_health = await hardware_monitor.get_system_health()
+    overall_score = _calculate_overall_health_score(performance_data)
 
-    # Calculate overall health score
-    cpu_health = 100 - performance_data.get("system_performance", {}).get(
-        "cpu_percent", 0
-    )
-    memory_health = 100 - performance_data.get("system_performance", {}).get(
-        "memory_percent", 0
-    )
-    gpu_health = 100 - performance_data.get("hardware_performance", {}).get(
-        "gpu_utilization", 0
-    )
-
-    overall_score = (cpu_health + memory_health + gpu_health) / 3
-
-    dashboard_data = {
+    return {
         "timestamp": datetime.now().isoformat(),
-        "overall_health": {
-            "score": round(overall_score, 1),
-            "status": (
-                "excellent"
-                if overall_score > 80
-                else (
-                    "good"
-                    if overall_score > 60
-                    else "warning" if overall_score > 40 else "critical"
-                )
-            ),
-            "text": (
-                "Excellent"
-                if overall_score > 80
-                else (
-                    "Good"
-                    if overall_score > 60
-                    else "Warning" if overall_score > 40 else "Critical"
-                )
-            ),
-        },
+        "overall_health": _get_health_status(overall_score),
         "gpu_metrics": performance_data.get("hardware_performance", {}).get("gpu", {}),
         "npu_metrics": performance_data.get("hardware_performance", {}).get("npu", {}),
         "system_metrics": {
@@ -244,18 +234,9 @@ async def get_phase9_dashboard_data():
         },
         "api_performance": performance_data.get("api_performance", {}),
         "active_connections": len(analytics_state["websocket_connections"]),
-        "recent_api_calls": len(
-            [
-                call
-                for call in analytics_state["api_call_patterns"]
-                if datetime.fromisoformat(call["timestamp"])
-                > datetime.now() - timedelta(minutes=5)
-            ]
-        ),
+        "recent_api_calls": _count_recent_api_calls(analytics_state["api_call_patterns"]),
         "system_health": system_health,
     }
-
-    return dashboard_data
 
 
 @with_error_handling(

@@ -327,20 +327,26 @@ class StreamingCommandExecutor:
     async def _process_stream_tasks(
         self, tasks: List[asyncio.Task]
     ) -> AsyncGenerator[StreamChunk, None]:
-        """Process stream tasks and yield chunks. (Issue #315 - extracted)"""
+        """Process stream tasks and yield chunks. (Issue #315 - extracted)
+
+        Issue #509: Optimized O(n²) list.remove() to O(1) set operations.
+        asyncio.wait() already returns sets, so we work directly with them.
+        """
+        # Issue #509: Use set for O(1) removal instead of O(n) list.remove()
+        remaining_tasks = set(tasks)
         try:
-            while tasks:
+            while remaining_tasks:
                 done, pending = await asyncio.wait(
-                    tasks, return_when=asyncio.FIRST_COMPLETED
+                    remaining_tasks, return_when=asyncio.FIRST_COMPLETED
                 )
                 for task in done:
                     chunks = await self._safe_get_task_chunks(task)
                     for chunk in chunks:
                         yield chunk
-                    tasks.remove(task)
-                tasks = list(pending)
+                # Issue #509: O(1) set difference instead of O(n) list operations
+                remaining_tasks = pending
         finally:
-            for task in tasks:
+            for task in remaining_tasks:
                 task.cancel()
 
     async def _safe_get_task_chunks(

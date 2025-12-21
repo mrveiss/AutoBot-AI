@@ -391,16 +391,28 @@ class LLMCostTracker:
         try:
             redis = await self.get_redis()
 
-            # Get daily totals for the period
-            daily_costs = {}
+            # Issue #480: Use pipeline to batch fetch daily totals (fix N+1 query)
+            # Build list of dates and keys first
+            date_strs = []
+            daily_keys = []
             current = start_date
             while current <= end_date:
                 date_str = current.strftime("%Y-%m-%d")
-                daily_key = f"{self.DAILY_TOTALS_KEY}:{date_str}"
-                cost = await redis.get(daily_key)
-                if cost:
-                    daily_costs[date_str] = float(cost)
+                date_strs.append(date_str)
+                daily_keys.append(f"{self.DAILY_TOTALS_KEY}:{date_str}")
                 current += timedelta(days=1)
+
+            # Batch fetch all daily costs using pipeline
+            daily_costs = {}
+            if daily_keys:
+                pipe = redis.pipeline()
+                for key in daily_keys:
+                    pipe.get(key)
+                results = await pipe.execute()
+
+                for date_str, cost in zip(date_strs, results):
+                    if cost:
+                        daily_costs[date_str] = float(cost)
 
             total_cost = sum(daily_costs.values())
 

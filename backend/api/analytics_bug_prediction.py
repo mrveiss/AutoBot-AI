@@ -449,59 +449,44 @@ def _score_from_thresholds(
     return 0
 
 
+def _calculate_max_indent(lines: list) -> int:
+    """Calculate max indentation depth (Issue #398: extracted)."""
+    max_indent = 0
+    for line in lines:
+        if line.strip():
+            indent = len(line) - len(line.lstrip())
+            spaces = indent // 4 if "    " in line[:indent] else indent // 2
+            max_indent = max(max_indent, spaces)
+    return max_indent
+
+
+def _calculate_conditional_density(lines: list, line_count: int) -> float:
+    """Calculate conditional statement density (Issue #398: extracted)."""
+    conditionals = sum(1 for line in lines if any(kw in line for kw in CONTROL_FLOW_KEYWORDS))
+    return conditionals / max(line_count, 1) * 100
+
+
+def _calculate_complexity_score(lines: list) -> int:
+    """Calculate total complexity score from code lines (Issue #398: extracted)."""
+    line_count = len(lines)
+    score = _score_from_thresholds(line_count, [(500, 30), (300, 20), (100, 10)])
+    score += _score_from_thresholds(_calculate_max_indent(lines), [(6, 25), (4, 15), (2, 5)])
+    score += _score_from_thresholds(_calculate_conditional_density(lines, line_count), [(15, 25), (10, 15), (5, 5)])
+    func_count = sum(1 for line in lines if line.strip().startswith(_FUNCTION_DEF_PREFIXES))
+    score += _score_from_thresholds(func_count, [(20, 20), (10, 10)])
+    return min(100, score)
+
+
 async def analyze_file_complexity(file_path: str) -> float:
-    """Estimate file complexity (0-100 score)."""
+    """Estimate file complexity 0-100 score (Issue #398: refactored)."""
     try:
         path = Path(file_path)
-        # Issue #358 - avoid blocking
         if not await asyncio.to_thread(path.exists):
-            return 30  # Default for non-existent files
-
+            return 30
         content = await asyncio.to_thread(path.read_text, encoding="utf-8", errors="ignore")
-        lines = content.split("\n")
-        line_count = len(lines)
-
-        # Simple complexity heuristics
-        complexity_score = 0
-
-        # Line count factor (Issue #281: use extracted helper)
-        complexity_score += _score_from_thresholds(
-            line_count, [(500, 30), (300, 20), (100, 10)]
-        )
-
-        # Nesting depth estimation (count indentation levels)
-        max_indent = 0
-        for line in lines:
-            if line.strip():
-                indent = len(line) - len(line.lstrip())
-                spaces = indent // 4 if "    " in line[:indent] else indent // 2
-                max_indent = max(max_indent, spaces)
-
-        complexity_score += _score_from_thresholds(
-            max_indent, [(6, 25), (4, 15), (2, 5)]
-        )
-
-        # Conditional density
-        conditionals = sum(
-            1
-            for line in lines
-            if any(kw in line for kw in CONTROL_FLOW_KEYWORDS)
-        )
-        conditional_density = conditionals / max(line_count, 1) * 100
-        complexity_score += _score_from_thresholds(
-            conditional_density, [(15, 25), (10, 15), (5, 5)]
-        )
-
-        # Function count estimation (Issue #380: use module-level tuple)
-        func_count = sum(
-            1 for line in lines if line.strip().startswith(_FUNCTION_DEF_PREFIXES)
-        )
-        complexity_score += _score_from_thresholds(func_count, [(20, 20), (10, 10)])
-
-        return min(100, complexity_score)
-
+        return _calculate_complexity_score(content.split("\n"))
     except Exception as e:
-        logger.warning(f"Failed to analyze complexity for {file_path}: {e}")
+        logger.warning("Failed to analyze complexity for %s: %s", file_path, e)
         return 30
 
 
@@ -654,68 +639,50 @@ async def get_high_risk_files(
     ]
 
 
-@router.get("/file/{file_path:path}")
-async def get_file_risk(file_path: str) -> dict[str, Any]:
-    """
-    Get detailed risk assessment for a specific file.
-
-    Returns comprehensive risk analysis with factors and recommendations.
-    """
-    # Check if file exists
-    path = Path(file_path)
-
-    # Issue #358 - avoid blocking
-    if await asyncio.to_thread(path.exists):
-        complexity = await analyze_file_complexity(str(path))
-        bug_history = await get_git_bug_history()
-        change_freq = await get_file_change_frequency()
-
-        # Issue #358 - avoid blocking
-        file_stat = await asyncio.to_thread(path.stat)
-        factors = {
-            "complexity": complexity,
-            "change_frequency": min(100, change_freq.get(file_path, 0) * 10),
-            "bug_history": min(100, bug_history.get(file_path, 0) * 15),
-            "test_coverage": 50,
-            "file_size": min(100, file_stat.st_size / 500),
-        }
-
-        risk_score = sum(
-            factors.get(factor.value, 0) * weight
-            for factor, weight in RISK_WEIGHTS.items()
-            if factor.value in factors
-        )
-
-        return {
-            "file_path": file_path,
-            "risk_score": round(risk_score, 1),
-            "risk_level": get_risk_level(risk_score).value,
-            "factors": factors,
-            "factor_weights": {k.value: v for k, v in RISK_WEIGHTS.items()},
-            "bug_count_history": bug_history.get(file_path, 0),
-            "prevention_tips": get_prevention_tips(factors),
-            "suggested_tests": get_suggested_tests(file_path, factors),
-            "recommendation": _get_file_recommendation(risk_score, factors),
-        }
-
-    # Return demo data for non-existent file
+def _build_file_risk_response(file_path: str, factors: dict, bug_history: dict) -> dict:
+    """Build file risk response from factors (Issue #398: extracted)."""
+    risk_score = sum(factors.get(f.value, 0) * w for f, w in RISK_WEIGHTS.items() if f.value in factors)
     return {
-        "file_path": file_path,
-        "risk_score": 45.0,
-        "risk_level": "medium",
-        "factors": {
-            "complexity": 50,
-            "change_frequency": 40,
-            "bug_history": 45,
-            "test_coverage": 50,
-            "file_size": 35,
-        },
+        "file_path": file_path, "risk_score": round(risk_score, 1),
+        "risk_level": get_risk_level(risk_score).value, "factors": factors,
         "factor_weights": {k.value: v for k, v in RISK_WEIGHTS.items()},
-        "bug_count_history": 2,
+        "bug_count_history": bug_history.get(file_path, 0),
+        "prevention_tips": get_prevention_tips(factors),
+        "suggested_tests": get_suggested_tests(file_path, factors),
+        "recommendation": _get_file_recommendation(risk_score, factors),
+    }
+
+
+def _get_demo_file_risk_response(file_path: str) -> dict:
+    """Get demo file risk response for non-existent files (Issue #398: extracted)."""
+    demo_factors = {"complexity": 50, "change_frequency": 40, "bug_history": 45, "test_coverage": 50, "file_size": 35}
+    return {
+        "file_path": file_path, "risk_score": 45.0, "risk_level": "medium", "factors": demo_factors,
+        "factor_weights": {k.value: v for k, v in RISK_WEIGHTS.items()}, "bug_count_history": 2,
         "prevention_tips": get_prevention_tips({"complexity": 50, "bug_history": 45}),
         "suggested_tests": [f"Add unit tests for {Path(file_path).stem}"],
         "recommendation": "Monitor this file for potential issues",
     }
+
+
+@router.get("/file/{file_path:path}")
+async def get_file_risk(file_path: str) -> dict[str, Any]:
+    """Get detailed risk assessment for a specific file (Issue #398: refactored)."""
+    path = Path(file_path)
+    if not await asyncio.to_thread(path.exists):
+        return _get_demo_file_risk_response(file_path)
+
+    complexity = await analyze_file_complexity(str(path))
+    bug_history = await get_git_bug_history()
+    change_freq = await get_file_change_frequency()
+    file_stat = await asyncio.to_thread(path.stat)
+
+    factors = {
+        "complexity": complexity, "change_frequency": min(100, change_freq.get(file_path, 0) * 10),
+        "bug_history": min(100, bug_history.get(file_path, 0) * 15), "test_coverage": 50,
+        "file_size": min(100, file_stat.st_size / 500),
+    }
+    return _build_file_risk_response(file_path, factors, bug_history)
 
 
 def _get_file_recommendation(risk_score: float, factors: dict[str, float]) -> str:
@@ -731,72 +698,46 @@ def _get_file_recommendation(risk_score: float, factors: dict[str, float]) -> st
     return "MINIMAL RISK: File is well-maintained with low bug probability."
 
 
+# Heatmap legend configuration (Issue #398: extracted)
+_HEATMAP_LEGEND = {
+    "critical": {"min": 80, "color": "#ef4444"}, "high": {"min": 60, "color": "#f97316"},
+    "medium": {"min": 40, "color": "#eab308"}, "low": {"min": 20, "color": "#22c55e"},
+    "minimal": {"min": 0, "color": "#3b82f6"},
+}
+
+
+def _group_files_by_directory(files: list) -> list:
+    """Group files by top-level directory (Issue #398: extracted)."""
+    groups: dict[str, list[dict]] = {}
+    for f in files:
+        parts = f["file_path"].split("/")
+        group = parts[0] if len(parts) > 1 else "root"
+        groups.setdefault(group, []).append(f)
+
+    heatmap_data = []
+    for group_name, group_files in groups.items():
+        avg_risk = sum(f["risk_score"] for f in group_files) / len(group_files)
+        heatmap_data.append({
+            "name": group_name, "value": round(avg_risk, 1), "file_count": len(group_files),
+            "risk_level": get_risk_level(avg_risk).value, "files": group_files,
+        })
+    return sorted(heatmap_data, key=lambda x: x["value"], reverse=True)
+
+
+def _get_flat_heatmap_data(files: list) -> list:
+    """Get flat heatmap data (Issue #398: extracted)."""
+    return [{"name": f["file_path"], "value": f["risk_score"], "risk_level": get_risk_level(f["risk_score"]).value}
+            for f in sorted(files, key=lambda x: x["risk_score"], reverse=True)]
+
+
 @router.get("/heatmap")
 async def get_risk_heatmap(
     grouping: str = Query("directory", regex="^(directory|module|flat)$"),
 ) -> dict[str, Any]:
-    """
-    Get risk heatmap data for visualization.
-
-    Groups files by directory or module for heatmap display.
-    """
-    demo = generate_demo_predictions()
-    files = demo["files"]
-
-    if grouping == "directory":
-        # Group by top-level directory
-        groups: dict[str, list[dict]] = {}
-        for f in files:
-            parts = f["file_path"].split("/")
-            group = parts[0] if len(parts) > 1 else "root"
-            if group not in groups:
-                groups[group] = []
-            groups[group].append(f)
-
-        heatmap_data = []
-        for group_name, group_files in groups.items():
-            avg_risk = sum(f["risk_score"] for f in group_files) / len(group_files)
-            heatmap_data.append(
-                {
-                    "name": group_name,
-                    "value": round(avg_risk, 1),
-                    "file_count": len(group_files),
-                    "risk_level": get_risk_level(avg_risk).value,
-                    "files": group_files,
-                }
-            )
-
-        return {
-            "grouping": grouping,
-            "data": sorted(heatmap_data, key=lambda x: x["value"], reverse=True),
-            "legend": {
-                "critical": {"min": 80, "color": "#ef4444"},
-                "high": {"min": 60, "color": "#f97316"},
-                "medium": {"min": 40, "color": "#eab308"},
-                "low": {"min": 20, "color": "#22c55e"},
-                "minimal": {"min": 0, "color": "#3b82f6"},
-            },
-        }
-
-    # Flat listing
-    return {
-        "grouping": "flat",
-        "data": [
-            {
-                "name": f["file_path"],
-                "value": f["risk_score"],
-                "risk_level": get_risk_level(f["risk_score"]).value,
-            }
-            for f in sorted(files, key=lambda x: x["risk_score"], reverse=True)
-        ],
-        "legend": {
-            "critical": {"min": 80, "color": "#ef4444"},
-            "high": {"min": 60, "color": "#f97316"},
-            "medium": {"min": 40, "color": "#eab308"},
-            "low": {"min": 20, "color": "#22c55e"},
-            "minimal": {"min": 0, "color": "#3b82f6"},
-        },
-    }
+    """Get risk heatmap data for visualization (Issue #398: refactored)."""
+    files = generate_demo_predictions()["files"]
+    data = _group_files_by_directory(files) if grouping == "directory" else _get_flat_heatmap_data(files)
+    return {"grouping": grouping if grouping == "directory" else "flat", "data": data, "legend": _HEATMAP_LEGEND}
 
 
 @router.get("/trends")

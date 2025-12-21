@@ -30,7 +30,7 @@ class ModelConfigMixin:
 
         if selected_model:
             logger.info(
-                f"UNIFIED CONFIG: Selected model from config.yaml: {selected_model}"
+                "UNIFIED CONFIG: Selected model from config.yaml: %s", selected_model
             )
             return selected_model
 
@@ -43,7 +43,7 @@ class ModelConfigMixin:
         # Final fallback - use centralized constant
         fallback_model = ModelConstants.DEFAULT_OLLAMA_MODEL
         logger.warning(
-            f"UNIFIED CONFIG: No model configured, using fallback: {fallback_model}"
+            "UNIFIED CONFIG: No model configured, using fallback: %s", fallback_model
         )
         return fallback_model
 
