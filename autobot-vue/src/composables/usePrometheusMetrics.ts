@@ -102,7 +102,7 @@ export interface PerformanceAlert {
   recommendation: string
   timestamp: number
   // Issue #474: AlertManager-specific fields (optional for backward compatibility)
-  source?: 'alertmanager' | 'phase9_monitor'
+  source?: 'alertmanager' | 'autobot_monitor'
   alertname?: string
   fingerprint?: string
   description?: string
@@ -124,7 +124,7 @@ export interface AlertsSummary {
   alerts: PerformanceAlert[]
   sources?: {
     alertmanager: number
-    phase9_monitor: number
+    autobot_monitor: number
   }
 }
 
@@ -712,8 +712,8 @@ export function useServiceHealth(pollInterval = 15000) {
  * Composable for alert monitoring
  * Optimized for alert notifications and summaries
  *
- * Issue #474: Now fetches alerts from both Prometheus AlertManager and legacy
- * phase9_monitor. AlertManager alerts include richer metadata.
+ * Issue #474: Now fetches alerts from both Prometheus AlertManager and AutoBot
+ * internal monitor. AlertManager alerts include richer metadata.
  */
 export function useAlerts(pollInterval = 30000) {
   const api = useApi()
@@ -726,9 +726,9 @@ export function useAlerts(pollInterval = 30000) {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   // Issue #474: Track alert sources
-  const sources = ref<{ alertmanager: number; phase9_monitor: number }>({
+  const sources = ref<{ alertmanager: number; autobot_monitor: number }>({
     alertmanager: 0,
-    phase9_monitor: 0
+    autobot_monitor: 0
   })
 
   let interval: ReturnType<typeof setInterval> | null = null

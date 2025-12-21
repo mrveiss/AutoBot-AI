@@ -9,7 +9,7 @@
   Replaces legacy custom JSON API calls with unified Prometheus/Grafana integration.
 -->
 <template>
-  <div class="phase9-monitoring-dashboard">
+  <div class="performance-monitoring-dashboard">
     <!-- Header -->
     <div class="dashboard-header">
       <div class="header-title">
@@ -542,7 +542,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.phase9-monitoring-dashboard {
+.performance-monitoring-dashboard {
   padding: 20px;
   background: #f8f9fa;
   min-height: 100vh;
