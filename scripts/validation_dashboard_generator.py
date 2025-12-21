@@ -6,8 +6,7 @@
 Real-Time Validation Dashboard Generator
 Creates comprehensive validation reports and dashboards for system monitoring
 
-NOTE: Long methods (_get_dashboard_css, _create_dashboard_html) are ACCEPTABLE
-EXCEPTIONS per Issue #490 - CSS/HTML template generators with low cyclomatic complexity.
+Issue #515: CSS extracted to templates/dashboards/styles/validation_dashboard.css
 """
 
 import argparse
@@ -29,6 +28,7 @@ from src.utils.html_dashboard_utils import (
     get_light_theme_css,
     create_dashboard_header,
 )
+from src.utils.template_loader import load_css, template_exists
 
 logger = logging.getLogger(__name__)
 
@@ -509,153 +509,41 @@ class ValidationDashboardGenerator:
 
         Issue #281: Extracted from _create_dashboard_html to reduce function
         length and separate styling from HTML structure.
+        Issue #515: CSS moved to external template file for better maintainability.
 
         Returns:
             CSS string for dashboard styling.
         """
+        template_path = "dashboards/styles/validation_dashboard.css"
+
+        if template_exists(template_path):
+            return load_css("validation_dashboard")
+
+        # Fallback for backwards compatibility if template is missing
+        logger.warning("CSS template not found, using inline fallback: %s", template_path)
+        return self._get_fallback_css()
+
+    def _get_fallback_css(self) -> str:
+        """
+        Fallback CSS if template file is not available.
+
+        Issue #515: Preserved for backwards compatibility during template migration.
+        """
         return """
-        body {
-            margin: 0;
-            padding: 20px;
-        }
-        .dashboard {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        .stat-card {
-            background: white;
-            padding: 25px;
-            border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            text-align: center;
-        }
-        .stat-value {
-            font-size: 3em;
-            font-weight: bold;
-            margin: 10px 0;
-        }
-        .stat-label {
-            color: #666;
-            font-size: 0.9em;
-        }
+        body { margin: 0; padding: 20px; }
+        .dashboard { max-width: 1400px; margin: 0 auto; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+        .stat-value { font-size: 3em; font-weight: bold; margin: 10px 0; }
         .health-excellent { color: #4CAF50; }
         .health-good { color: #8BC34A; }
         .health-fair { color: #FF9800; }
         .health-needs_attention { color: #F44336; }
-        .main-content {
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 30px;
-            margin-bottom: 30px;
-        }
-        .phases-section {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .sidebar {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-        .sidebar-section {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .phase-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 15px;
-            margin: 10px 0;
-            border-left: 4px solid;
-            background: #f8f9fa;
-            border-radius: 5px;
-        }
-        .phase-progress {
-            width: 100px;
-            height: 8px;
-            background: #e0e0e0;
-            border-radius: 4px;
-            overflow: hidden;
-        }
-        .phase-progress-bar {
-            height: 100%;
-            transition: width 0.3s ease;
-        }
-        .alert {
-            padding: 15px;
-            margin: 10px 0;
-            border-radius: 5px;
-            border-left: 4px solid;
-        }
-        .alert-critical {
-            background: #ffebee;
-            border-color: #f44336;
-            color: #c62828;
-        }
-        .alert-warning {
-            background: #fff3e0;
-            border-color: #ff9800;
-            color: #e65100;
-        }
-        .alert-info {
-            background: #e3f2fd;
-            border-color: #2196f3;
-            color: #1565c0;
-        }
-        .recommendation {
-            padding: 15px;
-            margin: 10px 0;
-            background: #f8f9fa;
-            border-radius: 5px;
-            border-left: 4px solid #007bff;
-        }
-        .recommendation-title {
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        .recommendation-urgency {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 3px;
-            font-size: 0.8em;
-            font-weight: bold;
-        }
-        .urgency-high { background: #ffcdd2; color: #c62828; }
-        .urgency-medium { background: #ffe0b2; color: #e65100; }
-        .urgency-low { background: #c8e6c9; color: #2e7d32; }
-        .chart-container {
-            margin: 20px 0;
-            height: 300px;
-        }
-        .refresh-info {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: rgba(0,0,0,0.8);
-            color: white;
-            padding: 10px 15px;
-            border-radius: 5px;
-            font-size: 0.9em;
-        }
-        @media (max-width: 768px) {
-            .main-content {
-                grid-template-columns: 1fr;
-            }
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-        }
+        .phase-item { display: flex; padding: 15px; margin: 10px 0; border-left: 4px solid; background: #f8f9fa; border-radius: 5px; }
+        .alert { padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid; }
+        .alert-critical { background: #ffebee; border-color: #f44336; }
+        .alert-warning { background: #fff3e0; border-color: #ff9800; }
+        .alert-info { background: #e3f2fd; border-color: #2196f3; }
     """
 
     def _create_dashboard_html(self, report_data: Dict) -> str:

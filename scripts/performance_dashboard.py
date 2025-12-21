@@ -6,8 +6,7 @@
 Performance Dashboard Generator for AutoBot
 Creates HTML dashboards for system monitoring and performance tracking
 
-NOTE: Long method (_get_additional_dashboard_css) is an ACCEPTABLE EXCEPTION
-per Issue #490 - CSS template generator with low cyclomatic complexity.
+Issue #515: CSS extracted to templates/dashboards/styles/performance_dashboard.css
 """
 
 import json
@@ -22,6 +21,7 @@ from src.utils.html_dashboard_utils import (
     get_light_theme_css,
     create_dashboard_header,
 )
+from src.utils.template_loader import load_css, template_exists
 
 
 def _get_additional_dashboard_css() -> str:
@@ -29,9 +29,26 @@ def _get_additional_dashboard_css() -> str:
     Get additional CSS styles for dashboard-specific elements.
 
     Issue #281: Extracted from generate_dashboard_html to reduce function length.
+    Issue #515: CSS moved to external template file for better maintainability.
 
     Returns:
         CSS string for dashboard grid, cards, metrics, progress bars, etc.
+    """
+    template_path = "dashboards/styles/performance_dashboard.css"
+
+    if template_exists(template_path):
+        return load_css("performance_dashboard")
+
+    # Fallback for backwards compatibility if template is missing
+    logger.warning("CSS template not found, using inline fallback: %s", template_path)
+    return _get_fallback_css()
+
+
+def _get_fallback_css() -> str:
+    """
+    Fallback CSS if template file is not available.
+
+    Issue #515: Preserved for backwards compatibility during template migration.
     """
     return """
         .dashboard-grid {
@@ -40,169 +57,29 @@ def _get_additional_dashboard_css() -> str:
             gap: 1.5rem;
             margin-bottom: 2rem;
         }
-
         .card {
             background: white;
             border-radius: 10px;
             padding: 1.5rem;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: transform 0.3s ease;
         }
-
-        .card:hover {
-            transform: translateY(-2px);
-        }
-
-        .card h3 {
-            color: #4a5568;
-            margin-bottom: 1rem;
-            font-size: 1.3rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
         .metric {
             display: flex;
             justify-content: space-between;
-            align-items: center;
             padding: 0.5rem 0;
             border-bottom: 1px solid #e2e8f0;
         }
-
-        .metric:last-child {
-            border-bottom: none;
-        }
-
-        .metric-label {
-            font-weight: 500;
-            color: #4a5568;
-        }
-
-        .metric-value {
-            font-weight: bold;
-            color: #2d3748;
-        }
-
         .progress-bar {
             width: 100%;
             height: 20px;
             background-color: #e2e8f0;
             border-radius: 10px;
             overflow: hidden;
-            margin: 0.5rem 0;
         }
-
-        .progress-fill {
-            height: 100%;
-            border-radius: 10px;
-            transition: width 0.3s ease;
-        }
-
-        .progress-normal {
-            background: linear-gradient(90deg, #48bb78, #38a169);
-        }
-
-        .progress-warning {
-            background: linear-gradient(90deg, #ed8936, #d69e2e);
-        }
-
-        .progress-critical {
-            background: linear-gradient(90deg, #f56565, #e53e3e);
-        }
-
-        .chart-container {
-            position: relative;
-            height: 300px;
-            margin: 1rem 0;
-        }
-
-        .services-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-top: 1rem;
-        }
-
-        .service-card {
-            background: #f8fafc;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 1rem;
-            text-align: center;
-        }
-
-        .service-healthy {
-            border-color: #38a169;
-            background-color: #f0fff4;
-        }
-
-        .service-unhealthy {
-            border-color: #e53e3e;
-            background-color: #fef5f5;
-        }
-
-        .service-name {
-            font-weight: bold;
-            margin-bottom: 0.5rem;
-            text-transform: uppercase;
-            font-size: 0.9rem;
-        }
-
-        .service-status {
-            font-size: 0.8rem;
-            padding: 0.2rem 0.5rem;
-            border-radius: 12px;
-            color: white;
-        }
-
-        .alerts-list {
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .alert-item {
-            padding: 0.8rem;
-            margin: 0.5rem 0;
-            border-radius: 6px;
-            border-left: 4px solid;
-        }
-
-        .alert-warning {
-            background-color: #fef5e7;
-            border-color: #d69e2e;
-        }
-
-        .alert-critical {
-            background-color: #fef5f5;
-            border-color: #e53e3e;
-        }
-
-        .timestamp {
-            color: #718096;
-            font-size: 0.9rem;
-            margin-top: 1rem;
-            text-align: center;
-        }
-
-        .footer {
-            text-align: center;
-            padding: 2rem;
-            color: #718096;
-            background: white;
-            margin-top: 2rem;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-
-        .refresh-info {
-            background: #edf2f7;
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 2rem;
-            text-align: center;
-            color: #4a5568;
-        }
+        .progress-fill { height: 100%; border-radius: 10px; }
+        .progress-normal { background: linear-gradient(90deg, #48bb78, #38a169); }
+        .progress-warning { background: linear-gradient(90deg, #ed8936, #d69e2e); }
+        .progress-critical { background: linear-gradient(90deg, #f56565, #e53e3e); }
     """
 
 
