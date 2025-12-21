@@ -112,7 +112,7 @@ class Phase9MonitoringManager:
                 logger.info("Running initial GPU optimization...")
                 optimization_result = await optimize_gpu_for_multimodal()
                 if optimization_result.success:
-                    logger.info("GPU optimization completed: %s% improvement", optimization_result.performance_improvement:.1f)
+                    logger.info("GPU optimization completed: %.1f%% improvement", optimization_result.performance_improvement)
                     self.optimizations_applied += len(optimization_result.applied_optimizations)
                 else:
                     logger.warning("GPU optimization failed")
@@ -198,12 +198,12 @@ class Phase9MonitoringManager:
                 if overall_efficiency < 80:  # Trigger optimization if efficiency is low
                     optimization_result = await optimize_gpu_for_multimodal()
                     if optimization_result.success:
-                        logger.info("Periodic optimization completed: %s% improvement", optimization_result.performance_improvement:.1f)
+                        logger.info("Periodic optimization completed: %.1f%% improvement", optimization_result.performance_improvement)
                         self.optimizations_applied += len(optimization_result.applied_optimizations)
                     else:
                         logger.warning("Periodic optimization failed")
                 else:
-                    logger.info("GPU efficiency is good (%s%), skipping optimization", overall_efficiency:.1f)
+                    logger.info("GPU efficiency is good (%.1f%%), skipping optimization", overall_efficiency)
 
             except Exception as e:
                 logger.error("Error in periodic optimization loop: %s", e)

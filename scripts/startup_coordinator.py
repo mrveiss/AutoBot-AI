@@ -305,7 +305,7 @@ class StartupCoordinator:
                         component.state = ComponentState.READY
                         component.ready_time = time.time()
                         startup_duration = component.ready_time - component.start_time
-                        logger.info("✅ %s is ready (took %ss)", component.name, startup_duration:.1f)
+                        logger.info("✅ %s is ready (took %.1fs)", component.name, startup_duration)
                         self.save_state()
                         return True
 

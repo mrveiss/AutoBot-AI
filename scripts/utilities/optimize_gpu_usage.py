@@ -264,8 +264,8 @@ def test_gpu_inference():
 
             logger.info("✅ PyTorch CUDA available")
             logger.info("   Device: %s", device_name)
-            logger.info("   Memory Allocated: %s GB", memory_allocated:.2f)
-            logger.info("   Memory Cached: %s GB", memory_cached:.2f)
+            logger.info("   Memory Allocated: %.2f GB", memory_allocated)
+            logger.info("   Memory Cached: %.2f GB", memory_cached)
 
             return True
         else:

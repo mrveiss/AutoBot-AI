@@ -232,7 +232,7 @@ def _report_and_verify_results(
     logger.info("Facts indexed: %s", indexed_count)
     logger.info("Facts skipped (no source): %s", skipped_count)
     logger.info("Errors: %s", error_count)
-    logger.info("Time elapsed: %ss", elapsed:.2f)
+    logger.info("Time elapsed: %.2fs", elapsed)
     logger.info("\nCategory index counts:")
     for cat, count in sorted(category_counts.items()):
         logger.info("  - %s: %s facts", cat, count)

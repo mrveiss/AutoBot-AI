@@ -163,7 +163,7 @@ class StandardizedAgent(BaseAgent):
             async with self._stats_lock:
                 self._total_processing_time += processing_time
 
-            self.logger.debug("Request %s processed successfully in %ss", request.request_id, processing_time:.3f)
+            self.logger.debug("Request %s processed successfully in %.3fs", request.request_id, processing_time)
             return self._build_success_response(request, result, processing_time)
 
         except Exception as e:

@@ -226,7 +226,7 @@ class GPUSemanticChunker:
             device = "cuda:0"
             gpu_name = torch.cuda.get_device_name(0)
             total_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
-            logger.info("Optimizing for GPU: %s (%sGB)", gpu_name, total_memory:.1f)
+            logger.info("Optimizing for GPU: %s (%.1fGB)", gpu_name, total_memory)
         else:
             device = "cpu"
             logger.warning("CUDA not available - falling back to CPU")
@@ -313,8 +313,8 @@ class GPUSemanticChunker:
             sentences_per_sec = len(sentences) / total_time if total_time > 0 else 0
 
             logger.info("GPU chunking completed:")
-            logger.info("  - Total time: %ss", total_time:.3f)
-            logger.info("  - Performance: %s sentences/sec", sentences_per_sec:.1f)
+            logger.info("  - Total time: %.3fs", total_time)
+            logger.info("  - Performance: %.1f sentences/sec", sentences_per_sec)
             logger.info("  - Chunks created: %s", len(chunks))
 
             return chunks

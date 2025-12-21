@@ -215,7 +215,7 @@ class ToolPatternAnalyzer:
             if len(self.tool_calls) % 10 == 0:  # Analyze every 10 calls
                 asyncio.create_task(self._analyze_patterns())
 
-            logger.debug("Recorded tool call: %s (%ss)", tool_name, response_time:.2f)
+            logger.debug("Recorded tool call: %s (%.2fs)", tool_name, response_time)
 
         except Exception as e:
             logger.error("Error recording tool call: %s", e)

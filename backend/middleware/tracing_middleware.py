@@ -258,7 +258,7 @@ class TracingMiddleware(BaseHTTPMiddleware):
             span.set_attribute("http.duration_ms", duration_ms)
         # Log for debugging if trace is slow
         if duration_ms > 5000:  # 5 second threshold
-            logger.warning("Slow request traced: %s took %sms", span_name, duration_ms:.2f)
+            logger.warning("Slow request traced: %s took %.2fms", span_name, duration_ms)
 
 
 def create_tracing_middleware(

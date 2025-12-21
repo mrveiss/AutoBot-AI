@@ -206,7 +206,7 @@ class TodoWriteOptimizer:
                 todo_item.content, existing_todo.content
             )
             if similarity > self.similarity_threshold:
-                logger.debug("Similar todo found: %s similarity", similarity:.2f)
+                logger.debug("Similar todo found: %.2f similarity", similarity)
                 return True
 
         # Check recent operations to prevent rapid duplicates

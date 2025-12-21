@@ -144,7 +144,7 @@ class AdaptiveMemoryManager:
             memory = psutil.virtual_memory()
 
             if memory.percent <= (self.memory_threshold * 100):
-                logger.debug("Memory usage normal: %s%", memory.percent:.1f)
+                logger.debug("Memory usage normal: %.1f%%", memory.percent)
                 return
 
             logger.warning(

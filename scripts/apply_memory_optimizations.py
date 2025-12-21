@@ -263,7 +263,7 @@ class MemoryOptimizationApplier:
 
             if new_size < original_size:
                 saved_mb = (original_size - new_size) / (1024**2)
-                logger.info("💾 Database optimization saved %sMB", saved_mb:.1f)
+                logger.info("💾 Database optimization saved %.1fMB", saved_mb)
                 # Remove backup if successful
                 backup_file.unlink()
             else:

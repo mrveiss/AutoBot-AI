@@ -87,7 +87,7 @@ class DNSCacheService:
                 'status': 'resolved'
             })
 
-            logger.info("✓ %s → %s (%sms)", hostname, ip, resolution_time:.1f)
+            logger.info("✓ %s → %s (%.1fms)", hostname, ip, resolution_time)
 
         except socket.gaierror as e:
             result.update({

@@ -121,7 +121,7 @@ class RateLimiter:
                 wait_time = self.window_seconds - (now - oldest_request)
 
                 if wait_time > 0:
-                    logger.info("Rate limit reached, waiting %ss", wait_time:.2f)
+                    logger.info("Rate limit reached, waiting %.2fs", wait_time)
                     # Release lock while sleeping to allow other operations
                     self._lock.release()
                     try:
@@ -151,7 +151,7 @@ class RateLimiter:
             wait_time = self.window_seconds - (now - oldest_request)
 
             if wait_time > 0:
-                logger.info("Rate limit reached, waiting %ss", wait_time:.2f)
+                logger.info("Rate limit reached, waiting %.2fs", wait_time)
                 # Release lock while sleeping to allow other operations
                 self._lock.release()
                 try:

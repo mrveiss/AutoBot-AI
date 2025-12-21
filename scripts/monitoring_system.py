@@ -800,7 +800,7 @@ class SystemMonitor:
 
             # Collect application metrics
             app_metrics = await self.collect_application_metrics()
-            logger.info("🔧 Services: %s))}", len(app_metrics.get('services', {)
+            logger.info("🔧 Services: %s", len(app_metrics.get('services', {})))
 
             # Perform health checks
             health_results = await self.perform_health_checks()

@@ -209,7 +209,7 @@ class AnsibleExecutor:
         """Default event handler for logging"""
         event_type = event.get("event", "unknown")
         if event_type in _ANSIBLE_LOGGABLE_EVENTS:
-            logger.info("Ansible event: %s - %s)}", event_type, event.get('event_data', {)
+            logger.info("Ansible event: %s - %s", event_type, event.get('event_data', {}))
         else:
             logger.debug("Ansible event: %s", event_type)
 

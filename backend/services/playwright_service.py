@@ -205,7 +205,7 @@ class PlaywrightService:
             ) as response:
                 if response.status == 200:
                     result = await response.json()
-                    logger.info("Frontend test completed: %s)}", result.get('summary', {)
+                    logger.info("Frontend test completed: %s", result.get('summary', {}))
                     return result
                 else:
                     error_text = await response.text()

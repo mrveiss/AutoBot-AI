@@ -199,7 +199,7 @@ class LLMModelOptimizer:
 
                 if process.returncode == 0:
                     install_time = time.time() - start_time
-                    logger.info("✅ Successfully installed %s in %ss", model, install_time:.1f)
+                    logger.info("✅ Successfully installed %s in %.1fs", model, install_time)
                     installation_results[model] = {
                         "status": "success",
                         "install_time": install_time,

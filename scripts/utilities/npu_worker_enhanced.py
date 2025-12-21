@@ -411,7 +411,7 @@ class EnhancedNPUWorker:
                     "precision": self.npu_optimization["precision"],
                 }
 
-                logger.info("✅ Model %s optimized for NPU (%ss)", model_name, time.time() - start_time:.2f)
+                logger.info("✅ Model %s optimized for NPU (%.2fs)", model_name, time.time() - start_time)
 
             else:
                 # CPU fallback
@@ -867,7 +867,7 @@ class EnhancedNPUWorker:
             # Update stats
             self.task_stats["tasks_completed"] += 1
 
-            logger.info("✅ Enhanced task %s completed in %sms", task_id, (end_time - start_time)*1000:.2f)
+            logger.info("✅ Enhanced task %s completed in %.2fms", task_id, (end_time - start_time)*1000)
 
         except Exception as e:
             logger.error("❌ Enhanced task %s failed: %s", task_id, e)

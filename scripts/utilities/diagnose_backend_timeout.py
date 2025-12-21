@@ -74,11 +74,11 @@ class BackendDiagnostic:
             s.close()
 
             if response:
-                logger.info("✅ TCP HTTP response received in %ss", elapsed:.3f)
+                logger.info("✅ TCP HTTP response received in %.3fs", elapsed)
                 logger.info("📋 Response preview: %s", response[:100])
                 return True
             else:
-                logger.error("❌ No response received after %ss", elapsed:.3f)
+                logger.error("❌ No response received after %.3fs", elapsed)
                 return False
 
         except socket.timeout:
@@ -109,11 +109,11 @@ class BackendDiagnostic:
 
         except asyncio.TimeoutError:
             elapsed = time.time() - start_time
-            logger.error("❌ Async request timed out after %ss", elapsed:.3f)
+            logger.error("❌ Async request timed out after %.3fs", elapsed)
             return False
         except Exception as e:
             elapsed = time.time() - start_time
-            logger.error("❌ Async request error after %ss: %s", elapsed:.3f, e)
+            logger.error("❌ Async request error after %.3fs: %s", elapsed, e)
             return False
 
     def test_sync_request(self) -> bool:
@@ -136,11 +136,11 @@ class BackendDiagnostic:
 
         except requests.exceptions.Timeout:
             elapsed = time.time() - start_time
-            logger.error("❌ Sync request timed out after %ss", elapsed:.3f)
+            logger.error("❌ Sync request timed out after %.3fs", elapsed)
             return False
         except Exception as e:
             elapsed = time.time() - start_time
-            logger.error("❌ Sync request error after %ss: %s", elapsed:.3f, e)
+            logger.error("❌ Sync request error after %.3fs: %s", elapsed, e)
             return False
 
     def test_specific_endpoints(self) -> Dict[str, bool]:

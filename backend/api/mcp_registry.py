@@ -96,11 +96,11 @@ class MCPToolCache:
 
         age = datetime.now() - self._tools_updated
         if age > self.ttl:
-            logger.debug("MCP tools cache expired (age: %ss)", age.total_seconds():.1f)
+            logger.debug("MCP tools cache expired (age: %.1fs)", age.total_seconds())
             self._stats["cache_misses"] += 1
             return None
 
-        logger.debug("MCP tools cache hit (age: %ss)", age.total_seconds():.1f)
+        logger.debug("MCP tools cache hit (age: %.1fs)", age.total_seconds())
         self._stats["cache_hits"] += 1
         return self._tools_cache
 
@@ -124,11 +124,11 @@ class MCPToolCache:
 
         age = datetime.now() - self._bridges_updated
         if age > self.ttl:
-            logger.debug("MCP bridges cache expired (age: %ss)", age.total_seconds():.1f)
+            logger.debug("MCP bridges cache expired (age: %.1fs)", age.total_seconds())
             self._stats["cache_misses"] += 1
             return None
 
-        logger.debug("MCP bridges cache hit (age: %ss)", age.total_seconds():.1f)
+        logger.debug("MCP bridges cache hit (age: %.1fs)", age.total_seconds())
         self._stats["cache_hits"] += 1
         return self._bridges_cache
 

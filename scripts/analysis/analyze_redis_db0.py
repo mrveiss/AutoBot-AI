@@ -172,7 +172,7 @@ def analyze_redis_db0():
 
         # Get overall info
         info = client.info()
-        logger.info("Database 0 Keys: %s).get('keys', 'No data')}", info.get('db0', {)
+        logger.info("Database 0 Keys: %s", info.get('db0', {}).get('keys', 'No data'))
         logger.info("Total Memory Used: %s", info.get('used_memory_human', 'Unknown'))
 
         # Analyze key patterns using helper

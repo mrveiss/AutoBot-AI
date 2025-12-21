@@ -419,7 +419,7 @@ class RedisToChromaDBMigration:
                     matches += 1
 
             accuracy = matches / sample_size * 100
-            logger.info("Verification: %s/%s matches (%s%)", matches, sample_size, accuracy:.1f)
+            logger.info("Verification: %s/%s matches (%.1f%%)", matches, sample_size, accuracy)
 
             return accuracy > 95  # Require >95% match
 
@@ -492,10 +492,10 @@ class RedisToChromaDBMigration:
         logger.info("\n" + "="*50)
         logger.info("Migration Complete")
         logger.info("="*50)
-        logger.info("Total time: %ss", total_time:.1f)
+        logger.info("Total time: %.1fs", total_time)
         logger.info("Migrated: %s/%s", self.migrated_vectors, self.total_vectors)
         logger.info("Failed: %s", self.failed_vectors)
-        logger.info("Speed: %s vectors/sec", self.migrated_vectors/total_time:.0f)
+        logger.info("Speed: %.0f vectors/sec", self.migrated_vectors/total_time)
 
         # Save migration log
         self._save_migration_log()

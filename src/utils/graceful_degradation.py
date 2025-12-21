@@ -594,7 +594,7 @@ class GracefulDegradationManager:
             uptime = self.service_status.uptime_percentage
 
         # Log health status (outside lock)
-        logger.debug("Health check: %s (uptime: %s%)", health, uptime:.1f)
+        logger.debug("Health check: %s (uptime: %.1f%%)", health, uptime)
 
     async def get_service_status(self) -> ServiceStatus:
         """Get current service status (thread-safe, returns snapshot)"""

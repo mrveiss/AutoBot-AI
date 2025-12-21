@@ -583,7 +583,7 @@ class ClaudeAPIOptimizationSuite:
                     await self._adjust_optimization_mode(OptimizationMode.AGGRESSIVE)
 
                 elif rate_limit_risk > 0.6:  # Moderate risk
-                    logger.info("Moderate rate limit risk: %s", rate_limit_risk:.2f)
+                    logger.info("Moderate rate limit risk: %.2f", rate_limit_risk)
                     await self._adjust_optimization_mode(OptimizationMode.BALANCED)
 
             except Exception as e:
