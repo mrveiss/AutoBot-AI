@@ -166,7 +166,7 @@ async def get_enterprise_status():
         )
 
     except Exception as e:
-        logger.error(f"Error getting enterprise status: {e}")
+        logger.error("Error getting enterprise status: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to get enterprise status: {str(e)}"
         )
@@ -191,7 +191,7 @@ async def enable_enterprise_feature(request: FeatureEnableRequest):
     try:
         manager = get_enterprise_manager()
 
-        logger.info(f"Enabling enterprise feature: {request.feature_name}")
+        logger.info("Enabling enterprise feature: %s", request.feature_name)
 
         result = await manager.enable_feature(request.feature_name)
 
@@ -223,7 +223,7 @@ async def enable_enterprise_feature(request: FeatureEnableRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Error enabling enterprise feature {request.feature_name}: {e}")
+        logger.error("Error enabling enterprise feature %s: %s", request.feature_name, e)
         raise HTTPException(
             status_code=500, detail=f"Failed to enable feature: {str(e)}"
         )
@@ -302,7 +302,7 @@ async def enable_all_enterprise_features():
         )
 
     except Exception as e:
-        logger.error(f"Error enabling all enterprise features: {e}")
+        logger.error("Error enabling all enterprise features: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to enable enterprise features: {str(e)}"
         )
@@ -362,7 +362,7 @@ async def list_enterprise_features(
         )
 
     except Exception as e:
-        logger.error(f"Error listing enterprise features: {e}")
+        logger.error("Error listing enterprise features: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to list features: {str(e)}"
         )
@@ -421,7 +421,7 @@ async def bulk_enable_features(request: BulkFeatureRequest):
         )
 
     except Exception as e:
-        logger.error(f"Error in bulk feature enablement: {e}")
+        logger.error("Error in bulk feature enablement: %s", e)
         raise HTTPException(status_code=500, detail=f"Bulk enablement failed: {str(e)}")
 
 
@@ -490,7 +490,7 @@ async def get_enterprise_health():
         )
 
     except Exception as e:
-        logger.error(f"Error getting enterprise health: {e}")
+        logger.error("Error getting enterprise health: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to get health status: {str(e)}"
         )
@@ -556,7 +556,7 @@ async def optimize_system_performance(request: PerformanceOptimizationRequest):
         )
 
     except Exception as e:
-        logger.error(f"Error optimizing performance: {e}")
+        logger.error("Error optimizing performance: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Performance optimization failed: {str(e)}"
         )
@@ -619,7 +619,7 @@ async def get_infrastructure_status():
         )
 
     except Exception as e:
-        logger.error(f"Error getting infrastructure status: {e}")
+        logger.error("Error getting infrastructure status: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to get infrastructure status: {str(e)}"
         )
@@ -669,7 +669,7 @@ async def deploy_zero_downtime():
         )
 
     except Exception as e:
-        logger.error(f"Error in zero-downtime deployment: {e}")
+        logger.error("Error in zero-downtime deployment: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Zero-downtime deployment failed: {str(e)}"
         )
@@ -724,7 +724,7 @@ async def validate_phase4_completion():
         )
 
     except Exception as e:
-        logger.error(f"Error validating Phase 4 completion: {e}")
+        logger.error("Error validating Phase 4 completion: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Phase 4 validation failed: {str(e)}"
         )

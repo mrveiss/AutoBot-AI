@@ -38,7 +38,7 @@ class WorkflowController:
         workflow_id = control_request.workflow_id
 
         if workflow_id not in workflows:
-            logger.error(f"Workflow {workflow_id} not found for control action")
+            logger.error("Workflow %s not found for control action", workflow_id)
             return False
 
         workflow = workflows[workflow_id]
@@ -69,7 +69,7 @@ class WorkflowController:
             return await self._skip_step(workflow, control_request.step_id, workflows)
 
         else:
-            logger.warning(f"Unknown workflow control action: {action}")
+            logger.warning("Unknown workflow control action: %s", action)
             return False
 
     async def _pause_workflow(self, workflow: ActiveWorkflow) -> bool:

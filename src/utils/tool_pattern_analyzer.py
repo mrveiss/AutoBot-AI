@@ -215,10 +215,10 @@ class ToolPatternAnalyzer:
             if len(self.tool_calls) % 10 == 0:  # Analyze every 10 calls
                 asyncio.create_task(self._analyze_patterns())
 
-            logger.debug(f"Recorded tool call: {tool_name} ({response_time:.2f}s)")
+            logger.debug("Recorded tool call: %s (%ss)", tool_name, response_time:.2f)
 
         except Exception as e:
-            logger.error(f"Error recording tool call: {e}")
+            logger.error("Error recording tool call: %s", e)
 
     def _classify_tool_call(
         self, tool_name: str, parameters: Dict[str, Any]
@@ -397,7 +397,7 @@ class ToolPatternAnalyzer:
             )
 
         except Exception as e:
-            logger.error(f"Error during pattern analysis: {e}")
+            logger.error("Error during pattern analysis: %s", e)
 
     async def _detect_sequence_patterns(self) -> None:
         """Detect common tool call sequences"""
@@ -876,11 +876,11 @@ class ToolPatternAnalyzer:
             with open(file_path, "w") as f:
                 json.dump(report, f, indent=2, default=str)
 
-            logger.info(f"Analysis report exported to {file_path}")
+            logger.info("Analysis report exported to %s", file_path)
             return True
 
         except Exception as e:
-            logger.error(f"Error exporting analysis report: {e}")
+            logger.error("Error exporting analysis report: %s", e)
             return False
 
     def reset_analysis(self) -> None:

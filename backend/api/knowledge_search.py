@@ -161,7 +161,7 @@ async def _apply_reranking(query: str, results: list, kb_to_use) -> dict | None:
             reranking_method="cross-encoder",
         )
     except Exception as e:
-        logger.error(f"Advanced reranking failed: {e}, returning original results")
+        logger.error("Advanced reranking failed: %s, returning original results", e)
         return None
 
 
@@ -184,7 +184,7 @@ async def _apply_rag_enhancement(query: str, results: list, kb_class_name: str) 
             rag_analysis=rag_enhancement,
         )
     except Exception as e:
-        logger.error(f"RAG enhancement failed: {e}")
+        logger.error("RAG enhancement failed: %s", e)
         return None
 
 
@@ -222,7 +222,7 @@ async def _check_empty_kb_for_rag(kb_to_use, query: str) -> Metadata | None:
                 "message": "Knowledge base is empty",
             }
     except Exception as stats_err:
-        logger.warning(f"Could not check KB stats: {stats_err}")
+        logger.warning("Could not check KB stats: %s", stats_err)
 
     return None
 
@@ -247,7 +247,7 @@ async def _reformulate_query_if_requested(
                 )  # Limit to avoid too many queries
 
         except Exception as e:
-            logger.warning(f"Query reformulation failed: {e}")
+            logger.warning("Query reformulation failed: %s", e)
 
     return reformulated_queries
 
@@ -281,7 +281,7 @@ async def _search_with_all_queries(
                     all_results.append(result)
 
         except Exception as e:
-            logger.error(f"Search failed for query '{search_query}': {e}")
+            logger.error("Search failed for query '%s': %s", search_query, e)
 
     return all_results[:search_limit]
 
@@ -350,7 +350,7 @@ async def _process_with_rag_agent(
         }
 
     except Exception as e:
-        logger.error(f"RAG processing failed: {e}")
+        logger.error("RAG processing failed: %s", e)
         return {
             "status": "partial_success",
             "synthesized_response": (
@@ -415,7 +415,7 @@ async def search_knowledge(request: dict, req: Request):
                         "Add documents in the Manage tab.",
             )
     except Exception as stats_err:
-        logger.warning(f"Could not check KB stats: {stats_err}")
+        logger.warning("Could not check KB stats: %s", stats_err)
 
     # Execute search
     results = await _execute_kb_search(kb_to_use, query, search_limit, mode)
@@ -500,7 +500,7 @@ async def enhanced_search(request: EnhancedSearchRequest, req: Request):
         return request.get_fallback_response(results)
 
     # Issue #372: Use model method for log summary
-    logger.info(f"Enhanced search: {request.get_log_summary()}")
+    logger.info("Enhanced search: %s", request.get_log_summary())
 
     # Issue #372: Use model method for search params
     result = await kb_to_use.enhanced_search(**request.to_search_params())
@@ -652,7 +652,7 @@ async def similarity_search(request: dict, req: Request):
                 "rag_analysis": rag_enhancement,
             }
         except Exception as e:
-            logger.error(f"RAG enhancement failed: {e}")
+            logger.error("RAG enhancement failed: %s", e)
             # Continue with regular results if RAG fails
 
     return {
@@ -922,7 +922,7 @@ async def _enhance_search_with_rag(
         }
 
     except Exception as e:
-        logger.error(f"RAG enhancement error: {e}")
+        logger.error("RAG enhancement error: %s", e)
         return {
             "error": str(e),
             "analysis_summary": {

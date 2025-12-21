@@ -180,7 +180,7 @@ class GPUVectorIndex:
                 return False
 
         except Exception as e:
-            logger.error(f"Failed to initialize vector index: {e}")
+            logger.error("Failed to initialize vector index: %s", e)
             return False
 
     def _detect_wsl(self) -> bool:
@@ -212,7 +212,7 @@ class GPUVectorIndex:
             return True
 
         except Exception as e:
-            logger.warning(f"GPU index initialization failed: {e}")
+            logger.warning("GPU index initialization failed: %s", e)
             return False
 
     async def _initialize_cpu_index(self) -> bool:
@@ -225,7 +225,7 @@ class GPUVectorIndex:
             )
             return True
         except Exception as e:
-            logger.error(f"CPU index initialization failed: {e}")
+            logger.error("CPU index initialization failed: %s", e)
             return False
 
     def _create_base_index(self) -> Any:
@@ -537,11 +537,11 @@ class GPUVectorIndex:
             await asyncio.to_thread(_write_id_map)
 
             self.last_save_time = datetime.now()
-            logger.info(f"✅ Index saved to {save_path}")
+            logger.info("✅ Index saved to %s", save_path)
             return True
 
         except Exception as e:
-            logger.error(f"Failed to save index: {e}")
+            logger.error("Failed to save index: %s", e)
             return False
 
     async def load(self, path: Optional[str] = None) -> bool:
@@ -557,7 +557,7 @@ class GPUVectorIndex:
             # Issue #358 - avoid blocking
             index_file_exists = await asyncio.to_thread((load_dir / "index.faiss").exists)
             if not index_file_exists:
-                logger.warning(f"No index file found at {load_path}")
+                logger.warning("No index file found at %s", load_path)
                 return False
 
             # Load CPU index
@@ -599,7 +599,7 @@ class GPUVectorIndex:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to load index: {e}")
+            logger.error("Failed to load index: %s", e)
             return False
 
     async def _maybe_save(self):
@@ -705,7 +705,7 @@ class HybridVectorSearch:
                 if added == 0:
                     added = len(doc_ids)
             except Exception as e:
-                logger.error(f"Failed to add to ChromaDB: {e}")
+                logger.error("Failed to add to ChromaDB: %s", e)
 
         return added
 
@@ -810,7 +810,7 @@ class HybridVectorSearch:
             return enriched
 
         except Exception as e:
-            logger.error(f"Failed to enrich from ChromaDB: {e}")
+            logger.error("Failed to enrich from ChromaDB: %s", e)
             return results
 
     async def _chromadb_search(
@@ -875,7 +875,7 @@ class HybridVectorSearch:
             return results, metrics
 
         except Exception as e:
-            logger.error(f"ChromaDB search failed: {e}")
+            logger.error("ChromaDB search failed: %s", e)
             return [], SearchMetrics(
                 query_time_ms=0,
                 total_vectors_searched=0,
@@ -924,11 +924,11 @@ class HybridVectorSearch:
                 embeddings, doc_ids, normalize=True
             )
 
-            logger.info(f"✅ Synced {added} vectors from ChromaDB to FAISS index")
+            logger.info("✅ Synced %s vectors from ChromaDB to FAISS index", added)
             return added
 
         except Exception as e:
-            logger.error(f"Failed to sync from ChromaDB: {e}")
+            logger.error("Failed to sync from ChromaDB: %s", e)
             return 0
 
     def get_stats(self) -> Dict[str, Any]:

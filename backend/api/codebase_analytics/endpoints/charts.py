@@ -140,9 +140,9 @@ async def get_chart_data():
                     metadata, problem_types, severity_counts, race_conditions, file_problems
                 )
             storage_type = "chromadb"
-            logger.info(f"Aggregated chart data for {total_problems} problems")
+            logger.info("Aggregated chart data for %s problems", total_problems)
         except Exception as chroma_error:
-            logger.warning(f"ChromaDB query failed: {chroma_error}")
+            logger.warning("ChromaDB query failed: %s", chroma_error)
             code_collection = None
 
     # Fallback to Redis if ChromaDB fails
@@ -161,7 +161,7 @@ async def get_chart_data():
             )
             storage_type = "redis"
         except Exception as redis_error:
-            logger.error(f"Redis query failed: {redis_error}")
+            logger.error("Redis query failed: %s", redis_error)
             return JSONResponse(
                 {"status": "error", "message": "Failed to retrieve chart data", "error": str(redis_error)},
                 status_code=500,

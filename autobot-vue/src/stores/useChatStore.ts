@@ -162,7 +162,7 @@ export const useChatStore = defineStore('chat', () => {
       currentSession.value.messages[messageIndex] = {
         ...message,
         metadata: {
-          ...(message.metadata || {}),
+          ...message.metadata,
           ...metadataUpdates
         }
       }

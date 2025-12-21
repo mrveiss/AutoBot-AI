@@ -298,7 +298,7 @@ def get_staged_files() -> list[str]:
             return [f for f in result.stdout.strip().split("\n") if f]
         return []
     except Exception as e:
-        logger.warning(f"Failed to get staged files: {e}")
+        logger.warning("Failed to get staged files: %s", e)
         return []
 
 
@@ -320,7 +320,7 @@ def get_file_content(filepath: str) -> Optional[str]:
             return path.read_text(encoding="utf-8")
         return None
     except Exception as e:
-        logger.warning(f"Failed to read file {filepath}: {e}")
+        logger.warning("Failed to read file %s: %s", filepath, e)
         return None
 
 
@@ -372,7 +372,7 @@ def run_check(check: CheckDefinition, filepath: str, content: str) -> list[Check
                     )
                 )
     except re.error as e:
-        logger.warning(f"Invalid regex in check {check.id}: {e}")
+        logger.warning("Invalid regex in check %s: %s", check.id, e)
 
     return results
 

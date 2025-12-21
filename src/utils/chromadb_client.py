@@ -77,9 +77,9 @@ def get_chromadb_client(
             ),
         )
 
-        logger.info(f"ChromaDB client initialized at: {chroma_path}")
+        logger.info("ChromaDB client initialized at: %s", chroma_path)
         return client
 
     except Exception as e:
-        logger.error(f"Failed to initialize ChromaDB client: {e}")
+        logger.error("Failed to initialize ChromaDB client: %s", e)
         raise

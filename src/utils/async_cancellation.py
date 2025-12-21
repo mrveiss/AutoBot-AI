@@ -51,14 +51,14 @@ class CancellationToken:
         self.cancellation_message = message
         self.cancellation_time = time.time()
 
-        logger.info(f"🚫 Operation cancelled: {reason.value} - {message}")
+        logger.info("🚫 Operation cancelled: %s - %s", reason.value, message)
 
         # Execute cancellation callbacks
         for callback in self._callbacks:
             try:
                 callback(self)
             except Exception as e:
-                logger.error(f"Error in cancellation callback: {e}")
+                logger.error("Error in cancellation callback: %s", e)
 
     def add_cancellation_callback(
         self, callback: Callable[["CancellationToken"], None]
@@ -215,7 +215,7 @@ class SmartCancellationHandler:
                 await asyncio.sleep(TimingConstants.STANDARD_DELAY)  # Check every second
 
             except Exception as e:
-                logger.error(f"Error in condition monitoring: {e}")
+                logger.error("Error in condition monitoring: %s", e)
                 await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)  # Wait longer on error
 
     async def shutdown(self):
@@ -262,15 +262,15 @@ async def execute_with_cancellation(
                 operation, token, *args, **kwargs
             )
 
-        logger.info(f"✅ Operation completed successfully: {operation_id}")
+        logger.info("✅ Operation completed successfully: %s", operation_id)
         return result
 
     except OperationCancelledException as e:
-        logger.warning(f"⚠️ Operation cancelled: {operation_id} - {e.message}")
+        logger.warning("⚠️ Operation cancelled: %s - %s", operation_id, e.message)
         raise
 
     except Exception as e:
-        logger.error(f"❌ Operation failed: {operation_id} - {str(e)}")
+        logger.error("❌ Operation failed: %s - %s", operation_id, str(e))
         raise
 
     finally:

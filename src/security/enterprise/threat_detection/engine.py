@@ -127,7 +127,7 @@ class ThreatDetectionEngine:
                 self._save_config(default_config)
                 return default_config
         except Exception as e:
-            logger.error(f"Failed to load threat detection config: {e}")
+            logger.error("Failed to load threat detection config: %s", e)
             return self._get_default_config()
 
     def _get_default_config(self) -> Dict:
@@ -180,7 +180,7 @@ class ThreatDetectionEngine:
                 with open(self.config_path, "w", encoding="utf-8") as f:
                     yaml.dump(config, f, default_flow_style=False)
             except Exception as e:
-                logger.error(f"Failed to save threat detection config: {e}")
+                logger.error("Failed to save threat detection config: %s", e)
 
     def _load_injection_patterns(self) -> List[Dict]:
         """Load command injection detection patterns"""
@@ -289,9 +289,9 @@ class ThreatDetectionEngine:
                 with open(self.profile_storage_path, "rb") as f:
                     self.user_profiles = pickle.load(f)
                 self.stats["users_monitored"] = len(self.user_profiles)
-                logger.info(f"Loaded {len(self.user_profiles)} user profiles")
+                logger.info("Loaded %s user profiles", len(self.user_profiles))
         except Exception as e:
-            logger.error(f"Failed to load user profiles: {e}")
+            logger.error("Failed to load user profiles: %s", e)
             self.user_profiles = {}
 
     def _save_user_profiles(self):
@@ -300,7 +300,7 @@ class ThreatDetectionEngine:
             with open(self.profile_storage_path, "wb") as f:
                 pickle.dump(self.user_profiles, f)
         except Exception as e:
-            logger.error(f"Failed to save user profiles: {e}")
+            logger.error("Failed to save user profiles: %s", e)
 
     def _start_background_tasks(self):
         """Start background monitoring and maintenance tasks"""
@@ -326,7 +326,7 @@ class ThreatDetectionEngine:
                 await asyncio.sleep(retrain_interval)
                 await self._retrain_models()
             except Exception as e:
-                logger.error(f"Error in periodic model training: {e}")
+                logger.error("Error in periodic model training: %s", e)
 
     async def _periodic_profile_updates(self):
         """Periodically update user behavioral profiles"""
@@ -340,7 +340,7 @@ class ThreatDetectionEngine:
                 await asyncio.sleep(update_interval)
                 await self._update_user_profiles()
             except Exception as e:
-                logger.error(f"Error in periodic profile updates: {e}")
+                logger.error("Error in periodic profile updates: %s", e)
 
     async def _periodic_cleanup(self):
         """Periodic cleanup of old data and statistics"""
@@ -349,7 +349,7 @@ class ThreatDetectionEngine:
                 await asyncio.sleep(TimingConstants.HOURLY_INTERVAL)  # Cleanup every hour
                 await self._cleanup_old_data()
             except Exception as e:
-                logger.error(f"Error in periodic cleanup: {e}")
+                logger.error("Error in periodic cleanup: %s", e)
 
     async def analyze_event(self, event: Dict) -> Optional[ThreatEvent]:
         """
@@ -464,39 +464,29 @@ class ThreatDetectionEngine:
 
     async def _block_ip_address(self, ip_address: str):
         """Block suspicious IP address"""
-        logger.warning(f"SECURITY ACTION: Blocking IP address {ip_address}")
+        logger.warning("SECURITY ACTION: Blocking IP address %s", ip_address)
         # Implementation would integrate with firewall/WAF
 
     async def _quarantine_file(self, filename: str):
         """Quarantine suspicious file"""
-        logger.warning(f"SECURITY ACTION: Quarantining file {filename}")
+        logger.warning("SECURITY ACTION: Quarantining file %s", filename)
         # Implementation would move file to quarantine directory
 
     async def _apply_rate_limiting(self, user_id: str, ip_address: str):
         """Apply rate limiting to user/IP"""
-        logger.warning(
-            f"SECURITY ACTION: Rate limiting user {user_id} from IP {ip_address}"
-        )
+        logger.warning("SECURITY ACTION: Rate limiting user %s from IP %s", user_id, ip_address)
         # Implementation would update rate limiting rules
 
     async def _send_security_alert(self, threat: ThreatEvent):
         """Send security alert to security team"""
-        logger.critical(
-            f"SECURITY THREAT DETECTED: {threat.threat_category.value} | "
-            f"Level: {threat.threat_level.value} | "
-            f"User: {threat.user_id} | "
-            f"Confidence: {threat.confidence_score:.2f} | "
-            f"IP: {threat.source_ip}"
-        )
+        logger.critical("SECURITY THREAT DETECTED: %s | Level: %s | User: %s | Confidence: %.2f | IP: %s", threat.threat_category.value, threat.threat_level.value, threat.user_id, threat.confidence_score, threat.source_ip)
 
     async def _retrain_models(self):
         """Retrain ML models with new data"""
         min_samples = self.config.get("ml_models", {}).get("min_training_samples", 1000)
 
         if len(self.recent_events) < min_samples:
-            logger.info(
-                f"Insufficient data for model training: {len(self.recent_events)} < {min_samples}"
-            )
+            logger.info("Insufficient data for model training: %s < %s", len(self.recent_events), min_samples)
             return
 
         try:
@@ -510,7 +500,7 @@ class ThreatDetectionEngine:
                 logger.info("ML models retrained successfully")
 
         except Exception as e:
-            logger.error(f"Failed to retrain models: {e}")
+            logger.error("Failed to retrain models: %s", e)
 
     def _extract_features_from_events(self) -> np.ndarray:
         """Extract numerical features from events for ML training"""
@@ -542,7 +532,7 @@ class ThreatDetectionEngine:
             self._save_user_profiles()
             logger.info("User profiles updated successfully")
         except Exception as e:
-            logger.error(f"Failed to update user profiles: {e}")
+            logger.error("Failed to update user profiles: %s", e)
 
     async def _cleanup_old_data(self):
         """Clean up old data and maintain performance"""
@@ -563,12 +553,10 @@ class ThreatDetectionEngine:
                 self.stats["threats_by_category"] = defaultdict(int)
                 self.stats["threats_by_level"] = defaultdict(int)
 
-            logger.debug(
-                f"Cleanup completed: removed {len(expired_sessions)} expired sessions"
-            )
+            logger.debug("Cleanup completed: removed %s expired sessions", len(expired_sessions))
 
         except Exception as e:
-            logger.error(f"Error during cleanup: {e}")
+            logger.error("Error during cleanup: %s", e)
 
     def get_threat_statistics(self) -> Dict:
         """Get threat detection statistics"""

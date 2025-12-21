@@ -84,14 +84,14 @@ async def _create_new_knowledge_base(app: FastAPI):
         return None
 
     except ImportError as import_error:
-        logger.error(f"❌ CRITICAL: KnowledgeBase not available: {import_error}")
-        logger.error(f"Import traceback:\n{traceback.format_exc()}")
+        logger.error("❌ CRITICAL: KnowledgeBase not available: %s", import_error)
+        logger.error("Import traceback:\n%s", traceback.format_exc())
         return None
     except Exception as init_error:
         logger.error(
             f"❌ CRITICAL: KnowledgeBase initialization failed: {init_error}"
         )
-        logger.error(f"Full traceback:\n{traceback.format_exc()}")
+        logger.error("Full traceback:\n%s", traceback.format_exc())
         return None
 
 
@@ -128,7 +128,7 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
         return await _create_new_knowledge_base(app)
 
     except Exception as e:
-        logger.error(f"❌ Failed to get or create knowledge base: {e}")
+        logger.error("❌ Failed to get or create knowledge base: %s", e)
         return None
 
 
@@ -177,8 +177,8 @@ async def get_knowledge_base_async() -> Optional["KnowledgeBase"]:  # noqa: F821
                 return None
 
     except ImportError as import_error:
-        logger.error(f"❌ KnowledgeBase not available: {import_error}")
+        logger.error("❌ KnowledgeBase not available: %s", import_error)
         return None
     except Exception as e:
-        logger.error(f"❌ Failed to create knowledge base singleton: {e}")
+        logger.error("❌ Failed to create knowledge base singleton: %s", e)
         return None

@@ -135,7 +135,7 @@ class AdvancedWorkflowOrchestrator:
             return workflow_id
 
         except Exception as e:
-            logger.error(f"Failed to generate intelligent workflow: {e}")
+            logger.error("Failed to generate intelligent workflow: %s", e)
             raise
 
     async def _create_enhanced_workflow(

@@ -306,7 +306,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
             self._finalize_analysis()
             return self.graphs
         except SyntaxError as e:
-            logger.error(f"Syntax error in {self.file_path}: {e}")
+            logger.error("Syntax error in %s: %s", self.file_path, e)
             raise
 
     def _finalize_analysis(self):
@@ -1057,7 +1057,7 @@ async def analyze_code(request: AnalyzeRequest):
     except SyntaxError as e:
         raise HTTPException(status_code=400, detail=f"Syntax error in code: {str(e)}")
     except Exception as e:
-        logger.error(f"Analysis error: {e}")
+        logger.error("Analysis error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1144,7 +1144,7 @@ async def analyze_file(request: AnalyzeFileRequest):
     except SyntaxError as e:
         raise HTTPException(status_code=400, detail=f"Syntax error in file: {str(e)}")
     except Exception as e:
-        logger.error(f"File analysis error: {e}")
+        logger.error("File analysis error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1183,7 +1183,7 @@ async def get_vulnerabilities(request: AnalyzeRequest):
         }
 
     except Exception as e:
-        logger.error(f"Vulnerability analysis error: {e}")
+        logger.error("Vulnerability analysis error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1233,7 +1233,7 @@ async def get_taint_summary(request: AnalyzeRequest):
         )
 
     except Exception as e:
-        logger.error(f"Taint summary error: {e}")
+        logger.error("Taint summary error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 

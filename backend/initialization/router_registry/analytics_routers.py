@@ -74,13 +74,13 @@ def _load_single_analytics_router(
     try:
         module = importlib.import_module(module_path)
         router = getattr(module, 'router')
-        logger.info(f"✅ Optional router loaded: {name}")
+        logger.info("✅ Optional router loaded: %s", name)
         return (router, prefix, tags, name)
     except ImportError as e:
-        logger.warning(f"⚠️ Optional router not available: {name} - {e}")
+        logger.warning("⚠️ Optional router not available: %s - %s", name, e)
         return None
     except AttributeError as e:
-        logger.warning(f"⚠️ Router not found in module {module_path}: {name} - {e}")
+        logger.warning("⚠️ Router not found in module %s: %s - %s", module_path, name, e)
         return None
 
 
@@ -103,5 +103,5 @@ def load_analytics_routers() -> List[Tuple]:
         if result:
             optional_routers.append(result)
 
-    logger.info(f"📊 Loaded {len(optional_routers)}/{len(ANALYTICS_ROUTER_CONFIGS)} analytics routers")
+    logger.info("📊 Loaded %s/%s analytics routers", len(optional_routers), len(ANALYTICS_ROUTER_CONFIGS))
     return optional_routers

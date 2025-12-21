@@ -119,7 +119,7 @@ async def enhanced_lifespan(app: FastAPI):
         await close_ai_stack_client()
         logger.info("✅ AI Stack client closed successfully")
     except Exception as e:
-        logger.error(f"❌ Error closing AI Stack client: {e}")
+        logger.error("❌ Error closing AI Stack client: %s", e)
 
     # Shutdown distributed tracing
     try:
@@ -130,7 +130,7 @@ async def enhanced_lifespan(app: FastAPI):
         tracing.shutdown()
         logger.info("✅ Distributed tracing shutdown complete")
     except Exception as e:
-        logger.error(f"❌ Error shutting down distributed tracing: {e}")
+        logger.error("❌ Error shutting down distributed tracing: %s", e)
 
     # REFACTORED: Removed redis_pools cleanup - using centralized Redis client management
     # Redis connections are automatically managed by get_redis_client()
@@ -178,7 +178,7 @@ def create_enhanced_app() -> FastAPI:
 
         app.add_middleware(TracingMiddleware, service_name="autobot-backend")
     except Exception as e:
-        logger.warning(f"Distributed tracing middleware not available: {e}")
+        logger.warning("Distributed tracing middleware not available: %s", e)
 
     # NOTE: AuthenticationMiddleware is a utility class, not ASGI middleware
     # It's accessed via auth_middleware singleton and get_current_user dependency
@@ -191,7 +191,7 @@ def create_enhanced_app() -> FastAPI:
     @app.exception_handler(Exception)
     async def global_exception_handler(request, exc):
         """Handle uncaught exceptions with logging and JSON response."""
-        logger.error(f"Global exception: {exc}\n{traceback.format_exc()}")
+        logger.error("Global exception: %s\n%s", exc, traceback.format_exc())
         # Thread-safe access to init status
         ai_stack_status = await get_init_status("ai_stack")
         return JSONResponse(
@@ -254,9 +254,9 @@ def configure_enhanced_api_routes(app: FastAPI) -> None:
             router_tags: List[Union[str, Enum]] = list(tags) if tags else []
             api_router.include_router(router, prefix=prefix, tags=router_tags)
             api_registry.register_router(name, router, f"/api{prefix}")
-            logger.info(f"✅ Registered core router: {name} at /api{prefix}")
+            logger.info("✅ Registered core router: %s at /api%s", name, prefix)
         except Exception as e:
-            logger.error(f"❌ Failed to register core router {name}: {e}")
+            logger.error("❌ Failed to register core router %s: %s", name, e)
 
     # Register AI Stack enhanced routers
     for router, prefix, tags, name in ai_enhanced_routers_config:
@@ -264,9 +264,9 @@ def configure_enhanced_api_routes(app: FastAPI) -> None:
             router_tags: List[Union[str, Enum]] = list(tags) if tags else []
             api_router.include_router(router, prefix=prefix, tags=router_tags)
             api_registry.register_router(name, router, f"/api{prefix}")
-            logger.info(f"✅ Registered AI Stack router: {name} at /api{prefix}")
+            logger.info("✅ Registered AI Stack router: %s at /api%s", name, prefix)
         except Exception as e:
-            logger.error(f"❌ Failed to register AI Stack router {name}: {e}")
+            logger.error("❌ Failed to register AI Stack router %s: %s", name, e)
 
     # Load optional routers from centralized loader
     optional_routers = load_optional_routers()
@@ -281,7 +281,7 @@ def configure_enhanced_api_routes(app: FastAPI) -> None:
                 f"✅ Successfully registered optional router: {name} at /api{prefix}"
             )
         except Exception as e:
-            logger.error(f"❌ Failed to register optional router {name}: {e}")
+            logger.error("❌ Failed to register optional router %s: %s", name, e)
 
     # Register utility endpoints
     api_registry.register_router("utility", api_router, "/api")
@@ -300,7 +300,7 @@ def add_static_files(app: FastAPI) -> None:
     static_dir = "static"
     if os.path.exists(static_dir):
         app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
-        logger.info(f"Static files mounted from {static_dir}")
+        logger.info("Static files mounted from %s", static_dir)
 
 
 # Backward compatibility: create_app function

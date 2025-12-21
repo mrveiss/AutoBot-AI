@@ -274,7 +274,7 @@ class ServiceMonitor:
                     "Redis client initialization returned None (Redis disabled?)"
                 )
         except Exception as e:
-            logger.warning(f"Could not initialize Redis client: {e}")
+            logger.warning("Could not initialize Redis client: %s", e)
 
         # Note: Docker client initialization removed - we use VM monitoring instead
         # Services now run on VMs via systemd, not Docker containers
@@ -319,23 +319,23 @@ class ServiceMonitor:
                     "Backend API", f"HTTP {response.status}", response_time=response_time
                 )
         except asyncio.TimeoutError:
-            logger.warning(f"Backend API health check timed out: {backend_url}")
+            logger.warning("Backend API health check timed out: %s", backend_url)
             # Issue #471: Record failure metrics
             _metrics.update_service_health("backend_api", 0.0)
             _metrics.update_service_status("backend_api", "error")
             return _service_error_status("Backend API", "Connection timed out")
         except aiohttp.ClientConnectorError as e:
-            logger.warning(f"Backend API connection refused: {backend_url} - {e}")
+            logger.warning("Backend API connection refused: %s - %s", backend_url, e)
             _metrics.update_service_health("backend_api", 0.0)
             _metrics.update_service_status("backend_api", "error")
             return _service_error_status("Backend API", "Connection refused")
         except aiohttp.ClientError as e:
-            logger.warning(f"Backend API HTTP error: {e}")
+            logger.warning("Backend API HTTP error: %s", e)
             _metrics.update_service_health("backend_api", 0.0)
             _metrics.update_service_status("backend_api", "error")
             return _service_error_status("Backend API", f"HTTP error: {str(e)[:50]}")
         except Exception as e:
-            logger.error(f"Backend API check unexpected error: {e}", exc_info=True)
+            logger.error("Backend API check unexpected error: %s", e, exc_info=True)
             _metrics.update_service_health("backend_api", 0.0)
             _metrics.update_service_status("backend_api", "error")
             return _service_error_status("Backend API", str(e)[:100])
@@ -476,28 +476,28 @@ class ServiceMonitor:
                     "LLM Manager", f"HTTP {response.status}", icon="fas fa-brain", category="ai"
                 )]
         except asyncio.TimeoutError:
-            logger.warning(f"LLM service check timed out: {llm_url}")
+            logger.warning("LLM service check timed out: %s", llm_url)
             _metrics.update_service_health("llm_manager", 0.0)
             _metrics.update_service_status("llm_manager", "error")
             return [_service_error_status(
                 "LLM Manager", "Connection timed out", icon="fas fa-brain", category="ai"
             )]
         except aiohttp.ClientConnectorError as e:
-            logger.warning(f"LLM service connection refused: {llm_url} - {e}")
+            logger.warning("LLM service connection refused: %s - %s", llm_url, e)
             _metrics.update_service_health("llm_manager", 0.0)
             _metrics.update_service_status("llm_manager", "error")
             return [_service_error_status(
                 "LLM Manager", "Connection refused", icon="fas fa-brain", category="ai"
             )]
         except aiohttp.ClientError as e:
-            logger.warning(f"LLM service HTTP error: {e}")
+            logger.warning("LLM service HTTP error: %s", e)
             _metrics.update_service_health("llm_manager", 0.0)
             _metrics.update_service_status("llm_manager", "error")
             return [_service_error_status(
                 "LLM Manager", f"HTTP error: {str(e)[:50]}", icon="fas fa-brain", category="ai"
             )]
         except Exception as e:
-            logger.error(f"LLM service check unexpected error: {e}", exc_info=True)
+            logger.error("LLM service check unexpected error: %s", e, exc_info=True)
             _metrics.update_service_health("llm_manager", 0.0)
             _metrics.update_service_status("llm_manager", "error")
             return [_service_error_status(
@@ -552,28 +552,28 @@ class ServiceMonitor:
                     icon="fas fa-database", category="knowledge"
                 )
         except asyncio.TimeoutError:
-            logger.warning(f"Knowledge base check timed out: {kb_url}")
+            logger.warning("Knowledge base check timed out: %s", kb_url)
             _metrics.update_service_health("knowledge_base", 0.0)
             _metrics.update_service_status("knowledge_base", "error")
             return _service_error_status(
                 "Knowledge Base", "Connection timed out", icon="fas fa-database", category="knowledge"
             )
         except aiohttp.ClientConnectorError as e:
-            logger.warning(f"Knowledge base connection refused: {kb_url} - {e}")
+            logger.warning("Knowledge base connection refused: %s - %s", kb_url, e)
             _metrics.update_service_health("knowledge_base", 0.0)
             _metrics.update_service_status("knowledge_base", "error")
             return _service_error_status(
                 "Knowledge Base", "Connection refused", icon="fas fa-database", category="knowledge"
             )
         except aiohttp.ClientError as e:
-            logger.warning(f"Knowledge base HTTP error: {e}")
+            logger.warning("Knowledge base HTTP error: %s", e)
             _metrics.update_service_health("knowledge_base", 0.0)
             _metrics.update_service_status("knowledge_base", "error")
             return _service_error_status(
                 "Knowledge Base", f"HTTP error: {str(e)[:50]}", icon="fas fa-database", category="knowledge"
             )
         except Exception as e:
-            logger.error(f"Knowledge base check unexpected error: {e}", exc_info=True)
+            logger.error("Knowledge base check unexpected error: %s", e, exc_info=True)
             _metrics.update_service_health("knowledge_base", 0.0)
             _metrics.update_service_status("knowledge_base", "error")
             return _service_error_status(
@@ -727,12 +727,12 @@ class ServiceMonitor:
                     if isinstance(status, VMStatus):
                         vm_results.append(status)
                     else:
-                        logger.error(f"VM check failed: {status}")
+                        logger.error("VM check failed: %s", status)
 
             return vm_results
 
         except Exception as e:
-            logger.error(f"VM monitoring failed: {e}")
+            logger.error("VM monitoring failed: %s", e)
             return [VMStatus(
                 name="VM Monitor", host="unknown", status="error",
                 message=f"Monitor failed: {str(e)[:50]}",
@@ -776,7 +776,7 @@ class ServiceMonitor:
         all_services = [r for r in async_results if isinstance(r, ServiceStatus)]
         for r in async_results:
             if not isinstance(r, ServiceStatus):
-                logger.error(f"Service check failed: {r}")
+                logger.error("Service check failed: %s", r)
 
         # Add sync checks
         all_services.append(self.check_redis())
@@ -855,7 +855,7 @@ async def get_service_health():
             "errors": 0,
         }
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
+        logger.error("Health check failed: %s", e)
         return {
             "status": "error",
             "message": str(e),
@@ -939,7 +939,7 @@ async def get_system_resources():
             "status": "unavailable",
         }
     except Exception as e:
-        logger.error(f"Failed to get system resources: {e}")
+        logger.error("Failed to get system resources: %s", e)
         return {"error": str(e), "status": "error"}
 
 
@@ -1010,7 +1010,7 @@ async def get_all_services():
             "status": "ok",
         }
     except Exception as e:
-        logger.error(f"Failed to get services status: {e}")
+        logger.error("Failed to get services status: %s", e)
         return {"error": str(e), "status": "error"}
 
 
@@ -1141,7 +1141,7 @@ async def debug_vm_test():
             "vms": [vm.dict() for vm in vm_statuses],
         }
     except Exception as e:
-        logger.error(f"VM test failed: {e}")
+        logger.error("VM test failed: %s", e)
         return {
             "success": False,
             "error": str(e),

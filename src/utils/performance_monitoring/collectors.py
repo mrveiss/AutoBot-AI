@@ -153,7 +153,7 @@ class GPUCollector:
             return self._build_metrics(parts)
 
         except Exception as e:
-            logger.error(f"Error collecting GPU metrics: {e}")
+            logger.error("Error collecting GPU metrics: %s", e)
             return None
 
 
@@ -207,7 +207,7 @@ class NPUCollector:
             )
 
         except Exception as e:
-            logger.error(f"Error collecting NPU metrics: {e}")
+            logger.error("Error collecting NPU metrics: %s", e)
             return None
 
 
@@ -266,7 +266,7 @@ class SystemCollector:
                     continue
 
         except Exception as e:
-            logger.error(f"Error getting AutoBot processes: {e}")
+            logger.error("Error getting AutoBot processes: %s", e)
 
         return autobot_processes
 
@@ -352,7 +352,7 @@ class SystemCollector:
             )
 
         except Exception as e:
-            logger.error(f"Error collecting system performance metrics: {e}")
+            logger.error("Error collecting system performance metrics: %s", e)
             return self._empty_metrics()
 
     def _empty_metrics(self) -> SystemPerformanceMetrics:
@@ -465,7 +465,7 @@ class ServiceCollector:
             )
 
         except Exception as e:
-            logger.error(f"Error collecting single service metrics: {e}")
+            logger.error("Error collecting single service metrics: %s", e)
             return None
 
     async def collect(self) -> List[ServicePerformanceMetrics]:
@@ -575,5 +575,5 @@ class MultiModalCollector:
             return None
 
         except Exception as e:
-            logger.error(f"Error collecting multimodal metrics: {e}")
+            logger.error("Error collecting multimodal metrics: %s", e)
             return None

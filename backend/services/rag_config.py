@@ -166,7 +166,7 @@ def load_rag_config_from_yaml(config_manager: Any) -> RAGConfig:
             return RAGConfig()
 
     except Exception as e:
-        logger.warning(f"Failed to load RAG config from YAML: {e}, using defaults")
+        logger.warning("Failed to load RAG config from YAML: %s, using defaults", e)
         return RAGConfig()
 
 
@@ -224,5 +224,5 @@ def update_rag_config(updates: Metadata) -> RAGConfig:
         # Create new instance with updated values
         _rag_config_instance = RAGConfig.from_dict(current_config)
 
-        logger.info(f"RAG configuration updated: {list(updates.keys())}")
+        logger.info("RAG configuration updated: %s", list(updates.keys()))
         return _rag_config_instance

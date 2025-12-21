@@ -95,7 +95,7 @@ class NPUPerformanceMeasurement:
             logger.info("✅ Comprehensive benchmark completed successfully")
 
         except Exception as e:
-            logger.error(f"❌ Benchmark failed: {e}")
+            logger.error("❌ Benchmark failed: %s", e)
             benchmark_results["error"] = str(e)
 
         return benchmark_results
@@ -151,7 +151,7 @@ class NPUPerformanceMeasurement:
                 baseline_results["gpu_embedding_performance"] = await self._test_gpu_embedding_performance()
 
         except Exception as e:
-            logger.error(f"Hardware baseline measurement failed: {e}")
+            logger.error("Hardware baseline measurement failed: %s", e)
             baseline_results["error"] = str(e)
 
         return baseline_results
@@ -209,7 +209,7 @@ class NPUPerformanceMeasurement:
             chunker._embedding_model = original_model
 
         except Exception as e:
-            logger.error(f"CPU embedding performance test failed: {e}")
+            logger.error("CPU embedding performance test failed: %s", e)
             cpu_results["error"] = str(e)
 
         return cpu_results
@@ -261,7 +261,7 @@ class NPUPerformanceMeasurement:
             }
 
         except Exception as e:
-            logger.error(f"GPU embedding performance test failed: {e}")
+            logger.error("GPU embedding performance test failed: %s", e)
             gpu_results["error"] = str(e)
 
         return gpu_results
@@ -309,7 +309,7 @@ class NPUPerformanceMeasurement:
                     npu_results["semantic_search"] = await self._test_npu_semantic_search(session)
 
         except Exception as e:
-            logger.error(f"NPU Worker direct test failed: {e}")
+            logger.error("NPU Worker direct test failed: %s", e)
             npu_results["error"] = str(e)
 
         return npu_results
@@ -408,7 +408,7 @@ class NPUPerformanceMeasurement:
                 }
 
         except Exception as e:
-            logger.error(f"NPU embedding generation test failed: {e}")
+            logger.error("NPU embedding generation test failed: %s", e)
             embedding_results["error"] = str(e)
 
         return embedding_results
@@ -496,7 +496,7 @@ class NPUPerformanceMeasurement:
                         }
 
         except Exception as e:
-            logger.error(f"NPU semantic search test failed: {e}")
+            logger.error("NPU semantic search test failed: %s", e)
             search_results["error"] = str(e)
 
         return search_results
@@ -589,7 +589,7 @@ class NPUPerformanceMeasurement:
             engine_results["hardware_utilization"] = await search_engine.get_search_statistics()
 
         except Exception as e:
-            logger.error(f"Semantic search engine test failed: {e}")
+            logger.error("Semantic search engine test failed: %s", e)
             engine_results["error"] = str(e)
 
         return engine_results
@@ -676,7 +676,7 @@ class NPUPerformanceMeasurement:
                             }
 
         except Exception as e:
-            logger.error(f"API endpoint test failed: {e}")
+            logger.error("API endpoint test failed: %s", e)
             api_results["error"] = str(e)
 
         return api_results
@@ -747,7 +747,7 @@ class NPUPerformanceMeasurement:
             }
 
         except Exception as e:
-            logger.error(f"Performance comparison analysis failed: {e}")
+            logger.error("Performance comparison analysis failed: %s", e)
             comparison["error"] = str(e)
 
         return comparison
@@ -819,7 +819,7 @@ class NPUPerformanceMeasurement:
             recommendations.append("Consider workload-specific optimization (latency vs throughput vs quality)")
 
         except Exception as e:
-            logger.error(f"Recommendation generation failed: {e}")
+            logger.error("Recommendation generation failed: %s", e)
             recommendations.append(f"Recommendation generation failed: {e}")
 
         return recommendations
@@ -839,11 +839,11 @@ class NPUPerformanceMeasurement:
             with open(results_path, 'w') as f:
                 json.dump(results, f, indent=2, default=str)
 
-            logger.info(f"✅ Results saved to: {results_path}")
+            logger.info("✅ Results saved to: %s", results_path)
             return str(results_path)
 
         except Exception as e:
-            logger.error(f"Failed to save results: {e}")
+            logger.error("Failed to save results: %s", e)
             return None
 
     def print_summary(self, results: Dict[str, Any]):

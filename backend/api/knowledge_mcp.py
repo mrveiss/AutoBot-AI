@@ -331,7 +331,7 @@ async def mcp_search_knowledge_base(request: KnowledgeSearchRequest):
         }
 
     except Exception as e:
-        logger.error(f"Error searching knowledge base: {e}")
+        logger.error("Error searching knowledge base: %s", e)
         return {"success": False, "error": str(e), "results": []}
 
 
@@ -360,7 +360,7 @@ async def mcp_add_to_knowledge_base(request: DocumentAddRequest):
         }
 
     except Exception as e:
-        logger.error(f"Error adding to knowledge base: {e}")
+        logger.error("Error adding to knowledge base: %s", e)
         return {"success": False, "error": str(e)}
 
 
@@ -397,7 +397,7 @@ async def mcp_get_knowledge_stats(request: KnowledgeStatsRequest):
         return {"success": True, "stats": stats}
 
     except Exception as e:
-        logger.error(f"Error getting knowledge stats: {e}")
+        logger.error("Error getting knowledge stats: %s", e)
         return {"success": False, "error": str(e), "stats": {}}
 
 
@@ -453,7 +453,7 @@ async def mcp_summarize_knowledge_topic(request: Metadata):
         }
 
     except Exception as e:
-        logger.error(f"Error summarizing topic: {e}")
+        logger.error("Error summarizing topic: %s", e)
         return {"success": False, "error": str(e), "summary": ""}
 
 
@@ -496,7 +496,7 @@ async def mcp_vector_similarity_search(request: Metadata):
             }
 
     except Exception as e:
-        logger.error(f"Error in vector similarity search: {e}")
+        logger.error("Error in vector similarity search: %s", e)
         return {"success": False, "error": str(e), "results": []}
 
 
@@ -557,7 +557,7 @@ async def mcp_langchain_qa_chain(request: Metadata):
         }
 
     except Exception as e:
-        logger.error(f"Error in LangChain QA chain: {e}")
+        logger.error("Error in LangChain QA chain: %s", e)
         return {"success": False, "error": str(e), "answer": ""}
 
 
@@ -644,7 +644,7 @@ async def mcp_redis_vector_operations(request: Metadata):
         return {"success": False, "error": f"Unknown operation: {operation}"}
 
     except Exception as e:
-        logger.error(f"Error in Redis vector operations: {e}")
+        logger.error("Error in Redis vector operations: %s", e)
         return {"success": False, "error": str(e)}
 
 

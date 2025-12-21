@@ -71,7 +71,7 @@ async def get_optimization_health():
         return health_status
 
     except Exception as e:
-        logger.error(f"Error checking optimization health: {e}")
+        logger.error("Error checking optimization health: %s", e)
         return JSONResponse(
             content={"status": "unhealthy", "error": str(e)}, status_code=500
         )
@@ -102,7 +102,7 @@ async def get_available_models():
         }
 
     except Exception as e:
-        logger.error(f"Error getting available models: {e}")
+        logger.error("Error getting available models: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to get available models: {str(e)}"
         )
@@ -163,7 +163,7 @@ async def select_optimal_model(request: OptimizationRequest):
         }
 
     except Exception as e:
-        logger.error(f"Error selecting optimal model: {e}")
+        logger.error("Error selecting optimal model: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to select optimal model: {str(e)}"
         )
@@ -199,7 +199,7 @@ async def track_model_performance(performance_data: ModelPerformanceData):
         }
 
     except Exception as e:
-        logger.error(f"Error tracking model performance: {e}")
+        logger.error("Error tracking model performance: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to track performance: {str(e)}"
         )
@@ -232,7 +232,7 @@ async def get_model_performance_history(model_name: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting model performance history: {e}")
+        logger.error("Error getting model performance history: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to get performance history: {str(e)}"
         )
@@ -257,7 +257,7 @@ async def get_optimization_suggestions():
         }
 
     except Exception as e:
-        logger.error(f"Error getting optimization suggestions: {e}")
+        logger.error("Error getting optimization suggestions: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to get optimization suggestions: {str(e)}"
         )
@@ -314,7 +314,7 @@ async def compare_models():
         }
 
     except Exception as e:
-        logger.error(f"Error comparing models: {e}")
+        logger.error("Error comparing models: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to compare models: {str(e)}"
         )
@@ -376,7 +376,7 @@ async def benchmark_model(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error benchmarking model: {e}")
+        logger.error("Error benchmarking model: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to benchmark model: {str(e)}"
         )
@@ -436,7 +436,7 @@ async def get_system_resources():
         }
 
     except Exception as e:
-        logger.error(f"Error getting system resources: {e}")
+        logger.error("Error getting system resources: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to get system resources: {str(e)}"
         )
@@ -475,7 +475,7 @@ async def get_optimization_config():
         return optimization_config
 
     except Exception as e:
-        logger.error(f"Error getting optimization config: {e}")
+        logger.error("Error getting optimization config: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to get optimization config: {str(e)}"
         )

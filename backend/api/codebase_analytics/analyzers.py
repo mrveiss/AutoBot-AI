@@ -31,7 +31,7 @@ try:
     _bug_predictor: Optional[BugPredictor] = None
     _analyzers_available = True
 except ImportError as e:
-    logger.warning(f"Code intelligence analyzers not available: {e}")
+    logger.warning("Code intelligence analyzers not available: %s", e)
     _analyzers_available = False
     _anti_pattern_detector = None
     _performance_analyzer = None
@@ -784,7 +784,7 @@ def _run_anti_pattern_analysis(file_path: str) -> List[Dict]:
                 "suggestion": pattern.suggestion,
             })
     except Exception as e:
-        logger.debug(f"Anti-pattern detection skipped for {file_path}: {e}")
+        logger.debug("Anti-pattern detection skipped for %s: %s", file_path, e)
     return problems
 
 
@@ -806,7 +806,7 @@ def _run_performance_analysis(file_path: str) -> List[Dict]:
                 "suggestion": issue.recommendation,
             })
     except Exception as e:
-        logger.debug(f"Performance analysis skipped for {file_path}: {e}")
+        logger.debug("Performance analysis skipped for %s: %s", file_path, e)
     return problems
 
 
@@ -843,7 +843,7 @@ def _run_bug_prediction(file_path: str) -> List[Dict]:
                 "suggestion": suggestion,
             })
     except Exception as e:
-        logger.debug(f"Bug prediction skipped for {file_path}: {e}")
+        logger.debug("Bug prediction skipped for %s: %s", file_path, e)
     return problems
 
 
@@ -1053,7 +1053,7 @@ async def _merge_llm_results(
         technical_debt.extend(llm_results.get("technical_debt", []))
 
     except Exception as e:
-        logger.debug(f"LLM analysis skipped for {file_path}: {e}")
+        logger.debug("LLM analysis skipped for %s: %s", file_path, e)
 
 
 def _extract_imports_from_node(node: ast.AST) -> List[str]:
@@ -1155,7 +1155,7 @@ async def detect_hardcodes_and_debt_with_llm(
         result = _parse_llm_json_response(response.content.strip())
         return result if result else empty_result
     except Exception as e:
-        logger.debug(f"LLM analysis failed for {file_path}: {e}")
+        logger.debug("LLM analysis failed for %s: %s", file_path, e)
         return empty_result
 
 
@@ -1253,7 +1253,7 @@ async def analyze_python_file(file_path: str, use_llm: bool = False) -> Metadata
             race_problems = detect_race_conditions(tree, content, file_path)
             problems.extend(race_problems)
         except Exception as e:
-            logger.debug(f"Race condition detection skipped for {file_path}: {e}")
+            logger.debug("Race condition detection skipped for %s: %s", file_path, e)
 
         # Phase 5: Code intelligence analyzers
         code_intel_problems = _run_code_intelligence_analyzers(file_path)
@@ -1273,11 +1273,11 @@ async def analyze_python_file(file_path: str, use_llm: bool = False) -> Metadata
         }
 
     except OSError as e:
-        logger.error(f"Failed to read Python file {file_path}: {e}")
+        logger.error("Failed to read Python file %s: %s", file_path, e)
         return _create_empty_analysis_result()
 
     except Exception as e:
-        logger.error(f"Error analyzing Python file {file_path}: {e}")
+        logger.error("Error analyzing Python file %s: %s", file_path, e)
         result = _create_empty_analysis_result()
         result["problems"] = [
             {
@@ -1361,7 +1361,7 @@ def analyze_javascript_vue_file(file_path: str) -> Metadata:
             "hardcodes": hardcodes, "problems": problems, **line_counts,
         }
     except Exception as e:
-        logger.error(f"Error analyzing JS/Vue file {file_path}: {e}")
+        logger.error("Error analyzing JS/Vue file %s: %s", file_path, e)
         return _create_empty_js_analysis_result()
 
 
@@ -1398,7 +1398,7 @@ def analyze_documentation_file(file_path: str) -> Metadata:
         }
 
     except Exception as e:
-        logger.error(f"Error analyzing documentation file {file_path}: {e}")
+        logger.error("Error analyzing documentation file %s: %s", file_path, e)
         return {
             "line_count": 0,
             "documentation_lines": 0,

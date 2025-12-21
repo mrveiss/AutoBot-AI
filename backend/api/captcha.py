@@ -66,7 +66,7 @@ async def resolve_captcha(
     Returns:
         CaptchaResolutionResponse with success status
     """
-    logger.info(f"Marking CAPTCHA {captcha_id} as resolved")
+    logger.info("Marking CAPTCHA %s as resolved", captcha_id)
 
     try:
         captcha_service = get_captcha_human_loop()
@@ -95,7 +95,7 @@ async def resolve_captcha(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error resolving CAPTCHA {captcha_id}: {e}")
+        logger.error("Error resolving CAPTCHA %s: %s", captcha_id, e)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to resolve CAPTCHA: {str(e)}",
@@ -120,7 +120,7 @@ async def skip_captcha(
     Returns:
         CaptchaResolutionResponse with skip status
     """
-    logger.info(f"Marking CAPTCHA {captcha_id} as skipped")
+    logger.info("Marking CAPTCHA %s as skipped", captcha_id)
 
     try:
         captcha_service = get_captcha_human_loop()
@@ -149,7 +149,7 @@ async def skip_captcha(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error skipping CAPTCHA {captcha_id}: {e}")
+        logger.error("Error skipping CAPTCHA %s: %s", captcha_id, e)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to skip CAPTCHA: {str(e)}",
@@ -179,7 +179,7 @@ async def get_pending_captchas() -> JSONResponse:
         )
 
     except Exception as e:
-        logger.error(f"Error getting pending CAPTCHAs: {e}")
+        logger.error("Error getting pending CAPTCHAs: %s", e)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get pending CAPTCHAs: {str(e)}",
@@ -210,7 +210,7 @@ async def captcha_health() -> JSONResponse:
         )
 
     except Exception as e:
-        logger.error(f"CAPTCHA health check failed: {e}")
+        logger.error("CAPTCHA health check failed: %s", e)
         return JSONResponse(
             status_code=503,
             content={

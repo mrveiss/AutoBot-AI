@@ -119,7 +119,7 @@ def _parse_man_page_fact(fact_json: bytes) -> tuple:
 
         return is_man_page, is_system_command, created_at
     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
-        logger.warning(f"Error parsing fact metadata: {e}")
+        logger.warning("Error parsing fact metadata: %s", e)
         return False, False, None
 
 
@@ -235,14 +235,14 @@ async def _get_or_compute_category_counts(
         # Use cached values
         for i, cat_id in enumerate(cache_keys.keys()):
             category_counts[cat_id] = int(cached_values[i])
-        logger.debug(f"Using cached category counts: {category_counts}")
+        logger.debug("Using cached category counts: %s", category_counts)
     else:
         # Cache miss - compute counts
         logger.info("Cache miss - computing category counts from all facts")
         all_facts = await kb.get_all_facts()
-        logger.info(f"Categorizing {len(all_facts)} facts into main categories")
+        logger.info("Categorizing %s facts into main categories", len(all_facts))
         await _compute_category_counts(all_facts, get_category_for_source, category_counts)
-        logger.info(f"Category counts: {category_counts}")
+        logger.info("Category counts: %s", category_counts)
         # Cache for 1 hour
         for cat_id, cache_key in cache_keys.items():
             await kb.aioredis_client.set(
@@ -276,7 +276,7 @@ async def get_main_categories(req: Request):
 
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     has_redis = kb.aioredis_client is not None if kb else False
-    logger.info(f"get_main_categories - kb: {kb is not None}, has_redis: {has_redis}")
+    logger.info("get_main_categories - kb: %s, has_redis: %s", kb is not None, has_redis)
 
     category_counts = {
         KnowledgeCategory.AUTOBOT_DOCUMENTATION: 0,
@@ -292,7 +292,7 @@ async def get_main_categories(req: Request):
                 kb, cache_keys, get_category_for_source, category_counts
             )
         except Exception as e:
-            logger.error(f"Error categorizing facts: {e}")
+            logger.error("Error categorizing facts: %s", e)
 
     main_categories = _build_main_categories(CATEGORY_METADATA, category_counts)
     return {"categories": main_categories, "total": len(main_categories)}
@@ -321,7 +321,7 @@ async def get_knowledge_categories(req: Request):
             kb_to_use.redis_client.hgetall, "knowledge_base:facts"
         )
     except Exception as redis_err:
-        logger.debug(f"Redis error getting facts: {redis_err}")
+        logger.debug("Redis error getting facts: %s", redis_err)
         all_facts_data = {}
 
     category_counts = {}
@@ -331,7 +331,7 @@ async def get_knowledge_categories(req: Request):
             category = fact.get("metadata", {}).get("category", "uncategorized")
             category_counts[category] = category_counts.get(category, 0) + 1
         except (json.JSONDecodeError, KeyError, TypeError) as e:
-            logger.warning(f"Error parsing fact JSON: {e}")
+            logger.warning("Error parsing fact JSON: %s", e)
             continue
 
     # Format for frontend with counts
@@ -476,7 +476,7 @@ def _parse_and_filter_facts(
             if len(entries) >= limit:
                 break
         except Exception as e:
-            logger.warning(f"Error parsing fact {fact_id}: {e}")
+            logger.warning("Error parsing fact %s: %s", fact_id, e)
     return entries
 
 
@@ -492,7 +492,7 @@ async def get_knowledge_entries(
     if kb is None:
         return _empty_entries_response(message="Knowledge base not initialized")
 
-    logger.info(f"Getting knowledge entries: limit={limit}, cursor={cursor}")
+    logger.info("Getting knowledge entries: limit=%s, cursor=%s", limit, cursor)
     current_cursor = int(cursor) if cursor else 0
 
     try:
@@ -508,7 +508,7 @@ async def get_knowledge_entries(
             "count": len(entries[:limit]), "has_more": next_cursor != 0,
         }
     except Exception as e:
-        logger.error(f"Redis error getting facts: {e}")
+        logger.error("Redis error getting facts: %s", e)
         return _empty_entries_response(error="Redis connection error")
 
 
@@ -541,7 +541,7 @@ def _analyze_facts_for_stats(all_facts_data: dict) -> tuple:
             type_counts[ft] = type_counts.get(ft, 0) + 1
             fact_sizes.append(len(fact.get("content", "")))
         except (json.JSONDecodeError, KeyError, TypeError, AttributeError) as e:
-            logger.warning(f"Error processing fact for size calculation: {e}")
+            logger.warning("Error processing fact for size calculation: %s", e)
     return category_counts, source_counts, type_counts, fact_sizes
 
 
@@ -694,7 +694,7 @@ async def get_man_pages_summary(req: Request):
         }
 
     except Exception as redis_err:
-        logger.error(f"Redis error getting man pages: {redis_err}")
+        logger.error("Redis error getting man pages: %s", redis_err)
         return {
             "status": "error",
             "message": "Failed to query knowledge base",
@@ -783,7 +783,7 @@ async def search_man_pages(req: Request, query: str, limit: int = 10):
     if kb_to_use is None:
         return {"results": [], "total_results": 0, "query": query}
 
-    logger.info(f"Searching man pages: '{query}' (limit={limit})")
+    logger.info("Searching man pages: '%s' (limit=%s)", query, limit)
 
     # Perform search
     kb_class_name = kb_to_use.__class__.__name__
@@ -852,10 +852,10 @@ async def clear_all_knowledge(request: dict, req: Request):
         try:
             items_removed = await _clear_kb_via_redis(kb)
         except Exception as e:
-            logger.error(f"Error during knowledge base clearing: {e}")
+            logger.error("Error during knowledge base clearing: %s", e)
             raise HTTPException(status_code=500, detail=f"Failed to clear: {str(e)}")
 
-    logger.warning(f"Knowledge base cleared. Removed {items_removed} entries.")
+    logger.warning("Knowledge base cleared. Removed %s entries.", items_removed)
     return {
         "status": "success", "items_removed": items_removed, "items_before": items_before,
         "message": f"Successfully cleared knowledge base. Removed {items_removed} entries.",
@@ -997,7 +997,7 @@ def _process_fact_data(fact_data: dict, cat: str, fact_key: str) -> Optional[dic
             "metadata": metadata,
         }
     except (json.JSONDecodeError, KeyError, TypeError) as e:
-        logger.debug(f"Skipping invalid fact entry: {e}")
+        logger.debug("Skipping invalid fact entry: %s", e)
         return None
 
 
@@ -1010,7 +1010,7 @@ async def _cache_facts_result(kb, cache_key: str, result: dict) -> None:
         )
         logger.debug("Cached facts_by_category result")
     except Exception as cache_error:
-        logger.warning(f"Failed to cache facts_by_category: {cache_error}")
+        logger.warning("Failed to cache facts_by_category: %s", cache_error)
 
 
 def _raise_kb_unavailable() -> None:
@@ -1071,7 +1071,7 @@ async def get_facts_by_category(
 
         categories_dict = _build_categories_dict(all_fact_keys, fact_results)
     except Exception as e:
-        logger.error(f"Error in indexed fact retrieval: {e}")
+        logger.error("Error in indexed fact retrieval: %s", e)
         return {"categories": {}, "total_facts": 0, "error": str(e)}
 
     result = {

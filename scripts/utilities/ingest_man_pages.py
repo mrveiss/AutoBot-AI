@@ -131,7 +131,7 @@ class ManPageIngester:
             commands: List of command names to ingest
             category: Category label for logging
         """
-        logger.info(f"Starting ingestion of {len(commands)} {category} commands")
+        logger.info("Starting ingestion of %s %s commands", len(commands), category)
 
         for command in commands:
             self.stats["attempted"] += 1
@@ -140,21 +140,21 @@ class ManPageIngester:
                 # Check if already exists
                 existing = self.manager.get_manual(command)
                 if existing:
-                    logger.info(f"Command '{command}' already exists, skipping")
+                    logger.info("Command '%s' already exists, skipping", command)
                     self.stats["skipped"] += 1
                     continue
 
                 # Attempt to ingest
                 success = self.manager.ingest_command(command)
                 if success:
-                    logger.info(f"Successfully ingested: {command}")
+                    logger.info("Successfully ingested: %s", command)
                     self.stats["successful"] += 1
                 else:
-                    logger.warning(f"Failed to ingest: {command}")
+                    logger.warning("Failed to ingest: %s", command)
                     self.stats["failed"] += 1
 
             except Exception as e:
-                logger.error(f"Error ingesting command '{command}': {e}")
+                logger.error("Error ingesting command '%s': %s", command, e)
                 self.stats["failed"] += 1
 
     def ingest_all_essential(self) -> None:
@@ -181,11 +181,11 @@ class ManPageIngester:
                     if line.strip() and not line.startswith("#")
                 ]
 
-            logger.info(f"Loaded {len(commands)} commands from {command_file}")
+            logger.info("Loaded %s commands from %s", len(commands), command_file)
             self.ingest_command_list(commands, "custom")
 
         except Exception as e:
-            logger.error(f"Failed to load commands from {command_file}: {e}")
+            logger.error("Failed to load commands from %s: %s", command_file, e)
 
     def print_statistics(self) -> None:
         """Print ingestion statistics."""

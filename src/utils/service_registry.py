@@ -214,7 +214,7 @@ class ServiceRegistry:
             try:
                 return DeploymentMode(mode)
             except ValueError:
-                self.logger.warning(f"Invalid deployment mode: {mode}")
+                self.logger.warning("Invalid deployment mode: %s", mode)
 
         # Auto-detect based on environment
         # DEFAULT BEHAVIOR: Local + Docker hybrid (backend on host, services in containers)
@@ -329,7 +329,7 @@ class ServiceRegistry:
                     )
 
         except Exception as e:
-            self.logger.error(f"Failed to load config file {config_file}: {e}")
+            self.logger.error("Failed to load config file %s: %s", config_file, e)
 
     def _load_environment_config(self):
         """Load service configurations from environment variables"""
@@ -375,7 +375,7 @@ class ServiceRegistry:
             registry.get_service_url("ai-stack", "/api/process")  # http://ai-stack.autobot.local:{NetworkConstants.AI_STACK_PORT}/api/process
         """
         if service_name not in self.services:
-            self.logger.error(f"Unknown service: {service_name}")
+            self.logger.error("Unknown service: %s", service_name)
             raise ValueError(f"Service '{service_name}' not found in registry")
 
         service = self.services[service_name]
@@ -404,7 +404,7 @@ class ServiceRegistry:
         self.health_status[service_config.name] = ServiceHealth(
             status=ServiceStatus.UNKNOWN, last_check=0
         )
-        self.logger.info(f"Registered service: {service_config.name}")
+        self.logger.info("Registered service: %s", service_config.name)
 
     async def check_service_health(self, service_name: str) -> ServiceHealth:
         """Check health of a specific service"""
@@ -439,7 +439,7 @@ class ServiceRegistry:
                     health.failure_count += 1
 
         except Exception as e:
-            self.logger.warning(f"Health check failed for {service_name}: {e}")
+            self.logger.warning("Health check failed for %s: %s", service_name, e)
             health.status = ServiceStatus.UNHEALTHY
             health.failure_count += 1
 
@@ -447,7 +447,7 @@ class ServiceRegistry:
         if health.failure_count >= service.circuit_breaker_threshold:
             health.circuit_open_until = current_time + service.circuit_breaker_timeout
             health.status = ServiceStatus.CIRCUIT_OPEN
-            self.logger.error(f"Circuit breaker opened for {service_name}")
+            self.logger.error("Circuit breaker opened for %s", service_name)
 
         health.last_check = current_time
         return health

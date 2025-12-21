@@ -87,7 +87,7 @@ class DistributedServiceDiscovery:
         self.services.update(primary_services)
         self.backup_endpoints.update(backup_endpoints)
 
-        logger.info(f"🌐 Service registry initialized with {len(self.services)} services")
+        logger.info("🌐 Service registry initialized with %s services", len(self.services))
 
     def _get_config_value(self, service_name: str, key: str, default_key: str):
         """Get configuration value with fallback to system defaults. Issue #281: Extracted helper."""
@@ -270,7 +270,7 @@ class DistributedServiceDiscovery:
             else:
                 return await self._check_http_health(endpoint)
         except Exception as e:
-            logger.debug(f"Health check failed for {endpoint.url}: {e}")
+            logger.debug("Health check failed for %s: %s", endpoint.url, e)
             endpoint.is_healthy = False
             endpoint.last_check = time.time()
             return False
@@ -405,7 +405,7 @@ class DistributedServiceDiscovery:
                 await asyncio.sleep(ServiceDiscoveryConfig.HEALTH_CHECK_INTERVAL_S)  # Check every 30 seconds
 
             except Exception as e:
-                logger.error(f"Background health monitoring error: {e}")
+                logger.error("Background health monitoring error: %s", e)
                 await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Back off on errors
 
 

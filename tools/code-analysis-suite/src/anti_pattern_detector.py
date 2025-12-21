@@ -321,16 +321,24 @@ class AntiPatternDetector:
         patterns: List[str],
         exclude_patterns: List[str]
     ) -> None:
-        """Parse all Python files and build indexes"""
+        """Parse all Python files and build indexes.
+
+        Issue #510: Optimized O(n³) → O(n²) by converting exclude_patterns
+        to a frozenset for O(1) substring checks instead of O(e) per file.
+        """
         self.modules.clear()
         self.classes.clear()
         self.all_defined_names.clear()
 
         root = Path(root_path)
 
+        # Issue #510: Convert exclude_patterns to frozenset once
+        # Enables O(1) membership check per pattern
+        exclude_set = frozenset(exclude_patterns)
+
         for pattern in patterns:
             for file_path in root.glob(pattern):
-                if file_path.is_file() and not self._should_skip(file_path, exclude_patterns):
+                if file_path.is_file() and not self._should_skip(file_path, exclude_set):
                     try:
                         module_info = await self._parse_file(str(file_path))
                         if module_info:
@@ -348,8 +356,13 @@ class AntiPatternDetector:
                 if imported in self.modules:
                     self.modules[imported].is_imported_by.add(module.name)
 
-    def _should_skip(self, file_path: Path, exclude_patterns: List[str]) -> bool:
-        """Check if file should be skipped"""
+    def _should_skip(
+        self, file_path: Path, exclude_patterns: "frozenset[str] | List[str]"
+    ) -> bool:
+        """Check if file should be skipped.
+
+        Issue #510: Accepts frozenset for O(1) membership check.
+        """
         path_str = str(file_path)
         return any(pattern in path_str for pattern in exclude_patterns)
 

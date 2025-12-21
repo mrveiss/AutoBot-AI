@@ -252,7 +252,7 @@ class ConfigService:
 
             return config_data
         except Exception as e:
-            logger.error(f"Error getting full config: {str(e)}")
+            logger.error("Error getting full config: %s", str(e))
             # Return cached config if available, even if refresh failed
             if ConfigService._cached_config is not None:
                 logger.warning("Returning cached config due to refresh failure")
@@ -266,7 +266,7 @@ class ConfigService:
             logger.info("UNIFIED CONFIG SERVICE: Getting LLM configuration")
             return unified_config_manager.get_llm_config()
         except Exception as e:
-            logger.error(f"Error getting LLM config: {str(e)}")
+            logger.error("Error getting LLM config: %s", str(e))
             raise
 
     @staticmethod
@@ -284,7 +284,7 @@ class ConfigService:
                 "priority": redis_config.get("priority", 10),
             }
         except Exception as e:
-            logger.error(f"Error getting Redis config: {str(e)}")
+            logger.error("Error getting Redis config: %s", str(e))
             raise
 
     @staticmethod
@@ -332,7 +332,7 @@ class ConfigService:
                 ),
             }
         except Exception as e:
-            logger.error(f"Error updating LLM config: {str(e)}")
+            logger.error("Error updating LLM config: %s", str(e))
             raise
 
     @staticmethod
@@ -381,13 +381,13 @@ class ConfigService:
             # Reload the global config manager
             unified_config_manager.reload()
 
-            logger.info(f"Updated Redis configuration: {config_data}")
+            logger.info("Updated Redis configuration: %s", config_data)
             return {
                 "status": "success",
                 "message": "Redis configuration updated successfully",
             }
         except Exception as e:
-            logger.error(f"Error updating Redis config: {str(e)}")
+            logger.error("Error updating Redis config: %s", str(e))
             raise
 
     @staticmethod
@@ -423,7 +423,7 @@ class ConfigService:
                 "message": "Configuration saved and reloaded successfully",
             }
         except Exception as e:
-            logger.error(f"Error saving full config: {str(e)}")
+            logger.error("Error saving full config: %s", str(e))
             raise
 
     @staticmethod
@@ -432,7 +432,7 @@ class ConfigService:
         try:
             return unified_config_manager.get("backend", {})
         except Exception as e:
-            logger.error(f"Error loading backend settings: {str(e)}")
+            logger.error("Error loading backend settings: %s", str(e))
             raise
 
     @staticmethod
@@ -470,7 +470,7 @@ class ConfigService:
                 "message": "Backend settings updated successfully",
             }
         except Exception as e:
-            logger.error(f"Error updating backend settings: {str(e)}")
+            logger.error("Error updating backend settings: %s", str(e))
             raise
 
     @staticmethod

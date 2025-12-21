@@ -45,10 +45,10 @@ class BackendDiagnostic:
                 logger.info("✅ Socket connection: SUCCESS")
                 return True
             else:
-                logger.error(f"❌ Socket connection failed: {result}")
+                logger.error("❌ Socket connection failed: %s", result)
                 return False
         except Exception as e:
-            logger.error(f"❌ Socket test error: {e}")
+            logger.error("❌ Socket test error: %s", e)
             return False
 
     def test_tcp_connection(self) -> bool:
@@ -74,18 +74,18 @@ class BackendDiagnostic:
             s.close()
 
             if response:
-                logger.info(f"✅ TCP HTTP response received in {elapsed:.3f}s")
-                logger.info(f"📋 Response preview: {response[:100]}")
+                logger.info("✅ TCP HTTP response received in %ss", elapsed:.3f)
+                logger.info("📋 Response preview: %s", response[:100])
                 return True
             else:
-                logger.error(f"❌ No response received after {elapsed:.3f}s")
+                logger.error("❌ No response received after %ss", elapsed:.3f)
                 return False
 
         except socket.timeout:
             logger.error("❌ TCP connection timed out")
             return False
         except Exception as e:
-            logger.error(f"❌ TCP test error: {e}")
+            logger.error("❌ TCP test error: %s", e)
             return False
 
     async def test_async_request(self) -> bool:
@@ -109,11 +109,11 @@ class BackendDiagnostic:
 
         except asyncio.TimeoutError:
             elapsed = time.time() - start_time
-            logger.error(f"❌ Async request timed out after {elapsed:.3f}s")
+            logger.error("❌ Async request timed out after %ss", elapsed:.3f)
             return False
         except Exception as e:
             elapsed = time.time() - start_time
-            logger.error(f"❌ Async request error after {elapsed:.3f}s: {e}")
+            logger.error("❌ Async request error after %ss: %s", elapsed:.3f, e)
             return False
 
     def test_sync_request(self) -> bool:
@@ -136,11 +136,11 @@ class BackendDiagnostic:
 
         except requests.exceptions.Timeout:
             elapsed = time.time() - start_time
-            logger.error(f"❌ Sync request timed out after {elapsed:.3f}s")
+            logger.error("❌ Sync request timed out after %ss", elapsed:.3f)
             return False
         except Exception as e:
             elapsed = time.time() - start_time
-            logger.error(f"❌ Sync request error after {elapsed:.3f}s: {e}")
+            logger.error("❌ Sync request error after %ss: %s", elapsed:.3f, e)
             return False
 
     def test_specific_endpoints(self) -> Dict[str, bool]:
@@ -151,7 +151,7 @@ class BackendDiagnostic:
 
         for endpoint in endpoints:
             try:
-                logger.info(f"🎯 Testing endpoint: {endpoint}")
+                logger.info("🎯 Testing endpoint: %s", endpoint)
                 start_time = time.time()
 
                 response = requests.get(f"{self.base_url}{endpoint}", timeout=5)
@@ -165,7 +165,7 @@ class BackendDiagnostic:
             except Exception as e:
                 elapsed = time.time() - start_time
                 results[endpoint] = False
-                logger.error(f"❌ {endpoint}: Failed in {elapsed:.3f}s - {e}")
+                logger.error("❌ %s: Failed in %ss - %s", endpoint, elapsed:.3f, e)
 
         return results
 
@@ -196,10 +196,10 @@ class BackendDiagnostic:
         async_ok = results["async_request"]
         sync_ok = results["sync_request"]
 
-        logger.info(f"🔌 Socket Connection: {'✅ PASS' if socket_ok else '❌ FAIL'}")
-        logger.info(f"🌐 TCP Connection: {'✅ PASS' if tcp_ok else '❌ FAIL'}")
-        logger.info(f"⚡ Async HTTP: {'✅ PASS' if async_ok else '❌ FAIL'}")
-        logger.info(f"📡 Sync HTTP: {'✅ PASS' if sync_ok else '❌ FAIL'}")
+        logger.info("🔌 Socket Connection: %s", '✅ PASS' if socket_ok else '❌ FAIL')
+        logger.info("🌐 TCP Connection: %s", '✅ PASS' if tcp_ok else '❌ FAIL')
+        logger.info("⚡ Async HTTP: %s", '✅ PASS' if async_ok else '❌ FAIL')
+        logger.info("📡 Sync HTTP: %s", '✅ PASS' if sync_ok else '❌ FAIL')
 
         # Endpoint tests
         endpoint_results = results["endpoint_tests"]
@@ -211,7 +211,7 @@ class BackendDiagnostic:
         )
         for endpoint, success in endpoint_results.items():
             status = "✅ PASS" if success else "❌ FAIL"
-            logger.info(f"   {endpoint}: {status}")
+            logger.info("   %s: %s", endpoint, status)
 
         # Diagnosis
         logger.info("\n🔍 DIAGNOSIS:")
@@ -258,7 +258,7 @@ async def main():
         return 0 if any_success else 1
 
     except Exception as e:
-        logger.error(f"❌ Diagnostic failed: {e}")
+        logger.error("❌ Diagnostic failed: %s", e)
         return 2
 
 

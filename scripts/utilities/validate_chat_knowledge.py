@@ -40,7 +40,7 @@ async def test_chat_knowledge_components():
             topic="Test Chat for Knowledge Management",
             keywords=["test", "knowledge", "management"]
         )
-        logger.info(f"✅ Context created for chat: {context.chat_id}")
+        logger.info("✅ Context created for chat: %s", context.chat_id)
 
         # Test temporary knowledge addition
         knowledge_id = await manager.add_temporary_knowledge(
@@ -48,11 +48,11 @@ async def test_chat_knowledge_components():
             content="This is a test knowledge item that demonstrates the chat knowledge management system.",
             metadata={"type": "test", "priority": "medium"}
         )
-        logger.info(f"✅ Temporary knowledge added: {knowledge_id}")
+        logger.info("✅ Temporary knowledge added: %s", knowledge_id)
 
         # Test getting knowledge for decision
         pending_items = await manager.get_knowledge_for_decision(test_chat_id)
-        logger.info(f"✅ Retrieved {len(pending_items)} pending knowledge items")
+        logger.info("✅ Retrieved %s pending knowledge items", len(pending_items))
 
         if pending_items:
             # Test applying a knowledge decision
@@ -61,7 +61,7 @@ async def test_chat_knowledge_components():
                 knowledge_id=pending_items[0]["id"],
                 decision=KnowledgeDecision.KEEP_TEMPORARY
             )
-            logger.info(f"✅ Knowledge decision applied: {success}")
+            logger.info("✅ Knowledge decision applied: %s", success)
 
         # Test file association
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
@@ -74,7 +74,7 @@ async def test_chat_knowledge_components():
             association_type=FileAssociationType.UPLOAD,
             metadata={"test": True}
         )
-        logger.info(f"✅ File associated: {association.file_name}")
+        logger.info("✅ File associated: %s", association.file_name)
 
         # Test knowledge search
         search_results = await manager.search_chat_knowledge(
@@ -82,13 +82,13 @@ async def test_chat_knowledge_components():
             chat_id=test_chat_id,
             include_temporary=True
         )
-        logger.info(f"✅ Search returned {len(search_results)} results")
+        logger.info("✅ Search returned %s results", len(search_results))
 
         logger.info("🎉 All chat knowledge components working correctly!")
         return True
 
     except Exception as e:
-        logger.error(f"❌ Component test failed: {e}")
+        logger.error("❌ Component test failed: %s", e)
         import traceback
         traceback.print_exc()
         return False
@@ -113,18 +113,18 @@ def test_frontend_components():
                 with open(component_path, 'r') as f:
                     content = f.read()
                     if len(content) > 100:  # Basic content check
-                        logger.info(f"✅ Component exists and has content: {os.path.basename(component_path)}")
+                        logger.info("✅ Component exists and has content: %s", os.path.basename(component_path))
                     else:
-                        logger.warning(f"⚠️ Component seems empty: {os.path.basename(component_path)}")
+                        logger.warning("⚠️ Component seems empty: %s", os.path.basename(component_path))
             else:
-                logger.error(f"❌ Component missing: {os.path.basename(component_path)}")
+                logger.error("❌ Component missing: %s", os.path.basename(component_path))
                 return False
 
         logger.info("🎉 All frontend components are present!")
         return True
 
     except Exception as e:
-        logger.error(f"❌ Frontend component check failed: {e}")
+        logger.error("❌ Frontend component check failed: %s", e)
         return False
 
 
@@ -152,7 +152,7 @@ def test_api_endpoints():
         for route in routes:
             path = str(route.path)
             found_endpoints.append(path)
-            logger.info(f"✅ Endpoint found: {route.methods} {path}")
+            logger.info("✅ Endpoint found: %s %s", route.methods, path)
 
         missing_endpoints = []
         for expected in expected_endpoints:
@@ -160,14 +160,14 @@ def test_api_endpoints():
                 missing_endpoints.append(expected)
 
         if missing_endpoints:
-            logger.warning(f"⚠️ Missing endpoints: {missing_endpoints}")
+            logger.warning("⚠️ Missing endpoints: %s", missing_endpoints)
         else:
             logger.info("🎉 All expected API endpoints are defined!")
 
         return len(missing_endpoints) == 0
 
     except Exception as e:
-        logger.error(f"❌ API endpoint test failed: {e}")
+        logger.error("❌ API endpoint test failed: %s", e)
         return False
 
 
@@ -184,7 +184,7 @@ async def main():
 
     results = []
     for test_name, test_func in tests:
-        logger.info(f"Running {test_name}...")
+        logger.info("Running %s...", test_name)
         try:
             if asyncio.iscoroutine(test_func):
                 result = await test_func
@@ -192,9 +192,9 @@ async def main():
                 result = test_func
             results.append((test_name, result))
             status = "✅ PASSED" if result else "❌ FAILED"
-            logger.info(f"{status} - {test_name}")
+            logger.info("%s - %s", status, test_name)
         except Exception as e:
-            logger.error(f"❌ EXCEPTION in {test_name}: {e}")
+            logger.error("❌ EXCEPTION in %s: %s", test_name, e)
             results.append((test_name, False))
 
         logger.info("-" * 40)
@@ -209,16 +209,16 @@ async def main():
 
     for test_name, result in results:
         status = "✅ PASS" if result else "❌ FAIL"
-        logger.info(f"{status} {test_name}")
+        logger.info("%s %s", status, test_name)
 
     logger.info("-" * 60)
-    logger.info(f"🎯 RESULT: {passed}/{total} tests passed")
+    logger.info("🎯 RESULT: %s/%s tests passed", passed, total)
 
     if passed == total:
         logger.info("🎉 VALIDATION SUCCESSFUL - System ready for deployment!")
         logger.info("💡 To enable in production, restart backend with: ./run_agent.sh")
     else:
-        logger.warning(f"⚠️ {total - passed} validation issues found")
+        logger.warning("⚠️ %s validation issues found", total - passed)
 
     return passed == total
 

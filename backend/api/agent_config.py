@@ -48,7 +48,7 @@ async def _get_available_models() -> list:
             return [m.get("name", m) if isinstance(m, dict) else m for m in result["models"]]
         return []
     except Exception as e:
-        logger.warning(f"Could not fetch available models: {e}")
+        logger.warning("Could not fetch available models: %s", e)
         return []
 
 
@@ -326,7 +326,7 @@ async def enable_agent(agent_id: str):
     unified_config_manager.save_settings()
     ConfigService.clear_cache()
 
-    logger.info(f"Enabled agent {agent_id}")
+    logger.info("Enabled agent %s", agent_id)
 
     return JSONResponse(
         status_code=200,
@@ -355,7 +355,7 @@ async def disable_agent(agent_id: str):
     unified_config_manager.save_settings()
     ConfigService.clear_cache()
 
-    logger.info(f"Disabled agent {agent_id}")
+    logger.info("Disabled agent %s", agent_id)
 
     return JSONResponse(
         status_code=200,

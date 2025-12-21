@@ -123,7 +123,7 @@ async def get_feature_flags_status(
         return {"success": True, "data": stats}
 
     except Exception as e:
-        logger.error(f"Failed to get feature flags status: {e}")
+        logger.error("Failed to get feature flags status: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
 
 
@@ -191,7 +191,7 @@ async def update_enforcement_mode(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to update enforcement mode: {e}")
+        logger.error("Failed to update enforcement mode: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to update mode: {str(e)}")
 
 
@@ -245,7 +245,7 @@ async def set_endpoint_enforcement(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to set endpoint enforcement: {e}")
+        logger.error("Failed to set endpoint enforcement: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -288,7 +288,7 @@ async def remove_endpoint_enforcement(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to remove endpoint enforcement: {e}")
+        logger.error("Failed to remove endpoint enforcement: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -334,7 +334,7 @@ async def get_access_control_metrics(
         return {"success": True, "data": {**stats, "current_mode": current_mode.value}}
 
     except Exception as e:
-        logger.error(f"Failed to get access control metrics: {e}")
+        logger.error("Failed to get access control metrics: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get metrics: {str(e)}")
 
 
@@ -366,7 +366,7 @@ async def get_endpoint_metrics(
         return {"success": True, "data": stats}
 
     except Exception as e:
-        logger.error(f"Failed to get endpoint metrics: {e}")
+        logger.error("Failed to get endpoint metrics: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -398,7 +398,7 @@ async def get_user_metrics(
         return {"success": True, "data": stats}
 
     except Exception as e:
-        logger.error(f"Failed to get user metrics: {e}")
+        logger.error("Failed to get user metrics: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -426,5 +426,5 @@ async def cleanup_old_metrics(
         return {"success": True, "message": "Old metrics cleanup completed"}
 
     except Exception as e:
-        logger.error(f"Failed to cleanup metrics: {e}")
+        logger.error("Failed to cleanup metrics: %s", e)
         raise HTTPException(status_code=500, detail=str(e))

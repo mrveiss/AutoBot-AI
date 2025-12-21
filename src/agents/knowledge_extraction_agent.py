@@ -262,13 +262,13 @@ Respond only with valid JSON.
 
         # Check required fields
         if not all(field in fact_data for field in required_fields):
-            logger.debug(f"Missing required fields in fact: {fact_data}")
+            logger.debug("Missing required fields in fact: %s", fact_data)
             return False
 
         # Check confidence range
         confidence = fact_data.get("confidence", 0)
         if not isinstance(confidence, _NUMERIC_TYPES) or not (0.0 <= confidence <= 1.0):  # Issue #380
-            logger.debug(f"Invalid confidence value: {confidence}")
+            logger.debug("Invalid confidence value: %s", confidence)
             return False
 
         # Check non-empty strings (Issue #380: use module-level constant)
@@ -285,7 +285,7 @@ Respond only with valid JSON.
             FactType(fact_data["fact_type"])
             TemporalType(fact_data["temporal_type"])
         except ValueError as e:
-            logger.debug(f"Invalid enum value in fact: {e}")
+            logger.debug("Invalid enum value in fact: %s", e)
             return False
 
         return True
@@ -303,7 +303,7 @@ Respond only with valid JSON.
 
         if not response or response.error:
             error_msg = response.error if response else "No response"
-            logger.warning(f"No response from LLM for fact extraction: {error_msg}")
+            logger.warning("No response from LLM for fact extraction: %s", error_msg)
             return None
 
         try:
@@ -313,7 +313,7 @@ Respond only with valid JSON.
                 return None
             return facts_data["facts"]
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse LLM response as JSON: {e}")
+            logger.error("Failed to parse LLM response as JSON: %s", e)
             return None
 
     def _enhance_fact_data(
@@ -396,7 +396,7 @@ Respond only with valid JSON.
                     )
 
             except Exception as e:
-                logger.error(f"Error creating AtomicFact: {e}")
+                logger.error("Error creating AtomicFact: %s", e)
                 validation_errors += 1
 
         return extracted_facts, validation_errors
@@ -412,7 +412,7 @@ Respond only with valid JSON.
         start_time = time.time()
 
         try:
-            logger.info(f"Extracting facts from {len(content)} character content")
+            logger.info("Extracting facts from %s character content", len(content))
 
             raw_facts = await self._get_llm_facts_response(content, context)
             if raw_facts is None:
@@ -447,7 +447,7 @@ Respond only with valid JSON.
 
         except Exception as e:
             processing_time = time.time() - start_time
-            logger.error(f"Error in fact extraction: {e}")
+            logger.error("Error in fact extraction: %s", e)
             return FactExtractionResult(
                 facts=[],
                 processing_time=processing_time,
@@ -464,7 +464,7 @@ Respond only with valid JSON.
 
         for result in chunk_results:
             if isinstance(result, Exception):
-                logger.error(f"Chunk processing failed: {result}")
+                logger.error("Chunk processing failed: %s", result)
                 total_errors += 1
                 continue
 
@@ -479,7 +479,7 @@ Respond only with valid JSON.
         self, chunks: List[Dict[str, Any]], source: str
     ) -> FactExtractionResult:
         """Extract facts from multiple chunks in parallel."""
-        logger.info(f"Processing {len(chunks)} chunks for fact extraction")
+        logger.info("Processing %s chunks for fact extraction", len(chunks))
 
         semaphore = asyncio.Semaphore(3)
 
@@ -557,5 +557,5 @@ Respond only with valid JSON.
                 f for f in filtered_facts if f.confidence >= min_confidence
             ]
 
-        logger.debug(f"Filtered {len(facts)} facts to {len(filtered_facts)} facts")
+        logger.debug("Filtered %s facts to %s facts", len(facts), len(filtered_facts))
         return filtered_facts

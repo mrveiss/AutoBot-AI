@@ -180,7 +180,7 @@ async def create_terminal_session(request: TerminalSessionRequest):
     # Store in session manager (you would use a proper store in production)
     session_manager.session_configs[session_id] = session_config
 
-    logger.info(f"Created terminal session: {session_id}")
+    logger.info("Created terminal session: %s", session_id)
 
     return {
         "session_id": session_id,
@@ -265,7 +265,7 @@ async def delete_terminal_session(session_id: str):
     # Remove session configuration
     del session_manager.session_configs[session_id]
 
-    logger.info(f"Deleted terminal session: {session_id}")
+    logger.info("Deleted terminal session: %s", session_id)
 
     return {"session_id": session_id, "status": "deleted"}
 
@@ -453,7 +453,7 @@ async def consolidated_terminal_websocket(websocket: WebSocket, session_id: str)
 
             redis_client = get_redis_client()
         except Exception as e:
-            logger.warning(f"Could not get Redis client for terminal logging: {e}")
+            logger.warning("Could not get Redis client for terminal logging: %s", e)
 
         # Create consolidated terminal handler
         terminal = ConsolidatedTerminalWebSocket(
@@ -466,7 +466,7 @@ async def consolidated_terminal_websocket(websocket: WebSocket, session_id: str)
         # Start terminal session (activates PTY output reader)
         await terminal.start()
 
-        logger.info(f"WebSocket connection established for session {session_id}")
+        logger.info("WebSocket connection established for session %s", session_id)
 
         # Handle WebSocket communication
         try:
@@ -479,9 +479,9 @@ async def consolidated_terminal_websocket(websocket: WebSocket, session_id: str)
                 await terminal.handle_message(message)
 
         except WebSocketDisconnect:
-            logger.info(f"WebSocket disconnected for session {session_id}")
+            logger.info("WebSocket disconnected for session %s", session_id)
         except Exception as e:
-            logger.error(f"Error in WebSocket handling: {e}")
+            logger.error("Error in WebSocket handling: %s", e)
             await websocket.send_text(
                 json.dumps(
                     {
@@ -493,7 +493,7 @@ async def consolidated_terminal_websocket(websocket: WebSocket, session_id: str)
             )
 
     except Exception as e:
-        logger.error(f"Error establishing WebSocket connection: {e}")
+        logger.error("Error establishing WebSocket connection: %s", e)
     finally:
         # Clean up connection
         session_manager.remove_connection(session_id)

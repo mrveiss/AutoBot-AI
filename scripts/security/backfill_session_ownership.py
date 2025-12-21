@@ -109,7 +109,7 @@ class SessionOwnershipBackfill:
             if cursor == 0:
                 break
 
-        logger.info(f"✓ Found {len(sessions)} chat sessions")
+        logger.info("✓ Found %s chat sessions", len(sessions))
         return sessions
 
     async def check_session_owner(self, session_id: str) -> Optional[str]:
@@ -136,16 +136,16 @@ class SessionOwnershipBackfill:
             True if successful
         """
         if self.dry_run:
-            logger.info(f"[DRY RUN] Would assign {session_id[:16]}... to {owner}")
+            logger.info("[DRY RUN] Would assign %s... to %s", session_id[:16], owner)
             return True
 
         success = await self.validator.set_session_owner(session_id, owner)
 
         if success:
             if self.verbose:
-                logger.info(f"✓ Assigned {session_id[:16]}... to {owner}")
+                logger.info("✓ Assigned %s... to %s", session_id[:16], owner)
         else:
-            logger.error(f"✗ Failed to assign {session_id[:16]}...")
+            logger.error("✗ Failed to assign %s...", session_id[:16])
 
         return success
 
@@ -154,8 +154,8 @@ class SessionOwnershipBackfill:
         logger.info("=" * 60)
         logger.info("Session Ownership Backfill")
         logger.info("=" * 60)
-        logger.info(f"Default Owner: {self.default_owner}")
-        logger.info(f"Dry Run: {self.dry_run}")
+        logger.info("Default Owner: %s", self.default_owner)
+        logger.info("Dry Run: %s", self.dry_run)
         logger.info("=" * 60)
 
         # Get all sessions
@@ -166,7 +166,7 @@ class SessionOwnershipBackfill:
             logger.warning("No chat sessions found in Redis DB 0")
             return
 
-        logger.info(f"Processing {self.total_sessions} sessions...")
+        logger.info("Processing %s sessions...", self.total_sessions)
         logger.info("")
 
         # Process each session
@@ -196,10 +196,10 @@ class SessionOwnershipBackfill:
 
                 # Progress indicator
                 if not self.verbose and idx % 10 == 0:
-                    logger.info(f"Progress: {idx}/{self.total_sessions}")
+                    logger.info("Progress: %s/%s", idx, self.total_sessions)
 
             except Exception as e:
-                logger.error(f"Error processing {session_id[:16]}...: {e}")
+                logger.error("Error processing %s...: %s", session_id[:16], e)
                 self.errors += 1
 
         # Print summary
@@ -211,10 +211,10 @@ class SessionOwnershipBackfill:
         logger.info("=" * 60)
         logger.info("Backfill Summary")
         logger.info("=" * 60)
-        logger.info(f"Total Sessions:       {self.total_sessions}")
-        logger.info(f"Already Owned:        {self.already_owned}")
-        logger.info(f"Newly Assigned:       {self.newly_assigned}")
-        logger.info(f"Errors:               {self.errors}")
+        logger.info("Total Sessions:       %s", self.total_sessions)
+        logger.info("Already Owned:        %s", self.already_owned)
+        logger.info("Newly Assigned:       %s", self.newly_assigned)
+        logger.info("Errors:               %s", self.errors)
         logger.info("=" * 60)
 
         if self.dry_run:
@@ -223,7 +223,7 @@ class SessionOwnershipBackfill:
         elif self.errors == 0:
             logger.info("✓ BACKFILL COMPLETE - All sessions have ownership")
         else:
-            logger.warning(f"⚠ BACKFILL COMPLETED WITH {self.errors} ERRORS")
+            logger.warning("⚠ BACKFILL COMPLETED WITH %s ERRORS", self.errors)
             logger.warning("  Review errors above and retry if needed")
 
         logger.info("=" * 60)
@@ -243,14 +243,14 @@ class SessionOwnershipBackfill:
         for session_id in sessions:
             owner = await self.check_session_owner(session_id)
             if not owner:
-                logger.error(f"✗ Session {session_id[:16]}... has no owner!")
+                logger.error("✗ Session %s... has no owner!", session_id[:16])
                 unowned += 1
 
         if unowned == 0:
             logger.info("✓ All sessions have ownership assigned")
             return True
         else:
-            logger.error(f"✗ {unowned} sessions still lack ownership")
+            logger.error("✗ %s sessions still lack ownership", unowned)
             return False
 
 
@@ -329,7 +329,7 @@ async def main():
         logger.info("\nInterrupted by user")
         sys.exit(1)
     except Exception as e:
-        logger.error(f"Fatal error: {e}", exc_info=True)
+        logger.error("Fatal error: %s", e, exc_info=True)
         sys.exit(1)
 
 

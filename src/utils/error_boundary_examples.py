@@ -195,7 +195,7 @@ def integrate_with_knowledge_base():
             results = kb.search_chunks(query, limit=limit)
             return results
         except Exception as e:
-            logger.error(f"KB search failed: {e}")
+            logger.error("KB search failed: %s", e)
             # Error boundary will handle this
             raise
 
@@ -220,7 +220,7 @@ def integrate_with_llm_interface():
             response = await llm.achat_completion(messages, **kwargs)
             return response
         except Exception as e:
-            logger.error(f"LLM chat failed: {e}")
+            logger.error("LLM chat failed: %s", e)
             # Error boundary will handle this
             raise
 

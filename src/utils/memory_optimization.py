@@ -388,7 +388,7 @@ def optimize_memory_usage():
 
     # Force garbage collection
     collected = gc.collect()
-    logger.info(f"Garbage collection freed {collected} objects")
+    logger.info("Garbage collection freed %s objects", collected)
 
     # Configure garbage collection thresholds for better performance
     # (threshold0, threshold1, threshold2)
@@ -405,12 +405,12 @@ def optimize_memory_usage():
         object_counts[obj_type] = object_counts.get(obj_type, 0) + 1
 
     total_objects = len(gc.get_objects())
-    logger.info(f"Current object count: {total_objects:,} total objects")
+    logger.info("Current object count: %s total objects", total_objects:,)
 
     # Log top 5 object types
     top_objects = sorted(object_counts.items(), key=lambda x: x[1], reverse=True)[:5]
     for obj_type, count in top_objects:
-        logger.info(f"  {obj_type}: {count:,} instances")
+        logger.info("  %s: %s instances", obj_type, count:,)
 
     return {
         "objects_collected": collected,

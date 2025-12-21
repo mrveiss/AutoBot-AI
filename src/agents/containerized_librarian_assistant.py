@@ -83,7 +83,7 @@ class ContainerizedLibrarianAssistant:
                     )
                     return False
         except Exception as e:
-            logger.error(f"Cannot reach Playwright service: {e}")
+            logger.error("Cannot reach Playwright service: %s", e)
             return False
 
     async def search_web(
@@ -116,14 +116,14 @@ class ContainerizedLibrarianAssistant:
                 f"{self.playwright_service_url}/search", json=payload
             ) as response:
                 if response.status != 200:
-                    logger.error(f"Search request failed: status {response.status}")
+                    logger.error("Search request failed: status %s", response.status)
                     return []
 
                 result = await response.json()
 
                 if result.get("success"):
                     results = result.get("results", [])
-                    logger.info(f"Found {len(results)} search results")
+                    logger.info("Found %s search results", len(results))
                     return results[: self.max_search_results]
                 else:
                     logger.error(
@@ -132,7 +132,7 @@ class ContainerizedLibrarianAssistant:
                     return []
 
         except Exception as e:
-            logger.error(f"Error during web search: {e}")
+            logger.error("Error during web search: %s", e)
             return []
 
     async def extract_content(self, url: str) -> Optional[Dict[str, Any]]:
@@ -150,13 +150,13 @@ class ContainerizedLibrarianAssistant:
         try:
             payload = {"url": url}
 
-            logger.info(f"Extracting content via Playwright service: {url}")
+            logger.info("Extracting content via Playwright service: %s", url)
 
             async with await self.http_client.post(
                 f"{self.playwright_service_url}/extract", json=payload
             ) as response:
                 if response.status != 200:
-                    logger.error(f"Content extraction failed: status {response.status}")
+                    logger.error("Content extraction failed: status %s", response.status)
                     return None
 
                 result = await response.json()
@@ -186,7 +186,7 @@ class ContainerizedLibrarianAssistant:
                     return None
 
         except Exception as e:
-            logger.error(f"Error extracting content from {url}: {e}")
+            logger.error("Error extracting content from %s: %s", url, e)
             return None
 
     async def assess_content_quality(
@@ -263,7 +263,7 @@ Respond in JSON format:
                 }
 
         except Exception as e:
-            logger.error(f"Error assessing content quality: {e}")
+            logger.error("Error assessing content quality: %s", e)
             return {
                 "score": 0.3,
                 "reasoning": f"Error during assessment: {str(e)}",
@@ -321,11 +321,11 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
                 )
                 return True
             else:
-                logger.error(f"Failed to store content from {content_data.get('url')}")
+                logger.error("Failed to store content from %s", content_data.get('url'))
                 return False
 
         except Exception as e:
-            logger.error(f"Error storing content in knowledge base: {e}")
+            logger.error("Error storing content in knowledge base: %s", e)
             return False
 
     def _should_store_content(
@@ -407,7 +407,7 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
                 research_results["error"] = "Playwright service not available"
                 return research_results
 
-            logger.info(f"Researching query: {query}")
+            logger.info("Researching query: %s", query)
             search_results = await self.search_web(query)
             research_results["search_results"] = search_results
 
@@ -440,7 +440,7 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
             )
 
         except Exception as e:
-            logger.error(f"Error during research: {e}")
+            logger.error("Error during research: %s", e)
             research_results["error"] = str(e)
 
         return research_results
@@ -486,7 +486,7 @@ Format sources as: [Source: Domain Name]
             return summary
 
         except Exception as e:
-            logger.error(f"Error creating research summary: {e}")
+            logger.error("Error creating research summary: %s", e)
             return f"Research completed but summary generation failed: {str(e)}"
 
 

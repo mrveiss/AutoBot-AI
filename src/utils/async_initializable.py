@@ -83,7 +83,7 @@ BEFORE (Manual Pattern - 20+ lines):
                     return True
 
                 except Exception as e:
-                    logger.error(f"MyService initialization failed: {e}")
+                    logger.error("MyService initialization failed: %s", e)
                     await self._cleanup()
                     return False
 
@@ -261,9 +261,9 @@ class AsyncInitializable(ABC):
         """Attempt cleanup with error handling (Issue #315)."""
         try:
             await self._cleanup_impl()
-            logger.info(f"{self._component_name} cleanup completed")
+            logger.info("%s cleanup completed", self._component_name)
         except Exception as cleanup_error:
-            logger.error(f"{self._component_name} cleanup failed: {cleanup_error}")
+            logger.error("%s cleanup failed: %s", self._component_name, cleanup_error)
 
     @error_boundary(component="async_initializable", function="initialize")
     async def initialize(self) -> bool:
@@ -281,19 +281,19 @@ class AsyncInitializable(ABC):
         """
         # Fast path: Already initialized
         if self._initialized:
-            logger.debug(f"{self._component_name} already initialized")
+            logger.debug("%s already initialized", self._component_name)
             return True
 
         # Acquire lock for initialization
         async with self._initialization_lock:
             # Double-check: Another coroutine may have initialized while we waited
             if self._initialized:
-                logger.debug(f"{self._component_name} was initialized by another coroutine")
+                logger.debug("%s was initialized by another coroutine", self._component_name)
                 return True
 
             # Start metrics tracking
             self._metrics.start_time = time.time()
-            logger.info(f"Initializing {self._component_name}...")
+            logger.info("Initializing %s...", self._component_name)
 
             # Attempt initialization with optional retry
             current_delay = self._retry_delay
@@ -430,9 +430,9 @@ class SyncInitializable(ABC):
         """Attempt cleanup with error handling (Issue #315)."""
         try:
             self._cleanup_impl()
-            logger.info(f"{self._component_name} cleanup completed")
+            logger.info("%s cleanup completed", self._component_name)
         except Exception as cleanup_error:
-            logger.error(f"{self._component_name} cleanup failed: {cleanup_error}")
+            logger.error("%s cleanup failed: %s", self._component_name, cleanup_error)
 
     def initialize(self) -> bool:
         """
@@ -443,19 +443,19 @@ class SyncInitializable(ABC):
         """
         # Fast path: Already initialized
         if self._initialized:
-            logger.debug(f"{self._component_name} already initialized")
+            logger.debug("%s already initialized", self._component_name)
             return True
 
         # Acquire lock for initialization
         with self._initialization_lock:
             # Double-check
             if self._initialized:
-                logger.debug(f"{self._component_name} was initialized by another thread")
+                logger.debug("%s was initialized by another thread", self._component_name)
                 return True
 
             # Start metrics tracking
             self._metrics.start_time = time.time()
-            logger.info(f"Initializing {self._component_name}...")
+            logger.info("Initializing %s...", self._component_name)
 
             # Attempt initialization with optional retry
             current_delay = self._retry_delay

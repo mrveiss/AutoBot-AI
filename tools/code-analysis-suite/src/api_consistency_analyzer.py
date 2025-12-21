@@ -87,6 +87,16 @@ class APIConsistencyAnalyzer:
             ]
         }
 
+        # Issue #510: Precompile framework patterns at init time
+        # Reduces per-file work from O(frameworks * patterns) to O(frameworks)
+        self._compiled_framework_patterns = {}
+        for framework, pattern_list in self.framework_patterns.items():
+            compiled_list = [
+                (re.compile(pattern, re.MULTILINE | re.IGNORECASE), desc)
+                for pattern, desc in pattern_list
+            ]
+            self._compiled_framework_patterns[framework] = compiled_list
+
         logger.info("API Consistency Analyzer initialized")
 
     async def analyze_api_consistency(self, root_path: str = ".", patterns: List[str] = None) -> Dict[str, Any]:
@@ -237,13 +247,17 @@ class APIConsistencyAnalyzer:
         return None
 
     async def _extract_endpoints_with_regex(self, file_path: str, content: str, lines: List[str]) -> List[APIEndpoint]:
-        """Extract endpoints using regex patterns"""
+        """Extract endpoints using regex patterns.
+
+        Issue #510: Optimized to use precompiled patterns from init.
+        """
 
         endpoints = []
 
-        for framework, pattern_list in self.framework_patterns.items():
-            for pattern, description in pattern_list:
-                for match in re.finditer(pattern, content, re.MULTILINE | re.IGNORECASE):
+        # Issue #510: Use precompiled patterns for O(1) regex creation
+        for framework, compiled_list in self._compiled_framework_patterns.items():
+            for compiled_pattern, description in compiled_list:
+                for match in compiled_pattern.finditer(content):
                     line_num = content[:match.start()].count('\n') + 1
 
                     if framework == 'fastapi':

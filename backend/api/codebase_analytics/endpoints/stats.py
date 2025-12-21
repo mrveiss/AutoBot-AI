@@ -81,7 +81,7 @@ async def get_codebase_stats():
     try:
         results = code_collection.get(ids=["codebase_stats"], include=["metadatas"])
     except Exception as chroma_error:
-        logger.warning(f"ChromaDB stats query failed: {chroma_error}")
+        logger.warning("ChromaDB stats query failed: %s", chroma_error)
         return _no_data_response()
 
     # Check if we have data
@@ -231,9 +231,9 @@ async def get_codebase_problems(problem_type: Optional[str] = None):
     if code_collection:
         try:
             all_problems = _fetch_problems_from_chromadb(code_collection, problem_type)
-            logger.info(f"Retrieved {len(all_problems)} problems from ChromaDB")
+            logger.info("Retrieved %s problems from ChromaDB", len(all_problems))
         except Exception as chroma_error:
-            logger.warning(f"ChromaDB query failed: {chroma_error}, falling back to Redis")
+            logger.warning("ChromaDB query failed: %s, falling back to Redis", chroma_error)
             code_collection = None
 
     # Fallback to Redis if ChromaDB fails

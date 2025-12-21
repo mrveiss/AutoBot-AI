@@ -51,9 +51,9 @@ class DNSCacheService:
                         k: v for k, v in data.items()
                         if v.get('timestamp', 0) > cutoff
                     }
-                logger.info(f"Loaded {len(self.cache)} cached DNS entries")
+                logger.info("Loaded %s cached DNS entries", len(self.cache))
         except Exception as e:
-            logger.warning(f"Could not load DNS cache: {e}")
+            logger.warning("Could not load DNS cache: %s", e)
             self.cache = {}
 
     def save_cache(self):
@@ -62,7 +62,7 @@ class DNSCacheService:
             with open(self.cache_file, 'w') as f:
                 json.dump(self.cache, f, indent=2)
         except Exception as e:
-            logger.error(f"Could not save DNS cache: {e}")
+            logger.error("Could not save DNS cache: %s", e)
 
     async def resolve_hostname(self, hostname: str, config: Dict) -> Dict:
         """Resolve a hostname and check port connectivity"""
@@ -87,7 +87,7 @@ class DNSCacheService:
                 'status': 'resolved'
             })
 
-            logger.info(f"✓ {hostname} → {ip} ({resolution_time:.1f}ms)")
+            logger.info("✓ %s → %s (%sms)", hostname, ip, resolution_time:.1f)
 
         except socket.gaierror as e:
             result.update({
@@ -95,7 +95,7 @@ class DNSCacheService:
                 'error': str(e),
                 'resolution_time_ms': round((time.time() - start_time) * 1000, 2)
             })
-            logger.warning(f"✗ {hostname} DNS failed: {e}")
+            logger.warning("✗ %s DNS failed: %s", hostname, e)
             return result
 
         # Port Connectivity Checks
@@ -151,7 +151,7 @@ class DNSCacheService:
                     self.cache[hostname] = results[i]
 
         total_time = time.time() - start_time
-        logger.info(f"✅ DNS cache refreshed in {total_time:.1f}s ({len(self.cache)} entries)")
+        logger.info("✅ DNS cache refreshed in %ss (%s entries)", total_time:.1f, len(self.cache))
 
         self.save_cache()
 
@@ -188,7 +188,7 @@ class DNSCacheService:
 
     async def run_daemon(self):
         """Run DNS cache service daemon"""
-        logger.info(f"🚀 Starting DNS Cache Service (refresh every {self.refresh_interval}s)")
+        logger.info("🚀 Starting DNS Cache Service (refresh every %ss)", self.refresh_interval)
 
         # Initial cache refresh
         await self.refresh_cache()
@@ -202,13 +202,13 @@ class DNSCacheService:
                 # Log cache status every 5 minutes
                 if int(time.time()) % 300 == 0:
                     status = self.get_cache_status()
-                    logger.info(f"📊 Cache: {status['fresh_entries']}/{status['total_entries']} fresh entries")
+                    logger.info("📊 Cache: %s/%s fresh entries", status['fresh_entries'], status['total_entries'])
 
             except KeyboardInterrupt:
                 logger.info("🛑 DNS Cache Service stopped")
                 break
             except Exception as e:
-                logger.error(f"❌ Error in DNS cache refresh: {e}")
+                logger.error("❌ Error in DNS cache refresh: %s", e)
                 await asyncio.sleep(5)  # Wait before retry
 
 

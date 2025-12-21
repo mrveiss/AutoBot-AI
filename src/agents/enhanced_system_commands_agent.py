@@ -233,7 +233,7 @@ and suggest alternatives."""
             }
 
         except Exception as e:
-            logger.error(f"Error extracting command: {e}")
+            logger.error("Error extracting command: %s", e)
             return {
                 "command": "",
                 "explanation": f"Failed to extract command: {e}",
@@ -348,7 +348,7 @@ and suggest alternatives."""
             return str(response)
 
         except Exception as e:
-            logger.error(f"Error extracting response content: {e}")
+            logger.error("Error extracting response content: %s", e)
             return "Error extracting command response"
 
     def is_system_command_request(self, message: str) -> bool:

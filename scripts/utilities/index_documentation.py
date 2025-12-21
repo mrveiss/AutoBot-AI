@@ -222,7 +222,7 @@ def _check_already_indexed(kb, content_hash: str, file_path: Path, title: str) -
     """
     existing_hash_key = f"doc_hash:{content_hash}"
     if kb.redis_client.exists(existing_hash_key):
-        logger.info(f"Document already indexed (unchanged): {file_path.name}")
+        logger.info("Document already indexed (unchanged): %s", file_path.name)
         return {
             "status": "skipped",
             "reason": "already_indexed",
@@ -272,7 +272,7 @@ async def _index_document_chunks(
         if result["status"] == "success":
             indexed_chunks.append(result["fact_id"])
         else:
-            logger.error(f"Failed to index chunk: {result.get('message', 'Unknown error')}")
+            logger.error("Failed to index chunk: %s", result.get('message', 'Unknown error'))
 
     return indexed_chunks
 
@@ -319,7 +319,7 @@ async def index_document(
             content = f.read()
 
         if not content.strip():
-            logger.warning(f"Skipping empty file: {file_path}")
+            logger.warning("Skipping empty file: %s", file_path)
             return {
                 "status": "skipped",
                 "reason": "empty_file",
@@ -338,7 +338,7 @@ async def index_document(
 
         # Chunk document and index
         chunks = chunk_markdown_by_sections(content)
-        logger.info(f"Processing {file_path.name}: {len(chunks)} chunks")
+        logger.info("Processing %s: %s chunks", file_path.name, len(chunks))
 
         indexed_chunks = await _index_document_chunks(
             kb, chunks, title, category, file_path, content_hash
@@ -357,7 +357,7 @@ async def index_document(
         }
 
     except Exception as e:
-        logger.error(f"Error indexing {file_path}: {e}")
+        logger.error("Error indexing %s: %s", file_path, e)
         return {
             "status": "error",
             "file": str(file_path),
@@ -437,7 +437,7 @@ async def index_all_documentation(
     docs_dir = PROJECT_ROOT / "docs"
     discovered_files = await discover_documentation_files(docs_dir, category_filter)
 
-    logger.info(f"Discovered {len(discovered_files)} documentation files")
+    logger.info("Discovered %s documentation files", len(discovered_files))
 
     if dry_run:
         logger.info("DRY RUN - Preview of files to be indexed:")
@@ -460,7 +460,7 @@ async def index_all_documentation(
     }
 
     for i, (file_path, category) in enumerate(discovered_files, 1):
-        logger.info(f"[{i}/{len(discovered_files)}] Indexing: {file_path.name} ({category})")
+        logger.info("[%s/%s] Indexing: %s (%s)", i, len(discovered_files), file_path.name, category)
 
         result = await index_document(kb, file_path, category, reindex)
         results["files"].append(result)
@@ -475,7 +475,7 @@ async def index_all_documentation(
 
         # Progress update every 10 files
         if i % 10 == 0:
-            logger.info(f"Progress: {i}/{len(discovered_files)} files processed")
+            logger.info("Progress: %s/%s files processed", i, len(discovered_files))
 
     # Close knowledge base
     await kb.close()
@@ -484,11 +484,11 @@ async def index_all_documentation(
     logger.info("=" * 80)
     logger.info("DOCUMENTATION INDEXING COMPLETE")
     logger.info("=" * 80)
-    logger.info(f"Total Files: {results['total_files']}")
-    logger.info(f"Indexed: {results['indexed']}")
-    logger.info(f"Skipped: {results['skipped']}")
-    logger.info(f"Errors: {results['errors']}")
-    logger.info(f"Total Chunks: {results['total_chunks']}")
+    logger.info("Total Files: %s", results['total_files'])
+    logger.info("Indexed: %s", results['indexed'])
+    logger.info("Skipped: %s", results['skipped'])
+    logger.info("Errors: %s", results['errors'])
+    logger.info("Total Chunks: %s", results['total_chunks'])
     logger.info("=" * 80)
 
     return results
@@ -533,12 +533,12 @@ async def main():
         with open(results_file, 'w') as f:
             json.dump(results, f, indent=2)
 
-        logger.info(f"Results written to: {results_file}")
+        logger.info("Results written to: %s", results_file)
 
         return 0 if results.get("errors", 0) == 0 else 1
 
     except Exception as e:
-        logger.error(f"Documentation indexing failed: {e}")
+        logger.error("Documentation indexing failed: %s", e)
         import traceback
         logger.error(traceback.format_exc())
         return 1

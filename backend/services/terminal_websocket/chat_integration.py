@@ -48,7 +48,7 @@ class TerminalChatIntegrator:
             return False
 
         try:
-            logger.info(f"[CHAT INTEGRATION] Saving command to chat: {command[:50]}")
+            logger.info("[CHAT INTEGRATION] Saving command to chat: %s", command[:50])
             await self.chat_history_manager.add_message(
                 sender="terminal",
                 text=f"$ {command}",
@@ -58,7 +58,7 @@ class TerminalChatIntegrator:
             logger.info("[CHAT INTEGRATION] Command saved successfully")
             return True
         except Exception as e:
-            logger.error(f"Failed to save command to chat: {e}")
+            logger.error("Failed to save command to chat: %s", e)
             return False
 
     async def buffer_output(self, content: str) -> None:
@@ -106,7 +106,7 @@ class TerminalChatIntegrator:
                 )
                 logger.info("[CHAT INTEGRATION] Output saved successfully")
             except Exception as e:
-                logger.error(f"Failed to save output to chat: {e}")
+                logger.error("Failed to save output to chat: %s", e)
         else:
             skip_reason = "terminal prompt" if is_prompt else "only ANSI codes"
             logger.debug(
@@ -141,7 +141,7 @@ class TerminalChatIntegrator:
                     self._output_buffer = ""
                     logger.info("[CHAT INTEGRATION] Buffer flushed successfully")
         except Exception as e:
-            logger.error(f"Failed to flush output buffer: {e}")
+            logger.error("Failed to flush output buffer: %s", e)
 
     async def write_to_transcript(self, content: str) -> bool:
         """Write content to terminal transcript file"""
@@ -155,8 +155,8 @@ class TerminalChatIntegrator:
                 await f.write(content)
             return True
         except OSError as e:
-            logger.error(f"Failed to write to transcript (I/O error): {e}")
+            logger.error("Failed to write to transcript (I/O error): %s", e)
             return False
         except Exception as e:
-            logger.error(f"Failed to write to transcript: {e}")
+            logger.error("Failed to write to transcript: %s", e)
             return False

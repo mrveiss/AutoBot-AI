@@ -37,7 +37,7 @@ async def benchmark_memory_bandwidth() -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error(f"Memory bandwidth benchmark failed: {e}")
+        logger.error("Memory bandwidth benchmark failed: %s", e)
         return {"error": str(e), "score": 0}
 
 
@@ -60,7 +60,7 @@ async def benchmark_compute_performance() -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error(f"Compute performance benchmark failed: {e}")
+        logger.error("Compute performance benchmark failed: %s", e)
         return {"error": str(e), "score": 0}
 
 
@@ -83,7 +83,7 @@ async def benchmark_mixed_precision() -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error(f"Mixed precision benchmark failed: {e}")
+        logger.error("Mixed precision benchmark failed: %s", e)
         return {"error": str(e), "score": 0}
 
 
@@ -106,7 +106,7 @@ async def benchmark_tensor_cores() -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error(f"Tensor Core benchmark failed: {e}")
+        logger.error("Tensor Core benchmark failed: %s", e)
         return {"error": str(e), "score": 0}
 
 
@@ -233,5 +233,5 @@ async def run_comprehensive_benchmark(
         return benchmark_results
 
     except Exception as e:
-        logger.error(f"GPU benchmark failed: {e}")
+        logger.error("GPU benchmark failed: %s", e)
         return {"error": str(e), "timestamp": time.time()}

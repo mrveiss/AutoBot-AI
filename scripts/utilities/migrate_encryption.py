@@ -104,7 +104,7 @@ class ChatEncryptionMigrator:
                 return encryption_service.is_encrypted(content)
 
         except Exception as e:
-            logger.error(f"Error checking encryption status of {file_path}: {e}")
+            logger.error("Error checking encryption status of %s: %s", file_path, e)
             return False
 
     def migrate_file(self, file_path: str) -> bool:
@@ -117,11 +117,11 @@ class ChatEncryptionMigrator:
             True if migration was successful
         """
         try:
-            logger.info(f"Processing file: {file_path}")
+            logger.info("Processing file: %s", file_path)
 
             # Check if already encrypted
             if self.is_file_encrypted(file_path):
-                logger.info(f"File {file_path} is already encrypted, skipping")
+                logger.info("File %s is already encrypted, skipping", file_path)
                 self.stats["skipped"] += 1
                 return True
 
@@ -130,14 +130,14 @@ class ChatEncryptionMigrator:
                 chat_data = json.load(f)
 
             if self.dry_run:
-                logger.info(f"DRY RUN: Would encrypt {file_path}")
+                logger.info("DRY RUN: Would encrypt %s", file_path)
                 self.stats["migrated"] += 1
                 return True
 
             # Create backup if requested
             if self.create_backup:
                 backup_path = self.backup_file(file_path)
-                logger.info(f"Created backup: {backup_path}")
+                logger.info("Created backup: %s", backup_path)
 
             # Encrypt and save
             chat_manager = ChatHistoryManager()
@@ -146,12 +146,12 @@ class ChatEncryptionMigrator:
             with open(file_path, "w") as f:
                 f.write(encrypted_data)
 
-            logger.info(f"Successfully encrypted {file_path}")
+            logger.info("Successfully encrypted %s", file_path)
             self.stats["migrated"] += 1
             return True
 
         except Exception as e:
-            logger.error(f"Failed to migrate {file_path}: {e}")
+            logger.error("Failed to migrate %s: %s", file_path, e)
             self.stats["errors"] += 1
             return False
 
@@ -164,10 +164,10 @@ class ChatEncryptionMigrator:
         chats_dir = self.get_chats_directory()
 
         if not os.path.exists(chats_dir):
-            logger.warning(f"Chats directory {chats_dir} does not exist")
+            logger.warning("Chats directory %s does not exist", chats_dir)
             return True
 
-        logger.info(f"Migrating chat files in: {chats_dir}")
+        logger.info("Migrating chat files in: %s", chats_dir)
 
         # Find all chat files
         chat_files = []
@@ -176,7 +176,7 @@ class ChatEncryptionMigrator:
                 chat_files.append(os.path.join(chats_dir, filename))
 
         self.stats["total_files"] = len(chat_files)
-        logger.info(f"Found {len(chat_files)} chat files to process")
+        logger.info("Found %s chat files to process", len(chat_files))
 
         if len(chat_files) == 0:
             logger.info("No chat files found to migrate")

@@ -168,7 +168,7 @@ async def process_image(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Image processing failed: {e}")
+        logger.error("Image processing failed: %s", e)
         processing_time = time.time() - start_time
         return MultiModalResponse(
             success=False,
@@ -234,7 +234,7 @@ async def process_audio(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Audio processing failed: {e}")
+        logger.error("Audio processing failed: %s", e)
         processing_time = time.time() - start_time
         return MultiModalResponse(
             success=False,
@@ -286,7 +286,7 @@ async def process_text(request: TextProcessingRequest):
         )
 
     except Exception as e:
-        logger.error(f"Text processing failed: {e}")
+        logger.error("Text processing failed: %s", e)
         processing_time = time.time() - start_time
         return MultiModalResponse(
             success=False,
@@ -339,7 +339,7 @@ async def generate_embedding(request: EmbeddingRequest):
         }
 
     except Exception as e:
-        logger.error(f"Embedding generation failed: {e}")
+        logger.error("Embedding generation failed: %s", e)
         processing_time = time.time() - start_time
         return {"success": False, "error": str(e), "processing_time": processing_time}
 
@@ -399,7 +399,7 @@ async def cross_modal_search(request: CrossModalSearchRequest):
         )
 
     except Exception as e:
-        logger.error(f"Cross-modal search failed: {e}")
+        logger.error("Cross-modal search failed: %s", e)
         processing_time = time.time() - start_time
         return CrossModalSearchResponse(
             query=str(request.query),
@@ -456,7 +456,7 @@ async def get_multimodal_stats():
         }
 
     except Exception as e:
-        logger.error(f"Failed to get multimodal stats: {e}")
+        logger.error("Failed to get multimodal stats: %s", e)
         return {
             "success": False,
             "error": str(e),
@@ -626,7 +626,7 @@ async def get_performance_stats():
         }
 
     except Exception as e:
-        logger.error(f"Failed to get performance stats: {e}")
+        logger.error("Failed to get performance stats: %s", e)
         return {"success": False, "error": str(e), "timestamp": time.time()}
 
 
@@ -651,7 +651,7 @@ async def optimize_performance():
         }
 
     except Exception as e:
-        logger.error(f"Performance optimization failed: {e}")
+        logger.error("Performance optimization failed: %s", e)
         return {"success": False, "error": str(e), "timestamp": time.time()}
 
 
@@ -669,7 +669,7 @@ async def get_performance_summary():
         return {"success": True, "timestamp": time.time(), "summary": summary}
 
     except Exception as e:
-        logger.error(f"Failed to get performance summary: {e}")
+        logger.error("Failed to get performance summary: %s", e)
         return {"success": False, "error": str(e), "timestamp": time.time()}
 
 
@@ -707,7 +707,7 @@ async def update_batch_size(modality: str, batch_size: int):
         }
 
     except Exception as e:
-        logger.error(f"Failed to update batch size: {e}")
+        logger.error("Failed to update batch size: %s", e)
         return {"success": False, "error": str(e), "timestamp": time.time()}
 
 

@@ -220,7 +220,7 @@ class LLMCostTracker:
 
         if pricing is None:
             # Default to zero for unknown models (assume local/free)
-            logger.warning(f"Unknown model pricing for: {model}, assuming free")
+            logger.warning("Unknown model pricing for: %s, assuming free", model)
             return 0.0
 
         # Calculate cost (pricing is per 1M tokens)
@@ -361,7 +361,7 @@ class LLMCostTracker:
                 await pipe.execute()
 
         except Exception as e:
-            logger.error(f"Failed to store LLM usage record: {e}")
+            logger.error("Failed to store LLM usage record: %s", e)
 
     async def _check_budget_alerts(self, cost: float) -> None:
         """Check if any budget alerts should be triggered"""
@@ -454,7 +454,7 @@ class LLMCostTracker:
             }
 
         except Exception as e:
-            logger.error(f"Failed to get cost summary: {e}")
+            logger.error("Failed to get cost summary: %s", e)
             return {
                 "error": str(e),
                 "period": {
@@ -483,7 +483,7 @@ class LLMCostTracker:
             }
 
         except Exception as e:
-            logger.error(f"Failed to get session cost: {e}")
+            logger.error("Failed to get session cost: %s", e)
             return {"session_id": session_id, "error": str(e)}
 
     async def get_cost_trends(self, days: int = 30) -> Dict[str, Any]:
@@ -535,7 +535,7 @@ class LLMCostTracker:
             records = await redis.lrange(self.USAGE_LIST_KEY, 0, limit - 1)
             return [json.loads(r) for r in records]
         except Exception as e:
-            logger.error(f"Failed to get recent usage: {e}")
+            logger.error("Failed to get recent usage: %s", e)
             return []
 
 

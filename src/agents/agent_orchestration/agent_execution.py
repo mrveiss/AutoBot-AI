@@ -254,7 +254,7 @@ class AgentExecutor:
             return result
 
         except Exception as e:
-            logger.error(f"Error executing single agent {agent_type}: {e}")
+            logger.error("Error executing single agent %s: %s", agent_type, e)
             return {
                 "status": "error",
                 "response": f"Error in {agent_type.value} agent: {str(e)}",
@@ -294,7 +294,7 @@ class AgentExecutor:
                     secondary_results.append(secondary_result)
 
                 except Exception as e:
-                    logger.error(f"Error in secondary agent {agent_type}: {e}")
+                    logger.error("Error in secondary agent %s: %s", agent_type, e)
 
             # Synthesize results
             final_result = await self._synthesize_multi_agent_results(
@@ -304,7 +304,7 @@ class AgentExecutor:
             return final_result
 
         except Exception as e:
-            logger.error(f"Error in multi-agent execution: {e}")
+            logger.error("Error in multi-agent execution: %s", e)
             return {
                 "status": "error",
                 "response": "Error in multi-agent coordination",
@@ -331,7 +331,7 @@ class AgentExecutor:
             }
 
         except Exception as e:
-            logger.error(f"Orchestrator fallback error: {e}")
+            logger.error("Orchestrator fallback error: %s", e)
             return {
                 "status": "error",
                 "response": "I'm unable to process this request at the moment.",
@@ -380,5 +380,5 @@ class AgentExecutor:
             }
 
         except Exception as e:
-            logger.error(f"Error synthesizing multi-agent results: {e}")
+            logger.error("Error synthesizing multi-agent results: %s", e)
             return primary_result  # Fallback to primary result

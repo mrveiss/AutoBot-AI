@@ -154,7 +154,7 @@ class SessionManager:
                 self._register_pty_with_terminal_manager(pty_session_id, conversation_id)
 
         except Exception as e:
-            logger.error(f"Error creating PTY session: {e}")
+            logger.error("Error creating PTY session: %s", e)
             pty_session_id = None
 
         session = AgentTerminalSession(
@@ -241,13 +241,13 @@ class SessionManager:
                     async with self._sessions_lock:
                         self.sessions[session_id] = session
 
-                    logger.info(f"Loaded session {session_id} from Redis persistence")
+                    logger.info("Loaded session %s from Redis persistence", session_id)
                     return session
 
             except asyncio.TimeoutError:
-                logger.warning(f"Redis timeout loading session {session_id}")
+                logger.warning("Redis timeout loading session %s", session_id)
             except Exception as e:
-                logger.error(f"Failed to load session from Redis: {e}")
+                logger.error("Failed to load session from Redis: %s", e)
 
         # Session not found in memory or Redis
         return None
@@ -294,7 +294,7 @@ class SessionManager:
             else:
                 return False
 
-        logger.info(f"Closed agent terminal session {session_id}")
+        logger.info("Closed agent terminal session %s", session_id)
 
         # Remove from Redis (outside lock since Redis has its own concurrency control)
         if self.redis_client:
@@ -302,7 +302,7 @@ class SessionManager:
                 key = f"agent_terminal:session:{session_id}"
                 await self.redis_client.delete(key)
             except Exception as e:
-                logger.error(f"Failed to remove session from Redis: {e}")
+                logger.error("Failed to remove session from Redis: %s", e)
 
         return True
 
@@ -320,7 +320,7 @@ class SessionManager:
             )
 
         except Exception as e:
-            logger.error(f"Failed to persist session to Redis: {e}")
+            logger.error("Failed to persist session to Redis: %s", e)
 
     async def _restore_pending_approval(
         self, session: AgentTerminalSession, conversation_id: str
@@ -412,7 +412,7 @@ class SessionManager:
                 )
 
         except Exception as e:
-            logger.error(f"Failed to restore pending approval from chat history: {e}")
+            logger.error("Failed to restore pending approval from chat history: %s", e)
             import traceback
 
-            logger.error(f"Traceback: {traceback.format_exc()}")
+            logger.error("Traceback: %s", traceback.format_exc())

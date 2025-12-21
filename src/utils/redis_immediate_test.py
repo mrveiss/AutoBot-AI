@@ -82,7 +82,7 @@ async def immediate_redis_test(host: str, port: int, db: int = 0):
         ping_result = await asyncio.to_thread(client.ping)
 
         if ping_result:
-            logger.info(f"✅ Redis immediate connection SUCCESS: {host}:{port}")
+            logger.info("✅ Redis immediate connection SUCCESS: %s:%s", host, port)
             connection_state.mark_connected(
                 client, {"host": host, "port": port, "db": db}
             )
@@ -92,7 +92,7 @@ async def immediate_redis_test(host: str, port: int, db: int = 0):
 
     except Exception as e:
         error_msg = f"Redis immediate connection FAILED: {host}:{port} - {str(e)}"
-        logger.warning(f"⚠️ {error_msg}")
+        logger.warning("⚠️ %s", error_msg)
         connection_state.mark_disconnected(error_msg)
         yield connection_state
     finally:

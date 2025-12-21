@@ -46,7 +46,7 @@ def _create_deployment_event_callback(task, ip_address: str, role: str):
             },
         )
         if event_type in _DEPLOYMENT_LOGGABLE_EVENTS:
-            logger.info(f"Deployment event [{ip_address}]: {event_type}")
+            logger.info("Deployment event [%s]: %s", ip_address, event_type)
     return event_callback
 
 
@@ -138,7 +138,7 @@ def deploy_host(self, host_config: Metadata, force_redeploy: bool = False):
         )
         return result
     except Exception as e:
-        logger.exception(f"Deployment task failed: {e}")
+        logger.exception("Deployment task failed: %s", e)
         raise
     finally:
         loop.close()
@@ -166,7 +166,7 @@ async def _deploy_host_async(task, host_config: Metadata, force_redeploy: bool):
     if not ip_address or not role:
         raise ValueError("host_config must include 'ip_address' and 'role'")
 
-    logger.info(f"Starting deployment for host {ip_address} with role {role}")
+    logger.info("Starting deployment for host %s with role %s", ip_address, role)
 
     # Issue #398: Use extracted helpers
     event_callback = _create_deployment_event_callback(task, ip_address, role)
@@ -184,15 +184,15 @@ async def _deploy_host_async(task, host_config: Metadata, force_redeploy: bool):
         )
 
         if runner.status == "successful":
-            logger.info(f"Deployment successful: {ip_address} (role: {role})")
+            logger.info("Deployment successful: %s (role: %s)", ip_address, role)
             return _build_deployment_result("success", ip_address, role)
         else:
-            logger.error(f"Deployment failed: {ip_address} (role: {role})")
-            logger.error(f"Return code: {runner.rc}")
+            logger.error("Deployment failed: %s (role: %s)", ip_address, role)
+            logger.error("Return code: %s", runner.rc)
             return _build_deployment_result("failed", ip_address, role, runner=runner)
 
     except Exception as e:
-        logger.exception(f"Deployment exception for {ip_address}: {e}")
+        logger.exception("Deployment exception for %s: %s", ip_address, e)
         raise
 
 
@@ -221,7 +221,7 @@ def provision_ssh_key(host_ip: str, password: str, ssh_user: str = "autobot"):
         )
         return result
     except Exception as e:
-        logger.exception(f"SSH key provisioning failed: {e}")
+        logger.exception("SSH key provisioning failed: %s", e)
         raise
     finally:
         loop.close()
@@ -241,7 +241,7 @@ async def _provision_ssh_key_async(host_ip: str, password: str, ssh_user: str):
     """
     executor = AnsibleExecutor()
 
-    logger.info(f"Starting SSH key provisioning for {ssh_user}@{host_ip}")
+    logger.info("Starting SSH key provisioning for %s@%s", ssh_user, host_ip)
 
     # Generate inventory with password authentication
     inventory = {
@@ -270,14 +270,14 @@ async def _provision_ssh_key_async(host_ip: str, password: str, ssh_user: str):
         )
 
         if runner.status == "successful":
-            logger.info(f"SSH key provisioning successful: {host_ip}")
+            logger.info("SSH key provisioning successful: %s", host_ip)
             return {
                 "status": "success",
                 "host": host_ip,
                 "message": f"Successfully provisioned SSH key for {ssh_user}@{host_ip}",
             }
         else:
-            logger.error(f"SSH key provisioning failed: {host_ip}")
+            logger.error("SSH key provisioning failed: %s", host_ip)
             return {
                 "status": "failed",
                 "host": host_ip,
@@ -286,5 +286,5 @@ async def _provision_ssh_key_async(host_ip: str, password: str, ssh_user: str):
             }
 
     except Exception as e:
-        logger.exception(f"SSH key provisioning exception for {host_ip}: {e}")
+        logger.exception("SSH key provisioning exception for %s: %s", host_ip, e)
         raise

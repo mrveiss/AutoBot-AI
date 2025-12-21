@@ -80,7 +80,7 @@ async def reload_chat_workflow():
         )
 
     except Exception as e:
-        logger.error(f"Chat workflow reload failed: {e}")
+        logger.error("Chat workflow reload failed: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to reload chat workflow: {str(e)}"
         )
@@ -103,7 +103,7 @@ async def reload_module(request: ReloadRequest):
         # Import hot reload manager
         from src.utils.hot_reload_manager import hot_reload_manager
 
-        logger.info(f"Hot reload request: {request.module_name}")
+        logger.info("Hot reload request: %s", request.module_name)
 
         # Check if module is registered
         if not hot_reload_manager.is_watching(request.module_name):
@@ -127,7 +127,7 @@ async def reload_module(request: ReloadRequest):
             )
 
     except Exception as e:
-        logger.error(f"Module reload failed: {e}")
+        logger.error("Module reload failed: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to reload module: {str(e)}"
         )
@@ -150,7 +150,7 @@ async def get_reload_status():
         return status
 
     except Exception as e:
-        logger.error(f"Failed to get reload status: {e}")
+        logger.error("Failed to get reload status: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
 
 
@@ -180,7 +180,7 @@ async def start_hot_reload():
         }
 
     except Exception as e:
-        logger.error(f"Failed to start hot reload: {e}")
+        logger.error("Failed to start hot reload: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to start hot reload: {str(e)}"
         )
@@ -204,7 +204,7 @@ async def stop_hot_reload():
         return {"success": True, "message": "Hot reload manager stopped"}
 
     except Exception as e:
-        logger.error(f"Failed to stop hot reload: {e}")
+        logger.error("Failed to stop hot reload: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to stop hot reload: {str(e)}"
         )
@@ -236,5 +236,5 @@ async def hot_reload_health():
         }
 
     except Exception as e:
-        logger.error(f"Hot reload health check failed: {e}")
+        logger.error("Hot reload health check failed: %s", e)
         return {"status": "unhealthy", "error": str(e), "service": "hot_reload"}

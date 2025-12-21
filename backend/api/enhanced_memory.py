@@ -147,7 +147,7 @@ async def get_memory_statistics(days_back: int = Query(30, ge=1, le=365)):
             "performance_insights": insights,
         }
     except Exception as e:
-        logger.error(f"Error getting memory statistics: {e}")
+        logger.error("Error getting memory statistics: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -191,7 +191,7 @@ async def get_task_history(
         }
 
     except Exception as e:
-        logger.error(f"Error getting task history: {e}")
+        logger.error("Error getting task history: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -247,7 +247,7 @@ async def create_task(request: TaskCreateRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error creating task: {e}")
+        logger.error("Error creating task: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -294,7 +294,7 @@ async def update_task(task_id: str, request: TaskUpdateRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating task {task_id}: {e}")
+        logger.error("Error updating task %s: %s", task_id, e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -339,7 +339,7 @@ async def add_markdown_reference(task_id: str, request: MarkdownReferenceRequest
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error adding markdown reference: {e}")
+        logger.error("Error adding markdown reference: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -363,7 +363,7 @@ async def scan_markdown_system():
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"Error scanning markdown system: {e}")
+        logger.error("Error scanning markdown system: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -398,7 +398,7 @@ async def search_markdown(
         }
 
     except Exception as e:
-        logger.error(f"Error searching markdown: {e}")
+        logger.error("Error searching markdown: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -426,7 +426,7 @@ async def get_document_references(file_path: str):
         }
 
     except Exception as e:
-        logger.error(f"Error getting document references: {e}")
+        logger.error("Error getting document references: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -454,7 +454,7 @@ async def get_embedding_cache_stats():
         }
 
     except Exception as e:
-        logger.error(f"Error getting embedding cache stats: {e}")
+        logger.error("Error getting embedding cache stats: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -481,7 +481,7 @@ async def cleanup_old_data(days_to_keep: int = Query(90, ge=30, le=365)):
         }
 
     except Exception as e:
-        logger.error(f"Error cleaning up old data: {e}")
+        logger.error("Error cleaning up old data: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -503,5 +503,5 @@ async def get_active_tasks():
         }
 
     except Exception as e:
-        logger.error(f"Error getting active tasks: {e}")
+        logger.error("Error getting active tasks: %s", e)
         raise HTTPException(status_code=500, detail=str(e))

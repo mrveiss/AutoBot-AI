@@ -81,7 +81,7 @@ async def get_playwright_status():
         status = await service.get_service_status()
         return status
     except Exception as e:
-        logger.error(f"Error getting Playwright status: {e}")
+        logger.error("Error getting Playwright status: %s", e)
         return {
             "service": "playwright",
             "status": "error",
@@ -114,7 +114,7 @@ async def health_check():
             ),
         }
     except Exception as e:
-        logger.error(f"Playwright health check failed: {e}")
+        logger.error("Playwright health check failed: %s", e)
         raise HTTPException(
             status_code=503, detail=f"Playwright service unavailable: {str(e)}"
         )
@@ -147,7 +147,7 @@ async def web_search(request: SearchRequest):
         if result.get("success", False):
             return result
         else:
-            logger.warning(f"Web search failed: {result.get('error', 'Unknown error')}")
+            logger.warning("Web search failed: %s", result.get('error', 'Unknown error'))
             raise HTTPException(
                 status_code=500, detail=result.get("error", "Web search failed")
             )
@@ -155,7 +155,7 @@ async def web_search(request: SearchRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Web search error: {e}")
+        logger.error("Web search error: %s", e)
         raise HTTPException(status_code=500, detail=f"Web search failed: {str(e)}")
 
 
@@ -172,7 +172,7 @@ async def test_frontend(request: FrontendTestRequest):
     Runs comprehensive tests on the frontend interface
     """
     try:
-        logger.info(f"Frontend test request for: {request.frontend_url}")
+        logger.info("Frontend test request for: %s", request.frontend_url)
 
         result = await test_frontend_embedded(request.frontend_url)
 
@@ -189,7 +189,7 @@ async def test_frontend(request: FrontendTestRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Frontend test error: {e}")
+        logger.error("Frontend test error: %s", e)
         raise HTTPException(status_code=500, detail=f"Frontend test failed: {str(e)}")
 
 
@@ -227,7 +227,7 @@ async def send_test_message(request: TestMessageRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Test message error: {e}")
+        logger.error("Test message error: %s", e)
         raise HTTPException(status_code=500, detail=f"Test message failed: {str(e)}")
 
 
@@ -244,7 +244,7 @@ async def capture_screenshot(request: ScreenshotRequest):
     Returns metadata about captured screenshot
     """
     try:
-        logger.info(f"Screenshot request for: {request.url}")
+        logger.info("Screenshot request for: %s", request.url)
 
         async with playwright_service() as service:
             result = await service.capture_screenshot(
@@ -256,7 +256,7 @@ async def capture_screenshot(request: ScreenshotRequest):
         if result.get("success", False):
             return result
         else:
-            logger.warning(f"Screenshot failed: {result.get('error', 'Unknown error')}")
+            logger.warning("Screenshot failed: %s", result.get('error', 'Unknown error'))
             raise HTTPException(
                 status_code=500, detail=result.get("error", "Screenshot capture failed")
             )
@@ -264,7 +264,7 @@ async def capture_screenshot(request: ScreenshotRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Screenshot error: {e}")
+        logger.error("Screenshot error: %s", e)
         raise HTTPException(status_code=500, detail=f"Screenshot failed: {str(e)}")
 
 
@@ -289,13 +289,13 @@ async def quick_automation_test(background_tasks: BackgroundTasks):
             # Test 1: Service health
             service = await get_playwright_service()
             health = await service.get_service_status()
-            logger.info(f"Service health: {health.get('status')}")
+            logger.info("Service health: %s", health.get('status'))
 
             # Test 2: Web search
             search_result = await search_web_embedded(
                 "AutoBot system test", max_results=2
             )
-            logger.info(f"Search test: {len(search_result.get('results', []))} results")
+            logger.info("Search test: %s results", len(search_result.get('results', [])))
 
             # Test 3: Frontend test
             frontend_result = await test_frontend_embedded()
@@ -307,12 +307,12 @@ async def quick_automation_test(background_tasks: BackgroundTasks):
                     if t.get("status") == "PASS"
                 ]
             )
-            logger.info(f"Frontend test: {passed}/{test_count} tests passed")
+            logger.info("Frontend test: %s/%s tests passed", passed, test_count)
 
             logger.info("Quick automation test suite completed successfully")
 
         except Exception as e:
-            logger.error(f"Automation test suite failed: {e}")
+            logger.error("Automation test suite failed: %s", e)
 
     # Start tests in background
     background_tasks.add_task(run_automation_tests)
@@ -342,7 +342,7 @@ async def navigate_to_url(request: NavigateRequest):
     Forwards navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
     """
     try:
-        logger.info(f"Navigate request: {request.url}")
+        logger.info("Navigate request: %s", request.url)
 
         http_client = get_http_client()
         async with await http_client.post(
@@ -357,20 +357,20 @@ async def navigate_to_url(request: NavigateRequest):
             result = await response.json()
 
             if response.status == 200:
-                logger.info(f"Navigation successful: {result.get('url')}")
+                logger.info("Navigation successful: %s", result.get('url'))
                 return result
             else:
-                logger.error(f"Navigation failed: {result}")
+                logger.error("Navigation failed: %s", result)
                 raise HTTPException(
                     status_code=response.status,
                     detail=result.get("error", "Navigation failed"),
                 )
 
     except aiohttp.ClientError as e:
-        logger.error(f"Browser VM connection error: {e}")
+        logger.error("Browser VM connection error: %s", e)
         raise HTTPException(status_code=503, detail=f"Browser VM unavailable: {str(e)}")
     except Exception as e:
-        logger.error(f"Navigation error: {e}")
+        logger.error("Navigation error: %s", e)
         raise HTTPException(status_code=500, detail=f"Navigation failed: {str(e)}")
 
 
@@ -401,17 +401,17 @@ async def reload_page(request: ReloadRequest):
                 logger.info("Reload successful")
                 return result
             else:
-                logger.error(f"Reload failed: {result}")
+                logger.error("Reload failed: %s", result)
                 raise HTTPException(
                     status_code=response.status,
                     detail=result.get("error", "Reload failed"),
                 )
 
     except aiohttp.ClientError as e:
-        logger.error(f"Browser VM connection error: {e}")
+        logger.error("Browser VM connection error: %s", e)
         raise HTTPException(status_code=503, detail=f"Browser VM unavailable: {str(e)}")
     except Exception as e:
-        logger.error(f"Reload error: {e}")
+        logger.error("Reload error: %s", e)
         raise HTTPException(status_code=500, detail=f"Reload failed: {str(e)}")
 
 

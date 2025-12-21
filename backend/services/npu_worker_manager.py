@@ -78,17 +78,17 @@ class NPUWorkerManager:
         try:
             worker = NPUWorkerConfig(**worker_data)
             self._workers[worker.id] = worker
-            logger.info(f"Loaded worker config: {worker.id} ({worker.name})")
+            logger.info("Loaded worker config: %s (%s)", worker.id, worker.name)
             return True
         except Exception as e:
-            logger.error(f"Failed to load worker config: {e}")
+            logger.error("Failed to load worker config: %s", e)
             return False
 
     def _load_workers_from_config(self):
         """Load worker configurations from YAML file"""
         try:
             if not self.config_file.exists():
-                logger.warning(f"Worker config file not found: {self.config_file}")
+                logger.warning("Worker config file not found: %s", self.config_file)
                 self._save_workers_to_config()
                 return
 
@@ -105,10 +105,10 @@ class NPUWorkerManager:
             if lb_config:
                 self._load_balancing_config = LoadBalancingConfig(**lb_config)
 
-            logger.info(f"Loaded {len(self._workers)} worker configurations")
+            logger.info("Loaded %s worker configurations", len(self._workers))
 
         except Exception as e:
-            logger.error(f"Failed to load worker configurations: {e}")
+            logger.error("Failed to load worker configurations: %s", e)
 
     async def _save_workers_to_config(self):
         """Save worker configurations to YAML file"""
@@ -132,13 +132,13 @@ class NPUWorkerManager:
                 ) as f:
                     await f.write(yaml.dump(data, default_flow_style=False))
             except OSError as e:
-                logger.error(f"Failed to write worker config file: {e}")
+                logger.error("Failed to write worker config file: %s", e)
                 raise
 
-            logger.info(f"Saved {len(self._workers)} worker configurations")
+            logger.info("Saved %s worker configurations", len(self._workers))
 
         except Exception as e:
-            logger.error(f"Failed to save worker configurations: {e}")
+            logger.error("Failed to save worker configurations: %s", e)
             raise
 
     async def start_health_monitoring(self):
@@ -178,7 +178,7 @@ class NPUWorkerManager:
         try:
             await self._check_worker_health(worker_id)
         except Exception as e:
-            logger.error(f"Health check failed for worker {worker_id}: {e}")
+            logger.error("Health check failed for worker %s: %s", worker_id, e)
 
     async def _health_check_loop(self):
         """Background task that periodically checks worker health"""
@@ -199,7 +199,7 @@ class NPUWorkerManager:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Health check loop error: {e}")
+                logger.error("Health check loop error: %s", e)
                 # Error recovery delay before retry
                 await asyncio.sleep(TimingConstants.LONG_DELAY)
 
@@ -257,7 +257,7 @@ class NPUWorkerManager:
                     )
 
         except asyncio.TimeoutError:
-            logger.warning(f"Worker {worker_id} health check timed out")
+            logger.warning("Worker %s health check timed out", worker_id)
             status = NPUWorkerStatus(
                 id=worker_id,
                 status=WorkerStatus.OFFLINE,
@@ -274,7 +274,7 @@ class NPUWorkerManager:
                     )
 
         except Exception as e:
-            logger.error(f"Worker {worker_id} health check failed: {e}")
+            logger.error("Worker %s health check failed: %s", worker_id, e)
             status = NPUWorkerStatus(
                 id=worker_id, status=WorkerStatus.ERROR, error_message=str(e)
             )
@@ -302,7 +302,7 @@ class NPUWorkerManager:
             await self.redis_client.setex(key, ttl, value)
 
         except Exception as e:
-            logger.error(f"Failed to store worker status in Redis: {e}")
+            logger.error("Failed to store worker status in Redis: %s", e)
 
     async def _emit_worker_event(
         self, event_type: str, worker_details: NPUWorkerDetails
@@ -329,7 +329,7 @@ class NPUWorkerManager:
             )
 
         except Exception as e:
-            logger.error(f"Failed to emit worker event: {e}", exc_info=True)
+            logger.error("Failed to emit worker event: %s", e, exc_info=True)
 
     async def _get_worker_status(self, worker_id: str) -> Optional[NPUWorkerStatus]:
         """Get worker status from Redis"""
@@ -344,7 +344,7 @@ class NPUWorkerManager:
                 return NPUWorkerStatus.parse_raw(value)
 
         except Exception as e:
-            logger.error(f"Failed to get worker status from Redis: {e}")
+            logger.error("Failed to get worker status from Redis: %s", e)
 
         return None
 
@@ -473,7 +473,7 @@ class NPUWorkerManager:
                     self.redis_client.delete(f"npu:worker:{worker_id}:metrics"),
                 )
             except Exception as e:
-                logger.error(f"Failed to remove worker data from Redis: {e}")
+                logger.error("Failed to remove worker data from Redis: %s", e)
 
         # Save to config file
         await self._save_workers_to_config()
@@ -546,7 +546,7 @@ class NPUWorkerManager:
                 return NPUWorkerMetrics.parse_raw(value)
 
         except Exception as e:
-            logger.error(f"Failed to get worker metrics from Redis: {e}")
+            logger.error("Failed to get worker metrics from Redis: %s", e)
 
         return None
 
@@ -558,7 +558,7 @@ class NPUWorkerManager:
         """Update load balancing configuration"""
         self._load_balancing_config = config
         await self._save_workers_to_config()
-        logger.info(f"Updated load balancing config: {config.strategy}")
+        logger.info("Updated load balancing config: %s", config.strategy)
 
 
 # Global worker manager instance (thread-safe)

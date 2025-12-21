@@ -73,11 +73,11 @@ class FactExtractionService:
         if self.enable_deduplication:
             original_count = len(extraction_result.facts)
             extraction_result.facts = await self._deduplicate_facts(extraction_result.facts)
-            logger.info(f"Deduplication: {original_count} -> {len(extraction_result.facts)} facts")
+            logger.info("Deduplication: %s -> %s facts", original_count, len(extraction_result.facts))
 
         if self.enable_entity_resolution:
             extraction_result.facts = await entity_resolver.resolve_facts_entities(extraction_result.facts)
-            logger.info(f"Entity resolution: {len(extraction_result.facts)} facts processed")
+            logger.info("Entity resolution: %s facts processed", len(extraction_result.facts))
 
     def _build_extraction_result(self, extraction_result, storage_results: Dict[str, Any]) -> Dict[str, Any]:
         """Build the final extraction result dictionary (Issue #398: extracted).
@@ -115,14 +115,14 @@ class FactExtractionService:
             Dictionary with extraction results and storage information
         """
         try:
-            logger.info(f"Starting fact extraction for source: {source}")
+            logger.info("Starting fact extraction for source: %s", source)
 
             extraction_result = await self.extraction_agent.extract_facts_from_text(
                 content=content, source=source, context=str(metadata) if metadata else None
             )
 
             if not extraction_result.facts:
-                logger.warning(f"No facts extracted from source: {source}")
+                logger.warning("No facts extracted from source: %s", source)
                 return {
                     "status": "success", "facts_extracted": 0, "facts_stored": 0,
                     "processing_time": extraction_result.processing_time,
@@ -140,11 +140,11 @@ class FactExtractionService:
 
             await self._record_extraction_history(source, extraction_result, storage_results)
 
-            logger.info(f"Completed fact extraction: {len(extraction_result.facts)} facts stored")
+            logger.info("Completed fact extraction: %s facts stored", len(extraction_result.facts))
             return self._build_extraction_result(extraction_result, storage_results)
 
         except Exception as e:
-            logger.error(f"Error in fact extraction and storage: {e}")
+            logger.error("Error in fact extraction and storage: %s", e)
             return {"status": "error", "message": str(e), "facts_extracted": 0, "facts_stored": 0}
 
     async def extract_facts_from_chunks(
@@ -165,7 +165,7 @@ class FactExtractionService:
             Dictionary with extraction results
         """
         try:
-            logger.info(f"Processing {len(chunks)} chunks for fact extraction")
+            logger.info("Processing %s chunks for fact extraction", len(chunks))
 
             # Extract facts from chunks in parallel
             extraction_result = await self.extraction_agent.extract_facts_from_chunks(
@@ -199,10 +199,7 @@ class FactExtractionService:
                 source, extraction_result, storage_results
             )
 
-            logger.info(
-                f"Processed {len(chunks)} chunks, extracted "
-                f"{len(extraction_result.facts)} facts"
-            )
+            logger.info("Processed %s chunks, extracted %s facts", len(chunks), len(extraction_result.facts))
 
             return {
                 "status": "success",
@@ -223,7 +220,7 @@ class FactExtractionService:
             }
 
         except Exception as e:
-            logger.error(f"Error processing chunks for fact extraction: {e}")
+            logger.error("Error processing chunks for fact extraction: %s", e)
             return {
                 "status": "error",
                 "message": str(e),
@@ -261,12 +258,12 @@ class FactExtractionService:
                     seen_combinations.add(fact_key)
                     deduplicated.append(fact)
                 else:
-                    logger.debug(f"Duplicate fact filtered: {fact}")
+                    logger.debug("Duplicate fact filtered: %s", fact)
 
             return deduplicated
 
         except Exception as e:
-            logger.error(f"Error in fact deduplication: {e}")
+            logger.error("Error in fact deduplication: %s", e)
             return facts  # Return original list if deduplication fails
 
     def _prepare_fact_for_pipeline(
@@ -304,7 +301,7 @@ class FactExtractionService:
                 pipe.sadd(index_key, fact.fact_id)
             return True
         except Exception as e:
-            logger.error(f"Error preparing fact for storage: {e}")
+            logger.error("Error preparing fact for storage: %s", e)
             return False
 
     async def _store_facts(
@@ -344,21 +341,19 @@ class FactExtractionService:
                     await pipe.execute()
                     stored_count += len(batch) - batch_errors
                     error_count += batch_errors
-                    logger.debug(f"Stored batch of {len(batch)} facts")
+                    logger.debug("Stored batch of %s facts", len(batch))
                 except Exception as e:
-                    logger.error(f"Error executing batch storage: {e}")
+                    logger.error("Error executing batch storage: %s", e)
                     error_count += len(batch)
 
             # Also store facts in the main knowledge base as structured content
             if self.knowledge_base and hasattr(self.knowledge_base, "store_fact"):
                 await self._store_facts_in_kb(facts, metadata)
 
-            logger.info(
-                f"Fact storage complete: {stored_count} stored, {error_count} errors"
-            )
+            logger.info("Fact storage complete: %s stored, %s errors", stored_count, error_count)
 
         except Exception as e:
-            logger.error(f"Error in fact storage: {e}")
+            logger.error("Error in fact storage: %s", e)
             error_count = len(facts)
 
         return {"stored_count": stored_count, "error_count": error_count}
@@ -404,12 +399,10 @@ class FactExtractionService:
             }
 
             await self.knowledge_base.store_fact(content, kb_metadata)
-            logger.debug(
-                f"Stored {len(facts)} facts in knowledge base as structured content"
-            )
+            logger.debug("Stored %s facts in knowledge base as structured content", len(facts))
 
         except Exception as e:
-            logger.error(f"Error storing facts in knowledge base: {e}")
+            logger.error("Error storing facts in knowledge base: %s", e)
 
     async def _record_extraction_history(
         self,
@@ -451,10 +444,10 @@ class FactExtractionService:
             )
             await self.redis_client.ltrim(self.extraction_history_key, 0, 999)
 
-            logger.debug(f"Recorded extraction history for source: {source}")
+            logger.debug("Recorded extraction history for source: %s", source)
 
         except Exception as e:
-            logger.error(f"Error recording extraction history: {e}")
+            logger.error("Error recording extraction history: %s", e)
 
     def _build_criteria_candidate_keys(
         self,
@@ -583,14 +576,14 @@ class FactExtractionService:
                         break
 
                 except Exception as e:
-                    logger.error(f"Error deserializing fact {fact_id}: {e}")
+                    logger.error("Error deserializing fact %s: %s", fact_id, e)
                     continue
 
-            logger.debug(f"Retrieved {len(facts)} facts matching criteria")
+            logger.debug("Retrieved %s facts matching criteria", len(facts))
             return facts
 
         except Exception as e:
-            logger.error(f"Error retrieving facts: {e}")
+            logger.error("Error retrieving facts: %s", e)
             return []
 
     async def get_extraction_statistics(self) -> Dict[str, Any]:
@@ -677,7 +670,7 @@ class FactExtractionService:
             }
 
         except Exception as e:
-            logger.error(f"Error getting extraction statistics: {e}")
+            logger.error("Error getting extraction statistics: %s", e)
             return {"error": str(e)}
 
     async def _handle_temporal_invalidation(self, new_facts: List[AtomicFact]):
@@ -704,17 +697,11 @@ class FactExtractionService:
                         result["status"] == "success"
                         and result["facts_invalidated"] > 0
                     ):
-                        logger.info(
-                            f"Invalidated {result['facts_invalidated']} "
-                            f"contradictory facts for new fact {fact.fact_id}"
-                        )
+                        logger.info("contradictory facts for new fact %s", fact.fact_id)
 
                 except Exception as e:
-                    logger.error(
-                        f"Error checking contradictions for fact "
-                        f"{fact.fact_id}: {e}"
-                    )
+                    logger.error("Error checking contradictions for fact %s: %s", fact.fact_id, e)
                     continue
 
         except Exception as e:
-            logger.error(f"Error in temporal invalidation handling: {e}")
+            logger.error("Error in temporal invalidation handling: %s", e)

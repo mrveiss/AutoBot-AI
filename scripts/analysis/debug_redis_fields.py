@@ -26,7 +26,7 @@ def debug_redis_vector_fields():
         logger.info("Index info:")
         for i in range(0, len(ft_info), 2):
             if i + 1 < len(ft_info):
-                logger.info(f"  {ft_info[i]}: {ft_info[i+1]}")
+                logger.info("  %s: %s", ft_info[i], ft_info[i+1])
 
         # Get a sample document to see actual fields
         logger.info("\nGetting sample documents...")
@@ -36,7 +36,7 @@ def debug_redis_vector_fields():
             'LIMIT', '0', '3'
         )
 
-        logger.info(f"Search returned {search_result[0]} total documents")
+        logger.info("Search returned %s total documents", search_result[0])
 
         if len(search_result) > 1:
             logger.info("\nSample document structures:")
@@ -45,22 +45,22 @@ def debug_redis_vector_fields():
                 doc_id = search_result[i]
                 if i + 1 < len(search_result):
                     fields = search_result[i + 1]
-                    logger.info(f"\nDocument: {doc_id}")
-                    logger.info(f"Fields: {fields}")
-                    logger.info(f"Available field names: {fields[::2] if isinstance(fields, list) else 'Not a list'}")
+                    logger.info("\nDocument: %s", doc_id)
+                    logger.info("Fields: %s", fields)
+                    logger.info("Available field names: %s", fields[::2] if isinstance(fields, list) else 'Not a list')
 
         # Also check direct hash access
         logger.info("\nChecking direct hash access...")
         sample_keys = list(client.scan_iter(match="llama_index/vector*", count=3))
         for key in sample_keys[:2]:
-            logger.info(f"\nKey: {key}")
+            logger.info("\nKey: %s", key)
             hash_data = client.hgetall(key)
-            logger.info(f"Hash fields: {list(hash_data.keys())}")
+            logger.info("Hash fields: %s", list(hash_data.keys()))
             for field, value in hash_data.items():
-                logger.info(f"  {field}: {value[:100] if len(str(value)) > 100 else value}...")
+                logger.info("  %s: %s...", field, value[:100] if len(str(value)) > 100 else value)
 
     except Exception as e:
-        logger.error(f"Error debugging Redis fields: {e}")
+        logger.error("Error debugging Redis fields: %s", e)
         import traceback
         traceback.print_exc()
 

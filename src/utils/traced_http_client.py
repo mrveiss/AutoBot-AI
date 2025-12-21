@@ -92,7 +92,7 @@ class TracedHttpClient:
             inject(headers)
             return headers
         except Exception as e:
-            logger.debug(f"Could not extract trace context: {e}")
+            logger.debug("Could not extract trace context: %s", e)
             return {}
 
     def _get_target_service(self, url: str) -> str:

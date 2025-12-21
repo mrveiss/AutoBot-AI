@@ -51,7 +51,7 @@ def get_lazy_dependencies():
             WorkerNode,
         )
     except ImportError as e:
-        logger.error(f"Failed to import intelligent agent dependencies: {e}")
+        logger.error("Failed to import intelligent agent dependencies: %s", e)
         raise HTTPException(
             status_code=503, detail="Intelligent agent dependencies not available"
         )
@@ -95,7 +95,7 @@ async def get_agent() -> "IntelligentAgent":
             return _agent_instance
 
         except Exception as e:
-            logger.error(f"Failed to initialize intelligent agent: {e}")
+            logger.error("Failed to initialize intelligent agent: %s", e)
             raise HTTPException(
                 status_code=503,
                 detail=f"Intelligent agent initialization failed: {str(e)}",
@@ -253,7 +253,7 @@ async def health_check():
         return HealthResponse(status="healthy", components=components, uptime=uptime)
 
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
+        logger.error("Health check failed: %s", e)
         return HealthResponse(
             status="unhealthy", components={"error": str(e)}, uptime=0.0
         )
@@ -305,7 +305,7 @@ async def websocket_stream(websocket: WebSocket):
                     {"type": "error", "content": "No goal provided"}
                 )
                 continue
-            logger.info(f"Processing WebSocket goal: {goal}")
+            logger.info("Processing WebSocket goal: %s", goal)
             try:
                 # Stream chunks back to client
                 async for chunk in agent.process_natural_language_goal(
@@ -323,17 +323,17 @@ async def websocket_stream(websocket: WebSocket):
                     {"type": "complete", "content": "Goal processing completed"}
                 )
             except Exception as e:
-                logger.error(f"Error processing WebSocket goal: {e}")
+                logger.error("Error processing WebSocket goal: %s", e)
                 await websocket.send_json(
                     {"type": "error", "content": f"Error processing goal: {str(e)}"}
                 )
     except WebSocketDisconnect:
         logger.info("WebSocket connection closed")
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        logger.error("WebSocket error: %s", e)
         try:
             await websocket.send_json(
                 {"type": "error", "content": f"WebSocket error: {str(e)}"}
             )
         except Exception as conn_error:
-            logger.debug(f"Connection error: {conn_error}")  # Connection closed
+            logger.debug("Connection error: %s", conn_error)  # Connection closed

@@ -121,7 +121,7 @@ class CaptchaSolver:
             pytesseract.get_tesseract_version()
             return True
         except Exception as e:
-            logger.warning(f"Tesseract OCR not available: {e}")
+            logger.warning("Tesseract OCR not available: %s", e)
             return False
 
     def _check_opencv(self) -> bool:
@@ -195,7 +195,7 @@ class CaptchaSolver:
             return result
 
         except Exception as e:
-            logger.error(f"CAPTCHA solving error: {e}")
+            logger.error("CAPTCHA solving error: %s", e)
             return CaptchaSolveResult(
                 success=False,
                 captcha_type=captcha_type,
@@ -282,7 +282,7 @@ class CaptchaSolver:
 
             return text, avg_confidence
         except Exception as e:
-            logger.debug(f"OCR attempt failed: {e}")
+            logger.debug("OCR attempt failed: %s", e)
             return None, 0.0
 
     async def _solve_text_captcha(
@@ -384,7 +384,7 @@ class CaptchaSolver:
                 )
 
         except Exception as e:
-            logger.debug(f"Math CAPTCHA solving failed: {e}")
+            logger.debug("Math CAPTCHA solving failed: %s", e)
 
         return CaptchaSolveResult(
             success=False,

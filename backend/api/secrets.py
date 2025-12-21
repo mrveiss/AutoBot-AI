@@ -280,7 +280,7 @@ class SecretsManager:
             try:
                 current_mtime = os.path.getmtime(self.secrets_file)
             except OSError as e:
-                logger.error(f"Failed to get secrets file mtime: {e}")
+                logger.error("Failed to get secrets file mtime: %s", e)
                 # File may have been deleted - return empty dict
                 self._secrets_cache = {}
                 self._cache_mtime = None
@@ -298,7 +298,7 @@ class SecretsManager:
                     self._cache_mtime = current_mtime
                     return deepcopy(self._secrets_cache)
             except (json.JSONDecodeError, FileNotFoundError) as e:
-                logger.warning(f"Secrets file corrupted or missing: {e}, initializing empty")
+                logger.warning("Secrets file corrupted or missing: %s, initializing empty", e)
                 self._secrets_cache = {}
                 self._cache_mtime = None
                 return deepcopy(self._secrets_cache)
@@ -330,7 +330,7 @@ class SecretsManager:
             try:
                 self._cache_mtime = os.path.getmtime(self.secrets_file)
             except OSError as e:
-                logger.error(f"Failed to update cache mtime: {e}")
+                logger.error("Failed to update cache mtime: %s", e)
                 self._cache_mtime = None
 
     def _invalidate_cache(self):
@@ -364,7 +364,7 @@ class SecretsManager:
         secrets[secret.id] = secret_data
         self._save_secrets(secrets)
 
-        logger.info(f"Created {request.get_log_summary()} (ID: {secret.id})")
+        logger.info("Created %s (ID: %s)", request.get_log_summary(), secret.id)
         return secret
 
     def get_secret(
@@ -456,7 +456,7 @@ class SecretsManager:
         secrets[secret_id] = secret_data
         self._save_secrets(secrets)
 
-        logger.info(f"Updated secret '{secret_data['name']}' (ID: {secret_id})")
+        logger.info("Updated secret '%s' (ID: %s)", secret_data['name'], secret_id)
 
         # Return updated secret model
         safe_data = secret_data.copy()
@@ -482,7 +482,7 @@ class SecretsManager:
         del secrets[secret_id]
         self._save_secrets(secrets)
 
-        logger.info(f"Deleted secret '{secret_data['name']}' (ID: {secret_id})")
+        logger.info("Deleted secret '%s' (ID: %s)", secret_data['name'], secret_id)
         return True
 
     def transfer_secrets(
@@ -541,7 +541,7 @@ class SecretsManager:
 
         self._save_secrets(secrets)
 
-        logger.info(f"Transferred {len(transferred)} secrets, {len(failed)} failed")
+        logger.info("Transferred %s secrets, %s failed", len(transferred), len(failed))
         return {
             "transferred": transferred,
             "failed": failed,
@@ -592,7 +592,7 @@ class SecretsManager:
 
         self._save_secrets(secrets)
 
-        logger.info(f"Deleted {len(deleted)} secrets for chat {chat_id}")
+        logger.info("Deleted %s secrets for chat %s", len(deleted), chat_id)
         return {
             "chat_id": chat_id,
             "deleted_secrets": deleted,
@@ -617,7 +617,7 @@ def check_rate_limit(request: Request) -> None:
     """Check rate limit and raise exception if exceeded"""
     client_id = get_client_id(request)
     if not rate_limiter.is_allowed(client_id):
-        logger.warning(f"[Secrets] Rate limit exceeded for client: {client_id}")
+        logger.warning("[Secrets] Rate limit exceeded for client: %s", client_id)
         raise HTTPException(
             status_code=429,
             detail="Rate limit exceeded. Please try again later.",
@@ -678,7 +678,7 @@ async def create_secret(request: SecretCreateRequest, http_request: Request):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         audit_log("CREATE", "N/A", http_request, success=False, details=str(e))
-        logger.error(f"Failed to create secret: {e}")
+        logger.error("Failed to create secret: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to create secret: {str(e)}"
         )
@@ -709,7 +709,7 @@ async def list_secrets(
             },
         )
     except Exception as e:
-        logger.error(f"Failed to list secrets: {e}")
+        logger.error("Failed to list secrets: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to list secrets: {str(e)}")
 
 
@@ -755,7 +755,7 @@ async def get_secrets_status():
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"Failed to get secrets status: {e}")
+        logger.error("Failed to get secrets status: %s", e)
         return {
             "status": "error",
             "service": "secrets_manager",
@@ -806,7 +806,7 @@ async def get_secrets_stats():
 
         return JSONResponse(status_code=200, content=stats)
     except Exception as e:
-        logger.error(f"Failed to get secrets stats: {e}")
+        logger.error("Failed to get secrets stats: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
 
 
@@ -836,7 +836,7 @@ async def get_secret(
         raise
     except Exception as e:
         audit_log("ACCESS", secret_id, http_request, success=False, details=str(e))
-        logger.error(f"Failed to get secret: {e}")
+        logger.error("Failed to get secret: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get secret: {str(e)}")
 
 
@@ -885,7 +885,7 @@ async def update_secret(
         raise
     except Exception as e:
         audit_log("UPDATE", secret_id, http_request, success=False, details=str(e))
-        logger.error(f"Failed to update secret: {e}")
+        logger.error("Failed to update secret: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to update secret: {str(e)}"
         )
@@ -920,7 +920,7 @@ async def delete_secret(
         raise
     except Exception as e:
         audit_log("DELETE", secret_id, http_request, success=False, details=str(e))
-        logger.error(f"Failed to delete secret: {e}")
+        logger.error("Failed to delete secret: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to delete secret: {str(e)}"
         )
@@ -960,7 +960,7 @@ async def transfer_secrets(
         )
     except Exception as e:
         audit_log("TRANSFER", "N/A", http_request, success=False, details=str(e))
-        logger.error(f"Failed to transfer secrets: {e}")
+        logger.error("Failed to transfer secrets: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to transfer secrets: {str(e)}"
         )
@@ -978,7 +978,7 @@ async def get_chat_cleanup_info(chat_id: str):
         info = secrets_manager.cleanup_chat_secrets(chat_id)
         return JSONResponse(status_code=200, content=info)
     except Exception as e:
-        logger.error(f"Failed to get chat cleanup info: {e}")
+        logger.error("Failed to get chat cleanup info: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to get cleanup info: {str(e)}"
         )
@@ -1016,7 +1016,7 @@ async def delete_chat_secrets(
         )
     except Exception as e:
         audit_log("BULK_DELETE", "N/A", http_request, success=False, details=str(e))
-        logger.error(f"Failed to delete chat secrets: {e}")
+        logger.error("Failed to delete chat secrets: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to delete chat secrets: {str(e)}"
         )

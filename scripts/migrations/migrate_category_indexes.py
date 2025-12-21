@@ -60,7 +60,7 @@ def _connect_to_redis() -> redis.Redis:
     redis_password = os.getenv("REDIS_PASSWORD") or os.getenv("AUTOBOT_REDIS_PASSWORD")
     redis_db = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
 
-    logger.info(f"Connecting to Redis at {redis_host}:{redis_port} (db={redis_db})")
+    logger.info("Connecting to Redis at %s:%s (db=%s)", redis_host, redis_port, redis_db)
 
     try:
         redis_client = redis.Redis(
@@ -74,7 +74,7 @@ def _connect_to_redis() -> redis.Redis:
         logger.info("Connected to Redis successfully")
         return redis_client
     except Exception as e:
-        logger.error(f"Failed to connect to Redis: {e}")
+        logger.error("Failed to connect to Redis: %s", e)
         return None
 
 
@@ -89,10 +89,10 @@ def _clear_existing_indexes(redis_client: redis.Redis) -> None:
     """
     existing_indexes = redis_client.keys("category:index:*")
     if existing_indexes:
-        logger.info(f"Found {len(existing_indexes)} existing category indexes")
+        logger.info("Found %s existing category indexes", len(existing_indexes))
         for idx_key in existing_indexes:
             count = redis_client.scard(idx_key)
-            logger.info(f"  - {idx_key.decode() if isinstance(idx_key, bytes) else idx_key}: {count} facts")
+            logger.info("  - %s: %s facts", idx_key.decode() if isinstance(idx_key, bytes) else idx_key, count)
 
         logger.info("\nClearing existing indexes to rebuild...")
         for idx_key in existing_indexes:
@@ -121,7 +121,7 @@ def _scan_all_fact_keys(redis_client: redis.Redis) -> list:
         if cursor == 0:
             break
 
-    logger.info(f"Found {len(all_fact_keys)} facts to index")
+    logger.info("Found %s facts to index", len(all_fact_keys))
     return all_fact_keys
 
 
@@ -192,12 +192,12 @@ def _process_facts_and_build_indexes(
                 indexed_count += 1
 
             except (json.JSONDecodeError, KeyError, TypeError) as e:
-                logger.debug(f"Error processing {fact_key}: {e}")
+                logger.debug("Error processing %s: %s", fact_key, e)
                 error_count += 1
                 continue
 
         progress = min(i + chunk_size, len(all_fact_keys))
-        logger.info(f"  Processed {progress}/{len(all_fact_keys)} facts...")
+        logger.info("  Processed %s/%s facts...", progress, len(all_fact_keys))
 
     return category_counts, indexed_count, skipped_count, error_count
 
@@ -228,14 +228,14 @@ def _report_and_verify_results(
     logger.info("\n" + "=" * 60)
     logger.info("Migration Complete!")
     logger.info("=" * 60)
-    logger.info(f"Total facts scanned: {len(all_fact_keys)}")
-    logger.info(f"Facts indexed: {indexed_count}")
-    logger.info(f"Facts skipped (no source): {skipped_count}")
-    logger.info(f"Errors: {error_count}")
-    logger.info(f"Time elapsed: {elapsed:.2f}s")
+    logger.info("Total facts scanned: %s", len(all_fact_keys))
+    logger.info("Facts indexed: %s", indexed_count)
+    logger.info("Facts skipped (no source): %s", skipped_count)
+    logger.info("Errors: %s", error_count)
+    logger.info("Time elapsed: %ss", elapsed:.2f)
     logger.info("\nCategory index counts:")
     for cat, count in sorted(category_counts.items()):
-        logger.info(f"  - {cat}: {count} facts")
+        logger.info("  - %s: %s facts", cat, count)
 
     logger.info("\nVerifying indexes...")
     for cat in category_counts:
@@ -243,7 +243,7 @@ def _report_and_verify_results(
         actual_count = redis_client.scard(index_key)
         expected_count = category_counts[cat]
         status = "✅" if actual_count == expected_count else "❌"
-        logger.info(f"  {status} {index_key}: {actual_count} (expected {expected_count})")
+        logger.info("  %s %s: %s (expected %s)", status, index_key, actual_count, expected_count)
 
     logger.info("\n" + "=" * 60)
     logger.info("Category indexes created successfully!")
@@ -304,7 +304,7 @@ def main():
         logger.warning("Migration interrupted by user")
         return 1
     except Exception as e:
-        logger.error(f"Migration failed: {e}", exc_info=True)
+        logger.error("Migration failed: %s", e, exc_info=True)
         return 1
 
 

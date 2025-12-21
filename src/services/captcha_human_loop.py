@@ -126,7 +126,7 @@ class CaptchaHumanLoop:
 
                 self._auto_solver = get_captcha_solver()
             except ImportError as e:
-                logger.warning(f"Auto CAPTCHA solver not available: {e}")
+                logger.warning("Auto CAPTCHA solver not available: %s", e)
                 self.enable_auto_solve = False
         return self._auto_solver
 
@@ -163,7 +163,7 @@ class CaptchaHumanLoop:
             await asyncio.sleep(TimingConstants.STANDARD_DELAY)  # Wait for response
             return True
         except Exception as e:
-            logger.warning(f"Auto-fill failed, falling back: {e}")
+            logger.warning("Auto-fill failed, falling back: %s", e)
             return False
 
     async def _handle_auto_solve(
@@ -190,7 +190,7 @@ class CaptchaHumanLoop:
 
         solution = auto_result.get("solution")
         confidence = auto_result.get("confidence", "medium")
-        logger.info(f"CAPTCHA auto-solved with {confidence} confidence: {solution}")
+        logger.info("CAPTCHA auto-solved with %s confidence: %s", confidence, solution)
 
         # Try auto-fill if selector provided
         if captcha_input_selector and solution:
@@ -244,7 +244,7 @@ class CaptchaHumanLoop:
         captcha_id = str(uuid.uuid4())
         start_time = datetime.utcnow()
 
-        logger.info(f"Handling CAPTCHA at {url} (type: {captcha_type})")
+        logger.info("Handling CAPTCHA at %s (type: %s)", url, captcha_type)
 
         try:
             # Take screenshot of CAPTCHA
@@ -260,7 +260,7 @@ class CaptchaHumanLoop:
                 return auto_result
 
             # === STEP 2: Fall back to human intervention ===
-            logger.info(f"Requesting human intervention for CAPTCHA at {url}")
+            logger.info("Requesting human intervention for CAPTCHA at %s", url)
 
             # Create pending resolution event
             resolution_event = asyncio.Event()
@@ -289,16 +289,14 @@ class CaptchaHumanLoop:
                 success = status == CaptchaResolutionStatus.SOLVED
 
                 if success:
-                    logger.info(f"CAPTCHA {captcha_id} solved by user")
+                    logger.info("CAPTCHA %s solved by user", captcha_id)
                 else:
-                    logger.info(f"CAPTCHA {captcha_id} skipped by user")
+                    logger.info("CAPTCHA %s skipped by user", captcha_id)
 
             except asyncio.TimeoutError:
                 status = CaptchaResolutionStatus.TIMEOUT
                 success = False
-                logger.warning(
-                    f"CAPTCHA resolution timeout after {self.timeout_seconds}s"
-                )
+                logger.warning("CAPTCHA resolution timeout after %ss", self.timeout_seconds)
 
                 # Notify frontend of timeout
                 await self._notify_captcha_timeout(captcha_id, url)
@@ -306,7 +304,7 @@ class CaptchaHumanLoop:
         except Exception as e:
             status = CaptchaResolutionStatus.ERROR
             success = False
-            logger.error(f"Error requesting CAPTCHA intervention: {e}")
+            logger.error("Error requesting CAPTCHA intervention: %s", e)
 
             return CaptchaResolutionResult(
                 success=False,
@@ -348,13 +346,13 @@ class CaptchaHumanLoop:
             bool: True if CAPTCHA was found and marked, False otherwise
         """
         if captcha_id not in self._pending_resolutions:
-            logger.warning(f"Unknown CAPTCHA ID: {captcha_id}")
+            logger.warning("Unknown CAPTCHA ID: %s", captcha_id)
             return False
 
         self._resolution_results[captcha_id] = status
         self._pending_resolutions[captcha_id].set()
 
-        logger.info(f"CAPTCHA {captcha_id} marked as {status.value}")
+        logger.info("CAPTCHA %s marked as %s", captcha_id, status.value)
         return True
 
     async def _notify_captcha_detected(
@@ -467,7 +465,7 @@ class CaptchaHumanLoop:
             }
 
         except Exception as e:
-            logger.warning(f"Auto-solve attempt failed: {e}")
+            logger.warning("Auto-solve attempt failed: %s", e)
             return None
 
 

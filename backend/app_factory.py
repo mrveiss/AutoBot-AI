@@ -86,9 +86,9 @@ class AppFactory:
         for router, prefix, tags, name in core_routers:
             try:
                 app.include_router(router, prefix=f"/api{prefix}", tags=tags)
-                logger.info(f"✅ Registered core router: {name} at /api{prefix}")
+                logger.info("✅ Registered core router: %s at /api%s", name, prefix)
             except Exception as e:
-                logger.error(f"❌ Failed to register core router {name}: {e}")
+                logger.error("❌ Failed to register core router %s: %s", name, e)
 
         # Register optional routers
         for router, prefix, tags, name in optional_routers:
@@ -98,7 +98,7 @@ class AppFactory:
                     f"✅ Successfully registered optional router: {name} at /api{prefix}"
                 )
             except Exception as e:
-                logger.warning(f"⚠️ Failed to register optional router {name}: {e}")
+                logger.warning("⚠️ Failed to register optional router %s: %s", name, e)
 
         logger.info("✅ API routes configured with optional AI Stack integration")
 
@@ -111,7 +111,7 @@ class AppFactory:
             else:
                 logger.info("No static directory found, skipping static file mounting")
         except Exception as e:
-            logger.warning(f"Could not mount static files: {e}")
+            logger.warning("Could not mount static files: %s", e)
 
         logger.info("✅ FastAPI application configured successfully")
         return app

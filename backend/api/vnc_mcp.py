@@ -177,7 +177,7 @@ async def check_vnc_status_mcp(request: VNCStatusRequest) -> Metadata:
                 ),
             }
     except aiohttp.ClientError as e:
-        logger.error(f"HTTP error checking VNC status for {vnc_type}: {e}")
+        logger.error("HTTP error checking VNC status for %s: %s", vnc_type, e)
         return {
             "success": False,
             "vnc_type": vnc_type,
@@ -186,7 +186,7 @@ async def check_vnc_status_mcp(request: VNCStatusRequest) -> Metadata:
             "message": f"HTTP error checking VNC {vnc_type} status",
         }
     except Exception as e:
-        logger.error(f"Failed to check VNC status for {vnc_type}: {e}")
+        logger.error("Failed to check VNC status for %s: %s", vnc_type, e)
         return {
             "success": False,
             "vnc_type": vnc_type,
@@ -283,10 +283,10 @@ async def get_browser_vnc_context_mcp() -> Metadata:
                     ),
                 }
     except aiohttp.ClientError as e:
-        logger.warning(f"HTTP error getting Playwright state: {e}")
+        logger.warning("HTTP error getting Playwright state: %s", e)
         context["playwright_state"] = {"error": str(e)}
     except Exception as e:
-        logger.warning(f"Failed to get Playwright state: {e}")
+        logger.warning("Failed to get Playwright state: %s", e)
         context["playwright_state"] = {"error": str(e)}
 
     # Get VNC state using singleton HTTP client
@@ -308,10 +308,10 @@ async def get_browser_vnc_context_mcp() -> Metadata:
                     recent = list(cache.get("recent_activity", [])[-5:])
                 context["vnc_state"]["recent_observations"] = recent
     except aiohttp.ClientError as e:
-        logger.warning(f"HTTP error getting VNC state: {e}")
+        logger.warning("HTTP error getting VNC state: %s", e)
         context["vnc_state"] = {"error": str(e)}
     except Exception as e:
-        logger.warning(f"Failed to get VNC state: {e}")
+        logger.warning("Failed to get VNC state: %s", e)
         context["vnc_state"] = {"error": str(e)}
 
     return context
@@ -348,6 +348,6 @@ async def record_vnc_observation(vnc_type: str, observation: Metadata):
         ][-100:]
         vnc_observations[vnc_type]["last_check"] = datetime.now()
 
-    logger.debug(f"Recorded VNC observation for {vnc_type}: {observation.get('type')}")
+    logger.debug("Recorded VNC observation for %s: %s", vnc_type, observation.get('type'))
 
     return {"success": True, "recorded": True}

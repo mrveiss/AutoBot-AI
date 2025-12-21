@@ -68,7 +68,7 @@ class RAGAgent(StandardizedAgent):
             }
         )
 
-        logger.info(f"RAG Agent initialized with model: {self.model_name}")
+        logger.info("RAG Agent initialized with model: %s", self.model_name)
 
     async def handle_document_query(self, request: AgentRequest) -> Dict[str, Any]:
         """Handle document query action"""
@@ -209,7 +209,7 @@ class RAGAgent(StandardizedAgent):
             Dict containing reformulated queries and analysis
         """
         try:
-            logger.info(f"RAG Agent reformulating query: {original_query[:50]}...")
+            logger.info("RAG Agent reformulating query: %s...", original_query[:50])
 
             system_prompt = self._get_query_reformulation_prompt()
 
@@ -237,7 +237,7 @@ class RAGAgent(StandardizedAgent):
             }
 
         except Exception as e:
-            logger.error(f"Query reformulation error: {e}")
+            logger.error("Query reformulation error: %s", e)
             return {
                 "status": "error",
                 "original_query": original_query,
@@ -259,7 +259,7 @@ class RAGAgent(StandardizedAgent):
             List of documents with relevance scores
         """
         try:
-            logger.info(f"RAG Agent ranking {len(documents)} documents")
+            logger.info("RAG Agent ranking %s documents", len(documents))
 
             # For now, use simple scoring - can be enhanced with more sophisticated ranking
             scored_documents = []
@@ -296,7 +296,7 @@ class RAGAgent(StandardizedAgent):
             return scored_documents
 
         except Exception as e:
-            logger.error(f"Document ranking error: {e}")
+            logger.error("Document ranking error: %s", e)
             return documents  # Return original list on error
 
     def _get_rag_system_prompt(self) -> str:
@@ -420,7 +420,7 @@ Focus on creating 2-4 reformulated queries that would retrieve different but rel
             }
 
         except Exception as e:
-            logger.error(f"Error extracting synthesis response: {e}")
+            logger.error("Error extracting synthesis response: %s", e)
             return {
                 "response": "Error in response extraction",
                 "confidence": 0.0,
@@ -449,7 +449,7 @@ Focus on creating 2-4 reformulated queries that would retrieve different but rel
                 }
 
         except Exception as e:
-            logger.error(f"Error extracting reformulation response: {e}")
+            logger.error("Error extracting reformulation response: %s", e)
             return {
                 "reformulated_queries": [],
                 "key_concepts": [],
@@ -496,7 +496,7 @@ Focus on creating 2-4 reformulated queries that would retrieve different but rel
             return str(response)
 
         except Exception as e:
-            logger.error(f"Error extracting response content: {e}")
+            logger.error("Error extracting response content: %s", e)
             return "Error extracting response content"
 
     def is_rag_appropriate(self, message: str, has_documents: bool = False) -> bool:

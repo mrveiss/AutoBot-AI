@@ -153,13 +153,13 @@ def is_domain_allowed(url: str) -> bool:
 
         # Require HTTP/HTTPS
         if parsed.scheme not in ALLOWED_HTTP_SCHEMES:
-            logger.warning(f"Blocked non-HTTP scheme: {parsed.scheme}")
+            logger.warning("Blocked non-HTTP scheme: %s", parsed.scheme)
             return False
 
         # Get domain (hostname)
         domain = parsed.hostname
         if not domain:
-            logger.warning(f"Could not parse domain from URL: {url}")
+            logger.warning("Could not parse domain from URL: %s", url)
             return False
 
         # Check exact match
@@ -172,11 +172,11 @@ def is_domain_allowed(url: str) -> bool:
             if domain == parent_domain or domain.endswith(f".{parent_domain}"):
                 return True
 
-        logger.warning(f"Domain not in whitelist: {domain}")
+        logger.warning("Domain not in whitelist: %s", domain)
         return False
 
     except Exception as e:
-        logger.error(f"Domain validation error for {url}: {e}")
+        logger.error("Domain validation error for %s: %s", url, e)
         return False
 
 
@@ -194,7 +194,7 @@ def validate_headers(headers: Dict[str, str]) -> bool:
 
     for key in headers:
         if key.lower() in BLOCKED_HEADERS:
-            logger.warning(f"Blocked sensitive header: {key}")
+            logger.warning("Blocked sensitive header: %s", key)
             return False
 
     return True
@@ -650,13 +650,13 @@ async def execute_http_request(
             }
 
     except asyncio.TimeoutError:
-        logger.error(f"HTTP request timed out after {timeout} seconds: {url}")
+        logger.error("HTTP request timed out after %s seconds: %s", timeout, url)
         raise HTTPException(
             status_code=504,
             detail=f"Request timed out after {timeout} seconds",
         )
     except aiohttp.ClientError as e:
-        logger.error(f"HTTP client error: {e}")
+        logger.error("HTTP client error: %s", e)
         raise HTTPException(
             status_code=502,
             detail=f"HTTP request failed: {str(e)}",
@@ -692,7 +692,7 @@ async def http_get_mcp(request: HTTPGetRequest) -> JSONObject:
         raise HTTPException(status_code=400, detail="Request contains blocked headers")
 
     # Log the operation
-    logger.info(f"HTTP GET request: {request.url}")
+    logger.info("HTTP GET request: %s", request.url)
 
     # Execute request
     result = await execute_http_request(
@@ -751,7 +751,7 @@ async def http_post_mcp(request: HTTPPostRequest) -> JSONObject:
             )
 
     # Log the operation
-    logger.info(f"HTTP POST request: {request.url}")
+    logger.info("HTTP POST request: %s", request.url)
 
     # Execute request
     result = await execute_http_request(
@@ -804,7 +804,7 @@ async def http_put_mcp(request: HTTPPutRequest) -> JSONObject:
             )
 
     # Log the operation
-    logger.info(f"HTTP PUT request: {request.url}")
+    logger.info("HTTP PUT request: %s", request.url)
 
     # Execute request
     result = await execute_http_request(
@@ -856,7 +856,7 @@ async def http_patch_mcp(request: HTTPPatchRequest) -> JSONObject:
             )
 
     # Log the operation
-    logger.info(f"HTTP PATCH request: {request.url}")
+    logger.info("HTTP PATCH request: %s", request.url)
 
     # Execute request
     result = await execute_http_request(
@@ -899,7 +899,7 @@ async def http_delete_mcp(request: HTTPDeleteRequest) -> JSONObject:
         raise HTTPException(status_code=400, detail="Request contains blocked headers")
 
     # Log the operation with warning (destructive)
-    logger.warning(f"HTTP DELETE request (destructive): {request.url}")
+    logger.warning("HTTP DELETE request (destructive): %s", request.url)
 
     # Execute request
     result = await execute_http_request(
@@ -940,7 +940,7 @@ async def http_head_mcp(request: HTTPHeadRequest) -> JSONObject:
         raise HTTPException(status_code=400, detail="Request contains blocked headers")
 
     # Log the operation
-    logger.info(f"HTTP HEAD request: {request.url}")
+    logger.info("HTTP HEAD request: %s", request.url)
 
     # Execute request
     result = await execute_http_request(

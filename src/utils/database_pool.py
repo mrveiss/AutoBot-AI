@@ -60,7 +60,7 @@ class SQLiteConnectionPool:
                 conn = self._create_connection()
                 self._pool.put(conn)
             except Exception as e:
-                logger.error(f"Failed to create initial connection: {e}")
+                logger.error("Failed to create initial connection: %s", e)
 
     def _create_connection(self) -> sqlite3.Connection:
         """Create a new SQLite connection with optimized settings."""
@@ -86,7 +86,7 @@ class SQLiteConnectionPool:
             self._created_connections += 1
             self._stats["connections_created"] += 1
 
-        logger.debug(f"Created new SQLite connection #{self._created_connections}")
+        logger.debug("Created new SQLite connection #%s", self._created_connections)
         return conn
 
     def _acquire_connection(self) -> sqlite3.Connection:
@@ -164,7 +164,7 @@ class SQLiteConnectionPool:
             yield conn
 
         except Exception as e:
-            logger.error(f"Error with database connection: {e}")
+            logger.error("Error with database connection: %s", e)
             # Connection is bad, don't return it to pool
             if conn:
                 self._close_connection_safely(conn)
@@ -186,7 +186,7 @@ class SQLiteConnectionPool:
             except Exception:
                 break
 
-        logger.info(f"Closed {closed} connections from pool")
+        logger.info("Closed %s connections from pool", closed)
         with self._lock:
             self._created_connections = 0
 
@@ -281,7 +281,7 @@ def get_connection_pool(db_path: str, pool_size: int = 10) -> SQLiteConnectionPo
         # Create new pool
         pool = SQLiteConnectionPool(db_path, pool_size)
         _connection_pools[db_path] = pool
-        logger.info(f"Created connection pool for {db_path} with size {pool_size}")
+        logger.info("Created connection pool for %s with size %s", db_path, pool_size)
         return pool
 
 
@@ -289,7 +289,7 @@ def close_all_pools():
     """Close all connection pools."""
     with _pools_lock:
         for db_path, pool in _connection_pools.items():
-            logger.info(f"Closing pool for {db_path}")
+            logger.info("Closing pool for %s", db_path)
             pool.close_all()
         _connection_pools.clear()
 

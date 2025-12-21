@@ -108,7 +108,7 @@ class WebSocketManager:
                 await asyncio.sleep(TimingConstants.STANDARD_DELAY)  # Check every second
 
             except Exception as e:
-                logger.error(f"Error in heartbeat loop: {e}")
+                logger.error("Error in heartbeat loop: %s", e)
                 await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)  # Wait longer on error
 
     async def _check_connection_health(self, connection_id: str, current_time: float):
@@ -137,7 +137,7 @@ class WebSocketManager:
                     missed_count = self.missed_heartbeats.get(connection_id, 0) + 1
                     self.missed_heartbeats[connection_id] = missed_count
 
-                logger.warning(f"Missed heartbeat #{missed_count} for {connection_id}")
+                logger.warning("Missed heartbeat #%s for %s", missed_count, connection_id)
 
                 if missed_count >= self.config.max_missed_heartbeats:
                     await self._handle_connection_lost(connection_id)
@@ -164,22 +164,22 @@ class WebSocketManager:
                 self.last_heartbeat_sent[connection_id] = current_time
                 self.connection_states[connection_id] = ConnectionState.HEARTBEAT_SENT
 
-            logger.debug(f"💓 Heartbeat sent to {connection_id}")
+            logger.debug("💓 Heartbeat sent to %s", connection_id)
 
         except Exception as e:
-            logger.error(f"Failed to send heartbeat to {connection_id}: {e}")
+            logger.error("Failed to send heartbeat to %s: %s", connection_id, e)
             await self._handle_connection_error(connection_id, e)
 
     async def _handle_connection_lost(self, connection_id: str):
         """Handle lost connection"""
-        logger.warning(f"🔌 Connection lost: {connection_id}")
+        logger.warning("🔌 Connection lost: %s", connection_id)
 
         # Clean up connection
         await self.disconnect(connection_id)
 
     async def _handle_connection_error(self, connection_id: str, error: Exception):
         """Handle connection errors (thread-safe)"""
-        logger.error(f"🚫 Connection error for {connection_id}: {error}")
+        logger.error("🚫 Connection error for %s: %s", connection_id, error)
 
         async with self._lock:
             self.connection_states[connection_id] = ConnectionState.ERROR
@@ -219,11 +219,11 @@ class WebSocketManager:
                 }
             )
 
-            logger.info(f"✅ WebSocket connected: {connection_id}")
+            logger.info("✅ WebSocket connected: %s", connection_id)
             return True
 
         except Exception as e:
-            logger.error(f"❌ WebSocket connection failed: {e}")
+            logger.error("❌ WebSocket connection failed: %s", e)
             return False
 
     async def disconnect(self, connection_id: str):
@@ -261,7 +261,7 @@ class WebSocketManager:
             if connection_id in self.last_heartbeat_received:
                 del self.last_heartbeat_received[connection_id]
 
-        logger.info(f"🔌 WebSocket disconnected: {connection_id}")
+        logger.info("🔌 WebSocket disconnected: %s", connection_id)
 
     async def handle_message(self, connection_id: str, message: str) -> bool:
         """
@@ -304,14 +304,14 @@ class WebSocketManager:
             return True
 
         except Exception as e:
-            logger.error(f"Error handling message from {connection_id}: {e}")
+            logger.error("Error handling message from %s: %s", connection_id, e)
             return False
 
     async def _handle_heartbeat_response(
         self, connection_id: str, message_data: Dict[str, Any], current_time: float
     ):
         """Handle heartbeat response from client (thread-safe)"""
-        logger.debug(f"💓 Heartbeat response received from {connection_id}")
+        logger.debug("💓 Heartbeat response received from %s", connection_id)
 
         # Reset missed heartbeat count and get websocket under lock
         async with self._lock:
@@ -336,7 +336,7 @@ class WebSocketManager:
     def register_message_handler(self, message_type: str, handler: Callable):
         """Register handler for specific message types"""
         self.message_handlers[message_type] = handler
-        logger.info(f"📝 Registered handler for message type: {message_type}")
+        logger.info("📝 Registered handler for message type: %s", message_type)
 
     async def broadcast_message(
         self, message: Dict[str, Any], exclude: Optional[Set[str]] = None
@@ -354,7 +354,7 @@ class WebSocketManager:
                 try:
                     await websocket.send_json(message)
                 except Exception as e:
-                    logger.error(f"Failed to broadcast to {connection_id}: {e}")
+                    logger.error("Failed to broadcast to %s: %s", connection_id, e)
 
     async def send_message(self, connection_id: str, message: Dict[str, Any]) -> bool:
         """Send message to specific connection (thread-safe)"""
@@ -369,7 +369,7 @@ class WebSocketManager:
             await websocket.send_json(message)
             return True
         except Exception as e:
-            logger.error(f"Failed to send message to {connection_id}: {e}")
+            logger.error("Failed to send message to %s: %s", connection_id, e)
             return False
 
     async def get_connection_stats(self) -> Dict[str, Any]:
@@ -430,11 +430,11 @@ async def create_websocket_handler(websocket: WebSocket, connection_id: str):
                     break  # Handler indicated connection should close
 
             except WebSocketDisconnect:
-                logger.info(f"🔌 WebSocket disconnected normally: {connection_id}")
+                logger.info("🔌 WebSocket disconnected normally: %s", connection_id)
                 break
 
             except Exception as e:
-                logger.error(f"❌ WebSocket error for {connection_id}: {e}")
+                logger.error("❌ WebSocket error for %s: %s", connection_id, e)
                 break
 
     finally:

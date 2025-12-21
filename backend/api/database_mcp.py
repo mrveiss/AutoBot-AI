@@ -111,19 +111,19 @@ def validate_sql_query(sql: str) -> bool:
     - Block SQL comments that could hide malicious code
     """
     if len(sql) > MAX_QUERY_LENGTH:
-        logger.warning(f"Query too long: {len(sql)} chars (max: {MAX_QUERY_LENGTH})")
+        logger.warning("Query too long: %s chars (max: %s)", len(sql), MAX_QUERY_LENGTH)
         return False
 
     # Check for blocked patterns
     for pattern in BLOCKED_SQL_PATTERNS:
         if re.search(pattern, sql, re.IGNORECASE):
-            logger.warning(f"Blocked SQL pattern detected: {pattern}")
+            logger.warning("Blocked SQL pattern detected: %s", pattern)
             return False
 
     # Count semicolons (should be 0 or 1 at the end)
     semicolons = sql.count(";")
     if semicolons > 1:
-        logger.warning(f"Multiple statements detected: {semicolons} semicolons")
+        logger.warning("Multiple statements detected: %s semicolons", semicolons)
         return False
 
     return True
@@ -132,7 +132,7 @@ def validate_sql_query(sql: str) -> bool:
 def is_database_allowed(db_name: str) -> bool:
     """Check if database is in whitelist"""
     if db_name not in DATABASE_WHITELIST:
-        logger.warning(f"Database not in whitelist: {db_name}")
+        logger.warning("Database not in whitelist: %s", db_name)
         return False
     return True
 
@@ -170,7 +170,7 @@ async def check_rate_limit() -> bool:
             query_counter["reset_time"] = now
 
         if query_counter["count"] >= MAX_QUERIES_PER_MINUTE:
-            logger.warning(f"Rate limit exceeded: {query_counter['count']} queries/min")
+            logger.warning("Rate limit exceeded: %s queries/min", query_counter['count'])
             return False
 
         query_counter["count"] += 1
@@ -668,7 +668,7 @@ async def database_query_mcp(request: SQLQueryRequest) -> Metadata:
         )
 
     # Log the operation
-    logger.info(f"Database query on {request.database}: {request.query[:100]}...")
+    logger.info("Database query on %s: %s...", request.database, request.query[:100])
 
     try:
         # Execute query in thread pool (Issue #357: non-blocking)
@@ -691,7 +691,7 @@ async def database_query_mcp(request: SQLQueryRequest) -> Metadata:
         }
 
     except sqlite3.Error as e:
-        logger.error(f"SQLite error: {e}")
+        logger.error("SQLite error: %s", e)
         raise HTTPException(status_code=500, detail=f"Database query error: {str(e)}")
 
 
@@ -766,7 +766,7 @@ async def database_execute_mcp(request: SQLExecuteRequest) -> Metadata:
         }
 
     except sqlite3.Error as e:
-        logger.error(f"SQLite execute error: {e}")
+        logger.error("SQLite execute error: %s", e)
         raise HTTPException(status_code=500, detail=f"Database execute error: {str(e)}")
 
 
@@ -801,7 +801,7 @@ async def database_list_tables_mcp(request: TableListRequest) -> Metadata:
             status_code=404, detail=f"Database file not found: {request.database}"
         )
 
-    logger.info(f"Listing tables in {request.database}")
+    logger.info("Listing tables in %s", request.database)
 
     try:
         # List tables in thread pool (Issue #357: non-blocking)
@@ -819,7 +819,7 @@ async def database_list_tables_mcp(request: TableListRequest) -> Metadata:
         }
 
     except sqlite3.Error as e:
-        logger.error(f"SQLite error listing tables: {e}")
+        logger.error("SQLite error listing tables: %s", e)
         raise HTTPException(status_code=500, detail=f"Error listing tables: {str(e)}")
 
 
@@ -854,7 +854,7 @@ async def database_describe_schema_mcp(request: SchemaRequest) -> Metadata:
             status_code=404, detail=f"Database file not found: {request.database}"
         )
 
-    logger.info(f"Describing schema for {request.database}")
+    logger.info("Describing schema for %s", request.database)
 
     try:
         # Describe schema in thread pool (Issue #357: non-blocking)
@@ -873,7 +873,7 @@ async def database_describe_schema_mcp(request: SchemaRequest) -> Metadata:
         }
 
     except sqlite3.Error as e:
-        logger.error(f"SQLite error describing schema: {e}")
+        logger.error("SQLite error describing schema: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Error describing schema: {str(e)}"
         )
@@ -956,7 +956,7 @@ async def database_statistics_mcp(request: TableListRequest) -> Metadata:
             status_code=404, detail=f"Database file not found: {request.database}"
         )
 
-    logger.info(f"Getting statistics for {request.database}")
+    logger.info("Getting statistics for %s", request.database)
 
     try:
         # Get statistics in thread pool (Issue #357: non-blocking)
@@ -976,7 +976,7 @@ async def database_statistics_mcp(request: TableListRequest) -> Metadata:
         }
 
     except sqlite3.Error as e:
-        logger.error(f"SQLite error getting statistics: {e}")
+        logger.error("SQLite error getting statistics: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Error getting statistics: {str(e)}"
         )

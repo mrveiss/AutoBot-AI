@@ -223,7 +223,7 @@ def get_documentation_searcher():
                 _documentation_searcher = None
                 return None
         except Exception as e:
-            logger.warning(f"Could not initialize documentation searcher: {e}")
+            logger.warning("Could not initialize documentation searcher: %s", e)
             return None
 
 
@@ -308,7 +308,7 @@ async def unified_search(req: Request, body: UnifiedSearchRequest):
                 result["facts"] = fact_results.get("results", [])
             result["sources_searched"].append("facts")
         except Exception as e:
-            logger.warning(f"Fact search failed: {e}")
+            logger.warning("Fact search failed: %s", e)
 
     # Expand with relations if enabled
     if "relations" in body.include_sources and body.expand_relations and kb is not None:
@@ -324,7 +324,7 @@ async def unified_search(req: Request, body: UnifiedSearchRequest):
 
             result["sources_searched"].append("relations")
         except Exception as e:
-            logger.warning(f"Relation expansion failed: {e}")
+            logger.warning("Relation expansion failed: %s", e)
 
     # Search documentation
     if "documentation" in body.include_sources and body.doc_results > 0:
@@ -341,7 +341,7 @@ async def unified_search(req: Request, body: UnifiedSearchRequest):
                 result["documentation"] = doc_results
                 result["sources_searched"].append("documentation")
         except Exception as e:
-            logger.warning(f"Documentation search failed: {e}")
+            logger.warning("Documentation search failed: %s", e)
 
     # Calculate totals
     result["total_results"] = (
@@ -410,7 +410,7 @@ async def unified_stats(req: Request):
                     "relations_by_type": rel_stats.get("relations_by_type", {}),
                 }
         except Exception as e:
-            logger.warning(f"KB stats failed: {e}")
+            logger.warning("KB stats failed: %s", e)
 
     # Documentation stats
     try:
@@ -423,7 +423,7 @@ async def unified_stats(req: Request):
                 "collection_name": doc_searcher.collection_name,
             }
     except Exception as e:
-        logger.warning(f"Doc stats failed: {e}")
+        logger.warning("Doc stats failed: %s", e)
 
     return stats
 
@@ -460,7 +460,7 @@ async def get_llm_context(req: Request, body: ContextRequest):
                 fact_results, body.max_context_length, context_parts, citations, total_length
             )
         except Exception as e:
-            logger.warning(f"Fact context failed: {e}")
+            logger.warning("Fact context failed: %s", e)
 
     # Get related facts (Issue #315: use extracted helper)
     if body.include_relations and kb is not None and citations:
@@ -469,7 +469,7 @@ async def get_llm_context(req: Request, body: ContextRequest):
                 kb, citations, body.max_context_length, context_parts, total_length
             )
         except Exception as e:
-            logger.warning(f"Relation context failed: {e}")
+            logger.warning("Relation context failed: %s", e)
 
     # Get documentation (Issue #315: uses helper for reduced nesting)
     if body.include_documentation:
@@ -478,7 +478,7 @@ async def get_llm_context(req: Request, body: ContextRequest):
                 body.query, body.max_context_length, context_parts, citations, total_length
             )
         except Exception as e:
-            logger.warning(f"Doc context failed: {e}")
+            logger.warning("Doc context failed: %s", e)
 
     context_string = "".join(context_parts)
 
@@ -537,7 +537,7 @@ async def search_documentation(
         }
 
     except Exception as e:
-        logger.error(f"Documentation search failed: {e}")
+        logger.error("Documentation search failed: %s", e)
         raise HTTPException(
             status_code=500,
             detail=f"Documentation search failed: {str(e)}",
@@ -577,7 +577,7 @@ async def documentation_stats():
         }
 
     except Exception as e:
-        logger.error(f"Documentation stats failed: {e}")
+        logger.error("Documentation stats failed: %s", e)
         return {
             "success": False,
             "message": str(e),

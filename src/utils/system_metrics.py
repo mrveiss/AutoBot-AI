@@ -58,7 +58,7 @@ class SystemMetricsCollector:
             from src.monitoring.prometheus_metrics import get_metrics_manager
             self.prometheus = get_metrics_manager()
         except (ImportError, Exception) as e:
-            self.logger.warning(f"Prometheus metrics not available: {e}")
+            self.logger.warning("Prometheus metrics not available: %s", e)
             self.prometheus = None
 
         # Metric categories to collect
@@ -152,7 +152,7 @@ class SystemMetricsCollector:
                     self.prometheus.record_network_bytes("recv", network.bytes_recv)
 
         except Exception as e:
-            self.logger.error(f"Error collecting system metrics: {e}")
+            self.logger.error("Error collecting system metrics: %s", e)
 
         return metrics
 
@@ -175,7 +175,7 @@ class SystemMetricsCollector:
             return 1.0
 
         except Exception as ping_error:
-            self.logger.warning(f"Redis ping failed: {ping_error}")
+            self.logger.warning("Redis ping failed: %s", ping_error)
             return 0.0
 
     async def _check_http_service_health(
@@ -297,7 +297,7 @@ class SystemMetricsCollector:
                     )
 
             except Exception as e:
-                self.logger.warning(f"Health check failed for {service_name}: {e}")
+                self.logger.warning("Health check failed for %s: %s", service_name, e)
                 error_msg = str(e)
 
             # Create health metric (success or failure)
@@ -385,7 +385,7 @@ class SystemMetricsCollector:
                     )
                     self._auth_error_logged = True
             else:
-                self.logger.error(f"Error collecting knowledge base metrics: {e}")
+                self.logger.error("Error collecting knowledge base metrics: %s", e)
 
         return metrics
 
@@ -408,7 +408,7 @@ class SystemMetricsCollector:
             if isinstance(result, dict):
                 all_metrics.update(result)
             elif isinstance(result, Exception):
-                self.logger.error(f"Metric collection error: {result}")
+                self.logger.error("Metric collection error: %s", result)
 
         return all_metrics
 
@@ -456,7 +456,7 @@ class SystemMetricsCollector:
             return summary
 
         except Exception as e:
-            self.logger.error(f"Error generating metric summary: {e}")
+            self.logger.error("Error generating metric summary: %s", e)
             return {"error": str(e)}
 
     async def start_collection(self):
@@ -477,13 +477,13 @@ class SystemMetricsCollector:
                 metrics = await self.collect_all_metrics()
 
                 if metrics:
-                    self.logger.debug(f"Collected {len(metrics)} metrics (pushed to Prometheus)")
+                    self.logger.debug("Collected %s metrics (pushed to Prometheus)", len(metrics))
 
                 # Wait for next collection
                 await asyncio.sleep(self._collection_interval)
 
             except Exception as e:
-                self.logger.error(f"Error in metrics collection loop: {e}")
+                self.logger.error("Error in metrics collection loop: %s", e)
                 await asyncio.sleep(self._collection_interval)
 
     async def stop_collection(self):

@@ -466,7 +466,7 @@ async def analyze_codebase(request: AnalysisRequest):
                 ]
                 report.anti_patterns = filtered_patterns
             except ValueError:
-                logger.warning(f"Invalid severity filter: {request.min_severity}")
+                logger.warning("Invalid severity filter: %s", request.min_severity)
 
         return JSONResponse(
             status_code=200,
@@ -478,7 +478,7 @@ async def analyze_codebase(request: AnalysisRequest):
         )
 
     except Exception as e:
-        logger.error(f"Analysis failed: {e}")
+        logger.error("Analysis failed: %s", e)
         raise HTTPException(
             status_code=500,
             detail=f"Analysis failed: {str(e)}",
@@ -531,7 +531,7 @@ async def quick_scan_file(request: QuickScanRequest):
         )
 
     except Exception as e:
-        logger.error(f"File scan failed: {e}")
+        logger.error("File scan failed: %s", e)
         raise HTTPException(
             status_code=500,
             detail=f"Scan failed: {str(e)}",
@@ -585,7 +585,7 @@ async def get_codebase_health_score(
         )
 
     except Exception as e:
-        logger.error(f"Health score calculation failed: {e}")
+        logger.error("Health score calculation failed: %s", e)
         raise HTTPException(
             status_code=500,
             detail=f"Health check failed: {str(e)}",
@@ -696,7 +696,7 @@ async def analyze_redis_usage_endpoint(request: RedisAnalysisRequest):
                     if _SEVERITY_ORDER.index(r.severity.value) >= min_idx
                 ]
             except ValueError:
-                logger.warning(f"Invalid severity filter: {request.min_severity}")
+                logger.warning("Invalid severity filter: %s", request.min_severity)
 
         # Get summary
         optimizer.results = results
@@ -714,7 +714,7 @@ async def analyze_redis_usage_endpoint(request: RedisAnalysisRequest):
         )
 
     except Exception as e:
-        logger.error(f"Redis analysis failed: {e}")
+        logger.error("Redis analysis failed: %s", e)
         raise HTTPException(
             status_code=500,
             detail=f"Redis analysis failed: {str(e)}",
@@ -767,7 +767,7 @@ async def scan_redis_file(request: RedisFileScanRequest):
         )
 
     except Exception as e:
-        logger.error(f"Redis file scan failed: {e}")
+        logger.error("Redis file scan failed: %s", e)
         raise HTTPException(
             status_code=500,
             detail=f"Scan failed: {str(e)}",
@@ -855,7 +855,7 @@ async def get_redis_usage_health_score(
         )
 
     except Exception as e:
-        logger.error(f"Redis health score calculation failed: {e}")
+        logger.error("Redis health score calculation failed: %s", e)
         raise HTTPException(
             status_code=500,
             detail=f"Health check failed: {str(e)}",
@@ -957,7 +957,7 @@ async def security_analyze(request: SecurityAnalysisRequest):
         )
 
     except Exception as e:
-        logger.error(f"Security analysis failed: {e}")
+        logger.error("Security analysis failed: %s", e)
         raise HTTPException(
             status_code=500,
             detail=f"Security analysis failed: {str(e)}",
@@ -1018,7 +1018,7 @@ async def security_scan_file(request: SecurityFileScanRequest):
         )
 
     except Exception as e:
-        logger.error(f"Security file scan failed: {e}")
+        logger.error("Security file scan failed: %s", e)
         raise HTTPException(
             status_code=500,
             detail=f"File scan failed: {str(e)}",
@@ -1113,7 +1113,7 @@ async def get_security_score(
         )
 
     except Exception as e:
-        logger.error(f"Security score calculation failed: {e}")
+        logger.error("Security score calculation failed: %s", e)
         raise HTTPException(
             status_code=500,
             detail=f"Security score calculation failed: {str(e)}",
@@ -1177,7 +1177,7 @@ async def get_security_report(
             )
 
     except Exception as e:
-        logger.error(f"Security report generation failed: {e}")
+        logger.error("Security report generation failed: %s", e)
         raise HTTPException(
             status_code=500,
             detail=f"Report generation failed: {str(e)}",
@@ -1278,7 +1278,7 @@ async def performance_analyze(request: PerformanceAnalysisRequest):
         )
 
     except Exception as e:
-        logger.error(f"Performance analysis failed: {e}")
+        logger.error("Performance analysis failed: %s", e)
         raise HTTPException(
             status_code=500,
             detail=f"Performance analysis failed: {str(e)}",
@@ -1339,7 +1339,7 @@ async def performance_scan_file(request: PerformanceFileScanRequest):
         )
 
     except Exception as e:
-        logger.error(f"Performance file scan failed: {e}")
+        logger.error("Performance file scan failed: %s", e)
         raise HTTPException(
             status_code=500,
             detail=f"File scan failed: {str(e)}",
@@ -1433,7 +1433,7 @@ async def get_performance_score(
         )
 
     except Exception as e:
-        logger.error(f"Performance score calculation failed: {e}")
+        logger.error("Performance score calculation failed: %s", e)
         raise HTTPException(
             status_code=500,
             detail=f"Performance score calculation failed: {str(e)}",
@@ -1497,7 +1497,7 @@ async def get_performance_report(
             )
 
     except Exception as e:
-        logger.error(f"Performance report generation failed: {e}")
+        logger.error("Performance report generation failed: %s", e)
         raise HTTPException(
             status_code=500,
             detail=f"Report generation failed: {str(e)}",

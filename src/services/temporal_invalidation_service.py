@@ -228,10 +228,7 @@ class TemporalInvalidationService:
             # Store updated rules
             await self._store_invalidation_rules(existing_rules)
 
-            logger.info(
-                f"Invalidation rules initialized: {len(existing_rules)} total, "
-                f"{rules_added} added"
-            )
+            logger.info("Invalidation rules initialized: %s total, %s added", len(existing_rules), rules_added)
 
             return {
                 "status": "success",
@@ -241,7 +238,7 @@ class TemporalInvalidationService:
             }
 
         except Exception as e:
-            logger.error(f"Error initializing invalidation rules: {e}")
+            logger.error("Error initializing invalidation rules: %s", e)
             return {"status": "error", "message": str(e)}
 
     async def _load_invalidation_rules(self) -> Dict[str, InvalidationRule]:
@@ -259,13 +256,13 @@ class TemporalInvalidationService:
                     rule = InvalidationRule.from_dict(rule_dict)
                     rules[rule_id] = rule
                 except Exception as e:
-                    logger.error(f"Error loading rule {rule_id}: {e}")
+                    logger.error("Error loading rule %s: %s", rule_id, e)
                     continue
 
             return rules
 
         except Exception as e:
-            logger.error(f"Error loading invalidation rules: {e}")
+            logger.error("Error loading invalidation rules: %s", e)
             return {}
 
     async def _store_invalidation_rules(self, rules: Dict[str, InvalidationRule]):
@@ -282,10 +279,10 @@ class TemporalInvalidationService:
                 pipe.hset(self.invalidation_rules_key, rule_id, rule_json)
 
             await pipe.execute()
-            logger.debug(f"Stored {len(rules)} invalidation rules")
+            logger.debug("Stored %s invalidation rules", len(rules))
 
         except Exception as e:
-            logger.error(f"Error storing invalidation rules: {e}")
+            logger.error("Error storing invalidation rules: %s", e)
 
     def _process_facts_against_rules(
         self,
@@ -310,7 +307,7 @@ class TemporalInvalidationService:
 
         for i, fact in enumerate(all_facts):
             if i % 100 == 0:
-                logger.debug(f"Processed {i}/{len(all_facts)} facts")
+                logger.debug("Processed %s/%s facts", i, len(all_facts))
 
             # Check each rule against this fact
             for rule_id, rule in enabled_rules.items():
@@ -402,7 +399,7 @@ class TemporalInvalidationService:
             Dictionary with invalidation results
         """
         start_time = datetime.now()
-        logger.info(f"Starting invalidation sweep (dry_run={dry_run})")
+        logger.info("Starting invalidation sweep (dry_run=%s)", dry_run)
 
         try:
             if not self.fact_extraction_service:
@@ -417,7 +414,7 @@ class TemporalInvalidationService:
                 return {"status": "error", "message": "No invalidation rules available"}
 
             enabled_rules = {k: v for k, v in rules.items() if v.enabled}
-            logger.info(f"Using {len(enabled_rules)} enabled invalidation rules")
+            logger.info("Using %s enabled invalidation rules", len(enabled_rules))
 
             # Get all active facts
             all_facts = await self.fact_extraction_service.get_facts_by_criteria(
@@ -434,7 +431,7 @@ class TemporalInvalidationService:
                     "facts_invalidated": 0,
                 }
 
-            logger.info(f"Processing {len(all_facts)} active facts")
+            logger.info("Processing %s active facts", len(all_facts))
 
             # Process facts against rules (Issue #281: uses helper)
             facts_to_invalidate, invalidation_reasons, rule_statistics = (
@@ -474,14 +471,11 @@ class TemporalInvalidationService:
                 invalidation_reasons=invalidation_reasons,
             )
 
-            logger.info(
-                f"Invalidation sweep completed: {invalidated_count}/"
-                f"{len(facts_to_invalidate)} facts invalidated"
-            )
+            logger.info("Invalidation sweep completed: %s/%s facts invalidated", invalidated_count, len(facts_to_invalidate))
             return result
 
         except Exception as e:
-            logger.error(f"Error in invalidation sweep: {e}")
+            logger.error("Error in invalidation sweep: %s", e)
             return {
                 "status": "error",
                 "message": str(e),
@@ -523,7 +517,7 @@ class TemporalInvalidationService:
                 pipe.srem(index_key, fact.fact_id)
             return True
         except Exception as e:
-            logger.error(f"Error preparing fact {fact.fact_id} for invalidation: {e}")
+            logger.error("Error preparing fact %s for invalidation: %s", fact.fact_id, e)
             return False
 
     async def _invalidate_facts(
@@ -559,16 +553,16 @@ class TemporalInvalidationService:
                 try:
                     await pipe.execute()
                     invalidated_count += len(batch)
-                    logger.debug(f"Invalidated batch of {len(batch)} facts")
+                    logger.debug("Invalidated batch of %s facts", len(batch))
                 except Exception as e:
-                    logger.error(f"Error executing batch invalidation: {e}")
+                    logger.error("Error executing batch invalidation: %s", e)
                     continue
 
-            logger.info(f"Successfully invalidated {invalidated_count} facts")
+            logger.info("Successfully invalidated %s facts", invalidated_count)
             return invalidated_count
 
         except Exception as e:
-            logger.error(f"Error in fact invalidation: {e}")
+            logger.error("Error in fact invalidation: %s", e)
             return invalidated_count
 
     async def _record_invalidation_sweep(self, **kwargs):
@@ -592,7 +586,7 @@ class TemporalInvalidationService:
             logger.debug("Recorded invalidation sweep history")
 
         except Exception as e:
-            logger.error(f"Error recording invalidation history: {e}")
+            logger.error("Error recording invalidation history: %s", e)
 
     def _find_contradictory_facts(
         self, new_fact: AtomicFact, similar_facts: List[AtomicFact]
@@ -753,7 +747,7 @@ class TemporalInvalidationService:
             }
 
         except Exception as e:
-            logger.error(f"Error getting invalidation statistics: {e}")
+            logger.error("Error getting invalidation statistics: %s", e)
             return {"error": str(e)}
 
     async def add_invalidation_rule(self, rule: InvalidationRule) -> Dict[str, Any]:
@@ -763,11 +757,11 @@ class TemporalInvalidationService:
             rules[rule.rule_id] = rule
             await self._store_invalidation_rules(rules)
 
-            logger.info(f"Added invalidation rule: {rule.name}")
+            logger.info("Added invalidation rule: %s", rule.name)
             return {"status": "success", "rule_id": rule.rule_id}
 
         except Exception as e:
-            logger.error(f"Error adding invalidation rule: {e}")
+            logger.error("Error adding invalidation rule: %s", e)
             return {"status": "error", "message": str(e)}
 
     async def remove_invalidation_rule(self, rule_id: str) -> Dict[str, Any]:
@@ -777,13 +771,13 @@ class TemporalInvalidationService:
             if rule_id in rules:
                 del rules[rule_id]
                 await self._store_invalidation_rules(rules)
-                logger.info(f"Removed invalidation rule: {rule_id}")
+                logger.info("Removed invalidation rule: %s", rule_id)
                 return {"status": "success", "rule_id": rule_id}
             else:
                 return {"status": "error", "message": "Rule not found"}
 
         except Exception as e:
-            logger.error(f"Error removing invalidation rule: {e}")
+            logger.error("Error removing invalidation rule: %s", e)
             return {"status": "error", "message": str(e)}
 
     async def schedule_periodic_invalidation(self):
@@ -792,10 +786,7 @@ class TemporalInvalidationService:
             logger.info("Auto invalidation disabled")
             return
 
-        logger.info(
-            f"Scheduling periodic invalidation every "
-            f"{self.invalidation_interval_hours} hours"
-        )
+        logger.info("Scheduling periodic invalidation every %s hours", self.invalidation_interval_hours)
 
         while True:
             try:
@@ -807,10 +798,7 @@ class TemporalInvalidationService:
                 result = await self.run_invalidation_sweep(dry_run=False)
 
                 if result["status"] == "success":
-                    logger.info(
-                        f"Scheduled invalidation completed: "
-                        f"{result['facts_invalidated']} facts invalidated"
-                    )
+                    logger.info("Scheduled invalidation completed: ")
                 else:
                     logger.error(
                         f"Scheduled invalidation failed: {result.get('message')}"
@@ -820,7 +808,7 @@ class TemporalInvalidationService:
                 logger.info("Periodic invalidation cancelled")
                 break
             except Exception as e:
-                logger.error(f"Error in periodic invalidation: {e}")
+                logger.error("Error in periodic invalidation: %s", e)
                 # Continue running despite errors
                 continue
 

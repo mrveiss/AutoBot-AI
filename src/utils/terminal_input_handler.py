@@ -143,19 +143,19 @@ class TerminalInputHandler:
         if self.mock_responses and self._mock_index < len(self.mock_responses):
             response = self.mock_responses[self._mock_index]
             self._mock_index += 1
-            logger.debug(f"Mock response for '{prompt}': {response}")
+            logger.debug("Mock response for '%s': %s", prompt, response)
             return response
 
         # Check for pattern-based default responses
         prompt_lower = prompt.lower()
         for pattern, response in self.default_responses.items():
             if pattern in prompt_lower:
-                logger.debug(f"Default response for '{prompt}': {response}")
+                logger.debug("Default response for '%s': %s", prompt, response)
                 return response
 
         # Return default or reasonable fallback
         if default:
-            logger.debug(f"Using default for '{prompt}': {default}")
+            logger.debug("Using default for '%s': %s", prompt, default)
             return default
 
         # Intelligent defaults based on prompt content
@@ -231,7 +231,7 @@ class TerminalInputHandler:
         try:
             response = input_queue.get(timeout=timeout)
             if response.startswith("ERROR:"):
-                logger.warning(f"Input error: {response}")
+                logger.warning("Input error: %s", response)
                 return default
             return response
         except queue.Empty:
@@ -270,7 +270,7 @@ class TerminalInputHandler:
                 None, lambda: self.get_input(prompt, timeout, default)
             )
         except InputTimeoutError:
-            logger.warning(f"Async input timeout for prompt: {prompt}")
+            logger.warning("Async input timeout for prompt: %s", prompt)
             return default
 
     @contextmanager
@@ -351,7 +351,7 @@ def safe_input(prompt: str = "", timeout: float = None, default: str = "") -> st
     try:
         return handler.get_input(prompt, timeout, default)
     except InputTimeoutError:
-        logger.warning(f"Input timeout for prompt: {prompt}")
+        logger.warning("Input timeout for prompt: %s", prompt)
         return default
 
 

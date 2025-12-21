@@ -93,7 +93,7 @@ class StepGenerator:
             return smart_steps
 
         except Exception as e:
-            logger.error(f"Smart step generation failed: {e}")
+            logger.error("Smart step generation failed: %s", e)
             return self._generate_fallback_steps(user_request, intent_analysis)
 
     def _extract_command_from_base_step(self, base_step) -> str:

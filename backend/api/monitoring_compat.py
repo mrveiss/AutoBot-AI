@@ -61,7 +61,7 @@ async def query_prometheus_instant(query: str) -> Optional[float]:
             timeout=aiohttp.ClientTimeout(total=10),
         ) as response:
             if response.status != 200:
-                logger.warning(f"Prometheus query failed: {response.status}")
+                logger.warning("Prometheus query failed: %s", response.status)
                 return None
 
             data = await response.json()
@@ -76,10 +76,10 @@ async def query_prometheus_instant(query: str) -> Optional[float]:
             return float(results[0]["value"][1])
 
     except aiohttp.ClientError as e:
-        logger.error(f"Prometheus connection error: {e}")
+        logger.error("Prometheus connection error: %s", e)
         return None
     except (KeyError, IndexError, ValueError) as e:
-        logger.error(f"Error parsing Prometheus response: {e}")
+        logger.error("Error parsing Prometheus response: %s", e)
         return None
 
 
@@ -113,7 +113,7 @@ async def query_prometheus_range(
             timeout=aiohttp.ClientTimeout(total=30),
         ) as response:
             if response.status != 200:
-                logger.warning(f"Prometheus range query failed: {response.status}")
+                logger.warning("Prometheus range query failed: %s", response.status)
                 return []
 
             data = await response.json()
@@ -142,10 +142,10 @@ async def query_prometheus_range(
             return points
 
     except aiohttp.ClientError as e:
-        logger.error(f"Prometheus connection error: {e}")
+        logger.error("Prometheus connection error: %s", e)
         return []
     except (KeyError, ValueError) as e:
-        logger.error(f"Error parsing Prometheus response: {e}")
+        logger.error("Error parsing Prometheus response: %s", e)
         return []
 
 
@@ -156,7 +156,7 @@ async def get_system_metrics_current():
     Use Grafana dashboard 'autobot-system' instead.
     """
     warnings.warn(DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
-    logger.warning(f"Deprecated endpoint called: /metrics/system/current - {DEPRECATION_MSG}")
+    logger.warning("Deprecated endpoint called: /metrics/system/current - %s", DEPRECATION_MSG)
 
     # Issue #379: Concurrent queries with asyncio.gather
     cpu, memory, disk, load_1m = await asyncio.gather(
@@ -190,7 +190,7 @@ async def get_system_metrics_history(
     Use Grafana dashboard 'autobot-system' instead.
     """
     warnings.warn(DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
-    logger.warning(f"Deprecated endpoint called: /metrics/system/history - {DEPRECATION_MSG}")
+    logger.warning("Deprecated endpoint called: /metrics/system/history - %s", DEPRECATION_MSG)
 
     # Parse duration
     duration_map = {
@@ -228,7 +228,7 @@ async def get_workflow_summary():
     Use Grafana dashboard 'autobot-workflow' instead.
     """
     warnings.warn(DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
-    logger.warning(f"Deprecated endpoint called: /metrics/workflow/summary - {DEPRECATION_MSG}")
+    logger.warning("Deprecated endpoint called: /metrics/workflow/summary - %s", DEPRECATION_MSG)
 
     # Issue #379: Concurrent queries with asyncio.gather
     total, completed, failed, active = await asyncio.gather(
@@ -267,7 +267,7 @@ async def get_recent_errors(
     Use Grafana dashboard 'autobot-errors' instead.
     """
     warnings.warn(DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
-    logger.warning(f"Deprecated endpoint called: /metrics/errors/recent - {DEPRECATION_MSG}")
+    logger.warning("Deprecated endpoint called: /metrics/errors/recent - %s", DEPRECATION_MSG)
 
     # Issue #379: Concurrent queries with asyncio.gather
     total_errors, error_rate_1m, error_rate_5m = await asyncio.gather(
@@ -341,7 +341,7 @@ async def get_services_health():
     Use Grafana dashboard 'autobot-overview' instead.
     """
     warnings.warn(DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
-    logger.warning(f"Deprecated endpoint called: /metrics/services/health - {DEPRECATION_MSG}")
+    logger.warning("Deprecated endpoint called: /metrics/services/health - %s", DEPRECATION_MSG)
 
     # Query service status for each service (Issue #380: use module-level constant)
     health_data = {}
@@ -379,7 +379,7 @@ async def get_github_status():
     Use Grafana dashboard 'autobot-github' instead.
     """
     warnings.warn(DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
-    logger.warning(f"Deprecated endpoint called: /metrics/github/status - {DEPRECATION_MSG}")
+    logger.warning("Deprecated endpoint called: /metrics/github/status - %s", DEPRECATION_MSG)
 
     rate_limit = await query_prometheus_instant("autobot_github_api_rate_limit_remaining")
     total_ops = await query_prometheus_instant("sum(autobot_github_api_operations_total)")

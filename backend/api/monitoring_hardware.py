@@ -69,7 +69,7 @@ class HardwareMonitor:
                 "status": "healthy" if utilization > 0 else "idle",
             }
         except Exception as e:
-            logger.error(f"Error getting GPU status: {e}")
+            logger.error("Error getting GPU status: %s", e)
             _metrics.set_gpu_available(False)
             return {"available": False, "status": "error", "error": str(e)}
 
@@ -103,7 +103,7 @@ class HardwareMonitor:
                 "status": "healthy" if utilization > 0 else "idle",
             }
         except Exception as e:
-            logger.error(f"Error getting NPU status: {e}")
+            logger.error("Error getting NPU status: %s", e)
             _metrics.set_npu_available(False)
             return {"available": False, "status": "error", "error": str(e)}
 
@@ -136,7 +136,7 @@ class HardwareMonitor:
                 "timestamp": time.time(),
             }
         except Exception as e:
-            logger.error(f"Error getting system health: {e}")
+            logger.error("Error getting system health: %s", e)
             return {"status": "error", "error": str(e)}
 
     @staticmethod
@@ -186,7 +186,7 @@ class HardwareMonitor:
                 },
             }
         except Exception as e:
-            logger.error(f"Error getting system resources: {e}")
+            logger.error("Error getting system resources: %s", e)
             return {"error": str(e)}
 
 

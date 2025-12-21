@@ -565,44 +565,236 @@ class GoogleGeminiProvider(BaseAIProvider):
 
 
 class LocalModelProvider(BaseAIProvider):
-    """Local model provider (fallback)"""
+    """Local model provider using Ollama for text generation.
+
+    Provides integration with locally-hosted LLMs via Ollama.
+    Image analysis is not supported by most local models.
+    """
 
     def __init__(self, config: AIModelConfig):
-        """Initialize local model provider with config."""
+        """Initialize local model provider with Ollama client."""
         super().__init__(config)
+        self._ollama_available = False
+
+    def _initialize_client(self):
+        """Initialize Ollama client connection."""
+        import os
+
+        self._ollama_host = os.getenv("AUTOBOT_OLLAMA_HOST")
+        self._ollama_port = os.getenv("AUTOBOT_OLLAMA_PORT")
+        self._ollama_available = bool(self._ollama_host and self._ollama_port)
+
+        if self._ollama_available:
+            self._ollama_url = f"http://{self._ollama_host}:{self._ollama_port}"
+            logger.info("LocalModelProvider initialized with Ollama at %s", self._ollama_url)
+        else:
+            logger.warning(
+                "Ollama not configured. Set AUTOBOT_OLLAMA_HOST and "
+                "AUTOBOT_OLLAMA_PORT environment variables for local model support."
+            )
 
     async def generate_text(self, request: AIRequest) -> AIResponse:
-        """Generate text using local model (placeholder)"""
-        return AIResponse(
-            request_id=request.request_id,
-            provider=self.config.provider,
-            model_name=self.config.model_name,
-            content="Local model text generation not implemented",
-            usage={"prompt_tokens": 0, "completion_tokens": 0},
-            finish_reason="not_implemented",
-            tool_calls=None,
-            confidence=0.1,
-            processing_time=0.1,
-            metadata={"note": "Local model integration pending"},
-        )
+        """Generate text using local Ollama model."""
+        import aiohttp
+
+        start_time = time.time()
+
+        if not self._ollama_available:
+            return AIResponse(
+                request_id=request.request_id,
+                provider=self.config.provider,
+                model_name=self.config.model_name,
+                content="Error: Ollama not configured. Set AUTOBOT_OLLAMA_HOST and AUTOBOT_OLLAMA_PORT.",
+                usage={"prompt_tokens": 0, "completion_tokens": 0},
+                finish_reason="error",
+                tool_calls=None,
+                confidence=0.0,
+                processing_time=time.time() - start_time,
+                metadata={"error": "ollama_not_configured"},
+            )
+
+        try:
+            # Build messages for Ollama chat API
+            messages = []
+            if request.system_message:
+                messages.append({"role": "system", "content": request.system_message})
+            messages.append({"role": "user", "content": request.prompt})
+
+            data = {
+                "model": self.config.model_name or "llama3.2",
+                "messages": messages,
+                "stream": False,
+                "options": {
+                    "temperature": request.temperature or self.config.temperature,
+                },
+            }
+
+            async with aiohttp.ClientSession() as session:
+                timeout = aiohttp.ClientTimeout(total=120.0)
+                async with session.post(
+                    f"{self._ollama_url}/api/chat",
+                    json=data,
+                    timeout=timeout,
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        raise aiohttp.ClientError(f"HTTP {response.status}: {error_text}")
+
+                    result = await response.json()
+
+            processing_time = time.time() - start_time
+            content = result.get("message", {}).get("content", "")
+
+            return AIResponse(
+                request_id=request.request_id,
+                provider=self.config.provider,
+                model_name=result.get("model", self.config.model_name),
+                content=content,
+                usage={
+                    "prompt_tokens": result.get("prompt_eval_count", 0),
+                    "completion_tokens": result.get("eval_count", 0),
+                },
+                finish_reason="stop" if result.get("done") else "incomplete",
+                tool_calls=None,
+                confidence=0.8,
+                processing_time=processing_time,
+                metadata={
+                    "total_duration": result.get("total_duration"),
+                    "load_duration": result.get("load_duration"),
+                },
+            )
+
+        except Exception as e:
+            logger.error("Ollama request failed: %s", e)
+            return AIResponse(
+                request_id=request.request_id,
+                provider=self.config.provider,
+                model_name=self.config.model_name,
+                content=f"Error: Local model request failed - {str(e)}",
+                usage={"prompt_tokens": 0, "completion_tokens": 0},
+                finish_reason="error",
+                tool_calls=None,
+                confidence=0.0,
+                processing_time=time.time() - start_time,
+                metadata={"error": str(e)},
+            )
 
     async def analyze_image(self, request: AIRequest) -> AIResponse:
-        """Analyze image using local model (placeholder)"""
-        return AIResponse(
-            request_id=request.request_id,
-            provider=self.config.provider,
-            model_name=self.config.model_name,
-            content="Local model image analysis not implemented",
-            usage={"prompt_tokens": 0, "completion_tokens": 0},
-            finish_reason="not_implemented",
-            tool_calls=None,
-            confidence=0.1,
-            processing_time=0.1,
-            metadata={"note": "Local vision model integration pending"},
-        )
+        """Analyze image using local model.
+
+        Note: Most local models do not support vision. Returns error for unsupported models.
+        LLaVA models support vision if available.
+        """
+        start_time = time.time()
+
+        # Check if using a vision-capable model (e.g., llava)
+        model_name = self.config.model_name or ""
+        if "llava" not in model_name.lower() and "vision" not in model_name.lower():
+            return AIResponse(
+                request_id=request.request_id,
+                provider=self.config.provider,
+                model_name=self.config.model_name,
+                content=(
+                    f"Error: Model '{model_name}' does not support image analysis. "
+                    "Use a vision-capable model like 'llava' for image analysis."
+                ),
+                usage={"prompt_tokens": 0, "completion_tokens": 0},
+                finish_reason="error",
+                tool_calls=None,
+                confidence=0.0,
+                processing_time=time.time() - start_time,
+                metadata={"error": "vision_not_supported"},
+            )
+
+        # For vision models, attempt to process with images
+        return await self._generate_with_images(request)
+
+    async def _generate_with_images(self, request: AIRequest) -> AIResponse:
+        """Generate response with image input for vision-capable models."""
+        import aiohttp
+
+        start_time = time.time()
+
+        if not self._ollama_available:
+            return AIResponse(
+                request_id=request.request_id,
+                provider=self.config.provider,
+                model_name=self.config.model_name,
+                content="Error: Ollama not configured for vision model.",
+                usage={"prompt_tokens": 0, "completion_tokens": 0},
+                finish_reason="error",
+                tool_calls=None,
+                confidence=0.0,
+                processing_time=time.time() - start_time,
+                metadata={"error": "ollama_not_configured"},
+            )
+
+        try:
+            # Ollama vision models expect images in the message
+            messages = []
+            if request.system_message:
+                messages.append({"role": "system", "content": request.system_message})
+
+            user_message = {"role": "user", "content": request.prompt}
+            if request.images:
+                user_message["images"] = request.images  # Base64 encoded
+            messages.append(user_message)
+
+            data = {
+                "model": self.config.model_name,
+                "messages": messages,
+                "stream": False,
+            }
+
+            async with aiohttp.ClientSession() as session:
+                timeout = aiohttp.ClientTimeout(total=180.0)  # Vision takes longer
+                async with session.post(
+                    f"{self._ollama_url}/api/chat",
+                    json=data,
+                    timeout=timeout,
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        raise aiohttp.ClientError(f"HTTP {response.status}: {error_text}")
+
+                    result = await response.json()
+
+            processing_time = time.time() - start_time
+            content = result.get("message", {}).get("content", "")
+
+            return AIResponse(
+                request_id=request.request_id,
+                provider=self.config.provider,
+                model_name=result.get("model", self.config.model_name),
+                content=content,
+                usage={
+                    "prompt_tokens": result.get("prompt_eval_count", 0),
+                    "completion_tokens": result.get("eval_count", 0),
+                },
+                finish_reason="stop" if result.get("done") else "incomplete",
+                tool_calls=None,
+                confidence=0.7,
+                processing_time=processing_time,
+                metadata={"vision_model": True},
+            )
+
+        except Exception as e:
+            logger.error("Ollama vision request failed: %s", e)
+            return AIResponse(
+                request_id=request.request_id,
+                provider=self.config.provider,
+                model_name=self.config.model_name,
+                content=f"Error: Vision model request failed - {str(e)}",
+                usage={"prompt_tokens": 0, "completion_tokens": 0},
+                finish_reason="error",
+                tool_calls=None,
+                confidence=0.0,
+                processing_time=time.time() - start_time,
+                metadata={"error": str(e)},
+            )
 
     async def multimodal_chat(self, request: AIRequest) -> AIResponse:
-        """Multi-modal chat with local model (placeholder)"""
+        """Multi-modal chat with local model."""
         if request.images:
             return await self.analyze_image(request)
         else:

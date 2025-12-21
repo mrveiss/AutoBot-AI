@@ -150,7 +150,7 @@ class BaseAgent(ABC):
         self._message_handlers = {}
         self._handlers_lock = threading.Lock()
 
-        logger.info(f"Initialized {agent_type} agent in {deployment_mode.value} mode")
+        logger.info("Initialized %s agent in %s mode", agent_type, deployment_mode.value)
 
     @abstractmethod
     async def process_request(self, request: AgentRequest) -> AgentResponse:
@@ -203,7 +203,7 @@ class BaseAgent(ABC):
             )
 
         except Exception as e:
-            logger.error(f"Health check failed for {self.agent_type}: {e}")
+            logger.error("Health check failed for %s: %s", self.agent_type, e)
             # Read error count under lock
             with self._stats_lock:
                 error_count = self.error_count
@@ -243,7 +243,7 @@ class BaseAgent(ABC):
                 "uptime_seconds": (datetime.now() - self.startup_time).total_seconds(),
             }
         except Exception as e:
-            logger.warning(f"Could not get resource usage: {e}")
+            logger.warning("Could not get resource usage: %s", e)
             return {"error": str(e)}
 
     async def execute_with_tracking(self, request: AgentRequest) -> AgentResponse:
@@ -281,7 +281,7 @@ class BaseAgent(ABC):
             with self._stats_lock:
                 self.error_count += 1
 
-            logger.error(f"Agent {self.agent_type} error: {e}")
+            logger.error("Agent %s error: %s", self.agent_type, e)
             return AgentResponse(
                 request_id=request.request_id,
                 agent_type=self.agent_type,
@@ -320,11 +320,11 @@ class BaseAgent(ABC):
                 MessageType.REQUEST, self._handle_communication_request
             )
 
-            logger.info(f"Agent {self.agent_id} communication initialized")
+            logger.info("Agent %s communication initialized", self.agent_id)
             return True
 
         except Exception as e:
-            logger.error(f"Failed to initialize communication for {self.agent_id}: {e}")
+            logger.error("Failed to initialize communication for %s: %s", self.agent_id, e)
             return False
 
     async def _handle_communication_request(
@@ -362,7 +362,7 @@ class BaseAgent(ABC):
             return response_message
 
         except Exception as e:
-            logger.error(f"Error handling communication request: {e}")
+            logger.error("Error handling communication request: %s", e)
             # Return error response
             return StandardMessage(
                 header=MessageHeader(message_type=MessageType.ERROR),
@@ -376,7 +376,7 @@ class BaseAgent(ABC):
     ) -> Optional[Any]:
         """Send a message to another agent"""
         if not self.communication_protocol:
-            logger.error(f"Communication not initialized for agent {self.agent_id}")
+            logger.error("Communication not initialized for agent %s", self.agent_id)
             return None
 
         try:
@@ -386,13 +386,13 @@ class BaseAgent(ABC):
                 self.agent_id, recipient_id, message_data, timeout
             )
         except Exception as e:
-            logger.error(f"Error sending message to {recipient_id}: {e}")
+            logger.error("Error sending message to %s: %s", recipient_id, e)
             return None
 
     async def broadcast_message(self, message_data: Any) -> int:
         """Broadcast a message to all agents"""
         if not self.communication_protocol:
-            logger.error(f"Communication not initialized for agent {self.agent_id}")
+            logger.error("Communication not initialized for agent %s", self.agent_id)
             return 0
 
         try:
@@ -400,7 +400,7 @@ class BaseAgent(ABC):
 
             return await broadcast_to_all_agents(self.agent_id, message_data)
         except Exception as e:
-            logger.error(f"Error broadcasting message: {e}")
+            logger.error("Error broadcasting message: %s", e)
             return 0
 
     async def shutdown_communication(self):
@@ -410,9 +410,9 @@ class BaseAgent(ABC):
                 manager = get_communication_manager()
                 await manager.unregister_agent(self.agent_id)
                 self.communication_protocol = None
-                logger.info(f"Agent {self.agent_id} communication shutdown")
+                logger.info("Agent %s communication shutdown", self.agent_id)
             except Exception as e:
-                logger.error(f"Error shutting down communication: {e}")
+                logger.error("Error shutting down communication: %s", e)
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get performance statistics for this agent (thread-safe)"""

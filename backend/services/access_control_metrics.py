@@ -142,7 +142,7 @@ class AccessControlMetrics:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to record violation: {e}")
+            logger.error("Failed to record violation: %s", e)
             return False
 
     def _aggregate_redis_counts(
@@ -244,7 +244,7 @@ class AccessControlMetrics:
             return stats
 
         except Exception as e:
-            logger.error(f"Failed to get statistics: {e}")
+            logger.error("Failed to get statistics: %s", e)
             return {"error": str(e), "total_violations": 0}
 
     def _parse_json_violation_data(
@@ -272,7 +272,7 @@ class AccessControlMetrics:
             try:
                 violations.append(json.loads(violation_data))
             except (json.JSONDecodeError, ValueError) as e:
-                logger.debug(f"Failed to parse violation data: {e}")
+                logger.debug("Failed to parse violation data: %s", e)
         return violations
 
     async def _get_recent_violations(self, limit: int = 20) -> List[Metadata]:
@@ -326,7 +326,7 @@ class AccessControlMetrics:
             return violations[:limit]
 
         except Exception as e:
-            logger.error(f"Failed to get recent violations: {e}")
+            logger.error("Failed to get recent violations: %s", e)
             return []
 
     async def get_endpoint_statistics(
@@ -377,7 +377,7 @@ class AccessControlMetrics:
             return stats
 
         except Exception as e:
-            logger.error(f"Failed to get endpoint statistics: {e}")
+            logger.error("Failed to get endpoint statistics: %s", e)
             return {"endpoint": endpoint, "error": str(e)}
 
     async def get_user_statistics(self, username: str, days: int = 7) -> Metadata:
@@ -426,7 +426,7 @@ class AccessControlMetrics:
             return stats
 
         except Exception as e:
-            logger.error(f"Failed to get user statistics: {e}")
+            logger.error("Failed to get user statistics: %s", e)
             return {"username": username, "error": str(e)}
 
     async def cleanup_old_metrics(self):
@@ -457,10 +457,10 @@ class AccessControlMetrics:
             if all_keys_to_delete:
                 deleted_count = await redis.delete(*all_keys_to_delete)
 
-            logger.info(f"Cleaned up {deleted_count} old metric keys")
+            logger.info("Cleaned up %s old metric keys", deleted_count)
 
         except Exception as e:
-            logger.error(f"Failed to cleanup old metrics: {e}")
+            logger.error("Failed to cleanup old metrics: %s", e)
 
 
 # Global metrics instance

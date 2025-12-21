@@ -42,10 +42,10 @@ async def fetch_quality_health() -> Dict[str, Any]:
             if response.status == 200:
                 return await response.json()
             else:
-                logger.warning(f"Quality endpoint returned {response.status}")
+                logger.warning("Quality endpoint returned %s", response.status)
                 return {"overall": 0, "grade": "N/A", "breakdown": {}}
     except Exception as e:
-        logger.warning(f"Failed to fetch quality health: {e}")
+        logger.warning("Failed to fetch quality health: %s", e)
         return {"overall": 0, "grade": "N/A", "breakdown": {}}
 
 
@@ -66,10 +66,10 @@ async def fetch_codebase_charts() -> Dict[str, Any]:
             if response.status == 200:
                 return await response.json()
             else:
-                logger.warning(f"Charts endpoint returned {response.status}")
+                logger.warning("Charts endpoint returned %s", response.status)
                 return {"chart_data": {"problem_types": [], "severity_counts": [], "top_files": []}}
     except Exception as e:
-        logger.warning(f"Failed to fetch codebase charts: {e}")
+        logger.warning("Failed to fetch codebase charts: %s", e)
         return {"chart_data": {"problem_types": [], "severity_counts": [], "top_files": []}}
 
 
@@ -90,10 +90,10 @@ async def fetch_debt_summary() -> Dict[str, Any]:
             if response.status == 200:
                 return await response.json()
             else:
-                logger.warning(f"Debt endpoint returned {response.status}")
+                logger.warning("Debt endpoint returned %s", response.status)
                 return {"summary": {"total_items": 0, "total_hours": 0}}
     except Exception as e:
-        logger.warning(f"Failed to fetch debt summary: {e}")
+        logger.warning("Failed to fetch debt summary: %s", e)
         return {"summary": {"total_items": 0, "total_hours": 0}}
 
 
@@ -114,10 +114,10 @@ async def fetch_performance_summary() -> Dict[str, Any]:
             if response.status == 200:
                 return await response.json()
             else:
-                logger.warning(f"Performance endpoint returned {response.status}")
+                logger.warning("Performance endpoint returned %s", response.status)
                 return {"total_analyses": 0, "average_score": 0, "common_issues": []}
     except Exception as e:
-        logger.warning(f"Failed to fetch performance summary: {e}")
+        logger.warning("Failed to fetch performance summary: %s", e)
         return {"total_analyses": 0, "average_score": 0, "common_issues": []}
 
 

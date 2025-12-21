@@ -100,9 +100,9 @@ class EntityResolver:
                     "entity_resolution.embedding_model", "all-MiniLM-L6-v2"
                 )
                 self.embedding_model = SentenceTransformer(model_name)
-                logger.info(f"Loaded embedding model: {model_name}")
+                logger.info("Loaded embedding model: %s", model_name)
             except Exception as e:
-                logger.warning(f"Failed to load embedding model: {e}")
+                logger.warning("Failed to load embedding model: %s", e)
                 self.enable_semantic_similarity = False
 
         return self.embedding_model
@@ -121,7 +121,7 @@ class EntityResolver:
             EntityResolutionResult with resolved mappings
         """
         start_time = datetime.now()
-        logger.info(f"Starting entity resolution for {len(entity_names)} entities")
+        logger.info("Starting entity resolution for %s entities", len(entity_names))
 
         try:
             # Remove duplicates while preserving order
@@ -178,7 +178,7 @@ class EntityResolver:
             return result
 
         except Exception as e:
-            logger.error(f"Error in entity resolution: {e}")
+            logger.error("Error in entity resolution: %s", e)
             # Return fallback result
             return EntityResolutionResult(
                 original_entities=entity_names,
@@ -324,7 +324,7 @@ class EntityResolver:
             return float(np.max(similarities))
 
         except Exception as e:
-            logger.error(f"Error calculating semantic similarity: {e}")
+            logger.error("Error calculating semantic similarity: %s", e)
             return 0.0
 
     def _classify_entity_type(self, entity_name: str) -> EntityType:
@@ -364,14 +364,14 @@ class EntityResolver:
                     mapping = EntityMapping.from_dict(mapping_dict)
                     mappings[mapping_id] = mapping
                 except (json.JSONDecodeError, Exception) as e:
-                    logger.error(f"Error loading mapping {mapping_id}: {e}")
+                    logger.error("Error loading mapping %s: %s", mapping_id, e)
                     continue
 
-            logger.debug(f"Loaded {len(mappings)} existing entity mappings")
+            logger.debug("Loaded %s existing entity mappings", len(mappings))
             return mappings
 
         except Exception as e:
-            logger.error(f"Error loading entity mappings: {e}")
+            logger.error("Error loading entity mappings: %s", e)
             return {}
 
     async def _store_entity_mappings(self, mappings: List[EntityMapping]):
@@ -392,10 +392,10 @@ class EntityResolver:
                 )
 
             await pipe.execute()
-            logger.debug(f"Stored {len(mappings)} entity mappings")
+            logger.debug("Stored %s entity mappings", len(mappings))
 
         except Exception as e:
-            logger.error(f"Error storing entity mappings: {e}")
+            logger.error("Error storing entity mappings: %s", e)
 
     async def _record_resolution_history(
         self, result: EntityResolutionResult, context: Optional[Dict[str, Any]]
@@ -431,7 +431,7 @@ class EntityResolver:
             logger.debug("Recorded entity resolution history")
 
         except Exception as e:
-            logger.error(f"Error recording resolution history: {e}")
+            logger.error("Error recording resolution history: %s", e)
 
     async def resolve_facts_entities(self, facts: List[AtomicFact]) -> List[AtomicFact]:
         """
@@ -446,7 +446,7 @@ class EntityResolver:
         if not facts:
             return facts
 
-        logger.info(f"Resolving entities in {len(facts)} facts")
+        logger.info("Resolving entities in %s facts", len(facts))
 
         try:
             # Extract all entities from facts
@@ -489,7 +489,7 @@ class EntityResolver:
             return updated_facts
 
         except Exception as e:
-            logger.error(f"Error resolving fact entities: {e}")
+            logger.error("Error resolving fact entities: %s", e)
             return facts  # Return original facts if resolution fails
 
     async def get_resolution_statistics(self) -> Dict[str, Any]:
@@ -549,7 +549,7 @@ class EntityResolver:
             }
 
         except Exception as e:
-            logger.error(f"Error getting resolution statistics: {e}")
+            logger.error("Error getting resolution statistics: %s", e)
             return {"error": str(e)}
 
 

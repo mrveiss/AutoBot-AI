@@ -589,7 +589,7 @@ class CodebaseIndexingService:
                     )
                     files.append(file_info)
                 except (OSError, ValueError) as e:
-                    logger.warning(f"Could not process file {file_path}: {e}")
+                    logger.warning("Could not process file %s: %s", file_path, e)
                     continue
 
         return files
@@ -606,16 +606,16 @@ class CodebaseIndexingService:
                 async with aiofiles.open(file_path, "r", encoding="latin-1") as f:
                     return await f.read()
             except OSError as e:
-                logger.warning(f"Failed to read file {file_path}: {e}")
+                logger.warning("Failed to read file %s: %s", file_path, e)
                 return None
             except Exception as e:
-                logger.warning(f"Could not decode file {file_path}: {e}")
+                logger.warning("Could not decode file %s: %s", file_path, e)
                 return None
         except OSError as e:
-            logger.warning(f"Failed to read file {file_path}: {e}")
+            logger.warning("Failed to read file %s: %s", file_path, e)
             return None
         except Exception as e:
-            logger.warning(f"Error reading file {file_path}: {e}")
+            logger.warning("Error reading file %s: %s", file_path, e)
             return None
 
     def _chunk_file_content(
@@ -667,20 +667,14 @@ class CodebaseIndexingService:
                     result = await knowledge_base.store_fact(chunk["content"], metadata)
                     if result and result.get("status") == "success":
                         stored_count += 1
-                        logger.debug(
-                            f"Stored chunk {i+1}/{len(chunks)} for {file_info.relative_path}"
-                        )
+                        logger.debug("Stored chunk %s/%s for %s", i+1, len(chunks), file_info.relative_path)
                     else:
-                        logger.warning(
-                            f"Failed to store chunk {i+1} for {file_info.relative_path}: {result}"
-                        )
+                        logger.warning("Failed to store chunk %s for %s: %s", i+1, file_info.relative_path, result)
                 else:
                     logger.warning("Knowledge base does not support store_fact method")
 
             except Exception as e:
-                logger.error(
-                    f"Error storing chunk {i+1} for {file_info.relative_path}: {e}"
-                )
+                logger.error("Error storing chunk %s for %s: %s", i+1, file_info.relative_path, e)
                 self.progress.errors.append(
                     f"Chunk storage error in {file_info.relative_path}[{i+1}]: {str(e)}"
                 )
@@ -704,14 +698,14 @@ class CodebaseIndexingService:
 
             # Skip empty files
             if not content.strip():
-                logger.debug(f"Skipping empty file: {file_info.relative_path}")
+                logger.debug("Skipping empty file: %s", file_info.relative_path)
                 self.progress.processed_files += 1
                 return True
 
             # Chunk the content
             chunks = self._chunk_file_content(content, file_info)
             if not chunks:
-                logger.warning(f"No chunks generated for: {file_info.relative_path}")
+                logger.warning("No chunks generated for: %s", file_info.relative_path)
                 self.progress.processed_files += 1
                 return True
 
@@ -721,7 +715,7 @@ class CodebaseIndexingService:
 
             if stored_count > 0:
                 self.progress.successful_files += 1
-                logger.info(f"Indexed {file_info.relative_path}: {stored_count} chunks")
+                logger.info("Indexed %s: %s chunks", file_info.relative_path, stored_count)
             else:
                 self.progress.failed_files += 1
                 self.progress.errors.append(
@@ -732,7 +726,7 @@ class CodebaseIndexingService:
             return stored_count > 0
 
         except Exception as e:
-            logger.error(f"Error indexing file {file_info.relative_path}: {e}")
+            logger.error("Error indexing file %s: %s", file_info.relative_path, e)
             self.progress.failed_files += 1
             self.progress.processed_files += 1
             self.progress.errors.append(
@@ -744,7 +738,7 @@ class CodebaseIndexingService:
         self, batch_size: int = 10, max_files: Optional[int] = None
     ) -> IndexingProgress:
         """Index the entire codebase with progress tracking"""
-        logger.info(f"Starting codebase indexing for: {self.root_path}")
+        logger.info("Starting codebase indexing for: %s", self.root_path)
 
         # Reset progress
         self.progress = IndexingProgress()
@@ -765,7 +759,7 @@ class CodebaseIndexingService:
                 files = files[:max_files]
 
             self.progress.total_files = len(files)
-            logger.info(f"Found {len(files)} files to index")
+            logger.info("Found %s files to index", len(files))
 
             # Group files by category for organized processing
             files_by_category = {}
@@ -777,9 +771,7 @@ class CodebaseIndexingService:
 
             # Process files in batches by category
             for category, category_files in files_by_category.items():
-                logger.info(
-                    f"Processing {len(category_files)} files in category: {category}"
-                )
+                logger.info("Processing %s files in category: %s", len(category_files), category)
 
                 # Process in batches to avoid overwhelming the system
                 for i in range(0, len(category_files), batch_size):
@@ -794,9 +786,7 @@ class CodebaseIndexingService:
 
                     # Log batch progress
                     successful_in_batch = sum(1 for r in results if r is True)
-                    logger.info(
-                        f"Batch {i//batch_size + 1}: {successful_in_batch}/{len(batch)} files indexed successfully"
-                    )
+                    logger.info("Batch %s: %s/%s files indexed successfully", i//batch_size + 1, successful_in_batch, len(batch))
 
                     # Small delay to prevent overwhelming the system
                     await asyncio.sleep(TimingConstants.MICRO_DELAY)
@@ -804,20 +794,18 @@ class CodebaseIndexingService:
             self.progress.end_time = datetime.now()
 
             logger.info("Codebase indexing completed!")
-            logger.info(
-                f"Results: {self.progress.successful_files} successful, {self.progress.failed_files} failed"
-            )
-            logger.info(f"Total chunks created: {self.progress.total_chunks}")
+            logger.info("Results: %s successful, %s failed", self.progress.successful_files, self.progress.failed_files)
+            logger.info("Total chunks created: %s", self.progress.total_chunks)
 
             if self.progress.errors:
-                logger.warning(f"Errors encountered: {len(self.progress.errors)}")
+                logger.warning("Errors encountered: %s", len(self.progress.errors))
                 for error in self.progress.errors[:10]:  # Log first 10 errors
-                    logger.warning(f"  - {error}")
+                    logger.warning("  - %s", error)
 
             return self.progress
 
         except Exception as e:
-            logger.error(f"Codebase indexing failed: {e}")
+            logger.error("Codebase indexing failed: %s", e)
             self.progress.end_time = datetime.now()
             self.progress.errors.append(f"Indexing failed: {str(e)}")
             return self.progress
@@ -830,7 +818,7 @@ class CodebaseIndexingService:
         self, category: str, batch_size: int = 10
     ) -> IndexingProgress:
         """Reindex files in a specific category"""
-        logger.info(f"Starting category reindexing for: {category}")
+        logger.info("Starting category reindexing for: %s", category)
 
         # Reset progress
         self.progress = IndexingProgress()
@@ -847,10 +835,10 @@ class CodebaseIndexingService:
             category_files = [f for f in files if f.category == category]
 
             self.progress.total_files = len(category_files)
-            logger.info(f"Found {len(category_files)} files in category: {category}")
+            logger.info("Found %s files in category: %s", len(category_files), category)
 
             if not category_files:
-                logger.warning(f"No files found for category: {category}")
+                logger.warning("No files found for category: %s", category)
                 return self.progress
 
             # Process files in batches
@@ -866,22 +854,18 @@ class CodebaseIndexingService:
 
                 # Log batch progress
                 successful_in_batch = sum(1 for r in results if r is True)
-                logger.info(
-                    f"Category {category} batch {i//batch_size + 1}: {successful_in_batch}/{len(batch)} files indexed"
-                )
+                logger.info("Category %s batch %s: %s/%s files indexed", category, i//batch_size + 1, successful_in_batch, len(batch))
 
                 # Small delay between batches to prevent system overload
                 await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
             self.progress.end_time = datetime.now()
-            logger.info(
-                f"Category {category} reindexing completed: {self.progress.successful_files} successful"
-            )
+            logger.info("Category %s reindexing completed: %s successful", category, self.progress.successful_files)
 
             return self.progress
 
         except Exception as e:
-            logger.error(f"Category reindexing failed for {category}: {e}")
+            logger.error("Category reindexing failed for %s: %s", category, e)
             self.progress.end_time = datetime.now()
             self.progress.errors.append(f"Category reindexing failed: {str(e)}")
             return self.progress

@@ -93,10 +93,10 @@ class InteractiveTerminalAgent:
             # Start output streaming
             asyncio.create_task(self._stream_output())
 
-            logger.info(f"Started terminal session for chat {self.chat_id}: {command}")
+            logger.info("Started terminal session for chat %s: %s", self.chat_id, command)
 
         except Exception as e:
-            logger.error(f"Failed to start terminal session: {e}")
+            logger.error("Failed to start terminal session: %s", e)
             await self._send_error(f"Failed to start terminal: {str(e)}")
             raise
 
@@ -140,7 +140,7 @@ class InteractiveTerminalAgent:
                 await self._process_output(data)
 
             except Exception as e:
-                logger.error(f"Error in output streaming: {e}")
+                logger.error("Error in output streaming: %s", e)
                 break
 
     async def _data_available(self) -> bool:
@@ -173,7 +173,7 @@ class InteractiveTerminalAgent:
                 await self._send_to_chat(output)
 
         except Exception as e:
-            logger.error(f"Error processing output: {e}")
+            logger.error("Error processing output: %s", e)
 
     def _detect_sudo_prompt(self, output: str) -> bool:
         """Detect sudo password prompts"""
@@ -282,7 +282,7 @@ class InteractiveTerminalAgent:
                 await self._send_to_chat(f"$ {user_input}")
 
         except Exception as e:
-            logger.error(f"Error sending input: {e}")
+            logger.error("Error sending input: %s", e)
             await self._send_error(f"Failed to send input: {str(e)}")
 
     async def take_control(self):
@@ -348,7 +348,7 @@ class InteractiveTerminalAgent:
 
             await self._send_to_chat(f"\n[Signal {signal_type} sent]\n")
         except Exception as e:
-            logger.error(f"Error sending signal: {e}")
+            logger.error("Error sending signal: %s", e)
 
     async def _handle_session_end(self):
         """Handle terminal session end (thread-safe)"""
@@ -433,4 +433,4 @@ class InteractiveTerminalAgent:
         self.slave_fd = None
         self.process = None
 
-        logger.info(f"Cleaned up terminal session for chat {self.chat_id}")
+        logger.info("Cleaned up terminal session for chat %s", self.chat_id)

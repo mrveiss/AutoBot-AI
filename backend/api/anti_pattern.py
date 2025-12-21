@@ -214,7 +214,7 @@ async def analyze_anti_patterns(request: AnalysisRequest):
     Returns severity-scored issues with actionable refactoring suggestions.
     """
     try:
-        logger.info(f"Starting anti-pattern analysis: {request.root_path}")
+        logger.info("Starting anti-pattern analysis: %s", request.root_path)
 
         detector = await _get_detector()
         report = await detector.analyze(
@@ -239,12 +239,12 @@ async def analyze_anti_patterns(request: AnalysisRequest):
         )
 
         # Issue #372: Use model method for log summary
-        logger.info(f"Anti-pattern analysis complete: {report.get_log_summary()}")
+        logger.info("Anti-pattern analysis complete: %s", report.get_log_summary())
 
         return response
 
     except Exception as e:
-        logger.error(f"Anti-pattern analysis failed: {e}")
+        logger.error("Anti-pattern analysis failed: %s", e)
         raise HTTPException(
             status_code=500,
             detail=f"Analysis failed: {str(e)}"
@@ -285,7 +285,7 @@ async def get_cached_analysis():
             )
 
     except Exception as e:
-        logger.error(f"Failed to retrieve cached analysis: {e}")
+        logger.error("Failed to retrieve cached analysis: %s", e)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to retrieve cache: {str(e)}"
@@ -337,7 +337,7 @@ async def detect_god_classes(request: AnalysisRequest):
         )
 
     except Exception as e:
-        logger.error(f"God class detection failed: {e}")
+        logger.error("God class detection failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -381,7 +381,7 @@ async def detect_circular_dependencies(request: AnalysisRequest):
         )
 
     except Exception as e:
-        logger.error(f"Circular dependency detection failed: {e}")
+        logger.error("Circular dependency detection failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -426,7 +426,7 @@ async def detect_feature_envy(request: AnalysisRequest):
         )
 
     except Exception as e:
-        logger.error(f"Feature envy detection failed: {e}")
+        logger.error("Feature envy detection failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -481,7 +481,7 @@ async def detect_code_smells(request: AnalysisRequest):
         )
 
     except Exception as e:
-        logger.error(f"Code smell detection failed: {e}")
+        logger.error("Code smell detection failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -525,7 +525,7 @@ async def detect_dead_code(request: AnalysisRequest):
         )
 
     except Exception as e:
-        logger.error(f"Dead code detection failed: {e}")
+        logger.error("Dead code detection failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -577,7 +577,7 @@ async def get_health_score(request: AnalysisRequest):
         )
 
     except Exception as e:
-        logger.error(f"Health score calculation failed: {e}")
+        logger.error("Health score calculation failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -75,7 +75,7 @@ async def execute_command(request: SandboxExecuteRequest):
     - Security event logging
     """
     try:
-        logger.info(f"Sandbox execution request: {request.command[:50]}...")
+        logger.info("Sandbox execution request: %s...", request.command[:50])
 
         # Validate security level
         try:
@@ -126,7 +126,7 @@ async def execute_command(request: SandboxExecuteRequest):
         )
 
     except Exception as e:
-        logger.error(f"Sandbox execution error: {e}")
+        logger.error("Sandbox execution error: %s", e)
         return error_response(
             error=f"Sandbox execution failed: {str(e)}",
             status_code=500,
@@ -149,7 +149,7 @@ async def execute_script(request: SandboxScriptRequest):
     - python/python3: Python scripts
     """
     try:
-        logger.info(f"Sandbox script execution: {request.language}")
+        logger.info("Sandbox script execution: %s", request.language)
 
         # Validate security level
         try:
@@ -202,7 +202,7 @@ async def execute_script(request: SandboxScriptRequest):
         )
 
     except Exception as e:
-        logger.error(f"Script execution error: {e}")
+        logger.error("Script execution error: %s", e)
         return error_response(
             error=f"Script execution failed: {str(e)}",
             status_code=500,
@@ -226,7 +226,7 @@ async def execute_batch(request: SandboxBatchRequest):
     - Aggregate results
     """
     try:
-        logger.info(f"Batch execution: {len(request.commands)} commands")
+        logger.info("Batch execution: %s commands", len(request.commands))
 
         # Validate security level
         try:
@@ -290,7 +290,7 @@ async def execute_batch(request: SandboxBatchRequest):
         )
 
     except Exception as e:
-        logger.error(f"Batch execution error: {e}")
+        logger.error("Batch execution error: %s", e)
         return error_response(
             error=f"Batch execution failed: {str(e)}",
             status_code=500,
@@ -341,7 +341,7 @@ async def get_sandbox_stats():
         )
 
     except Exception as e:
-        logger.error(f"Stats retrieval error: {e}")
+        logger.error("Stats retrieval error: %s", e)
         return error_response(
             error=f"Failed to get stats: {str(e)}",
             status_code=500,

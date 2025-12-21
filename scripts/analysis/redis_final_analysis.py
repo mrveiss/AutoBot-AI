@@ -98,7 +98,7 @@ class AutoBotVectorStoreAnalysis:
             return analysis
 
         except Exception as e:
-            logger.error(f"❌ Deep analysis failed: {e}")
+            logger.error("❌ Deep analysis failed: %s", e)
             return {}
 
     def _extract_vector_config(self, index_info: Dict) -> Dict[str, Any]:
@@ -116,7 +116,7 @@ class AutoBotVectorStoreAnalysis:
                             'dimensions': attrs[i + 5] if i + 5 < len(attrs) else 'unknown'
                         }
         except Exception as e:
-            logger.warning(f"Could not extract vector config: {e}")
+            logger.warning("Could not extract vector config: %s", e)
         return {}
 
     def _identify_compatibility_issues(self, field_analysis: Dict) -> List[str]:
@@ -195,18 +195,18 @@ class AutoBotVectorStoreAnalysis:
             nodes = await asyncio.to_thread(retriever.retrieve, "deployment configuration")
 
             result_count = len(nodes)
-            logger.info(f"✅ LlamaIndex field fix test: {result_count} results")
+            logger.info("✅ LlamaIndex field fix test: %s results", result_count)
 
             if result_count > 0:
                 for i, node in enumerate(nodes[:2]):
-                    logger.info(f"  Result {i+1}: {node.text[:100] if hasattr(node, 'text') else 'No text'}...")
+                    logger.info("  Result %s: %s...", i+1, node.text[:100] if hasattr(node, 'text') else 'No text')
 
             fixes_attempted.append(f"Successfully retrieved {result_count} results using retriever")
 
             return True, result_count, fixes_attempted
 
         except Exception as e:
-            logger.error(f"❌ LlamaIndex field fix failed: {e}")
+            logger.error("❌ LlamaIndex field fix failed: %s", e)
             fixes_attempted.append(f"FAILED: {str(e)}")
             return False, 0, fixes_attempted
 
@@ -253,14 +253,14 @@ class AutoBotVectorStoreAnalysis:
             )
 
             result_count = len(results)
-            logger.info(f"✅ LangChain DB0 test: {result_count} results")
+            logger.info("✅ LangChain DB0 test: %s results", result_count)
 
             fixes_attempted.append(f"Successfully searched and found {result_count} results")
 
             return True, result_count, fixes_attempted
 
         except Exception as e:
-            logger.error(f"❌ LangChain DB0 test failed: {e}")
+            logger.error("❌ LangChain DB0 test failed: %s", e)
             fixes_attempted.append(f"FAILED: {str(e)}")
             return False, 0, fixes_attempted
 
@@ -518,7 +518,7 @@ class AutoBotVectorStoreAnalysis:
                     node = nodes[0]
                     if hasattr(node, 'text') and node.text:
                         fixes_attempted.append("Nodes have valid text content")
-                        logger.info(f"Sample text: {node.text[:100]}...")
+                        logger.info("Sample text: %s...", node.text[:100])
                     else:
                         fixes_attempted.append("WARNING: Nodes missing text content")
 
@@ -548,7 +548,7 @@ class AutoBotVectorStoreAnalysis:
                 return result_count > 0, result_count, fixes_attempted
 
         except Exception as e:
-            logger.error(f"❌ LlamaIndex test failed: {e}")
+            logger.error("❌ LlamaIndex test failed: %s", e)
             fixes_attempted.append(f"FAILED: {str(e)}")
             return False, 0, fixes_attempted
 
@@ -602,11 +602,11 @@ class AutoBotVectorStoreAnalysis:
             result_count = len(results)
             fixes_attempted.append(f"Search returned {result_count} results")
 
-            logger.info(f"✅ LangChain DB0 successful: {result_count} results")
+            logger.info("✅ LangChain DB0 successful: %s results", result_count)
             return True, result_count, fixes_attempted
 
         except Exception as e:
-            logger.error(f"❌ LangChain DB0 failed: {e}")
+            logger.error("❌ LangChain DB0 failed: %s", e)
             fixes_attempted.append(f"FAILED: {str(e)}")
             return False, 0, fixes_attempted
 

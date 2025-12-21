@@ -46,7 +46,7 @@ class TerminalAuditLogger:
         self.audit_log.append(log_entry)
 
         # Also log to system logger for persistent audit trail
-        logger.info(f"Terminal audit: {json.dumps(log_entry)}")
+        logger.info("Terminal audit: %s", json.dumps(log_entry))
 
     def log_message_received(self, message_type: str) -> None:
         """Log message received event"""

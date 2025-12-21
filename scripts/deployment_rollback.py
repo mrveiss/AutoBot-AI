@@ -540,25 +540,29 @@ class RollbackManager:
                 self.print_step(
                     f"Restoring from git version: {target_version}", "running"
                 )
-                result = subprocess.run(
-                    ["git", "checkout", target_version],
+                # Issue #479: Use async subprocess
+                process = await asyncio.create_subprocess_exec(
+                    "git", "checkout", target_version,
                     cwd=self.project_root,
-                    capture_output=True,
-                    text=True,
-                    check=False,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
                 )
+                stdout, stderr = await process.communicate()
 
-                if result.returncode == 0:
+                if process.returncode == 0:
                     # Reinstall dependencies
                     self.print_step("Reinstalling dependencies...", "running")
-                    subprocess.run(
-                        ["pip", "install", "-r", "requirements.txt"],
+                    # Issue #479: Use async subprocess
+                    pip_process = await asyncio.create_subprocess_exec(
+                        "pip", "install", "-r", "requirements.txt",
                         cwd=self.project_root,
-                        check=False,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
                     )
+                    await pip_process.communicate()
                     return True
                 else:
-                    self.print_step(f"Git checkout failed: {result.stderr}", "error")
+                    self.print_step(f"Git checkout failed: {stderr.decode()}", "error")
                     return False
 
             self.print_step(f"Unknown target version: {target_version}", "error")

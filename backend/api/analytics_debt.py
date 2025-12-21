@@ -423,7 +423,7 @@ def _get_problems_from_chromadb(code_collection) -> List[Dict[str, Any]]:
             return []
         return [_extract_problem_from_meta(meta) for meta in problems_result["metadatas"]]
     except Exception as e:
-        logger.warning(f"ChromaDB query failed: {e}")
+        logger.warning("ChromaDB query failed: %s", e)
         return []
 
 
@@ -441,7 +441,7 @@ async def _get_antipatterns_from_redis(redis_client) -> List[Dict[str, Any]]:
         ap_results = json.loads(ap_data)
         return ap_results.get("anti_patterns", [])
     except Exception as e:
-        logger.warning(f"Redis anti-pattern fetch failed: {e}")
+        logger.warning("Redis anti-pattern fetch failed: %s", e)
         return []
 
 
@@ -455,7 +455,7 @@ def _store_debt_result(debt_result: Dict[str, Any]) -> None:
         debt_redis.set(key, json.dumps(debt_result), ex=86400 * 30)  # Keep 30 days
         debt_redis.set(f"{DEBT_PREFIX}latest", key)
     except Exception as e:
-        logger.warning(f"Failed to store debt calculation: {e}")
+        logger.warning("Failed to store debt calculation: %s", e)
 
 
 def _decode_redis_value(value: Any) -> Optional[str]:
@@ -479,7 +479,7 @@ def _get_latest_debt_data() -> Optional[Dict[str, Any]]:
             return None
         return json.loads(debt_data)
     except Exception as e:
-        logger.warning(f"Redis fetch failed: {e}")
+        logger.warning("Redis fetch failed: %s", e)
         return None
 
 
@@ -516,7 +516,7 @@ async def calculate_technical_debt(request: DebtCalculationRequest):
         )
 
     except Exception as e:
-        logger.error(f"Debt calculation failed: {e}")
+        logger.error("Debt calculation failed: %s", e)
         return JSONResponse(
             status_code=500, content={"status": "error", "message": str(e)}
         )
@@ -610,7 +610,7 @@ def _get_debt_trend_data() -> List[Dict[str, Any]]:
                 "total_cost_usd": summary.get("total_cost_usd", 0),
             })
     except Exception as e:
-        logger.warning(f"Redis trend fetch failed: {e}")
+        logger.warning("Redis trend fetch failed: %s", e)
     return trend_data
 
 

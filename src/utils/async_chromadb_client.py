@@ -415,11 +415,11 @@ async def get_async_chromadb_client(
         async_client = AsyncChromaClient(sync_client)
         _async_client_cache[db_path] = async_client
 
-        logger.info(f"Async ChromaDB client initialized at: {chroma_path}")
+        logger.info("Async ChromaDB client initialized at: %s", chroma_path)
         return async_client
 
     except Exception as e:
-        logger.error(f"Failed to initialize async ChromaDB client: {e}")
+        logger.error("Failed to initialize async ChromaDB client: %s", e)
         raise
 
 

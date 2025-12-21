@@ -64,11 +64,11 @@ class PathsManager:
             # Cache the paths
             PathsManager._paths_cache = paths_config
             PathsManager._cache_timestamp = time.time()
-            logger.debug(f"Paths cached for {PathsManager.CACHE_DURATION} seconds")
+            logger.debug("Paths cached for %s seconds", PathsManager.CACHE_DURATION)
 
             return paths_config
         except Exception as e:
-            logger.error(f"Error getting paths config: {str(e)}")
+            logger.error("Error getting paths config: %s", str(e))
             # Return cached paths if available, even if refresh failed
             if PathsManager._paths_cache is not None:
                 logger.warning("Returning cached paths due to refresh failure")
@@ -142,7 +142,7 @@ class PathsManager:
             path.mkdir(parents=True, exist_ok=True)
             return path
         except Exception as e:
-            logger.error(f"Failed to create directory {path}: {str(e)}")
+            logger.error("Failed to create directory %s: %s", path, str(e))
             raise
 
     @staticmethod
@@ -159,7 +159,7 @@ class PathsManager:
             # Fall back to paths configuration
             return PathsManager.get_log_path("audit")
         except Exception as e:
-            logger.error(f"Error getting audit log path: {str(e)}")
+            logger.error("Error getting audit log path: %s", str(e))
             # Ultimate fallback
             return Path("logs/audit.log")
 
@@ -177,7 +177,7 @@ class PathsManager:
             # Fall back to paths configuration
             return PathsManager.get_data_path("chats")
         except Exception as e:
-            logger.error(f"Error getting chat data directory: {str(e)}")
+            logger.error("Error getting chat data directory: %s", str(e))
             # Ultimate fallback
             return Path("data/chats")
 
@@ -195,7 +195,7 @@ class PathsManager:
             # Fall back to paths configuration
             return PathsManager.get_data_path("chat_history.json")
         except Exception as e:
-            logger.error(f"Error getting chat history file path: {str(e)}")
+            logger.error("Error getting chat history file path: %s", str(e))
             # Ultimate fallback
             return Path("data/chat_history.json")
 
@@ -213,7 +213,7 @@ class PathsManager:
             # Fall back to paths configuration
             return PathsManager.get_data_path("knowledge_base.db")
         except Exception as e:
-            logger.error(f"Error getting knowledge base database path: {str(e)}")
+            logger.error("Error getting knowledge base database path: %s", str(e))
             # Ultimate fallback
             return Path("data/knowledge_base.db")
 
@@ -231,7 +231,7 @@ class PathsManager:
             # Fall back to paths configuration
             return PathsManager.get_data_path("reliability_stats.json")
         except Exception as e:
-            logger.error(f"Error getting reliability stats file path: {str(e)}")
+            logger.error("Error getting reliability stats file path: %s", str(e))
             # Ultimate fallback
             return Path("data/reliability_stats.json")
 
@@ -250,7 +250,7 @@ class PathsManager:
             # Fall back to paths configuration
             return PathsManager.get_data_path("chromadb")
         except Exception as e:
-            logger.error(f"Error getting ChromaDB path: {str(e)}")
+            logger.error("Error getting ChromaDB path: %s", str(e))
             # Ultimate fallback
             return Path("data/chromadb")
 

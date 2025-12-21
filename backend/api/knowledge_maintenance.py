@@ -68,7 +68,7 @@ def _process_fact_metadata(metadata_str, fact_key, created_at) -> dict | None:
             "title": metadata.get("title", "unknown"),
         }
     except json.JSONDecodeError:
-        logger.warning(f"Failed to parse metadata for {fact_key}")
+        logger.warning("Failed to parse metadata for %s", fact_key)
         return None
 
 
@@ -189,7 +189,7 @@ async def deduplicate_facts(req: Request, dry_run: bool = True):
     if kb is None:
         raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
-    logger.info(f"Starting deduplication scan (dry_run={dry_run})...")
+    logger.info("Starting deduplication scan (dry_run=%s)...", dry_run)
 
     # Scan and group facts
     fact_groups, total_facts = await _scan_all_facts(kb)
@@ -203,9 +203,9 @@ async def deduplicate_facts(req: Request, dry_run: bool = True):
     # Delete duplicates if not dry run
     deleted_count = 0
     if not dry_run and facts_to_delete:
-        logger.info(f"Deleting {len(facts_to_delete)} duplicate facts...")
+        logger.info("Deleting %s duplicate facts...", len(facts_to_delete))
         deleted_count = await _delete_facts_in_batches(kb, facts_to_delete)
-        logger.info(f"Deleted {deleted_count} duplicate facts")
+        logger.info("Deleted %s duplicate facts", deleted_count)
 
     return {
         "status": "success",
@@ -465,7 +465,7 @@ async def _vectorize_single_document(
             })
 
     except Exception as e:
-        logger.error(f"Vectorization failed for {command}: {e}")
+        logger.error("Vectorization failed for %s: %s", command, e)
         results["failed"] += 1
         results["details"].append({
             "doc_id": doc_id,
@@ -591,7 +591,7 @@ def _check_orphaned_fact(key: str, metadata_str) -> tuple:
     try:
         metadata = json.loads(metadata_str)
     except json.JSONDecodeError:
-        logger.warning(f"Failed to parse metadata for {key}")
+        logger.warning("Failed to parse metadata for %s", key)
         return False, False, None
 
     file_path = metadata.get("file_path")
@@ -732,7 +732,7 @@ async def cleanup_orphaned_facts(req: Request, dry_run: bool = True):
     # Delete orphans if not dry run
     deleted_count = 0
     if not dry_run:
-        logger.info(f"Deleting {len(orphaned_facts)} orphaned facts...")
+        logger.info("Deleting %s orphaned facts...", len(orphaned_facts))
 
         fact_keys = [f["fact_key"] for f in orphaned_facts]
 
@@ -748,7 +748,7 @@ async def cleanup_orphaned_facts(req: Request, dry_run: bool = True):
 
         deleted_count = await asyncio.to_thread(_delete_orphan_batches)
 
-        logger.info(f"Deleted {deleted_count} orphaned facts")
+        logger.info("Deleted %s orphaned facts", deleted_count)
 
     return {
         "status": "success",
@@ -1043,7 +1043,7 @@ async def delete_fact(
             detail="Delete operation not supported by current knowledge base implementation",
         )
 
-    logger.info(f"Deleting fact {fact_id}")
+    logger.info("Deleting fact %s", fact_id)
 
     # Call delete_fact method
     result = await kb.delete_fact(fact_id=fact_id)
@@ -1097,7 +1097,7 @@ async def bulk_delete_facts(request: BulkDeleteRequest, req: Request):
             detail="Knowledge base not initialized",
         )
 
-    logger.info(f"Bulk delete request: {len(request.fact_ids)} facts, confirm={request.confirm}")
+    logger.info("Bulk delete request: %s facts, confirm=%s", len(request.fact_ids), request.confirm)
 
     result = await kb.bulk_delete(
         fact_ids=request.fact_ids,
@@ -1330,7 +1330,7 @@ async def list_backups(
             detail="Knowledge base not initialized",
         )
 
-    logger.info(f"List backups request: limit={limit}")
+    logger.info("List backups request: limit=%s", limit)
 
     result = await kb.list_backups(limit=limit)
 
@@ -1363,7 +1363,7 @@ async def delete_backup(request: DeleteBackupRequest, req: Request):
             detail="Knowledge base not initialized",
         )
 
-    logger.info(f"Delete backup request: file={request.backup_file}")
+    logger.info("Delete backup request: file=%s", request.backup_file)
 
     result = await kb.delete_backup(backup_file=request.backup_file)
 

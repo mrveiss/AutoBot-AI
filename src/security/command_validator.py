@@ -38,7 +38,7 @@ class CommandValidator:
             with open(config_path, "r") as f:
                 return json.load(f)
         except Exception as e:
-            logger.error(f"Failed to load command config: {e}")
+            logger.error("Failed to load command config: %s", e)
             # Return minimal safe defaults
             return {
                 "commands": {
@@ -82,9 +82,7 @@ class CommandValidator:
         # Security check - ensure command is not blocked
         is_blocked, reason = self.is_command_blocked(command)
         if is_blocked:
-            logger.warning(
-                f"Allowed command blocked by safety check: {command} - {reason}"
-            )
+            logger.warning("Allowed command blocked by safety check: %s - %s", command, reason)
             return None
 
         return {
@@ -150,16 +148,13 @@ class CommandValidator:
                 command_info = self.get_allowed_command(query_type, message)
 
                 if command_info:
-                    logger.info(
-                        f"Validated command request: {query_type} -> "
-                        f"{command_info['command']}"
-                    )
+                    logger.info("Validated command request: %s -> ", query_type)
                     return command_info
 
             # Check for explicit command requests (but don't execute them)
             # Issue #380: Use module-level frozenset
             if any(word in message.lower() for word in _COMMAND_REQUEST_KEYWORDS):
-                logger.warning(f"Blocked explicit command request: {message}")
+                logger.warning("Blocked explicit command request: %s", message)
                 return {
                     "type": "blocked",
                     "command": "BLOCKED",
@@ -170,7 +165,7 @@ class CommandValidator:
             return None
 
         except Exception as e:
-            logger.error(f"Command validation error: {e}")
+            logger.error("Command validation error: %s", e)
             return None
 
     def get_available_commands(self) -> Dict:

@@ -76,7 +76,7 @@ class SecureIntelligentAgentMixin:
 
         if result.blocked:
             logger.error("🚨 BLOCKED: User input contains injection patterns")
-            logger.error(f"Patterns: {result.detected_patterns}")
+            logger.error("Patterns: %s", result.detected_patterns)
             raise ValueError(
                 "User input blocked due to security policy violation: "
                 f"{result.detected_patterns}"
@@ -144,9 +144,7 @@ class SecureIntelligentAgentMixin:
                 }
             )
 
-        logger.info(
-            f"✅ Securely parsed {len(command_dicts)} commands from LLM response"
-        )
+        logger.info("✅ Securely parsed %s commands from LLM response", len(command_dicts))
 
         return command_dicts
 
@@ -166,7 +164,7 @@ class SecureIntelligentAgentMixin:
         Returns:
             Execution result with security metadata
         """
-        logger.info(f"Executing command with security validation: {command}")
+        logger.info("Executing command with security validation: %s", command)
 
         # Execute through enhanced security layer
         result = await self.security_layer.execute_command(
@@ -213,7 +211,7 @@ PATCH_INSTRUCTIONS = """
 4. SANITIZE USER INPUT (in process_natural_language_goal method, line ~194):
 
    # BEFORE:
-   logger.info(f"Processing natural language goal: {user_input}")
+   logger.info("Processing natural language goal: %s", user_input)
 
    # AFTER:
    # Layer 1: Sanitize user input for injection attempts
@@ -229,7 +227,7 @@ PATCH_INSTRUCTIONS = """
            return
        user_input = result.sanitized_text
    except Exception as e:
-       logger.error(f"Security validation error: {e}")
+       logger.error("Security validation error: %s", e)
        yield StreamChunk(
            timestamp=self._get_timestamp(),
            chunk_type=ChunkType.ERROR,
@@ -238,7 +236,7 @@ PATCH_INSTRUCTIONS = """
        )
        return
 
-   logger.info(f"Processing sanitized goal: {user_input}")
+   logger.info("Processing sanitized goal: %s", user_input)
 
 5. VALIDATE CONVERSATION CONTEXT (in process_natural_language_goal, before adding to context):
 
@@ -261,7 +259,7 @@ PATCH_INSTRUCTIONS = """
            )
            return
    except Exception as e:
-       logger.warning(f"Context validation warning: {e}")
+       logger.warning("Context validation warning: %s", e)
 
    self.state.conversation_context.append({...})
 
@@ -287,7 +285,7 @@ PATCH_INSTRUCTIONS = """
                "validation_metadata": validated.validation_metadata
            })
 
-       logger.info(f"✅ Securely parsed {len(command_dicts)} commands")
+       logger.info("✅ Securely parsed %s commands", len(command_dicts))
        return command_dicts
 
 7. UPDATE _handle_complex_goal (line ~446 - add user_goal parameter):

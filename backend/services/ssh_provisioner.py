@@ -95,7 +95,7 @@ class SSHKeyProvisioner:
         Returns:
             Connected SSHClient instance
         """
-        logger.info(f"Connecting to {host_ip}:{port} with password authentication")
+        logger.info("Connecting to %s:%s with password authentication", host_ip, port)
         ssh = paramiko.SSHClient()
         # Internal VM infrastructure (172.16.168.x), keys change on reprovision
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # nosec B507
@@ -193,7 +193,7 @@ class SSHKeyProvisioner:
             try:
                 ssh.close()
             except Exception as e:
-                logger.warning(f"Error closing SSH connection: {e}")
+                logger.warning("Error closing SSH connection: %s", e)
 
     def provision_key(
         self, host_ip: str, port: int, username: str, password: str
@@ -225,7 +225,7 @@ class SSHKeyProvisioner:
             paramiko.SSHException: If SSH connection fails
             Exception: If key provisioning fails
         """
-        logger.info(f"Starting SSH key provisioning for {username}@{host_ip}:{port}")
+        logger.info("Starting SSH key provisioning for %s@%s:%s", username, host_ip, port)
 
         # Generate key pair (Issue #281: uses helper)
         private_pem, pub_key_with_comment, public_key = self._generate_rsa_keypair(host_ip)
@@ -247,24 +247,24 @@ class SSHKeyProvisioner:
             # Verify key authentication (Issue #281: uses helper)
             self._verify_key_authentication(host_ip, port, username, private_key_str)
 
-            logger.info(f"SSH key provisioning successful for {username}@{host_ip}")
+            logger.info("SSH key provisioning successful for %s@%s", username, host_ip)
 
             # Calculate public key fingerprint for verification
             fingerprint = self._get_key_fingerprint(public_key)
-            logger.info(f"Public key fingerprint: {fingerprint}")
+            logger.info("Public key fingerprint: %s", fingerprint)
 
             return (private_key_str, pub_key_with_comment)
 
         except paramiko.AuthenticationException as e:
-            logger.error(f"Authentication failed for {username}@{host_ip}: {e}")
+            logger.error("Authentication failed for %s@%s: %s", username, host_ip, e)
             raise Exception(f"Password authentication failed: {str(e)}")
 
         except paramiko.SSHException as e:
-            logger.error(f"SSH connection failed for {host_ip}:{port}: {e}")
+            logger.error("SSH connection failed for %s:%s: %s", host_ip, port, e)
             raise Exception(f"SSH connection failed: {str(e)}")
 
         except Exception as e:
-            logger.exception(f"SSH key provisioning failed for {host_ip}: {e}")
+            logger.exception("SSH key provisioning failed for %s: %s", host_ip, e)
             raise
 
         finally:
@@ -344,7 +344,7 @@ class SSHKeyProvisioner:
             True if authentication successful, False otherwise
         """
         try:
-            logger.info(f"Testing key authentication for {username}@{host_ip}")
+            logger.info("Testing key authentication for %s@%s", username, host_ip)
 
             # Load private key from in-memory string
             private_key_file = StringIO(private_key_content)
@@ -368,9 +368,9 @@ class SSHKeyProvisioner:
 
             ssh.close()
 
-            logger.info(f"Key authentication successful for {username}@{host_ip}")
+            logger.info("Key authentication successful for %s@%s", username, host_ip)
             return True
 
         except Exception as e:
-            logger.error(f"Key authentication failed for {username}@{host_ip}: {e}")
+            logger.error("Key authentication failed for %s@%s: %s", username, host_ip, e)
             return False

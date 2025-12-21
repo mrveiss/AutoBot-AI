@@ -46,7 +46,7 @@ def _process_data_type_stats_results(
     data_type_stats = {}
     for dt, dt_stats in zip(data_types, stats_results):
         if isinstance(dt_stats, Exception):
-            logger.error(f"Error getting stats for {dt}: {dt_stats}")
+            logger.error("Error getting stats for %s: %s", dt, dt_stats)
             data_type_stats[dt] = {"error": str(dt_stats)}
         else:
             data_type_stats[dt] = dt_stats
@@ -88,7 +88,7 @@ async def get_cache_stats(data_type: Optional[str] = Query(None)):
         return CacheStatsResponse(**global_stats)
 
     except Exception as e:
-        logger.error(f"Error getting cache stats: {e}")
+        logger.error("Error getting cache stats: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Error getting cache stats: {str(e)}"
         )
@@ -114,7 +114,7 @@ async def warm_cache(request: CacheWarmingRequest):
                 else:
                     failed_types.append(data_type)
             except Exception as e:
-                logger.error(f"Error warming cache for {data_type}: {e}")
+                logger.error("Error warming cache for %s: %s", data_type, e)
                 failed_types.append(data_type)
 
         return {
@@ -125,7 +125,7 @@ async def warm_cache(request: CacheWarmingRequest):
         }
 
     except Exception as e:
-        logger.error(f"Error warming cache: {e}")
+        logger.error("Error warming cache: %s", e)
         raise HTTPException(status_code=500, detail=f"Error warming cache: {str(e)}")
 
 
@@ -153,7 +153,7 @@ async def invalidate_cache(
         }
 
     except Exception as e:
-        logger.error(f"Error invalidating cache: {e}")
+        logger.error("Error invalidating cache: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Error invalidating cache: {str(e)}"
         )
@@ -184,7 +184,7 @@ async def clear_all_cache():
         }
 
     except Exception as e:
-        logger.error(f"Error clearing cache: {e}")
+        logger.error("Error clearing cache: %s", e)
         raise HTTPException(status_code=500, detail=f"Error clearing cache: {str(e)}")
 
 
@@ -215,7 +215,7 @@ async def _warm_templates_cache() -> bool:
             {"success": True, "template": template_detail.to_detail_dict()},
         )
 
-    logger.info(f"Warmed cache for {len(templates)} templates")
+    logger.info("Warmed cache for %s templates", len(templates))
     return True
 
 
@@ -239,7 +239,7 @@ async def _warm_system_status_cache() -> bool:
         logger.info("Warmed cache for system health status")
         return True
     except Exception as e:
-        logger.error(f"Error warming system status cache: {e}")
+        logger.error("Error warming system status cache: %s", e)
         return False
 
 
@@ -259,7 +259,7 @@ async def _warm_project_status_cache() -> bool:
         logger.info("Warmed cache for project status")
         return True
     except Exception as e:
-        logger.error(f"Error warming project status cache: {e}")
+        logger.error("Error warming project status cache: %s", e)
         return False
 
 
@@ -275,11 +275,11 @@ async def _warm_data_type(data_type: str, force_refresh: bool = False) -> bool:
         if data_type == "project_status":
             return await _warm_project_status_cache()
 
-        logger.warning(f"No warming strategy defined for data type: {data_type}")
+        logger.warning("No warming strategy defined for data type: %s", data_type)
         return False
 
     except Exception as e:
-        logger.error(f"Error warming cache for {data_type}: {e}")
+        logger.error("Error warming cache for %s: %s", data_type, e)
         return False
 
 
@@ -305,7 +305,7 @@ async def cache_health_check():
         }
 
     except Exception as e:
-        logger.error(f"Error checking cache health: {e}")
+        logger.error("Error checking cache health: %s", e)
         return {"status": "unhealthy", "error": str(e)}
 
 
@@ -322,11 +322,11 @@ async def warm_startup_cache():
                 success = await _warm_data_type(data_type)
                 if success:
                     warmed_count += 1
-                    logger.info(f"Successfully warmed cache for {data_type}")
+                    logger.info("Successfully warmed cache for %s", data_type)
                 else:
-                    logger.warning(f"Failed to warm cache for {data_type}")
+                    logger.warning("Failed to warm cache for %s", data_type)
             except Exception as e:
-                logger.error(f"Error warming {data_type} during startup: {e}")
+                logger.error("Error warming %s during startup: %s", data_type, e)
 
         logger.info(
             f"Startup cache warming completed: "
@@ -335,5 +335,5 @@ async def warm_startup_cache():
         return warmed_count
 
     except Exception as e:
-        logger.error(f"Error during startup cache warming: {e}")
+        logger.error("Error during startup cache warming: %s", e)
         return 0

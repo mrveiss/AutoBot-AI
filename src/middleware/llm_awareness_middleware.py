@@ -88,7 +88,7 @@ class LLMAwarenessMiddleware(BaseHTTPMiddleware):
             logger.info("LLM awareness middleware initialized")
             return True
         except Exception as e:
-            logger.error(f"Failed to initialize LLM awareness: {e}")
+            logger.error("Failed to initialize LLM awareness: %s", e)
             return False
 
     async def _inject_awareness_into_field(
@@ -124,10 +124,10 @@ class LLMAwarenessMiddleware(BaseHTTPMiddleware):
             modified_body = await self._inject_awareness_into_field(request_data, field)
             request._body = modified_body
             _update_request_headers(request, modified_body)
-            logger.debug(f"Injected awareness context for {field} in {request.url.path}")
+            logger.debug("Injected awareness context for %s in %s", field, request.url.path)
 
         except Exception as e:
-            logger.error(f"Error injecting awareness context: {e}")
+            logger.error("Error injecting awareness context: %s", e)
 
     async def dispatch(self, request: Request, call_next):
         """Process request and inject awareness context if needed"""
@@ -155,7 +155,7 @@ class LLMAwarenessMiddleware(BaseHTTPMiddleware):
                         context["current_capabilities"]["count"]
                     )
             except Exception as e:
-                logger.error(f"Error adding awareness headers: {e}")
+                logger.error("Error adding awareness headers: %s", e)
 
         return response
 
@@ -179,7 +179,7 @@ class LLMAwarenessMiddleware(BaseHTTPMiddleware):
                 return self.context_cache
 
         except Exception as e:
-            logger.error(f"Error getting cached context: {e}")
+            logger.error("Error getting cached context: %s", e)
 
         return None
 
@@ -200,7 +200,7 @@ class LLMAwarenessInjector:
                 message, context_level=context_level
             )
         except Exception as e:
-            logger.error(f"Error in manual awareness injection: {e}")
+            logger.error("Error in manual awareness injection: %s", e)
             return message
 
     async def get_system_prompt_prefix(self, detailed: bool = False) -> str:
@@ -227,7 +227,7 @@ Active capabilities ({context['current_capabilities']['count']}):"""
             return prefix
 
         except Exception as e:
-            logger.error(f"Error creating system prompt prefix: {e}")
+            logger.error("Error creating system prompt prefix: %s", e)
             return "You are AutoBot, an AI assistant.\n"
 
     async def analyze_capability_relevance(self, query: str) -> Dict[str, Any]:
@@ -235,7 +235,7 @@ Active capabilities ({context['current_capabilities']['count']}):"""
         try:
             return await self.awareness.get_phase_aware_response(query)
         except Exception as e:
-            logger.error(f"Error analyzing capability relevance: {e}")
+            logger.error("Error analyzing capability relevance: %s", e)
             return {"error": str(e), "relevant_capabilities": []}
 
 

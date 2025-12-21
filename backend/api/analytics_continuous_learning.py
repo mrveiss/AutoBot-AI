@@ -297,7 +297,7 @@ class LearningPipeline:
             result["processed"] = True
             self.processed_count += 1
         except Exception as e:
-            logger.error(f"Failed to process event {event.event_id}: {e}")
+            logger.error("Failed to process event %s: %s", event.event_id, e)
             result["error"] = str(e)
 
         return result
@@ -308,7 +308,7 @@ class LearningPipeline:
         change_type = event.data.get("change_type", "modified")
 
         # Track for batch scanning
-        logger.debug(f"File change: {change_type} - {file_path}")
+        logger.debug("File change: %s - %s", change_type, file_path)
 
         return f"tracked_{change_type}"
 
@@ -369,7 +369,7 @@ class LearningPipeline:
         threshold_type = event.data.get("threshold_type", "")
         current_value = event.data.get("current_value", 0)
 
-        logger.info(f"Threshold crossed: {threshold_type} = {current_value}")
+        logger.info("Threshold crossed: %s = %s", threshold_type, current_value)
 
         return "threshold_handled"
 
@@ -682,7 +682,7 @@ class FileMonitor:
         )
         self.state = MonitoringState.RUNNING
 
-        logger.info(f"File monitoring started for {len(paths)} paths")
+        logger.info("File monitoring started for %s paths", len(paths))
         return True
 
     async def stop(self) -> bool:
@@ -716,7 +716,7 @@ class FileMonitor:
                 logger.debug("Monitor loop cancelled")
                 break
             except Exception as e:
-                logger.error(f"Monitor loop error: {e}")
+                logger.error("Monitor loop error: %s", e)
 
     async def _scan_files(self):
         """Scan all monitored files."""
@@ -958,7 +958,7 @@ class ContinuousLearningEngine:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Event processing error: {e}")
+                logger.error("Event processing error: %s", e)
 
     async def _generate_insights_loop(self):
         """Periodically generate insights."""
@@ -971,7 +971,7 @@ class ContinuousLearningEngine:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Insight generation error: {e}")
+                logger.error("Insight generation error: %s", e)
 
     async def submit_feedback(
         self, pattern_id: str, is_correct: bool, details: Optional[str] = None

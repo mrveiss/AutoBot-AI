@@ -24,6 +24,29 @@ _cache_ttl: int = 300  # 5 minutes cache
 # Lock for thread-safe cache access
 _cache_lock = asyncio.Lock()
 
+# Issue #514: Per-file locking to prevent concurrent write corruption
+_prompt_file_locks: Dict[str, asyncio.Lock] = {}
+_prompt_locks_lock = asyncio.Lock()
+
+
+async def _get_prompt_file_lock(filepath: str) -> asyncio.Lock:
+    """
+    Get or create a lock for a specific prompt file path (Issue #514).
+
+    Uses per-file locking to allow concurrent writes to different prompts
+    while preventing corruption from concurrent writes to the same file.
+
+    Args:
+        filepath: Absolute path to the prompt file
+
+    Returns:
+        asyncio.Lock for the specified file
+    """
+    async with _prompt_locks_lock:
+        if filepath not in _prompt_file_locks:
+            _prompt_file_locks[filepath] = asyncio.Lock()
+        return _prompt_file_locks[filepath]
+
 
 async def _read_prompt_file(
     full_path: str, rel_path: str, entry: str, base_path: str, semaphore: asyncio.Semaphore
@@ -58,10 +81,10 @@ async def _read_prompt_file(
             return prompt_info, default_info
 
         except asyncio.TimeoutError:
-            logger.warning(f"Timeout reading prompt file {full_path}")
+            logger.warning("Timeout reading prompt file %s", full_path)
             return None, None
         except Exception as e:
-            logger.error(f"Error reading prompt file {full_path}: {str(e)}")
+            logger.error("Error reading prompt file %s: %s", full_path, str(e))
             return None, None
 
 
@@ -74,7 +97,7 @@ def _process_prompt_results(results: list, prompts: list, defaults: dict) -> Non
     """Process gathered prompt results into prompts/defaults (Issue #315: extracted)."""
     for result in results:
         if isinstance(result, Exception):
-            logger.warning(f"File read failed: {result}")
+            logger.warning("File read failed: %s", result)
             continue
         if result is None:
             continue
@@ -99,7 +122,7 @@ async def _load_all_prompts(
     """
     # Collect file read tasks using module-level helper
     file_tasks = await _collect_prompt_files(prompts_dir, "", semaphore)
-    logger.info(f"Found {len(file_tasks)} prompt files to read")
+    logger.info("Found %s prompt files to read", len(file_tasks))
 
     # Execute all file reads concurrently
     results = await asyncio.gather(*file_tasks, return_exceptions=True)
@@ -130,7 +153,7 @@ async def _load_prompts_with_cancellation(
             "prompts_loading",
         )
     except Exception as e:
-        logger.error(f"Prompts loading failed: {str(e)}")
+        logger.error("Prompts loading failed: %s", str(e))
         # Return partial results if we have any
         if not prompts:
             raise HTTPException(
@@ -179,7 +202,7 @@ async def _collect_prompt_files(
         return tasks
 
     except Exception as e:
-        logger.error(f"Error collecting files from {directory}: {e}")
+        logger.error("Error collecting files from %s: %s", directory, e)
         return []
 
 
@@ -220,7 +243,7 @@ async def get_prompts():
         # (Issue #315: inner functions moved to module level to reduce nesting)
         # Issue #358 - avoid blocking
         if not await asyncio.to_thread(os.path.exists, prompts_dir):
-            logger.warning(f"Prompts directory {prompts_dir} not found")
+            logger.warning("Prompts directory %s not found", prompts_dir)
         else:
             await _load_prompts_with_cancellation(
                 prompts_dir, semaphore, prompts, defaults
@@ -231,14 +254,14 @@ async def get_prompts():
             _prompts_cache = {"prompts": prompts, "defaults": defaults}
             _cache_timestamp = current_time
 
-        logger.info(f"Successfully loaded {len(prompts)} prompts")
+        logger.info("Successfully loaded %s prompts", len(prompts))
         return _prompts_cache
 
     except HTTPException:
         # Re-raise HTTP exceptions
         raise
     except Exception as e:
-        logger.error(f"Error getting prompts: {str(e)}", exc_info=True)
+        logger.error("Error getting prompts: %s", str(e), exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error getting prompts: {str(e)}")
 
 
@@ -298,9 +321,12 @@ async def save_prompt(prompt_id: str, request: dict):
         )
 
         # Write the content to the file - PERFORMANCE FIX: Convert to async file I/O
-        async with aiofiles.open(resolved_path, "w", encoding="utf-8") as f:
-            await f.write(content)
-        logger.info(f"Saved prompt {prompt_id} to {file_path}")
+        # Issue #514: Use per-file locking to prevent concurrent write corruption
+        file_lock = await _get_prompt_file_lock(resolved_path)
+        async with file_lock:
+            async with aiofiles.open(resolved_path, "w", encoding="utf-8") as f:
+                await f.write(content)
+        logger.info("Saved prompt %s to %s", prompt_id, file_path)
         # Return the updated prompt data
         prompt_name = os.path.basename(file_path).rsplit(".", 1)[0]
         prompt_type = (
@@ -320,10 +346,10 @@ async def save_prompt(prompt_id: str, request: dict):
             "content": content,
         }
     except OSError as e:
-        logger.error(f"Failed to write prompt file {prompt_id}: {e}")
+        logger.error("Failed to write prompt file %s: %s", prompt_id, e)
         raise HTTPException(status_code=500, detail=f"Failed to save prompt file: {str(e)}")
     except Exception as e:
-        logger.error(f"Error saving prompt {prompt_id}: {str(e)}")
+        logger.error("Error saving prompt %s: %s", prompt_id, str(e))
         raise HTTPException(status_code=500, detail=f"Error saving prompt: {str(e)}")
 
 
@@ -352,9 +378,12 @@ async def revert_prompt(prompt_id: str):
             # Save the default content to the custom prompt location
             custom_file_path = os.path.join(prompts_dir, prompt_id.replace("_", "/"))
             await asyncio.to_thread(os.makedirs, os.path.dirname(custom_file_path), exist_ok=True)
-            async with aiofiles.open(custom_file_path, "w", encoding="utf-8") as f:
-                await f.write(default_content)
-            logger.info(f"Reverted prompt {prompt_id} to default")
+            # Issue #514: Use per-file locking to prevent concurrent write corruption
+            file_lock = await _get_prompt_file_lock(custom_file_path)
+            async with file_lock:
+                async with aiofiles.open(custom_file_path, "w", encoding="utf-8") as f:
+                    await f.write(default_content)
+            logger.info("Reverted prompt %s to default", prompt_id)
             prompt_name = os.path.basename(custom_file_path).rsplit(".", 1)[0]
             prompt_type = (
                 os.path.dirname(custom_file_path).replace(prompts_dir + "/", "")
@@ -373,13 +402,13 @@ async def revert_prompt(prompt_id: str):
                 "content": default_content,
             }
         else:
-            logger.warning(f"No default found for prompt {prompt_id}")
+            logger.warning("No default found for prompt %s", prompt_id)
             raise HTTPException(
                 status_code=404, detail=f"No default prompt found for {prompt_id}"
             )
     except OSError as e:
-        logger.error(f"Failed to read/write prompt file during revert {prompt_id}: {e}")
+        logger.error("Failed to read/write prompt file during revert %s: %s", prompt_id, e)
         raise HTTPException(status_code=500, detail=f"Failed to access prompt file: {str(e)}")
     except Exception as e:
-        logger.error(f"Error reverting prompt {prompt_id}: {str(e)}")
+        logger.error("Error reverting prompt %s: %s", prompt_id, str(e))
         raise HTTPException(status_code=500, detail=f"Error reverting prompt: {str(e)}")

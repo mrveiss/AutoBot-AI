@@ -68,7 +68,7 @@ async def request_elevation(request: ElevationRequest):
             "status": "pending",
         }
 
-    logger.info(f"Elevation requested: {request_id} - {request.operation}")
+    logger.info("Elevation requested: %s - %s", request_id, request.operation)
 
     return {
         "success": True,
@@ -96,7 +96,7 @@ async def authorize_elevation(auth: ElevationAuthorization):
         is_valid = await verify_sudo_password(auth.password)
 
         if not is_valid:
-            logger.warning(f"Invalid sudo password for request {request_id}")
+            logger.warning("Invalid sudo password for request %s", request_id)
             raise HTTPException(status_code=401, detail="Invalid password")
 
         # Create session token
@@ -119,7 +119,7 @@ async def authorize_elevation(auth: ElevationAuthorization):
             pending_requests[request_id]["status"] = "authorized"
             pending_requests[request_id]["session_token"] = session_token
 
-        logger.info(f"Elevation authorized: {request_id}")
+        logger.info("Elevation authorized: %s", request_id)
 
         return {
             "success": True,
@@ -131,13 +131,13 @@ async def authorize_elevation(auth: ElevationAuthorization):
         }
 
     except ValueError as e:
-        logger.error(f"Elevation authorization failed due to invalid input: {e}")
+        logger.error("Elevation authorization failed due to invalid input: %s", e)
         raise HTTPException(status_code=400, detail="Invalid authorization data")
     except (OSError, IOError) as e:
-        logger.error(f"Elevation authorization failed due to system error: {e}")
+        logger.error("Elevation authorization failed due to system error: %s", e)
         raise HTTPException(status_code=500, detail="System error during authorization")
     except Exception as e:
-        logger.error(f"Elevation authorization failed: {e}")
+        logger.error("Elevation authorization failed: %s", e)
         raise HTTPException(status_code=500, detail="Authorization failed")
 
 
@@ -188,7 +188,7 @@ async def execute_elevated_command(session_token: str, command: str):
         # In production, implement proper security controls
         result = await run_elevated_command(command)
 
-        logger.info(f"Elevated command executed: {command}")
+        logger.info("Elevated command executed: %s", command)
 
         return {
             "success": True,
@@ -198,15 +198,15 @@ async def execute_elevated_command(session_token: str, command: str):
         }
 
     except (OSError, IOError) as e:
-        logger.error(f"Failed to execute elevated command due to system error: {e}")
+        logger.error("Failed to execute elevated command due to system error: %s", e)
         raise HTTPException(
             status_code=500, detail="System error during command execution"
         )
     except asyncio.TimeoutError as e:
-        logger.error(f"Failed to execute elevated command due to timeout: {e}")
+        logger.error("Failed to execute elevated command due to timeout: %s", e)
         raise HTTPException(status_code=408, detail="Command execution timed out")
     except Exception as e:
-        logger.error(f"Failed to execute elevated command: {e}")
+        logger.error("Failed to execute elevated command: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Command execution failed: {str(e)}"
         )
@@ -253,13 +253,13 @@ async def verify_sudo_password(password: str) -> bool:
         return process.returncode == 0
 
     except (OSError, IOError) as e:
-        logger.error(f"Password verification failed due to system error: {e}")
+        logger.error("Password verification failed due to system error: %s", e)
         return False
     except asyncio.TimeoutError as e:
-        logger.error(f"Password verification failed due to timeout: {e}")
+        logger.error("Password verification failed due to timeout: %s", e)
         return False
     except Exception as e:
-        logger.error(f"Password verification failed: {e}")
+        logger.error("Password verification failed: %s", e)
         return False
 
 
@@ -293,10 +293,10 @@ async def run_elevated_command(command: str) -> dict:
         }
 
     except (OSError, IOError) as e:
-        logger.error(f"Command execution failed due to system error: {e}")
+        logger.error("Command execution failed due to system error: %s", e)
         return {"stdout": "", "stderr": f"System error: {str(e)}", "return_code": 1}
     except asyncio.TimeoutError as e:
-        logger.error(f"Command execution failed due to timeout: {e}")
+        logger.error("Command execution failed due to timeout: %s", e)
         return {"stdout": "", "stderr": "Command timed out", "return_code": 124}
     except Exception as e:
         return {"stdout": "", "stderr": str(e), "return_code": 1}
@@ -312,7 +312,7 @@ async def revoke_elevation_session(session_token: str):
     """Revoke an elevation session"""
     if session_token in elevation_sessions:
         del elevation_sessions[session_token]
-        logger.info(f"Elevation session revoked: {session_token}")
+        logger.info("Elevation session revoked: %s", session_token)
 
     return {"success": True, "message": "Session revoked"}
 

@@ -69,7 +69,7 @@ class LLMStreamProcessor:
             return "".join(self.content_buffer), True
 
         except Exception as e:
-            logger.error(f"Stream processing error: {e}")
+            logger.error("Stream processing error: %s", e)
             return "".join(self.content_buffer), False
 
     def get_processing_time(self) -> float:
@@ -111,7 +111,7 @@ class LLMStreamingInterface:
                     return f"Error: HTTP {response.status}", False
 
         except Exception as e:
-            logger.error(f"Ollama request exception: {e}")
+            logger.error("Ollama request exception: %s", e)
             return f"Error: {str(e)}", False
 
     async def cleanup(self):

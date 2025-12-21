@@ -146,7 +146,7 @@ class AgentTerminalService:
                 pty = simple_pty_manager.get_session(session.pty_session_id)
                 pty_alive = pty is not None and pty.is_alive()
             except Exception as e:
-                logger.error(f"Error checking PTY alive status: {e}")
+                logger.error("Error checking PTY alive status: %s", e)
                 pty_alive = False
 
         # Issue #372: Use model method to reduce feature envy
@@ -214,7 +214,7 @@ class AgentTerminalService:
         )
 
         await self.command_queue.add_command(cmd_execution)
-        logger.info(f"✅ [QUEUE] Added command {cmd_execution.command_id} to queue")
+        logger.info("✅ [QUEUE] Added command %s to queue", cmd_execution.command_id)
 
         session.set_pending_approval(
             command=command,
@@ -306,7 +306,7 @@ class AgentTerminalService:
                     session_id=session.conversation_id,
                 )
             except Exception as e:
-                logger.error(f"[INTERPRETATION] Failed to interpret results: {e}")
+                logger.error("[INTERPRETATION] Failed to interpret results: %s", e)
 
         session.command_history.append(
             {
@@ -432,7 +432,7 @@ class AgentTerminalService:
             }
 
         except Exception as e:
-            logger.error(f"Approved command execution error: {e}")
+            logger.error("Approved command execution error: %s", e)
             return {
                 "status": "error",
                 "error": str(e),
@@ -504,7 +504,7 @@ class AgentTerminalService:
                     session_id=session.conversation_id,
                 )
             except Exception as e:
-                logger.error(f"Failed to interpret approved command results: {e}")
+                logger.error("Failed to interpret approved command results: %s", e)
 
     async def _update_and_broadcast_approval_status(
         self,
@@ -610,7 +610,7 @@ class AgentTerminalService:
         try:
             return await self._execute_auto_approved_command(session, command, risk)
         except Exception as e:
-            logger.error(f"Command execution error: {e}")
+            logger.error("Command execution error: %s", e)
             return {
                 "status": "error",
                 "error": str(e),
@@ -659,7 +659,7 @@ class AgentTerminalService:
                 f"[CHAT INTEGRATION] {command_type.capitalize()} command saved to chat"
             )
         except Exception as e:
-            logger.error(f"Failed to save {command_type} command to chat: {e}")
+            logger.error("Failed to save %s command to chat: %s", command_type, e)
 
     # ============================================================================
     # Approval Workflow (delegated to ApprovalHandler)
@@ -768,7 +768,7 @@ class AgentTerminalService:
             }
 
         session.state = AgentSessionState.AGENT_CONTROL
-        logger.info(f"Agent resumed control of session {session_id}")
+        logger.info("Agent resumed control of session %s", session_id)
 
         return {
             "status": "success",

@@ -588,7 +588,7 @@ async def _send_periodic_update_or_break(websocket: WebSocket) -> bool:
         await websocket.send_json(_build_periodic_update(current_data))
         return True
     except Exception as e:
-        logger.error(f"Failed to send periodic update: {e}")
+        logger.error("Failed to send periodic update: %s", e)
         return False
 
 
@@ -621,7 +621,7 @@ async def _realtime_loop_iteration(websocket: WebSocket) -> tuple[bool, bool]:
         logger.info("Analytics WebSocket client disconnected")
         return False, True
     except Exception as e:
-        logger.error(f"Error in analytics WebSocket: {e}")
+        logger.error("Error in analytics WebSocket: %s", e)
         send_ok = await _send_error_safely(websocket, e)
         return send_ok, False
 
@@ -656,7 +656,7 @@ async def websocket_realtime_analytics(websocket: WebSocket):
                 break
 
     except Exception as e:
-        logger.error(f"Analytics WebSocket error: {e}")
+        logger.error("Analytics WebSocket error: %s", e)
     finally:
         analytics_state["websocket_connections"].discard(websocket)
         logger.info("Analytics WebSocket disconnected and cleaned up")
@@ -957,7 +957,7 @@ async def _send_performance_update_if_due(
             await websocket.send_json(_build_performance_message(perf_data))
             return current_time
         except Exception as e:
-            logger.error(f"Performance update error: {e}")
+            logger.error("Performance update error: %s", e)
     return last_update
 
 
@@ -975,7 +975,7 @@ async def _send_api_activity_update_if_due(
             await websocket.send_json(_build_api_activity_message(recent_calls))
             return current_time
         except Exception as e:
-            logger.error(f"API activity update error: {e}")
+            logger.error("API activity update error: %s", e)
     return last_update
 
 
@@ -994,7 +994,7 @@ async def _send_health_update_if_due(
             await websocket.send_json(_build_health_message(alerts, critical))
             return current_time
         except Exception as e:
-            logger.error(f"System health update error: {e}")
+            logger.error("System health update error: %s", e)
     return last_update
 
 
@@ -1042,7 +1042,7 @@ async def _live_analytics_loop_iteration(
     except WebSocketDisconnect:
         return False, last_performance_update, last_api_update, last_health_update
     except Exception as e:
-        logger.error(f"Error in live analytics WebSocket: {e}")
+        logger.error("Error in live analytics WebSocket: %s", e)
         send_ok = await _send_error_safely(websocket, e)
         return send_ok, last_performance_update, last_api_update, last_health_update
 
@@ -1088,7 +1088,7 @@ async def websocket_live_analytics(websocket: WebSocket):
                 break
 
     except Exception as e:
-        logger.error(f"Live analytics WebSocket error: {e}")
+        logger.error("Live analytics WebSocket error: %s", e)
     finally:
         analytics_state["websocket_connections"].discard(websocket)
         logger.info("Live analytics WebSocket disconnected")

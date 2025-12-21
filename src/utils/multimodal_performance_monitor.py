@@ -185,7 +185,7 @@ class MultiModalPerformanceMonitor:
             }
 
         except Exception as e:
-            logger.error(f"GPU memory optimization failed: {e}")
+            logger.error("GPU memory optimization failed: %s", e)
             return {"status": "optimization_failed", "error": str(e)}
 
     def enable_mixed_precision(self, enable: bool = True) -> bool:
@@ -206,7 +206,7 @@ class MultiModalPerformanceMonitor:
                 logger.warning("Mixed precision not available or disabled")
                 return False
         except Exception as e:
-            logger.error(f"Failed to enable mixed precision: {e}")
+            logger.error("Failed to enable mixed precision: %s", e)
             return False
 
     def _emit_prometheus_metrics(
@@ -326,7 +326,7 @@ class MultiModalPerformanceMonitor:
                 "device_count": torch.cuda.device_count(),
             }
         except Exception as e:
-            logger.error(f"Failed to get GPU stats: {e}")
+            logger.error("Failed to get GPU stats: %s", e)
             return {"error": str(e)}
 
     def _get_processing_time_stats(self) -> Dict[str, Any]:

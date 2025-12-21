@@ -60,7 +60,7 @@ class ConnectionTester:
                     await asyncio.to_thread(redis_client.ping)
                     redis_status = "connected"
             except Exception as e:
-                logger.debug(f"Redis health check failed: {e}")
+                logger.debug("Redis health check failed: %s", e)
 
             # Quick Ollama availability check (no generation test)
             ollama_status = "disconnected"
@@ -76,7 +76,7 @@ class ConnectionTester:
                         if response.status == 200:
                             ollama_status = "connected"
             except Exception as e:
-                logger.debug(f"Ollama health check failed: {e}")
+                logger.debug("Ollama health check failed: %s", e)
 
             health_data = {
                 "status": "healthy",
@@ -95,7 +95,7 @@ class ConnectionTester:
             return health_data
 
         except Exception as e:
-            logger.error(f"Error in fast health check: {str(e)}")
+            logger.error("Error in fast health check: %s", str(e))
             return {
                 "status": "unhealthy",
                 "backend": "connected",
@@ -233,7 +233,7 @@ class ConnectionTester:
                     return await ConnectionTester._test_ollama_model(endpoint, model)
 
         except Exception as e:
-            logger.error(f"Ollama connection test failed: {str(e)}")
+            logger.error("Ollama connection test failed: %s", str(e))
             return {
                 "status": "disconnected",
                 "message": f"Failed to test Ollama connection: {str(e)}",
@@ -316,7 +316,7 @@ class ConnectionTester:
                 "redis_search_module_loaded": redis_search_module_loaded,
             }
         except Exception as e:
-            logger.error(f"Redis connection test failed: {str(e)}")
+            logger.error("Redis connection test failed: %s", str(e))
             return {
                 "status": "disconnected",
                 "message": f"Failed to connect to Redis: {str(e)}",
@@ -400,7 +400,7 @@ class ConnectionTester:
                 }
 
         except Exception as e:
-            logger.error(f"Error getting embedding status: {str(e)}")
+            logger.error("Error getting embedding status: %s", str(e))
             return {
                 "connected": False,
                 "current_model": None,
@@ -441,7 +441,7 @@ class ConnectionTester:
                 },
             }
         except Exception as e:
-            logger.error(f"Error in comprehensive health check: {str(e)}")
+            logger.error("Error in comprehensive health check: %s", str(e))
             return {
                 "status": "unhealthy",
                 "backend": "connected",
@@ -486,7 +486,7 @@ class ModelManager:
 
             return {"status": "success", "models": models, "total_count": len(models)}
         except Exception as e:
-            logger.error(f"Error getting available models: {str(e)}")
+            logger.error("Error getting available models: %s", str(e))
             return {"status": "error", "error": str(e), "models": [], "total_count": 0}
 
     @staticmethod
@@ -506,7 +506,7 @@ class ModelManager:
         current_time = time.time()
         time_since_last = current_time - ModelManager._last_ollama_warning
         if time_since_last >= ModelManager._warning_interval:
-            logger.warning(f"Failed to get Ollama models: {str(error)}")
+            logger.warning("Failed to get Ollama models: %s", str(error))
             ModelManager._last_ollama_warning = current_time
 
     @staticmethod

@@ -240,17 +240,27 @@ class CodeIssueAnalyzer:
                 ]
             }
 
+            # Issue #506: Precompile and combine patterns per category
+            # Reduces O(n⁴) to O(n²) by eliminating per-pattern loop
+            compiled_patterns = {}
+            for category, pattern_list in patterns.items():
+                # Combine all patterns for this category into one regex
+                combined = "|".join(f"({p})" for p in pattern_list)
+                compiled_patterns[category] = re.compile(
+                    combined, re.IGNORECASE | re.MULTILINE
+                )
+
             # Analyze each code sample
             for sample in code_samples:
                 text = sample['text']
                 doc_id = sample['doc_id']
 
-                for category, pattern_list in patterns.items():
-                    for pattern in pattern_list:
-                        try:
-                            matches = re.findall(pattern, text, re.IGNORECASE | re.MULTILINE)
+                # Issue #506: Single pass per category instead of per-pattern
+                for category, compiled_pattern in compiled_patterns.items():
+                    try:
+                        matches = compiled_pattern.findall(text)
 
-                            for match in matches:
+                        for match in matches:
                                 # Extract the actual value (handle tuple results from groups)
                                 value = match[0] if isinstance(match, tuple) and len(match) > 0 else match
 

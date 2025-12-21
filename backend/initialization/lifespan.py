@@ -67,7 +67,7 @@ def configure_logging():
     for logger_name in _BACKEND_LOGGER_NAMES:
         logging.getLogger(logger_name).setLevel(LOG_LEVEL_VALUE)
 
-    logger.info(f"📊 Logging level set to: {LOG_LEVEL} ({LOG_LEVEL_VALUE})")
+    logger.info("📊 Logging level set to: %s (%s)", LOG_LEVEL, LOG_LEVEL_VALUE)
 
 
 async def initialize_critical_services(app: FastAPI):
@@ -162,7 +162,7 @@ async def initialize_critical_services(app: FastAPI):
         logger.info("✅ [ 60%] PHASE 1 COMPLETE: All critical services operational")
 
     except Exception as critical_error:
-        logger.error(f"❌ CRITICAL INITIALIZATION FAILED: {critical_error}")
+        logger.error("❌ CRITICAL INITIALIZATION FAILED: %s", critical_error)
         logger.error("Backend startup ABORTED - critical services must be operational")
         raise  # Re-raise to prevent app from starting
 
@@ -183,7 +183,7 @@ async def _init_knowledge_base(app: FastAPI):
         await update_app_state("knowledge_base", knowledge_base)
         logger.info("✅ [ 70%] Knowledge Base: Knowledge base ready")
     except Exception as kb_error:
-        logger.warning(f"Knowledge base initialization failed: {kb_error}")
+        logger.warning("Knowledge base initialization failed: %s", kb_error)
         app.state.knowledge_base = None
 
 
@@ -200,7 +200,7 @@ async def _init_npu_worker_websocket():
         init_npu_worker_websocket()
         logger.info("✅ [ 80%] NPU Workers: WebSocket subscriptions initialized")
     except Exception as npu_ws_error:
-        logger.warning(f"NPU worker WebSocket initialization failed: {npu_ws_error}")
+        logger.warning("NPU worker WebSocket initialization failed: %s", npu_ws_error)
 
 
 async def _init_graph_rag_service(app: FastAPI, memory_graph):
@@ -240,7 +240,7 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
         else:
             logger.info("🔄 [ 87%] Graph-RAG: Skipped (knowledge base not available)")
     except Exception as graph_rag_error:
-        logger.warning(f"Graph-RAG service initialization failed: {graph_rag_error}")
+        logger.warning("Graph-RAG service initialization failed: %s", graph_rag_error)
         app.state.graph_rag_service = None
 
 
@@ -272,7 +272,7 @@ async def _init_entity_extractor(app: FastAPI, memory_graph):
             "✅ [ 88%] Entity Extractor: Entity extractor initialized successfully"
         )
     except Exception as entity_error:
-        logger.warning(f"Entity extractor initialization failed: {entity_error}")
+        logger.warning("Entity extractor initialization failed: %s", entity_error)
         app.state.entity_extractor = None
 
 
@@ -302,7 +302,7 @@ async def _init_memory_graph(app: FastAPI):
         await _init_entity_extractor(app, memory_graph)
 
     except Exception as memory_error:
-        logger.warning(f"Memory graph initialization failed: {memory_error}")
+        logger.warning("Memory graph initialization failed: %s", memory_error)
         app.state.memory_graph = None
         app.state.graph_rag_service = None
         app.state.entity_extractor = None
@@ -340,7 +340,7 @@ async def _init_background_llm_sync(app: FastAPI):
             logger.info("🔄 [ 90%] AI Stack: AI Stack partially available")
 
     except Exception as sync_error:
-        logger.warning(f"Background LLM sync initialization failed: {sync_error}")
+        logger.warning("Background LLM sync initialization failed: %s", sync_error)
 
 
 async def initialize_background_services(app: FastAPI):
@@ -375,7 +375,7 @@ async def initialize_background_services(app: FastAPI):
         logger.info("✅ [100%] PHASE 2 COMPLETE: All background services initialized")
 
     except Exception as e:
-        logger.error(f"Background initialization encountered errors: {e}")
+        logger.error("Background initialization encountered errors: %s", e)
         logger.info("App remains operational with degraded background services")
 
 
@@ -395,7 +395,7 @@ async def cleanup_services(app: FastAPI):
         # Redis connections automatically managed by get_redis_client()
         logger.info("✅ Cleanup completed successfully")
     except Exception as e:
-        logger.error(f"Error during shutdown: {e}")
+        logger.error("Error during shutdown: %s", e)
 
 
 def create_lifespan_manager():

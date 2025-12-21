@@ -66,7 +66,7 @@ async def validation_health():
             "timestamp": validator._get_timestamp() if validator else None,
         }
     except Exception as e:
-        logger.error(f"Validation health check failed: {e}")
+        logger.error("Validation health check failed: %s", e)
         raise_server_error("API_0003", f"Health check failed: {str(e)}")
 
 
@@ -106,7 +106,7 @@ async def run_comprehensive_validation(
         return validation_result
 
     except Exception as e:
-        logger.error(f"Comprehensive validation failed: {e}")
+        logger.error("Comprehensive validation failed: %s", e)
         raise_server_error("API_0003", f"Validation error: {str(e)}")
 
 
@@ -173,7 +173,7 @@ async def run_quick_validation():
         }
 
     except Exception as e:
-        logger.error(f"Quick validation failed: {e}")
+        logger.error("Quick validation failed: %s", e)
         raise_server_error("API_0003", f"Quick validation error: {str(e)}")
 
 
@@ -221,7 +221,7 @@ async def validate_component(component_name: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Component validation failed for {component_name}: {e}")
+        logger.error("Component validation failed for %s: %s", component_name, e)
         raise_server_error("API_0003", f"Component validation error: {str(e)}")
 
 
@@ -286,7 +286,7 @@ async def get_optimization_recommendations():
         }
 
     except Exception as e:
-        logger.error(f"Failed to get recommendations: {e}")
+        logger.error("Failed to get recommendations: %s", e)
         raise_server_error("API_0003", f"Recommendations error: {str(e)}")
 
 
@@ -318,7 +318,7 @@ async def get_validation_status():
         }
 
     except Exception as e:
-        logger.error(f"Failed to get validation status: {e}")
+        logger.error("Failed to get validation status: %s", e)
         raise_server_error("API_0003", f"Status error: {str(e)}")
 
 
@@ -366,5 +366,5 @@ async def run_performance_benchmark():
         }
 
     except Exception as e:
-        logger.error(f"Performance benchmark failed: {e}")
+        logger.error("Performance benchmark failed: %s", e)
         raise_server_error("API_0003", f"Benchmark error: {str(e)}")

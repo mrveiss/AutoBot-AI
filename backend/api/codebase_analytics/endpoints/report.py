@@ -3,16 +3,22 @@
 # Author: mrveiss
 """
 Codebase analysis report generation endpoint
+
+Includes:
+- Code issue analysis from ChromaDB indexed data
+- Bug prediction integration (Issue #505)
 """
 
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter
 from fastapi.responses import PlainTextResponse
 
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.code_intelligence.bug_predictor import BugPredictor, PredictionResult
 
 from src.utils.file_categorization import (
     FILE_CATEGORY_CODE,
@@ -280,6 +286,167 @@ def _build_summary_section(
     return lines
 
 
+# Risk level emoji mapping for bug prediction (Issue #505)
+def _get_risk_emoji(risk_level: str) -> str:
+    """Get emoji indicator for risk level."""
+    return {
+        "critical": "🔴",
+        "high": "🟠",
+        "medium": "🟡",
+        "low": "🟢",
+        "minimal": "🔵",
+    }.get(risk_level.lower(), "⚪")
+
+
+def _generate_bug_risk_section(prediction: PredictionResult) -> List[str]:
+    """
+    Generate the Bug Risk Analysis section for the report (Issue #505).
+
+    Args:
+        prediction: PredictionResult from BugPredictor.analyze_directory()
+
+    Returns:
+        List of markdown lines for the bug risk section
+    """
+    lines = [
+        "## 🐛 Bug Risk Analysis",
+        "",
+        "> **Predictive analysis based on code complexity, change frequency, and bug history.**",
+        "",
+    ]
+
+    # Accuracy notice (Issue #468)
+    if prediction.accuracy_score is not None:
+        lines.append(f"**Prediction Accuracy:** {prediction.accuracy_score:.1f}%")
+    else:
+        lines.append("**Prediction Accuracy:** *Historical accuracy data not yet available*")
+    lines.append("")
+
+    # Summary statistics
+    lines.extend([
+        "### Overview",
+        "",
+        "| Metric | Value |",
+        "|--------|-------|",
+        f"| Files Analyzed | {prediction.analyzed_files} |",
+        f"| High Risk Files | {prediction.high_risk_count} |",
+        f"| Predicted Bug Locations | {prediction.predicted_bugs} |",
+        "",
+    ])
+
+    # Risk distribution
+    lines.extend([
+        "### Risk Distribution",
+        "",
+        "| Risk Level | Files |",
+        "|------------|-------|",
+    ])
+
+    for level in ["critical", "high", "medium", "low", "minimal"]:
+        count = prediction.risk_distribution.get(level, 0)
+        emoji = _get_risk_emoji(level)
+        lines.append(f"| {emoji} {level.capitalize()} | {count} |")
+
+    lines.append("")
+
+    # Top risk factors
+    if prediction.top_risk_factors:
+        lines.extend([
+            "### Top Risk Factors",
+            "",
+            "| Factor | Total Score |",
+            "|--------|-------------|",
+        ])
+        for factor, score in prediction.top_risk_factors:
+            display_factor = factor.replace("_", " ").title()
+            lines.append(f"| {display_factor} | {score:.1f} |")
+        lines.append("")
+
+    # High risk files (top 10)
+    high_risk_files = [
+        fa for fa in prediction.file_assessments
+        if fa.risk_level.value in ("critical", "high")
+    ][:10]
+
+    if high_risk_files:
+        lines.extend([
+            "### High-Risk Files",
+            "",
+            "> Files with the highest probability of containing bugs.",
+            "",
+        ])
+
+        for fa in high_risk_files:
+            emoji = _get_risk_emoji(fa.risk_level.value)
+            lines.extend([
+                f"#### {emoji} `{fa.file_path}` (Score: {fa.risk_score:.1f})",
+                "",
+            ])
+
+            # Risk factors contributing to score
+            if fa.factor_scores:
+                top_factors = sorted(
+                    fa.factor_scores,
+                    key=lambda x: x.score,
+                    reverse=True
+                )[:3]
+                lines.append("**Contributing Factors:**")
+                for fs in top_factors:
+                    factor_name = fs.factor.value.replace("_", " ").title()
+                    lines.append(f"- {factor_name}: {fs.score:.0f} ({fs.details})")
+                lines.append("")
+
+            # Prevention tips
+            if fa.prevention_tips:
+                lines.append("**Prevention Tips:**")
+                for tip in fa.prevention_tips[:3]:
+                    lines.append(f"- {tip}")
+                lines.append("")
+
+            # Recommendation
+            if fa.recommendation:
+                lines.append(f"**Recommendation:** {fa.recommendation}")
+                lines.append("")
+
+    # Cross-reference section placeholder
+    lines.extend([
+        "### Correlation with Detected Issues",
+        "",
+        "> Files appearing in both static analysis issues AND high bug risk prediction.",
+        "",
+    ])
+
+    lines.extend(["---", ""])
+
+    return lines
+
+
+def _get_bug_prediction(project_root: Optional[str] = None) -> Optional[PredictionResult]:
+    """
+    Get bug prediction data for the project (Issue #505).
+
+    Args:
+        project_root: Root directory to analyze (defaults to current directory)
+
+    Returns:
+        PredictionResult or None if analysis fails
+    """
+    try:
+        # Use project root or default to current working directory
+        root = project_root or str(Path.cwd())
+        predictor = BugPredictor(project_root=root)
+        result = predictor.analyze_directory(pattern="*.py", limit=100)
+        logger.info(
+            "Bug prediction completed: %s files analyzed, %s high-risk",
+            result.analyzed_files,
+            result.high_risk_count,
+        )
+        return result
+    except Exception as e:
+        logger.warning("Bug prediction analysis failed: %s", e)
+        return None
+
+
 def _build_issue_sections(by_category: Dict[str, List[Dict]]) -> List[str]:
     """Build all issue category sections (Issue #398: extracted)."""
     lines = []
@@ -335,17 +502,99 @@ def _build_issue_sections(by_category: Dict[str, List[Dict]]) -> List[str]:
     return lines
 
 
+def _build_correlation_section(
+    problems: List[Dict],
+    prediction: Optional[PredictionResult],
+) -> List[str]:
+    """
+    Build cross-reference section showing files with both issues AND high risk (Issue #505).
+
+    Args:
+        problems: List of detected code issues
+        prediction: Bug prediction result
+
+    Returns:
+        List of markdown lines for correlation section
+    """
+    if not prediction:
+        return []
+
+    lines = []
+
+    # Get files with issues
+    files_with_issues = set(p.get("file_path", "") for p in problems if p.get("file_path"))
+
+    # Get high-risk files
+    high_risk_files = {
+        fa.file_path: fa
+        for fa in prediction.file_assessments
+        if fa.risk_level.value in ("critical", "high")
+    }
+
+    # Find overlap
+    overlap = files_with_issues & set(high_risk_files.keys())
+
+    if overlap:
+        lines.extend([
+            "**⚠️ Priority Files (Issues + High Bug Risk):**",
+            "",
+            "| File | Issue Count | Risk Score | Risk Level |",
+            "|------|-------------|------------|------------|",
+        ])
+
+        # Count issues per file
+        issue_counts: Dict[str, int] = {}
+        for p in problems:
+            fp = p.get("file_path", "")
+            if fp in overlap:
+                issue_counts[fp] = issue_counts.get(fp, 0) + 1
+
+        # Sort by risk score
+        sorted_overlap = sorted(
+            overlap,
+            key=lambda f: high_risk_files[f].risk_score,
+            reverse=True,
+        )
+
+        for file_path in sorted_overlap[:10]:
+            fa = high_risk_files[file_path]
+            issue_count = issue_counts.get(file_path, 0)
+            emoji = _get_risk_emoji(fa.risk_level.value)
+            lines.append(
+                f"| `{file_path}` | {issue_count} | {fa.risk_score:.1f} | "
+                f"{emoji} {fa.risk_level.value.capitalize()} |"
+            )
+
+        lines.extend([
+            "",
+            f"> **{len(overlap)} files** have both detected issues and high bug risk. "
+            "These should be prioritized for review.",
+            "",
+        ])
+    else:
+        lines.append("*No files appear in both static analysis issues and high bug risk.*")
+        lines.append("")
+
+    return lines
+
+
 def _generate_markdown_report(
     problems: List[Dict],
     analyzed_path: Optional[str] = None,
+    bug_prediction: Optional[PredictionResult] = None,
 ) -> str:
     """
-    Generate a Markdown report from problems list (Issue #398: refactored).
+    Generate a Markdown report from problems list (Issue #398: refactored, Issue #505: bug prediction).
 
     Problems are separated by file category:
     - Code/Config issues are shown first (priority - need to fix)
     - Backup/Archive issues shown separately (informational - may not need to fix)
     - Docs/Logs issues shown at the end (usually not critical)
+
+    Bug prediction section added (Issue #505):
+    - High-risk files summary
+    - Risk distribution
+    - Correlation with detected issues
     """
     path_info = analyzed_path or "Unknown"
     by_category = _separate_by_category(problems)
@@ -357,6 +606,29 @@ def _generate_markdown_report(
     # Build report sections
     lines = _build_report_header(path_info, len(problems), counts)
     lines.extend(_build_summary_section(severity_counts, type_counts))
+
+    # Add bug risk section if prediction available (Issue #505)
+    if bug_prediction:
+        bug_risk_lines = _generate_bug_risk_section(bug_prediction)
+        # Insert correlation data into the bug risk section
+        correlation_lines = _build_correlation_section(problems, bug_prediction)
+        # Find where to insert correlation (before the final ---)
+        if correlation_lines:
+            # Replace placeholder correlation section
+            insert_idx = None
+            for i, line in enumerate(bug_risk_lines):
+                if line == "### Correlation with Detected Issues":
+                    insert_idx = i
+                    break
+            if insert_idx is not None:
+                # Remove placeholder and insert real data
+                bug_risk_lines = (
+                    bug_risk_lines[:insert_idx + 3] +  # Keep header + blank + note
+                    correlation_lines +
+                    bug_risk_lines[-2:]  # Keep final --- and blank
+                )
+        lines.extend(bug_risk_lines)
+
     lines.extend(_build_issue_sections(by_category))
     lines.append("*Report generated by AutoBot Code Analysis*")
 
@@ -402,12 +674,33 @@ async def generate_analysis_report(format: str = "markdown"):
                         "suggestion": metadata.get("suggestion", ""),
                     })
 
-            logger.info(f"Retrieved {len(problems)} problems for report")
+            logger.info("Retrieved %s problems for report", len(problems))
         except Exception as e:
-            logger.error(f"Failed to fetch problems from ChromaDB: {e}")
+            logger.error("Failed to fetch problems from ChromaDB: %s", e)
+
+    # Get bug prediction data (Issue #505)
+    bug_prediction = _get_bug_prediction()
 
     if not problems:
-        report = """# Code Analysis Report
+        # Even with no issues, include bug prediction if available (Issue #505)
+        if bug_prediction and bug_prediction.analyzed_files > 0:
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            lines = [
+                "# Code Analysis Report",
+                "",
+                f"**Generated:** {now}",
+                "**Status:** No code issues detected",
+                "",
+                "> No static analysis issues found. Bug risk analysis is shown below.",
+                "",
+                "---",
+                "",
+            ]
+            lines.extend(_generate_bug_risk_section(bug_prediction))
+            lines.append("*Report generated by AutoBot Code Analysis*")
+            report = "\n".join(lines)
+        else:
+            report = """# Code Analysis Report
 
 **Status:** No issues found
 
@@ -422,7 +715,11 @@ Run "Index Codebase" first to analyze the code.
     else:
         # Try to get the analyzed path from the latest indexing task
         # For now, we'll note it as "Indexed Codebase"
-        report = _generate_markdown_report(problems, analyzed_path="Indexed Codebase")
+        report = _generate_markdown_report(
+            problems,
+            analyzed_path="Indexed Codebase",
+            bug_prediction=bug_prediction,
+        )
 
     return PlainTextResponse(
         content=report,

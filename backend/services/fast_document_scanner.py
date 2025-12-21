@@ -322,7 +322,7 @@ class FastDocumentScanner:
         command_files = self._get_man_page_paths()
 
         total_available = len(command_files)
-        logger.info(f"Found {total_available} man pages on system")
+        logger.info("Found %s man pages on system", total_available)
 
         # Detect changes using metadata (ULTRA FAST)
         changes = self._detect_changes(command_files, machine_id, limit)
@@ -384,7 +384,7 @@ class FastDocumentScanner:
                     return f.read()
 
         except Exception as file_error:
-            logger.debug(f"Direct file read failed for {file_path}: {file_error}")
+            logger.debug("Direct file read failed for %s: %s", file_path, file_error)
 
             # Fallback to subprocess (slower but more reliable)
             try:
@@ -405,7 +405,7 @@ class FastDocumentScanner:
                     return None
 
             except subprocess.TimeoutExpired:
-                logger.warning(f"Timeout reading man page for {command}")
+                logger.warning("Timeout reading man page for %s", command)
                 return None
             except Exception as subprocess_error:
                 logger.error(
@@ -443,11 +443,11 @@ class FastDocumentScanner:
                 return result
 
             # Fallback to subprocess parsing
-            logger.debug(f"File parsing failed for {command}, trying subprocess")
+            logger.debug("File parsing failed for %s, trying subprocess", command)
             return parser.parse_man_page_with_subprocess(command, section or "1")
 
         except Exception as e:
-            logger.error(f"Failed to parse man page for {command}: {e}")
+            logger.error("Failed to parse man page for %s: %s", command, e)
             return None
 
     def get_man_page_for_storage(
@@ -622,5 +622,5 @@ class FastDocumentScanner:
                     if limit and count >= limit:
                         break
 
-        logger.info(f"Prepared {len(results)} man pages for indexing")
+        logger.info("Prepared %s man pages for indexing", len(results))
         return results

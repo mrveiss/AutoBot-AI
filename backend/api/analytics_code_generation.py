@@ -689,7 +689,7 @@ class CodeGenerationEngine:
             )
 
         except Exception as e:
-            logger.error(f"Code generation failed: {e}")
+            logger.error("Code generation failed: %s", e)
             return CodeGenerationResponse(
                 success=False,
                 error=str(e),
@@ -758,7 +758,7 @@ class CodeGenerationEngine:
             )
 
         except Exception as e:
-            logger.error(f"Code refactoring failed: {e}")
+            logger.error("Code refactoring failed: %s", e)
             return RefactoringResponse(
                 success=False,
                 original_code=request.code,
@@ -800,7 +800,7 @@ class CodeGenerationEngine:
 
             return version_id
         except Exception as e:
-            logger.error(f"Failed to save version: {e}")
+            logger.error("Failed to save version: %s", e)
             return version_id
 
     async def get_versions(self, file_path: str) -> List[Dict[str, Any]]:
@@ -821,7 +821,7 @@ class CodeGenerationEngine:
 
             return versions
         except Exception as e:
-            logger.error(f"Failed to get versions: {e}")
+            logger.error("Failed to get versions: %s", e)
             return []
 
     async def rollback(
@@ -847,7 +847,7 @@ class CodeGenerationEngine:
                 return versions[0]["code"]
 
         except Exception as e:
-            logger.error(f"Failed to rollback: {e}")
+            logger.error("Failed to rollback: %s", e)
             return None
 
     async def _track_generation_stats(
@@ -875,7 +875,7 @@ class CodeGenerationEngine:
             await redis.expire(stats_key, 30 * 24 * 60 * 60)
 
         except Exception as e:
-            logger.error(f"Failed to track stats: {e}")
+            logger.error("Failed to track stats: %s", e)
 
     async def get_stats(self) -> Dict[str, Any]:
         """Get code generation statistics"""
@@ -909,7 +909,7 @@ class CodeGenerationEngine:
             return stats
 
         except Exception as e:
-            logger.error(f"Failed to get stats: {e}")
+            logger.error("Failed to get stats: %s", e)
             return {"date": datetime.now().strftime("%Y-%m-%d"), "error": str(e)}
 
 

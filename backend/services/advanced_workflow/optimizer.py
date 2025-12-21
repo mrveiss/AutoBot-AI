@@ -63,7 +63,7 @@ class WorkflowOptimizer:
                 seen_commands.add(command_signature)
                 optimized_steps.append(step)
             else:
-                logger.info(f"Eliminated redundant step: {step.command}")
+                logger.info("Eliminated redundant step: %s", step.command)
 
         return optimized_steps
 

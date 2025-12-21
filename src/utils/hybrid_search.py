@@ -275,7 +275,7 @@ class HybridSearchEngine:
         try:
             # Extract keywords from query
             query_keywords = self.extract_keywords(query)
-            self.logger.debug(f"Extracted keywords from '{query}': {query_keywords}")
+            self.logger.debug("Extracted keywords from '%s': %s", query, query_keywords)
 
             # Perform semantic search with higher top_k to get more candidates
             semantic_results = await self.knowledge_base.search(
@@ -283,7 +283,7 @@ class HybridSearchEngine:
             )
 
             if not semantic_results:
-                self.logger.warning(f"No semantic results found for query: '{query}'")
+                self.logger.warning("No semantic results found for query: '%s'", query)
                 return []
 
             # Enhance results with keyword scoring
@@ -336,12 +336,12 @@ class HybridSearchEngine:
             return final_results
 
         except Exception as e:
-            self.logger.error(f"Error in hybrid search: {e}")
+            self.logger.error("Error in hybrid search: %s", e)
             # Fallback to regular semantic search
             try:
                 return await self.knowledge_base.search(query, top_k, filters)
             except Exception as fallback_error:
-                self.logger.error(f"Fallback search also failed: {fallback_error}")
+                self.logger.error("Fallback search also failed: %s", fallback_error)
                 return []
 
     async def explain_search(self, query: str, top_k: int = 5) -> Dict[str, Any]:
@@ -401,7 +401,7 @@ class HybridSearchEngine:
             return explanation
 
         except Exception as e:
-            self.logger.error(f"Error in search explanation: {e}")
+            self.logger.error("Error in search explanation: %s", e)
             return {"error": str(e)}
 
 

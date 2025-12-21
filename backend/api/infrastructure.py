@@ -108,7 +108,7 @@ async def list_hosts(
         }
 
     except Exception as e:
-        logger.error(f"Error listing hosts: {e}")
+        logger.error("Error listing hosts: %s", e)
         raise HTTPException(status_code=500, detail=f"Error listing hosts: {str(e)}")
 
 
@@ -195,7 +195,7 @@ async def _save_ssh_key_file(
         return key_path, content.decode("utf-8")
 
     except OSError as e:
-        logger.error(f"Failed to save SSH key file {key_path}: {e}")
+        logger.error("Failed to save SSH key file %s: %s", key_path, e)
         raise HTTPException(
             status_code=500, detail=f"Failed to save SSH key file: {str(e)}"
         )
@@ -298,14 +298,14 @@ async def create_host(
         # Store credentials (Issue #281: uses helper)
         _store_host_credentials(host.id, auth_method, password, key_content)
 
-        logger.info(f"Created host: {hostname} ({ip_address}) with role {role}")
+        logger.info("Created host: %s (%s) with role %s", hostname, ip_address, role)
 
         return host
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error creating host: {e}")
+        logger.error("Error creating host: %s", e)
         raise HTTPException(status_code=500, detail=f"Error creating host: {str(e)}")
 
 
@@ -362,7 +362,7 @@ async def get_host(host_id: int):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting host {host_id}: {e}")
+        logger.error("Error getting host %s: %s", host_id, e)
         raise HTTPException(status_code=500, detail=f"Error getting host: {str(e)}")
 
 
@@ -416,14 +416,14 @@ async def update_host(host_id: int, host_update: HostUpdate):
         # Get updated host
         updated_host = db.get_host(host_id)
 
-        logger.info(f"Updated host {host_id}: {update_data}")
+        logger.info("Updated host %s: %s", host_id, update_data)
 
         return updated_host
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating host {host_id}: {e}")
+        logger.error("Error updating host %s: %s", host_id, e)
         raise HTTPException(status_code=500, detail=f"Error updating host: {str(e)}")
 
 
@@ -459,21 +459,21 @@ async def delete_host(host_id: int):
         if host.ssh_key_path and key_exists:
             try:
                 await asyncio.to_thread(os.unlink, host.ssh_key_path)
-                logger.info(f"Deleted SSH key file: {host.ssh_key_path}")
+                logger.info("Deleted SSH key file: %s", host.ssh_key_path)
             except Exception as e:
-                logger.warning(f"Failed to delete SSH key file: {e}")
+                logger.warning("Failed to delete SSH key file: %s", e)
 
         # Delete host (cascades to credentials and deployments)
         db.delete_host(host_id)
 
-        logger.info(f"Deleted host {host_id}")
+        logger.info("Deleted host %s", host_id)
 
         return None
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error deleting host {host_id}: {e}")
+        logger.error("Error deleting host %s: %s", host_id, e)
         raise HTTPException(status_code=500, detail=f"Error deleting host: {str(e)}")
 
 
@@ -526,7 +526,7 @@ async def get_host_status(host_id: int):
 
         except Exception as e:
             error_message = str(e)
-            logger.warning(f"Connectivity check failed for host {host_id}: {e}")
+            logger.warning("Connectivity check failed for host %s: %s", host_id, e)
 
         # Get active deployments count
         deployments = db.get_deployments(host_id=host_id, status="running")
@@ -547,7 +547,7 @@ async def get_host_status(host_id: int):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting host status {host_id}: {e}")
+        logger.error("Error getting host status %s: %s", host_id, e)
         raise HTTPException(
             status_code=500, detail=f"Error getting host status: {str(e)}"
         )
@@ -633,7 +633,7 @@ async def create_deployment(deployment: DeploymentCreate):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error creating deployment: {e}")
+        logger.error("Error creating deployment: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Error creating deployment: {str(e)}"
         )
@@ -694,7 +694,7 @@ async def get_deployment(deployment_id: int):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting deployment {deployment_id}: {e}")
+        logger.error("Error getting deployment %s: %s", deployment_id, e)
         raise HTTPException(
             status_code=500, detail=f"Error getting deployment: {str(e)}"
         )
@@ -734,7 +734,7 @@ async def list_deployments(
         return deployments
 
     except Exception as e:
-        logger.error(f"Error listing deployments: {e}")
+        logger.error("Error listing deployments: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Error listing deployments: {str(e)}"
         )
@@ -813,7 +813,7 @@ async def provision_ssh_key(host_id: int, provision_request: ProvisionKeyRequest
                 public_key_content.split()[-1] if "@" in public_key_content else None
             )
 
-            logger.info(f"SSH key provisioning successful for host {host_id}")
+            logger.info("SSH key provisioning successful for host %s", host_id)
 
             return ProvisionKeyResponse(
                 success=True,
@@ -826,7 +826,7 @@ async def provision_ssh_key(host_id: int, provision_request: ProvisionKeyRequest
             # Update host status to failed
             db.update_host_status(host_id, "failed")
 
-            logger.error(f"SSH key provisioning failed for host {host_id}: {e}")
+            logger.error("SSH key provisioning failed for host %s: %s", host_id, e)
 
             raise HTTPException(
                 status_code=400, detail=f"SSH key provisioning failed: {str(e)}"
@@ -835,7 +835,7 @@ async def provision_ssh_key(host_id: int, provision_request: ProvisionKeyRequest
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error provisioning SSH key for host {host_id}: {e}")
+        logger.error("Error provisioning SSH key for host %s: %s", host_id, e)
         raise HTTPException(
             status_code=500, detail=f"Error provisioning SSH key: {str(e)}"
         )
@@ -863,12 +863,12 @@ async def list_roles():
     try:
         roles = db.get_roles()
 
-        logger.info(f"Listed {len(roles)} infrastructure roles")
+        logger.info("Listed %s infrastructure roles", len(roles))
 
         return roles
 
     except Exception as e:
-        logger.error(f"Error listing roles: {e}")
+        logger.error("Error listing roles: %s", e)
         raise HTTPException(status_code=500, detail=f"Error listing roles: {str(e)}")
 
 
@@ -896,7 +896,7 @@ async def get_statistics():
         return stats
 
     except Exception as e:
-        logger.error(f"Error getting statistics: {e}")
+        logger.error("Error getting statistics: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Error getting statistics: {str(e)}"
         )
@@ -928,7 +928,7 @@ async def health_check():
         }
 
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
+        logger.error("Health check failed: %s", e)
         return JSONResponse(
             status_code=503,
             content={

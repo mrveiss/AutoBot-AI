@@ -5,7 +5,6 @@ Tests the LRU cache with TTL for ChromaDB query embeddings.
 
 import asyncio
 import pytest
-import time
 
 from src.knowledge_base import EmbeddingCache, get_embedding_cache
 
@@ -131,8 +130,8 @@ class TestEmbeddingCache:
         result = await cache.get(query)
         assert result == embedding
 
-        # Wait for TTL to expire (2 seconds)
-        time.sleep(2.1)
+        # Wait for TTL to expire (2 seconds) - Issue #479: Use async sleep
+        await asyncio.sleep(2.1)
 
         # Should be expired now
         result = await cache.get(query)

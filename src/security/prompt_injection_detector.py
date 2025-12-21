@@ -164,7 +164,7 @@ class PromptInjectionDetector:
         self.dangerous_patterns = list(DANGEROUS_PATTERNS)
         self.context_poison_patterns = list(CONTEXT_POISON_PATTERNS)
 
-        logger.info(f"PromptInjectionDetector initialized (strict_mode={strict_mode})")
+        logger.info("PromptInjectionDetector initialized (strict_mode=%s)", strict_mode)
 
     def detect_injection(
         self, text: str, context: str = "user_input"
@@ -242,15 +242,11 @@ class PromptInjectionDetector:
         blocked = max_risk in {InjectionRisk.HIGH, InjectionRisk.CRITICAL}
 
         if blocked:
-            logger.warning(
-                f"🚨 BLOCKED: Prompt injection detected (risk={max_risk.value})"
-            )
-            logger.warning(f"Detected patterns: {detected_patterns}")
+            logger.warning("🚨 BLOCKED: Prompt injection detected (risk=%s)", max_risk.value)
+            logger.warning("Detected patterns: %s", detected_patterns)
         elif max_risk != InjectionRisk.SAFE:
-            logger.info(
-                f"⚠️ SUSPICIOUS: Potential injection detected (risk={max_risk.value})"
-            )
-            logger.info(f"Detected patterns: {detected_patterns}")
+            logger.info("⚠️ SUSPICIOUS: Potential injection detected (risk=%s)", max_risk.value)
+            logger.info("Detected patterns: %s", detected_patterns)
 
         return InjectionDetectionResult(
             risk_level=max_risk,
@@ -338,7 +334,7 @@ class PromptInjectionDetector:
                 # Detect and sanitize string metadata
                 result = self.detect_injection(value, context="multimodal_metadata")
                 if result.blocked:
-                    logger.warning(f"🚨 Blocked malicious metadata: {key}")
+                    logger.warning("🚨 Blocked malicious metadata: %s", key)
                     sanitized[key] = "[REDACTED - MALICIOUS CONTENT]"
                 else:
                     sanitized[key] = result.sanitized_text

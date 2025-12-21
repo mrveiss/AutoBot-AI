@@ -110,7 +110,7 @@ async def _publish_event_safe(event_manager, event_name: str, data: dict) -> Non
     try:
         await event_manager.publish(event_name, data)
     except Exception as e:
-        logger.warning(f"Failed to publish {event_name} event: {e}")
+        logger.warning("Failed to publish %s event: %s", event_name, e)
 
 
 async def _run_subprocess(
@@ -159,7 +159,7 @@ async def _run_subprocess(
             return_code=None,
         )
     except OSError as e:
-        logger.error(f"Failed to create subprocess: {e}")
+        logger.error("Failed to create subprocess: %s", e)
         security_layer.audit_log(
             "execute_command",
             user_role,
@@ -342,21 +342,21 @@ async def _execute_goal_with_error_handling(
             goal, [{"role": "user", "content": goal}]
         )
     except asyncio.TimeoutError as e:
-        logger.error(f"Goal execution timed out: {goal[:100]}...")
+        logger.error("Goal execution timed out: %s...", goal[:100])
         _record_goal_metrics(task_start_time, "timeout")
         raise InternalError(
             message="Goal execution timed out. Please try again.",
             details={"goal": goal[:100], "error_type": "timeout"},
         ) from e
     except aiohttp.ClientError as e:
-        logger.error(f"Network error during goal execution: {e}")
+        logger.error("Network error during goal execution: %s", e)
         _record_goal_metrics(task_start_time, "network_error")
         raise InternalError(
             message="Network error during goal execution. Please try again.",
             details={"error_type": "network", "error": str(e)},
         ) from e
     except Exception as e:
-        logger.error(f"Failed to execute goal: {e}", exc_info=True)
+        logger.error("Failed to execute goal: %s", e, exc_info=True)
         _record_goal_metrics(task_start_time, "error")
         raise InternalError(
             message=f"Goal execution failed: {str(e)}",
@@ -474,7 +474,7 @@ async def pause_agent_api(request: Request, user_role: str = Form("user")):
     try:
         await orchestrator.pause_agent()
     except Exception as e:
-        logger.error(f"Failed to pause agent: {e}", exc_info=True)
+        logger.error("Failed to pause agent: %s", e, exc_info=True)
         security_layer.audit_log(
             "agent_pause", user_role, "failure", {"error": str(e)}
         )
@@ -488,7 +488,7 @@ async def pause_agent_api(request: Request, user_role: str = Form("user")):
     try:
         await event_manager.publish("agent_paused", {"message": "Agent operation paused."})
     except Exception as e:
-        logger.warning(f"Failed to publish agent_paused event: {e}")
+        logger.warning("Failed to publish agent_paused event: %s", e)
     return {"message": "Agent paused successfully."}
 
 
@@ -520,7 +520,7 @@ async def resume_agent_api(request: Request, user_role: str = Form("user")):
     try:
         await orchestrator.resume_agent()
     except Exception as e:
-        logger.error(f"Failed to resume agent: {e}", exc_info=True)
+        logger.error("Failed to resume agent: %s", e, exc_info=True)
         security_layer.audit_log(
             "agent_resume", user_role, "failure", {"error": str(e)}
         )
@@ -536,7 +536,7 @@ async def resume_agent_api(request: Request, user_role: str = Form("user")):
             "agent_resumed", {"message": "Agent operation resumed."}
         )
     except Exception as e:
-        logger.warning(f"Failed to publish agent_resumed event: {e}")
+        logger.warning("Failed to publish agent_resumed event: %s", e)
     return {"message": "Agent resumed successfully."}
 
 
@@ -579,7 +579,7 @@ async def command_approval(request: Request, payload: CommandApprovalPayload):
                 json.dumps(approval_message),
             )
         except Exception as e:
-            logger.error(f"Failed to publish command approval to Redis: {e}")
+            logger.error("Failed to publish command approval to Redis: %s", e)
             security_layer.audit_log(
                 "command_approval",
                 user_role,

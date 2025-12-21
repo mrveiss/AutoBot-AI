@@ -45,10 +45,10 @@ class WorkflowStepEvaluator:
             self.judges_enabled = True
             logger.info("LLM judges initialized for workflow step evaluation")
         except ImportError as e:
-            logger.warning(f"LLM judges not available: {e}")
+            logger.warning("LLM judges not available: %s", e)
             self.judges_enabled = False
         except Exception as e:
-            logger.error(f"Failed to initialize LLM judges: {e}")
+            logger.error("Failed to initialize LLM judges: %s", e)
             self.judges_enabled = False
 
     def _prepare_step_data(self, step: WorkflowStep) -> Metadata:
@@ -263,7 +263,7 @@ class WorkflowStepEvaluator:
             return evaluation_result
 
         except Exception as e:
-            logger.error(f"Error in step evaluation: {e}")
+            logger.error("Error in step evaluation: %s", e)
             return {
                 "should_proceed": True,  # Default to proceed on evaluation error
                 "reason": f"Evaluation error: {str(e)}",

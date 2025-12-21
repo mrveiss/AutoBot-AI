@@ -306,7 +306,7 @@ class ResearchAgent:
         """Start the research agent server."""
         import uvicorn
 
-        logger.info(f"Starting Research Agent server on {host}:{port}")
+        logger.info("Starting Research Agent server on %s:%s", host, port)
         uvicorn.run(self.app, host=host, port=port)
 
 

@@ -130,7 +130,7 @@ class ClaudeAPIBatchManager:
             await self._increment_metric("batched_requests")
             return response
         except Exception as e:
-            logger.warning(f"Batching failed, falling back to individual: {e}")
+            logger.warning("Batching failed, falling back to individual: %s", e)
             if not self.config.fallback_to_individual:
                 raise
             return None  # Signal to use fallback
@@ -249,7 +249,7 @@ class ClaudeAPIBatchManager:
 
         except Exception as e:
             await self._increment_metric("failed_requests")
-            logger.error(f"Request failed: {e}")
+            logger.error("Request failed: %s", e)
             raise
 
     async def _check_rate_limit(self) -> bool:

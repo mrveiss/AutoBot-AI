@@ -68,14 +68,14 @@ class ValidationDashboardGenerator:
                 logger.debug("Validation timed out, using fallback results")
                 validation_results = self._get_minimal_validation_results()
             except Exception as e:
-                logger.debug(f"Validation failed: {e}")
+                logger.debug("Validation failed: %s", e)
                 validation_results = self._get_minimal_validation_results()
 
             # Get system state with error handling
             try:
                 state_summary = await self.state_tracker.get_state_summary()
             except Exception as e:
-                logger.debug(f"State tracker unavailable: {e}")
+                logger.debug("State tracker unavailable: %s", e)
                 state_summary = self._get_default_state_summary()
 
             # Get progression status with error handling
@@ -84,7 +84,7 @@ class ValidationDashboardGenerator:
                     await self.progression_manager.check_progression_eligibility()
                 )
             except Exception as e:
-                logger.debug(f"Progression manager unavailable: {e}")
+                logger.debug("Progression manager unavailable: %s", e)
                 progression_status = self._get_default_progression_status()
 
             # Calculate metrics
@@ -136,7 +136,7 @@ class ValidationDashboardGenerator:
             return report
 
         except Exception as e:
-            logger.error(f"Error generating real-time report: {e}")
+            logger.error("Error generating real-time report: %s", e)
             raise
 
     def _calculate_current_metrics(
@@ -232,7 +232,7 @@ class ValidationDashboardGenerator:
             return trend_data
 
         except Exception as e:
-            logger.error(f"Error generating trend data: {e}")
+            logger.error("Error generating trend data: %s", e)
             return {}
 
     def _format_phase_details(self, phases: Dict[str, Dict]) -> List[Dict[str, Any]]:
@@ -500,7 +500,7 @@ class ValidationDashboardGenerator:
         with open(json_path, "w") as f:
             json.dump(report_data, f, indent=2, default=str)
 
-        logger.info(f"Dashboard generated: {dashboard_path}")
+        logger.info("Dashboard generated: %s", dashboard_path)
         return str(dashboard_path)
 
     def _get_dashboard_css(self) -> str:
@@ -770,7 +770,7 @@ class ValidationDashboardGenerator:
             while True:
                 # Generate dashboard
                 dashboard_path = await self.generate_html_dashboard()
-                logger.info(f"Dashboard updated: {dashboard_path}")
+                logger.info("Dashboard updated: %s", dashboard_path)
 
                 # Wait for next update
                 await asyncio.sleep(self.refresh_interval)
@@ -778,7 +778,7 @@ class ValidationDashboardGenerator:
         except KeyboardInterrupt:
             logger.info("Real-time monitoring stopped")
         except Exception as e:
-            logger.error(f"Error in real-time monitoring: {e}")
+            logger.error("Error in real-time monitoring: %s", e)
             raise
 
 
@@ -838,7 +838,7 @@ def main():
                 await generator.start_real_time_monitoring()
 
         except Exception as e:
-            logger.error(f"Command failed: {e}")
+            logger.error("Command failed: %s", e)
             return 1
 
         return 0

@@ -70,11 +70,11 @@ def _analyze_search_indices(client: redis.Redis) -> None:
     logger.info("\n=== REDIS SEARCH INDICES ===")
     try:
         indices = client.execute_command('FT._LIST')
-        logger.info(f"Search indices found: {indices}")
+        logger.info("Search indices found: %s", indices)
         for index in indices:
             _analyze_single_index(client, index)
     except Exception as e:
-        logger.warning(f"Could not list FT indices: {e}")
+        logger.warning("Could not list FT indices: %s", e)
 
 
 def _analyze_single_index(client: redis.Redis, index: Any) -> None:
@@ -83,9 +83,9 @@ def _analyze_single_index(client: redis.Redis, index: Any) -> None:
         index_name = _decode_bytes(index)
         ft_info = client.execute_command('FT.INFO', index_name)
         num_docs = _extract_num_docs(ft_info)
-        logger.info(f"  Index '{index_name}': {num_docs} documents")
+        logger.info("  Index '%s': %s documents", index_name, num_docs)
     except Exception as e:
-        logger.warning(f"  Could not analyze index {index}: {e}")
+        logger.warning("  Could not analyze index %s: %s", index, e)
 
 
 def _extract_num_docs(ft_info: List) -> int:
@@ -104,14 +104,14 @@ def _analyze_hash_key(client: redis.Redis, sample_key: str) -> None:
         field_str = _decode_bytes(field)
         value_str = str(value)[:50] + "..." if len(str(value)) > 50 else str(value)
         hash_fields.append(f"{field_str}: {value_str}")
-    logger.info(f"    Hash fields: {hash_fields[:3]}")
+    logger.info("    Hash fields: %s", hash_fields[:3])
 
 
 def _analyze_string_key(client: redis.Redis, sample_key: str) -> None:
     """Analyze a string key (Issue #338 - extracted helper)."""
     value = client.get(sample_key)
     value_str = str(value)[:100] + "..." if len(str(value)) > 100 else str(value)
-    logger.info(f"    Value: {value_str}")
+    logger.info("    Value: %s", value_str)
 
 
 def _analyze_sample_key(client: redis.Redis, sample_key: str) -> None:
@@ -119,14 +119,14 @@ def _analyze_sample_key(client: redis.Redis, sample_key: str) -> None:
     try:
         key_type = client.type(sample_key)
         key_type_str = _decode_bytes(key_type)
-        logger.info(f"  Key: {sample_key} (type: {key_type_str})")
+        logger.info("  Key: %s (type: %s)", sample_key, key_type_str)
 
         if key_type_str == 'hash':
             _analyze_hash_key(client, sample_key)
         elif key_type_str == 'string':
             _analyze_string_key(client, sample_key)
     except Exception as e:
-        logger.warning(f"    Could not analyze key {sample_key}: {e}")
+        logger.warning("    Could not analyze key %s: %s", sample_key, e)
 
 
 def _log_sample_data(client: redis.Redis, key_samples: Dict[str, List[str]]) -> None:
@@ -134,7 +134,7 @@ def _log_sample_data(client: redis.Redis, key_samples: Dict[str, List[str]]) -> 
     logger.info("\n=== SAMPLE NON-VECTOR DATA ===")
     for pattern, samples in key_samples.items():
         if pattern != 'llama_index/vector' and samples:
-            logger.info(f"\nPattern: {pattern}")
+            logger.info("\nPattern: %s", pattern)
             for sample_key in samples[:2]:
                 _analyze_sample_key(client, sample_key)
 
@@ -148,8 +148,8 @@ def _log_impact_assessment(key_patterns: Dict[str, int]) -> None:
         if pattern != 'llama_index/vector'
     )
 
-    logger.info(f"Vector keys: {vector_keys:,}")
-    logger.info(f"Non-vector keys: {total_other_keys:,}")
+    logger.info("Vector keys: %s", vector_keys:,)
+    logger.info("Non-vector keys: %s", total_other_keys:,)
 
     if total_other_keys == 0:
         logger.info("✅ Database 0 appears to be EXCLUSIVELY for vectors")
@@ -172,19 +172,19 @@ def analyze_redis_db0():
 
         # Get overall info
         info = client.info()
-        logger.info(f"Database 0 Keys: {info.get('db0', {}).get('keys', 'No data')}")
-        logger.info(f"Total Memory Used: {info.get('used_memory_human', 'Unknown')}")
+        logger.info("Database 0 Keys: %s).get('keys', 'No data')}", info.get('db0', {)
+        logger.info("Total Memory Used: %s", info.get('used_memory_human', 'Unknown'))
 
         # Analyze key patterns using helper
         logger.info("\n=== KEY PATTERN ANALYSIS ===")
         key_patterns, key_samples, total_keys = _scan_keys(client)
 
-        logger.info(f"Total keys scanned: {total_keys}")
+        logger.info("Total keys scanned: %s", total_keys)
         logger.info("\nKey patterns found:")
         for pattern, count in sorted(key_patterns.items(), key=lambda x: x[1], reverse=True):
-            logger.info(f"  {pattern}: {count:,} keys")
+            logger.info("  %s: %s keys", pattern, count:,)
             if pattern in key_samples and key_samples[pattern]:
-                logger.info(f"    Samples: {key_samples[pattern]}")
+                logger.info("    Samples: %s", key_samples[pattern])
 
         # Check FT indices using helper
         _analyze_search_indices(client)
@@ -196,7 +196,7 @@ def analyze_redis_db0():
         _log_impact_assessment(key_patterns)
 
     except Exception as e:
-        logger.error(f"Analysis failed: {e}")
+        logger.error("Analysis failed: %s", e)
         import traceback
         traceback.print_exc()
 

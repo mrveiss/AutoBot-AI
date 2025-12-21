@@ -105,7 +105,7 @@ class WorkflowExecutor:
 
         # Check dependencies
         if not self._check_step_dependencies(workflow, current_step):
-            logger.warning(f"Step {current_step.step_id} dependencies not met")
+            logger.warning("Step %s dependencies not met", current_step.step_id)
             current_step.status = WorkflowStepStatus.SKIPPED
             workflow.current_step_index += 1
             await self.process_next_step(workflow, workflows)
@@ -138,7 +138,7 @@ class WorkflowExecutor:
                     )
                     return
             except Exception as e:
-                logger.error(f"Error evaluating workflow step with LLM judge: {e}")
+                logger.error("Error evaluating workflow step with LLM judge: %s", e)
                 # Continue without judge evaluation
 
         # Update step status
@@ -234,7 +234,7 @@ class WorkflowExecutor:
             await self.process_next_step(workflow, workflows)
 
         except Exception as e:
-            logger.error(f"Step execution failed: {e}")
+            logger.error("Step execution failed: %s", e)
             current_step.status = WorkflowStepStatus.FAILED
             current_step.execution_result = {"error": str(e)}
 
@@ -279,7 +279,7 @@ class WorkflowExecutor:
         """Execute command via terminal session"""
         # This would integrate with the existing terminal WebSocket system
         # For now, simulate command execution
-        logger.info(f"Executing workflow command: {command}")
+        logger.info("Executing workflow command: %s", command)
 
         # Simulate command execution delay
         await asyncio.sleep(1)
@@ -556,7 +556,7 @@ class WorkflowExecutor:
             True if response was processed, False if no pending approval
         """
         if workflow_id not in self._pending_plan_approvals:
-            logger.warning(f"No pending approval for workflow {workflow_id}")
+            logger.warning("No pending approval for workflow %s", workflow_id)
             return False
 
         approval_request = self._pending_plan_approvals[workflow_id]

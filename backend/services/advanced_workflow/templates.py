@@ -41,7 +41,7 @@ class TemplateManager:
         for template in templates:
             self.templates[template.template_id] = template
 
-        logger.info(f"Initialized {len(templates)} intelligent workflow templates")
+        logger.info("Initialized %s intelligent workflow templates", len(templates))
 
     def get_template(self, template_id: str) -> Optional[WorkflowTemplate]:
         """Get a template by ID"""

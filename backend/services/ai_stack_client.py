@@ -55,7 +55,7 @@ async def _process_ai_stack_response(
     response_text = await response.text()
 
     if response.status >= 400:
-        logger.error(f"AI Stack error {response.status}: {response_text}")
+        logger.error("AI Stack error %s: %s", response.status, response_text)
 
         if response.status >= 500 and attempt < retry_attempts - 1:
             return None, True, None  # Retry on server errors
@@ -140,7 +140,7 @@ class AIStackClient:
     async def connect(self):
         """Initialize HTTP session for AI Stack communication."""
         # HTTPClient singleton is already initialized
-        logger.info(f"AI Stack client connected to {self.base_url}")
+        logger.info("AI Stack client connected to %s", self.base_url)
 
     async def close(self):
         """Close the HTTP session."""
@@ -200,7 +200,7 @@ class AIStackClient:
                     return result
 
             except aiohttp.ClientError as e:
-                logger.error(f"AI Stack client error (attempt {attempt + 1}): {e}")
+                logger.error("AI Stack client error (attempt %s): %s", attempt + 1, e)
                 if attempt < self.retry_attempts - 1:
                     await asyncio.sleep(self.retry_delay * (attempt + 1))
                     continue
@@ -210,7 +210,7 @@ class AIStackClient:
                     details={"error": str(e), "url": url},
                 )
             except Exception as e:
-                logger.error(f"Unexpected error in AI Stack request: {e}")
+                logger.error("Unexpected error in AI Stack request: %s", e)
                 raise AIStackError(
                     f"Unexpected error: {str(e)}", details={"error": str(e), "url": url}
                 )

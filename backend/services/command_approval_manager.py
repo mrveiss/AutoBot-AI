@@ -185,7 +185,7 @@ class CommandApprovalManager:
                 command_risk=CommandRisk.HIGH
             )
             if not allowed:
-                logger.warning(f"Permission denied: {reason}")
+                logger.warning("Permission denied: %s", reason)
         """
         # Use provided permissions or defaults
         perms_dict = permissions or CommandApprovalManager.DEFAULT_PERMISSIONS
@@ -333,7 +333,7 @@ class CommandApprovalManager:
             return False
 
         except Exception as e:
-            logger.error(f"Failed to check auto-approve rules: {e}")
+            logger.error("Failed to check auto-approve rules: %s", e)
             return False
 
     async def store_auto_approve_rule(
@@ -382,7 +382,7 @@ class CommandApprovalManager:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to store auto-approve rule: {e}")
+            logger.error("Failed to store auto-approve rule: %s", e)
             return False
 
     @staticmethod
@@ -444,6 +444,6 @@ class CommandApprovalManager:
         """
         if user_id in self.auto_approve_rules:
             del self.auto_approve_rules[user_id]
-            logger.info(f"Cleared auto-approve rules for user {user_id}")
+            logger.info("Cleared auto-approve rules for user %s", user_id)
             return True
         return False

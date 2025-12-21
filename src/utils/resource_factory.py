@@ -46,7 +46,7 @@ class ResourceFactory:
             return kb
 
         except Exception as e:
-            logger.error(f"Failed to create KnowledgeBase: {e}")
+            logger.error("Failed to create KnowledgeBase: %s", e)
             raise
 
     @staticmethod
@@ -75,7 +75,7 @@ class ResourceFactory:
             return llm
 
         except Exception as e:
-            logger.error(f"Failed to create LLMInterface: {e}")
+            logger.error("Failed to create LLMInterface: %s", e)
             raise
 
     @staticmethod
@@ -110,7 +110,7 @@ class ResourceFactory:
             return orch
 
         except Exception as e:
-            logger.error(f"Failed to create EnhancedOrchestrator: {e}")
+            logger.error("Failed to create EnhancedOrchestrator: %s", e)
             raise
 
     @staticmethod
@@ -154,7 +154,7 @@ class ResourceFactory:
             return chm
 
         except Exception as e:
-            logger.error(f"Failed to create ChatHistoryManager: {e}")
+            logger.error("Failed to create ChatHistoryManager: %s", e)
             raise
 
     @staticmethod
@@ -189,7 +189,7 @@ class ResourceFactory:
             return wam
 
         except Exception as e:
-            logger.error(f"Failed to create WorkflowAutomationManager: {e}")
+            logger.error("Failed to create WorkflowAutomationManager: %s", e)
             raise
 
     @staticmethod

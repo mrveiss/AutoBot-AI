@@ -2,54 +2,152 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Mock LLM Providers - Local fallback and mock implementations for testing.
+Local LLM Providers - Local Ollama integration with mock fallback for testing.
+
+Provides real Ollama integration when available, falls back to mock responses
+only when Ollama is not configured (for testing/development without Ollama).
 
 Extracted from llm_interface.py as part of Issue #381 god class refactoring.
+Updated in Issue #453 to use real Ollama integration.
 """
 
 import asyncio
-import random
 import logging
+import os
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
 class LocalLLM:
-    """Local TinyLLaMA fallback"""
+    """Local LLM provider using Ollama when available.
 
-    async def generate(self, prompt: str) -> dict:
+    Attempts to use real Ollama for text generation. Falls back to mock
+    responses only when Ollama is not configured (AUTOBOT_OLLAMA_HOST/PORT not set).
+    """
+
+    def __init__(self):
+        """Initialize local LLM with Ollama connection check."""
+        self._ollama_host = os.getenv("AUTOBOT_OLLAMA_HOST")
+        self._ollama_port = os.getenv("AUTOBOT_OLLAMA_PORT")
+        self._ollama_available = bool(self._ollama_host and self._ollama_port)
+        self._ollama_url: Optional[str] = None
+        self._default_model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "llama3.2")
+
+        if self._ollama_available:
+            self._ollama_url = f"http://{self._ollama_host}:{self._ollama_port}"
+            logger.info("LocalLLM initialized with Ollama at %s", self._ollama_url)
+        else:
+            logger.warning(
+                "Ollama not configured - LocalLLM will use mock responses. "
+                "Set AUTOBOT_OLLAMA_HOST and AUTOBOT_OLLAMA_PORT for real LLM."
+            )
+
+    async def generate(self, prompt: str, model: Optional[str] = None) -> dict:
         """
-        Generate response using local TinyLLaMA fallback model.
+        Generate response using local Ollama model.
+
+        Falls back to mock response if Ollama is not available.
 
         Args:
             prompt: Input text prompt
+            model: Optional model name override
 
         Returns:
             Dict with response in OpenAI-compatible format
         """
-        logger.info("Using local TinyLLaMA fallback.")
-        await asyncio.sleep(0.1)
-        return {
-            "choices": [
-                {"message": {"content": f"Local TinyLLaMA response to: {prompt}"}}
-            ]
-        }
+        if not self._ollama_available:
+            logger.debug("Using mock response (Ollama not configured)")
+            await asyncio.sleep(0.1)
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                "[Mock Response - Ollama not configured] "
+                                f"Prompt received: {prompt[:100]}..."
+                            )
+                        }
+                    }
+                ],
+                "_mock": True,
+            }
+
+        try:
+            import aiohttp
+
+            data = {
+                "model": model or self._default_model,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False,
+            }
+
+            async with aiohttp.ClientSession() as session:
+                timeout = aiohttp.ClientTimeout(total=120.0)
+                async with session.post(
+                    f"{self._ollama_url}/api/chat",
+                    json=data,
+                    timeout=timeout,
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        logger.error("Ollama request failed: HTTP %s - %s", response.status, error_text)
+                        return {
+                            "choices": [
+                                {"message": {"content": f"Error: Ollama returned HTTP {response.status}"}}
+                            ],
+                            "_error": True,
+                        }
+
+                    result = await response.json()
+
+            content = result.get("message", {}).get("content", "")
+            logger.debug("Ollama response received: %d chars", len(content))
+
+            return {
+                "choices": [{"message": {"content": content}}],
+                "model": result.get("model"),
+                "usage": {
+                    "prompt_tokens": result.get("prompt_eval_count", 0),
+                    "completion_tokens": result.get("eval_count", 0),
+                },
+            }
+
+        except Exception as e:
+            logger.error("Ollama request failed: %s", e)
+            return {
+                "choices": [
+                    {"message": {"content": f"Error: Local LLM request failed - {str(e)}"}}
+                ],
+                "_error": True,
+            }
 
 
 class MockPalm:
-    """Mock Palm API for testing"""
+    """Mock Palm API - for testing only.
+
+    NOTE: This class exists only for backward compatibility and testing.
+    In production, use real Google AI APIs via the appropriate provider.
+    """
 
     class QuotaExceededError(Exception):
         """Exception raised when API quota is exceeded."""
 
         pass
 
+    def __init__(self):
+        """Initialize MockPalm with warning about mock usage."""
+        logger.warning(
+            "MockPalm instantiated - this is for testing only. "
+            "Use real Google AI provider in production."
+        )
+
     async def get_quota_status(self):
         """
-        Get current API quota status (mock implementation for testing).
+        Get mock quota status (for testing).
 
         Returns:
-            Dict with quota usage information
+            MockQuotaStatus with simulated quota information
         """
         await asyncio.sleep(0.05)
 
@@ -58,36 +156,34 @@ class MockPalm:
                 """Initialize mock quota status with remaining token count."""
                 self.remaining_tokens = remaining_tokens
 
-        mock_status = MockQuotaStatus(50000)
-        if random.random() < 0.2:
-            mock_status.remaining_tokens = 500
-        return mock_status
+        # Always return healthy quota for testing
+        return MockQuotaStatus(50000)
 
     async def generate_text(self, **kwargs):
         """
-        Generate text using mock Palm API (for testing).
+        Generate mock text response (for testing).
 
         Args:
             **kwargs: Generation parameters
 
         Returns:
-            Dict with generated text
-
-        Raises:
-            QuotaExceededError: Randomly raised to test quota handling
+            Dict with mock generated text
         """
         await asyncio.sleep(0.1)
 
-        if random.random() < 0.1:
-            raise self.QuotaExceededError("Mock Quota Exceeded")
+        prompt = kwargs.get("prompt", "")
         return {
             "choices": [
                 {
                     "message": {
-                        "content": f"Google LLM response to: {kwargs.get('prompt')}"
+                        "content": (
+                            f"[Mock Palm Response - Testing Only] "
+                            f"Prompt: {prompt[:50]}..."
+                        )
                     }
                 }
-            ]
+            ],
+            "_mock": True,
         }
 
 

@@ -1,8 +1,22 @@
+/**
+ * KnowledgeController - Manages knowledge base operations
+ *
+ * Provides a unified interface for knowledge base operations,
+ * bridging the Pinia store with the KnowledgeRepository API layer.
+ *
+ * @author mrveiss
+ * @copyright (c) 2025 mrveiss
+ */
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useAppStore } from '@/stores/useAppStore'
-import { knowledgeRepository } from '@/models/repositories'
+import { knowledgeRepository } from '@/models/repositories/KnowledgeRepository'
+import type {
+  SearchKnowledgeRequest,
+  AddTextRequest,
+  AddUrlRequest,
+  AddFileOptions
+} from '@/models/repositories/KnowledgeRepository'
 import type { KnowledgeDocument, SearchResult, SearchFilters } from '@/stores/useKnowledgeStore'
-import type { SearchKnowledgeRequest, AddTextRequest, AddUrlRequest } from '@/models/repositories/KnowledgeRepository'
 import { generateCategoryId, generateDocumentId } from '@/utils/ChatIdGenerator'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -38,28 +52,27 @@ export class KnowledgeController {
       this.knowledgeStore.setSearching(true)
       this.knowledgeStore.updateSearchQuery(searchQuery)
 
-      // TODO: Old repository uses SearchParams without filters object
-      // Using type assertion until repositories are consolidated
-      const results = await knowledgeRepository.searchKnowledge({
+      // Build search request with proper typing
+      const searchRequest: SearchKnowledgeRequest = {
         query: searchQuery,
         limit: 20
-        // Note: old repository doesn't support filters - need to filter client-side or migrate to new repository
-      } as any)
+      }
 
+      const results = await knowledgeRepository.searchKnowledge(searchRequest)
       this.knowledgeStore.updateSearchResults(results)
 
       // Update search suggestions based on results
       if (results.length > 0) {
-        // Type assertion: repository transforms results to include document property
-        const suggestions = (results as SearchResult[]).slice(0, 5).map(result =>
+        const suggestions = results.slice(0, 5).map(result =>
           this.extractKeywords(result.document.title || result.document.content)
         ).flat().slice(0, 8)
 
         this.knowledgeStore.setSearchSuggestions([...new Set(suggestions)])
       }
 
-    } catch (error: any) {
-      this.appStore.setGlobalError(`Search failed: ${error.message}`)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      this.appStore.setGlobalError(`Search failed: ${errorMessage}`)
       throw error
     } finally {
       this.knowledgeStore.setSearching(false)
@@ -84,30 +97,32 @@ export class KnowledgeController {
     try {
       this.knowledgeStore.setLoading(true)
 
-      // TODO: Consolidate repository interfaces - repositories.ts vs repositories/KnowledgeRepository.ts
-      // Current: old repository expects { content, title, category }
-      // Using type assertion until repositories are consolidated
-      const result = await knowledgeRepository.addTextToKnowledge({
+      // Build request with proper typing
+      const request: AddTextRequest = {
         content,
         title: title || this.generateTitleFromContent(content),
-        category: category || 'General'
-      } as any)
+        category: category || 'General',
+        tags: tags || []
+      }
+
+      await knowledgeRepository.addTextToKnowledge(request)
 
       // Add to local store
       const documentId = this.knowledgeStore.addDocument({
-        title: title || this.generateTitleFromContent(content),
+        title: request.title || this.generateTitleFromContent(content),
         content,
         source: 'Manual Entry',
         type: 'document',
-        category: category || 'General',
-        tags: tags || []
+        category: request.category || 'General',
+        tags: request.tags || []
       })
 
       await this.refreshStats()
       return documentId
 
-    } catch (error: any) {
-      this.appStore.setGlobalError(`Failed to add document: ${error.message}`)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      this.appStore.setGlobalError(`Failed to add document: ${errorMessage}`)
       throw error
     } finally {
       this.knowledgeStore.setLoading(false)
@@ -118,11 +133,14 @@ export class KnowledgeController {
     try {
       this.knowledgeStore.setLoading(true)
 
-      // TODO: Old repository expects { url, title?, category? } without method/tags
-      const result = await knowledgeRepository.addUrlToKnowledge({
+      // Build request with proper typing
+      const request: AddUrlRequest = {
         url,
-        category: category || 'Web Content'
-      } as any)
+        category: category || 'Web Content',
+        tags: tags || []
+      }
+
+      const result = await knowledgeRepository.addUrlToKnowledge(request)
 
       // Add to local store (backend response should include processed content)
       const documentId = this.knowledgeStore.addDocument({
@@ -130,15 +148,16 @@ export class KnowledgeController {
         content: result.content || '',
         source: url,
         type: 'webpage',
-        category: category || 'Web Content',
-        tags: tags || []
+        category: request.category || 'Web Content',
+        tags: request.tags || []
       })
 
       await this.refreshStats()
       return documentId
 
-    } catch (error: any) {
-      this.appStore.setGlobalError(`Failed to add URL: ${error.message}`)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      this.appStore.setGlobalError(`Failed to add URL: ${errorMessage}`)
       throw error
     } finally {
       this.knowledgeStore.setLoading(false)
@@ -149,10 +168,13 @@ export class KnowledgeController {
     try {
       this.knowledgeStore.setLoading(true)
 
-      // TODO: Old repository expects { title?, category? } without tags
-      const result = await knowledgeRepository.addFileToKnowledge(file, {
-        category: category || 'Uploads'
-      } as any)
+      // Build options with proper typing
+      const options: AddFileOptions = {
+        category: category || 'Uploads',
+        tags: tags || []
+      }
+
+      const result = await knowledgeRepository.addFileToKnowledge(file, options)
 
       // Add to local store
       const documentId = this.knowledgeStore.addDocument({
@@ -160,8 +182,8 @@ export class KnowledgeController {
         content: result.content || '',
         source: file.name,
         type: 'upload',
-        category: category || 'Uploads',
-        tags: tags || [],
+        category: options.category || 'Uploads',
+        tags: options.tags || [],
         metadata: {
           fileSize: file.size,
           wordCount: result.word_count
@@ -171,8 +193,9 @@ export class KnowledgeController {
       await this.refreshStats()
       return documentId
 
-    } catch (error: any) {
-      this.appStore.setGlobalError(`Failed to upload file: ${error.message}`)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      this.appStore.setGlobalError(`Failed to upload file: ${errorMessage}`)
       throw error
     } finally {
       this.knowledgeStore.setLoading(false)
@@ -181,16 +204,16 @@ export class KnowledgeController {
 
   async updateDocument(documentId: string, updates: Partial<KnowledgeDocument>): Promise<void> {
     try {
-      // TODO: Type mismatch between store and repository KnowledgeDocument interfaces
-      await knowledgeRepository.updateDocument(documentId, updates as any)
+      await knowledgeRepository.updateDocument(documentId, updates)
       this.knowledgeStore.updateDocument(documentId, updates)
-      
+
       if (updates.category) {
         await this.refreshStats()
       }
 
-    } catch (error: any) {
-      this.appStore.setGlobalError(`Failed to update document: ${error.message}`)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      this.appStore.setGlobalError(`Failed to update document: ${errorMessage}`)
       throw error
     }
   }
@@ -201,11 +224,12 @@ export class KnowledgeController {
 
       await knowledgeRepository.deleteDocument(documentId)
       this.knowledgeStore.deleteDocument(documentId)
-      
+
       await this.refreshStats()
 
-    } catch (error: any) {
-      this.appStore.setGlobalError(`Failed to delete document: ${error.message}`)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      this.appStore.setGlobalError(`Failed to delete document: ${errorMessage}`)
       throw error
     } finally {
       this.knowledgeStore.setLoading(false)
@@ -218,11 +242,12 @@ export class KnowledgeController {
 
       await knowledgeRepository.bulkDeleteDocuments(documentIds)
       this.knowledgeStore.bulkDeleteDocuments(documentIds)
-      
+
       await this.refreshStats()
 
-    } catch (error: any) {
-      this.appStore.setGlobalError(`Failed to delete documents: ${error.message}`)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      this.appStore.setGlobalError(`Failed to delete documents: ${errorMessage}`)
       throw error
     } finally {
       this.knowledgeStore.setLoading(false)
@@ -233,7 +258,7 @@ export class KnowledgeController {
   async loadCategories(): Promise<void> {
     try {
       const stats = await knowledgeRepository.getKnowledgeStats()
-      
+
       // Update categories in store
       const categories = stats.categories.map((cat: { name: string; document_count: number }) => ({
         id: generateCategoryId(),
@@ -245,7 +270,7 @@ export class KnowledgeController {
 
       this.knowledgeStore.categories = categories
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.warn('Failed to load categories:', error)
     }
   }
@@ -279,7 +304,7 @@ export class KnowledgeController {
   async refreshStats(): Promise<void> {
     try {
       const stats = await knowledgeRepository.getKnowledgeStats()
-      
+
       // Update local categories with counts
       stats.categories.forEach((catStat: { name: string; document_count: number }) => {
         const category = this.knowledgeStore.categories.find(c => c.name === catStat.name)
@@ -297,70 +322,72 @@ export class KnowledgeController {
   async loadAllDocuments(): Promise<void> {
     try {
       this.knowledgeStore.setLoading(true)
-      
+
       const response = await knowledgeRepository.getAllEntries()
       logger.debug('Knowledge entries response:', response)
-      
+
       if (response.success && response.entries) {
         // Clear existing documents
         this.knowledgeStore.documents = []
-        
+
         // Convert backend entries to frontend document format
-        const documents = response.entries.map((entry: any) => {
+        const documents = response.entries.map((entry) => {
           const metadata = entry.metadata || {}
           return {
             id: entry.id || entry.fact_id || generateDocumentId(),
-            title: metadata.title || entry.fact || 'Untitled',
+            title: (metadata.title as string) || entry.fact || 'Untitled',
             content: entry.fact || entry.content || '',
-            source: metadata.source || metadata.url || 'Unknown',
+            source: (metadata.source as string) || (metadata.url as string) || 'Unknown',
             type: this.determineDocumentType(metadata),
-            tags: metadata.tags || [],
-            category: metadata.category || 'General',
-            createdAt: metadata.created_at ? new Date(metadata.created_at) : new Date(entry.created_at || Date.now()),
-            updatedAt: metadata.updated_at ? new Date(metadata.updated_at) : new Date(entry.updated_at || Date.now()),
+            tags: (metadata.tags as string[]) || [],
+            category: (metadata.category as string) || 'General',
+            createdAt: metadata.created_at ? new Date(metadata.created_at as string) : new Date(entry.created_at || Date.now()),
+            updatedAt: metadata.updated_at ? new Date(metadata.updated_at as string) : new Date(entry.updated_at || Date.now()),
             metadata: {
-              wordCount: metadata.word_count,
-              fileSize: metadata.file_size,
-              language: metadata.language,
-              author: metadata.author
+              wordCount: metadata.word_count as number | undefined,
+              fileSize: metadata.file_size as number | undefined,
+              language: metadata.language as string | undefined,
+              author: metadata.author as string | undefined
             }
           }
         })
-        
+
         // Add documents to store
         this.knowledgeStore.documents = documents
-        
+
         // Update categories based on documents
         await this.refreshStats()
       }
-      
-    } catch (error: any) {
+
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       logger.error('Failed to load documents:', error)
-      this.appStore.setGlobalError(`Failed to load documents: ${error.message}`)
+      this.appStore.setGlobalError(`Failed to load documents: ${errorMessage}`)
     } finally {
       this.knowledgeStore.setLoading(false)
     }
   }
 
   // Helper to determine document type from metadata
-  private determineDocumentType(metadata: any): 'document' | 'webpage' | 'api' | 'upload' {
+  private determineDocumentType(metadata: Record<string, unknown>): 'document' | 'webpage' | 'api' | 'upload' {
     if (metadata.content_type === 'url' || metadata.type === 'url_reference') {
       return 'webpage'
     }
-    if (metadata.filename || metadata.content_type?.includes('multipart')) {
+    if (metadata.filename || (typeof metadata.content_type === 'string' && metadata.content_type.includes('multipart'))) {
       return 'upload'
     }
-    if (metadata.source?.toLowerCase().includes('api')) {
+    if (typeof metadata.source === 'string' && metadata.source.toLowerCase().includes('api')) {
       return 'api'
     }
     return 'document'
   }
 
-  async getDetailedStats(): Promise<any> {
+  async getDetailedStats(): Promise<unknown> {
     try {
       return await knowledgeRepository.getDetailedKnowledgeStats()
-    } catch (error: any) {
-      this.appStore.setGlobalError(`Failed to get statistics: ${error.message}`)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      this.appStore.setGlobalError(`Failed to get statistics: ${errorMessage}`)
       throw error
     }
   }
@@ -369,8 +396,9 @@ export class KnowledgeController {
     try {
       this.appStore.setLoading(true, 'Exporting knowledge base...')
       return await knowledgeRepository.exportKnowledge()
-    } catch (error: any) {
-      this.appStore.setGlobalError(`Export failed: ${error.message}`)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      this.appStore.setGlobalError(`Export failed: ${errorMessage}`)
       throw error
     } finally {
       this.appStore.setLoading(false)
@@ -380,12 +408,13 @@ export class KnowledgeController {
   async cleanupKnowledgeBase(): Promise<void> {
     try {
       this.appStore.setLoading(true, 'Cleaning up knowledge base...')
-      
+
       await knowledgeRepository.cleanupKnowledge()
       await this.refreshStats()
 
-    } catch (error: any) {
-      this.appStore.setGlobalError(`Cleanup failed: ${error.message}`)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      this.appStore.setGlobalError(`Cleanup failed: ${errorMessage}`)
       throw error
     } finally {
       this.appStore.setLoading(false)
@@ -395,12 +424,13 @@ export class KnowledgeController {
   async reindexKnowledgeBase(): Promise<void> {
     try {
       this.appStore.setLoading(true, 'Reindexing knowledge base...')
-      
+
       await knowledgeRepository.reindexKnowledgeBase()
       await this.refreshStats()
 
-    } catch (error: any) {
-      this.appStore.setGlobalError(`Reindexing failed: ${error.message}`)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      this.appStore.setGlobalError(`Reindexing failed: ${errorMessage}`)
       throw error
     } finally {
       this.appStore.setLoading(false)
@@ -414,7 +444,7 @@ export class KnowledgeController {
     if (firstSentence.length > 3 && firstSentence.length <= 50) {
       return firstSentence.trim()
     }
-    
+
     return content.substring(0, 50).trim() + (content.length > 50 ? '...' : '')
   }
 
@@ -425,13 +455,13 @@ export class KnowledgeController {
       .split(/\s+/)
       .filter(word => word.length > 3)
       .filter(word => !this.isStopWord(word))
-    
+
     // Return most frequent words
     const wordCount = new Map<string, number>()
     words.forEach(word => {
       wordCount.set(word, (wordCount.get(word) || 0) + 1)
     })
-    
+
     return Array.from(wordCount.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
@@ -480,7 +510,7 @@ export class KnowledgeController {
     try {
       this.knowledgeStore.setSearching(true)
 
-      const results = await knowledgeRepository.searchKnowledge({
+      const searchRequest: SearchKnowledgeRequest = {
         query: params.query,
         limit: 50,
         filters: {
@@ -488,17 +518,20 @@ export class KnowledgeController {
           tags: params.tags,
           types: params.types
         }
-      })
+      }
+
+      const results = await knowledgeRepository.searchKnowledge(searchRequest)
 
       // Filter by similarity threshold if provided
-      const filteredResults = params.similarityThreshold 
+      const filteredResults = params.similarityThreshold
         ? results.filter(result => result.score >= params.similarityThreshold!)
         : results
 
       this.knowledgeStore.updateSearchResults(filteredResults)
 
-    } catch (error: any) {
-      this.appStore.setGlobalError(`Advanced search failed: ${error.message}`)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      this.appStore.setGlobalError(`Advanced search failed: ${errorMessage}`)
       throw error
     } finally {
       this.knowledgeStore.setSearching(false)
@@ -509,7 +542,7 @@ export class KnowledgeController {
   async getSimilarDocuments(documentId: string): Promise<SearchResult[]> {
     try {
       return await knowledgeRepository.getSimilarDocuments(documentId, 5)
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.warn('Failed to get similar documents:', error)
       return []
     }

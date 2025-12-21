@@ -91,7 +91,7 @@ class SecureWebResearch:
             })
 
             if not domain_validation["safe"]:
-                logger.warning(f"Domain blocked: {result_url} - {domain_validation['reason']}")
+                logger.warning("Domain blocked: %s - %s", result_url, domain_validation['reason'])
                 self.security_stats["domains_blocked"] += 1
                 self.security_stats["threats_detected"] += len(domain_validation["threats_detected"])
                 return None
@@ -148,7 +148,7 @@ class SecureWebResearch:
         research_result["security"]["query_validation"] = query_validation
 
         if not query_validation["safe"]:
-            logger.warning(f"Query blocked due to security concerns: {query_validation['threats_detected']}")
+            logger.warning("Query blocked due to security concerns: %s", query_validation['threats_detected'])
             self.security_stats["queries_blocked"] += 1
             self.security_stats["threats_detected"] += len(query_validation["threats_detected"])
 
@@ -196,7 +196,7 @@ class SecureWebResearch:
                 if validated:
                     secure_results.append(validated)
             except Exception as e:
-                logger.error(f"Error validating result {idx}: {e}")
+                logger.error("Error validating result %s: %s", idx, e)
                 continue
 
         research_result.update({
@@ -266,7 +266,7 @@ class SecureWebResearch:
                 return early_return
 
             # Step 2: Execute Research
-            logger.info(f"Executing secure research for query: {sanitized_query[:50]}...")
+            logger.info("Executing secure research for query: %s...", sanitized_query[:50])
             raw_results = await self.research_integration.conduct_research(
                 query=sanitized_query,
                 research_type=research_type,
@@ -281,11 +281,11 @@ class SecureWebResearch:
             processing_time = time.time() - start_time
             self._add_performance_metrics(research_result, processing_time)
 
-            logger.info(f"Secure research completed: {len(research_result['results'])} results, {processing_time:.2f}s")
+            logger.info("Secure research completed: %s results, %.2fs", len(research_result['results']), processing_time)
             return research_result
 
         except Exception as e:
-            logger.error(f"Error during secure research: {e}")
+            logger.error("Error during secure research: %s", e)
             return self._create_error_result(query, e)
 
     async def validate_research_query(self, query: str) -> Dict[str, Any]:
@@ -409,7 +409,7 @@ class SecureWebResearch:
             return test_results
 
         except Exception as e:
-            logger.error(f"Error testing security components: {e}")
+            logger.error("Error testing security components: %s", e)
             return {
                 "overall_status": "error",
                 "error": str(e),

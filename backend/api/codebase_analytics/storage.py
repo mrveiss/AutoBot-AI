@@ -73,7 +73,7 @@ def get_code_collection():
         return code_collection
 
     except Exception as e:
-        logger.error(f"ChromaDB connection failed: {e}")
+        logger.error("ChromaDB connection failed: %s", e)
         return None
 
 
@@ -107,11 +107,11 @@ async def get_code_collection_async():
 
         # Get count asynchronously
         count = await async_collection.count()
-        logger.info(f"ChromaDB autobot_code collection ready ({count} items)")
+        logger.info("ChromaDB autobot_code collection ready (%s items)", count)
         return async_collection
 
     except Exception as e:
-        logger.error(f"ChromaDB async connection failed: {e}")
+        logger.error("ChromaDB async connection failed: %s", e)
         return None
 
 

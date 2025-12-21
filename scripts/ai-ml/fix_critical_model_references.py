@@ -41,17 +41,26 @@ def check_hardcoded_models(directory: str, extensions: list[str]) -> list[dict]:
         r'os\.getenv\(["\']AUTOBOT_OLLAMA_MODEL["\']',  # Deprecated env var
     ]
 
+    # Issue #506: Precompile and combine patterns - O(1) instead of O(p) per line
+    combined_pattern = re.compile(
+        "|".join(f"({p})" for p in hardcoded_patterns),
+        re.IGNORECASE
+    )
+
     # Files/directories to skip
     skip_dirs = {'archives', 'analysis', '.git', '__pycache__', 'node_modules', '.venv'}
     skip_files = {'model_constants.py'}  # This file defines the constants
+    # Issue #506: Convert extensions to set for O(1) lookup
+    extensions_set = set(extensions)
 
     for root, dirs, files in os.walk(directory):
         # Skip excluded directories
         dirs[:] = [d for d in dirs if d not in skip_dirs]
 
         for filename in files:
-            # Check if file has target extension
-            if not any(filename.endswith(ext) for ext in extensions):
+            # Issue #506: O(1) extension check using set
+            ext = os.path.splitext(filename)[1]
+            if ext not in extensions_set:
                 continue
 
             # Skip excluded files
@@ -64,15 +73,15 @@ def check_hardcoded_models(directory: str, extensions: list[str]) -> list[dict]:
                 with open(filepath, 'r', encoding='utf-8') as f:
                     lines = f.readlines()
 
+                # Issue #506: Single pattern search per line instead of loop
                 for line_num, line in enumerate(lines, 1):
-                    for pattern in hardcoded_patterns:
-                        if re.search(pattern, line, re.IGNORECASE):
-                            findings.append({
-                                'file': filepath,
-                                'line': line_num,
-                                'content': line.strip(),
-                                'pattern': pattern
-                            })
+                    if combined_pattern.search(line):
+                        findings.append({
+                            'file': filepath,
+                            'line': line_num,
+                            'content': line.strip(),
+                            'pattern': 'combined_hardcoded_pattern'
+                        })
             except (IOError, UnicodeDecodeError):
                 continue
 

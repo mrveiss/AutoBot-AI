@@ -32,6 +32,29 @@ import aiofiles
 
 from backend.type_defs.common import JSONObject, Metadata
 
+# Issue #514: Per-file locking to prevent concurrent write corruption
+_file_locks: Dict[str, asyncio.Lock] = {}
+_file_locks_lock = asyncio.Lock()
+
+
+async def _get_file_lock(filepath: str) -> asyncio.Lock:
+    """
+    Get or create a lock for a specific file path (Issue #514).
+
+    Uses per-file locking to allow concurrent writes to different files
+    while preventing corruption from concurrent writes to the same file.
+
+    Args:
+        filepath: Absolute path to the file
+
+    Returns:
+        asyncio.Lock for the specified file
+    """
+    async with _file_locks_lock:
+        if filepath not in _file_locks:
+            _file_locks[filepath] = asyncio.Lock()
+        return _file_locks[filepath]
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
@@ -78,7 +101,7 @@ def is_path_allowed(path: str) -> bool:
 
         # Block path traversal attempts
         if ".." in path:
-            logger.warning(f"Path traversal attempt blocked: {path}")
+            logger.warning("Path traversal attempt blocked: %s", path)
             return False
 
         # Verify resolved path matches absolute path (no symlink trickery)
@@ -103,7 +126,7 @@ def is_path_allowed(path: str) -> bool:
         return is_allowed
 
     except Exception as e:
-        logger.error(f"Path validation error for {path}: {e}")
+        logger.error("Path validation error for %s: %s", path, e)
         return False
 
 
@@ -729,8 +752,11 @@ async def write_file_mcp(request: WriteFileRequest) -> Metadata:
         await asyncio.to_thread(os.makedirs, parent_dir, exist_ok=True)
 
     try:
-        async with aiofiles.open(request.path, "w", encoding="utf-8") as f:
-            await f.write(request.content)
+        # Issue #514: Use per-file locking to prevent concurrent write corruption
+        file_lock = await _get_file_lock(request.path)
+        async with file_lock:
+            async with aiofiles.open(request.path, "w", encoding="utf-8") as f:
+                await f.write(request.content)
 
         file_size = await asyncio.to_thread(os.path.getsize, request.path)
 
@@ -770,24 +796,27 @@ async def edit_file_mcp(request: EditFileRequest) -> Metadata:
         )
 
     try:
-        async with aiofiles.open(request.path, "r", encoding="utf-8") as f:
-            content = await f.read()
+        # Issue #514: Use per-file locking to prevent concurrent read-modify-write corruption
+        file_lock = await _get_file_lock(request.path)
+        async with file_lock:
+            async with aiofiles.open(request.path, "r", encoding="utf-8") as f:
+                content = await f.read()
 
-        original_content = content
-        edits_applied = []
+            original_content = content
+            edits_applied = []
 
-        for edit in request.edits:
-            old_text = edit.get("old_text", edit.get("oldText"))
-            new_text = edit.get("new_text", edit.get("newText"))
+            for edit in request.edits:
+                old_text = edit.get("old_text", edit.get("oldText"))
+                new_text = edit.get("new_text", edit.get("newText"))
 
-            if old_text in content:
-                content = content.replace(old_text, new_text)
-                edits_applied.append({"old": old_text[:50], "new": new_text[:50]})
+                if old_text in content:
+                    content = content.replace(old_text, new_text)
+                    edits_applied.append({"old": old_text[:50], "new": new_text[:50]})
 
-        # Write changes if not dry run
-        if not request.dry_run:
-            async with aiofiles.open(request.path, "w", encoding="utf-8") as f:
-                await f.write(content)
+            # Write changes if not dry run
+            if not request.dry_run:
+                async with aiofiles.open(request.path, "w", encoding="utf-8") as f:
+                    await f.write(content)
 
         return {
             "success": True,

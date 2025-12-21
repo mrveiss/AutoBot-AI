@@ -163,7 +163,7 @@ async def enhanced_semantic_search(request: SearchRequest):
         )
 
     except Exception as e:
-        logger.error(f"Enhanced search failed: {e}")
+        logger.error("Enhanced search failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 
@@ -192,7 +192,7 @@ async def get_hardware_status():
         }
 
     except Exception as e:
-        logger.error(f"Failed to get hardware status: {e}")
+        logger.error("Failed to get hardware status: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to get hardware status: {str(e)}"
         )
@@ -225,7 +225,7 @@ async def benchmark_search_performance(request: BenchmarkRequest):
         }
 
     except Exception as e:
-        logger.error(f"Benchmark failed: {e}")
+        logger.error("Benchmark failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Benchmark failed: {str(e)}")
 
 
@@ -257,7 +257,7 @@ async def optimize_search_engine(request: OptimizationRequest):
         }
 
     except Exception as e:
-        logger.error(f"Optimization failed: {e}")
+        logger.error("Optimization failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Optimization failed: {str(e)}")
 
 
@@ -300,7 +300,7 @@ async def get_performance_analytics():
         }
 
     except Exception as e:
-        logger.error(f"Failed to get performance analytics: {e}")
+        logger.error("Failed to get performance analytics: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to get performance analytics: {str(e)}"
         )
@@ -339,7 +339,7 @@ async def test_npu_connectivity():
         }
 
     except Exception as e:
-        logger.warning(f"NPU connectivity test failed: {e}")
+        logger.warning("NPU connectivity test failed: %s", e)
         return {
             "connectivity": "failed",
             "error": str(e),
@@ -519,7 +519,7 @@ async def health_check():
         }
 
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
+        logger.error("Health check failed: %s", e)
         return {
             "status": "unhealthy",
             "service": "enhanced_search",

@@ -151,11 +151,11 @@ class CachedResponseStrategy(FallbackStrategy):
         try:
             async with aiofiles.open(cache_file, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(cache_data))
-            logger.debug(f"Cached response for key: {cache_key}")
+            logger.debug("Cached response for key: %s", cache_key)
         except OSError as e:
-            logger.warning(f"Failed to write cache file {cache_file}: {e}")
+            logger.warning("Failed to write cache file %s: %s", cache_file, e)
         except Exception as e:
-            logger.warning(f"Failed to serialize cache response: {e}")
+            logger.warning("Failed to serialize cache response: %s", e)
 
     async def _find_cached_response(self, request: str) -> Optional[Dict[str, Any]]:
         """Find a cached response for the request"""
@@ -175,9 +175,9 @@ class CachedResponseStrategy(FallbackStrategy):
                 if age <= self.max_cache_age:
                     return cached_data
             except OSError as e:
-                logger.warning(f"Failed to read cache file {cache_file}: {e}")
+                logger.warning("Failed to read cache file %s: %s", cache_file, e)
             except Exception as e:
-                logger.warning(f"Error parsing cache file {cache_file}: {e}")
+                logger.warning("Error parsing cache file %s: %s", cache_file, e)
 
         # Try similarity-based matching
         return await self._find_similar_cached_response(request)
@@ -222,12 +222,12 @@ class CachedResponseStrategy(FallbackStrategy):
                         best_match["confidence"] = similarity
 
                 except OSError as e:
-                    logger.warning(f"Failed to read cache file {cache_file}: {e}")
+                    logger.warning("Failed to read cache file %s: %s", cache_file, e)
                 except Exception as e:
-                    logger.warning(f"Error parsing cache file {cache_file}: {e}")
+                    logger.warning("Error parsing cache file %s: %s", cache_file, e)
 
         except Exception as e:
-            logger.warning(f"Error scanning cache directory: {e}")
+            logger.warning("Error scanning cache directory: %s", e)
 
         return best_match
 
@@ -453,7 +453,7 @@ class GracefulDegradationManager:
                 return await self._use_fallback_strategy(request, context)
 
         except Exception as e:
-            logger.warning(f"Primary service failed: {e}")
+            logger.warning("Primary service failed: %s", e)
             await self._record_failure()
             return await self._use_fallback_strategy(request, context)
 
@@ -554,7 +554,7 @@ class GracefulDegradationManager:
             health_val = health.value
             level_name = level.name
 
-        logger.info(f"Service health updated: {health_val} (degradation: {level_name})")
+        logger.info("Service health updated: %s (degradation: %s)", health_val, level_name)
 
     async def _update_response_time_metric(self, response_time: float):
         """Update average response time metric (thread-safe)"""
@@ -578,7 +578,7 @@ class GracefulDegradationManager:
                 await self._perform_health_check()
                 await asyncio.sleep(self.health_check_interval)
             except Exception as e:
-                logger.error(f"Error in monitoring loop: {e}")
+                logger.error("Error in monitoring loop: %s", e)
                 await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY * 2)
 
     async def _perform_health_check(self):
@@ -594,7 +594,7 @@ class GracefulDegradationManager:
             uptime = self.service_status.uptime_percentage
 
         # Log health status (outside lock)
-        logger.debug(f"Health check: {health} (uptime: {uptime:.1f}%)")
+        logger.debug("Health check: %s (uptime: %s%)", health, uptime:.1f)
 
     async def get_service_status(self) -> ServiceStatus:
         """Get current service status (thread-safe, returns snapshot)"""
@@ -641,7 +641,7 @@ class GracefulDegradationManager:
         async with self._lock:
             self.service_status.degradation_level = level
             level_name = level.name
-        logger.info(f"Forced degradation level to: {level_name}")
+        logger.info("Forced degradation level to: %s", level_name)
 
     async def reset_service_status(self):
         """Reset service status to healthy (for recovery, thread-safe)"""

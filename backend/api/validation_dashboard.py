@@ -11,7 +11,7 @@ import os
 
 # Import the dashboard generator
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 
 from backend.type_defs.common import Metadata
@@ -60,99 +60,9 @@ _dashboard_generator_lock = threading.Lock()
 _validation_judges = None
 _validation_judges_lock = threading.Lock()
 
-# Issue #281: Fallback report phase details extracted from generate_fallback_report
-FALLBACK_PHASE_DETAILS = (
-    {
-        "name": "Phase 1 - Core Infrastructure",
-        "status": "completed",
-        "progress": 100,
-        "capabilities": ["Redis", "FastAPI", "Docker"],
-    },
-    {
-        "name": "Phase 2 - Frontend Framework",
-        "status": "completed",
-        "progress": 100,
-        "capabilities": ["Vue.js", "Component System", "Routing"],
-    },
-    {
-        "name": "Phase 3 - Knowledge Management",
-        "status": "completed",
-        "progress": 95,
-        "capabilities": ["LlamaIndex", "Vector Search", "Document Processing"],
-    },
-    {
-        "name": "Phase 4 - Chat System",
-        "status": "in_progress",
-        "progress": 80,
-        "capabilities": ["Chat Interface", "LLM Integration", "Session Management"],
-    },
-    {
-        "name": "Phase 5 - Monitoring",
-        "status": "in_progress",
-        "progress": 70,
-        "capabilities": ["System Metrics", "Log Analysis", "Health Checks"],
-    },
-)
-
-# Issue #281: Fallback report recommendations extracted from generate_fallback_report
-FALLBACK_RECOMMENDATIONS = (
-    {
-        "title": "Optimize Redis Memory Usage",
-        "description": "Consider implementing data expiration policies for Redis keys",
-        "urgency": "medium",
-        "action": "Review Redis configuration and implement key expiration",
-    },
-    {
-        "title": "Add More Unit Tests",
-        "description": "Current test coverage could be improved",
-        "urgency": "low",
-        "action": "Increase test coverage to above 80%",
-    },
-)
-
-# Issue #281: Fallback system overview extracted from generate_fallback_report
-FALLBACK_SYSTEM_OVERVIEW = {
-    "overall_maturity": 85.2,
-    "completed_phases": 8,
-    "total_phases": 12,
-    "active_capabilities": 15,
-    "system_health": "healthy",
-}
-
-
-def generate_fallback_report():
-    """Generate fallback mock data when the dashboard generator is not available.
-
-    Issue #281: Refactored to use module-level constants.
-    Reduced from 89 to ~25 lines (72% reduction).
-    """
-    current_time = datetime.now()
-
-    return {
-        "status": "success",
-        "report": {
-            "system_overview": FALLBACK_SYSTEM_OVERVIEW,
-            "phase_details": list(FALLBACK_PHASE_DETAILS),
-            "alerts": [
-                {
-                    "type": "warning",
-                    "title": "Memory Usage High",
-                    "description": "System memory usage above 80%",
-                    "timestamp": (current_time - timedelta(minutes=15)).isoformat(),
-                    "severity": "medium",
-                }
-            ],
-            "recommendations": list(FALLBACK_RECOMMENDATIONS),
-            "progression_status": {
-                "can_progress": True,
-                "current_phase": "Phase 4",
-                "next_available": ["Phase 6 - Advanced Features"],
-                "blocked_phases": [],
-            },
-            "generated_at": current_time.isoformat(),
-        },
-        "timestamp": current_time.isoformat(),
-    }
+# Issue #461: Removed mock fallback data constants (FALLBACK_PHASE_DETAILS,
+# FALLBACK_RECOMMENDATIONS, FALLBACK_SYSTEM_OVERVIEW) and generate_fallback_report().
+# Validation dashboard now returns proper error responses when generator unavailable.
 
 
 def _try_create_dashboard_generator() -> Optional[ValidationDashboardGenerator]:
@@ -162,11 +72,11 @@ def _try_create_dashboard_generator() -> Optional[ValidationDashboardGenerator]:
         logger.info("Dashboard generator initialized")
         return generator
     except ImportError as e:
-        logger.error(f"Failed to initialize dashboard generator due to import error: {e}")
+        logger.error("Failed to initialize dashboard generator due to import error: %s", e)
     except (OSError, IOError) as e:
-        logger.error(f"Failed to initialize dashboard generator due to file system error: {e}")
+        logger.error("Failed to initialize dashboard generator due to file system error: %s", e)
     except Exception as e:
-        logger.error(f"Failed to initialize dashboard generator due to unexpected error: {e}")
+        logger.error("Failed to initialize dashboard generator due to unexpected error: %s", e)
     return None
 
 
@@ -175,7 +85,7 @@ def get_dashboard_generator() -> Optional[ValidationDashboardGenerator]:
     global _dashboard_generator
 
     if ValidationDashboardGenerator is None:
-        logger.error(f"ValidationDashboardGenerator not available: {import_error}")
+        logger.error("ValidationDashboardGenerator not available: %s", import_error)
         return None
 
     if _dashboard_generator is None:
@@ -197,9 +107,9 @@ def _try_create_validation_judges() -> Optional[Metadata]:
         logger.info("Validation judges initialized")
         return judges
     except ImportError as e:
-        logger.error(f"Failed to initialize validation judges due to import error: {e}")
+        logger.error("Failed to initialize validation judges due to import error: %s", e)
     except Exception as e:
-        logger.error(f"Failed to initialize validation judges due to unexpected error: {e}")
+        logger.error("Failed to initialize validation judges due to unexpected error: %s", e)
     return None
 
 
@@ -257,7 +167,7 @@ async def get_dashboard_status():
             "timestamp": datetime.now().isoformat(),
         }
     except (ImportError, AttributeError) as e:
-        logger.error(f"Error getting dashboard status due to missing dependency: {e}")
+        logger.error("Error getting dashboard status due to missing dependency: %s", e)
         raise_service_unavailable("API_0005", "Dashboard generator not available")
 
 
@@ -268,15 +178,23 @@ async def get_dashboard_status():
 )
 @router.get("/report")
 async def get_validation_report():
-    """Get current validation report data"""
+    """Get current validation report data.
+
+    Issue #461: Returns proper error response when generator unavailable
+    instead of fallback mock data.
+    """
+    generator = get_dashboard_generator()
+
+    if generator is None:
+        # Issue #461: Return proper error instead of mock data
+        logger.warning("Validation dashboard generator not available")
+        raise_service_unavailable(
+            "API_0005",
+            "Validation dashboard generator not available. "
+            "Check system configuration and ensure ValidationDashboardGenerator is properly installed.",
+        )
+
     try:
-        generator = get_dashboard_generator()
-
-        if generator is None:
-            # Fallback to mock data when generator not available
-            logger.warning("Using fallback mock data for validation report")
-            return generate_fallback_report()
-
         # Generate real-time report
         report = await generator.generate_real_time_report()
 
@@ -290,18 +208,24 @@ async def get_validation_report():
         logger.error(
             f"Error generating validation report due to missing dependency: {e}"
         )
-        # Fallback to mock data
-        return generate_fallback_report()
+        raise_service_unavailable(
+            "API_0005",
+            f"Dashboard generator dependency error: {e}",
+        )
     except (OSError, IOError) as e:
         logger.error(
-            "Error generating validation report due to " f"file system error: {e}"
+            f"Error generating validation report due to file system error: {e}"
         )
-        # Fallback to mock data
-        return generate_fallback_report()
+        raise_server_error(
+            "API_0003",
+            f"File system error generating validation report: {e}",
+        )
     except Exception as e:
-        logger.error(f"Error generating validation report: {e}")
-        # Fallback to mock data
-        return generate_fallback_report()
+        logger.error("Error generating validation report: %s", e)
+        raise_server_error(
+            "API_0004",
+            f"Unexpected error generating validation report: {e}",
+        )
 
 
 @with_error_handling(
@@ -337,7 +261,7 @@ async def get_dashboard_html():
         return HTMLResponse(content=html_content)
 
     except (ImportError, AttributeError) as e:
-        logger.error(f"Error generating dashboard HTML due to missing dependency: {e}")
+        logger.error("Error generating dashboard HTML due to missing dependency: %s", e)
         return HTMLResponse(
             content=f"""
             <html><body>
@@ -349,7 +273,7 @@ async def get_dashboard_html():
             status_code=503,
         )
     except (OSError, IOError) as e:
-        logger.error(f"Error generating dashboard HTML due to file system error: {e}")
+        logger.error("Error generating dashboard HTML due to file system error: %s", e)
         return HTMLResponse(
             content=f"""
             <html><body>
@@ -388,10 +312,10 @@ async def get_dashboard_file():
         )
 
     except FileNotFoundError as e:
-        logger.error(f"Dashboard file not found: {e}")
+        logger.error("Dashboard file not found: %s", e)
         raise_not_found_error("API_0002", "Dashboard file not found")
     except (OSError, IOError) as e:
-        logger.error(f"Error serving dashboard file due to file system error: {e}")
+        logger.error("Error serving dashboard file due to file system error: %s", e)
         raise_server_error("API_0003", "File system error")
 
 
@@ -435,7 +359,7 @@ async def generate_dashboard(
                     f"file system error: {e}"
                 )
             except Exception as e:
-                logger.error(f"Background dashboard generation failed: {e}")
+                logger.error("Background dashboard generation failed: %s", e)
 
         background_tasks.add_task(generate_background)
 
@@ -514,7 +438,7 @@ async def get_dashboard_metrics():
         }
 
     except (ImportError, AttributeError) as e:
-        logger.error(f"Error getting dashboard metrics due to missing dependency: {e}")
+        logger.error("Error getting dashboard metrics due to missing dependency: %s", e)
         raise_service_unavailable("API_0005", "Dashboard generator not available")
 
 
@@ -544,7 +468,7 @@ async def get_trend_data():
         }
 
     except (ImportError, AttributeError) as e:
-        logger.error(f"Error getting trend data due to missing dependency: {e}")
+        logger.error("Error getting trend data due to missing dependency: %s", e)
         raise_service_unavailable("API_0005", "Dashboard generator not available")
 
 
@@ -583,7 +507,7 @@ async def get_system_alerts():
         }
 
     except (ImportError, AttributeError) as e:
-        logger.error(f"Error getting system alerts due to missing dependency: {e}")
+        logger.error("Error getting system alerts due to missing dependency: %s", e)
         raise_service_unavailable("API_0005", "Dashboard generator not available")
 
 
@@ -685,10 +609,10 @@ async def judge_workflow_step(request: dict):
         }
 
     except (ImportError, AttributeError) as e:
-        logger.error(f"Error in workflow step judgment due to missing dependency: {e}")
+        logger.error("Error in workflow step judgment due to missing dependency: %s", e)
         raise_service_unavailable("API_0005", "Validation judges not available")
     except ValueError as e:
-        logger.error(f"Error in workflow step judgment due to invalid input: {e}")
+        logger.error("Error in workflow step judgment due to invalid input: %s", e)
         raise_validation_error("API_0001", "Invalid workflow step data")
 
 
@@ -743,10 +667,10 @@ async def judge_agent_response(request: dict):
         }
 
     except (ImportError, AttributeError) as e:
-        logger.error(f"Error in agent response judgment due to missing dependency: {e}")
+        logger.error("Error in agent response judgment due to missing dependency: %s", e)
         raise_service_unavailable("API_0005", "Validation judges not available")
     except ValueError as e:
-        logger.error(f"Error in agent response judgment due to invalid input: {e}")
+        logger.error("Error in agent response judgment due to invalid input: %s", e)
         raise_validation_error("API_0001", "Invalid agent response data")
 
 
@@ -787,7 +711,7 @@ async def get_judge_status():
                 "details": str(e),
             }
         except Exception as e:
-            logger.error(f"Error getting metrics for {judge_name}: {e}")
+            logger.error("Error getting metrics for %s: %s", judge_name, e)
             judge_metrics[judge_name] = {"error": str(e)}
 
     return {

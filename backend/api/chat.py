@@ -107,13 +107,13 @@ async def get_chat_workflow_manager(request: Request) -> Any:
 # Simple utility functions to replace missing imports
 def handle_api_error(error: Exception, request_id: str = "unknown") -> Dict[str, str]:
     """Simple error handler replacement"""
-    logger.error(f"[{request_id}] API error: {str(error)}")
+    logger.error("[%s] API error: %s", request_id, str(error))
     return {"error": str(error)}
 
 
 def log_request_context(request: Request, endpoint: str, request_id: str) -> None:
     """Log request context for debugging"""
-    logger.info(f"[{request_id}] {endpoint} - {request.method} {request.url.path}")
+    logger.info("[%s] %s - %s %s", request_id, endpoint, request.method, request.url.path)
 
 
 # ====================================================================
@@ -438,7 +438,7 @@ async def _get_chat_context(
         )
         return chat_context
     except Exception as e:
-        logger.warning(f"Could not retrieve chat context: {e}")
+        logger.warning("Could not retrieve chat context: %s", e)
         return []
 
 
@@ -510,7 +510,7 @@ async def _generate_ai_response(
                 "role": "assistant",
             }
     except Exception as e:
-        logger.error(f"LLM generation failed: {e}")
+        logger.error("LLM generation failed: %s", e)
         return {
             "content": "I encountered an error processing your message. Please try again.",
             "role": "assistant",
@@ -646,7 +646,7 @@ async def _generate_llm_stream(
         yield f"data: {json.dumps({'type': 'end'})}\n\n"
 
     except Exception as e:
-        logger.error(f"Streaming error: {e}")
+        logger.error("Streaming error: %s", e)
         error_data = {
             "type": "error",
             "message": "Error generating response",
@@ -908,24 +908,24 @@ async def _stream_chat_workflow_messages(
 ):
     """Stream chat workflow messages as SSE events (Issue #398: extracted)."""
     try:
-        logger.debug(f"[{request_id}] Starting stream for chat_id={chat_id}")
+        logger.debug("[%s] Starting stream for chat_id=%s", request_id, chat_id)
         yield f"data: {json.dumps({'type': 'start', 'session_id': chat_id, 'request_id': request_id})}\n\n"
 
-        logger.debug(f"[{request_id}] Processing message: {message[:50]}...")
+        logger.debug("[%s] Processing message: %s...", request_id, message[:50])
         message_count = 0
         async for msg in chat_workflow_manager.process_message_stream(
             session_id=chat_id, message=message, context=context
         ):
             message_count += 1
             msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
-            logger.debug(f"[{request_id}] Message {message_count}: {msg_data}")
+            logger.debug("[%s] Message %s: %s", request_id, message_count, msg_data)
             yield f"data: {json.dumps(msg_data)}\n\n"
 
-        logger.debug(f"[{request_id}] Stream complete: {message_count} messages")
+        logger.debug("[%s] Stream complete: %s messages", request_id, message_count)
         yield f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n"
 
     except Exception as e:
-        logger.error(f"[{request_id}] Streaming error: {e}", exc_info=True)
+        logger.error("[%s] Streaming error: %s", request_id, e, exc_info=True)
         yield f"data: {json.dumps({'type': 'error', 'content': f'Error: {e}', 'request_id': request_id})}\n\n"
 
 
@@ -965,7 +965,7 @@ async def _stream_direct_response(
         yield f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n"
 
     except Exception as e:
-        logger.error(f"[{request_id}] Direct response streaming error: {e}", exc_info=True)
+        logger.error("[%s] Direct response streaming error: %s", request_id, e, exc_info=True)
         error_data = {
             "type": "error",
             "content": f"Error processing command approval: {str(e)}",

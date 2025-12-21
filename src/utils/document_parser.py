@@ -126,7 +126,7 @@ class DocumentParser:
             return text, metadata
 
         except Exception as e:
-            logger.error(f"Failed to parse {file_path}: {e}", exc_info=True)
+            logger.error("Failed to parse %s: %s", file_path, e, exc_info=True)
             metadata["extraction_success"] = False
             metadata["extraction_error"] = str(e)
             return "", metadata
@@ -145,7 +145,7 @@ class DocumentParser:
                 if text.strip():
                     text_parts.append(f"--- Page {page_num} ---\n{text}")
             except Exception as e:
-                logger.warning(f"Failed to extract page {page_num}: {e}")
+                logger.warning("Failed to extract page %s: %s", page_num, e)
 
         return "\n\n".join(text_parts)
 
@@ -316,7 +316,7 @@ class DocumentParser:
             metadata["warning"] = "textract required for .doc files"
             return ""
         except Exception as e:
-            logger.error(f"Failed to parse .doc file: {e}")
+            logger.error("Failed to parse .doc file: %s", e)
             return ""
 
 

@@ -166,7 +166,7 @@ async def get_frontend_config():
         return frontend_config
 
     except Exception as e:
-        logger.error(f"Error getting frontend config: {str(e)}")
+        logger.error("Error getting frontend config: %s", str(e))
         # Return fallback config (Issue #281: uses extracted helper)
-        logger.warning(f"Returning default frontend config due to error: {str(e)}")
+        logger.warning("Returning default frontend config due to error: %s", str(e))
         return _build_fallback_config()

@@ -132,7 +132,7 @@ class ServiceDiscovery:
         host = config_dict.get("host")
         port = config_dict.get("port")
         if not host or not port:
-            logger.error(f"Service {service_name} missing required 'host' or 'port' in configuration")
+            logger.error("Service %s missing required 'host' or 'port' in configuration", service_name)
             host = host or system_defaults.get(f"{service_name}_host", "localhost")
             port = port or system_defaults.get(f"{service_name}_port", 8000)
         return host, port
@@ -265,7 +265,7 @@ class ServiceDiscovery:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error in health monitor loop: {e}")
+                logger.error("Error in health monitor loop: %s", e)
                 await asyncio.sleep(ServiceDiscoveryConfig.ERROR_RECOVERY_DELAY_S)
 
     async def check_all_services(self) -> Dict[str, ServiceStatus]:
@@ -291,7 +291,7 @@ class ServiceDiscovery:
         for i, (service_name, _) in enumerate(tasks):
             result = completed_tasks[i]
             if isinstance(result, Exception):
-                logger.error(f"Health check failed for {service_name}: {result}")
+                logger.error("Health check failed for %s: %s", service_name, result)
                 # Update service status under lock
                 async with self._lock:
                     if service_name in self.services:
@@ -345,7 +345,7 @@ class ServiceDiscovery:
         """Check health of a specific service with circuit breaker logic (thread-safe)."""
         async with self._lock:
             if service_name not in self.services:
-                logger.warning(f"Unknown service: {service_name}")
+                logger.warning("Unknown service: %s", service_name)
                 return ServiceStatus.UNKNOWN
             service = self.services[service_name]
             consecutive_failures = service.consecutive_failures
@@ -363,7 +363,7 @@ class ServiceDiscovery:
             return status
         except Exception as e:
             await self._update_service_error_status(service, str(e), time.time() - start_time)
-            logger.error(f"Health check error for {service_name}: {e}")
+            logger.error("Health check error for %s: %s", service_name, e)
             return ServiceStatus.UNHEALTHY
 
     async def _check_http_service(self, service: ServiceEndpoint) -> ServiceStatus:
@@ -464,7 +464,7 @@ class ServiceDiscovery:
 
             # Check if service is available
             if not service.is_available and service.required:
-                logger.warning(f"Required service {service_name} is not available")
+                logger.warning("Required service %s is not available", service_name)
 
             return service.url
 
@@ -567,7 +567,7 @@ class ServiceDiscovery:
                 return True, ready_services
 
             missing = set(required_services) - set(ready_services)
-            logger.info(f"Waiting for services: {list(missing)}")
+            logger.info("Waiting for services: %s", list(missing))
 
             await asyncio.sleep(ServiceDiscoveryConfig.CORE_SERVICES_WAIT_INTERVAL_S)
 
@@ -600,7 +600,7 @@ async def _auto_start_monitoring():
     try:
         await service_discovery.start_health_monitoring()
     except Exception as e:
-        logger.error(f"Failed to auto-start service discovery: {e}")
+        logger.error("Failed to auto-start service discovery: %s", e)
 
 
 # Schedule auto-start (will run when event loop is available)

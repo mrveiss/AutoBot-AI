@@ -136,7 +136,7 @@ class RedisConfigLoader:
             return configs
 
         except Exception as e:
-            logger.error(f"Error loading YAML config from {yaml_path}: {e}")
+            logger.error("Error loading YAML config from %s: %s", yaml_path, e)
             return {}
 
     @staticmethod
@@ -169,7 +169,7 @@ class RedisConfigLoader:
                     )
                 }
         except (ImportError, Exception) as e:
-            logger.debug(f"Could not load from service registry: {e}")
+            logger.debug("Could not load from service registry: %s", e)
 
         return {}
 

@@ -271,7 +271,7 @@ async def update_rag_configuration(request: RAGConfigUpdate):
             "config": get_rag_config().to_dict(),
         }
 
-    logger.info(f"Updating RAG configuration: {list(updates.keys())}")
+    logger.info("Updating RAG configuration: %s", list(updates.keys()))
 
     # Update configuration
     new_config = update_rag_config(updates)

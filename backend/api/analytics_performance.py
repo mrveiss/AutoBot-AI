@@ -440,7 +440,7 @@ def analyze_with_regex(
                     )
                 )
         except re.error as e:
-            logger.warning(f"Invalid regex in pattern {pattern_id}: {e}")
+            logger.warning("Invalid regex in pattern %s: %s", pattern_id, e)
 
     return issues
 
@@ -519,7 +519,7 @@ async def analyze_path(
             if include_ast:
                 all_issues.extend(analyze_with_ast(str(filepath), content))
         except Exception as e:
-            logger.warning(f"Failed to analyze {filepath}: {e}")
+            logger.warning("Failed to analyze %s: %s", filepath, e)
 
     # Use demo data if no files found
     if not files_to_analyze:

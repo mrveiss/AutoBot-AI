@@ -204,7 +204,7 @@ class HTTPClientManager:
         except Exception as e:
             async with self._counter_lock:
                 self._error_count += 1
-            logger.error(f"HTTP request failed: {e}")
+            logger.error("HTTP request failed: %s", e)
             raise
         finally:
             # Decrement active request count and check for pending pool recreation
@@ -361,18 +361,18 @@ async def example_usage():
     # Simple GET request
     try:
         data = await http_client.get_json("https://api.example.com/data")
-        logger.info(f"Received data: {data}")
+        logger.info("Received data: %s", data)
     except aiohttp.ClientError as e:
-        logger.error(f"Request failed: {e}")
+        logger.error("Request failed: %s", e)
 
     # POST request with JSON
     try:
         response_data = await http_client.post_json(
             "https://api.example.com/submit", json_data={"key": "value"}
         )
-        logger.info(f"Response: {response_data}")
+        logger.info("Response: %s", response_data)
     except aiohttp.ClientError as e:
-        logger.error(f"Request failed: {e}")
+        logger.error("Request failed: %s", e)
 
     # Manual request with custom options
     try:
@@ -383,11 +383,11 @@ async def example_usage():
                 # Process streaming data
                 pass
     except Exception as e:
-        logger.error(f"Streaming failed: {e}")
+        logger.error("Streaming failed: %s", e)
 
     # Get statistics
     stats = http_client.get_stats()
-    logger.info(f"HTTP client stats: {stats}")
+    logger.info("HTTP client stats: %s", stats)
 
 
 # Decorator for automatic session management

@@ -64,7 +64,7 @@ async def list_workers():
         return workers
 
     except Exception as e:
-        logger.error(f"Failed to list workers: {e}")
+        logger.error("Failed to list workers: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve workers: {str(e)}",
@@ -99,14 +99,14 @@ async def add_worker(worker_config: NPUWorkerConfig):
         manager = await get_worker_manager()
         worker_details = await manager.add_worker(worker_config)
 
-        logger.info(f"Successfully registered worker: {worker_config.id}")
+        logger.info("Successfully registered worker: %s", worker_config.id)
         return worker_details
 
     except ValueError as e:
-        logger.warning(f"Worker registration failed: {e}")
+        logger.warning("Worker registration failed: %s", e)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        logger.error(f"Failed to add worker: {e}")
+        logger.error("Failed to add worker: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to register worker: {str(e)}",
@@ -148,7 +148,7 @@ async def get_worker(worker_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get worker {worker_id}: {e}")
+        logger.error("Failed to get worker %s: %s", worker_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve worker: {str(e)}",
@@ -190,16 +190,16 @@ async def update_worker(worker_id: str, worker_config: NPUWorkerConfig):
         manager = await get_worker_manager()
         worker_details = await manager.update_worker(worker_id, worker_config)
 
-        logger.info(f"Successfully updated worker: {worker_id}")
+        logger.info("Successfully updated worker: %s", worker_id)
         return worker_details
 
     except ValueError as e:
-        logger.warning(f"Worker update failed: {e}")
+        logger.warning("Worker update failed: %s", e)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to update worker {worker_id}: {e}")
+        logger.error("Failed to update worker %s: %s", worker_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update worker: {str(e)}",
@@ -227,14 +227,14 @@ async def remove_worker(worker_id: str):
         manager = await get_worker_manager()
         await manager.remove_worker(worker_id)
 
-        logger.info(f"Successfully removed worker: {worker_id}")
+        logger.info("Successfully removed worker: %s", worker_id)
         return JSONResponse(status_code=status.HTTP_204_NO_CONTENT, content=None)
 
     except ValueError as e:
-        logger.warning(f"Worker removal failed: {e}")
+        logger.warning("Worker removal failed: %s", e)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
-        logger.error(f"Failed to remove worker {worker_id}: {e}")
+        logger.error("Failed to remove worker %s: %s", worker_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to remove worker: {str(e)}",
@@ -282,7 +282,7 @@ async def test_worker(worker_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to test worker {worker_id}: {e}")
+        logger.error("Failed to test worker %s: %s", worker_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to test worker: {str(e)}",
@@ -327,7 +327,7 @@ async def get_worker_metrics(worker_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get metrics for worker {worker_id}: {e}")
+        logger.error("Failed to get metrics for worker %s: %s", worker_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve metrics: {str(e)}",
@@ -358,7 +358,7 @@ async def get_load_balancing_config():
         return config
 
     except Exception as e:
-        logger.error(f"Failed to get load balancing config: {e}")
+        logger.error("Failed to get load balancing config: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve load balancing configuration: {str(e)}",
@@ -389,14 +389,14 @@ async def update_load_balancing_config(config: LoadBalancingConfig):
         manager = await get_worker_manager()
         await manager.update_load_balancing_config(config)
 
-        logger.info(f"Updated load balancing config: strategy={config.strategy}")
+        logger.info("Updated load balancing config: strategy=%s", config.strategy)
         return config
 
     except ValueError as e:
-        logger.warning(f"Load balancing config update failed: {e}")
+        logger.warning("Load balancing config update failed: %s", e)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        logger.error(f"Failed to update load balancing config: {e}")
+        logger.error("Failed to update load balancing config: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update load balancing configuration: {str(e)}",
@@ -447,7 +447,7 @@ async def get_npu_status():
         }
 
     except Exception as e:
-        logger.error(f"Failed to get NPU status: {e}")
+        logger.error("Failed to get NPU status: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve NPU status: {str(e)}",

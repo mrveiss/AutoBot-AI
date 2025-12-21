@@ -75,10 +75,10 @@ class CaptchaSolver:
                     site_key, page_url, invisible
                 )
             else:
-                logger.error(f"Unsupported CAPTCHA service: {self.service}")
+                logger.error("Unsupported CAPTCHA service: %s", self.service)
                 return None
         except Exception as e:
-            logger.error(f"CAPTCHA solving failed: {str(e)}")
+            logger.error("CAPTCHA solving failed: %s", str(e))
             return None
 
     async def _solve_2captcha_recaptcha(
@@ -108,11 +108,11 @@ class CaptchaSolver:
         submit_result = await http_client.post_json(submit_url, json_data=submit_data)
 
         if submit_result.get("status") != 1:
-            logger.error(f"CAPTCHA submit failed: {submit_result}")
+            logger.error("CAPTCHA submit failed: %s", submit_result)
             return None
 
         captcha_id = submit_result["request"]
-        logger.info(f"CAPTCHA submitted, ID: {captcha_id}")
+        logger.info("CAPTCHA submitted, ID: %s", captcha_id)
 
         # Poll for result
         for attempt in range(self.timeout // 5):
@@ -129,7 +129,7 @@ class CaptchaSolver:
             elif result.get("error_text") == "CAPCHA_NOT_READY":
                 continue
             else:
-                logger.error(f"CAPTCHA solving failed: {result}")
+                logger.error("CAPTCHA solving failed: %s", result)
                 return None
 
         logger.error("CAPTCHA solving timeout")
@@ -296,7 +296,7 @@ class AdvancedWebResearcher:
 
     async def search_web(self, query: str, max_results: int = 5) -> Dict[str, Any]:
         """Perform web search with anti-detection"""
-        logger.info(f"Starting advanced web search for: {query}")
+        logger.info("Starting advanced web search for: %s", query)
 
         if not self.browser:
             await self.initialize()
@@ -313,7 +313,7 @@ class AdvancedWebResearcher:
 
             for engine_name, search_func in search_engines:
                 try:
-                    logger.info(f"Searching {engine_name} for: {query}")
+                    logger.info("Searching %s for: %s", engine_name, query)
                     results = await search_func(
                         query, max_results // len(search_engines) + 1
                     )
@@ -328,7 +328,7 @@ class AdvancedWebResearcher:
                     await self._random_delay(2, 5)
 
                 except Exception as e:
-                    logger.error(f"Search engine {engine_name} failed: {str(e)}")
+                    logger.error("Search engine %s failed: %s", engine_name, str(e))
                     continue
 
             # Deduplicate and rank results
@@ -349,7 +349,7 @@ class AdvancedWebResearcher:
             }
 
         except Exception as e:
-            logger.error(f"Advanced web search failed: {str(e)}")
+            logger.error("Advanced web search failed: %s", str(e))
             return {
                 "status": "error",
                 "query": query,
@@ -403,7 +403,7 @@ class AdvancedWebResearcher:
                         )
 
                 except Exception as e:
-                    logger.error(f"Error extracting DuckDuckGo result: {str(e)}")
+                    logger.error("Error extracting DuckDuckGo result: %s", str(e))
                     continue
 
         finally:
@@ -454,7 +454,7 @@ class AdvancedWebResearcher:
                         )
 
                 except Exception as e:
-                    logger.error(f"Error extracting Bing result: {str(e)}")
+                    logger.error("Error extracting Bing result: %s", str(e))
                     continue
 
         finally:
@@ -530,7 +530,7 @@ class AdvancedWebResearcher:
                     if result:
                         results.append(result)
                 except Exception as e:
-                    logger.error(f"Error extracting Google result: {str(e)}")
+                    logger.error("Error extracting Google result: %s", str(e))
 
         finally:
             await page.close()
@@ -553,13 +553,13 @@ class AdvancedWebResearcher:
         for selector in captcha_selectors:
             element = await page.query_selector(selector)
             if element:
-                logger.info(f"CAPTCHA detected with selector: {selector}")
+                logger.info("CAPTCHA detected with selector: %s", selector)
                 return True
 
         # Check page title and content for CAPTCHA indicators
         title = await page.title()
         if any(keyword in title.lower() for keyword in _CAPTCHA_KEYWORDS):
-            logger.info(f"CAPTCHA detected in page title: {title}")
+            logger.info("CAPTCHA detected in page title: %s", title)
             return True
 
         return False
@@ -653,7 +653,7 @@ class AdvancedWebResearcher:
                 await self._random_delay(1, 3)
 
             except Exception as e:
-                logger.error(f"Failed to enhance result {result['url']}: {str(e)}")
+                logger.error("Failed to enhance result %s: %s", result['url'], str(e))
                 result["content"] = result.get("snippet", "")
                 result["content_length"] = len(result["content"])
                 result["quality_score"] = 0.5
@@ -670,7 +670,7 @@ class AdvancedWebResearcher:
 
             # Handle potential CAPTCHA
             if await self._detect_captcha(page):
-                logger.warning(f"CAPTCHA detected on {url}, skipping content scraping")
+                logger.warning("CAPTCHA detected on %s, skipping content scraping", url)
                 return ""
 
             # Extract main content
@@ -703,7 +703,7 @@ class AdvancedWebResearcher:
             return content[:5000]  # Limit to 5000 characters
 
         except Exception as e:
-            logger.error(f"Failed to scrape content from {url}: {str(e)}")
+            logger.error("Failed to scrape content from %s: %s", url, str(e))
             return ""
         finally:
             await page.close()
@@ -833,7 +833,7 @@ class AdvancedWebResearcher:
 
         # Wait outside lock if needed
         if wait_time > 0:
-            logger.info(f"Rate limiting: waiting {wait_time:.2f}s for {domain}")
+            logger.info("Rate limiting: waiting %ss for %s", wait_time:.2f, domain)
             await asyncio.sleep(wait_time)
 
     async def _random_delay(self, min_seconds: float, max_seconds: float):

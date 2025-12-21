@@ -171,12 +171,12 @@ class AgentOrchestrator:
             try:
                 self.communication_manager = get_communication_manager()
             except Exception as e:
-                logger.warning(f"Could not initialize communication manager: {e}")
+                logger.warning("Could not initialize communication manager: %s", e)
 
-        logger.info(f"Enhanced Agent Orchestrator initialized: {self.orchestrator_id}")
-        logger.info(f"Communication available: {COMMUNICATION_AVAILABLE}")
-        logger.info(f"Legacy agents available: {LEGACY_AGENTS_AVAILABLE}")
-        logger.info(f"Distributed agents available: {DISTRIBUTED_AGENTS_AVAILABLE}")
+        logger.info("Enhanced Agent Orchestrator initialized: %s", self.orchestrator_id)
+        logger.info("Communication available: %s", COMMUNICATION_AVAILABLE)
+        logger.info("Legacy agents available: %s", LEGACY_AGENTS_AVAILABLE)
+        logger.info("Distributed agents available: %s", DISTRIBUTED_AGENTS_AVAILABLE)
 
     @property
     def is_running(self) -> bool:
@@ -253,7 +253,7 @@ class AgentOrchestrator:
                 }
 
         except Exception as e:
-            logger.error(f"Agent Orchestrator error: {e}")
+            logger.error("Agent Orchestrator error: %s", e)
             return {
                 "status": "error",
                 "response": (
@@ -321,7 +321,7 @@ class AgentOrchestrator:
             return stats
 
         except Exception as e:
-            logger.error(f"Error getting orchestrator statistics: {e}")
+            logger.error("Error getting orchestrator statistics: %s", e)
             return {
                 "error": str(e),
                 "orchestrator_id": self.orchestrator_id,

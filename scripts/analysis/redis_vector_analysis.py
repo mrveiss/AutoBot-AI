@@ -41,7 +41,7 @@ class RedisVectorStoreAnalyzer:
                     data = response.json()
                     return [model['name'] for model in data.get('models', [])]
         except Exception as e:
-            logger.error(f"Failed to get models: {e}")
+            logger.error("Failed to get models: %s", e)
         return []
 
     async def analyze_existing_data(self) -> Dict[str, Any]:
@@ -108,11 +108,11 @@ class RedisVectorStoreAnalyzer:
                 'key_prefixes': info_dict.get('prefixes', [])
             }
 
-            logger.info(f"📊 Analysis complete: {analysis['total_documents']} docs, {analysis['vector_dimension']} dim vectors")
+            logger.info("📊 Analysis complete: %s docs, %s dim vectors", analysis['total_documents'], analysis['vector_dimension'])
             return analysis
 
         except Exception as e:
-            logger.error(f"❌ Data analysis failed: {e}")
+            logger.error("❌ Data analysis failed: %s", e)
             return {}
 
     async def test_llamaindex_with_existing_data_basic(self) -> Tuple[bool, int, str]:
@@ -123,7 +123,7 @@ class RedisVectorStoreAnalyzer:
             # Get available models
             models = await self.get_available_models()
             llm_model = models[0] if models else "gemma3:270m"
-            logger.info(f"Using LLM model: {llm_model}")
+            logger.info("Using LLM model: %s", llm_model)
 
             from llama_index.vector_stores.redis import RedisVectorStore
             from llama_index.vector_stores.redis.schema import RedisVectorStoreSchema
@@ -168,14 +168,14 @@ class RedisVectorStoreAnalyzer:
 
             result_count = len(response.source_nodes) if hasattr(response, 'source_nodes') else 0
 
-            logger.info(f"✅ LlamaIndex successful: {result_count} results")
+            logger.info("✅ LlamaIndex successful: %s results", result_count)
 
             assessment = "EXCELLENT" if result_count > 5 else "GOOD" if result_count > 0 else "POOR"
 
             return True, result_count, assessment
 
         except Exception as e:
-            logger.error(f"❌ LlamaIndex test failed: {e}")
+            logger.error("❌ LlamaIndex test failed: %s", e)
             return False, 0, "FAILED"
 
     async def test_langchain_new_approach(self) -> Tuple[bool, int, str]:
@@ -233,7 +233,7 @@ class RedisVectorStoreAnalyzer:
                 k=5
             )
 
-            logger.info(f"✅ LangChain successful: {len(results)} results")
+            logger.info("✅ LangChain successful: %s results", len(results))
 
             # Test advanced features
             try:
@@ -244,16 +244,16 @@ class RedisVectorStoreAnalyzer:
                     k=3,
                     filter={"category": "deployment"}
                 )
-                logger.info(f"✅ Filtered search: {len(filtered_results)} results")
+                logger.info("✅ Filtered search: %s results", len(filtered_results))
             except Exception as filter_e:
-                logger.warning(f"Filtering not supported: {filter_e}")
+                logger.warning("Filtering not supported: %s", filter_e)
 
             assessment = "EXCELLENT" if len(results) >= len(test_docs) else "GOOD"
 
             return True, len(results), assessment
 
         except Exception as e:
-            logger.error(f"❌ LangChain test failed: {e}")
+            logger.error("❌ LangChain test failed: %s", e)
             import traceback
             logger.error(traceback.format_exc())
             return False, 0, "FAILED"
@@ -289,19 +289,19 @@ class RedisVectorStoreAnalyzer:
                     )
                     count = search_result[0] if search_result else 0
                     results[query] = count
-                    logger.info(f"Query '{query}': {count} results")
+                    logger.info("Query '%s': %s results", query, count)
                 except Exception as e:
-                    logger.warning(f"Query '{query}' failed: {e}")
+                    logger.warning("Query '%s' failed: %s", query, e)
                     results[query] = 0
 
             total_accessible = max(results.values())
             assessment = "EXCELLENT" if total_accessible > 1000 else "GOOD" if total_accessible > 100 else "POOR"
 
-            logger.info(f"✅ Direct Redis access: {total_accessible} max results")
+            logger.info("✅ Direct Redis access: %s max results", total_accessible)
             return True, total_accessible, assessment
 
         except Exception as e:
-            logger.error(f"❌ Direct Redis test failed: {e}")
+            logger.error("❌ Direct Redis test failed: %s", e)
             return False, 0, "FAILED"
 
     async def generate_migration_complexity_estimate(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
@@ -520,7 +520,7 @@ class RedisVectorStoreAnalyzer:
             # Get available models
             models = await self.get_available_models()
             llm_model = models[0] if models else "gemma3:270m"
-            logger.info(f"Using LLM model: {llm_model}")
+            logger.info("Using LLM model: %s", llm_model)
 
             from llama_index.vector_stores.redis import RedisVectorStore
             from llama_index.vector_stores.redis.schema import RedisVectorStoreSchema
@@ -568,18 +568,18 @@ class RedisVectorStoreAnalyzer:
             nodes = await asyncio.to_thread(retriever.retrieve, "kubernetes deployment guide")
 
             result_count = len(nodes)
-            logger.info(f"✅ LlamaIndex retrieval successful: {result_count} results")
+            logger.info("✅ LlamaIndex retrieval successful: %s results", result_count)
 
             if result_count > 0:
                 for i, node in enumerate(nodes[:2]):
-                    logger.info(f"  Result {i+1}: {node.text[:100]}...")
+                    logger.info("  Result %s: %s...", i+1, node.text[:100])
 
             assessment = "EXCELLENT" if result_count > 5 else "GOOD" if result_count > 0 else "POOR"
 
             return True, result_count, assessment
 
         except Exception as e:
-            logger.error(f"❌ LlamaIndex test failed: {e}")
+            logger.error("❌ LlamaIndex test failed: %s", e)
             import traceback
             logger.error(traceback.format_exc())
             return False, 0, "FAILED"
@@ -596,7 +596,7 @@ async def main():
     with open(output_file, 'w') as f:
         json.dump(recommendation, f, indent=2)
 
-    logger.info(f"\n💾 Detailed recommendation saved to: {output_file}")
+    logger.info("\n💾 Detailed recommendation saved to: %s", output_file)
 
 if __name__ == "__main__":
     asyncio.run(main())

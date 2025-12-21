@@ -137,7 +137,7 @@ class ErrorMetricsCollector:
             from src.monitoring.prometheus_metrics import get_metrics_manager
             self.prometheus = get_metrics_manager()
         except (ImportError, Exception) as e:
-            logger.warning(f"Prometheus metrics not available: {e}")
+            logger.warning("Prometheus metrics not available: %s", e)
             self.prometheus = None
 
     async def record_error(
@@ -272,7 +272,7 @@ class ErrorMetricsCollector:
             )
 
         except Exception as e:
-            logger.error(f"Failed to send alert notification: {e}")
+            logger.error("Failed to send alert notification: %s", e)
 
     async def mark_resolved(self, trace_id: str) -> bool:
         """
@@ -398,7 +398,7 @@ class ErrorMetricsCollector:
         """
         threshold_key = f"{component}:{error_code or 'any'}"
         self._alert_thresholds[threshold_key] = threshold
-        logger.info(f"Set alert threshold: {threshold_key} = {threshold}")
+        logger.info("Set alert threshold: %s = %s", threshold_key, threshold)
 
     async def cleanup_old_metrics(self) -> int:
         """
@@ -460,7 +460,7 @@ class ErrorMetricsCollector:
                 ]
                 for key in keys_to_remove:
                     del self._last_error_counts[key]
-                logger.info(f"Reset threshold counters for component: {component}")
+                logger.info("Reset threshold counters for component: %s", component)
             else:
                 self._last_error_counts.clear()
                 logger.info("Reset all threshold counters")

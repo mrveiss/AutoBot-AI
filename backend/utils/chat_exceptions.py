@@ -190,4 +190,4 @@ __all__ = [
 
 def log_exception(error: Exception, context: str = "chat") -> None:
     """Simple exception logger replacement."""
-    logger.error(f"[{context}] Exception: {str(error)}")
+    logger.error("[%s] Exception: %s", context, str(error))

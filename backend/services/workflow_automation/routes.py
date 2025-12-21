@@ -93,7 +93,7 @@ async def create_workflow(request: AutomatedWorkflowRequest):
         }
 
     except Exception as e:
-        logger.error(f"Failed to create workflow: {e}")
+        logger.error("Failed to create workflow: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -117,7 +117,7 @@ async def start_workflow(workflow_id: str):
             raise HTTPException(status_code=404, detail="Workflow not found")
 
     except Exception as e:
-        logger.error(f"Failed to start workflow: {e}")
+        logger.error("Failed to start workflow: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -145,7 +145,7 @@ async def control_workflow(request: WorkflowControlRequest):
             )
 
     except Exception as e:
-        logger.error(f"Failed to control workflow: {e}")
+        logger.error("Failed to control workflow: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -166,7 +166,7 @@ async def get_workflow_status(workflow_id: str):
             raise HTTPException(status_code=404, detail="Workflow not found")
 
     except Exception as e:
-        logger.error(f"Failed to get workflow status: {e}")
+        logger.error("Failed to get workflow status: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -188,7 +188,7 @@ async def get_active_workflows():
         return {"success": True, "workflows": workflows, "count": len(workflows)}
 
     except Exception as e:
-        logger.error(f"Failed to get active workflows: {e}")
+        logger.error("Failed to get active workflows: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -255,7 +255,7 @@ async def create_workflow_from_chat(request: dict):
             }
 
     except Exception as e:
-        logger.error(f"Failed to create workflow from chat: {e}")
+        logger.error("Failed to create workflow from chat: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -299,7 +299,7 @@ async def present_plan(workflow_id: str, request: PlanPresentationRequest = None
             raise HTTPException(status_code=404, detail="Workflow not found")
 
     except Exception as e:
-        logger.error(f"Failed to present plan: {e}")
+        logger.error("Failed to present plan: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -372,7 +372,7 @@ async def approve_plan(request: PlanApprovalResponse):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to process plan approval: {e}")
+        logger.error("Failed to process plan approval: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -407,7 +407,7 @@ async def get_pending_approval(workflow_id: str):
             }
 
     except Exception as e:
-        logger.error(f"Failed to get pending approval: {e}")
+        logger.error("Failed to get pending approval: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -448,8 +448,8 @@ async def workflow_websocket(websocket: WebSocket, session_id: str):
         # Clean up on disconnect
         if session_id in get_workflow_manager().terminal_sessions:
             del get_workflow_manager().terminal_sessions[session_id]
-        logger.info(f"WebSocket disconnected for session {session_id}")
+        logger.info("WebSocket disconnected for session %s", session_id)
     except Exception as e:
-        logger.error(f"WebSocket error for session {session_id}: {e}")
+        logger.error("WebSocket error for session %s: %s", session_id, e)
         if session_id in get_workflow_manager().terminal_sessions:
             del get_workflow_manager().terminal_sessions[session_id]

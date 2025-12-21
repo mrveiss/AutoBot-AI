@@ -50,14 +50,14 @@ class HostContainerDNS:
                         short_name = name.replace('autobot-', '')
                         mappings[f"{short_name}.autobot"] = ip
 
-            logger.info(f"Found {len(mappings)} container mappings")
+            logger.info("Found %s container mappings", len(mappings))
             return mappings
 
         except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to get container mappings: {e}")
+            logger.error("Failed to get container mappings: %s", e)
             return {}
         except Exception as e:
-            logger.error(f"Error getting container mappings: {e}")
+            logger.error("Error getting container mappings: %s", e)
             return {}
 
     def generate_hosts_entries(self, mappings: Dict[str, str]) -> List[str]:
@@ -120,11 +120,11 @@ class HostContainerDNS:
                 logger.info("✅ Updated /etc/hosts successfully")
                 return True
             else:
-                logger.error(f"Failed to update /etc/hosts: {process.stderr}")
+                logger.error("Failed to update /etc/hosts: %s", process.stderr)
                 return False
 
         except Exception as e:
-            logger.error(f"Error updating hosts file: {e}")
+            logger.error("Error updating hosts file: %s", e)
             return False
 
     def test_resolution(self, mappings: Dict[str, str]) -> Dict[str, bool]:
@@ -138,13 +138,13 @@ class HostContainerDNS:
                 results[name] = (resolved_ip == expected_ip)
 
                 if resolved_ip == expected_ip:
-                    logger.info(f"✅ {name} → {resolved_ip}")
+                    logger.info("✅ %s → %s", name, resolved_ip)
                 else:
-                    logger.warning(f"❌ {name} → {resolved_ip} (expected {expected_ip})")
+                    logger.warning("❌ %s → %s (expected %s)", name, resolved_ip, expected_ip)
 
             except socket.gaierror:
                 results[name] = False
-                logger.warning(f"❌ {name} → DNS resolution failed")
+                logger.warning("❌ %s → DNS resolution failed", name)
 
         return results
 
@@ -176,13 +176,13 @@ class HostContainerDNS:
                         connectivity[container_name][port] = (result == 0)
 
                         if result == 0:
-                            logger.info(f"✅ {container_name}:{port} - reachable")
+                            logger.info("✅ %s:%s - reachable", container_name, port)
                         else:
-                            logger.warning(f"❌ {container_name}:{port} - not reachable")
+                            logger.warning("❌ %s:%s - not reachable", container_name, port)
 
                     except Exception as e:
                         connectivity[container_name][port] = False
-                        logger.warning(f"❌ {container_name}:{port} - error: {e}")
+                        logger.warning("❌ %s:%s - error: %s", container_name, port, e)
 
         return connectivity
 
@@ -199,7 +199,7 @@ class HostContainerDNS:
         success = self.update_hosts_file(entries)
 
         if success:
-            logger.info(f"✅ Updated {len(mappings)} container DNS mappings")
+            logger.info("✅ Updated %s container DNS mappings", len(mappings))
             return True
         else:
             logger.error("❌ Failed to update DNS mappings")
@@ -207,7 +207,7 @@ class HostContainerDNS:
 
     def run_daemon(self, interval: int = 60):
         """Run as daemon with periodic updates"""
-        logger.info(f"🚀 Starting host-container DNS daemon (refresh every {interval}s)")
+        logger.info("🚀 Starting host-container DNS daemon (refresh every %ss)", interval)
 
         while True:
             try:
@@ -217,7 +217,7 @@ class HostContainerDNS:
                 logger.info("🛑 DNS daemon stopped")
                 break
             except Exception as e:
-                logger.error(f"❌ Daemon error: {e}")
+                logger.error("❌ Daemon error: %s", e)
                 time.sleep(10)
 
 

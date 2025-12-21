@@ -86,14 +86,14 @@ async def _store_system_command(kb_to_use, cmd_info: dict) -> bool:
             result = await kb_to_use.store_fact(text=content, metadata=metadata)
 
         if result and result.get("fact_id"):
-            logger.info(f"Added command: {cmd_info['command']}")
+            logger.info("Added command: %s", cmd_info['command'])
             return True
 
-        logger.warning(f"Failed to add command: {cmd_info['command']}")
+        logger.warning("Failed to add command: %s", cmd_info['command'])
         return False
 
     except Exception as e:
-        logger.error(f"Error adding command {cmd_info['command']}: {e}")
+        logger.error("Error adding command %s: %s", cmd_info['command'], e)
         return False
 
 
@@ -371,7 +371,7 @@ async def populate_system_commands(request: dict, req: Request):
         # Small delay between batches to prevent overload
         await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
-    logger.info(f"System commands population completed. Added {items_added} commands.")
+    logger.info("System commands population completed. Added %s commands.", items_added)
 
     return {
         "status": "success",
@@ -419,11 +419,11 @@ async def _fetch_man_page(command: str) -> str | None:
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
-            logger.warning(f"Timeout getting man page for: {command}")
+            logger.warning("Timeout getting man page for: %s", command)
             return None
 
         if proc.returncode != 0 or not stdout.strip():
-            logger.warning(f"No man page found for command: {command}")
+            logger.warning("No man page found for command: %s", command)
             return None
 
         man_content = stdout.decode("utf-8").strip()
@@ -431,7 +431,7 @@ async def _fetch_man_page(command: str) -> str | None:
         return _ANSI_ESCAPE_RE.sub("", man_content)
 
     except Exception as e:
-        logger.error(f"Error fetching man page for {command}: {e}")
+        logger.error("Error fetching man page for %s: %s", command, e)
         return None
 
 
@@ -445,12 +445,12 @@ async def _store_man_page(kb_to_use, command: str, content: str) -> bool:
             store_result = await kb_to_use.store_fact(text=content, metadata=metadata)
 
         if store_result and store_result.get("fact_id"):
-            logger.info(f"Added man page: {command}")
+            logger.info("Added man page: %s", command)
             return True
-        logger.warning(f"Failed to store man page: {command}")
+        logger.warning("Failed to store man page: %s", command)
         return False
     except Exception as e:
-        logger.error(f"Error storing man page for {command}: {e}")
+        logger.error("Error storing man page for %s: %s", command, e)
         return False
 
 
@@ -491,11 +491,11 @@ async def _populate_man_pages_background(kb_to_use):
             # Batch processing delay
             await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
-        logger.info(f"Manual pages population completed. Added {items_added} man pages.")
+        logger.info("Manual pages population completed. Added %s man pages.", items_added)
         return items_added
 
     except Exception as e:
-        logger.error(f"Error populating manual pages in background: {str(e)}")
+        logger.error("Error populating manual pages in background: %s", str(e))
         return 0
 
 
@@ -560,7 +560,7 @@ async def refresh_system_knowledge(request: dict, req: Request):
     # Start background Celery task
     task = refresh_task.apply_async()
 
-    logger.info(f"Knowledge refresh task started: {task.id}")
+    logger.info("Knowledge refresh task started: %s", task.id)
 
     return {
         "task_id": task.id,
@@ -681,7 +681,7 @@ async def _store_doc_file(
             return await kb_to_use.store_fact(content=structured_content, metadata=metadata)
         return await kb_to_use.store_fact(text=structured_content, metadata=metadata)
     except Exception as e:
-        logger.error(f"Error storing doc {doc_file}: {e}")
+        logger.error("Error storing doc %s: %s", doc_file, e)
         return None
 
 
@@ -722,7 +722,7 @@ async def _process_doc_file(
     content = await _read_doc_file_content(file_path)
 
     if content is None:
-        logger.warning(f"File not found or empty: {doc_file}")
+        logger.warning("File not found or empty: %s", doc_file)
         return (0, 1, 0)
 
     category = extract_category_from_path(doc_file)
@@ -735,7 +735,7 @@ async def _process_doc_file(
             facts_count=1,
             metadata={"fact_id": result.get("fact_id"), "title": f"AutoBot: {doc_file}"},
         )
-        logger.info(f"Added AutoBot doc: {doc_file}")
+        logger.info("Added AutoBot doc: %s", doc_file)
         return (1, 0, 0)
 
     tracker.mark_failed(str(file_path), "Failed to store in knowledge base")
@@ -799,7 +799,7 @@ async def _store_system_config(kb_to_use) -> bool:
             return True
         return False
     except Exception as e:
-        logger.error(f"Error adding AutoBot configuration: {e}")
+        logger.error("Error adding AutoBot configuration: %s", e)
         return False
 
 
@@ -830,7 +830,7 @@ async def _scan_doc_files(
     for md_file in md_files:
         rel_path = md_file.relative_to(autobot_base_path)
         if not force_reindex and not tracker.needs_reimport(str(md_file)):
-            logger.info(f"Skipping unchanged file: {rel_path}")
+            logger.info("Skipping unchanged file: %s", rel_path)
             items_skipped += 1
             continue
         doc_files.append(str(rel_path))
@@ -870,7 +870,7 @@ async def _process_all_doc_files(
         except Exception as e:
             items_failed += 1
             tracker.mark_failed(str(autobot_base_path / doc_file), str(e))
-            logger.error(f"Error processing AutoBot doc {doc_file}: {e}")
+            logger.error("Error processing AutoBot doc %s: %s", doc_file, e)
 
         await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
@@ -929,7 +929,7 @@ async def populate_autobot_docs(request: dict, req: Request):
     if await _store_autobot_config_info(kb_to_use):
         items_added += 1
 
-    logger.info(f"AutoBot docs completed: {items_added} added, {items_skipped} skipped, {items_failed} failed")
+    logger.info("AutoBot docs completed: %s added, %s skipped, %s failed", items_added, items_skipped, items_failed)
     return _build_population_response(items_added, items_skipped, items_failed, len(doc_files), force_reindex)
 
 
@@ -951,7 +951,7 @@ async def _store_single_man_page(kb_to_use, man_page: dict) -> bool:
         )
         return result and result.get("status") == "success"
     except Exception as e:
-        logger.error(f"Error storing man page {man_page.get('command')}: {e}")
+        logger.error("Error storing man page %s: %s", man_page.get('command'), e)
         return False
 
 
@@ -1003,7 +1003,7 @@ async def _scan_and_store_man_pages(
         redis_client = get_redis_client(async_client=False, database="main")
         scanner = FastDocumentScanner(redis_client)
 
-        logger.info(f"Scanning man pages (limit={limit}, sections={sections})...")
+        logger.info("Scanning man pages (limit=%s, sections=%s)...", limit, sections)
         man_pages = scanner.get_all_man_pages_for_indexing(
             limit=limit, sections=sections, system_context=system_context,
         )
@@ -1013,11 +1013,11 @@ async def _scan_and_store_man_pages(
                     "items_added": 0, "items_failed": 0}
 
         items_added, items_failed = await _store_man_pages_batch(kb_to_use, man_pages)
-        logger.info(f"Man page scan complete: {items_added} added, {items_failed} failed")
+        logger.info("Man page scan complete: %s added, %s failed", items_added, items_failed)
         return _build_man_scan_result(items_added, items_failed, len(man_pages), machine_id)
 
     except Exception as e:
-        logger.error(f"Man page scan failed: {e}")
+        logger.error("Man page scan failed: %s", e)
         return {"status": "error", "message": str(e), "items_added": 0, "items_failed": 0}
 
 
@@ -1081,7 +1081,7 @@ async def _store_parsed_man_pages(kb_to_use, parsed_content: list) -> int:
             if result and result.get("status") == "success":
                 items_added += 1
         except Exception as e:
-            logger.error(f"Error storing parsed man page: {e}")
+            logger.error("Error storing parsed man page: %s", e)
     return items_added
 
 

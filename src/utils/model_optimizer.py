@@ -198,15 +198,15 @@ class ModelOptimizer:
                         models.append(model_info)
 
                     self._models_cache = {model.name: model for model in models}
-                    self.logger.info(f"Refreshed {len(models)} available models")
+                    self.logger.info("Refreshed %s available models", len(models))
                     return models
 
                 else:
-                    self.logger.error(f"Failed to fetch models: HTTP {response.status}")
+                    self.logger.error("Failed to fetch models: HTTP %s", response.status)
                     return []
 
         except Exception as e:
-            self.logger.error(f"Error refreshing models: {e}")
+            self.logger.error("Error refreshing models: %s", e)
             return []
 
     async def _load_model_performance_history(self, model_info: ModelInfo):
@@ -296,7 +296,7 @@ class ModelOptimizer:
             return None
 
         except Exception as e:
-            self.logger.error(f"Error selecting optimal model: {e}")
+            self.logger.error("Error selecting optimal model: %s", e)
             return list(self._models_cache.keys())[0] if self._models_cache else None
 
     # Backward compatibility methods
@@ -335,7 +335,7 @@ class ModelOptimizer:
                 model_name, response_time, tokens_per_second, success
             )
         except Exception as e:
-            self.logger.error(f"Error tracking performance for {model_name}: {e}")
+            self.logger.error("Error tracking performance for %s: %s", model_name, e)
 
     async def get_optimization_suggestions(self) -> List[Dict[str, Any]]:
         """Get suggestions for model optimization."""
@@ -374,7 +374,7 @@ class ModelOptimizer:
             return suggestions
 
         except Exception as e:
-            self.logger.error(f"Error generating optimization suggestions: {e}")
+            self.logger.error("Error generating optimization suggestions: %s", e)
             return [{"type": "error", "message": str(e)}]
 
     def _build_no_history_suggestion(self) -> Dict[str, Any]:

@@ -196,12 +196,12 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
                 self.openvino_core = Core()
                 npu_devices = capabilities.get("openvino_npu_devices", [])
-                self.logger.info(f"🚀 NPU acceleration initialized: {npu_devices}")
+                self.logger.info("🚀 NPU acceleration initialized: %s", npu_devices)
             else:
                 self.logger.info("NPU acceleration not available, using CPU fallback")
 
         except Exception as e:
-            self.logger.warning(f"Failed to initialize NPU: {e}")
+            self.logger.warning("Failed to initialize NPU: %s", e)
             self.npu_available = False
 
     async def _ensure_search_engine_initialized(self):
@@ -277,10 +277,10 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 await self._index_file(file_path, relative_path)
                 indexed += 1
                 if indexed % 100 == 0:
-                    self.logger.info(f"Indexed {indexed} files...")
+                    self.logger.info("Indexed %s files...", indexed)
             except Exception as e:
                 errors.append(f"{relative_path}: {str(e)}")
-                self.logger.error(f"Failed to index {file_path}: {e}")
+                self.logger.error("Failed to index %s: %s", file_path, e)
         return indexed, skipped
 
     def _get_index_key(self, root_path: str) -> str:
@@ -595,7 +595,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
                     results.append(result)
 
                 except Exception as e:
-                    self.logger.error(f"Error processing element result: {e}")
+                    self.logger.error("Error processing element result: %s", e)
 
         return results[:max_results]
 
@@ -637,9 +637,9 @@ class NPUCodeSearchAgent(StandardizedAgent):
             lines = content.splitlines()
             return self._search_lines_for_query(lines, query, file_path, file_language)
         except OSError as e:
-            self.logger.error(f"Failed to read file {file_path}: {e}")
+            self.logger.error("Failed to read file %s: %s", file_path, e)
         except Exception as e:
-            self.logger.error(f"Error processing file {file_path}: {e}")
+            self.logger.error("Error processing file %s: %s", file_path, e)
         return []
 
     async def _search_exact(
@@ -661,7 +661,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 if len(results) >= max_results:
                     return results[:max_results]
             except Exception as e:
-                self.logger.error(f"Error processing file key {file_key}: {e}")
+                self.logger.error("Error processing file key %s: %s", file_key, e)
 
         return results
 
@@ -711,9 +711,9 @@ class NPUCodeSearchAgent(StandardizedAgent):
             lines = content.splitlines()
             return self._search_lines_regex(lines, pattern, query, file_path, file_language)
         except OSError as e:
-            self.logger.error(f"Failed to read file {file_path}: {e}")
+            self.logger.error("Failed to read file %s: %s", file_path, e)
         except Exception as e:
-            self.logger.error(f"Error processing file {file_path}: {e}")
+            self.logger.error("Error processing file %s: %s", file_path, e)
         return []
 
     async def _search_regex(
@@ -725,7 +725,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         try:
             pattern = re.compile(query, re.IGNORECASE | re.MULTILINE)
         except re.error as e:
-            self.logger.error(f"Invalid regex pattern: {query}, error: {e}")
+            self.logger.error("Invalid regex pattern: %s, error: %s", query, e)
             return []
 
         results = []
@@ -745,7 +745,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 if len(results) >= max_results:
                     return results[:max_results]
             except Exception as e:
-                self.logger.error(f"Error processing file key {file_key}: {e}")
+                self.logger.error("Error processing file key %s: %s", file_key, e)
 
         return results
 
@@ -811,9 +811,9 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 lines, query, query_words, file_path, file_language
             )
         except OSError as e:
-            self.logger.error(f"Failed to read file {file_path}: {e}")
+            self.logger.error("Failed to read file %s: %s", file_path, e)
         except Exception as e:
-            self.logger.error(f"Error processing file {file_path}: {e}")
+            self.logger.error("Error processing file %s: %s", file_path, e)
         return []
 
     async def _convert_npu_result(self, result: Any) -> CodeSearchResult:
@@ -903,7 +903,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             return self._get_context_lines(lines, line_number - 1, context_size)
 
         except OSError as e:
-            self.logger.error(f"Failed to read file {file_path}: {e}")
+            self.logger.error("Failed to read file %s: %s", file_path, e)
             return []
         except Exception as e:
             self.logger.error(

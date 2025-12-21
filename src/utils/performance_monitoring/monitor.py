@@ -105,8 +105,8 @@ class PerformanceMonitor:
         self._prometheus = get_metrics_manager()
 
         self.logger.info("Performance Monitor initialized")
-        self.logger.info(f"GPU Available: {self.gpu_available}")
-        self.logger.info(f"NPU Available: {self.npu_available}")
+        self.logger.info("GPU Available: %s", self.gpu_available)
+        self.logger.info("NPU Available: %s", self.npu_available)
 
     def _initialize_redis(self):
         """Initialize Redis client for metrics storage."""
@@ -159,7 +159,7 @@ class PerformanceMonitor:
             None if exception, original result otherwise
         """
         if isinstance(result, Exception):
-            self.logger.error(f"{metric_name} metrics collection failed: {result}")
+            self.logger.error("%s metrics collection failed: %s", metric_name, result)
             return None
         return result
 
@@ -224,7 +224,7 @@ class PerformanceMonitor:
             system_metrics = self._handle_metric_exception("System", results[3])
             service_metrics = results[4] if not isinstance(results[4], Exception) else []
             if isinstance(results[4], Exception):
-                self.logger.error(f"Service metrics collection failed: {results[4]}")
+                self.logger.error("Service metrics collection failed: %s", results[4])
 
             # Issue #398: Use extracted helpers for buffer updates
             self.gpu_metrics_buffer = self._update_metric_buffer(
@@ -271,7 +271,7 @@ class PerformanceMonitor:
             }
 
         except Exception as e:
-            self.logger.error(f"Error collecting all metrics: {e}")
+            self.logger.error("Error collecting all metrics: %s", e)
             return {
                 "timestamp": time.time(),
                 "collection_successful": False,
@@ -307,7 +307,7 @@ class PerformanceMonitor:
             await asyncio.to_thread(_persist_ops)
 
         except Exception as e:
-            self.logger.error(f"Error persisting metrics to Redis: {e}")
+            self.logger.error("Error persisting metrics to Redis: %s", e)
 
     def _push_to_prometheus(
         self, gpu_metrics, npu_metrics, multimodal_metrics, system_metrics
@@ -381,7 +381,7 @@ class PerformanceMonitor:
                     )
 
         except Exception as e:
-            self.logger.debug(f"Error pushing metrics to Prometheus: {e}")
+            self.logger.debug("Error pushing metrics to Prometheus: %s", e)
 
     async def start_monitoring(self):
         """Start continuous performance monitoring."""
@@ -406,7 +406,7 @@ class PerformanceMonitor:
                 await asyncio.sleep(self.collection_interval)
 
             except Exception as e:
-                self.logger.error(f"Error in monitoring loop: {e}")
+                self.logger.error("Error in monitoring loop: %s", e)
                 await asyncio.sleep(self.collection_interval)
 
     async def _analyze_performance_and_generate_alerts(self, metrics: Dict[str, Any]):
@@ -433,7 +433,7 @@ class PerformanceMonitor:
 
                     await asyncio.to_thread(_store_alerts)
                 except Exception as e:
-                    self.logger.debug(f"Could not store alerts in Redis: {e}")
+                    self.logger.debug("Could not store alerts in Redis: %s", e)
 
             # Issue #469: Push alerts to Prometheus for unified monitoring
             if alerts:
@@ -459,10 +459,10 @@ class PerformanceMonitor:
                 try:
                     await callback(alerts)
                 except Exception as e:
-                    self.logger.error(f"Error in alert callback: {e}")
+                    self.logger.error("Error in alert callback: %s", e)
 
         except Exception as e:
-            self.logger.error(f"Error analyzing performance: {e}")
+            self.logger.error("Error analyzing performance: %s", e)
 
     def _log_performance_summary(self, metrics: Dict[str, Any]):
         """Log comprehensive performance summary."""
@@ -495,10 +495,10 @@ class PerformanceMonitor:
                     f"Services: {healthy_services}/{total_services} healthy"
                 )
 
-            self.logger.info(f"PERFORMANCE: {' | '.join(summary_parts)}")
+            self.logger.info("PERFORMANCE: %s", ' | '.join(summary_parts))
 
         except Exception as e:
-            self.logger.error(f"Error logging performance summary: {e}")
+            self.logger.error("Error logging performance summary: %s", e)
 
     async def stop_monitoring(self):
         """Stop performance monitoring."""
@@ -571,7 +571,7 @@ class PerformanceMonitor:
             return dashboard
 
         except Exception as e:
-            self.logger.error(f"Error generating performance dashboard: {e}")
+            self.logger.error("Error generating performance dashboard: %s", e)
             return {"error": str(e), "timestamp": time.time()}
 
     def _calculate_trend_direction(self, values: list) -> str:
@@ -698,5 +698,5 @@ class PerformanceMonitor:
             )
 
         except Exception as e:
-            self.logger.error(f"Error generating optimization recommendations: {e}")
+            self.logger.error("Error generating optimization recommendations: %s", e)
             return []

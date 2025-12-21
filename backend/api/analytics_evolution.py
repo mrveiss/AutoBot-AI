@@ -236,11 +236,11 @@ async def store_quality_snapshot(snapshot: QualitySnapshot) -> bool:
 
         await asyncio.to_thread(_store_snapshot)
 
-        logger.info(f"Stored quality snapshot at {snapshot.timestamp}")
+        logger.info("Stored quality snapshot at %s", snapshot.timestamp)
         return True
 
     except Exception as e:
-        logger.error(f"Failed to store quality snapshot: {e}")
+        logger.error("Failed to store quality snapshot: %s", e)
         return False
 
 
@@ -271,7 +271,7 @@ async def store_pattern_snapshot(snapshot: PatternSnapshot) -> bool:
         return True
 
     except Exception as e:
-        logger.error(f"Failed to store pattern snapshot: {e}")
+        logger.error("Failed to store pattern snapshot: %s", e)
         return False
 
 
@@ -379,7 +379,7 @@ async def get_pattern_evolution(
         })
 
     except Exception as e:
-        logger.error(f"Error retrieving pattern evolution: {e}")
+        logger.error("Error retrieving pattern evolution: %s", e)
         return JSONResponse(
             {"status": "error", "message": str(e), "patterns": _generate_demo_patterns()}
         )
@@ -700,7 +700,7 @@ async def get_evolution_summary():
                 }
 
         except Exception as e:
-            logger.error(f"Error getting evolution summary: {e}")
+            logger.error("Error getting evolution summary: %s", e)
 
     return JSONResponse({"status": "success", "summary": summary})
 

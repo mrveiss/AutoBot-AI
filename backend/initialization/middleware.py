@@ -71,7 +71,7 @@ def configure_gzip(app: FastAPI, minimum_size: int = 1000):
         ```
     """
     app.add_middleware(GZipMiddleware, minimum_size=minimum_size)
-    logger.info(f"✅ GZip middleware configured (minimum size: {minimum_size} bytes)")
+    logger.info("✅ GZip middleware configured (minimum size: %s bytes)", minimum_size)
 
 
 def configure_service_auth(app: FastAPI):
@@ -102,7 +102,7 @@ def configure_service_auth(app: FastAPI):
         return
 
     except ImportError as e:
-        logger.warning(f"⚠️ Service auth enforcement middleware not available: {e}")
+        logger.warning("⚠️ Service auth enforcement middleware not available: %s", e)
 
     # Fallback to LOGGING MODE
     try:
@@ -115,7 +115,7 @@ def configure_service_auth(app: FastAPI):
         return
 
     except ImportError as e2:
-        logger.warning(f"⚠️ Service auth middleware not available: {e2}")
+        logger.warning("⚠️ Service auth middleware not available: %s", e2)
 
 
 def configure_middleware(

@@ -34,7 +34,7 @@ def is_vnc_running() -> bool:
         # pgrep returns 0 if process found, 1 if not found
         return result.returncode == 0
     except Exception as e:
-        logger.error(f"Error checking VNC status: {e}")
+        logger.error("Error checking VNC status: %s", e)
         return False
 
 
@@ -92,7 +92,7 @@ def start_vnc_server() -> Dict[str, str]:
     except subprocess.TimeoutExpired:
         return {"status": "error", "message": "VNC server start timeout"}
     except Exception as e:
-        logger.error(f"Error starting VNC server: {e}")
+        logger.error("Error starting VNC server: %s", e)
         return {"status": "error", "message": str(e)}
 
 
@@ -172,5 +172,5 @@ async def restart_vnc_server() -> Dict[str, str]:
         return start_vnc_server()
 
     except Exception as e:
-        logger.error(f"Error restarting VNC server: {e}")
+        logger.error("Error restarting VNC server: %s", e)
         return {"status": "error", "message": str(e)}

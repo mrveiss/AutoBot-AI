@@ -95,7 +95,7 @@ class AgentRegistry:
                 del self.agent_health[agent_type]
             if agent_type in self.last_health_check:
                 del self.last_health_check[agent_type]
-            logger.info(f"Unregistered {agent_type} agent")
+            logger.info("Unregistered %s agent", agent_type)
 
     def get_agent(self, agent_type: str) -> Optional[BaseAgent]:
         """Get agent by type"""
@@ -128,7 +128,7 @@ class AgentRegistry:
             self.agent_health[agent_type] = health
             self.last_health_check[agent_type] = datetime.now()
         except Exception as e:
-            logger.error(f"Health check failed for {agent_type}: {e}")
+            logger.error("Health check failed for %s: %s", agent_type, e)
 
 
 class ContainerAgentProxy(BaseAgent):
@@ -299,7 +299,7 @@ class AgentClient:
             return response
 
         except Exception as e:
-            logger.error(f"Error processing request for {request.agent_type}: {e}")
+            logger.error("Error processing request for %s: %s", request.agent_type, e)
             execution_time = time.time() - start_time
             self._update_stats(request.agent_type, "error", execution_time)
 
@@ -424,7 +424,7 @@ class AgentClient:
                         discovered.append(agent_type)
 
         except Exception as e:
-            logger.warning(f"Could not discover container agents: {e}")
+            logger.warning("Could not discover container agents: %s", e)
 
         return discovered
 

@@ -76,7 +76,7 @@ class BackgroundVectorizer:
             # Fire-and-forget async tracking
             asyncio.create_task(analyzer.record_usage(request))
         except Exception as e:
-            logger.debug(f"Embedding usage tracking failed (non-critical): {e}")
+            logger.debug("Embedding usage tracking failed (non-critical): %s", e)
 
     def _decode_bytes(self, value: bytes, default: str = "") -> str:
         """Decode bytes to string (Issue #336 - extracted helper)."""
@@ -155,14 +155,14 @@ class BackgroundVectorizer:
             await asyncio.to_thread(kb.vector_index.insert, document)
             result["success"] = True
             result["tokens"] = int(len(content.split()) * 1.3)
-            logger.debug(f"Vectorized fact {fact_id}")
+            logger.debug("Vectorized fact %s", fact_id)
             await self._mark_vectorization_complete(kb, fact_key)
         except Exception as doc_error:
             if "already exists" in str(doc_error).lower():
                 result["skipped"] = True
                 await self._mark_vectorization_complete(kb, fact_key)
             else:
-                logger.error(f"Failed to vectorize {fact_id}: {doc_error}")
+                logger.error("Failed to vectorize %s: %s", fact_id, doc_error)
 
         return result
 
@@ -189,7 +189,7 @@ class BackgroundVectorizer:
                     stats["failed"] += 1
             except Exception as e:
                 stats["failed"] += 1
-                logger.error(f"Error vectorizing fact {fact_key}: {e}")
+                logger.error("Error vectorizing fact %s: %s", fact_key, e)
 
         stats["processing_time"] = time.time() - batch_start_time
         return stats
@@ -212,7 +212,7 @@ class BackgroundVectorizer:
                 return
 
             total_batches = (len(fact_keys) + self.batch_size - 1) // self.batch_size
-            logger.info(f"Processing {len(fact_keys)} facts in {total_batches} batches")
+            logger.info("Processing %s facts in %s batches", len(fact_keys), total_batches)
 
             total_stats = {"success": 0, "skipped": 0, "failed": 0, "tokens": 0}
 
@@ -246,7 +246,7 @@ class BackgroundVectorizer:
             )
 
         except Exception as e:
-            logger.error(f"Background vectorization error: {e}")
+            logger.error("Background vectorization error: %s", e)
         finally:
             self.is_running = False
 
@@ -270,7 +270,7 @@ class BackgroundVectorizer:
                 await self.vectorize_pending_facts(kb)
 
             except Exception as e:
-                logger.error(f"Periodic check error: {e}")
+                logger.error("Periodic check error: %s", e)
                 # Error recovery delay before retry
                 await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)
 

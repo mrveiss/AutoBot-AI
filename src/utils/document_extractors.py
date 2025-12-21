@@ -137,7 +137,7 @@ class DocumentExtractor:
 
                 return "\n\n".join(pages)
             except Exception as e:
-                logger.error(f"Failed to read PDF {file_path}: {e}")
+                logger.error("Failed to read PDF %s: %s", file_path, e)
                 raise ValueError(f"Invalid or corrupted PDF file: {file_path}") from e
 
         # Run sync operation in thread pool to avoid blocking
@@ -183,7 +183,7 @@ class DocumentExtractor:
 
                 return "\n\n".join(paragraphs)
             except Exception as e:
-                logger.error(f"Failed to read DOCX {file_path}: {e}")
+                logger.error("Failed to read DOCX %s: %s", file_path, e)
                 raise ValueError(f"Invalid or corrupted DOCX file: {file_path}") from e
 
         # Run sync operation in thread pool to avoid blocking
@@ -220,13 +220,13 @@ class DocumentExtractor:
             async with aiofiles.open(file_path, "r", encoding=encoding) as f:
                 return await f.read()
         except UnicodeDecodeError as e:
-            logger.error(f"Encoding error reading {file_path} with {encoding}: {e}")
+            logger.error("Encoding error reading %s with %s: %s", file_path, encoding, e)
             raise
         except OSError as e:
-            logger.error(f"Failed to read text file {file_path}: {e}")
+            logger.error("Failed to read text file %s: %s", file_path, e)
             raise
         except Exception as e:
-            logger.error(f"Unexpected error reading text file {file_path}: {e}")
+            logger.error("Unexpected error reading text file %s: %s", file_path, e)
             raise
 
     @staticmethod
@@ -308,10 +308,10 @@ class DocumentExtractor:
         """Extract text from single file with error handling (Issue #281 - extracted helper)."""
         try:
             text = await DocumentExtractor.extract_from_file(file_path)
-            logger.info(f"✅ Extracted {len(text)} chars from {file_path.name}")
+            logger.info("✅ Extracted %s chars from %s", len(text), file_path.name)
             return (file_path, text)
         except Exception as e:
-            logger.error(f"❌ Failed to extract from {file_path}: {e}")
+            logger.error("❌ Failed to extract from %s: %s", file_path, e)
             return (file_path, None)
 
     @staticmethod
@@ -351,7 +351,7 @@ class DocumentExtractor:
             directory_path, file_types, glob_pattern, max_files
         )
 
-        logger.info(f"Found {len(all_files)} files to process in {directory_path}")
+        logger.info("Found %s files to process in %s", len(all_files), directory_path)
 
         # Process all files concurrently
         tasks = [DocumentExtractor._extract_single_file(fp) for fp in all_files]

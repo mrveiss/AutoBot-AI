@@ -24,11 +24,11 @@ async def integrate_cached_man_pages(kb_v2):
 
     cache_dir = Path("data/system_knowledge/man_pages")
     if not cache_dir.exists():
-        logger.warning(f"Man pages cache directory not found: {cache_dir}")
+        logger.warning("Man pages cache directory not found: %s", cache_dir)
         return 0
 
     man_files = list(cache_dir.glob("*.json"))
-    logger.info(f"Found {len(man_files)} cached man pages")
+    logger.info("Found %s cached man pages", len(man_files))
 
     integrated_count = 0
 
@@ -87,13 +87,13 @@ async def integrate_cached_man_pages(kb_v2):
             if result.get('status') == 'success':
                 integrated_count += 1
                 if integrated_count % 10 == 0:
-                    logger.info(f"Integrated {integrated_count}/{len(man_files)} man pages...")
+                    logger.info("Integrated %s/%s man pages...", integrated_count, len(man_files))
 
         except Exception as e:
-            logger.error(f"Error integrating {man_file}: {e}")
+            logger.error("Error integrating %s: %s", man_file, e)
             continue
 
-    logger.info(f"✓ Integrated {integrated_count} man pages into Knowledge Base V2")
+    logger.info("✓ Integrated %s man pages into Knowledge Base V2", integrated_count)
     return integrated_count
 
 
@@ -144,7 +144,7 @@ async def _integrate_single_doc(doc_path: Path, kb_v2) -> bool:
     )
 
     if result.get('status') == 'success':
-        logger.info(f"✓ Integrated documentation: {title}")
+        logger.info("✓ Integrated documentation: %s", title)
         return True
     return False
 
@@ -155,7 +155,7 @@ async def integrate_autobot_documentation(kb_v2):
 
     docs_dir = Path("docs")
     if not docs_dir.exists():
-        logger.warning(f"Documentation directory not found: {docs_dir}")
+        logger.warning("Documentation directory not found: %s", docs_dir)
         return 0
 
     priority_docs = [
@@ -172,17 +172,17 @@ async def integrate_autobot_documentation(kb_v2):
     for doc_path_str in priority_docs:
         doc_path = Path(doc_path_str)
         if not doc_path.exists():
-            logger.warning(f"Documentation file not found: {doc_path}")
+            logger.warning("Documentation file not found: %s", doc_path)
             continue
 
         try:
             if await _integrate_single_doc(doc_path, kb_v2):
                 integrated_count += 1
         except Exception as e:
-            logger.error(f"Error integrating {doc_path}: {e}")
+            logger.error("Error integrating %s: %s", doc_path, e)
             continue
 
-    logger.info(f"✓ Integrated {integrated_count} documentation files into Knowledge Base V2")
+    logger.info("✓ Integrated %s documentation files into Knowledge Base V2", integrated_count)
     return integrated_count
 
 
@@ -209,8 +209,8 @@ async def main():
         # Get current stats
         stats = await kb_v2.get_stats()
         logger.info("\nCurrent Knowledge Base Stats:")
-        logger.info(f"  - Total facts: {stats.get('total_facts', 0)}")
-        logger.info(f"  - Total vectors: {stats.get('total_vectors', 0)}")
+        logger.info("  - Total facts: %s", stats.get('total_facts', 0))
+        logger.info("  - Total vectors: %s", stats.get('total_vectors', 0))
 
         # Integrate man pages
         logger.info("\n2. Integrating Man Pages...")
@@ -223,21 +223,21 @@ async def main():
         # Get updated stats
         updated_stats = await kb_v2.get_stats()
         logger.info("\nUpdated Knowledge Base Stats:")
-        logger.info(f"  - Total facts: {updated_stats.get('total_facts', 0)}")
-        logger.info(f"  - Total vectors: {updated_stats.get('total_vectors', 0)}")
+        logger.info("  - Total facts: %s", updated_stats.get('total_facts', 0))
+        logger.info("  - Total vectors: %s", updated_stats.get('total_vectors', 0))
 
         logger.info("\n" + "=" * 80)
         logger.info("INTEGRATION COMPLETE")
         logger.info("=" * 80)
-        logger.info(f"✓ Man pages integrated: {man_pages_count}")
-        logger.info(f"✓ Documentation files integrated: {docs_count}")
-        logger.info(f"✓ Total system knowledge added: {man_pages_count + docs_count}")
+        logger.info("✓ Man pages integrated: %s", man_pages_count)
+        logger.info("✓ Documentation files integrated: %s", docs_count)
+        logger.info("✓ Total system knowledge added: %s", man_pages_count + docs_count)
         logger.info("=" * 80)
 
         return 0
 
     except Exception as e:
-        logger.error(f"✗ Integration failed: {e}")
+        logger.error("✗ Integration failed: %s", e)
         import traceback
         traceback.print_exc()
         return 1

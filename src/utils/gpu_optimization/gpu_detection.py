@@ -68,7 +68,7 @@ def detect_gpu_capabilities(gpu_available: bool) -> GPUCapabilities:
         capabilities = _detect_detailed_capabilities(capabilities)
 
     except Exception as e:
-        logger.error(f"Error detecting GPU capabilities: {e}")
+        logger.error("Error detecting GPU capabilities: %s", e)
 
     return capabilities
 
@@ -93,7 +93,7 @@ def _detect_detailed_capabilities(capabilities: GPUCapabilities) -> GPUCapabilit
     except ImportError:
         logger.debug("pynvml not available for detailed GPU capabilities")
     except Exception as e:
-        logger.debug(f"Failed to get detailed GPU capabilities: {e}")
+        logger.debug("Failed to get detailed GPU capabilities: %s", e)
 
     return capabilities
 

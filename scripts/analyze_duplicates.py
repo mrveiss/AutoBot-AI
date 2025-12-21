@@ -85,22 +85,30 @@ class DuplicateDetector:
         else:
             pattern_groups = ['js_functions', 'js_classes']
 
+        # Issue #506: Precompile and combine patterns per group
+        # Reduces O(n⁴) to O(n²) by eliminating per-pattern iteration
+        compiled_groups = {}
+        for group in pattern_groups:
+            # Combine patterns for this group
+            combined = "|".join(self.patterns[group])
+            compiled_groups[group] = re.compile(combined)
+
         lines = content.split('\n')
-        for pattern_group in pattern_groups:
-            for pattern in self.patterns[pattern_group]:
-                for i, line in enumerate(lines):
-                    matches = re.finditer(pattern, line)
-                    for match in matches:
-                        name = match.group(1) if match.groups() else match.group(0)
-                        if name and len(name) > 1:
-                            declarations.append({
-                                'name': name,
-                                'type': pattern_group.split('_')[-1][:-1],  # function/class
-                                'file': str(file_path.relative_to(self.root_path)),
-                                'line': i + 1,
-                                'definition': line.strip(),
-                                'language': language
-                            })
+        # Issue #506: Single pass per line per group instead of per-pattern
+        for i, line in enumerate(lines):
+            for pattern_group, compiled in compiled_groups.items():
+                for match in compiled.finditer(line):
+                    # Get first non-None group (the captured name)
+                    name = next((g for g in match.groups() if g), None)
+                    if name and len(name) > 1:
+                        declarations.append({
+                            'name': name,
+                            'type': pattern_group.split('_')[-1][:-1],  # function/class
+                            'file': str(file_path.relative_to(self.root_path)),
+                            'line': i + 1,
+                            'definition': line.strip(),
+                            'language': language
+                        })
 
         return declarations
 

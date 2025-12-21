@@ -83,7 +83,7 @@ async def query_knowledge_base(kb_query: KBQuery):
         return KBQueryResponse(**result)
 
     except Exception as e:
-        logger.error(f"Error querying knowledge base: {e}")
+        logger.error("Error querying knowledge base: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -111,7 +111,7 @@ async def get_kb_librarian_status():
         }
 
     except Exception as e:
-        logger.error(f"Error getting KB Librarian status: {e}")
+        logger.error("Error getting KB Librarian status: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -168,5 +168,5 @@ async def configure_kb_librarian(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Error configuring KB Librarian: {e}")
+        logger.error("Error configuring KB Librarian: %s", e)
         raise HTTPException(status_code=500, detail=str(e))

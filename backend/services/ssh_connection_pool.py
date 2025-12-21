@@ -50,7 +50,7 @@ async def _check_and_update_conn_health(
         return
     if not await check_health_fn(conn):
         conn.state = ConnectionState.UNHEALTHY
-        logger.warning(f"Connection to {pool_key} marked unhealthy")
+        logger.warning("Connection to %s marked unhealthy", pool_key)
 
 
 def _should_remove_connection(
@@ -309,10 +309,10 @@ class SSHConnectionPool:
                 if conn.client == client and conn.state == ConnectionState.ACTIVE:
                     conn.state = ConnectionState.IDLE
                     conn.last_used = datetime.now()
-                    logger.debug(f"Released connection to {pool_key} back to pool")
+                    logger.debug("Released connection to %s back to pool", pool_key)
                     return
 
-            logger.warning(f"Connection not found in pool {pool_key}")
+            logger.warning("Connection not found in pool %s", pool_key)
 
     async def _create_connection(
         self,
@@ -376,7 +376,7 @@ class SSHConnectionPool:
                     look_for_keys=False,
                 )
 
-                logger.info(f"SSH connection established to {username}@{host}:{port}")
+                logger.info("SSH connection established to %s@%s:%s", username, host, port)
                 return client
 
             except Exception as e:
@@ -388,7 +388,7 @@ class SSHConnectionPool:
                 if attempt < self.retry_max_attempts - 1:
                     # Exponential backoff
                     delay = self.retry_base_delay * (2**attempt)
-                    logger.debug(f"Retrying in {delay}s...")
+                    logger.debug("Retrying in %ss...", delay)
                     await asyncio.sleep(delay)
 
         # All attempts failed
@@ -414,7 +414,7 @@ class SSHConnectionPool:
             # Simple health check: execute 'echo' command
             transport = conn.client.get_transport()
             if not transport or not transport.is_active():
-                logger.debug(f"Transport inactive for connection to {conn.host}")
+                logger.debug("Transport inactive for connection to %s", conn.host)
                 return False
 
             # Execute simple command
@@ -432,7 +432,7 @@ class SSHConnectionPool:
                 return False
 
         except Exception as e:
-            logger.warning(f"Health check failed for connection to {conn.host}: {e}")
+            logger.warning("Health check failed for connection to %s: %s", conn.host, e)
             return False
 
     async def _health_check_loop(self):
@@ -447,7 +447,7 @@ class SSHConnectionPool:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error in health check loop: {e}")
+                logger.error("Error in health check loop: %s", e)
 
         logger.info("Health check loop stopped")
 
@@ -476,7 +476,7 @@ class SSHConnectionPool:
                     if should_remove:
                         self._close_connection(conn)
                         connections_to_remove.append(conn)
-                        logger.info(f"Removed {reason} connection to {pool_key}")
+                        logger.info("Removed %s connection to %s", reason, pool_key)
 
                 # Remove from pool
                 for conn in connections_to_remove:
@@ -488,7 +488,7 @@ class SSHConnectionPool:
             conn.client.close()
             conn.state = ConnectionState.CLOSED
         except Exception as e:
-            logger.error(f"Error closing connection to {conn.host}: {e}")
+            logger.error("Error closing connection to %s: %s", conn.host, e)
 
     async def cleanup_all(self):
         """Clean up all connections in the pool"""
@@ -498,7 +498,7 @@ class SSHConnectionPool:
             for pool_key, pool in self.pools.items():
                 for conn in pool:
                     self._close_connection(conn)
-                logger.info(f"Closed all connections for {pool_key}")
+                logger.info("Closed all connections for %s", pool_key)
 
             self.pools.clear()
             logger.info("All SSH connections cleaned up")

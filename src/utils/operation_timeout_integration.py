@@ -122,7 +122,7 @@ class OperationIntegrationManager:
             await self.redis_client.ping()
             logger.info("Connected to Redis for operations management")
         except Exception as e:
-            logger.warning(f"Failed to connect to Redis: {e}, using in-memory storage")
+            logger.warning("Failed to connect to Redis: %s, using in-memory storage", e)
             self.redis_client = None
 
         self.operation_manager = LongRunningOperationManager(self.redis_client)
@@ -162,7 +162,7 @@ class OperationIntegrationManager:
         except ValueError as e:
             raise_validation_error("API_0001", str(e))
         except Exception as e:
-            logger.error(f"Failed to create operation: {e}")
+            logger.error("Failed to create operation: %s", e)
             raise_server_error("API_0003", "Internal server error")
 
     def _calculate_operation_stats(self) -> tuple[int, int, int, int]:
@@ -234,7 +234,7 @@ class OperationIntegrationManager:
             new_operation_id = await self.operation_manager.resume_operation(latest_checkpoint.checkpoint_id)
             return {"status": "resumed", "new_operation_id": new_operation_id, "resumed_from": latest_checkpoint.checkpoint_id}
         except Exception as e:
-            logger.error(f"Failed to resume operation: {e}")
+            logger.error("Failed to resume operation: %s", e)
             raise_server_error("API_0003", str(e))
 
     async def _handle_update_progress(self, operation_id: str, request: ProgressUpdateRequest) -> Dict[str, str]:
@@ -254,7 +254,7 @@ class OperationIntegrationManager:
             operation_id = await execute_codebase_indexing(codebase_path, self.operation_manager, file_patterns)
             return {"operation_id": operation_id, "status": "started"}
         except Exception as e:
-            logger.error(f"Failed to start codebase indexing: {e}")
+            logger.error("Failed to start codebase indexing: %s", e)
             raise_server_error("API_0003", str(e))
 
     async def _handle_start_testing(self, test_suite_path: str, test_patterns: Optional[List[str]] = None) -> Dict[str, str]:
@@ -263,7 +263,7 @@ class OperationIntegrationManager:
             operation_id = await execute_comprehensive_test_suite(test_suite_path, self.operation_manager, test_patterns)
             return {"operation_id": operation_id, "status": "started"}
         except Exception as e:
-            logger.error(f"Failed to start comprehensive testing: {e}")
+            logger.error("Failed to start comprehensive testing: %s", e)
             raise_server_error("API_0003", str(e))
 
     def _setup_routes(self):

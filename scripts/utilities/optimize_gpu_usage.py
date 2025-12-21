@@ -40,7 +40,7 @@ def check_gpu_status():
 
         if result.returncode == 0:
             gpu_info = result.stdout.strip()
-            logger.info(f"🎮 GPU Status: {gpu_info}")
+            logger.info("🎮 GPU Status: %s", gpu_info)
 
             parts = gpu_info.split(",")
             if len(parts) >= 5:
@@ -50,12 +50,12 @@ def check_gpu_status():
                 utilization = int(parts[3].strip())
                 temp = int(parts[4].strip())
 
-                logger.info(f"   Name: {name}")
+                logger.info("   Name: %s", name)
                 logger.info(
                     f"   Memory: {used_mem}/{total_mem} MB ({(used_mem/total_mem)*100:.1f}% used)"
                 )
-                logger.info(f"   Utilization: {utilization}%")
-                logger.info(f"   Temperature: {temp}°C")
+                logger.info("   Utilization: %s%", utilization)
+                logger.info("   Temperature: %s°C", temp)
 
                 return {
                     "name": name,
@@ -70,7 +70,7 @@ def check_gpu_status():
             return {"available": False}
 
     except Exception as e:
-        logger.error(f"❌ Error checking GPU: {e}")
+        logger.error("❌ Error checking GPU: %s", e)
         return {"available": False}
 
 
@@ -90,7 +90,7 @@ def optimize_ollama_gpu_config():
         logger.info("🔧 Configuring Ollama for GPU optimization:")
         for key, value in gpu_env_vars.items():
             os.environ[key] = value
-            logger.info(f"   {key}={value}")
+            logger.info("   %s=%s", key, value)
 
         # Write environment config
         config_file = Path(__file__).parent / "gpu_env_config.sh"
@@ -100,12 +100,12 @@ def optimize_ollama_gpu_config():
             for key, value in gpu_env_vars.items():
                 f.write(f'export {key}="{value}"\n')
 
-        logger.info(f"✅ GPU configuration written to {config_file}")
+        logger.info("✅ GPU configuration written to %s", config_file)
 
         return True
 
     except Exception as e:
-        logger.error(f"❌ Error configuring GPU: {e}")
+        logger.error("❌ Error configuring GPU: %s", e)
         return False
 
 
@@ -169,12 +169,12 @@ def update_autobot_config():
         with open(config_file, "w") as f:
             yaml.dump(config, f, default_flow_style=False, indent=2)
 
-        logger.info(f"✅ AutoBot configuration updated in {config_file}")
+        logger.info("✅ AutoBot configuration updated in %s", config_file)
 
         return True
 
     except Exception as e:
-        logger.error(f"❌ Error updating AutoBot config: {e}")
+        logger.error("❌ Error updating AutoBot config: %s", e)
         return False
 
 
@@ -216,10 +216,10 @@ def create_model_recommendations():
             }
             parallel_capacity = "1-2 concurrent models"
 
-        logger.info(f"📋 Model Recommendations for {total_memory}MB GPU:")
-        logger.info(f"   Parallel Capacity: {parallel_capacity}")
+        logger.info("📋 Model Recommendations for %sMB GPU:", total_memory)
+        logger.info("   Parallel Capacity: %s", parallel_capacity)
         for agent, model in recommended_models.items():
-            logger.info(f"   {agent:20}: {model}")
+            logger.info("   %s: %s", agent:20, model)
 
         # Write recommendations to file
         recommendations_file = Path(__file__).parent / "gpu_model_recommendations.json"
@@ -240,12 +240,12 @@ def create_model_recommendations():
                 indent=2,
             )
 
-        logger.info(f"✅ Model recommendations saved to {recommendations_file}")
+        logger.info("✅ Model recommendations saved to %s", recommendations_file)
 
         return True
 
     except Exception as e:
-        logger.error(f"❌ Error creating model recommendations: {e}")
+        logger.error("❌ Error creating model recommendations: %s", e)
         return False
 
 
@@ -263,9 +263,9 @@ def test_gpu_inference():
             memory_cached = torch.cuda.memory_reserved(0) / 1024**3
 
             logger.info("✅ PyTorch CUDA available")
-            logger.info(f"   Device: {device_name}")
-            logger.info(f"   Memory Allocated: {memory_allocated:.2f} GB")
-            logger.info(f"   Memory Cached: {memory_cached:.2f} GB")
+            logger.info("   Device: %s", device_name)
+            logger.info("   Memory Allocated: %s GB", memory_allocated:.2f)
+            logger.info("   Memory Cached: %s GB", memory_cached:.2f)
 
             return True
         else:
@@ -276,7 +276,7 @@ def test_gpu_inference():
         logger.info("ℹ️ PyTorch not installed - skipping CUDA test")
         return True
     except Exception as e:
-        logger.error(f"❌ GPU inference test failed: {e}")
+        logger.error("❌ GPU inference test failed: %s", e)
         return False
 
 
@@ -312,9 +312,9 @@ def main():
     # Summary
     logger.info("\n" + "=" * 50)
     logger.info("📊 GPU Optimization Summary:")
-    logger.info(f"   GPU: {gpu_status.get('name', 'Unknown')}")
-    logger.info(f"   Memory: {gpu_status.get('total_memory_mb', 0)} MB total")
-    logger.info(f"   Current Usage: {gpu_status.get('utilization_percent', 0)}%")
+    logger.info("   GPU: %s", gpu_status.get('name', 'Unknown'))
+    logger.info("   Memory: %s MB total", gpu_status.get('total_memory_mb', 0))
+    logger.info("   Current Usage: %s%", gpu_status.get('utilization_percent', 0))
     logger.info("\n🎉 GPU optimization complete!")
     logger.info("   Source gpu_env_config.sh before starting AutoBot")
     logger.info("   Monitor GPU usage with: watch nvidia-smi")

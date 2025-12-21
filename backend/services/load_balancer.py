@@ -389,7 +389,7 @@ class NPULoadBalancer:
 
         strategy_class = strategies.get(strategy_name.lower())
         if not strategy_class:
-            logger.warning(f"Unknown strategy '{strategy_name}', using round_robin")
+            logger.warning("Unknown strategy '%s', using round_robin", strategy_name)
             strategy_class = RoundRobinStrategy
 
         return strategy_class()
@@ -444,7 +444,7 @@ class NPULoadBalancer:
         with self._workers_lock:
             if worker_id in self._workers:
                 del self._workers[worker_id]
-                logger.info(f"Removed worker {worker_id}")
+                logger.info("Removed worker %s", worker_id)
                 return True
         return False
 
@@ -552,7 +552,7 @@ class NPULoadBalancer:
             return result
 
         except Exception as e:
-            logger.error(f"Task execution error on worker {worker_id}: {e}")
+            logger.error("Task execution error on worker %s: %s", worker_id, e)
             worker.record_failure(
                 self._circuit_breaker_threshold, self._circuit_breaker_timeout
             )
@@ -631,7 +631,7 @@ class NPULoadBalancer:
                 logger.info("Health monitor loop cancelled")
                 break
             except Exception as e:
-                logger.error(f"Error in health monitor loop: {e}", exc_info=True)
+                logger.error("Error in health monitor loop: %s", e, exc_info=True)
                 # Error recovery delay before continuing monitoring
                 await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)
 
@@ -667,7 +667,7 @@ class NPULoadBalancer:
                 await self._emit_worker_status_change(worker, "health_check")
 
         except Exception as e:
-            logger.warning(f"Health check failed for worker {worker.worker_id}: {e}")
+            logger.warning("Health check failed for worker %s: %s", worker.worker_id, e)
             previous_status = worker.status
             worker.handle_unhealthy_check(
                 self._circuit_breaker_threshold, self._circuit_breaker_timeout
@@ -694,7 +694,7 @@ class NPULoadBalancer:
                 worker.to_status_event_dict(reason),
             )
         except Exception as e:
-            logger.error(f"Failed to emit worker status change event: {e}")
+            logger.error("Failed to emit worker status change event: %s", e)
 
 
 # ==============================================

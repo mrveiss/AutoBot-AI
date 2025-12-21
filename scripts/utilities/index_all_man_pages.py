@@ -10,6 +10,7 @@ Enhanced with OS/Machine context for deduplication and agent awareness
 
 import asyncio
 import logging
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -33,20 +34,33 @@ async def get_all_available_commands():
     logger.info("Scanning for all available commands with man pages...")
 
     try:
-        # Use man -k . to list ALL man pages
-        result = subprocess.run(
-            ['man', '-k', '.'],
-            capture_output=True,
-            text=True,
-            timeout=30
+        # Use man -k . to list ALL man pages (Issue #479: Use async subprocess)
+        process = await asyncio.create_subprocess_exec(
+            'man', '-k', '.',
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
         )
 
-        if result.returncode != 0:
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(), timeout=30
+            )
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
+            logger.error("Timeout listing man pages")
+            return []
+
+        if process.returncode != 0:
             logger.error("Failed to list man pages")
             return []
 
+        # Use decoded stdout
+        output_text = stdout.decode()
+        result_stdout = output_text
+
         commands = []
-        for line in result.stdout.split('\n'):
+        for line in result_stdout.split('\n'):
             if not line.strip():
                 continue
 
@@ -64,12 +78,12 @@ async def get_all_available_commands():
 
         # Remove duplicates
         commands = list(set(commands))
-        logger.info(f"Found {len(commands)} commands to index")
+        logger.info("Found %s commands to index", len(commands))
 
         return commands
 
     except Exception as e:
-        logger.error(f"Error scanning commands: {e}")
+        logger.error("Error scanning commands: %s", e)
         return []
 
 
@@ -83,32 +97,51 @@ async def index_command_batch(kb_v2, commands_batch, system_ctx=None):
 
     for command, section in commands_batch:
         try:
-            # Get man page content
-            result = subprocess.run(
-                ['man', section, command],
-                capture_output=True,
-                text=True,
-                timeout=10,
-                env={'MANWIDTH': '80'}
+            # Get man page content (Issue #479: Use async subprocess)
+            env = os.environ.copy()
+            env['MANWIDTH'] = '80'
+
+            process = await asyncio.create_subprocess_exec(
+                'man', section, command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env
             )
 
-            if result.returncode != 0:
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(), timeout=10
+                )
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+                continue
+
+            if process.returncode != 0:
                 continue
 
             # Clean output
-            man_content = result.stdout.strip()
+            man_content = stdout.decode().strip()
 
-            # Get description from man -k
-            desc_result = subprocess.run(
-                ['man', '-k', f'^{command}$'],
-                capture_output=True,
-                text=True,
-                timeout=5
+            # Get description from man -k (Issue #479: Use async subprocess)
+            desc_process = await asyncio.create_subprocess_exec(
+                'man', '-k', f'^{command}$',
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
             )
 
+            try:
+                desc_stdout, _ = await asyncio.wait_for(
+                    desc_process.communicate(), timeout=5
+                )
+            except asyncio.TimeoutError:
+                desc_process.kill()
+                await desc_process.wait()
+                desc_stdout = b""
+
             description = "System command"
-            if desc_result.returncode == 0:
-                for line in desc_result.stdout.split('\n'):
+            if desc_process.returncode == 0:
+                for line in desc_stdout.decode().split('\n'):
                     if command in line and '-' in line:
                         description = line.split('-', 1)[1].strip()
                         break
@@ -170,10 +203,10 @@ async def index_command_batch(kb_v2, commands_batch, system_ctx=None):
                 indexed_count += 1
 
         except subprocess.TimeoutExpired:
-            logger.debug(f"Timeout for {command}")
+            logger.debug("Timeout for %s", command)
             continue
         except Exception as e:
-            logger.debug(f"Error indexing {command}: {e}")
+            logger.debug("Error indexing %s: %s", command, e)
             continue
 
     return indexed_count
@@ -207,15 +240,15 @@ async def main():
             logger.error("✗ No commands found")
             return 1
 
-        logger.info(f"✓ Found {len(all_commands)} commands to index")
+        logger.info("✓ Found %s commands to index", len(all_commands))
 
         # Get system context for indexing
         logger.info("\n3. Detecting system context...")
         system_ctx = get_system_context()
-        logger.info(f"✓ Machine: {system_ctx['machine_id']} ({system_ctx['machine_ip']})")
-        logger.info(f"✓ OS: {system_ctx['os_name']} {system_ctx['os_version']}")
-        logger.info(f"✓ Architecture: {system_ctx['architecture']}")
-        logger.info(f"✓ Compatible with: {', '.join(get_compatible_os_list(system_ctx['os_name']))}")
+        logger.info("✓ Machine: %s (%s)", system_ctx['machine_id'], system_ctx['machine_ip'])
+        logger.info("✓ OS: %s %s", system_ctx['os_name'], system_ctx['os_version'])
+        logger.info("✓ Architecture: %s", system_ctx['architecture'])
+        logger.info("✓ Compatible with: %s", ', '.join(get_compatible_os_list(system_ctx['os_name'])))
 
         # Index in batches
         logger.info("\n4. Indexing man pages...")
@@ -228,7 +261,7 @@ async def main():
             total_indexed += batch_indexed
 
             progress = min(i + batch_size, len(all_commands))
-            logger.info(f"Progress: {progress}/{len(all_commands)} ({total_indexed} indexed)")
+            logger.info("Progress: %s/%s (%s indexed)", progress, len(all_commands), total_indexed)
 
         # Get final stats
         stats = await kb_v2.get_stats()
@@ -236,16 +269,16 @@ async def main():
         logger.info("\n" + "=" * 80)
         logger.info("INDEXING COMPLETE")
         logger.info("=" * 80)
-        logger.info(f"✓ Commands scanned: {len(all_commands)}")
-        logger.info(f"✓ Successfully indexed: {total_indexed}")
-        logger.info(f"✓ Total facts in KB: {stats.get('total_facts', 0)}")
-        logger.info(f"✓ Total vectors: {stats.get('total_vectors', 0)}")
+        logger.info("✓ Commands scanned: %s", len(all_commands))
+        logger.info("✓ Successfully indexed: %s", total_indexed)
+        logger.info("✓ Total facts in KB: %s", stats.get('total_facts', 0))
+        logger.info("✓ Total vectors: %s", stats.get('total_vectors', 0))
         logger.info("=" * 80)
 
         return 0
 
     except Exception as e:
-        logger.error(f"✗ Indexing failed: {e}")
+        logger.error("✗ Indexing failed: %s", e)
         import traceback
         traceback.print_exc()
         return 1

@@ -32,7 +32,7 @@ def load_terminal_routers():
         )
         logger.info("✅ Optional router loaded: terminal")
     except ImportError as e:
-        logger.warning(f"⚠️ Optional router not available: terminal - {e}")
+        logger.warning("⚠️ Optional router not available: terminal - %s", e)
 
     # Agent Terminal router
     try:
@@ -45,7 +45,7 @@ def load_terminal_routers():
             "✅ Optional router loaded: agent_terminal (includes prefix /api/agent-terminal)"
         )
     except ImportError as e:
-        logger.warning(f"⚠️ Optional router not available: agent_terminal - {e}")
+        logger.warning("⚠️ Optional router not available: agent_terminal - %s", e)
 
     # NOTE: remote_terminal and base_terminal were archived during terminal consolidation
     # - remote_terminal: Future feature, archived at backend/api/archive/remote_terminal.py.feature

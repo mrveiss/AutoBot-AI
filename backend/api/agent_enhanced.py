@@ -200,7 +200,7 @@ async def get_optimal_agents_for_goal(
         else:
             selected_agents = [available_agents[0]]
 
-    logger.info(f"Selected agents for goal '{goal[:50]}...': {selected_agents}")
+    logger.info("Selected agents for goal '%s...': %s", goal[:50], selected_agents)
     return selected_agents
 
 
@@ -253,7 +253,7 @@ async def _enhance_context_with_kb(payload, knowledge_base) -> str | None:
             kb_context = "\n".join([f"- {item.get('content', '')[:200]}..." for item in kb_results[:3]])
             return f"{payload.context or ''}\n\nRelevant knowledge:\n{kb_context}"
     except Exception as e:
-        logger.warning(f"Knowledge base context enhancement failed: {e}")
+        logger.warning("Knowledge base context enhancement failed: %s", e)
     return payload.context
 
 
@@ -289,7 +289,7 @@ async def execute_enhanced_goal(
         agents_info = await ai_client.list_available_agents()
         available_agents = agents_info.get("agents", [])
     except Exception as e:
-        logger.warning(f"Could not get agent list: {e}")
+        logger.warning("Could not get agent list: %s", e)
         available_agents = list(_FALLBACK_AGENTS)
 
     # Issue #398: Use extracted helpers
@@ -433,7 +433,7 @@ async def comprehensive_research_task(
                     )
 
             except Exception as e:
-                logger.warning(f"KB context failed: {e}")
+                logger.warning("KB context failed: %s", e)
 
         # Execute research using multiple agents
         research_result = await ai_client.multi_agent_query(
@@ -639,7 +639,7 @@ async def receive_goal_compat(
             return {"message": response_message}
 
     except Exception as e:
-        logger.warning(f"Enhanced goal execution failed, falling back: {e}")
+        logger.warning("Enhanced goal execution failed, falling back: %s", e)
 
         # Fallback to basic response
         return {

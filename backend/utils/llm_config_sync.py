@@ -63,7 +63,7 @@ class LLMConfigurationSynchronizer:
                 if common_model is None:
                     common_model = agent_model
                 elif common_model != agent_model:
-                    logger.warning(f"Agent {agent_id} uses different model: {agent_model}")
+                    logger.warning("Agent %s uses different model: %s", agent_id, agent_model)
 
         return agent_models, common_model
 
@@ -85,14 +85,14 @@ class LLMConfigurationSynchronizer:
             current_selected_model = LLMConfigurationSynchronizer._get_current_llm_model(
                 global_config_manager
             )
-            logger.info(f"Current global LLM model: '{current_selected_model}'")
+            logger.info("Current global LLM model: '%s'", current_selected_model)
 
             # Collect agent models using helper
             agent_models, common_model = LLMConfigurationSynchronizer._collect_agent_models(
                 global_config_manager, DEFAULT_AGENT_CONFIGS
             )
-            logger.info(f"Agent models: {agent_models}")
-            logger.info(f"Most common agent model: {common_model}")
+            logger.info("Agent models: %s", agent_models)
+            logger.info("Most common agent model: %s", common_model)
 
             # Determine if sync is needed
             sync_needed = False
@@ -118,8 +118,8 @@ class LLMConfigurationSynchronizer:
                 }
 
             # Perform synchronization
-            logger.info(f"SYNC NEEDED: {sync_reason}")
-            logger.info(f"Setting global LLM model to: {common_model}")
+            logger.info("SYNC NEEDED: %s", sync_reason)
+            logger.info("Setting global LLM model to: %s", common_model)
             global_config_manager.update_llm_model(common_model)
 
             # Verify the change
@@ -128,7 +128,7 @@ class LLMConfigurationSynchronizer:
             )
 
             if updated_model == common_model:
-                logger.info(f"✅ Successfully synchronized global LLM model to: {common_model}")
+                logger.info("✅ Successfully synchronized global LLM model to: %s", common_model)
                 return {
                     "status": "synchronized",
                     "previous_model": current_selected_model,
@@ -148,7 +148,7 @@ class LLMConfigurationSynchronizer:
             }
 
         except Exception as e:
-            logger.error(f"❌ Failed to synchronize LLM configuration: {e}")
+            logger.error("❌ Failed to synchronize LLM configuration: %s", e)
             return {"status": "error", "error": str(e)}
 
     @staticmethod
@@ -168,7 +168,7 @@ class LLMConfigurationSynchronizer:
             # Get available models
             result = await ModelManager.get_available_models()
             if result["status"] == "error":
-                logger.error(f"Failed to get available models: {result['error']}")
+                logger.error("Failed to get available models: %s", result['error'])
                 return {"status": "error", "error": result["error"]}
 
             models = result["models"]
@@ -177,7 +177,7 @@ class LLMConfigurationSynchronizer:
                 for model in models
             ]
 
-            logger.info(f"Found {len(model_names)} available models: {model_names}")
+            logger.info("Found %s available models: %s", len(model_names), model_names)
 
             # Update the configuration with available models
             global_config_manager.set_nested(
@@ -195,7 +195,7 @@ class LLMConfigurationSynchronizer:
             }
 
         except Exception as e:
-            logger.error(f"❌ Failed to populate models list: {e}")
+            logger.error("❌ Failed to populate models list: %s", e)
             return {"status": "error", "error": str(e)}
 
     @staticmethod
@@ -253,7 +253,7 @@ class LLMConfigurationSynchronizer:
                 logger.error("❌ Full LLM configuration synchronization failed")
 
         except Exception as e:
-            logger.error(f"❌ Full synchronization failed with exception: {e}")
+            logger.error("❌ Full synchronization failed with exception: %s", e)
             results["overall_status"] = "error"
             results["error"] = str(e)
 

@@ -384,7 +384,7 @@ class LLMPatternAnalyzer:
                     "Consider caching the response."
                 )
         except RedisError as e:
-            logger.warning(f"Failed to check cache for prompt analysis: {e}")
+            logger.warning("Failed to check cache for prompt analysis: %s", e)
             cached = None
 
         # Model recommendations
@@ -468,7 +468,7 @@ class LLMPatternAnalyzer:
                 "cache_count": data["count"]
             }
         except RedisError as e:
-            logger.error(f"Failed to record LLM usage: {e}")
+            logger.error("Failed to record LLM usage: %s", e)
             raise RuntimeError(f"Failed to record LLM usage: {e}")
 
     async def _update_stats(self, model: str, cost: float, success: bool):
@@ -494,7 +494,7 @@ class LLMPatternAnalyzer:
                 await pipe.expire(stats_key, 30 * 24 * 60 * 60)
                 await pipe.execute()
         except RedisError as e:
-            logger.warning(f"Failed to update LLM stats: {e}")
+            logger.warning("Failed to update LLM stats: %s", e)
 
     def _aggregate_day_stats(
         self, date: str, day_stats: dict, stats: Dict[str, Any]
@@ -573,7 +573,7 @@ class LLMPatternAnalyzer:
 
             return stats
         except RedisError as e:
-            logger.error(f"Failed to get usage stats: {e}")
+            logger.error("Failed to get usage stats: %s", e)
             raise RuntimeError(f"Failed to get usage stats: {e}")
 
     def _parse_cache_opportunity(
@@ -623,7 +623,7 @@ class LLMPatternAnalyzer:
             opportunities.sort(key=lambda x: x["potential_savings"], reverse=True)
             return opportunities[:20]
         except RedisError as e:
-            logger.error(f"Failed to identify cache opportunities: {e}")
+            logger.error("Failed to identify cache opportunities: %s", e)
             raise RuntimeError(f"Failed to identify cache opportunities: {e}")
 
     async def get_optimization_recommendations(self) -> List[Dict[str, Any]]:

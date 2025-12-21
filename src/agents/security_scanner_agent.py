@@ -85,7 +85,7 @@ class SecurityScannerAgent:
             return await handler(target, context)
 
         except Exception as e:
-            logger.error(f"Security scan failed: {e}")
+            logger.error("Security scan failed: %s", e)
             return {"status": "error", "message": f"Security scan failed: {str(e)}"}
 
     def _validate_target(self, target: str) -> bool:
@@ -112,7 +112,7 @@ class SecurityScannerAgent:
             logger.debug("Not a valid IP address, treating as hostname: %s", e)
 
         # For production, you'd check against authorized domains here
-        logger.warning(f"Target {target} not in authorized list")
+        logger.warning("Target %s not in authorized list", target)
         return False
 
     async def _port_scan(self, target: str, context: Dict[str, Any]) -> Dict[str, Any]:
@@ -162,7 +162,7 @@ class SecurityScannerAgent:
                 return result
 
         except Exception as e:
-            logger.error(f"Port scan failed: {e}")
+            logger.error("Port scan failed: %s", e)
             return {"status": "error", "message": f"Port scan failed: {str(e)}"}
 
     async def _service_detection(
@@ -191,7 +191,7 @@ class SecurityScannerAgent:
                 return result
 
         except Exception as e:
-            logger.error(f"Service detection failed: {e}")
+            logger.error("Service detection failed: %s", e)
             return {"status": "error", "message": f"Service detection failed: {str(e)}"}
 
     async def _vulnerability_scan(
@@ -224,7 +224,7 @@ class SecurityScannerAgent:
                 return result
 
         except Exception as e:
-            logger.error(f"Vulnerability scan failed: {e}")
+            logger.error("Vulnerability scan failed: %s", e)
             return {
                 "status": "error",
                 "message": f"Vulnerability scan failed: {str(e)}",
@@ -256,7 +256,7 @@ class SecurityScannerAgent:
                 return result
 
         except Exception as e:
-            logger.error(f"SSL scan failed: {e}")
+            logger.error("SSL scan failed: %s", e)
             return {"status": "error", "message": f"SSL scan failed: {str(e)}"}
 
     async def _dns_enumeration(
@@ -294,7 +294,7 @@ class SecurityScannerAgent:
             }
 
         except Exception as e:
-            logger.error(f"DNS enumeration failed: {e}")
+            logger.error("DNS enumeration failed: %s", e)
             return {"status": "error", "message": f"DNS enumeration failed: {str(e)}"}
 
     async def _check_robots_txt(
@@ -348,7 +348,7 @@ class SecurityScannerAgent:
             }
 
         except Exception as e:
-            logger.error(f"Web scan failed: {e}")
+            logger.error("Web scan failed: %s", e)
             return {"status": "error", "message": f"Web scan failed: {str(e)}"}
 
     # _run_command moved to src/utils/agent_command_helpers.py (Issue #292)
@@ -458,7 +458,7 @@ class SecurityScannerAgent:
             return tools_info
 
         except Exception as e:
-            logger.error(f"Tool research failed: {e}")
+            logger.error("Tool research failed: %s", e)
             # Fallback with known tools
             return {
                 "scan_type": scan_type,
@@ -536,7 +536,7 @@ class SecurityScannerAgent:
             }
 
         except Exception as e:
-            logger.error(f"Installation guide research failed: {e}")
+            logger.error("Installation guide research failed: %s", e)
             return {
                 "tool": tool_name,
                 "installation_guide": f"Try: sudo apt install {tool_name}",

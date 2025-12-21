@@ -91,8 +91,8 @@ class Phase9MonitoringManager:
 
             # Check hardware availability
             gpu_capabilities = get_gpu_capabilities()
-            logger.info(f"GPU Available: {gpu_capabilities['gpu_available']}")
-            logger.info(f"NPU Available: {phase9_monitor.npu_available}")
+            logger.info("GPU Available: %s", gpu_capabilities['gpu_available'])
+            logger.info("NPU Available: %s", phase9_monitor.npu_available)
 
             # Setup alert callbacks
             if self.alerts_enabled:
@@ -112,7 +112,7 @@ class Phase9MonitoringManager:
                 logger.info("Running initial GPU optimization...")
                 optimization_result = await optimize_gpu_for_multimodal()
                 if optimization_result.success:
-                    logger.info(f"GPU optimization completed: {optimization_result.performance_improvement:.1f}% improvement")
+                    logger.info("GPU optimization completed: %s% improvement", optimization_result.performance_improvement:.1f)
                     self.optimizations_applied += len(optimization_result.applied_optimizations)
                 else:
                     logger.warning("GPU optimization failed")
@@ -121,7 +121,7 @@ class Phase9MonitoringManager:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to initialize Phase 9 monitoring: {e}")
+            logger.error("Failed to initialize Phase 9 monitoring: %s", e)
             return False
 
     async def start_monitoring(self):
@@ -151,7 +151,7 @@ class Phase9MonitoringManager:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to start monitoring: {e}")
+            logger.error("Failed to start monitoring: %s", e)
             return False
 
     async def stop_monitoring(self):
@@ -170,12 +170,12 @@ class Phase9MonitoringManager:
 
             # Generate final report
             uptime = time.time() - self.start_time if self.start_time else 0
-            logger.info(f"Monitoring stopped. Uptime: {uptime:.1f}s, Metrics collected: {self.metrics_collected}")
+            logger.info("Monitoring stopped. Uptime: %ss, Metrics collected: %s", uptime:.1f, self.metrics_collected)
 
             return True
 
         except Exception as e:
-            logger.error(f"Failed to stop monitoring: {e}")
+            logger.error("Failed to stop monitoring: %s", e)
             return False
 
     async def _periodic_optimization_loop(self):
@@ -198,15 +198,15 @@ class Phase9MonitoringManager:
                 if overall_efficiency < 80:  # Trigger optimization if efficiency is low
                     optimization_result = await optimize_gpu_for_multimodal()
                     if optimization_result.success:
-                        logger.info(f"Periodic optimization completed: {optimization_result.performance_improvement:.1f}% improvement")
+                        logger.info("Periodic optimization completed: %s% improvement", optimization_result.performance_improvement:.1f)
                         self.optimizations_applied += len(optimization_result.applied_optimizations)
                     else:
                         logger.warning("Periodic optimization failed")
                 else:
-                    logger.info(f"GPU efficiency is good ({overall_efficiency:.1f}%), skipping optimization")
+                    logger.info("GPU efficiency is good (%s%), skipping optimization", overall_efficiency:.1f)
 
             except Exception as e:
-                logger.error(f"Error in periodic optimization loop: {e}")
+                logger.error("Error in periodic optimization loop: %s", e)
                 await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Wait before retrying
 
     async def _dashboard_update_loop(self):
@@ -231,7 +231,7 @@ class Phase9MonitoringManager:
                         self._log_dashboard_summary(dashboard_data)
 
             except Exception as e:
-                logger.error(f"Error in dashboard update loop: {e}")
+                logger.error("Error in dashboard update loop: %s", e)
                 await asyncio.sleep(TimingConstants.ERROR_RECOVERY_LONG_DELAY)  # Wait before retrying
 
     def _log_dashboard_summary(self, dashboard_data):
@@ -262,10 +262,10 @@ class Phase9MonitoringManager:
                 if critical_alerts > 0:
                     summary_parts.append(f"⚠️ {critical_alerts} critical alerts")
 
-            logger.info(f"DASHBOARD: {' | '.join(summary_parts)} | Collected: {self.metrics_collected}")
+            logger.info("DASHBOARD: %s | Collected: %s", ' | '.join(summary_parts), self.metrics_collected)
 
         except Exception as e:
-            logger.error(f"Error logging dashboard summary: {e}")
+            logger.error("Error logging dashboard summary: %s", e)
 
     async def _handle_performance_alert(self, alerts):
         """Handle performance alerts"""
@@ -284,7 +284,7 @@ class Phase9MonitoringManager:
                     await self._handle_critical_alert(alert)
 
         except Exception as e:
-            logger.error(f"Error handling performance alert: {e}")
+            logger.error("Error handling performance alert: %s", e)
 
     async def _handle_critical_alert(self, alert):
         """Handle critical performance alerts with automated responses"""
@@ -304,7 +304,7 @@ class Phase9MonitoringManager:
                 # Could implement service restart or fallback here
 
         except Exception as e:
-            logger.error(f"Error handling critical alert: {e}")
+            logger.error("Error handling critical alert: %s", e)
 
     async def run_benchmark_suite(self):
         """Run comprehensive benchmark suite"""
@@ -344,11 +344,11 @@ class Phase9MonitoringManager:
             with open(benchmark_file, 'w') as f:
                 json.dump(results, f, indent=2, default=str)
 
-            logger.info(f"Benchmark suite completed. Results saved to: {benchmark_file}")
+            logger.info("Benchmark suite completed. Results saved to: %s", benchmark_file)
             return results
 
         except Exception as e:
-            logger.error(f"Benchmark suite failed: {e}")
+            logger.error("Benchmark suite failed: %s", e)
             return {"error": str(e)}
 
     def get_status_report(self):
@@ -409,13 +409,13 @@ async def _handle_test_command(manager: Phase9MonitoringManager) -> None:
     await manager.initialize()
 
     metrics = await collect_phase9_metrics()
-    logger.info(f"Metrics collection test: {'✓' if metrics.get('collection_successful') else '✗'}")
+    logger.info("Metrics collection test: %s", '✓' if metrics.get('collection_successful') else '✗')
 
     capabilities = get_gpu_capabilities()
-    logger.info(f"GPU capabilities test: {'✓' if capabilities['gpu_available'] else '✗'}")
+    logger.info("GPU capabilities test: %s", '✓' if capabilities['gpu_available'] else '✗')
 
     efficiency = await monitor_gpu_efficiency()
-    logger.info(f"Efficiency monitoring test: {'✓' if 'overall_efficiency' in efficiency else '✗'}")
+    logger.info("Efficiency monitoring test: %s", '✓' if 'overall_efficiency' in efficiency else '✗')
 
     logger.info("Component tests completed")
 
@@ -441,9 +441,9 @@ async def main():
         try:
             with open(args.config, 'r') as f:
                 manager.config.update(json.load(f))
-                logger.info(f"Configuration loaded from {args.config}")
+                logger.info("Configuration loaded from %s", args.config)
         except Exception as e:
-            logger.error(f"Failed to load configuration: {e}")
+            logger.error("Failed to load configuration: %s", e)
 
     try:
         if args.command == "start":
@@ -470,7 +470,7 @@ async def main():
         if manager.monitoring_active:
             await manager.stop_monitoring()
     except Exception as e:
-        logger.error(f"Unexpected error: {e}")
+        logger.error("Unexpected error: %s", e)
         sys.exit(1)
 
 

@@ -88,7 +88,7 @@ class ConfigMigrator:
             return False
 
         except Exception as e:
-            logger.warning(f"Could not read {file_path}: {e}")
+            logger.warning("Could not read %s: %s", file_path, e)
             return False
 
     def migrate_file(self, file_path: Path) -> bool:
@@ -131,14 +131,14 @@ class ConfigMigrator:
                 with open(file_path, 'w', encoding='utf-8') as f:
                     f.write(modified_content)
 
-                logger.info(f"✅ Migrated {file_path} (backup at {backup_path})")
+                logger.info("✅ Migrated %s (backup at %s)", file_path, backup_path)
                 return True
             else:
-                logger.debug(f"No changes needed for {file_path}")
+                logger.debug("No changes needed for %s", file_path)
                 return False
 
         except Exception as e:
-            logger.error(f"❌ Failed to migrate {file_path}: {e}")
+            logger.error("❌ Failed to migrate %s: %s", file_path, e)
             return False
 
     def run_migration(self, dry_run: bool = False) -> Dict[str, int]:
@@ -147,7 +147,7 @@ class ConfigMigrator:
 
         # Find files to migrate
         files_to_migrate = self.scan_files_for_migration()
-        logger.info(f"📁 Found {len(files_to_migrate)} files to migrate")
+        logger.info("📁 Found %s files to migrate", len(files_to_migrate))
 
         # Migration statistics
         stats = {
@@ -160,7 +160,7 @@ class ConfigMigrator:
         if dry_run:
             logger.info("🔍 DRY RUN - No files will be modified")
             for file_path in files_to_migrate:
-                logger.info(f"Would migrate: {file_path}")
+                logger.info("Would migrate: %s", file_path)
             return stats
 
         # Migrate each file
@@ -171,7 +171,7 @@ class ConfigMigrator:
                     stats["changes_made"] += len([log for log in self.migration_log if str(file_path) in log])
             except Exception as e:
                 stats["files_failed"] += 1
-                logger.error(f"Migration failed for {file_path}: {e}")
+                logger.error("Migration failed for %s: %s", file_path, e)
 
         # Archive old configuration files
         if not dry_run:
@@ -199,7 +199,7 @@ class ConfigMigrator:
             if old_file.exists():
                 archive_path = archive_dir / old_file.name
                 shutil.move(str(old_file), str(archive_path))
-                logger.info(f"📦 Archived {old_file} to {archive_path}")
+                logger.info("📦 Archived %s to %s", old_file, archive_path)
 
     def _generate_migration_report(self, stats: Dict[str, int]):
         """Generate detailed migration report"""
@@ -229,7 +229,7 @@ class ConfigMigrator:
 
             f.write("\n**Total configuration code reduced**: ~1,600 lines consolidated into unified system\n")
 
-        logger.info(f"📄 Migration report saved to {report_path}")
+        logger.info("📄 Migration report saved to %s", report_path)
 
 
 def main():

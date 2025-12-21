@@ -79,7 +79,7 @@ class PayloadSizeTracker:
             else:
                 return len(str(payload).encode("utf-8"))
         except Exception as e:
-            logger.warning(f"Failed to calculate payload size: {e}")
+            logger.warning("Failed to calculate payload size: %s", e)
             return 0
 
 
@@ -330,7 +330,7 @@ class ConversationRateLimiter:
         ]
 
         if any(warning_conditions):
-            logger.warning(f"API Usage Warning: {result['recommendation']}")
+            logger.warning("API Usage Warning: %s", result['recommendation'])
             self.last_warning_time = current_time
 
     def _handle_rate_limit_hit(self):
@@ -339,7 +339,7 @@ class ConversationRateLimiter:
         with self._stats_lock:
             self.requests_per_minute = max(10, int(self.requests_per_minute * 0.8))
             new_limit = self.requests_per_minute
-        logger.warning(f"Rate limits adjusted to {new_limit}/min after limit hit")
+        logger.warning("Rate limits adjusted to %s/min after limit hit", new_limit)
 
 
 # Global instance for easy access (thread-safe)

@@ -93,7 +93,7 @@ class FeatureFlags:
             return EnforcementMode.DISABLED
 
         except Exception as e:
-            logger.error(f"Failed to get enforcement mode: {e}")
+            logger.error("Failed to get enforcement mode: %s", e)
             # Fail-safe: default to DISABLED on error
             return EnforcementMode.DISABLED
 
@@ -125,11 +125,11 @@ class FeatureFlags:
             await redis._redis.lpush(history_key, history_entry)
             await redis._redis.ltrim(history_key, 0, 99)  # Keep last 100 changes
 
-            logger.info(f"Enforcement mode set to: {mode.value}")
+            logger.info("Enforcement mode set to: %s", mode.value)
             return True
 
         except Exception as e:
-            logger.error(f"Failed to set enforcement mode: {e}")
+            logger.error("Failed to set enforcement mode: %s", e)
             return False
 
     async def get_endpoint_enforcement(
@@ -157,7 +157,7 @@ class FeatureFlags:
             return None  # Use global mode
 
         except Exception as e:
-            logger.error(f"Failed to get endpoint enforcement for {endpoint}: {e}")
+            logger.error("Failed to get endpoint enforcement for %s: %s", endpoint, e)
             return None
 
     async def set_endpoint_enforcement(
@@ -180,16 +180,16 @@ class FeatureFlags:
             if mode is None:
                 # Remove endpoint override
                 await redis.delete(key)
-                logger.info(f"Removed enforcement override for {endpoint}")
+                logger.info("Removed enforcement override for %s", endpoint)
             else:
                 # Set endpoint override
                 await redis.set(key, mode.value)
-                logger.info(f"Set {endpoint} enforcement to: {mode.value}")
+                logger.info("Set %s enforcement to: %s", endpoint, mode.value)
 
             return True
 
         except Exception as e:
-            logger.error(f"Failed to set endpoint enforcement: {e}")
+            logger.error("Failed to set endpoint enforcement: %s", e)
             return False
 
     async def get_feature(self, feature_name: str, default: bool = False) -> bool:
@@ -217,7 +217,7 @@ class FeatureFlags:
             return value.lower() in StringParsingConstants.TRUTHY_STRING_VALUES
 
         except Exception as e:
-            logger.error(f"Failed to get feature flag {feature_name}: {e}")
+            logger.error("Failed to get feature flag %s: %s", feature_name, e)
             return default
 
     async def set_feature(self, feature_name: str, enabled: bool) -> bool:
@@ -236,11 +236,11 @@ class FeatureFlags:
             key = f"feature_flag:{feature_name}"
             await redis.set(key, "true" if enabled else "false")
 
-            logger.info(f"Feature flag {feature_name} set to: {enabled}")
+            logger.info("Feature flag %s set to: %s", feature_name, enabled)
             return True
 
         except Exception as e:
-            logger.error(f"Failed to set feature flag {feature_name}: {e}")
+            logger.error("Failed to set feature flag %s: %s", feature_name, e)
             return False
 
     def _parse_history_entries(self, history_raw: list) -> list:
@@ -252,7 +252,7 @@ class FeatureFlags:
             try:
                 history.append(json.loads(entry))
             except Exception as e:
-                logger.debug(f"Skipping malformed history entry: {e}")
+                logger.debug("Skipping malformed history entry: %s", e)
         return history
 
     def _build_endpoint_overrides(
@@ -321,7 +321,7 @@ class FeatureFlags:
             }
 
         except Exception as e:
-            logger.error(f"Failed to get rollout statistics: {e}")
+            logger.error("Failed to get rollout statistics: %s", e)
             return {"error": str(e), "current_mode": "unknown"}
 
     async def clear_all_flags(self) -> bool:
@@ -346,11 +346,11 @@ class FeatureFlags:
                 if cursor == 0:
                     break
 
-            logger.warning(f"Cleared {deleted} feature flags")
+            logger.warning("Cleared %s feature flags", deleted)
             return True
 
         except Exception as e:
-            logger.error(f"Failed to clear feature flags: {e}")
+            logger.error("Failed to clear feature flags: %s", e)
             return False
 
 

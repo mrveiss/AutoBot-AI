@@ -230,7 +230,7 @@ class ChatKnowledgeManager:
 
         self.chat_contexts[chat_id].temporary_knowledge.append(knowledge_item)
 
-        logger.info(f"Temporary knowledge added to chat {chat_id}: {knowledge_id}")
+        logger.info("Temporary knowledge added to chat %s: %s", chat_id, knowledge_id)
         return knowledge_id
 
     async def get_knowledge_for_decision(self, chat_id: str) -> List[Metadata]:
@@ -312,19 +312,19 @@ class ChatKnowledgeManager:
                 item["status"] = "persistent"
                 item["kb_id"] = kb_id
 
-                logger.info(f"Knowledge {knowledge_id} added to KB as {kb_id}")
+                logger.info("Knowledge %s added to KB as %s", knowledge_id, kb_id)
 
             except Exception as e:
-                logger.error(f"Failed to add knowledge to KB: {e}")
+                logger.error("Failed to add knowledge to KB: %s", e)
                 return False
 
         elif decision == KnowledgeDecision.KEEP_TEMPORARY:
             item["status"] = "session_only"
-            logger.info(f"Knowledge {knowledge_id} kept as session-only")
+            logger.info("Knowledge %s kept as session-only", knowledge_id)
 
         elif decision == KnowledgeDecision.DELETE:
             context.temporary_knowledge.remove(item)
-            logger.info(f"Knowledge {knowledge_id} deleted")
+            logger.info("Knowledge %s deleted", knowledge_id)
 
         return True
 
@@ -395,7 +395,7 @@ class ChatKnowledgeManager:
 
         compiled_knowledge["kb_id"] = kb_id
 
-        logger.info(f"Chat {chat_id} compiled to knowledge base as {kb_id}")
+        logger.info("Chat %s compiled to knowledge base as %s", chat_id, kb_id)
         return compiled_knowledge
 
     async def search_chat_knowledge(
@@ -492,7 +492,7 @@ async def create_chat_context(request_data: CreateContextRequest, request: Reque
         }
 
     except Exception as e:
-        logger.error(f"Failed to create context: {e}")
+        logger.error("Failed to create context: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -533,7 +533,7 @@ async def associate_file_with_chat(
         }
 
     except Exception as e:
-        logger.error(f"Failed to associate file: {e}")
+        logger.error("Failed to associate file: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -560,7 +560,7 @@ async def upload_file_to_chat(
             async with aiofiles.open(file_path, "wb") as f:
                 await f.write(content)
         except OSError as e:
-            logger.error(f"Failed to write uploaded file {file_path}: {e}")
+            logger.error("Failed to write uploaded file %s: %s", file_path, e)
             raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
 
         # Associate with chat
@@ -574,7 +574,7 @@ async def upload_file_to_chat(
         return {"success": True, "file_id": association.file_id, "file_path": file_path}
 
     except Exception as e:
-        logger.error(f"Failed to upload file: {e}")
+        logger.error("Failed to upload file: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -600,7 +600,7 @@ async def add_temporary_knowledge(request: AddKnowledgeRequest):
         return {"success": True, "knowledge_id": knowledge_id}
 
     except Exception as e:
-        logger.error(f"Failed to add temporary knowledge: {e}")
+        logger.error("Failed to add temporary knowledge: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -622,7 +622,7 @@ async def get_pending_knowledge_decisions(chat_id: str):
         }
 
     except Exception as e:
-        logger.error(f"Failed to get pending knowledge: {e}")
+        logger.error("Failed to get pending knowledge: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -653,7 +653,7 @@ async def apply_knowledge_decision(request: KnowledgeDecisionRequest):
         }
 
     except Exception as e:
-        logger.error(f"Failed to apply knowledge decision: {e}")
+        logger.error("Failed to apply knowledge decision: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -682,7 +682,7 @@ async def compile_chat_to_knowledge(request_data: CompileChatRequest, request: R
         return {"success": True, "compiled": compiled}
 
     except Exception as e:
-        logger.error(f"Failed to compile chat: {e}")
+        logger.error("Failed to compile chat: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -710,7 +710,7 @@ async def search_chat_knowledge(request: SearchRequest):
         return {"success": True, "results": results, "count": len(results)}
 
     except Exception as e:
-        logger.error(f"Failed to search knowledge: {e}")
+        logger.error("Failed to search knowledge: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -754,7 +754,7 @@ async def get_chat_context(chat_id: str):
         }
 
     except Exception as e:
-        logger.error(f"Failed to get chat context: {e}")
+        logger.error("Failed to get chat context: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -774,7 +774,7 @@ async def health_check():
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"Chat knowledge health check failed: {e}")
+        logger.error("Chat knowledge health check failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 

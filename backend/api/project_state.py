@@ -104,7 +104,7 @@ async def get_project_status(detailed: bool = False):
         )
 
     except Exception as e:
-        logger.error(f"Error getting project status: {e}")
+        logger.error("Error getting project status: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -145,7 +145,7 @@ async def run_validation():
         return {"success": True, "message": "Validation completed", "results": results}
 
     except Exception as e:
-        logger.error(f"Error running validation: {e}")
+        logger.error("Error running validation: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -172,7 +172,7 @@ async def get_validation_report():
         }
 
     except Exception as e:
-        logger.error(f"Error generating validation report: {e}")
+        logger.error("Error generating validation report: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -228,7 +228,7 @@ async def get_all_phases():
         }
 
     except Exception as e:
-        logger.error(f"Error getting phases: {e}")
+        logger.error("Error getting phases: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -269,7 +269,7 @@ async def activate_phase(phase_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error activating phase: {e}")
+        logger.error("Error activating phase: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -292,7 +292,7 @@ async def auto_progress_phases():
         }
 
     except Exception as e:
-        logger.error(f"Error during auto progression: {e}")
+        logger.error("Error during auto progression: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -320,5 +320,5 @@ async def health_check():
         }
 
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
+        logger.error("Health check failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))

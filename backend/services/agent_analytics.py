@@ -252,7 +252,7 @@ class AgentAnalytics:
             running_key = f"{self.REDIS_KEY_PREFIX}running:{task_id}"
             await redis.set(running_key, json.dumps(record.to_dict()), ex=3600)  # 1 hour TTL
         except Exception as e:
-            logger.error(f"Failed to track task start: {e}")
+            logger.error("Failed to track task start: %s", e)
 
         return record
 
@@ -284,7 +284,7 @@ class AgentAnalytics:
             # Get running task
             task_data = await redis.get(running_key)
             if not task_data:
-                logger.warning(f"Task not found for completion: {task_id}")
+                logger.warning("Task not found for completion: %s", task_id)
                 return None
 
             task_str = task_data if isinstance(task_data, str) else task_data.decode("utf-8")
@@ -314,7 +314,7 @@ class AgentAnalytics:
             return record
 
         except Exception as e:
-            logger.error(f"Failed to track task completion: {e}")
+            logger.error("Failed to track task completion: %s", e)
             return None
 
     async def _store_completed_task(self, record: AgentTaskRecord) -> None:
@@ -333,7 +333,7 @@ class AgentAnalytics:
             await redis.expire(agent_key, 86400 * 30)  # 30 day retention
 
         except Exception as e:
-            logger.error(f"Failed to store completed task: {e}")
+            logger.error("Failed to store completed task: %s", e)
 
     async def _update_agent_metrics(self, record: AgentTaskRecord) -> None:
         """Update aggregated metrics for an agent"""
@@ -363,7 +363,7 @@ class AgentAnalytics:
             await redis.hset(metrics_key, "last_activity", record.completed_at or record.started_at)
 
         except Exception as e:
-            logger.error(f"Failed to update agent metrics: {e}")
+            logger.error("Failed to update agent metrics: %s", e)
 
     async def get_agent_metrics(self, agent_id: str) -> Optional[AgentMetrics]:
         """Get aggregated metrics for an agent"""
@@ -413,7 +413,7 @@ class AgentAnalytics:
             )
 
         except Exception as e:
-            logger.error(f"Failed to get agent metrics: {e}")
+            logger.error("Failed to get agent metrics: %s", e)
             return None
 
     async def get_all_agents_metrics(self) -> List[AgentMetrics]:
@@ -485,7 +485,7 @@ class AgentAnalytics:
             return metrics_list
 
         except Exception as e:
-            logger.error(f"Failed to get all agents metrics: {e}")
+            logger.error("Failed to get all agents metrics: %s", e)
             return []
 
     async def get_agent_history(
@@ -500,7 +500,7 @@ class AgentAnalytics:
             return [json.loads(r) for r in records]
 
         except Exception as e:
-            logger.error(f"Failed to get agent history: {e}")
+            logger.error("Failed to get agent history: %s", e)
             return []
 
     async def get_recent_tasks(self, limit: int = 100) -> List[Dict[str, Any]]:
@@ -511,7 +511,7 @@ class AgentAnalytics:
             return [json.loads(r) for r in records]
 
         except Exception as e:
-            logger.error(f"Failed to get recent tasks: {e}")
+            logger.error("Failed to get recent tasks: %s", e)
             return []
 
     async def compare_agents(
@@ -621,7 +621,7 @@ class AgentAnalytics:
             }
 
         except Exception as e:
-            logger.error(f"Failed to get performance trends: {e}")
+            logger.error("Failed to get performance trends: %s", e)
             return {"error": str(e)}
 
 

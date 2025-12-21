@@ -74,17 +74,17 @@ def _terminate_process_gracefully(name: str, process: subprocess.Popen) -> bool:
     if process.poll() is not None:
         return False  # Process already stopped
 
-    logger.info(f"Stopping {name} (PID: {process.pid})")
+    logger.info("Stopping %s (PID: %s)", name, process.pid)
     process.terminate()
 
     try:
         process.wait(timeout=5)
     except subprocess.TimeoutExpired:
-        logger.warning(f"Force killing {name}")
+        logger.warning("Force killing %s", name)
         process.kill()
         process.wait()
 
-    logger.info(f"✅ {name} stopped")
+    logger.info("✅ %s stopped", name)
     return True
 
 
@@ -186,7 +186,7 @@ class StartupCoordinator:
             with open(self.startup_state_file, 'w') as f:
                 json.dump(state_data, f, indent=2, default=str)
         except Exception as e:
-            logger.error(f"Failed to save startup state: {e}")
+            logger.error("Failed to save startup state: %s", e)
 
     def load_state(self):
         """Load startup state from file if it exists (Issue #315 - refactored)."""
@@ -203,7 +203,7 @@ class StartupCoordinator:
 
             logger.info("Loaded previous startup state")
         except Exception as e:
-            logger.warning(f"Could not load previous startup state: {e}")
+            logger.warning("Could not load previous startup state: %s", e)
 
     async def check_health(self, component: ComponentInfo) -> bool:
         """Check if a component is healthy (Issue #315 - refactored)."""
@@ -215,7 +215,7 @@ class StartupCoordinator:
             component.health_status = HealthStatus.HEALTHY if healthy else HealthStatus.UNHEALTHY
             return healthy
         except Exception as e:
-            logger.debug(f"Health check failed for {component.name}: {e}")
+            logger.debug("Health check failed for %s: %s", component.name, e)
             component.health_status = HealthStatus.UNHEALTHY
             return False
 
@@ -238,19 +238,19 @@ class StartupCoordinator:
         """Check if all dependencies of a component are ready"""
         for dep_name in component.dependencies:
             if dep_name not in self.components:
-                logger.error(f"Unknown dependency '{dep_name}' for component '{component.name}'")
+                logger.error("Unknown dependency '%s' for component '%s'", dep_name, component.name)
                 return False
 
             dep = self.components[dep_name]
             if dep.state != ComponentState.READY:
-                logger.debug(f"Dependency '{dep_name}' not ready for '{component.name}' (state: {dep.state})")
+                logger.debug("Dependency '%s' not ready for '%s' (state: %s)", dep_name, component.name, dep.state)
                 return False
 
         return True
 
     async def start_component(self, component: ComponentInfo) -> bool:
         """Start a single component"""
-        logger.info(f"🚀 Starting component: {component.name}")
+        logger.info("🚀 Starting component: %s", component.name)
         component.state = ComponentState.STARTING
         component.start_time = time.time()
         self.save_state()
@@ -258,7 +258,7 @@ class StartupCoordinator:
         try:
             if component.start_command:
                 # Start external process
-                logger.info(f"Executing: {component.start_command}")
+                logger.info("Executing: %s", component.start_command)
 
                 # Set up environment and working directory
                 env = os.environ.copy()
@@ -283,7 +283,7 @@ class StartupCoordinator:
                 self.processes[component.name] = process
                 component.pid = process.pid
 
-                logger.info(f"Started {component.name} with PID {component.pid}")
+                logger.info("Started %s with PID %s", component.name, component.pid)
 
                 # Wait for component to become healthy
                 max_wait = self.max_startup_time
@@ -294,7 +294,7 @@ class StartupCoordinator:
                     if process.poll() is not None:
                         stdout, stderr = process.communicate()
                         error_msg = f"Process died: {stderr.decode()}"
-                        logger.error(f"❌ {component.name} failed: {error_msg}")
+                        logger.error("❌ %s failed: %s", component.name, error_msg)
                         component.error_message = error_msg
                         component.state = ComponentState.FAILED
                         self.save_state()
@@ -305,25 +305,25 @@ class StartupCoordinator:
                         component.state = ComponentState.READY
                         component.ready_time = time.time()
                         startup_duration = component.ready_time - component.start_time
-                        logger.info(f"✅ {component.name} is ready (took {startup_duration:.1f}s)")
+                        logger.info("✅ %s is ready (took %ss)", component.name, startup_duration:.1f)
                         self.save_state()
                         return True
 
                     # Progress feedback
                     if attempt % 10 == 0 and attempt > 0:
-                        logger.info(f"⏳ Waiting for {component.name} to be ready... ({attempt}s elapsed)")
+                        logger.info("⏳ Waiting for %s to be ready... (%ss elapsed)", component.name, attempt)
 
                     await asyncio.sleep(check_interval)
 
                 # Timeout reached
-                logger.error(f"❌ {component.name} did not become ready within {max_wait}s")
+                logger.error("❌ %s did not become ready within %ss", component.name, max_wait)
                 component.error_message = f"Startup timeout ({max_wait}s)"
                 component.state = ComponentState.FAILED
                 self.save_state()
                 return False
             else:
                 # Built-in component (no external process)
-                logger.info(f"✅ {component.name} is ready (built-in)")
+                logger.info("✅ %s is ready (built-in)", component.name)
                 component.state = ComponentState.READY
                 component.ready_time = time.time()
                 self.save_state()
@@ -331,7 +331,7 @@ class StartupCoordinator:
 
         except Exception as e:
             error_msg = f"Failed to start: {str(e)}"
-            logger.error(f"❌ {component.name} failed: {error_msg}")
+            logger.error("❌ %s failed: %s", component.name, error_msg)
             component.error_message = error_msg
             component.state = ComponentState.FAILED
             self.save_state()
@@ -343,7 +343,7 @@ class StartupCoordinator:
             target_components = set(self.components.keys())
 
         logger.info("🎯 Starting AutoBot with state-based startup coordination")
-        logger.info(f"Target components: {', '.join(sorted(target_components))}")
+        logger.info("Target components: %s", ', '.join(sorted(target_components)))
 
         # Load any previous state
         self.load_state()
@@ -378,7 +378,7 @@ class StartupCoordinator:
                         break
 
                 if all_stuck:
-                    logger.error(f"❌ Startup stuck! Remaining components have failed dependencies: {remaining}")
+                    logger.error("❌ Startup stuck! Remaining components have failed dependencies: %s", remaining)
                     return False
 
                 # Wait a bit and try again
@@ -397,20 +397,20 @@ class StartupCoordinator:
                 success = await task
                 if success:
                     started_components.add(name)
-                    logger.info(f"✅ Component '{name}' started successfully")
+                    logger.info("✅ Component '%s' started successfully", name)
                 else:
                     failed_components.add(name)
-                    logger.error(f"❌ Component '{name}' failed to start")
+                    logger.error("❌ Component '%s' failed to start", name)
 
         # Final status
         total_target = len(target_components)
         successful = len(started_components)
         failed = len(failed_components)
 
-        logger.info(f"🎯 Startup completed: {successful}/{total_target} components started")
+        logger.info("🎯 Startup completed: %s/%s components started", successful, total_target)
 
         if failed_components:
-            logger.error(f"❌ Failed components: {', '.join(failed_components)}")
+            logger.error("❌ Failed components: %s", ', '.join(failed_components))
             return False
 
         logger.info("🎉 All components started successfully!")
@@ -425,7 +425,7 @@ class StartupCoordinator:
                 if _terminate_process_gracefully(name, process):
                     self.components[name].state = ComponentState.STOPPED
             except Exception as e:
-                logger.error(f"Error stopping {name}: {e}")
+                logger.error("Error stopping %s: %s", name, e)
 
         self.save_state()
 
@@ -440,7 +440,7 @@ async def main():
     # Set up signal handling
     def signal_handler(signum, frame):
         """Handle shutdown signals by stopping all components gracefully."""
-        logger.info(f"Received signal {signum}, shutting down...")
+        logger.info("Received signal %s, shutting down...", signum)
         coordinator.stop_all()
         sys.exit(0)
 
@@ -496,8 +496,8 @@ async def main():
         # Validate component names
         invalid = target_components - set(coordinator.components.keys())
         if invalid:
-            logger.error(f"Invalid component names: {invalid}")
-            logger.info(f"Available: {', '.join(coordinator.components.keys())}")
+            logger.error("Invalid component names: %s", invalid)
+            logger.info("Available: %s", ', '.join(coordinator.components.keys()))
             return
 
     success = await coordinator.startup_sequence(target_components)
@@ -517,7 +517,7 @@ async def main():
                 if component.state == ComponentState.READY:
                     healthy = await coordinator.check_health(component)
                     if not healthy:
-                        logger.warning(f"⚠️ Component {name} health check failed")
+                        logger.warning("⚠️ Component %s health check failed", name)
     except KeyboardInterrupt:
         pass
     finally:

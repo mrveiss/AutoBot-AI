@@ -226,7 +226,7 @@ class ClaudeAPIOptimizationSuite:
             return True
 
         except Exception as e:
-            logger.error(f"Error starting optimization suite: {e}")
+            logger.error("Error starting optimization suite: %s", e)
             self.is_active = False
             return False
 
@@ -254,7 +254,7 @@ class ClaudeAPIOptimizationSuite:
             return True
 
         except Exception as e:
-            logger.error(f"Error stopping optimization suite: {e}")
+            logger.error("Error stopping optimization suite: %s", e)
             return False
 
     async def _handle_rate_limited_request(
@@ -365,7 +365,7 @@ class ClaudeAPIOptimizationSuite:
         request_type: str, start_time: float
     ) -> Dict[str, Any]:
         """Handle optimization errors with pattern analysis and degradation."""
-        logger.error(f"Error optimizing request: {error}")
+        logger.error("Error optimizing request: %s", error)
 
         if self.pattern_analyzer:
             self.pattern_analyzer.record_tool_call(
@@ -483,7 +483,7 @@ class ClaudeAPIOptimizationSuite:
             return None
 
         except Exception as e:
-            logger.error(f"Error optimizing TodoWrite request: {e}")
+            logger.error("Error optimizing TodoWrite request: %s", e)
             return None
 
     def _should_batch_request(self, request_type: str) -> bool:
@@ -515,7 +515,7 @@ class ClaudeAPIOptimizationSuite:
             return None
 
         except Exception as e:
-            logger.error(f"Error attempting request batching: {e}")
+            logger.error("Error attempting request batching: %s", e)
             return None
 
     async def _execute_optimized_request(
@@ -564,7 +564,7 @@ class ClaudeAPIOptimizationSuite:
                 await asyncio.sleep(self.config.pattern_analysis_interval)
                 await self._process_pattern_analysis()
             except Exception as e:
-                logger.error(f"Error in background pattern analysis: {e}")
+                logger.error("Error in background pattern analysis: %s", e)
                 await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Wait before retrying
 
     async def _background_api_monitoring(self):
@@ -583,11 +583,11 @@ class ClaudeAPIOptimizationSuite:
                     await self._adjust_optimization_mode(OptimizationMode.AGGRESSIVE)
 
                 elif rate_limit_risk > 0.6:  # Moderate risk
-                    logger.info(f"Moderate rate limit risk: {rate_limit_risk:.2f}")
+                    logger.info("Moderate rate limit risk: %s", rate_limit_risk:.2f)
                     await self._adjust_optimization_mode(OptimizationMode.BALANCED)
 
             except Exception as e:
-                logger.error(f"Error in background API monitoring: {e}")
+                logger.error("Error in background API monitoring: %s", e)
                 await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)
 
     # Issue #315: Degradation level to optimization mode mapping
@@ -615,7 +615,7 @@ class ClaudeAPIOptimizationSuite:
                 await asyncio.sleep(TimingConstants.SHORT_TIMEOUT)  # Check every 30 seconds
                 await self._check_degradation_status()
             except Exception as e:
-                logger.error(f"Error in degradation monitoring: {e}")
+                logger.error("Error in degradation monitoring: %s", e)
                 await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)
 
     async def _adjust_optimization_mode(self, new_mode: OptimizationMode):
@@ -827,7 +827,7 @@ class ClaudeAPIOptimizationSuite:
             }
 
         except Exception as e:
-            logger.error(f"Error during forced optimization analysis: {e}")
+            logger.error("Error during forced optimization analysis: %s", e)
             return {
                 "status": "error",
                 "error": str(e),
@@ -849,14 +849,14 @@ class ClaudeAPIOptimizationSuite:
             async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(report, indent=2, default=str))
 
-            logger.info(f"Optimization report exported to {file_path}")
+            logger.info("Optimization report exported to %s", file_path)
             return True
 
         except OSError as e:
-            logger.error(f"Failed to write optimization report to {file_path}: {e}")
+            logger.error("Failed to write optimization report to %s: %s", file_path, e)
             return False
         except Exception as e:
-            logger.error(f"Error exporting optimization report: {e}")
+            logger.error("Error exporting optimization report: %s", e)
             return False
 
 
@@ -959,26 +959,26 @@ async def example_usage():
             },
         ]
     )
-    logger.info(f"TodoWrite optimization result: {json.dumps(todowrite_result, indent=2)}")
+    logger.info("TodoWrite optimization result: %s", json.dumps(todowrite_result, indent=2))
 
     # Example: Optimize general request
     general_result = await optimize_claude_request(
         {"action": "read_file", "path": "/test/file.py"}, "read_operation"
     )
-    logger.info(f"General request optimization result: {json.dumps(general_result, indent=2)}")
+    logger.info("General request optimization result: %s", json.dumps(general_result, indent=2))
 
     # Get optimization status
     status = suite.get_optimization_status()
-    logger.info(f"Optimization status: {json.dumps(status, indent=2, default=str)}")
+    logger.info("Optimization status: %s", json.dumps(status, indent=2, default=str))
 
     # Force optimization analysis
     analysis = await suite.force_optimization_analysis()
-    logger.info(f"Forced analysis result: {json.dumps(analysis, indent=2, default=str)}")
+    logger.info("Forced analysis result: %s", json.dumps(analysis, indent=2, default=str))
 
     # Export comprehensive report
     report_path = "/tmp/claude_optimization_report.json"
     exported = await suite.export_optimization_report(report_path)
-    logger.info(f"Report exported: {exported} -> {report_path}")
+    logger.info("Report exported: %s -> %s", exported, report_path)
 
     # Shutdown
     await shutdown_claude_api_optimization()

@@ -258,9 +258,9 @@ class DevelopmentSpeedupAgent:
                 self._analyze_function_duplicates(content, file_path, function_hashes)
 
             except OSError as e:
-                self.logger.debug(f"Failed to read file {file_path}: {e}")
+                self.logger.debug("Failed to read file %s: %s", file_path, e)
             except Exception as e:
-                self.logger.error(f"Error analyzing {file_path}: {e}")
+                self.logger.error("Error analyzing %s: %s", file_path, e)
 
         duplicates = self._process_block_duplicates(file_hashes)
         function_duplicates = self._process_function_duplicates(function_hashes)
@@ -364,7 +364,7 @@ class DevelopmentSpeedupAgent:
                 if module:
                     import_stats[module] += 1
             except Exception as e:
-                self.logger.error(f"Error analyzing import {result.content}: {e}")
+                self.logger.error("Error analyzing import %s: %s", result.content, e)
         return import_stats
 
     async def _check_unused_import(self, result) -> Optional[Dict[str, Any]]:
@@ -385,7 +385,7 @@ class DevelopmentSpeedupAgent:
                     "import": import_line,
                 }
         except OSError as e:
-            self.logger.debug(f"Failed to read file {result.file_path}: {e}")
+            self.logger.debug("Failed to read file %s: %s", result.file_path, e)
         except Exception:
             pass
         return None
@@ -478,14 +478,14 @@ class DevelopmentSpeedupAgent:
             long_functions = await self._find_long_functions(root_path)
             opportunities.extend(long_functions)
         except Exception as e:
-            self.logger.error(f"Error finding long functions: {e}")
+            self.logger.error("Error finding long functions: %s", e)
 
         # Complex condition detection
         try:
             complex_conditions = await self._find_complex_conditions(root_path)
             opportunities.extend(complex_conditions)
         except Exception as e:
-            self.logger.error(f"Error finding complex conditions: {e}")
+            self.logger.error("Error finding complex conditions: %s", e)
 
         return {
             "refactoring_opportunities": [
@@ -647,7 +647,7 @@ class DevelopmentSpeedupAgent:
                 )
 
             except OSError as e:
-                self.logger.debug(f"Failed to read file {file_path}: {e}")
+                self.logger.debug("Failed to read file %s: %s", file_path, e)
             except Exception:
                 pass
 

@@ -153,7 +153,7 @@ async def vision_health_check():
             interaction_types_supported=[i.value for i in InteractionType],
         )
     except Exception as e:
-        logger.error(f"Vision health check failed: {e}")
+        logger.error("Vision health check failed: %s", e)
         return VisionHealthResponse(
             status="unhealthy",
             analyzer_ready=False,
@@ -214,7 +214,7 @@ async def analyze_screen(request: ScreenAnalysisRequest):
             multimodal_analysis=screen_state.multimodal_analysis,
         )
     except Exception as e:
-        logger.error(f"Screen analysis failed: {e}")
+        logger.error("Screen analysis failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Screen analysis failed: {str(e)}")
 
 
@@ -271,7 +271,7 @@ async def detect_elements(request: ElementDetectionRequest):
             },
         }
     except Exception as e:
-        logger.error(f"Element detection failed: {e}")
+        logger.error("Element detection failed: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Element detection failed: {str(e)}"
         )
@@ -324,7 +324,7 @@ async def extract_text_ocr(request: OCRRequest):
                 "total_text_regions": len(screen_state.text_regions),
             }
     except Exception as e:
-        logger.error(f"OCR extraction failed: {e}")
+        logger.error("OCR extraction failed: %s", e)
         raise HTTPException(status_code=500, detail=f"OCR extraction failed: {str(e)}")
 
 
@@ -351,7 +351,7 @@ async def get_automation_opportunities(session_id: Optional[str] = None):
             "confidence": screen_state.confidence_score,
         }
     except Exception as e:
-        logger.error(f"Failed to identify automation opportunities: {e}")
+        logger.error("Failed to identify automation opportunities: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to identify opportunities: {str(e)}"
         )
@@ -421,7 +421,7 @@ async def get_layout_analysis(session_id: Optional[str] = None):
             "timestamp": screen_state.timestamp,
         }
     except Exception as e:
-        logger.error(f"Layout analysis failed: {e}")
+        logger.error("Layout analysis failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Layout analysis failed: {str(e)}")
 
 
@@ -449,7 +449,7 @@ async def get_vision_status():
             "supported_interaction_types": len(InteractionType),
         }
     except Exception as e:
-        logger.error(f"Failed to get vision status: {e}")
+        logger.error("Failed to get vision status: %s", e)
         return {
             "service": "computer_vision",
             "status": "error",

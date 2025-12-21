@@ -357,7 +357,7 @@ async def _add_explanation_to_result(
         result_dict["explanation"] = explanation.detailed_explanation
         result_dict["key_concepts"] = explanation.key_concepts
     except Exception as e:
-        logger.warning(f"Explanation generation failed: {e}")
+        logger.warning("Explanation generation failed: %s", e)
 
 
 # =============================================================================
@@ -804,7 +804,7 @@ class CodeExplainer:
             try:
                 return await self._llm_explain(code_snippet, file_path, line_number, context)
             except Exception as e:
-                logger.warning(f"LLM explanation failed: {e}, using heuristic")
+                logger.warning("LLM explanation failed: %s, using heuristic", e)
 
         # Fall back to heuristic explanation
         return self._heuristic_explain(code_snippet, file_path, line_number)
@@ -1071,7 +1071,7 @@ async def natural_language_search(request: NLSearchRequest):
         )
 
     except Exception as e:
-        logger.error(f"Natural language search error: {e}")
+        logger.error("Natural language search error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1097,7 +1097,7 @@ async def parse_query(query: str):
             question_type=parsed.question_type,
         )
     except Exception as e:
-        logger.error(f"Query parsing error: {e}")
+        logger.error("Query parsing error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1126,7 +1126,7 @@ async def get_query_suggestions(query: str):
             ],
         }
     except Exception as e:
-        logger.error(f"Suggestion generation error: {e}")
+        logger.error("Suggestion generation error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1151,7 +1151,7 @@ async def explain_code_snippet(code: str, file_path: str = "<unknown>", line_num
             "related_code": explanation.related_code,
         }
     except Exception as e:
-        logger.error(f"Code explanation error: {e}")
+        logger.error("Code explanation error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 

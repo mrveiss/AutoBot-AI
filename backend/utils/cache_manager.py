@@ -67,7 +67,7 @@ class CacheManager:
             self._redis_initialized = True
 
         except Exception as e:
-            logger.error(f"Failed to initialize Redis client: {e}")
+            logger.error("Failed to initialize Redis client: %s", e)
             self._redis_client = None
             self._redis_initialized = True
 
@@ -88,14 +88,14 @@ class CacheManager:
 
             if cached_data:
                 data = json.loads(cached_data)
-                logger.debug(f"Cache HIT for key: {key}")
+                logger.debug("Cache HIT for key: %s", key)
                 return data
             else:
-                logger.debug(f"Cache MISS for key: {key}")
+                logger.debug("Cache MISS for key: %s", key)
                 return None
 
         except Exception as e:
-            logger.error(f"Error getting cached data for key {key}: {e}")
+            logger.error("Error getting cached data for key %s: %s", key, e)
             return None
 
     async def set(
@@ -114,11 +114,11 @@ class CacheManager:
             serialized_data = json.dumps(data, default=str)
             await self._redis_client.setex(cache_key, ttl_seconds, serialized_data)
 
-            logger.debug(f"Cache SET for key: {key} (TTL: {ttl_seconds}s)")
+            logger.debug("Cache SET for key: %s (TTL: %ss)", key, ttl_seconds)
             return True
 
         except Exception as e:
-            logger.error(f"Error setting cached data for key {key}: {e}")
+            logger.error("Error setting cached data for key %s: %s", key, e)
             return False
 
     async def delete(self, key: str) -> bool:
@@ -133,14 +133,14 @@ class CacheManager:
             result = await self._redis_client.delete(cache_key)
 
             if result:
-                logger.debug(f"Cache DELETE for key: {key}")
+                logger.debug("Cache DELETE for key: %s", key)
                 return True
             else:
-                logger.debug(f"Cache DELETE failed - key not found: {key}")
+                logger.debug("Cache DELETE failed - key not found: %s", key)
                 return False
 
         except Exception as e:
-            logger.error(f"Error deleting cached data for key {key}: {e}")
+            logger.error("Error deleting cached data for key %s: %s", key, e)
             return False
 
     async def clear_pattern(self, pattern: str) -> int:
@@ -161,11 +161,11 @@ class CacheManager:
                 )
                 return deleted_count
             else:
-                logger.debug(f"Cache CLEAR: No keys found for pattern: {pattern}")
+                logger.debug("Cache CLEAR: No keys found for pattern: %s", pattern)
                 return 0
 
         except Exception as e:
-            logger.error(f"Error clearing cache for pattern {pattern}: {e}")
+            logger.error("Error clearing cache for pattern %s: %s", pattern, e)
             return 0
 
     async def get_stats(self) -> Metadata:
@@ -194,7 +194,7 @@ class CacheManager:
             }
 
         except Exception as e:
-            logger.error(f"Error getting cache stats: {e}")
+            logger.error("Error getting cache stats: %s", e)
             return {"status": "error", "error": str(e)}
 
 
@@ -250,22 +250,22 @@ def cache_response(cache_key: str = None, ttl: int = 300):
             try:
                 cached_result = await cache_manager.get(key)
                 if cached_result is not None:
-                    logger.debug(f"Cache HIT: {key} - serving from cache")
+                    logger.debug("Cache HIT: %s - serving from cache", key)
                     return cached_result
             except Exception as e:
-                logger.error(f"Cache retrieval error for key {key}: {e}")
+                logger.error("Cache retrieval error for key %s: %s", key, e)
 
             # Execute function and cache result
-            logger.debug(f"Cache MISS: {key} - executing function")
+            logger.debug("Cache MISS: %s - executing function", key)
             result = await func(*args, **kwargs)
 
             # Cache successful responses
             if _is_cacheable_response(result):
                 try:
                     await cache_manager.set(key, result, ttl)
-                    logger.debug(f"Cache SET: {key} - cached for {ttl}s")
+                    logger.debug("Cache SET: %s - cached for %ss", key, ttl)
                 except Exception as e:
-                    logger.error(f"Cache storage error for key {key}: {e}")
+                    logger.error("Cache storage error for key %s: %s", key, e)
 
             return result
 
@@ -319,7 +319,7 @@ def cache_function(cache_key: str = None, ttl: int = 300):
                 if cached_result is not None:
                     return cached_result
             except Exception as e:
-                logger.error(f"Cache retrieval error for key {key}: {e}")
+                logger.error("Cache retrieval error for key %s: %s", key, e)
 
             # Execute and cache
             result = await func(*args, **kwargs)
@@ -328,7 +328,7 @@ def cache_function(cache_key: str = None, ttl: int = 300):
                 try:
                     await cache_manager.set(key, result, ttl)
                 except Exception as e:
-                    logger.error(f"Cache storage error for key {key}: {e}")
+                    logger.error("Cache storage error for key %s: %s", key, e)
 
             return result
 

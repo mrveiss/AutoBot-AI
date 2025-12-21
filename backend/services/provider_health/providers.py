@@ -90,7 +90,7 @@ class OllamaHealth(BaseProviderHealth):
 
         except aiohttp.ClientError as e:
             response_time = time.time() - start_time
-            logger.warning(f"Ollama health check failed: {str(e)}")
+            logger.warning("Ollama health check failed: %s", str(e))
             return self._create_result(
                 status=ProviderStatus.UNAVAILABLE,
                 available=False,
@@ -100,7 +100,7 @@ class OllamaHealth(BaseProviderHealth):
             )
         except Exception as e:
             response_time = time.time() - start_time
-            logger.error(f"Ollama health check error: {str(e)}")
+            logger.error("Ollama health check error: %s", str(e))
             return self._create_result(
                 status=ProviderStatus.UNKNOWN,
                 available=False,
@@ -184,7 +184,7 @@ class OpenAIHealth(BaseProviderHealth):
 
         except aiohttp.ClientError as e:
             response_time = time.time() - start_time
-            logger.warning(f"OpenAI health check failed: {str(e)}")
+            logger.warning("OpenAI health check failed: %s", str(e))
             return self._create_result(
                 status=ProviderStatus.UNAVAILABLE,
                 available=False,
@@ -194,7 +194,7 @@ class OpenAIHealth(BaseProviderHealth):
             )
         except Exception as e:
             response_time = time.time() - start_time
-            logger.error(f"OpenAI health check error: {str(e)}")
+            logger.error("OpenAI health check error: %s", str(e))
             return self._create_result(
                 status=ProviderStatus.UNKNOWN,
                 available=False,
@@ -281,7 +281,7 @@ class AnthropicHealth(BaseProviderHealth):
 
         except aiohttp.ClientError as e:
             response_time = time.time() - start_time
-            logger.warning(f"Anthropic health check failed: {str(e)}")
+            logger.warning("Anthropic health check failed: %s", str(e))
             return self._create_result(
                 status=ProviderStatus.UNAVAILABLE,
                 available=False,
@@ -291,7 +291,7 @@ class AnthropicHealth(BaseProviderHealth):
             )
         except Exception as e:
             response_time = time.time() - start_time
-            logger.error(f"Anthropic health check error: {str(e)}")
+            logger.error("Anthropic health check error: %s", str(e))
             return self._create_result(
                 status=ProviderStatus.UNKNOWN,
                 available=False,
@@ -380,7 +380,7 @@ class GoogleHealth(BaseProviderHealth):
 
         except aiohttp.ClientError as e:
             response_time = time.time() - start_time
-            logger.warning(f"Google health check failed: {str(e)}")
+            logger.warning("Google health check failed: %s", str(e))
             return self._create_result(
                 status=ProviderStatus.UNAVAILABLE,
                 available=False,
@@ -390,7 +390,7 @@ class GoogleHealth(BaseProviderHealth):
             )
         except Exception as e:
             response_time = time.time() - start_time
-            logger.error(f"Google health check error: {str(e)}")
+            logger.error("Google health check error: %s", str(e))
             return self._create_result(
                 status=ProviderStatus.UNKNOWN,
                 available=False,

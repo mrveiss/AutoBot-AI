@@ -30,7 +30,7 @@ class WorkflowTemplateManager:
     def get_template(self, template_name: str, session_id: str) -> List[WorkflowStep]:
         """Get workflow steps from a template"""
         if template_name not in self.templates:
-            logger.warning(f"Template '{template_name}' not found")
+            logger.warning("Template '%s' not found", template_name)
             return []
         return self.templates[template_name](session_id)
 

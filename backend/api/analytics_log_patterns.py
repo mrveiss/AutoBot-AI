@@ -545,9 +545,9 @@ async def _read_log_lines(
                     result.append(filtered)
 
     except OSError as e:
-        logger.warning(f"Failed to read {file_path}: {e}")
+        logger.warning("Failed to read %s: %s", file_path, e)
     except Exception as e:
-        logger.warning(f"Error reading {file_path}: {e}")
+        logger.warning("Error reading %s: %s", file_path, e)
 
     return result
 
@@ -594,9 +594,9 @@ async def _read_log_lines_with_source(
                     result.append((line.strip(), file_name, ""))
 
     except OSError as e:
-        logger.warning(f"Failed to read {file_path}: {e}")
+        logger.warning("Failed to read %s: %s", file_path, e)
     except Exception as e:
-        logger.warning(f"Error reading {file_path}: {e}")
+        logger.warning("Error reading %s: %s", file_path, e)
 
     return result
 
@@ -766,7 +766,7 @@ async def mine_log_patterns(
         )
 
     except Exception as e:
-        logger.error(f"Error mining log patterns: {e}")
+        logger.error("Error mining log patterns: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -832,7 +832,7 @@ async def get_pattern_details(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting pattern details: {e}")
+        logger.error("Error getting pattern details: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -884,7 +884,7 @@ async def get_error_hotspots(
         }
 
     except Exception as e:
-        logger.error(f"Error getting error hotspots: {e}")
+        logger.error("Error getting error hotspots: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -944,7 +944,7 @@ async def get_log_stats(
         }
 
     except Exception as e:
-        logger.error(f"Error getting log stats: {e}")
+        logger.error("Error getting log stats: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -983,5 +983,5 @@ async def get_realtime_summary():
         }
 
     except Exception as e:
-        logger.error(f"Error getting realtime summary: {e}")
+        logger.error("Error getting realtime summary: %s", e)
         raise HTTPException(status_code=500, detail=str(e))

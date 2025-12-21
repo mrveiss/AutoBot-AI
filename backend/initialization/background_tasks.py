@@ -25,7 +25,7 @@ def log_initialization_step(
 ):
     """Log initialization steps with consistent formatting."""
     icon = "✅" if success else "❌" if percentage == 100 else "🔄"
-    logger.info(f"{icon} [{percentage:3d}%] {stage}: {message}")
+    logger.info("%s [%s%] %s: %s", icon, percentage:3d, stage, message)
 
 
 async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False):
@@ -40,7 +40,7 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
         kb = await factory_kb(app, force_refresh)
         return kb
     except Exception as e:
-        logger.error(f"Knowledge base initialization error: {e}")
+        logger.error("Knowledge base initialization error: %s", e)
         return None
 
 
@@ -65,7 +65,7 @@ async def _init_redis(update_status_fn, append_error_fn):
             True,
         )
     except Exception as e:
-        logger.error(f"Redis status check failed: {e}")
+        logger.error("Redis status check failed: %s", e)
         await update_status_fn("redis_pools", "failed")
         await append_error_fn(f"Redis: {str(e)}")
 
@@ -119,7 +119,7 @@ async def _init_chat_workflow(app: FastAPI, update_status_fn, append_error_fn):
             "Chat Workflow", "Chat workflow manager initialized", 90, True
         )
     except Exception as e:
-        logger.error(f"Chat workflow initialization failed: {e}")
+        logger.error("Chat workflow initialization failed: %s", e)
         await update_status_fn("chat_workflow", "failed")
         await append_error_fn(f"Chat workflow: {str(e)}")
 
@@ -139,7 +139,7 @@ async def _init_llm_sync(update_status_fn, append_error_fn):
         await update_status_fn("llm_sync", "ready")
         log_initialization_step("LLM Sync", "LLM synchronization completed", 90, True)
     except Exception as e:
-        logger.error(f"LLM sync failed: {e}")
+        logger.error("LLM sync failed: %s", e)
         await update_status_fn("llm_sync", "failed")
         await append_error_fn(f"LLM sync: {str(e)}")
 
@@ -180,7 +180,7 @@ async def _init_distributed_tracing(app: FastAPI, update_status_fn):
                 True,
             )
     except Exception as e:
-        logger.warning(f"Distributed tracing initialization failed: {e}")
+        logger.warning("Distributed tracing initialization failed: %s", e)
         await update_status_fn("distributed_tracing", "failed")
         # Don't add to errors - tracing is optional
         log_initialization_step(
@@ -253,5 +253,5 @@ async def enhanced_background_init(
         _log_initialization_result(failed_services)
 
     except Exception as e:
-        logger.error(f"Background initialization failed: {e}")
+        logger.error("Background initialization failed: %s", e)
         await append_error_fn(f"Background init: {str(e)}")

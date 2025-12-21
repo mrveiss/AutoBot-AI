@@ -56,7 +56,7 @@ async def get_system_error_statistics():
         stats = get_error_statistics()
         return {"status": "success", "data": stats}
     except Exception as e:
-        logger.error(f"Failed to get error statistics: {e}")
+        logger.error("Failed to get error statistics: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
@@ -110,7 +110,7 @@ async def get_recent_errors(limit: int = 20):
             },
         }
     except Exception as e:
-        logger.error(f"Failed to get recent errors: {e}")
+        logger.error("Failed to get recent errors: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
@@ -144,7 +144,7 @@ async def get_error_categories():
             "data": {"categories": category_stats, "total_errors": total},
         }
     except Exception as e:
-        logger.error(f"Failed to get error categories: {e}")
+        logger.error("Failed to get error categories: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
@@ -173,7 +173,7 @@ async def get_error_by_component():
             },
         }
     except Exception as e:
-        logger.error(f"Failed to get component errors: {e}")
+        logger.error("Failed to get component errors: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
@@ -229,7 +229,7 @@ async def get_error_system_health():
             },
         }
     except Exception as e:
-        logger.error(f"Failed to get error system health: {e}")
+        logger.error("Failed to get error system health: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
@@ -272,7 +272,7 @@ async def clear_error_history(authorization: Optional[str] = Header(None)):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to clear error history: {e}")
+        logger.error("Failed to clear error history: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
@@ -313,7 +313,7 @@ async def test_error_system(request: TestErrorRequest):
         raise
     except Exception as e:
         # This should trigger the error boundary system
-        logger.error(f"Test error triggered: {e}")
+        logger.error("Test error triggered: %s", e)
         return {
             "status": "success",
             "message": "Error boundary system triggered successfully",
@@ -399,7 +399,7 @@ async def get_metrics_summary():
 
         return {"status": "success", "data": summary}
     except Exception as e:
-        logger.error(f"Failed to get metrics summary: {e}")
+        logger.error("Failed to get metrics summary: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
@@ -437,7 +437,7 @@ async def get_error_timeline_endpoint(hours: int = 24, component: Optional[str] 
             },
         }
     except Exception as e:
-        logger.error(f"Failed to get error timeline: {e}")
+        logger.error("Failed to get error timeline: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
@@ -467,7 +467,7 @@ async def get_top_errors_endpoint(limit: int = 10):
             "data": {"top_errors": [stats.to_dict() for stats in top_errors]},
         }
     except Exception as e:
-        logger.error(f"Failed to get top errors: {e}")
+        logger.error("Failed to get top errors: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
@@ -501,7 +501,7 @@ async def mark_error_resolved_endpoint(trace_id: str):
                 "message": f"Error {trace_id} not found",
             }
     except Exception as e:
-        logger.error(f"Failed to mark error resolved: {e}")
+        logger.error("Failed to mark error resolved: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
@@ -543,7 +543,7 @@ async def set_alert_threshold_endpoint(request: AlertThresholdRequest):
             "threshold": request.threshold,
         }
     except Exception as e:
-        logger.error(f"Failed to set alert threshold: {e}")
+        logger.error("Failed to set alert threshold: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
@@ -571,7 +571,7 @@ async def cleanup_metrics_endpoint():
             "removed_count": removed,
         }
     except Exception as e:
-        logger.error(f"Failed to cleanup metrics: {e}")
+        logger.error("Failed to cleanup metrics: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )

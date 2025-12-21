@@ -46,7 +46,7 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
         except Exception as e:
             # Track errors
             status_code = 500
-            logger.error(f"Error processing {method} {endpoint}: {e}")
+            logger.error("Error processing %s %s: %s", method, endpoint, e)
             raise
 
         # Calculate response time
@@ -77,7 +77,7 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
             )
         except Exception as e:
             # Don't let analytics tracking errors affect the main request
-            logger.debug(f"Analytics tracking failed for {endpoint}: {e}")
+            logger.debug("Analytics tracking failed for %s: %s", endpoint, e)
 
 
 def create_analytics_middleware(analytics_controller=None):

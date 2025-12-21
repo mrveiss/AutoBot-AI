@@ -138,7 +138,7 @@ class NPUWorker:
                 )
 
             except Exception as e:
-                logger.error(f"Inference failed for task {task_id}: {e}")
+                logger.error("Inference failed for task %s: %s", task_id, e)
                 return NPUTaskResponse(task_id=task_id, status="failed", error=str(e))
 
         @self.app.post("/model/load")
@@ -161,7 +161,7 @@ class NPUWorker:
     async def initialize(self):
         """Initialize NPU worker."""
         self.start_time = time.time()
-        logger.info(f"🚀 Starting NPU Worker {self.worker_id}")
+        logger.info("🚀 Starting NPU Worker %s", self.worker_id)
 
         # Initialize Redis connection using centralized client
         try:
@@ -171,7 +171,7 @@ class NPUWorker:
             else:
                 logger.warning("⚠️ Redis client not available, continuing without Redis")
         except Exception as e:
-            logger.error(f"❌ Redis connection failed: {e}")
+            logger.error("❌ Redis connection failed: %s", e)
             self.redis_client = None
 
         # Initialize NPU
@@ -181,7 +181,7 @@ class NPUWorker:
         if self.redis_client:
             asyncio.create_task(self.task_processing_loop())
 
-        logger.info(f"🎯 NPU Worker initialized - NPU Available: {self.npu_available}")
+        logger.info("🎯 NPU Worker initialized - NPU Available: %s", self.npu_available)
 
     async def initialize_npu(self):
         """Initialize Intel NPU hardware."""
@@ -207,7 +207,7 @@ class NPUWorker:
                 if npu_devices:
                     self.npu_available = True
                     self.openvino_core = core
-                    logger.info(f"✅ NPU initialized - Devices: {npu_devices}")
+                    logger.info("✅ NPU initialized - Devices: %s", npu_devices)
 
                     # Load default models
                     await self.load_default_models()
@@ -221,11 +221,11 @@ class NPUWorker:
                 )
                 self.npu_available = False
             except Exception as e:
-                logger.error(f"❌ NPU initialization failed: {e}")
+                logger.error("❌ NPU initialization failed: %s", e)
                 self.npu_available = False
 
         except Exception as e:
-            logger.error(f"❌ NPU setup error: {e}")
+            logger.error("❌ NPU setup error: %s", e)
             self.npu_available = False
 
     async def load_default_models(self):
@@ -239,7 +239,7 @@ class NPUWorker:
             try:
                 await self.load_model(model_name)
             except Exception as e:
-                logger.warning(f"⚠️ Failed to load default model {model_name}: {e}")
+                logger.warning("⚠️ Failed to load default model %s: %s", model_name, e)
 
     async def load_model(self, model_name: str):
         """Load model for NPU inference."""
@@ -248,7 +248,7 @@ class NPUWorker:
 
             if self.npu_available:
                 # Load with OpenVINO NPU optimization
-                logger.info(f"📥 Loading {model_name} for NPU...")
+                logger.info("📥 Loading %s for NPU...", model_name)
 
                 # This would be the actual model loading logic
                 # For now, simulate the loading process
@@ -266,7 +266,7 @@ class NPUWorker:
                 )
             else:
                 # CPU fallback
-                logger.info(f"📥 Loading {model_name} for CPU fallback...")
+                logger.info("📥 Loading %s for CPU fallback...", model_name)
                 await asyncio.sleep(0.5)  # Faster CPU loading simulation
 
                 self.loaded_models[model_name] = {
@@ -277,7 +277,7 @@ class NPUWorker:
                 }
 
         except Exception as e:
-            logger.error(f"❌ Failed to load model {model_name}: {e}")
+            logger.error("❌ Failed to load model %s: %s", model_name, e)
             raise
 
     def estimate_model_size(self, model_name: str) -> int:
@@ -308,7 +308,7 @@ class NPUWorker:
                     await self.handle_queued_task(task)
 
             except Exception as e:
-                logger.error(f"❌ Task processing error: {e}")
+                logger.error("❌ Task processing error: %s", e)
                 await asyncio.sleep(1)
 
     async def handle_queued_task(self, task: Dict[str, Any]):
@@ -316,7 +316,7 @@ class NPUWorker:
         task_id = task.get("task_id")
 
         try:
-            logger.info(f"🔄 Processing task {task_id}")
+            logger.info("🔄 Processing task %s", task_id)
 
             # Move task to processing queue
             await self.redis_client.lpush("npu_tasks_processing", json.dumps(task))
@@ -348,7 +348,7 @@ class NPUWorker:
             )
 
         except Exception as e:
-            logger.error(f"❌ Task {task_id} failed: {e}")
+            logger.error("❌ Task %s failed: %s", task_id, e)
 
             # Move to failed queue
             error_response = {
@@ -507,7 +507,7 @@ def main():
     worker = NPUWorker(redis_host=args.redis_host, redis_port=args.redis_port)
 
     # Run the server
-    logger.info(f"🚀 Starting NPU Worker on {args.host}:{args.port}")
+    logger.info("🚀 Starting NPU Worker on %s:%s", args.host, args.port)
     uvicorn.run(worker.app, host=args.host, port=args.port, log_level="info")
 
 

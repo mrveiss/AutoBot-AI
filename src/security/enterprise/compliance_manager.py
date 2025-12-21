@@ -133,7 +133,7 @@ class ComplianceManager:
                 self._save_config(default_config)
                 return default_config
         except Exception as e:
-            logger.error(f"Failed to load compliance config: {e}")
+            logger.error("Failed to load compliance config: %s", e)
             return self._get_default_config()
 
     def _get_default_config(self) -> Dict:
@@ -180,7 +180,7 @@ class ComplianceManager:
                 with open(self.config_path, "w", encoding="utf-8") as f:
                     yaml.dump(config, f, default_flow_style=False)
             except Exception as e:
-                logger.error(f"Failed to save compliance config: {e}")
+                logger.error("Failed to save compliance config: %s", e)
 
     def _get_encryption_key(self) -> Optional[bytes]:
         """Get or generate encryption key for sensitive audit data (thread-safe, Issue #378)"""
@@ -193,7 +193,7 @@ class ComplianceManager:
                     with open(key_path, "rb") as f:
                         return f.read()
                 except Exception as e:
-                    logger.error(f"Failed to load encryption key: {e}")
+                    logger.error("Failed to load encryption key: %s", e)
 
             # Generate new key
             try:
@@ -206,7 +206,7 @@ class ComplianceManager:
                 logger.info("Generated new audit encryption key")
                 return key
             except Exception as e:
-                logger.error(f"Failed to generate encryption key: {e}")
+                logger.error("Failed to generate encryption key: %s", e)
                 return None
 
     def _load_compliance_requirements(self) -> Dict:
@@ -263,9 +263,7 @@ class ComplianceManager:
                 for event_type in policies:
                     if policies[event_type]["days"] < min_retention:
                         policies[event_type]["days"] = min_retention
-                        logger.info(
-                            f"Updated retention policy for {event_type} to meet {framework} requirements"
-                        )
+                        logger.info("Updated retention policy for %s to meet %s requirements", event_type, framework)
 
         return policies
 
@@ -518,9 +516,9 @@ class ComplianceManager:
             async with aiofiles.open(pii_log_path, "a", encoding="utf-8") as f:
                 await f.write(json.dumps(pii_access_log) + "\n")
         except OSError as e:
-            logger.error(f"Failed to write PII log to {pii_log_path}: {e}")
+            logger.error("Failed to write PII log to %s: %s", pii_log_path, e)
         except Exception as e:
-            logger.error(f"Failed to log PII access: {e}")
+            logger.error("Failed to log PII access: %s", e)
 
     async def _store_audit_event(self, audit_event: Dict):
         """Store audit event with appropriate security measures"""
@@ -570,9 +568,9 @@ class ComplianceManager:
                 await f.write(json.dumps(encrypted_event) + "\n")
 
         except OSError as e:
-            logger.error(f"Failed to write encrypted audit event to {storage_path}: {e}")
+            logger.error("Failed to write encrypted audit event to %s: %s", storage_path, e)
         except Exception as e:
-            logger.error(f"Failed to store encrypted audit event: {e}")
+            logger.error("Failed to store encrypted audit event: %s", e)
 
     async def _store_plain_event(self, audit_event: Dict, storage_path: Path):
         """Store plain text audit event"""
@@ -580,9 +578,9 @@ class ComplianceManager:
             async with aiofiles.open(storage_path, "a", encoding="utf-8") as f:
                 await f.write(json.dumps(audit_event) + "\n")
         except OSError as e:
-            logger.error(f"Failed to write audit event to {storage_path}: {e}")
+            logger.error("Failed to write audit event to %s: %s", storage_path, e)
         except Exception as e:
-            logger.error(f"Failed to store audit event: {e}")
+            logger.error("Failed to store audit event: %s", e)
 
     def _update_statistics(self, audit_event: Dict):
         """Update compliance statistics"""
@@ -705,9 +703,9 @@ class ComplianceManager:
             async with aiofiles.open(violations_path, "a", encoding="utf-8") as f:
                 await f.write(json.dumps(violation_event) + "\n")
         except OSError as e:
-            logger.error(f"Failed to write violation record to {violations_path}: {e}")
+            logger.error("Failed to write violation record to %s: %s", violations_path, e)
         except Exception as e:
-            logger.error(f"Failed to store violation record: {e}")
+            logger.error("Failed to store violation record: %s", e)
 
     async def _send_compliance_alert(self, violation_event: Dict):
         """Send real-time compliance alert"""
@@ -747,7 +745,7 @@ class ComplianceManager:
 
     async def _send_security_alert(self, message: str):
         """Send security alert"""
-        logger.warning(f"SECURITY ALERT: {message}")
+        logger.warning("SECURITY ALERT: %s", message)
 
     async def generate_compliance_report(
         self,
@@ -822,11 +820,11 @@ class ComplianceManager:
             )
             async with aiofiles.open(output_path, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(report, indent=2))
-            logger.info(f"Compliance report saved to {output_path}")
+            logger.info("Compliance report saved to %s", output_path)
         except OSError as e:
-            logger.error(f"Failed to write compliance report to {output_path}: {e}")
+            logger.error("Failed to write compliance report to %s: %s", output_path, e)
         except Exception as e:
-            logger.error(f"Failed to save compliance report: {e}")
+            logger.error("Failed to save compliance report: %s", e)
 
     def get_compliance_status(self) -> Dict:
         """Get current compliance status across all frameworks"""

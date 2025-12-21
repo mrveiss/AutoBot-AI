@@ -570,7 +570,7 @@ async def test_alert_system():
                 else:
                     failed_channels.append(channel_name)
             except Exception as e:
-                logger.error(f"Test alert failed on {channel_name}: {e}")
+                logger.error("Test alert failed on %s: %s", channel_name, e)
                 failed_channels.append(channel_name)
 
     return {

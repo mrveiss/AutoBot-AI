@@ -54,7 +54,7 @@ class KnowledgeBaseAdapter:
         """
         self.kb = knowledge_base
         self.kb_type = knowledge_base.__class__.__name__
-        logger.info(f"KnowledgeBaseAdapter initialized with {self.kb_type}")
+        logger.info("KnowledgeBaseAdapter initialized with %s", self.kb_type)
 
     async def search(
         self,
@@ -94,7 +94,7 @@ class KnowledgeBaseAdapter:
             return normalized_results
 
         except Exception as e:
-            logger.error(f"Search failed in {self.kb_type}: {e}")
+            logger.error("Search failed in %s: %s", self.kb_type, e)
             raise
 
     async def get_all_facts(self) -> List[Metadata]:
@@ -106,10 +106,10 @@ class KnowledgeBaseAdapter:
         """
         try:
             facts = await self.kb.get_all_facts()
-            logger.debug(f"Retrieved {len(facts)} facts from {self.kb_type}")
+            logger.debug("Retrieved %s facts from %s", len(facts), self.kb_type)
             return facts
         except Exception as e:
-            logger.error(f"Failed to get all facts: {e}")
+            logger.error("Failed to get all facts: %s", e)
             raise
 
     async def get_stats(self) -> Metadata:
@@ -124,7 +124,7 @@ class KnowledgeBaseAdapter:
             stats["kb_implementation"] = self.kb_type
             return stats
         except Exception as e:
-            logger.error(f"Failed to get stats: {e}")
+            logger.error("Failed to get stats: %s", e)
             raise
 
     def _normalize_results(self, results: List[Any]) -> List[Metadata]:
@@ -162,7 +162,7 @@ class KnowledgeBaseAdapter:
                 normalized.append(normalized_result)
             else:
                 # Handle other formats (objects, tuples, etc.)
-                logger.warning(f"Unexpected result type: {type(result)}")
+                logger.warning("Unexpected result type: %s", type(result))
                 normalized.append(
                     {"content": str(result), "metadata": {}, "score": 0.0}
                 )

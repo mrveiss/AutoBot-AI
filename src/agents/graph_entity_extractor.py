@@ -250,7 +250,7 @@ class GraphEntityExtractor:
             combined_text = self._combine_messages(messages)
 
             if not combined_text.strip():
-                logger.warning(f"No content to extract from conversation {conversation_id}")
+                logger.warning("No content to extract from conversation %s", conversation_id)
                 return result
 
             # Step 2: Extract and filter facts (Issue #281 - uses helper)
@@ -496,10 +496,10 @@ class GraphEntityExtractor:
                 )
 
                 created_entities.append(entity)
-                logger.debug(f"Created entity: {candidate.name}")
+                logger.debug("Created entity: %s", candidate.name)
 
             except Exception as e:
-                logger.warning(f"Failed to create entity '{candidate.name}': {e}")
+                logger.warning("Failed to create entity '%s': %s", candidate.name, e)
                 continue
 
         return created_entities
@@ -719,7 +719,7 @@ class GraphEntityExtractor:
         )
 
         result.facts_analyzed = len(extraction_result.facts)
-        logger.info(f"Extracted {result.facts_analyzed} facts from conversation")
+        logger.info("Extracted %s facts from conversation", result.facts_analyzed)
 
         # Filter facts by confidence
         high_confidence_facts = [
@@ -754,11 +754,11 @@ class GraphEntityExtractor:
         entity_candidates = self._facts_to_entity_candidates(
             high_confidence_facts, conversation_id, session_metadata
         )
-        logger.info(f"Generated {len(entity_candidates)} entity candidates")
+        logger.info("Generated %s entity candidates", len(entity_candidates))
 
         created_entities = await self._create_entities_in_graph(entity_candidates)
         result.entities_created = len(created_entities)
-        logger.info(f"Created {result.entities_created} entities in graph")
+        logger.info("Created %s entities in graph", result.entities_created)
 
         return created_entities
 
@@ -781,11 +781,11 @@ class GraphEntityExtractor:
         relation_candidates = self._infer_relationships(
             entity_candidates, high_confidence_facts
         )
-        logger.info(f"Inferred {len(relation_candidates)} relationship candidates")
+        logger.info("Inferred %s relationship candidates", len(relation_candidates))
 
         created_relations = await self._create_relations_in_graph(relation_candidates)
         result.relations_created = len(created_relations)
-        logger.info(f"Created {result.relations_created} relationships in graph")
+        logger.info("Created %s relationships in graph", result.relations_created)
 
     def _build_entity_candidate_from_group(
         self, fact_group: List[AtomicFact], entity_type: str, conversation_id: str

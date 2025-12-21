@@ -54,7 +54,7 @@ class PlaywrightService:
         """Initialize the Playwright service connection"""
         # Check if container is healthy
         await self._health_check()
-        logger.info(f"Playwright service initialized at {self.base_url}")
+        logger.info("Playwright service initialized at %s", self.base_url)
 
     async def cleanup(self):
         """Cleanup resources"""
@@ -71,10 +71,10 @@ class PlaywrightService:
                 if response.status == 200:
                     health_data = await response.json()
                     self._healthy = health_data.get("status") == "healthy"
-                    logger.debug(f"Playwright health check: {health_data}")
+                    logger.debug("Playwright health check: %s", health_data)
                     return self._healthy
                 else:
-                    logger.warning(f"Playwright health check failed: {response.status}")
+                    logger.warning("Playwright health check failed: %s", response.status)
                     self._healthy = False
                     return False
 
@@ -92,11 +92,11 @@ class PlaywrightService:
             self._healthy = False
             return False
         except aiohttp.ClientError as e:
-            logger.error(f"Playwright health check HTTP error: {e}")
+            logger.error("Playwright health check HTTP error: %s", e)
             self._healthy = False
             return False
         except Exception as e:
-            logger.error(f"Playwright health check unexpected error: {e}")
+            logger.error("Playwright health check unexpected error: %s", e)
             self._healthy = False
             return False
 
@@ -146,11 +146,11 @@ class PlaywrightService:
                     return result
                 else:
                     error_text = await response.text()
-                    logger.error(f"Search failed: {response.status} - {error_text}")
+                    logger.error("Search failed: %s - %s", response.status, error_text)
                     raise RuntimeError(f"Search failed: {response.status}")
 
         except asyncio.TimeoutError:
-            logger.error(f"Web search timed out after {self.timeout}s: '{query}'")
+            logger.error("Web search timed out after %ss: '%s'", self.timeout, query)
             return {
                 "success": False,
                 "error": f"Search timed out after {self.timeout}s",
@@ -158,7 +158,7 @@ class PlaywrightService:
                 "results": [],
             }
         except aiohttp.ClientConnectorError as e:
-            logger.error(f"Web search connection error: {e}")
+            logger.error("Web search connection error: %s", e)
             return {
                 "success": False,
                 "error": "Playwright service connection failed",
@@ -174,7 +174,7 @@ class PlaywrightService:
                 "results": [],
             }
         except Exception as e:
-            logger.error(f"Web search error: {e}")
+            logger.error("Web search error: %s", e)
             return {"success": False, "error": str(e), "query": query, "results": []}
 
     async def test_frontend(
@@ -205,7 +205,7 @@ class PlaywrightService:
             ) as response:
                 if response.status == 200:
                     result = await response.json()
-                    logger.info(f"Frontend test completed: {result.get('summary', {})}")
+                    logger.info("Frontend test completed: %s)}", result.get('summary', {)
                     return result
                 else:
                     error_text = await response.text()
@@ -215,7 +215,7 @@ class PlaywrightService:
                     raise RuntimeError(f"Frontend test failed: {response.status}")
 
         except asyncio.TimeoutError:
-            logger.error(f"Frontend test timed out after {self.timeout}s: {frontend_url}")
+            logger.error("Frontend test timed out after %ss: %s", self.timeout, frontend_url)
             return {
                 "success": False,
                 "error": f"Frontend test timed out after {self.timeout}s",
@@ -223,7 +223,7 @@ class PlaywrightService:
                 "tests": [],
             }
         except aiohttp.ClientConnectorError as e:
-            logger.error(f"Frontend test connection error: {e}")
+            logger.error("Frontend test connection error: %s", e)
             return {
                 "success": False,
                 "error": "Playwright service connection failed",
@@ -246,7 +246,7 @@ class PlaywrightService:
             error_details += (
                 f" | Traceback: {traceback.format_exc()[-500:]}"  # Last 500 chars
             )
-            logger.error(f"Frontend test error: {error_details}")
+            logger.error("Frontend test error: %s", error_details)
             return {
                 "success": False,
                 "error": error_details,
@@ -297,7 +297,7 @@ class PlaywrightService:
                     raise RuntimeError(f"Test message failed: {response.status}")
 
         except asyncio.TimeoutError:
-            logger.error(f"Test message timed out after {self.timeout}s")
+            logger.error("Test message timed out after %ss", self.timeout)
             return {
                 "success": False,
                 "error": f"Test message timed out after {self.timeout}s",
@@ -305,7 +305,7 @@ class PlaywrightService:
                 "steps": [],
             }
         except aiohttp.ClientConnectorError as e:
-            logger.error(f"Test message connection error: {e}")
+            logger.error("Test message connection error: %s", e)
             return {
                 "success": False,
                 "error": "Playwright service connection failed",
@@ -320,7 +320,7 @@ class PlaywrightService:
                 "steps": [],
             }
         except Exception as e:
-            logger.error(f"Test message error: {e}")
+            logger.error("Test message error: %s", e)
             return {"success": False, "error": str(e), "message": message, "steps": []}
 
     async def capture_screenshot(
@@ -363,14 +363,14 @@ class PlaywrightService:
                     return screenshot_info
                 else:
                     error_text = await response.text()
-                    logger.error(f"Screenshot failed: {response.status} - {error_text}")
+                    logger.error("Screenshot failed: %s - %s", response.status, error_text)
                     raise RuntimeError(f"Screenshot failed: {response.status}")
 
         except aiohttp.ClientError as e:
-            logger.error(f"Screenshot HTTP error: {e}")
+            logger.error("Screenshot HTTP error: %s", e)
             return {"success": False, "error": f"Connection error: {str(e)}", "url": url}
         except Exception as e:
-            logger.error(f"Screenshot error: {e}")
+            logger.error("Screenshot error: %s", e)
             return {"success": False, "error": str(e), "url": url}
 
     async def get_service_status(self) -> Metadata:

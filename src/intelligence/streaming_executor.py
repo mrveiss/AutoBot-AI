@@ -597,29 +597,19 @@ class StreamingCommandExecutor:
 if __name__ == "__main__":
     """Test the streaming executor functionality."""
     import asyncio
+    import sys
+    from pathlib import Path
 
-    # Mock components for testing
-    class MockLLMInterface:
-        async def generate_response(self, prompt, **kwargs):
-            """Generate mock LLM response based on prompt keywords."""
-            # Simple mock responses based on prompt content
-            if "progress" in prompt.lower():
-                return "Processing data..."
-            elif "completion" in prompt.lower():
-                return "Task completed successfully!"
-            else:
-                return "Command executing..."
+    # Add project root for test imports
+    project_root = Path(__file__).parent.parent.parent
+    sys.path.insert(0, str(project_root))
 
-    class MockCommandValidator:
-        def is_command_safe(self, command):
-            """Check if command is safe by filtering dangerous patterns."""
-            # Block obviously dangerous commands
-            dangerous = ["rm -r", "format", "del /s"]
-            return not any(danger in command.lower() for danger in dangerous)
+    # Import mock components from test fixtures (Issue #458)
+    from tests.fixtures.mocks import MockCommandValidator, MockLLMInterface
 
     async def test_executor():
         """Test streaming executor with mock components and sample commands."""
-        # Create mock components
+        # Create mock components from tests/fixtures/mocks.py
         llm = MockLLMInterface()
         validator = MockCommandValidator()
 

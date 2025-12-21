@@ -87,7 +87,7 @@ async def generate_intelligent_workflow(request_data: dict, request: Request):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to generate intelligent workflow: {e}")
+        logger.error("Failed to generate intelligent workflow: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -119,7 +119,7 @@ async def get_workflow_intelligence(workflow_id: str, request: Request):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get workflow intelligence: {e}")
+        logger.error("Failed to get workflow intelligence: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -150,7 +150,7 @@ async def get_advanced_analytics(request: Request):
         }
 
     except Exception as e:
-        logger.error(f"Failed to get analytics: {e}")
+        logger.error("Failed to get analytics: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -170,7 +170,7 @@ async def get_workflow_templates(request: Request):
         return {"success": True, "templates": templates, "total_count": len(templates)}
 
     except Exception as e:
-        logger.error(f"Failed to get workflow templates: {e}")
+        logger.error("Failed to get workflow templates: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -212,5 +212,5 @@ async def execute_workflow_template(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to execute template {template_id}: {e}")
+        logger.error("Failed to execute template %s: %s", template_id, e)
         raise HTTPException(status_code=500, detail=str(e))

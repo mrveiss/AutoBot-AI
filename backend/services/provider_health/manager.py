@@ -96,7 +96,7 @@ class ProviderHealthManager:
             async with cls._cache_lock:
                 cached = cls._get_from_cache(provider)
                 if cached:
-                    logger.debug(f"Using cached health status for {provider}")
+                    logger.debug("Using cached health status for %s", provider)
                     return cached
 
         # Perform health check
@@ -111,7 +111,7 @@ class ProviderHealthManager:
             return result
 
         except Exception as e:
-            logger.error(f"Error checking {provider} health: {str(e)}")
+            logger.error("Error checking %s health: %s", provider, str(e))
             return ProviderHealthResult(
                 status=ProviderStatus.UNKNOWN,
                 available=False,
@@ -221,7 +221,7 @@ class ProviderHealthManager:
             if provider:
                 if provider in cls._cache:
                     del cls._cache[provider]
-                    logger.debug(f"Cleared cache for provider: {provider}")
+                    logger.debug("Cleared cache for provider: %s", provider)
             else:
                 cls._cache.clear()
                 logger.debug("Cleared all provider health caches")

@@ -52,7 +52,7 @@ class ServiceAuthManager:
         # Store in Redis with 90-day expiration
         await self.redis.set(f"service:key:{service_id}", key_hex, ex=86400 * 90)
 
-        logger.info(f"✅ Generated service key for {service_id}", service_id=service_id)
+        logger.info("Generated service key for %s", service_id, extra={"service_id": service_id})
         return key_hex
 
     async def get_service_key(self, service_id: str) -> Optional[str]:

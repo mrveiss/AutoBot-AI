@@ -252,14 +252,14 @@ async def validate_session_ownership(
                 status_code=403, detail="Access denied: You do not own this session"
             )
 
-        logger.debug(f"User {current_user} validated as owner of session {session_id}")
+        logger.debug("User %s validated as owner of session %s", current_user, session_id)
         return True
 
     except HTTPException:
         # Re-raise HTTP exceptions (403 Forbidden)
         raise
     except Exception as e:
-        logger.error(f"Session ownership validation error: {e}")
+        logger.error("Session ownership validation error: %s", e)
         raise HTTPException(
             status_code=500, detail="Failed to validate session ownership"
         )
@@ -387,7 +387,7 @@ async def upload_conversation_file(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error uploading conversation file: {e}")
+        logger.error("Error uploading conversation file: %s", e)
         raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
 
 
@@ -460,7 +460,7 @@ async def list_conversation_files(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error listing conversation files: {e}")
+        logger.error("Error listing conversation files: %s", e)
         raise HTTPException(status_code=500, detail=f"Error listing files: {str(e)}")
 
 
@@ -544,7 +544,7 @@ async def download_conversation_file(request: Request, session_id: str, file_id:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error downloading conversation file: {e}")
+        logger.error("Error downloading conversation file: %s", e)
         raise HTTPException(status_code=500, detail=f"Error downloading file: {str(e)}")
 
 
@@ -632,7 +632,7 @@ async def preview_conversation_file(request: Request, session_id: str, file_id: 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error previewing conversation file: {e}")
+        logger.error("Error previewing conversation file: %s", e)
         raise HTTPException(status_code=500, detail=f"Error previewing file: {str(e)}")
 
 
@@ -713,7 +713,7 @@ async def delete_conversation_file(request: Request, session_id: str, file_id: s
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error deleting conversation file: {e}")
+        logger.error("Error deleting conversation file: %s", e)
         raise HTTPException(status_code=500, detail=f"Error deleting file: {str(e)}")
 
 

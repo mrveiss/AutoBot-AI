@@ -210,7 +210,7 @@ class ApprovalHandler:
                 # Continue - don't fail the approval process if broadcast fails
 
         except Exception as e:
-            logger.error(f"Error in approval status update: {e}", exc_info=True)
+            logger.error("Error in approval status update: %s", e, exc_info=True)
             # Don't fail the approval process if broadcast fails
 
     async def update_chat_approval_status(
@@ -354,4 +354,4 @@ class ApprovalHandler:
                 )
 
         except Exception as e:
-            logger.error(f"Failed to update command queue status: {e}", exc_info=True)
+            logger.error("Failed to update command queue status: %s", e, exc_info=True)

@@ -46,10 +46,10 @@ if __name__ == "__main__":
     reload = dev_mode or "--reload" in sys.argv
 
     # Log configuration
-    logger.info(f"📡 Host: {host}")
-    logger.info(f"🔌 Port: {port}")
-    logger.info(f"🔄 Reload: {reload}")
-    logger.info(f"🛠️  Dev Mode: {dev_mode}")
+    logger.info("📡 Host: %s", host)
+    logger.info("🔌 Port: %s", port)
+    logger.info("🔄 Reload: %s", reload)
+    logger.info("🛠️  Dev Mode: %s", dev_mode)
 
     try:
         # Run the server with optimized settings
@@ -69,5 +69,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logger.info("👋 AutoBot Backend shutdown by user")
     except Exception as e:
-        logger.error(f"❌ AutoBot Backend failed to start: {e}")
+        logger.error("❌ AutoBot Backend failed to start: %s", e)
         sys.exit(1)

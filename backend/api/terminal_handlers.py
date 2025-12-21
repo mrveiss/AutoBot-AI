@@ -125,7 +125,7 @@ async def _save_buffered_output_to_chat(
         logger.info("[CHAT INTEGRATION] Output saved successfully")
         return True, None
     except Exception as e:
-        logger.error(f"Failed to save output to chat: {e}")
+        logger.error("Failed to save output to chat: %s", e)
         return False, None
 
 
@@ -203,11 +203,11 @@ class ConsolidatedTerminalWebSocket:
                 # Output reader will be started when WebSocket is ready
                 self.pty_output_task = None
             else:
-                logger.error(f"Failed to create PTY session {self.session_id}")
+                logger.error("Failed to create PTY session %s", self.session_id)
                 self.pty_process = None
 
         except Exception as e:
-            logger.error(f"Could not initialize PTY process: {e}")
+            logger.error("Could not initialize PTY process: %s", e)
             self.pty_process = None
 
     async def _process_pty_event(self, event_type: str, content: str) -> bool:
@@ -228,7 +228,7 @@ class ConsolidatedTerminalWebSocket:
 
         if event_type in _TERMINAL_CLOSE_EVENTS:
             # PTY closed
-            logger.info(f"PTY closed for session {self.session_id}")
+            logger.info("PTY closed for session %s", self.session_id)
             await self.send_message(
                 {
                     "type": "terminal_closed",
@@ -246,7 +246,7 @@ class ConsolidatedTerminalWebSocket:
 
         (Issue #315 - refactored to reduce nesting depth)
         """
-        logger.info(f"Starting PTY output reader for session {self.session_id}")
+        logger.info("Starting PTY output reader for session %s", self.session_id)
 
         while self.active and self.pty_process:
             try:
@@ -265,17 +265,17 @@ class ConsolidatedTerminalWebSocket:
                     break
 
             except Exception as e:
-                logger.error(f"Error reading PTY output: {e}")
+                logger.error("Error reading PTY output: %s", e)
                 break
 
-        logger.info(f"PTY output reader stopped for session {self.session_id}")
+        logger.info("PTY output reader stopped for session %s", self.session_id)
 
     async def send_message(self, message: dict):
         """Send message to WebSocket client"""
         try:
             await self.websocket.send_text(json.dumps(message))
         except Exception as e:
-            logger.error(f"Error sending message: {e}")
+            logger.error("Error sending message: %s", e)
 
     async def send_to_terminal(self, text: str):
         """Send text input to terminal process"""
@@ -289,7 +289,7 @@ class ConsolidatedTerminalWebSocket:
                     )
                 return
             except Exception as e:
-                logger.error(f"Error writing to PTY: {e}")
+                logger.error("Error writing to PTY: %s", e)
                 await self.send_message(
                     {"type": "error", "content": f"Terminal error: {str(e)}"}
                 )
@@ -305,12 +305,12 @@ class ConsolidatedTerminalWebSocket:
 
         # Phase 3: Start async output sender task for queue-based delivery
         self._output_sender_task = asyncio.create_task(self._async_output_sender())
-        logger.info(f"Async output sender started for session {self.session_id}")
+        logger.info("Async output sender started for session %s", self.session_id)
 
         # Start PTY output reader task if PTY is available
         if self.pty_process and self.pty_process.is_alive():
             self.pty_output_task = asyncio.create_task(self._read_pty_output())
-            logger.info(f"PTY output reader started for session {self.session_id}")
+            logger.info("PTY output reader started for session %s", self.session_id)
 
             # NOTE: Keep PTY echo ON by default for automated/agent mode visibility
             # Frontend handles local echo for manual mode to reduce lag
@@ -327,7 +327,7 @@ class ConsolidatedTerminalWebSocket:
                 }
             )
         else:
-            logger.warning(f"PTY not available for session {self.session_id}")
+            logger.warning("PTY not available for session %s", self.session_id)
             await self.send_message(
                 {"type": "error", "content": "Terminal initialization failed"}
             )
@@ -348,7 +348,7 @@ class ConsolidatedTerminalWebSocket:
                     )
                     self._output_buffer = ""
             except Exception as e:
-                logger.error(f"Failed to flush output buffer: {e}")
+                logger.error("Failed to flush output buffer: %s", e)
 
         # Phase 3: Signal async output sender to stop
         if hasattr(self, "output_queue"):
@@ -359,7 +359,7 @@ class ConsolidatedTerminalWebSocket:
             except queue.Full:
                 logger.debug("Output queue full during shutdown, sender will stop via active flag")
             except Exception as e:
-                logger.error(f"Error signaling output sender to stop: {e}")
+                logger.error("Error signaling output sender to stop: %s", e)
 
         # Cancel output reader task if running
         if hasattr(self, "pty_output_task") and self.pty_output_task:
@@ -369,7 +369,7 @@ class ConsolidatedTerminalWebSocket:
             except (asyncio.CancelledError, asyncio.TimeoutError):
                 logger.debug("Output task cancelled during normal shutdown")
             except Exception as e:
-                logger.error(f"Error cancelling output task: {e}")
+                logger.error("Error cancelling output task: %s", e)
 
         # Cancel async output sender task if running
         if hasattr(self, "_output_sender_task") and self._output_sender_task:
@@ -379,7 +379,7 @@ class ConsolidatedTerminalWebSocket:
             except (asyncio.CancelledError, asyncio.TimeoutError):
                 logger.debug("Output sender task cancelled during normal shutdown")
             except Exception as e:
-                logger.error(f"Error cancelling output sender task: {e}")
+                logger.error("Error cancelling output sender task: %s", e)
 
         # Close PTY session using manager
         if self.pty_process:
@@ -388,9 +388,9 @@ class ConsolidatedTerminalWebSocket:
 
                 simple_pty_manager.close_session(self.session_id)
                 self.pty_process = None
-                logger.info(f"PTY session {self.session_id} closed")
+                logger.info("PTY session %s closed", self.session_id)
             except Exception as e:
-                logger.error(f"Error closing PTY session: {e}")
+                logger.error("Error closing PTY session: %s", e)
 
     def _get_message_handlers(self) -> Dict[str, Callable[[dict], Awaitable[None]]]:
         """Get dispatch table for message type handlers (Issue #336 - extracted helper)."""
@@ -432,10 +432,10 @@ class ConsolidatedTerminalWebSocket:
             if handler:
                 await handler(message)
             else:
-                logger.warning(f"Unknown message type: {message_type}")
+                logger.warning("Unknown message type: %s", message_type)
 
         except Exception as e:
-            logger.error(f"Error handling message: {e}")
+            logger.error("Error handling message: %s", e)
             await self.send_message(
                 {
                     "type": "error",
@@ -465,9 +465,9 @@ class ConsolidatedTerminalWebSocket:
             ) as f:
                 await f.write(text)
         except OSError as e:
-            logger.error(f"Failed to write input to transcript (I/O error): {e}")
+            logger.error("Failed to write input to transcript (I/O error): %s", e)
         except Exception as e:
-            logger.error(f"Failed to write input to transcript: {e}")
+            logger.error("Failed to write input to transcript: %s", e)
 
     async def _log_command_to_terminal_logger(
         self, command: str, status: str
@@ -491,9 +491,9 @@ class ConsolidatedTerminalWebSocket:
                 status=status,
                 user_id=None,
             )
-            logger.info(f"[MANUAL CMD] Successfully logged to {self.conversation_id}")
+            logger.info("[MANUAL CMD] Successfully logged to %s", self.conversation_id)
         except Exception as e:
-            logger.error(f"Failed to log command to TerminalLogger: {e}")
+            logger.error("Failed to log command to TerminalLogger: %s", e)
 
     async def _save_command_to_chat(self, command: str) -> None:
         """Save command as terminal message to chat (Issue #281: extracted)."""
@@ -501,7 +501,7 @@ class ConsolidatedTerminalWebSocket:
             return
 
         try:
-            logger.info(f"[CHAT INTEGRATION] Saving command to chat: {command[:50]}")
+            logger.info("[CHAT INTEGRATION] Saving command to chat: %s", command[:50])
             await self.chat_history_manager.add_message(
                 sender="terminal",
                 text=f"$ {command}",
@@ -510,7 +510,7 @@ class ConsolidatedTerminalWebSocket:
             )
             logger.info("[CHAT INTEGRATION] Command saved successfully")
         except Exception as e:
-            logger.error(f"Failed to save command to chat: {e}")
+            logger.error("Failed to save command to chat: %s", e)
 
     async def _handle_complete_command(self, command: str, text: str) -> bool:
         """Handle a complete command with security assessment (Issue #281: extracted).
@@ -662,7 +662,7 @@ class ConsolidatedTerminalWebSocket:
             True if PTY available, False otherwise
         """
         if not self.pty_process:
-            logger.error(f"[STDIN] No PTY process for session {self.session_id}")
+            logger.error("[STDIN] No PTY process for session %s", self.session_id)
             await self.send_message(
                 {
                     "type": "error",
@@ -725,14 +725,14 @@ class ConsolidatedTerminalWebSocket:
             error: The exception that occurred
             is_password: Whether password mode was active (echo disabled)
         """
-        logger.error(f"[STDIN] Error writing to PTY: {error}")
+        logger.error("[STDIN] Error writing to PTY: %s", error)
 
         # Re-enable echo if it was disabled (ensure terminal doesn't stay in silent mode)
         if is_password:
             try:
                 self.pty_process.set_echo(True)
             except Exception as echo_err:
-                logger.debug(f"Failed to re-enable echo: {echo_err}")
+                logger.debug("Failed to re-enable echo: %s", echo_err)
 
         await self.send_message(
             {
@@ -847,7 +847,7 @@ class ConsolidatedTerminalWebSocket:
                 )
 
         except Exception as e:
-            logger.error(f"Error resizing terminal: {e}")
+            logger.error("Error resizing terminal: %s", e)
 
     async def _handle_signal_message(self, message: dict):
         """Handle signal requests (SIGINT, SIGTERM, etc.)"""
@@ -866,7 +866,7 @@ class ConsolidatedTerminalWebSocket:
 
             sig = signal_map.get(signal_name)
             if not sig:
-                logger.warning(f"Unknown signal: {signal_name}")
+                logger.warning("Unknown signal: %s", signal_name)
                 await self.send_message(
                     {
                         "type": "error",
@@ -880,7 +880,7 @@ class ConsolidatedTerminalWebSocket:
             if self.pty_process:
                 success = self.pty_process.send_signal(sig)
                 if success:
-                    logger.info(f"Sent {signal_name} to PTY process")
+                    logger.info("Sent %s to PTY process", signal_name)
                     await self.send_message(
                         {
                             "type": "signal_sent",
@@ -889,7 +889,7 @@ class ConsolidatedTerminalWebSocket:
                         }
                     )
                 else:
-                    logger.error(f"Failed to send {signal_name}")
+                    logger.error("Failed to send %s", signal_name)
                     await self.send_message(
                         {
                             "type": "error",
@@ -918,7 +918,7 @@ class ConsolidatedTerminalWebSocket:
                 )
 
         except Exception as e:
-            logger.error(f"Error sending signal: {e}")
+            logger.error("Error sending signal: %s", e)
             await self.send_message(
                 {
                     "type": "error",
@@ -1095,7 +1095,7 @@ class ConsolidatedTerminalWebSocket:
             await self.websocket.send_text(json.dumps(message))
             return True
         except Exception as e:
-            logger.error(f"Error sending queued message to WebSocket: {e}")
+            logger.error("Error sending queued message to WebSocket: %s", e)
             return False
 
     async def _async_output_sender(self):
@@ -1108,7 +1108,7 @@ class ConsolidatedTerminalWebSocket:
 
         (Issue #315 - refactored to reduce nesting depth)
         """
-        logger.info(f"Starting async output sender for session {self.session_id}")
+        logger.info("Starting async output sender for session %s", self.session_id)
 
         try:
             while self.active:
@@ -1135,14 +1135,14 @@ class ConsolidatedTerminalWebSocket:
                         break
 
                 except Exception as e:
-                    logger.error(f"Error in async output sender loop: {e}")
+                    logger.error("Error in async output sender loop: %s", e)
                     # Error recovery delay to prevent tight loop
                     await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
         except Exception as e:
-            logger.error(f"Async output sender error: {e}")
+            logger.error("Async output sender error: %s", e)
         finally:
-            logger.info(f"Async output sender stopped for session {self.session_id}")
+            logger.info("Async output sender stopped for session %s", self.session_id)
 
 
 # Enhanced session manager for consolidated terminal
@@ -1203,10 +1203,10 @@ class ConsolidatedTerminalManager:
             try:
                 success = terminal.pty_process.send_signal(sig)
                 if success:
-                    logger.info(f"Sent signal {sig} to terminal session {session_id}")
+                    logger.info("Sent signal %s to terminal session %s", sig, session_id)
                 return success
             except Exception as e:
-                logger.error(f"Failed to send signal to session {session_id}: {e}")
+                logger.error("Failed to send signal to session %s: %s", session_id, e)
                 return False
         return False
 
@@ -1281,9 +1281,9 @@ class ConsolidatedTerminalManager:
             try:
                 await terminal.send_output(content)
                 count += 1
-                logger.debug(f"Sent output to terminal {session_id}")
+                logger.debug("Sent output to terminal %s", session_id)
             except Exception as e:
-                logger.error(f"Failed to send output to terminal {session_id}: {e}")
+                logger.error("Failed to send output to terminal %s: %s", session_id, e)
         return count
 
     async def get_terminal_stats(self, session_id: str = None) -> dict:

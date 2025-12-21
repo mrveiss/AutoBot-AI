@@ -160,7 +160,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         logger.info(
             f"OS: {os_info.os_type.value} ({os_info.distro.value if os_info.distro else 'N/A'})"
         )
-        logger.info(f"Available tools: {len(os_info.capabilities)}")
+        logger.info("Available tools: %s", len(os_info.capabilities))
 
     def _generate_machine_id(self, os_info) -> str:
         """Generate unique machine ID based on system characteristics"""
@@ -196,9 +196,9 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                 await f.write(
                     json.dumps(self.current_machine_profile.to_dict(), indent=2)
                 )
-            logger.info(f"Machine profile saved: {profile_file}")
+            logger.info("Machine profile saved: %s", profile_file)
         except OSError as e:
-            logger.error(f"Failed to save machine profile to {profile_file}: {e}")
+            logger.error("Failed to save machine profile to %s: %s", profile_file, e)
 
     async def _load_machine_profile(self, machine_id: str) -> Optional[MachineProfile]:
         """Load machine profile from disk"""
@@ -214,10 +214,10 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                 data = json.loads(content)
             return MachineProfile.from_dict(data)
         except OSError as e:
-            logger.warning(f"Failed to read machine profile {profile_file}: {e}")
+            logger.warning("Failed to read machine profile %s: %s", profile_file, e)
             return None
         except Exception as e:
-            logger.warning(f"Error loading machine profile {machine_id}: {e}")
+            logger.warning("Error loading machine profile %s: %s", machine_id, e)
             return None
 
     def _get_machine_knowledge_dir(self) -> Path:
@@ -279,7 +279,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         # Issue #358 - wrap glob in lambda to avoid blocking
         yaml_files = await asyncio.to_thread(lambda: list(tools_dir.glob("*.yaml")))
         for yaml_file in yaml_files:
-            logger.info(f"Adapting tools from {yaml_file}")
+            logger.info("Adapting tools from %s", yaml_file)
 
             try:
                 async with aiofiles.open(
@@ -288,7 +288,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                     content = await f.read()
                     tools_data = yaml.safe_load(content)
             except OSError as e:
-                logger.error(f"Failed to read tools file {yaml_file}: {e}")
+                logger.error("Failed to read tools file %s: %s", yaml_file, e)
                 continue
 
             # Filter and adapt tools for this machine
@@ -398,7 +398,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         # Issue #358 - wrap glob in lambda to avoid blocking
         yaml_files = await asyncio.to_thread(lambda: list(workflows_dir.glob("*.yaml")))
         for yaml_file in yaml_files:
-            logger.info(f"Adapting workflow from {yaml_file}")
+            logger.info("Adapting workflow from %s", yaml_file)
 
             try:
                 async with aiofiles.open(
@@ -407,7 +407,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                     content = await f.read()
                     workflow_data = yaml.safe_load(content)
             except OSError as e:
-                logger.error(f"Failed to read workflow file {yaml_file}: {e}")
+                logger.error("Failed to read workflow file %s: %s", yaml_file, e)
                 continue
 
             # Adapt workflow for machine capabilities
@@ -549,15 +549,15 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                         profile_data = json.loads(content)
                     machines.append(profile_data)
                 except OSError as e:
-                    logger.warning(f"Failed to read profile {profile_file}: {e}")
+                    logger.warning("Failed to read profile %s: %s", profile_file, e)
                 except Exception as e:
-                    logger.warning(f"Error loading profile {profile_file}: {e}")
+                    logger.warning("Error loading profile %s: %s", profile_file, e)
 
         return machines
 
     async def sync_knowledge_across_machines(self, target_machine_ids: List[str]):
         """Synchronize knowledge across multiple machines (future feature)"""
-        logger.info(f"Knowledge sync requested for machines: {target_machine_ids}")
+        logger.info("Knowledge sync requested for machines: %s", target_machine_ids)
         # This would implement knowledge sharing between connected AutoBot instances
         # For now, just log the request
 
@@ -615,12 +615,12 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             integration_results["successful"] += 1
             integration_results["commands"][command] = "success"
 
-            logger.debug(f"Integrated man page for {command}")
+            logger.debug("Integrated man page for %s", command)
 
         except Exception as e:
             integration_results["failed"] += 1
             integration_results["commands"][command] = f"error: {str(e)}"
-            logger.error(f"Failed to integrate man page for {command}: {e}")
+            logger.error("Failed to integrate man page for %s: %s", command, e)
 
     async def _integrate_man_pages(self):
         """Integrate man pages for tools available on this machine"""
@@ -690,7 +690,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         except ImportError:
             logger.warning("Man page integrator not available")
         except Exception as e:
-            logger.error(f"Error during man page integration: {e}")
+            logger.error("Error during man page integration: %s", e)
 
     def _is_man_page_recent(self, man_info, max_age_hours: int = 24) -> bool:
         """Check if man page cache is recent enough"""
@@ -743,7 +743,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                 f"Saved man page knowledge for {man_info.command} to {yaml_file}"
             )
         except OSError as e:
-            logger.error(f"Failed to save man page knowledge to {yaml_file}: {e}")
+            logger.error("Failed to save man page knowledge to %s: %s", yaml_file, e)
 
     async def _save_man_page_integration_summary(self, results: Dict[str, Any]):
         """Save man page integration summary"""
@@ -768,7 +768,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                 summary_file, "w", encoding="utf-8"
             ) as f:
                 await f.write(json.dumps(summary_data, indent=2))
-            logger.info(f"Saved man page integration summary to {summary_file}")
+            logger.info("Saved man page integration summary to %s", summary_file)
         except OSError as e:
             logger.error(
                 f"Failed to save man page integration summary to {summary_file}: {e}"

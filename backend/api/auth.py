@@ -115,7 +115,7 @@ async def login(request: Request, login_data: LoginRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Login error for user {login_data.username}: {e}")
+        logger.error("Login error for user %s: %s", login_data.username, e)
         raise HTTPException(
             status_code=500, detail="Authentication service temporarily unavailable"
         )
@@ -141,7 +141,7 @@ async def logout(request: Request, logout_data: LogoutRequest):
         return {"success": True, "message": "Logged out successfully"}
 
     except Exception as e:
-        logger.error(f"Logout error: {e}")
+        logger.error("Logout error: %s", e)
         # Don't fail logout on errors - return success
         return {"success": True, "message": "Logged out successfully"}
 
@@ -174,7 +174,7 @@ async def get_current_user_info(request: Request):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting user info: {e}")
+        logger.error("Error getting user info: %s", e)
         raise HTTPException(status_code=500, detail="Error retrieving user information")
 
 
@@ -198,7 +198,7 @@ async def check_authentication(request: Request):
         }
 
     except Exception as e:
-        logger.error(f"Auth check error: {e}")
+        logger.error("Auth check error: %s", e)
         return {
             "authenticated": False,
             "role": None,
@@ -230,7 +230,7 @@ async def check_permission(request: Request, operation: str):
         }
 
     except Exception as e:
-        logger.error(f"Permission check error for operation {operation}: {e}")
+        logger.error("Permission check error for operation %s: %s", operation, e)
         return {
             "permitted": False,
             "operation": operation,

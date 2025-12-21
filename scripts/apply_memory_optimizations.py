@@ -109,7 +109,7 @@ class MemoryOptimizationApplier:
                 )
 
         except Exception as e:
-            logger.warning(f"Failed to truncate {log_file}: {e}")
+            logger.warning("Failed to truncate %s: %s", log_file, e)
 
     def setup_rotating_loggers(self):
         """Set up rotating loggers for main log files"""
@@ -235,7 +235,7 @@ class MemoryOptimizationApplier:
         try:
             import sqlite3
 
-            logger.info(f"🗄️  Optimizing SQLite database: {db_file.name}")
+            logger.info("🗄️  Optimizing SQLite database: %s", db_file.name)
 
             # Create backup first
             backup_file = db_file.with_suffix(f"{db_file.suffix}.backup")
@@ -263,7 +263,7 @@ class MemoryOptimizationApplier:
 
             if new_size < original_size:
                 saved_mb = (original_size - new_size) / (1024**2)
-                logger.info(f"💾 Database optimization saved {saved_mb:.1f}MB")
+                logger.info("💾 Database optimization saved %sMB", saved_mb:.1f)
                 # Remove backup if successful
                 backup_file.unlink()
             else:
@@ -271,7 +271,7 @@ class MemoryOptimizationApplier:
                 backup_file.unlink()
 
         except Exception as e:
-            logger.warning(f"Failed to optimize SQLite database {db_file}: {e}")
+            logger.warning("Failed to optimize SQLite database %s: %s", db_file, e)
 
     def _analyze_json_compression(self, json_file: Path) -> float:
         """Analyze potential JSON compression savings"""
@@ -295,7 +295,7 @@ class MemoryOptimizationApplier:
             return compressed_size_mb
 
         except Exception as e:
-            logger.debug(f"Could not analyze compression for {json_file}: {e}")
+            logger.debug("Could not analyze compression for %s: %s", json_file, e)
             return 0.0
 
     def apply_global_memory_optimizations(self):
@@ -365,8 +365,8 @@ class MemoryOptimizationApplier:
             f.write(self._generate_markdown_report(report))
 
         logger.info("📄 Optimization reports saved:")
-        logger.info(f"  JSON: {json_file}")
-        logger.info(f"  Markdown: {md_file}")
+        logger.info("  JSON: %s", json_file)
+        logger.info("  Markdown: %s", md_file)
 
         return {"json": json_file, "markdown": md_file}
 
@@ -464,14 +464,14 @@ class MemoryOptimizationApplier:
             )
 
             for opt in self.optimizations_applied:
-                logger.info(f"✓ {opt['description']}")
+                logger.info("✓ %s", opt['description'])
 
             logger.info("=" * 60)
 
             return report
 
         except Exception as e:
-            logger.error(f"Memory optimization failed: {e}")
+            logger.error("Memory optimization failed: %s", e)
             raise
 
 
@@ -488,7 +488,7 @@ def main():
         return 0
 
     except Exception as e:
-        logger.error(f"Memory optimization failed: {e}")
+        logger.error("Memory optimization failed: %s", e)
         return 1
 
 

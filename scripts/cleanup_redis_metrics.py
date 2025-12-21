@@ -82,7 +82,7 @@ async def _connect_redis_clients(results: dict) -> tuple:
             logger.error("Failed to connect to Redis")
             results["errors"].append("Redis connection failed")
     except Exception as e:
-        logger.error(f"Redis connection error: {e}")
+        logger.error("Redis connection error: %s", e)
         results["errors"].append(str(e))
 
     # Also check knowledge database
@@ -132,7 +132,7 @@ async def _scan_all_patterns(redis_client, kb_redis_client, results: dict) -> li
                 logger.info("  %s: 0 keys", pattern)
 
         except Exception as e:
-            logger.warning(f"Error scanning pattern {pattern}: {e}")
+            logger.warning("Error scanning pattern %s: %s", pattern, e)
             results["errors"].append(f"Pattern {pattern}: {e}")
 
     return all_keys
@@ -166,7 +166,7 @@ async def _delete_keys(all_keys: list, redis_client, kb_redis_client, results: d
                 await redis_client.delete(key)
             deleted_count += 1
         except Exception as e:
-            logger.warning(f"Failed to delete {key}: {e}")
+            logger.warning("Failed to delete %s: %s", key, e)
             results["errors"].append(f"Delete {key}: {e}")
 
     return deleted_count

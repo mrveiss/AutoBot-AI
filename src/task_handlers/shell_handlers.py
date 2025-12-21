@@ -57,7 +57,7 @@ class ExecuteShellCommandHandler(TaskHandler):
                 "security_event": "shell_injection_attempt_blocked",
             },
         )
-        logger.warning(f"SECURITY: Blocked potentially dangerous command: {command}")
+        logger.warning("SECURITY: Blocked potentially dangerous command: %s", command)
         return result
 
     async def _run_subprocess(

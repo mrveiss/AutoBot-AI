@@ -81,7 +81,7 @@ def refresh_system_knowledge(self) -> Metadata:
 
         if result.returncode != 0:
             error_msg = result.stderr[:500] if result.stderr else "Unknown error"
-            logger.error(f"System knowledge refresh failed: {error_msg}")
+            logger.error("System knowledge refresh failed: %s", error_msg)
             return {
                 "status": "failed",
                 "error": error_msg,
@@ -104,7 +104,7 @@ def refresh_system_knowledge(self) -> Metadata:
         }
 
     except Exception as e:
-        logger.exception(f"System knowledge refresh task failed: {e}")
+        logger.exception("System knowledge refresh task failed: %s", e)
         return {
             "status": "failed",
             "error": str(e),
@@ -167,7 +167,7 @@ def reindex_knowledge_base(self) -> Metadata:
             loop.close()
 
     except Exception as e:
-        logger.exception(f"Knowledge base reindex task failed: {e}")
+        logger.exception("Knowledge base reindex task failed: %s", e)
         return {
             "status": "failed",
             "error": str(e),
@@ -221,7 +221,7 @@ async def _store_man_pages_to_kb(kb, man_pages: list, delay: float) -> tuple[int
                 items_failed += 1
 
         except Exception as e:
-            logger.error(f"Error storing man page: {e}")
+            logger.error("Error storing man page: %s", e)
             items_failed += 1
 
         await asyncio.sleep(delay)
@@ -283,7 +283,7 @@ async def _scan_man_page_changes_async(machine_id: str, limit: int | None = None
                 else:
                     items_failed += 1
             except Exception as e:
-                logger.error(f"Error storing parsed man page: {e}")
+                logger.error("Error storing parsed man page: %s", e)
                 items_failed += 1
 
         return {
@@ -297,7 +297,7 @@ async def _scan_man_page_changes_async(machine_id: str, limit: int | None = None
         }
 
     except Exception as e:
-        logger.error(f"Man page change scan failed: {e}")
+        logger.error("Man page change scan failed: %s", e)
         return {
             "status": "failed",
             "error": str(e),
@@ -338,7 +338,7 @@ def scan_man_page_changes(self, limit: int | None = None) -> Metadata:
         )
 
         machine_id = socket.gethostname()
-        logger.info(f"Starting man page change scan for {machine_id}...")
+        logger.info("Starting man page change scan for %s...", machine_id)
 
         # Run async scan in event loop
         result = _run_async_in_loop(
@@ -352,12 +352,12 @@ def scan_man_page_changes(self, limit: int | None = None) -> Metadata:
                 f"added={summary.get('added', 0)}, updated={summary.get('updated', 0)}"
             )
         else:
-            logger.error(f"Man page scan failed: {result.get('error')}")
+            logger.error("Man page scan failed: %s", result.get('error'))
 
         return result
 
     except Exception as e:
-        logger.exception(f"Man page change scan task failed: {e}")
+        logger.exception("Man page change scan task failed: %s", e)
         return {
             "status": "failed",
             "error": str(e),
@@ -454,7 +454,7 @@ def full_man_page_index(
         return result
 
     except Exception as e:
-        logger.exception(f"Full man page index task failed: {e}")
+        logger.exception("Full man page index task failed: %s", e)
         return {
             "status": "failed",
             "error": str(e),

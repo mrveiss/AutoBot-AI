@@ -121,7 +121,7 @@ class BackgroundLLMSync:
                 service.status = "offline"
                 service.last_check = time.time()
 
-            logger.warning(f"Health check failed for {service.service_name}: {e}")
+            logger.warning("Health check failed for %s: %s", service.service_name, e)
             return False
 
     async def perform_health_checks(self):
@@ -154,7 +154,7 @@ class BackgroundLLMSync:
             logger.debug("Connection pools warmed successfully")
 
         except Exception as e:
-            logger.warning(f"Failed to warm connection pools: {e}")
+            logger.warning("Failed to warm connection pools: %s", e)
 
     async def collect_performance_metrics(self):
         """Collect and log performance metrics (thread-safe)."""
@@ -185,10 +185,10 @@ class BackgroundLLMSync:
                 "timestamp": time.time(),
             }
 
-            logger.debug(f"Performance metrics: {metrics}")
+            logger.debug("Performance metrics: %s", metrics)
 
         except Exception as e:
-            logger.warning(f"Failed to collect performance metrics: {e}")
+            logger.warning("Failed to collect performance metrics: %s", e)
 
     async def background_sync_loop(self):
         """Main background synchronization loop."""
@@ -212,7 +212,7 @@ class BackgroundLLMSync:
                 logger.info("Background LLM sync loop cancelled")
                 break
             except Exception as e:
-                logger.error(f"❌ Error in background LLM sync loop: {e}")
+                logger.error("❌ Error in background LLM sync loop: %s", e)
                 # Continue running even if there's an error
                 await asyncio.sleep(self.check_interval)
 
@@ -310,7 +310,7 @@ async def background_llm_sync():
     except asyncio.CancelledError:
         logger.info("Background LLM sync cancelled")
     except Exception as e:
-        logger.error(f"❌ Background LLM sync failed: {e}")
+        logger.error("❌ Background LLM sync failed: %s", e)
     finally:
         if _background_sync:
             await _background_sync.stop()

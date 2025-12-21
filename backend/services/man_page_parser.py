@@ -302,7 +302,7 @@ class ManPageParser:
             file_path = Path(file_path)
 
             if not file_path.exists():
-                logger.warning(f"Man page file not found: {file_path}")
+                logger.warning("Man page file not found: %s", file_path)
                 return None
 
             if file_path.suffix == ".gz":
@@ -313,7 +313,7 @@ class ManPageParser:
                     return f.read()
 
         except (OSError, gzip.BadGzipFile) as e:
-            logger.error(f"Error reading man page {file_path}: {e}")
+            logger.error("Error reading man page %s: %s", file_path, e)
             return None
 
     def _extract_command_and_section(
@@ -491,7 +491,7 @@ class ManPageParser:
                         return line.split(" - ", 1)[1].strip()
 
         except Exception as e:
-            logger.debug(f"Failed to get summary for {command}: {e}")
+            logger.debug("Failed to get summary for %s: %s", command, e)
 
         return ""
 

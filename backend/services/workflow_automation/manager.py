@@ -93,7 +93,7 @@ class WorkflowAutomationManager:
             return None
 
         except Exception as e:
-            logger.error(f"Failed to create workflow from chat request: {e}")
+            logger.error("Failed to create workflow from chat request: %s", e)
             return None
 
     def _extract_command_from_step(self, step) -> str:
@@ -136,13 +136,13 @@ class WorkflowAutomationManager:
 
         self.active_workflows[workflow_id] = workflow
 
-        logger.info(f"Created automated workflow {workflow_id}: {name}")
+        logger.info("Created automated workflow %s: %s", workflow_id, name)
         return workflow_id
 
     async def start_workflow_execution(self, workflow_id: str) -> bool:
         """Start executing automated workflow"""
         if workflow_id not in self.active_workflows:
-            logger.error(f"Workflow {workflow_id} not found")
+            logger.error("Workflow %s not found", workflow_id)
             return False
 
         workflow = self.active_workflows[workflow_id]
@@ -198,7 +198,7 @@ class WorkflowAutomationManager:
             PlanApprovalRequest with presentation data, or None if workflow not found
         """
         if workflow_id not in self.active_workflows:
-            logger.error(f"Workflow {workflow_id} not found for plan presentation")
+            logger.error("Workflow %s not found for plan presentation", workflow_id)
             return None
 
         workflow = self.active_workflows[workflow_id]
@@ -228,7 +228,7 @@ class WorkflowAutomationManager:
                 workflow_id, timeout_seconds
             )
         except ValueError as e:
-            logger.error(f"Error waiting for plan approval: {e}")
+            logger.error("Error waiting for plan approval: %s", e)
             return None
 
     def handle_plan_approval_response(
@@ -271,7 +271,7 @@ class WorkflowAutomationManager:
         Issue #390: Allow cancellation after plan rejection.
         """
         if workflow_id not in self.active_workflows:
-            logger.error(f"Workflow {workflow_id} not found for cancellation")
+            logger.error("Workflow %s not found for cancellation", workflow_id)
             return False
 
         workflow = self.active_workflows[workflow_id]

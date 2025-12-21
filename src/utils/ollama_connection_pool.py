@@ -107,7 +107,7 @@ class OllamaConnectionPool:
 
         try:
             # Wait for available connection slot
-            logger.debug(f"[{request_id}] Waiting for connection slot")
+            logger.debug("[%s] Waiting for connection slot", request_id)
             async with self._stats_lock:
                 self.connection_stats["queued"] += 1
 
@@ -163,7 +163,7 @@ class OllamaConnectionPool:
                 async with self._stats_lock:
                     self.failed_requests += 1
                     self.connection_stats["failed"] += 1
-                logger.error(f"[{request_id}] Connection failed: {e}")
+                logger.error("[%s] Connection failed: %s", request_id, e)
                 raise
 
             # Session cleanup is handled by singleton HTTPClientManager
@@ -187,7 +187,7 @@ class OllamaConnectionPool:
                         self.active_connections -= 1
                         self.connection_stats["active"] -= 1
                 self.semaphore.release()
-                logger.debug(f"[{request_id}] Released connection")
+                logger.debug("[%s] Released connection", request_id)
 
     async def _execute_health_check(self, ollama_url: str) -> bool:
         """Execute the actual health check request (Issue #315 - extracted helper).
@@ -209,7 +209,7 @@ class OllamaConnectionPool:
             self.pool_healthy = healthy
 
         if error:
-            logger.error(f"Ollama health check failed: {error}")
+            logger.error("Ollama health check failed: %s", error)
         elif healthy:
             logger.info("Ollama connection pool health check: HEALTHY")
         else:
@@ -342,7 +342,7 @@ async def cleanup_ollama_pool():
             active = pool.active_connections
         if active == 0:
             break
-        logger.info(f"Waiting for {active} active connections to complete")
+        logger.info("Waiting for %s active connections to complete", active)
         await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
     with _ollama_pool_lock:

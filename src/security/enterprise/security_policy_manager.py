@@ -156,7 +156,7 @@ class SecurityPolicyManager:
                 self._save_config(default_config)
                 return default_config
         except Exception as e:
-            logger.error(f"Failed to load policy config: {e}")
+            logger.error("Failed to load policy config: %s", e)
             return self._get_default_config()
 
     def _get_default_config(self) -> Dict:
@@ -196,7 +196,7 @@ class SecurityPolicyManager:
                 with open(self.config_path, "w", encoding="utf-8") as f:
                     yaml.dump(config, f, default_flow_style=False)
             except Exception as e:
-                logger.error(f"Failed to save policy config: {e}")
+                logger.error("Failed to save policy config: %s", e)
 
     def _load_policies(self):
         """Load all security policies from storage"""
@@ -239,10 +239,10 @@ class SecurityPolicyManager:
                 self.policies[policy.policy_id] = policy
 
             self._update_policy_statistics()
-            logger.info(f"Loaded {len(self.policies)} security policies")
+            logger.info("Loaded %s security policies", len(self.policies))
 
         except Exception as e:
-            logger.error(f"Failed to load policies: {e}")
+            logger.error("Failed to load policies: %s", e)
 
     def _save_policy(self, policy: SecurityPolicy):
         """Save a single policy to storage (thread-safe, Issue #378)"""
@@ -271,7 +271,7 @@ class SecurityPolicyManager:
                     json.dump(policy_dict, f, indent=2, ensure_ascii=False)
 
             except Exception as e:
-                logger.error(f"Failed to save policy {policy.policy_id}: {e}")
+                logger.error("Failed to save policy %s: %s", policy.policy_id, e)
 
     def _load_compliance_mappings(self) -> Dict:
         """Load compliance framework mappings"""
@@ -399,7 +399,7 @@ class SecurityPolicyManager:
             )
             self.approve_policy(policy_id, "system")
 
-        logger.info(f"Initialized {len(default_policies)} default security policies")
+        logger.info("Initialized %s default security policies", len(default_policies))
 
     def create_policy(
         self,
@@ -441,14 +441,14 @@ class SecurityPolicyManager:
         self._save_policy(policy)
         self._update_policy_statistics()
 
-        logger.info(f"Created new security policy: {name} ({policy_id})")
+        logger.info("Created new security policy: %s (%s)", name, policy_id)
         return policy_id
 
     def update_policy(self, policy_id: str, updates: Dict, author: str) -> bool:
         """Update an existing security policy"""
 
         if policy_id not in self.policies:
-            logger.error(f"Policy not found: {policy_id}")
+            logger.error("Policy not found: %s", policy_id)
             return False
 
         policy = self.policies[policy_id]
@@ -484,14 +484,14 @@ class SecurityPolicyManager:
         self._save_policy(policy)
         self._update_policy_statistics()
 
-        logger.info(f"Updated policy {policy_id} to version {new_version}")
+        logger.info("Updated policy %s to version %s", policy_id, new_version)
         return True
 
     def approve_policy(self, policy_id: str, approver: str) -> bool:
         """Approve a security policy"""
 
         if policy_id not in self.policies:
-            logger.error(f"Policy not found: {policy_id}")
+            logger.error("Policy not found: %s", policy_id)
             return False
 
         policy = self.policies[policy_id]
@@ -506,14 +506,14 @@ class SecurityPolicyManager:
         self._save_policy(policy)
         self._update_policy_statistics()
 
-        logger.info(f"Approved policy {policy_id} by {approver}")
+        logger.info("Approved policy %s by %s", policy_id, approver)
         return True
 
     def deactivate_policy(self, policy_id: str) -> bool:
         """Deactivate a security policy"""
 
         if policy_id not in self.policies:
-            logger.error(f"Policy not found: {policy_id}")
+            logger.error("Policy not found: %s", policy_id)
             return False
 
         policy = self.policies[policy_id]
@@ -523,7 +523,7 @@ class SecurityPolicyManager:
         self._save_policy(policy)
         self._update_policy_statistics()
 
-        logger.info(f"Deactivated policy {policy_id}")
+        logger.info("Deactivated policy %s", policy_id)
         return True
 
     def _create_violation(
@@ -761,13 +761,7 @@ class SecurityPolicyManager:
             self.stats["violations_by_type"].get(violation_type, 0) + 1
         )
 
-        logger.warning(
-            f"POLICY VIOLATION: {violation.violation_type} | "
-            f"Policy: {violation.policy_id} | "
-            f"User: {violation.user_id} | "
-            f"Severity: {violation.severity} | "
-            f"Resource: {violation.resource}"
-        )
+        logger.warning("POLICY VIOLATION: %s | Policy: %s | User: %s | Severity: %s | Resource: %s", violation.violation_type, violation.policy_id, violation.user_id, violation.severity, violation.resource)
 
     def get_policy(self, policy_id: str) -> Optional[SecurityPolicy]:
         """Get a specific policy by ID"""

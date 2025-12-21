@@ -42,7 +42,7 @@ async def _get_memory_integration():
             )
             _memory_integration = await get_security_memory_integration()
         except Exception as e:
-            logger.warning(f"Memory integration not available: {e}")
+            logger.warning("Memory integration not available: %s", e)
             _memory_integration = None
     return _memory_integration
 
@@ -358,10 +358,7 @@ class SecurityWorkflowManager:
         # Persist to Redis
         await self._save_assessment(assessment)
 
-        logger.info(
-            f"Created security assessment: id={assessment_id}, "
-            f"name={name}, target={target}, training_mode={training_mode}"
-        )
+        logger.info("Created security assessment: id=%s, name=%s, target=%s, training_mode=%s", assessment_id, name, target, training_mode)
 
         # Create Memory MCP entity for the assessment
         try:
@@ -376,7 +373,7 @@ class SecurityWorkflowManager:
                     metadata=metadata,
                 )
         except Exception as e:
-            logger.warning(f"Failed to create assessment entity in Memory MCP: {e}")
+            logger.warning("Failed to create assessment entity in Memory MCP: %s", e)
 
         return assessment
 
@@ -402,7 +399,7 @@ class SecurityWorkflowManager:
             else:
                 await redis.srem(self.REDIS_ACTIVE_INDEX, assessment.id)
         except RedisError as e:
-            logger.error(f"Failed to save assessment {assessment.id}: {e}")
+            logger.error("Failed to save assessment %s: %s", assessment.id, e)
             raise RuntimeError(f"Failed to save assessment: {e}")
 
     async def get_assessment(self, assessment_id: str) -> Optional[SecurityAssessment]:
@@ -425,7 +422,7 @@ class SecurityWorkflowManager:
 
             return SecurityAssessment.from_dict(json.loads(data))
         except RedisError as e:
-            logger.error(f"Failed to get assessment {assessment_id}: {e}")
+            logger.error("Failed to get assessment %s: %s", assessment_id, e)
             raise RuntimeError(f"Failed to get assessment: {e}")
 
     def _parse_assessment_data(self, aid: str, data: dict) -> Optional[SecurityAssessment]:
@@ -460,7 +457,7 @@ class SecurityWorkflowManager:
                 metadata=ast.literal_eval(decoded.get("metadata", "{}")),
             )
         except Exception as e:
-            logger.error(f"Error parsing assessment {aid}: {e}")
+            logger.error("Error parsing assessment %s: %s", aid, e)
             return None
 
     async def list_active_assessments(self) -> list[SecurityAssessment]:
@@ -489,7 +486,7 @@ class SecurityWorkflowManager:
 
             return sorted(assessments, key=lambda a: a.updated_at, reverse=True)
         except RedisError as e:
-            logger.error(f"Failed to list active assessments: {e}")
+            logger.error("Failed to list active assessments: %s", e)
             raise RuntimeError(f"Failed to list active assessments: {e}")
 
     async def advance_phase(
@@ -511,23 +508,20 @@ class SecurityWorkflowManager:
         """
         assessment = await self.get_assessment(assessment_id)
         if not assessment:
-            logger.error(f"Assessment not found: {assessment_id}")
+            logger.error("Assessment not found: %s", assessment_id)
             return None
 
         current_phase = assessment.phase.value
         valid_next = VALID_TRANSITIONS.get(current_phase, [])
 
         if not valid_next:
-            logger.warning(f"No valid transitions from {current_phase}")
+            logger.warning("No valid transitions from %s", current_phase)
             return assessment
 
         # Determine target phase
         if target_phase:
             if target_phase not in valid_next:
-                logger.error(
-                    f"Invalid transition: {current_phase} -> {target_phase}. "
-                    f"Valid: {valid_next}"
-                )
+                logger.error("Invalid transition: %s -> %s. Valid: %s", current_phase, target_phase, valid_next)
                 return None
             next_phase = target_phase
         else:
@@ -562,10 +556,7 @@ class SecurityWorkflowManager:
 
         await self._save_assessment(assessment)
 
-        logger.info(
-            f"Assessment {assessment_id}: {current_phase} -> {next_phase} "
-            f"(reason: {reason or 'auto-advance'})"
-        )
+        logger.info("Assessment %s: %s -> %s ", assessment_id, current_phase, next_phase)
 
         return assessment
 
@@ -615,7 +606,7 @@ class SecurityWorkflowManager:
             is_new_host = True
 
         await self._save_assessment(assessment)
-        logger.info(f"Added/updated host {ip} in assessment {assessment_id}")
+        logger.info("Added/updated host %s in assessment %s", ip, assessment_id)
 
         # Create Memory MCP entity for new hosts
         if is_new_host:
@@ -631,7 +622,7 @@ class SecurityWorkflowManager:
                         metadata=metadata,
                     )
             except Exception as e:
-                logger.warning(f"Failed to create host entity in Memory MCP: {e}")
+                logger.warning("Failed to create host entity in Memory MCP: %s", e)
 
         return assessment
 
@@ -697,10 +688,7 @@ class SecurityWorkflowManager:
             host.services.append(service_info)
 
         await self._save_assessment(assessment)
-        logger.info(
-            f"Added port {port}/{protocol} ({service or 'unknown'}) "
-            f"to {host_ip} in assessment {assessment_id}"
-        )
+        logger.info("to %s in assessment %s", host_ip, assessment_id)
 
         # Issue #398: Create Memory MCP entities (uses extracted helper)
         await self._create_port_memory_entity(
@@ -748,7 +736,7 @@ class SecurityWorkflowManager:
                     product=product,
                 )
         except Exception as e:
-            logger.warning(f"Failed to create service entity in Memory MCP: {e}")
+            logger.warning("Failed to create service entity in Memory MCP: %s", e)
 
     async def add_vulnerability(
         self,
@@ -814,10 +802,7 @@ class SecurityWorkflowManager:
         assessment.findings.append(finding)
 
         await self._save_assessment(assessment)
-        logger.info(
-            f"Added vulnerability {cve_id or title} to {host_ip} "
-            f"in assessment {assessment_id}"
-        )
+        logger.info("Added vulnerability %s to %s in assessment %s", cve_id or title, host_ip, assessment_id)
 
         # Issue #398: Create Memory MCP entities (uses extracted helper)
         await self._create_vulnerability_memory_entity(
@@ -873,7 +858,7 @@ class SecurityWorkflowManager:
             )
             await memory.create_vulnerability_entity(request=vuln_request)
         except Exception as e:
-            logger.warning(f"Failed to create vulnerability entity in Memory MCP: {e}")
+            logger.warning("Failed to create vulnerability entity in Memory MCP: %s", e)
 
     async def add_finding(
         self,
@@ -898,7 +883,7 @@ class SecurityWorkflowManager:
         assessment.findings.append(finding)
 
         await self._save_assessment(assessment)
-        logger.info(f"Added finding to assessment {assessment_id}: {finding.get('type')}")
+        logger.info("Added finding to assessment %s: %s", assessment_id, finding.get('type'))
 
         return assessment
 
@@ -941,7 +926,7 @@ class SecurityWorkflowManager:
         assessment.actions_taken.append(action_record)
 
         await self._save_assessment(assessment)
-        logger.debug(f"Recorded action in assessment {assessment_id}: {action}")
+        logger.debug("Recorded action in assessment %s: %s", assessment_id, action)
 
         return assessment
 
@@ -977,7 +962,7 @@ class SecurityWorkflowManager:
         })
 
         await self._save_assessment(assessment)
-        logger.error(f"Assessment {assessment_id} entered ERROR state: {error_message}")
+        logger.error("Assessment %s entered ERROR state: %s", assessment_id, error_message)
 
         return assessment
 
@@ -1003,12 +988,12 @@ class SecurityWorkflowManager:
             return None
 
         if assessment.phase != AssessmentPhase.ERROR:
-            logger.warning(f"Assessment {assessment_id} is not in ERROR state")
+            logger.warning("Assessment %s is not in ERROR state", assessment_id)
             return assessment
 
         valid_recovery = VALID_TRANSITIONS.get("ERROR", [])
         if target_phase not in valid_recovery:
-            logger.error(f"Cannot recover to phase {target_phase}")
+            logger.error("Cannot recover to phase %s", target_phase)
             return None
 
         assessment.phase = AssessmentPhase(target_phase)
@@ -1023,7 +1008,7 @@ class SecurityWorkflowManager:
         })
 
         await self._save_assessment(assessment)
-        logger.info(f"Assessment {assessment_id} recovered to {target_phase}")
+        logger.info("Assessment %s recovered to %s", assessment_id, target_phase)
 
         return assessment
 
@@ -1045,12 +1030,12 @@ class SecurityWorkflowManager:
             await redis.srem(self.REDIS_ACTIVE_INDEX, assessment_id)
 
             if deleted:
-                logger.info(f"Deleted assessment {assessment_id}")
+                logger.info("Deleted assessment %s", assessment_id)
                 return True
 
             return False
         except RedisError as e:
-            logger.error(f"Failed to delete assessment {assessment_id}: {e}")
+            logger.error("Failed to delete assessment %s: %s", assessment_id, e)
             raise RuntimeError(f"Failed to delete assessment: {e}")
 
     async def get_assessment_summary(

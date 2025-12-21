@@ -531,7 +531,7 @@ async def execute_workflow(
         import logging
 
         logger = logging.getLogger(__name__)
-        logger.error(f"Workflow execution error: {e}", exc_info=True)
+        logger.error("Workflow execution error: %s", e, exc_info=True)
         raise HTTPException(
             status_code=500, detail=f"Workflow execution failed: {str(e)}"
         )

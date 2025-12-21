@@ -288,7 +288,7 @@ async def create_entity(
             tags=entity_data.tags,
         )
 
-        logger.info(f"[{request_id}] Entity created successfully: {entity['id']}")
+        logger.info("[%s] Entity created successfully: %s", request_id, entity['id'])
 
         return JSONResponse(
             status_code=201,
@@ -301,10 +301,10 @@ async def create_entity(
         )
 
     except ValueError as e:
-        logger.warning(f"[{request_id}] Validation error creating entity: {e}")
+        logger.warning("[%s] Validation error creating entity: %s", request_id, e)
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"[{request_id}] Error creating entity: {e}")
+        logger.error("[%s] Error creating entity: %s", request_id, e)
         raise HTTPException(
             status_code=500, detail=f"Failed to create entity: {str(e)}"
         )
@@ -349,7 +349,7 @@ async def list_all_entities(
             limit=limit,
         )
 
-        logger.info(f"[{request_id}] Found {len(entities)} entities")
+        logger.info("[%s] Found %s entities", request_id, len(entities))
 
         return JSONResponse(
             status_code=200,
@@ -368,7 +368,7 @@ async def list_all_entities(
         )
 
     except Exception as e:
-        logger.error(f"[{request_id}] Error listing entities: {e}")
+        logger.error("[%s] Error listing entities: %s", request_id, e)
         raise HTTPException(
             status_code=500, detail=f"Failed to list entities: {str(e)}"
         )
@@ -402,19 +402,19 @@ async def get_entity_by_id(
     request_id = generate_request_id()
 
     try:
-        logger.info(f"[{request_id}] Retrieving entity: {entity_id}")
+        logger.info("[%s] Retrieving entity: %s", request_id, entity_id)
 
         entity = await memory_graph.get_entity(
             entity_id=entity_id, include_relations=include_relations
         )
 
         if entity is None:
-            logger.warning(f"[{request_id}] Entity not found: {entity_id}")
+            logger.warning("[%s] Entity not found: %s", request_id, entity_id)
             raise HTTPException(
                 status_code=404, detail=f"Entity not found: {entity_id}"
             )
 
-        logger.info(f"[{request_id}] Entity retrieved: {entity['name']}")
+        logger.info("[%s] Entity retrieved: %s", request_id, entity['name'])
 
         return JSONResponse(
             status_code=200,
@@ -424,7 +424,7 @@ async def get_entity_by_id(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[{request_id}] Error retrieving entity: {e}")
+        logger.error("[%s] Error retrieving entity: %s", request_id, e)
         raise HTTPException(
             status_code=500, detail=f"Failed to retrieve entity: {str(e)}"
         )
@@ -458,17 +458,17 @@ async def get_entity_by_name(
     request_id = generate_request_id()
 
     try:
-        logger.info(f"[{request_id}] Searching for entity by name: {name}")
+        logger.info("[%s] Searching for entity by name: %s", request_id, name)
 
         entity = await memory_graph.get_entity(
             entity_name=name, include_relations=include_relations
         )
 
         if entity is None:
-            logger.warning(f"[{request_id}] Entity not found: {name}")
+            logger.warning("[%s] Entity not found: %s", request_id, name)
             raise HTTPException(status_code=404, detail=f"Entity not found: {name}")
 
-        logger.info(f"[{request_id}] Entity found: {entity['id']}")
+        logger.info("[%s] Entity found: %s", request_id, entity['id'])
 
         return JSONResponse(
             status_code=200,
@@ -478,7 +478,7 @@ async def get_entity_by_name(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[{request_id}] Error searching entity: {e}")
+        logger.error("[%s] Error searching entity: %s", request_id, e)
         raise HTTPException(
             status_code=500, detail=f"Failed to search entity: {str(e)}"
         )
@@ -512,14 +512,14 @@ async def add_observations(
     request_id = generate_request_id()
 
     try:
-        logger.info(f"[{request_id}] Adding observations to entity: {entity_id}")
+        logger.info("[%s] Adding observations to entity: %s", request_id, entity_id)
         entity_name = await _get_entity_name_by_id(memory_graph, entity_id)
 
         updated_entity = await memory_graph.add_observations(
             entity_name=entity_name, observations=observation_data.observations
         )
         obs_count = len(observation_data.observations)
-        logger.info(f"[{request_id}] Added {obs_count} observations to {entity_name}")
+        logger.info("[%s] Added %s observations to %s", request_id, obs_count, entity_name)
 
         return JSONResponse(
             status_code=200,
@@ -534,10 +534,10 @@ async def add_observations(
     except HTTPException:
         raise
     except ValueError as e:
-        logger.warning(f"[{request_id}] Validation error adding observations: {e}")
+        logger.warning("[%s] Validation error adding observations: %s", request_id, e)
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"[{request_id}] Error adding observations: {e}")
+        logger.error("[%s] Error adding observations: %s", request_id, e)
         raise HTTPException(
             status_code=500, detail=f"Failed to add observations: {str(e)}"
         )
@@ -573,7 +573,7 @@ async def delete_entity(
     request_id = generate_request_id()
 
     try:
-        logger.info(f"[{request_id}] Deleting entity: {entity_id}")
+        logger.info("[%s] Deleting entity: %s", request_id, entity_id)
         entity_name = await _get_entity_name_by_id(memory_graph, entity_id)
 
         deleted = await memory_graph.delete_entity(
@@ -582,7 +582,7 @@ async def delete_entity(
         if not deleted:
             raise HTTPException(status_code=404, detail=f"Entity not found: {entity_id}")
 
-        logger.info(f"[{request_id}] Entity deleted: {entity_name}")
+        logger.info("[%s] Entity deleted: %s", request_id, entity_name)
 
         return JSONResponse(
             status_code=200,
@@ -602,7 +602,7 @@ async def delete_entity(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[{request_id}] Error deleting entity: {e}")
+        logger.error("[%s] Error deleting entity: %s", request_id, e)
         raise HTTPException(
             status_code=500, detail=f"Failed to delete entity: {str(e)}"
         )
@@ -653,7 +653,7 @@ async def create_relation(
             metadata=relation_data.metadata,
         )
 
-        logger.info(f"[{request_id}] Relation created successfully")
+        logger.info("[%s] Relation created successfully", request_id)
 
         return JSONResponse(
             status_code=201,
@@ -666,10 +666,10 @@ async def create_relation(
         )
 
     except ValueError as e:
-        logger.warning(f"[{request_id}] Validation error creating relation: {e}")
+        logger.warning("[%s] Validation error creating relation: %s", request_id, e)
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"[{request_id}] Error creating relation: {e}")
+        logger.error("[%s] Error creating relation: %s", request_id, e)
         raise HTTPException(
             status_code=500, detail=f"Failed to create relation: {str(e)}"
         )
@@ -711,7 +711,7 @@ async def get_related_entities(
     request_id = generate_request_id()
 
     try:
-        logger.info(f"[{request_id}] Getting related entities for: {entity_id}")
+        logger.info("[%s] Getting related entities for: %s", request_id, entity_id)
         entity_name = await _get_entity_name_by_id(memory_graph, entity_id)
 
         related = await memory_graph.get_related_entities(
@@ -720,7 +720,7 @@ async def get_related_entities(
             direction=direction,
             max_depth=max_depth,
         )
-        logger.info(f"[{request_id}] Found {len(related)} related entities")
+        logger.info("[%s] Found %s related entities", request_id, len(related))
 
         return JSONResponse(
             status_code=200,
@@ -744,7 +744,7 @@ async def get_related_entities(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[{request_id}] Error getting related entities: {e}")
+        logger.error("[%s] Error getting related entities: %s", request_id, e)
         raise HTTPException(
             status_code=500, detail=f"Failed to get related entities: {str(e)}"
         )
@@ -794,7 +794,7 @@ async def delete_relation(
                 detail=f"Relation not found: {from_entity} --[{relation_type}]--> {to_entity}",
             )
 
-        logger.info(f"[{request_id}] Relation deleted successfully")
+        logger.info("[%s] Relation deleted successfully", request_id)
 
         return JSONResponse(
             status_code=200,
@@ -814,7 +814,7 @@ async def delete_relation(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[{request_id}] Error deleting relation: {e}")
+        logger.error("[%s] Error deleting relation: %s", request_id, e)
         raise HTTPException(
             status_code=500, detail=f"Failed to delete relation: {str(e)}"
         )
@@ -868,7 +868,7 @@ async def search_entities(
             status=status,
             limit=limit,
         )
-        logger.info(f"[{request_id}] Search returned {len(entities)} entities")
+        logger.info("[%s] Search returned %s entities", request_id, len(entities))
 
         return JSONResponse(
             status_code=200,
@@ -890,7 +890,7 @@ async def search_entities(
         )
 
     except Exception as e:
-        logger.error(f"[{request_id}] Error searching entities: {e}")
+        logger.error("[%s] Error searching entities: %s", request_id, e)
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 
@@ -947,7 +947,7 @@ async def get_entity_graph(
                 ),
             }
 
-        logger.info(f"[{request_id}] Graph data prepared")
+        logger.info("[%s] Graph data prepared", request_id)
 
         return JSONResponse(
             status_code=200,
@@ -957,7 +957,7 @@ async def get_entity_graph(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[{request_id}] Error building graph: {e}")
+        logger.error("[%s] Error building graph: %s", request_id, e)
         raise HTTPException(status_code=500, detail=f"Failed to build graph: {str(e)}")
 
 
@@ -1010,7 +1010,7 @@ async def memory_health_check(
         )
 
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
+        logger.error("Health check failed: %s", e)
         return JSONResponse(
             status_code=503,
             content={

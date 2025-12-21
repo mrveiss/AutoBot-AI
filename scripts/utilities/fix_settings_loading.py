@@ -43,7 +43,7 @@ class SettingsLoadingFixer:
                 logger.info("✅ Backend health check passed")
                 return True
             else:
-                logger.error(f"❌ Backend health check failed: {response.status_code}")
+                logger.error("❌ Backend health check failed: %s", response.status_code)
                 self.issues_found.append(
                     "Backend health endpoint not responding correctly"
                 )
@@ -67,10 +67,10 @@ class SettingsLoadingFixer:
             if response.status_code == 200:
                 settings = response.json()
                 logger.info("✅ Settings endpoint accessible")
-                logger.info(f"📋 Retrieved {len(settings)} setting categories")
+                logger.info("📋 Retrieved %s setting categories", len(settings))
                 return settings
             else:
-                logger.error(f"❌ Settings endpoint returned: {response.status_code}")
+                logger.error("❌ Settings endpoint returned: %s", response.status_code)
                 self.issues_found.append(
                     f"Settings endpoint error: {response.status_code}"
                 )
@@ -81,7 +81,7 @@ class SettingsLoadingFixer:
             self.issues_found.append("Settings endpoint timeout")
             return None
         except Exception as e:
-            logger.error(f"❌ Settings endpoint error: {e}")
+            logger.error("❌ Settings endpoint error: %s", e)
             self.issues_found.append(f"Settings endpoint error: {str(e)}")
             return None
 
@@ -103,7 +103,7 @@ class SettingsLoadingFixer:
             missing_sections = [s for s in required_sections if s not in settings]
 
             if missing_sections:
-                logger.error(f"❌ Missing sections in settings.json: {missing_sections}")
+                logger.error("❌ Missing sections in settings.json: %s", missing_sections)
                 self.issues_found.append(
                     f"Missing settings sections: {missing_sections}"
                 )
@@ -113,11 +113,11 @@ class SettingsLoadingFixer:
             return True
 
         except json.JSONDecodeError as e:
-            logger.error(f"❌ Invalid JSON in settings.json: {e}")
+            logger.error("❌ Invalid JSON in settings.json: %s", e)
             self.issues_found.append("settings.json contains invalid JSON")
             return False
         except Exception as e:
-            logger.error(f"❌ Error reading settings.json: {e}")
+            logger.error("❌ Error reading settings.json: %s", e)
             self.issues_found.append(f"Error reading settings file: {str(e)}")
             return False
 
@@ -144,7 +144,7 @@ class SettingsLoadingFixer:
                 return False
 
         except Exception as e:
-            logger.error(f"❌ Error checking frontend processes: {e}")
+            logger.error("❌ Error checking frontend processes: %s", e)
             return False
 
     def restart_backend(self) -> bool:
@@ -182,7 +182,7 @@ class SettingsLoadingFixer:
                 return False
 
         except Exception as e:
-            logger.error(f"❌ Error restarting backend: {e}")
+            logger.error("❌ Error restarting backend: %s", e)
             return False
 
     def generate_browser_fix_script(self):
@@ -298,7 +298,7 @@ if (!validation.isValid) {
         # Save script to file
         script_file = Path("scripts/utilities/browser_settings_fix.js")
         script_file.write_text(script)
-        logger.info(f"✅ Browser fix script saved to: {script_file}")
+        logger.info("✅ Browser fix script saved to: %s", script_file)
 
         # Also display instructions
         logger.info("\n" + "=" * 70)
@@ -356,9 +356,9 @@ if (!validation.isValid) {
             logger.warning("⚠️ Frontend Server: Not detected")
 
         if self.issues_found:
-            logger.info(f"\n🔍 Issues Found ({len(self.issues_found)}):")
+            logger.info("\n🔍 Issues Found (%s):", len(self.issues_found))
             for issue in self.issues_found:
-                logger.info(f"  • {issue}")
+                logger.info("  • %s", issue)
 
         return all_good
 
@@ -382,9 +382,9 @@ if (!validation.isValid) {
 
         # Summary
         if self.fixes_applied:
-            logger.info(f"\n✅ Fixes Applied ({len(self.fixes_applied)}):")
+            logger.info("\n✅ Fixes Applied (%s):", len(self.fixes_applied))
             for fix in self.fixes_applied:
-                logger.info(f"  • {fix}")
+                logger.info("  • %s", fix)
 
         logger.info("\n💡 RECOMMENDED ACTIONS:")
         logger.info("1. If backend is still not responding:")

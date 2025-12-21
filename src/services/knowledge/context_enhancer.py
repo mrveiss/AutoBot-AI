@@ -65,11 +65,7 @@ class ConversationContextEnhancer:
             re.compile(p, re.IGNORECASE) for p in self.CONTEXT_QUESTION_PATTERNS
         ]
         # Issue #509: Combined entity pattern for single-pass extraction
-        # Original list kept for backward compatibility if needed
-        self._entity_re = [
-            re.compile(p, re.IGNORECASE) for p in self.ENTITY_PATTERNS
-        ]
-        # Combined pattern: O(1) regex compilation, O(n) matching
+        # O(1) regex compilation, O(n) matching instead of O(n*p)
         self._combined_entity_re = re.compile(
             "|".join(f"({p})" for p in self.ENTITY_PATTERNS),
             re.IGNORECASE

@@ -64,7 +64,7 @@ class RedisCompatibilityWrapper:
                     "Consider migrating to async operations."
                 )
             except Exception as e:
-                logger.error(f"Failed to create sync Redis client: {e}")
+                logger.error("Failed to create sync Redis client: %s", e)
                 raise ConnectionError(
                     f"Unable to create Redis client for {self.database_name}"
                 )
@@ -79,7 +79,7 @@ class RedisCompatibilityWrapper:
             db = await self._get_async_db()
             return await db.get(key)
         except RedisError as e:
-            logger.error(f"Redis aget failed for key '{key}': {e}")
+            logger.error("Redis aget failed for key '%s': %s", key, e)
             raise
 
     async def aset(
@@ -96,7 +96,7 @@ class RedisCompatibilityWrapper:
             db = await self._get_async_db()
             return await db.set(key, value, ex=ex, px=px, nx=nx, xx=xx)
         except RedisError as e:
-            logger.error(f"Redis aset failed for key '{key}': {e}")
+            logger.error("Redis aset failed for key '%s': %s", key, e)
             raise
 
     async def adelete(self, *keys: str) -> int:
@@ -105,7 +105,7 @@ class RedisCompatibilityWrapper:
             db = await self._get_async_db()
             return await db.delete(*keys)
         except RedisError as e:
-            logger.error(f"Redis adelete failed for keys {keys}: {e}")
+            logger.error("Redis adelete failed for keys %s: %s", keys, e)
             raise
 
     async def aexists(self, *keys: str) -> int:
@@ -114,7 +114,7 @@ class RedisCompatibilityWrapper:
             db = await self._get_async_db()
             return await db.exists(*keys)
         except RedisError as e:
-            logger.error(f"Redis aexists failed for keys {keys}: {e}")
+            logger.error("Redis aexists failed for keys %s: %s", keys, e)
             raise
 
     async def aexpire(self, key: str, seconds: int) -> bool:
@@ -123,7 +123,7 @@ class RedisCompatibilityWrapper:
             db = await self._get_async_db()
             return await db.expire(key, seconds)
         except RedisError as e:
-            logger.error(f"Redis aexpire failed for key '{key}': {e}")
+            logger.error("Redis aexpire failed for key '%s': %s", key, e)
             raise
 
     async def attl(self, key: str) -> int:
@@ -132,7 +132,7 @@ class RedisCompatibilityWrapper:
             db = await self._get_async_db()
             return await db.ttl(key)
         except RedisError as e:
-            logger.error(f"Redis attl failed for key '{key}': {e}")
+            logger.error("Redis attl failed for key '%s': %s", key, e)
             raise
 
     async def ahget(self, name: str, key: str) -> Optional[str]:
@@ -141,7 +141,7 @@ class RedisCompatibilityWrapper:
             db = await self._get_async_db()
             return await db.hget(name, key)
         except RedisError as e:
-            logger.error(f"Redis ahget failed for hash '{name}', key '{key}': {e}")
+            logger.error("Redis ahget failed for hash '%s', key '%s': %s", name, key, e)
             raise
 
     async def ahset(
@@ -152,7 +152,7 @@ class RedisCompatibilityWrapper:
             db = await self._get_async_db()
             return await db.hset(name, key, value)
         except RedisError as e:
-            logger.error(f"Redis ahset failed for hash '{name}', key '{key}': {e}")
+            logger.error("Redis ahset failed for hash '%s', key '%s': %s", name, key, e)
             raise
 
     async def ahgetall(self, name: str) -> dict:
@@ -161,7 +161,7 @@ class RedisCompatibilityWrapper:
             db = await self._get_async_db()
             return await db.hgetall(name)
         except RedisError as e:
-            logger.error(f"Redis ahgetall failed for hash '{name}': {e}")
+            logger.error("Redis ahgetall failed for hash '%s': %s", name, e)
             raise
 
     async def alrange(self, name: str, start: int, end: int) -> list:
@@ -171,7 +171,7 @@ class RedisCompatibilityWrapper:
             # Use the underlying Redis client for operations not wrapped
             return await async_db._redis.lrange(name, start, end)
         except RedisError as e:
-            logger.error(f"Redis alrange failed for list '{name}': {e}")
+            logger.error("Redis alrange failed for list '%s': %s", name, e)
             raise
 
     async def aping(self) -> bool:
@@ -180,7 +180,7 @@ class RedisCompatibilityWrapper:
             db = await self._get_async_db()
             return await db.ping()
         except RedisError as e:
-            logger.error(f"Redis aping failed: {e}")
+            logger.error("Redis aping failed: %s", e)
             return False
 
     # Sync methods (deprecated but supported for compatibility)
@@ -399,7 +399,7 @@ async def test_async_migration(database: str = "main") -> dict:
     except Exception as e:
         results["error"] = str(e)
         results["migration_ready"] = False
-        logger.error(f"Async migration test failed for database '{database}': {e}")
+        logger.error("Async migration test failed for database '%s': %s", database, e)
 
     return results
 
@@ -418,10 +418,10 @@ async def migrate_sync_to_async_example():
         # These will show deprecation warnings
         compat.set("example_key", "example_value", ex=60)
         value = compat.get("example_key")
-        logger.info(f"Sync result: {value}")
+        logger.info("Sync result: %s", value)
 
     except Exception as e:
-        logger.error(f"Sync operations failed: {e}")
+        logger.error("Sync operations failed: %s", e)
 
     # New async way (preferred)
     logger.info("NEW ASYNC WAY (preferred):")
@@ -431,17 +431,17 @@ async def migrate_sync_to_async_example():
         # Use async methods - no deprecation warnings
         await compat.aset("example_key_async", "example_value_async", ex=60)
         value = await compat.aget("example_key_async")
-        logger.info(f"Async result: {value}")
+        logger.info("Async result: %s", value)
 
         # Cleanup
         await compat.adelete("example_key", "example_key_async")
 
     except Exception as e:
-        logger.error(f"Async operations failed: {e}")
+        logger.error("Async operations failed: %s", e)
 
     # Test migration readiness
     test_results = await test_async_migration("main")
-    logger.info(f"Migration test results: {test_results}")
+    logger.info("Migration test results: %s", test_results)
 
 
 if __name__ == "__main__":

@@ -252,7 +252,7 @@ class EmbeddingPatternAnalyzer:
             await self._update_stats(request, cost)
 
             # Issue #372: Use model method for log summary
-            logger.debug(f"Recorded embedding usage: {request.get_log_summary()}")
+            logger.debug("Recorded embedding usage: %s", request.get_log_summary())
 
             return {
                 "status": "recorded",
@@ -263,7 +263,7 @@ class EmbeddingPatternAnalyzer:
             }
 
         except Exception as e:
-            logger.error(f"Failed to record embedding usage: {e}")
+            logger.error("Failed to record embedding usage: %s", e)
             return {"status": "error", "error": str(e)}
 
     async def _update_stats(self, request: EmbeddingUsageRequest, cost: float):
@@ -308,7 +308,7 @@ class EmbeddingPatternAnalyzer:
                 await pipe.execute()
 
         except Exception as e:
-            logger.error(f"Failed to update embedding stats: {e}")
+            logger.error("Failed to update embedding stats: %s", e)
 
     async def get_stats(
         self,
@@ -375,7 +375,7 @@ class EmbeddingPatternAnalyzer:
             }
 
         except Exception as e:
-            logger.error(f"Failed to get embedding stats: {e}")
+            logger.error("Failed to get embedding stats: %s", e)
             return {"status": "error", "error": str(e)}
 
     def _parse_model_stats(self, key: bytes, stats: dict) -> Optional[dict]:
@@ -431,7 +431,7 @@ class EmbeddingPatternAnalyzer:
             }
 
         except Exception as e:
-            logger.error(f"Failed to get model comparison: {e}")
+            logger.error("Failed to get model comparison: %s", e)
             return {"status": "error", "error": str(e)}
 
     async def get_batch_optimization_recommendations(self) -> Dict[str, Any]:
@@ -499,7 +499,7 @@ class EmbeddingPatternAnalyzer:
             }
 
         except Exception as e:
-            logger.error(f"Failed to get optimization recommendations: {e}")
+            logger.error("Failed to get optimization recommendations: %s", e)
             return {"status": "error", "error": str(e)}
 
 

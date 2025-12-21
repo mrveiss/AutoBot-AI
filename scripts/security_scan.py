@@ -91,7 +91,7 @@ class SecurityScanner:
                         "status": "vulnerabilities_found",
                         "vulnerabilities": vulns,
                     }
-                    logger.warning(f"⚠️ Safety found {len(vulns)} vulnerabilities")
+                    logger.warning("⚠️ Safety found %s vulnerabilities", len(vulns))
                 except json.JSONDecodeError:
                     results["safety"] = {"status": "error", "message": result.stderr}
         except FileNotFoundError:
@@ -129,7 +129,7 @@ class SecurityScanner:
                     )
 
             except (FileNotFoundError, json.JSONDecodeError) as e:
-                logger.warning(f"Error running npm audit: {e}")
+                logger.warning("Error running npm audit: %s", e)
                 results["npm_audit"] = {"status": "error", "message": str(e)}
         else:
             results["npm_audit"] = {"status": "not_applicable"}
@@ -224,6 +224,14 @@ class SecurityScanner:
             r"-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----",
         ]
 
+        # Issue #506: Precompile and combine patterns - O(1) instead of O(p) per line
+        # Also fixes: import re was inside loop (very inefficient)
+        import re
+        combined_pattern = re.compile(
+            "|".join(f"({p})" for p in secret_patterns),
+            re.IGNORECASE
+        )
+
         found_secrets = []
         source_dirs = ["src/", "backend/"]
 
@@ -235,25 +243,23 @@ class SecurityScanner:
             for py_file in source_path.rglob("*.py"):
                 try:
                     content = py_file.read_text(encoding="utf-8")
+                    # Issue #506: Single pattern search per line
                     for i, line in enumerate(content.splitlines(), 1):
-                        for pattern in secret_patterns:
-                            import re
-
-                            if re.search(pattern, line, re.IGNORECASE):
-                                found_secrets.append(
-                                    {
-                                        "file": str(
-                                            py_file.relative_to(self.project_root)
-                                        ),
-                                        "line": i,
-                                        "pattern": "potential_secret",
-                                        "line_content": line.strip()[
-                                            :100
-                                        ],  # Truncate for safety
-                                    }
-                                )
+                        if combined_pattern.search(line):
+                            found_secrets.append(
+                                {
+                                    "file": str(
+                                        py_file.relative_to(self.project_root)
+                                    ),
+                                    "line": i,
+                                    "pattern": "potential_secret",
+                                    "line_content": line.strip()[
+                                        :100
+                                    ],  # Truncate for safety
+                                }
+                            )
                 except Exception as e:
-                    logger.debug(f"Error reading {py_file}: {e}")
+                    logger.debug("Error reading %s: %s", py_file, e)
 
         results["pattern_detection"] = {
             "status": "completed",
@@ -264,7 +270,7 @@ class SecurityScanner:
         if len(found_secrets) == 0:
             logger.info("✅ No obvious hardcoded secrets detected")
         else:
-            logger.warning(f"⚠️ Found {len(found_secrets)} potential hardcoded secrets")
+            logger.warning("⚠️ Found %s potential hardcoded secrets", len(found_secrets))
 
         return results
 
@@ -326,7 +332,7 @@ class SecurityScanner:
                     )
 
                 except Exception as e:
-                    logger.debug(f"Error reading {py_file}: {e}")
+                    logger.debug("Error reading %s: %s", py_file, e)
 
         results["best_practices"] = {
             "security_imports": security_imports,
@@ -335,9 +341,9 @@ class SecurityScanner:
             "status": "good" if security_imports > 0 else "needs_improvement",
         }
 
-        logger.info(f"✅ Security imports: {security_imports}")
-        logger.info(f"✅ Validation patterns: {validation_patterns}")
-        logger.info(f"✅ Error handling patterns: {error_handling}")
+        logger.info("✅ Security imports: %s", security_imports)
+        logger.info("✅ Validation patterns: %s", validation_patterns)
+        logger.info("✅ Error handling patterns: %s", error_handling)
 
         return results
 
@@ -418,8 +424,8 @@ class SecurityScanner:
             f.write(self.generate_markdown_report())
 
         logger.info("📄 Reports saved to:")
-        logger.info(f"  JSON: {json_report_path}")
-        logger.info(f"  Markdown: {md_report_path}")
+        logger.info("  JSON: %s", json_report_path)
+        logger.info("  Markdown: %s", md_report_path)
 
     def generate_markdown_report(self) -> str:
         """Generate markdown security report"""
@@ -522,13 +528,13 @@ class SecurityScanner:
         logger.info(
             f"{status_emoji.get(summary['overall_status'], '❓')} Overall Status: {summary['overall_status'].upper()}"
         )
-        logger.info(f"🔴 Critical Issues: {summary['critical_issues']}")
-        logger.info(f"🟡 Warnings: {summary['warnings']}")
+        logger.info("🔴 Critical Issues: %s", summary['critical_issues'])
+        logger.info("🟡 Warnings: %s", summary['warnings'])
 
         if summary.get("recommendations"):
             logger.info("\n📋 Recommended Actions:")
             for i, rec in enumerate(summary["recommendations"], 1):
-                logger.info(f"  {i}. {rec}")
+                logger.info("  %s. %s", i, rec)
 
         logger.info("=" * 50)
 

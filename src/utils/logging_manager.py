@@ -175,9 +175,9 @@ class LoggingManager:
                 )
                 try:
                     os.rename(log_file, backup_path)
-                    _logger.info(f"Rotated {log_file} to {backup_path}")
+                    _logger.info("Rotated %s to %s", log_file, backup_path)
                 except OSError as e:
-                    _logger.error(f"Failed to rotate {log_file}: {e}")
+                    _logger.error("Failed to rotate %s: %s", log_file, e)
 
 
 # Convenience functions for common logging patterns

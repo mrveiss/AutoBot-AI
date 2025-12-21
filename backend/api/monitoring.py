@@ -246,7 +246,7 @@ class MonitoringWebSocketManager:
             try:
                 await connection.send_text(message)
             except Exception as e:
-                logger.warning(f"Failed to send WebSocket message: {e}")
+                logger.warning("Failed to send WebSocket message: %s", e)
                 disconnected.append(connection)
 
         # Remove disconnected connections
@@ -273,7 +273,7 @@ class MonitoringWebSocketManager:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error in periodic updates: {e}")
+                logger.error("Error in periodic updates: %s", e)
                 await asyncio.sleep(self.update_interval)
 
 
@@ -940,12 +940,12 @@ async def realtime_monitoring_websocket(websocket: WebSocket):
                 if handler:
                     await handler(websocket, command)
             except json.JSONDecodeError as e:
-                logger.debug(f"Invalid JSON in monitoring WebSocket: {e}")
+                logger.debug("Invalid JSON in monitoring WebSocket: %s", e)
 
     except WebSocketDisconnect:
         ws_manager.disconnect(websocket)
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        logger.error("WebSocket error: %s", e)
         ws_manager.disconnect(websocket)
 
 

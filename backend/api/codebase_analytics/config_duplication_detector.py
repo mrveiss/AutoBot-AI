@@ -191,7 +191,7 @@ class ConfigDuplicationDetector:
                     self._process_dataclass_fields(node, filepath)
 
         except Exception as e:
-            logger.debug(f"Could not analyze {filepath}: {e}")
+            logger.debug("Could not analyze %s: %s", filepath, e)
 
     def scan_directory(self, directory: str = None) -> None:
         """

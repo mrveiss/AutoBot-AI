@@ -100,7 +100,7 @@ class GPUAccelerationOptimizer:
 
         self.logger.info("GPU Acceleration Optimizer initialized")
         if self.gpu_available:
-            self.logger.info(f"GPU capabilities detected: {self.gpu_capabilities}")
+            self.logger.info("GPU capabilities detected: %s", self.gpu_capabilities)
 
     async def _apply_optimization_passes(self) -> tuple:
         """Apply all optimization passes and collect results (Issue #398: extracted).
@@ -216,7 +216,7 @@ class GPUAccelerationOptimizer:
             return result
 
         except Exception as e:
-            self.logger.error(f"Multi-modal optimization failed: {e}")
+            self.logger.error("Multi-modal optimization failed: %s", e)
             return GPUOptimizationResult.create_failed("multimodal_workload", str(e))
 
     async def _collect_performance_baseline(self) -> Dict[str, float]:
@@ -246,7 +246,7 @@ class GPUAccelerationOptimizer:
             return baseline
 
         except Exception as e:
-            self.logger.error(f"Error collecting performance baseline: {e}")
+            self.logger.error("Error collecting performance baseline: %s", e)
             return {}
 
     def _calculate_performance_improvement(
@@ -287,7 +287,7 @@ class GPUAccelerationOptimizer:
             return sum(improvements) / len(improvements) if improvements else 0.0
 
         except Exception as e:
-            self.logger.error(f"Error calculating performance improvement: {e}")
+            self.logger.error("Error calculating performance improvement: %s", e)
             return 0.0
 
     async def benchmark_gpu_performance(self) -> Dict[str, Any]:
@@ -312,13 +312,13 @@ class GPUAccelerationOptimizer:
                     if hasattr(self.config, key):
                         setattr(self.config, key, value)
                     else:
-                        self.logger.warning(f"Unknown config key: {key}")
+                        self.logger.warning("Unknown config key: %s", key)
 
             self.logger.info("GPU optimization configuration updated")
             return True
 
         except Exception as e:
-            self.logger.error(f"Failed to update optimization config: {e}")
+            self.logger.error("Failed to update optimization config: %s", e)
             return False
 
     async def get_optimization_history(self) -> List[GPUOptimizationResult]:

@@ -38,7 +38,7 @@ def _parse_command_data_safe(command_data: bytes, state_filter: Optional[Command
         if state_filter is None or cmd.state == state_filter:
             return cmd
     except (json.JSONDecodeError, Exception) as e:
-        logger.debug(f"Failed to parse command data: {e}")
+        logger.debug("Failed to parse command data: %s", e)
     return None
 
 
@@ -67,7 +67,7 @@ class CommandExecutionQueue:
                     "⚠️ Redis not available for command queue - commands won't persist across restarts"
                 )
         except Exception as e:
-            logger.error(f"Failed to initialize Redis for command queue: {e}")
+            logger.error("Failed to initialize Redis for command queue: %s", e)
 
     def _get_command_key(self, command_id: str) -> str:
         """Get Redis key for command by ID"""
@@ -128,7 +128,7 @@ class CommandExecutionQueue:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to add command to queue: {e}")
+            logger.error("Failed to add command to queue: %s", e)
             return False
 
     async def get_command(self, command_id: str) -> Optional[CommandExecution]:
@@ -156,7 +156,7 @@ class CommandExecutionQueue:
             return CommandExecution.from_dict(data)
 
         except Exception as e:
-            logger.error(f"Failed to get command {command_id}: {e}")
+            logger.error("Failed to get command %s: %s", command_id, e)
             return None
 
     async def update_command(self, command: CommandExecution) -> bool:
@@ -196,7 +196,7 @@ class CommandExecutionQueue:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to update command {command.command_id}: {e}")
+            logger.error("Failed to update command %s: %s", command.command_id, e)
             return False
 
     async def get_terminal_commands(
@@ -296,7 +296,7 @@ class CommandExecutionQueue:
             return commands
 
         except Exception as e:
-            logger.error(f"Failed to get chat commands for {chat_id}: {e}")
+            logger.error("Failed to get chat commands for %s: %s", chat_id, e)
             return []
 
     async def get_pending_approvals(self) -> List[CommandExecution]:
@@ -339,7 +339,7 @@ class CommandExecutionQueue:
             return commands
 
         except Exception as e:
-            logger.error(f"Failed to get pending approvals: {e}")
+            logger.error("Failed to get pending approvals: %s", e)
             return []
 
     async def get_latest_pending_for_chat(
@@ -375,7 +375,7 @@ class CommandExecutionQueue:
         """
         command = await self.get_command(command_id)
         if not command:
-            logger.error(f"Cannot approve - command {command_id} not found")
+            logger.error("Cannot approve - command %s not found", command_id)
             return False
 
         if not command.is_pending():
@@ -403,7 +403,7 @@ class CommandExecutionQueue:
         """
         command = await self.get_command(command_id)
         if not command:
-            logger.error(f"Cannot deny - command {command_id} not found")
+            logger.error("Cannot deny - command %s not found", command_id)
             return False
 
         if not command.is_pending():
@@ -427,7 +427,7 @@ class CommandExecutionQueue:
         """
         command = await self.get_command(command_id)
         if not command:
-            logger.error(f"Cannot start execution - command {command_id} not found")
+            logger.error("Cannot start execution - command %s not found", command_id)
             return False
 
         if not command.is_approved():
@@ -456,7 +456,7 @@ class CommandExecutionQueue:
         """
         command = await self.get_command(command_id)
         if not command:
-            logger.error(f"Cannot complete - command {command_id} not found")
+            logger.error("Cannot complete - command %s not found", command_id)
             return False
 
         command.complete(output, stderr, return_code)

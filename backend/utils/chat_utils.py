@@ -345,7 +345,7 @@ def log_chat_error(
         ... except Exception as e:
         ...     log_chat_error(e, context="message_send", request_id="abc-123")
     """
-    logger.error(f"[{context}] [{request_id}] Error: {str(error)}", exc_info=True)
+    logger.error("[%s] [%s] Error: %s", context, request_id, str(error), exc_info=True)
 
 
 def log_chat_event(
@@ -379,7 +379,7 @@ def log_chat_event(
     if details:
         event_data["details"] = details
 
-    logger.info(f"Chat Event: {event_data}")
+    logger.info("Chat Event: %s", event_data)
 
 
 # =============================================================================

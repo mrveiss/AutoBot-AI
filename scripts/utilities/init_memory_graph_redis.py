@@ -97,8 +97,8 @@ class MemoryGraphInitializer:
             True if connection successful, False otherwise
         """
         try:
-            logger.info(f"Connecting to Redis at {self.redis_host}:{self.redis_port} DB {self.redis_db}...")
-            logger.info(f"Using key prefix: {self.entity_prefix}")
+            logger.info("Connecting to Redis at %s:%s DB %s...", self.redis_host, self.redis_port, self.redis_db)
+            logger.info("Using key prefix: %s", self.entity_prefix)
 
             self.redis_client = redis.Redis(
                 host=self.redis_host,
@@ -122,10 +122,10 @@ class MemoryGraphInitializer:
             return True
 
         except redis.ConnectionError as e:
-            logger.error(f"Failed to connect to Redis: {e}")
+            logger.error("Failed to connect to Redis: %s", e)
             return False
         except Exception as e:
-            logger.error(f"Unexpected error during connection: {e}")
+            logger.error("Unexpected error during connection: %s", e)
             logger.error(traceback.format_exc())
             return False
 
@@ -145,19 +145,19 @@ class MemoryGraphInitializer:
             for module in required_modules:
                 if module.lower() in modules_str.lower():
                     available_modules.append(module)
-                    logger.info(f"✓ Module {module} available")
+                    logger.info("✓ Module %s available", module)
                 else:
-                    logger.error(f"✗ Module {module} NOT available")
+                    logger.error("✗ Module %s NOT available", module)
 
             if len(available_modules) == len(required_modules):
                 logger.info("✓ All required Redis modules verified")
                 return True
             else:
-                logger.error(f"Missing modules: {set(required_modules) - set(available_modules)}")
+                logger.error("Missing modules: %s", set(required_modules) - set(available_modules))
                 return False
 
         except Exception as e:
-            logger.error(f"Failed to verify Redis modules: {e}")
+            logger.error("Failed to verify Redis modules: %s", e)
             return False
 
     def create_indexes(self) -> bool:
@@ -172,14 +172,14 @@ class MemoryGraphInitializer:
             # Create primary entity index
             if self._create_entity_index():
                 self.created_indexes.append(self.entity_index)
-                logger.info(f"✓ Created entity index: {self.entity_index}")
+                logger.info("✓ Created entity index: %s", self.entity_index)
             else:
                 return False
 
             # Create full-text search index
             if self._create_fulltext_index():
                 self.created_indexes.append(self.fulltext_index)
-                logger.info(f"✓ Created full-text index: {self.fulltext_index}")
+                logger.info("✓ Created full-text index: %s", self.fulltext_index)
             else:
                 return False
 
@@ -187,7 +187,7 @@ class MemoryGraphInitializer:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to create indexes: {e}")
+            logger.error("Failed to create indexes: %s", e)
             logger.error(traceback.format_exc())
             return False
 
@@ -213,9 +213,9 @@ class MemoryGraphInitializer:
             # Check if index already exists
             try:
                 self.redis_client.ft(self.entity_index).info()
-                logger.warning(f"Index {self.entity_index} already exists, dropping...")
+                logger.warning("Index %s already exists, dropping...", self.entity_index)
                 self.redis_client.ft(self.entity_index).dropindex(delete_documents=False)
-                logger.info(f"Dropped existing index {self.entity_index}")
+                logger.info("Dropped existing index %s", self.entity_index)
             except redis.ResponseError:
                 # Index doesn't exist, that's fine
                 pass
@@ -262,13 +262,13 @@ class MemoryGraphInitializer:
 
         except redis.ResponseError as e:
             if "Index already exists" in str(e):
-                logger.warning(f"Index {self.entity_index} already exists")
+                logger.warning("Index %s already exists", self.entity_index)
                 return True
             else:
-                logger.error(f"Redis error creating entity index: {e}")
+                logger.error("Redis error creating entity index: %s", e)
                 return False
         except Exception as e:
-            logger.error(f"Failed to create entity index: {e}")
+            logger.error("Failed to create entity index: %s", e)
             logger.error(traceback.format_exc())
             return False
 
@@ -286,9 +286,9 @@ class MemoryGraphInitializer:
             # Check if index already exists
             try:
                 self.redis_client.ft(self.fulltext_index).info()
-                logger.warning(f"Index {self.fulltext_index} already exists, dropping...")
+                logger.warning("Index %s already exists, dropping...", self.fulltext_index)
                 self.redis_client.ft(self.fulltext_index).dropindex(delete_documents=False)
-                logger.info(f"Dropped existing index {self.fulltext_index}")
+                logger.info("Dropped existing index %s", self.fulltext_index)
             except redis.ResponseError:
                 # Index doesn't exist, that's fine
                 pass
@@ -315,13 +315,13 @@ class MemoryGraphInitializer:
 
         except redis.ResponseError as e:
             if "Index already exists" in str(e):
-                logger.warning(f"Index {self.fulltext_index} already exists")
+                logger.warning("Index %s already exists", self.fulltext_index)
                 return True
             else:
-                logger.error(f"Redis error creating full-text index: {e}")
+                logger.error("Redis error creating full-text index: %s", e)
                 return False
         except Exception as e:
-            logger.error(f"Failed to create full-text index: {e}")
+            logger.error("Failed to create full-text index: %s", e)
             logger.error(traceback.format_exc())
             return False
 
@@ -335,15 +335,15 @@ class MemoryGraphInitializer:
             Migration statistics and results
         """
         try:
-            logger.info(f"Starting conversation migration from {transcript_dir}...")
+            logger.info("Starting conversation migration from %s...", transcript_dir)
 
             if not transcript_dir.exists():
-                logger.error(f"Transcript directory not found: {transcript_dir}")
+                logger.error("Transcript directory not found: %s", transcript_dir)
                 return {"status": "error", "message": "Directory not found"}
 
             # Get all transcript files
             transcript_files = list(transcript_dir.glob("*.json"))
-            logger.info(f"Found {len(transcript_files)} conversation transcripts")
+            logger.info("Found %s conversation transcripts", len(transcript_files))
 
             if not transcript_files:
                 logger.warning("No transcript files to migrate")
@@ -356,25 +356,25 @@ class MemoryGraphInitializer:
                     entity = self._conversation_to_entity(transcript_path)
                     if entity:
                         entities.append(entity)
-                        logger.debug(f"✓ Converted {transcript_path.name}")
+                        logger.debug("✓ Converted %s", transcript_path.name)
                 except Exception as e:
-                    logger.warning(f"Failed to convert {transcript_path.name}: {e}")
+                    logger.warning("Failed to convert %s: %s", transcript_path.name, e)
                     continue
 
-            logger.info(f"Converted {len(entities)} transcripts to entities")
+            logger.info("Converted %s transcripts to entities", len(entities))
 
             # Extract relations based on shared topics
             relations = self._extract_conversation_relations(entities)
-            logger.info(f"Extracted {len(relations)} relations between entities")
+            logger.info("Extracted %s relations between entities", len(relations))
 
             # Write entities and relations to Redis
             stats = self._write_entities_and_relations(entities, relations)
 
-            logger.info(f"✓ Migration complete: {stats['entities_created']} entities, {stats['relations_created']} relations")
+            logger.info("✓ Migration complete: %s entities, %s relations", stats['entities_created'], stats['relations_created'])
             return stats
 
         except Exception as e:
-            logger.error(f"Migration failed: {e}")
+            logger.error("Migration failed: %s", e)
             logger.error(traceback.format_exc())
             return {"status": "error", "message": str(e)}
 
@@ -457,7 +457,7 @@ class MemoryGraphInitializer:
             return entity
 
         except Exception as e:
-            logger.error(f"Failed to convert {transcript_path.name}: {e}")
+            logger.error("Failed to convert %s: %s", transcript_path.name, e)
             return None
 
     def _extract_conversation_relations(self, entities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -563,7 +563,7 @@ class MemoryGraphInitializer:
             }
 
         except Exception as e:
-            logger.error(f"Failed to write entities and relations: {e}")
+            logger.error("Failed to write entities and relations: %s", e)
             logger.error(traceback.format_exc())
             return {
                 "status": "error",
@@ -593,9 +593,9 @@ class MemoryGraphInitializer:
                 info = self.redis_client.ft(self.entity_index).info()
                 validation_results["entity_index"] = True
                 validation_results["details"]["entity_index"] = self._parse_index_info(info)
-                logger.info(f"✓ Entity index validated: {self.entity_index}")
+                logger.info("✓ Entity index validated: %s", self.entity_index)
             except redis.ResponseError as e:
-                logger.error(f"✗ Entity index validation failed: {e}")
+                logger.error("✗ Entity index validation failed: %s", e)
                 validation_results["details"]["entity_index"] = str(e)
 
             # Validate full-text index
@@ -603,9 +603,9 @@ class MemoryGraphInitializer:
                 info = self.redis_client.ft(self.fulltext_index).info()
                 validation_results["fulltext_index"] = True
                 validation_results["details"]["fulltext_index"] = self._parse_index_info(info)
-                logger.info(f"✓ Full-text index validated: {self.fulltext_index}")
+                logger.info("✓ Full-text index validated: %s", self.fulltext_index)
             except redis.ResponseError as e:
-                logger.error(f"✗ Full-text index validation failed: {e}")
+                logger.error("✗ Full-text index validation failed: %s", e)
                 validation_results["details"]["fulltext_index"] = str(e)
 
             # Test vector search functionality (if entities exist)
@@ -614,15 +614,15 @@ class MemoryGraphInitializer:
                 results = self.redis_client.ft(self.entity_index).search(query)
                 validation_results["vector_search"] = True
                 validation_results["details"]["vector_search"] = f"Search functional, {results.total} documents"
-                logger.info(f"✓ Vector search validated: {results.total} documents indexed")
+                logger.info("✓ Vector search validated: %s documents indexed", results.total)
             except Exception as e:
-                logger.warning(f"Vector search validation failed (may be no documents yet): {e}")
+                logger.warning("Vector search validation failed (may be no documents yet): %s", e)
                 validation_results["details"]["vector_search"] = str(e)
 
             return validation_results
 
         except Exception as e:
-            logger.error(f"Index validation failed: {e}")
+            logger.error("Index validation failed: %s", e)
             logger.error(traceback.format_exc())
             return {"status": "error", "message": str(e)}
 
@@ -653,7 +653,7 @@ class MemoryGraphInitializer:
             }
 
         except Exception as e:
-            logger.warning(f"Failed to parse index info: {e}")
+            logger.warning("Failed to parse index info: %s", e)
             return {"error": str(e)}
 
     def benchmark_performance(self) -> Dict[str, Any]:
@@ -675,7 +675,7 @@ class MemoryGraphInitializer:
                     self.redis_client.json().get(f"{self.entity_prefix}{entity_id}")
                     duration = (time.perf_counter() - start) * 1000
                     benchmarks["entity_lookup_ms"] = round(duration, 3)
-                    logger.info(f"Entity lookup: {benchmarks['entity_lookup_ms']}ms")
+                    logger.info("Entity lookup: %sms", benchmarks['entity_lookup_ms'])
 
             # Benchmark 2: Full-text search
             start = time.perf_counter()
@@ -685,9 +685,9 @@ class MemoryGraphInitializer:
                 duration = (time.perf_counter() - start) * 1000
                 benchmarks["fulltext_search_ms"] = round(duration, 3)
                 benchmarks["search_results_count"] = results.total
-                logger.info(f"Full-text search: {benchmarks['fulltext_search_ms']}ms ({results.total} results)")
+                logger.info("Full-text search: %sms (%s results)", benchmarks['fulltext_search_ms'], results.total)
             except Exception as e:
-                logger.warning(f"Search benchmark failed: {e}")
+                logger.warning("Search benchmark failed: %s", e)
                 benchmarks["fulltext_search_ms"] = None
 
             # Benchmark 3: Count by type
@@ -697,9 +697,9 @@ class MemoryGraphInitializer:
                 results = self.redis_client.ft(self.entity_index).search(query)
                 duration = (time.perf_counter() - start) * 1000
                 benchmarks["count_by_type_ms"] = round(duration, 3)
-                logger.info(f"Count by type: {benchmarks['count_by_type_ms']}ms")
+                logger.info("Count by type: %sms", benchmarks['count_by_type_ms'])
             except Exception as e:
-                logger.warning(f"Count benchmark failed: {e}")
+                logger.warning("Count benchmark failed: %s", e)
                 benchmarks["count_by_type_ms"] = None
 
             # Summary
@@ -719,7 +719,7 @@ class MemoryGraphInitializer:
             return benchmarks
 
         except Exception as e:
-            logger.error(f"Benchmark failed: {e}")
+            logger.error("Benchmark failed: %s", e)
             logger.error(traceback.format_exc())
             return {"status": "error", "message": str(e)}
 
@@ -764,15 +764,15 @@ class MemoryGraphInitializer:
             for index_name in self.created_indexes:
                 try:
                     self.redis_client.ft(index_name).dropindex(delete_documents=False)
-                    logger.info(f"✓ Dropped index: {index_name}")
+                    logger.info("✓ Dropped index: %s", index_name)
                 except redis.ResponseError as e:
-                    logger.warning(f"Could not drop index {index_name}: {e}")
+                    logger.warning("Could not drop index %s: %s", index_name, e)
 
             logger.info("✓ Rollback complete")
             return True
 
         except Exception as e:
-            logger.error(f"Rollback failed: {e}")
+            logger.error("Rollback failed: %s", e)
             return False
 
     def cleanup(self):
@@ -782,7 +782,7 @@ class MemoryGraphInitializer:
                 self.redis_client.close()
                 logger.info("Redis connection closed")
         except Exception as e:
-            logger.warning(f"Error during cleanup: {e}")
+            logger.warning("Error during cleanup: %s", e)
 
 
 def main():
@@ -881,7 +881,7 @@ def main():
         logger.warning("Interrupted by user")
         sys.exit(1)
     except Exception as e:
-        logger.error(f"Initialization failed: {e}")
+        logger.error("Initialization failed: %s", e)
         logger.error(traceback.format_exc())
         sys.exit(1)
     finally:

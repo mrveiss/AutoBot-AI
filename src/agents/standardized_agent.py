@@ -150,7 +150,7 @@ class StandardizedAgent(BaseAgent):
             self._last_request_time = start_time
 
         try:
-            self.logger.debug(f"Processing request {request.request_id} with action: {request.action}")
+            self.logger.debug("Processing request %s with action: %s", request.request_id, request.action)
 
             # Validate and get handler (Issue #398: extracted)
             error_response, handler_config, handler_method = self._validate_action_and_handler(request)
@@ -163,7 +163,7 @@ class StandardizedAgent(BaseAgent):
             async with self._stats_lock:
                 self._total_processing_time += processing_time
 
-            self.logger.debug(f"Request {request.request_id} processed successfully in {processing_time:.3f}s")
+            self.logger.debug("Request %s processed successfully in %ss", request.request_id, processing_time:.3f)
             return self._build_success_response(request, result, processing_time)
 
         except Exception as e:
@@ -173,7 +173,7 @@ class StandardizedAgent(BaseAgent):
                 self._last_error = str(e)
 
             processing_time = time.time() - start_time
-            self.logger.error(f"Error processing request {request.request_id}: {e}")
+            self.logger.error("Error processing request %s: %s", request.request_id, e)
 
             return self._create_error_response(
                 request,
@@ -280,11 +280,11 @@ class StandardizedAgent(BaseAgent):
 
     async def cleanup(self):
         """Standardized cleanup with logging (thread-safe)"""
-        self.logger.info(f"Cleaning up {self.agent_type} agent")
+        self.logger.info("Cleaning up %s agent", self.agent_type)
 
         # Log final stats
         stats = self.get_performance_stats()
-        self.logger.info(f"Final stats: {stats}")
+        self.logger.info("Final stats: %s", stats)
 
         # Reset counters (thread-safe)
         async with self._stats_lock:

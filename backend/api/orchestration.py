@@ -53,7 +53,7 @@ async def execute_workflow(request: WorkflowRequest):
     - Automatic failover and retry logic
     """
     try:
-        logger.info(f"Executing workflow for goal: {request.goal}")
+        logger.info("Executing workflow for goal: %s", request.goal)
 
         # Update max parallel tasks if specified
         if request.max_parallel_tasks:
@@ -111,7 +111,7 @@ async def execute_workflow(request: WorkflowRequest):
             )
 
     except Exception as e:
-        logger.error(f"Workflow execution error: {e}")
+        logger.error("Workflow execution error: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Workflow execution failed: {str(e)}"
         )
@@ -130,7 +130,7 @@ async def create_workflow_plan(request: WorkflowRequest):
     Useful for previewing what actions will be taken before execution.
     """
     try:
-        logger.info(f"Creating workflow plan for: {request.goal}")
+        logger.info("Creating workflow plan for: %s", request.goal)
 
         # Create plan
         plan = await enhanced_orchestrator.create_workflow_plan(
@@ -171,7 +171,7 @@ async def create_workflow_plan(request: WorkflowRequest):
         )
 
     except Exception as e:
-        logger.error(f"Plan creation error: {e}")
+        logger.error("Plan creation error: %s", e)
         raise HTTPException(status_code=500, detail=f"Plan creation failed: {str(e)}")
 
 
@@ -195,7 +195,7 @@ async def get_agent_performance():
         )
 
     except Exception as e:
-        logger.error(f"Performance report error: {e}")
+        logger.error("Performance report error: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to get performance report: {str(e)}"
         )
@@ -222,7 +222,7 @@ async def recommend_agents(request: AgentRecommendationRequest):
             try:
                 capabilities_needed.add(AgentCapability(cap_str))
             except ValueError:
-                logger.warning(f"Unknown capability: {cap_str}")
+                logger.warning("Unknown capability: %s", cap_str)
 
         if not capabilities_needed:
             raise HTTPException(
@@ -246,7 +246,7 @@ async def recommend_agents(request: AgentRecommendationRequest):
         )
 
     except Exception as e:
-        logger.error(f"Agent recommendation error: {e}")
+        logger.error("Agent recommendation error: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to get recommendations: {str(e)}"
         )
@@ -286,7 +286,7 @@ async def get_active_workflows():
         )
 
     except Exception as e:
-        logger.error(f"Active workflows error: {e}")
+        logger.error("Active workflows error: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to get active workflows: {str(e)}"
         )
@@ -374,7 +374,7 @@ async def get_agent_capabilities():
         )
 
     except Exception as e:
-        logger.error(f"Capabilities error: {e}")
+        logger.error("Capabilities error: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to get capabilities: {str(e)}"
         )
@@ -417,7 +417,7 @@ async def get_orchestration_status():
         )
 
     except Exception as e:
-        logger.error(f"Status error: {e}")
+        logger.error("Status error: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
 
 

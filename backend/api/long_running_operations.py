@@ -201,11 +201,11 @@ async def start_codebase_indexing(
 
         result = await manager.router.routes[0].endpoint(create_request)
 
-        logger.info(f"Started codebase indexing operation: {result['operation_id']}")
+        logger.info("Started codebase indexing operation: %s", result['operation_id'])
         return result
 
     except Exception as e:
-        logger.error(f"Failed to start codebase indexing: {e}")
+        logger.error("Failed to start codebase indexing: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to start operation: {str(e)}"
         )
@@ -276,7 +276,7 @@ async def start_comprehensive_testing(
         return result
 
     except Exception as e:
-        logger.error(f"Failed to start comprehensive testing: {e}")
+        logger.error("Failed to start comprehensive testing: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to start operation: {str(e)}"
         )
@@ -333,7 +333,7 @@ async def start_knowledge_base_population(
         return result
 
     except Exception as e:
-        logger.error(f"Failed to start knowledge base population: {e}")
+        logger.error("Failed to start knowledge base population: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to start operation: {str(e)}"
         )
@@ -383,11 +383,11 @@ async def start_security_scan(
 
         result = await manager.router.routes[0].endpoint(create_request)
 
-        logger.info(f"Started security scan operation: {result['operation_id']}")
+        logger.info("Started security scan operation: %s", result['operation_id'])
         return result
 
     except Exception as e:
-        logger.error(f"Failed to start security scan: {e}")
+        logger.error("Failed to start security scan: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to start operation: {str(e)}"
         )
@@ -434,7 +434,7 @@ async def migrate_existing_operation(
         return {"operation_id": operation_id, "status": "migrated"}
 
     except Exception as e:
-        logger.error(f"Failed to migrate operation: {e}")
+        logger.error("Failed to migrate operation: %s", e)
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
@@ -456,7 +456,7 @@ async def get_operation_status(
 
         return manager._convert_operation_to_response(operation)
     except Exception as e:
-        logger.error(f"Failed to get operation status: {e}")
+        logger.error("Failed to get operation status: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -514,7 +514,7 @@ async def list_operations(
         }
 
     except Exception as e:
-        logger.error(f"Failed to list operations: {e}")
+        logger.error("Failed to list operations: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -536,7 +536,7 @@ async def cancel_operation(operation_id: str, manager=Depends(get_operation_mana
         return {"status": "cancelled", "operation_id": operation_id}
 
     except Exception as e:
-        logger.error(f"Failed to cancel operation: {e}")
+        logger.error("Failed to cancel operation: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -570,7 +570,7 @@ async def resume_operation(operation_id: str, manager=Depends(get_operation_mana
         }
 
     except Exception as e:
-        logger.error(f"Failed to resume operation: {e}")
+        logger.error("Failed to resume operation: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -677,7 +677,7 @@ async def initialize_operations_service():
             await operation_integration_manager.initialize()
             logger.info("Long-running operations service initialized successfully")
         except Exception as e:
-            logger.error(f"Failed to initialize operations service: {e}")
+            logger.error("Failed to initialize operations service: %s", e)
 
 
 # Background task to initialize the service

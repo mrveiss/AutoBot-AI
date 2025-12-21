@@ -185,7 +185,7 @@ class SystemMonitor:
             return metrics
 
         except Exception as e:
-            logger.error(f"Failed to collect system metrics: {e}")
+            logger.error("Failed to collect system metrics: %s", e)
             return {}
 
     def _store_system_metrics(self, metrics: Dict[str, Any]):
@@ -213,7 +213,7 @@ class SystemMonitor:
                     ),
                 )
         except Exception as e:
-            logger.error(f"Failed to store system metrics: {e}")
+            logger.error("Failed to store system metrics: %s", e)
 
     def _check_system_alerts(self, metrics: Dict[str, Any]):
         """Check system metrics against alert thresholds"""
@@ -266,7 +266,7 @@ class SystemMonitor:
                     (alert["type"], alert["severity"], alert["message"]),
                 )
         except Exception as e:
-            logger.error(f"Failed to store alert: {e}")
+            logger.error("Failed to store alert: %s", e)
 
     async def collect_application_metrics(self) -> Dict[str, Any]:
         """Collect application-specific metrics"""
@@ -333,7 +333,7 @@ class SystemMonitor:
                 except Exception as e:
                     service_metrics["status"] = "error"
                     service_metrics["error_count"] = 1
-                    logger.debug(f"Service {service_name} health check failed: {e}")
+                    logger.debug("Service %s health check failed: %s", service_name, e)
 
             # For Redis, try connection using canonical client
             elif service_name == "redis":
@@ -355,7 +355,7 @@ class SystemMonitor:
             service_metrics.update(self._get_process_metrics(service_name))
 
         except Exception as e:
-            logger.error(f"Failed to collect metrics for {service_name}: {e}")
+            logger.error("Failed to collect metrics for %s: %s", service_name, e)
             service_metrics["status"] = "error"
             service_metrics["error_count"] = 1
 
@@ -413,7 +413,7 @@ class SystemMonitor:
                     continue
 
         except Exception as e:
-            logger.debug(f"Failed to get process metrics for {service_name}: {e}")
+            logger.debug("Failed to get process metrics for %s: %s", service_name, e)
 
         return metrics
 
@@ -438,7 +438,7 @@ class SystemMonitor:
                     ),
                 )
         except Exception as e:
-            logger.error(f"Failed to store application metrics: {e}")
+            logger.error("Failed to store application metrics: %s", e)
 
     async def perform_health_checks(self) -> Dict[str, Any]:
         """Perform comprehensive health checks"""
@@ -568,7 +568,7 @@ class SystemMonitor:
                             ),
                         )
         except Exception as e:
-            logger.error(f"Failed to store health check results: {e}")
+            logger.error("Failed to store health check results: %s", e)
 
     def _query_system_overview(self, conn) -> dict:
         """
@@ -723,7 +723,7 @@ class SystemMonitor:
                 dashboard["performance_trends"] = self._query_performance_trends(conn)
 
         except Exception as e:
-            logger.error(f"Failed to generate dashboard data: {e}")
+            logger.error("Failed to generate dashboard data: %s", e)
 
         return dashboard
 
@@ -785,7 +785,7 @@ class SystemMonitor:
                 )
 
         except Exception as e:
-            logger.error(f"Failed to cleanup old metrics: {e}")
+            logger.error("Failed to cleanup old metrics: %s", e)
 
     async def run_monitoring_cycle(self):
         """Run a complete monitoring cycle"""
@@ -800,11 +800,11 @@ class SystemMonitor:
 
             # Collect application metrics
             app_metrics = await self.collect_application_metrics()
-            logger.info(f"🔧 Services: {len(app_metrics.get('services', {}))}")
+            logger.info("🔧 Services: %s))}", len(app_metrics.get('services', {)
 
             # Perform health checks
             health_results = await self.perform_health_checks()
-            logger.info(f"🏥 Health: {health_results.get('overall_status', 'unknown')}")
+            logger.info("🏥 Health: %s", health_results.get('overall_status', 'unknown'))
 
             # Generate dashboard
             dashboard = self.generate_monitoring_dashboard()
@@ -834,7 +834,7 @@ class SystemMonitor:
             }
 
         except Exception as e:
-            logger.error(f"Monitoring cycle failed: {e}")
+            logger.error("Monitoring cycle failed: %s", e)
             return {}
 
     async def start_monitoring(self, continuous: bool = False):
@@ -859,7 +859,7 @@ class SystemMonitor:
                     logger.info("🛑 Monitoring stopped by user")
                     break
                 except Exception as e:
-                    logger.error(f"Monitoring error: {e}")
+                    logger.error("Monitoring error: %s", e)
                     await asyncio.sleep(TimingConstants.ERROR_RECOVERY_LONG_DELAY)  # Wait before retrying
         else:
             # Single monitoring cycle
@@ -912,7 +912,7 @@ async def main():
         return 0
 
     except Exception as e:
-        logger.error(f"Monitoring system failed: {e}")
+        logger.error("Monitoring system failed: %s", e)
         return 1
 
 

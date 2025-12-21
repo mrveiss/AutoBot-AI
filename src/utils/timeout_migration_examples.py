@@ -104,7 +104,7 @@ class ExistingOperationMigrator:
                     "processed_files", []
                 )
                 start_index = len(processed_files)
-                logger.info(f"Resuming indexing from file {start_index}")
+                logger.info("Resuming indexing from file %s", start_index)
             else:
                 processed_files = []
                 start_index = 0
@@ -145,10 +145,10 @@ class ExistingOperationMigrator:
                                 {"processed_files": processed_files + indexed_files},
                                 f"file_{i + 1}",
                             )
-                            logger.info(f"Checkpoint saved at file {i + 1}")
+                            logger.info("Checkpoint saved at file %s", i + 1)
 
                     except Exception as e:
-                        logger.warning(f"Failed to process {file_path}: {e}")
+                        logger.warning("Failed to process %s: %s", file_path, e)
                         # Continue processing other files
 
                 return {
@@ -180,7 +180,7 @@ class ExistingOperationMigrator:
             execute_immediately=False,
         )
 
-        logger.info(f"Migrated knowledge base indexing operation: {operation_id}")
+        logger.info("Migrated knowledge base indexing operation: %s", operation_id)
         return operation_id
 
     async def migrate_comprehensive_test_suite(self):
@@ -224,7 +224,7 @@ class ExistingOperationMigrator:
                     "failed_tests", []
                 )
                 start_index = len(completed_tests) + len(failed_tests)
-                logger.info(f"Resuming test suite from test {start_index}")
+                logger.info("Resuming test suite from test %s", start_index)
             else:
                 completed_tests = []
                 failed_tests = []
@@ -275,7 +275,7 @@ class ExistingOperationMigrator:
                             )
 
                     except Exception as e:
-                        logger.warning(f"Test {test_file} failed with error: {e}")
+                        logger.warning("Test %s failed with error: %s", test_file, e)
                         failed_tests.append(
                             {
                                 "file": str(test_file),
@@ -312,7 +312,7 @@ class ExistingOperationMigrator:
             execute_immediately=False,
         )
 
-        logger.info(f"Migrated comprehensive test suite operation: {operation_id}")
+        logger.info("Migrated comprehensive test suite operation: %s", operation_id)
         return operation_id
 
     async def migrate_security_scan_operation(self):
@@ -368,7 +368,7 @@ class ExistingOperationMigrator:
                     "scan_results", []
                 )
                 start_index = len(scan_results)
-                logger.info(f"Resuming security scan from file {start_index}")
+                logger.info("Resuming security scan from file %s", start_index)
             else:
                 scan_results = []
                 start_index = 0
@@ -406,7 +406,7 @@ class ExistingOperationMigrator:
                         )
 
                 except Exception as e:
-                    logger.warning(f"Failed to scan {file_path}: {e}")
+                    logger.warning("Failed to scan %s: %s", file_path, e)
 
             # Generate summary
             total_vulnerabilities = sum(
@@ -432,7 +432,7 @@ class ExistingOperationMigrator:
             execute_immediately=False,
         )
 
-        logger.info(f"Migrated security scan operation: {operation_id}")
+        logger.info("Migrated security scan operation: %s", operation_id)
         return operation_id
 
     async def _process_file_for_indexing(self, file_path: Path) -> Dict[str, Any]:

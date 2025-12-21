@@ -345,7 +345,7 @@ class StatsCollector:
         except asyncio.TimeoutError:
             logger.warning("Timeout collecting local system stats")
         except Exception as e:
-            logger.error(f"Error collecting local machine stats: {e}")
+            logger.error("Error collecting local machine stats: %s", e)
 
         return stats
 
@@ -571,7 +571,7 @@ class InfrastructureMonitor:
             if self.redis_client is None:
                 logger.warning("Redis client initialization returned None (Redis disabled?)")
         except Exception as e:
-            logger.error(f"Could not initialize Redis client: {e}")
+            logger.error("Could not initialize Redis client: %s", e)
 
     async def check_service_health(
         self, url: str, name: str, timeout: int = None
@@ -601,7 +601,7 @@ class InfrastructureMonitor:
                 return await self._stats_collector.collect_remote_stats(host)
 
         except Exception as e:
-            logger.error(f"Error getting machine stats for {host}: {e}")
+            logger.error("Error getting machine stats for %s: %s", host, e)
             return MachineStats()
 
     async def get_local_stats(self) -> MachineStats:
@@ -950,7 +950,7 @@ class InfrastructureMonitor:
                     if result.stats.disk_percent is not None:
                         _metrics.update_system_disk("/", result.stats.disk_percent)
             else:
-                logger.error(f"Error monitoring machine: {result}")
+                logger.error("Error monitoring machine: %s", result)
 
         return machines
 
@@ -1037,7 +1037,7 @@ async def health_check():
             "machines_configured": unique_machines,
         }
     except Exception as e:
-        logger.error(f"Infrastructure monitor health check failed: {e}")
+        logger.error("Infrastructure monitor health check failed: %s", e)
         return {
             "status": "error",
             "service": "infrastructure_monitor",
@@ -1073,7 +1073,7 @@ async def get_infrastructure_status():
         }
 
     except Exception as e:
-        logger.error(f"Error getting infrastructure status: {e}")
+        logger.error("Error getting infrastructure status: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1103,7 +1103,7 @@ async def get_machine_status(machine_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting machine status: {e}")
+        logger.error("Error getting machine status: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1125,5 +1125,5 @@ async def refresh_infrastructure():
         }
 
     except Exception as e:
-        logger.error(f"Error refreshing infrastructure: {e}")
+        logger.error("Error refreshing infrastructure: %s", e)
         raise HTTPException(status_code=500, detail=str(e))

@@ -35,10 +35,10 @@ async def main():
         identity_file = project_root / "data" / "system_knowledge" / "autobot_identity.md"
 
         if not identity_file.exists():
-            logger.error(f"AutoBot identity file not found at {identity_file}")
+            logger.error("AutoBot identity file not found at %s", identity_file)
             return
 
-        logger.info(f"Found AutoBot identity file at {identity_file}")
+        logger.info("Found AutoBot identity file at %s", identity_file)
 
         # Read the identity document
         with open(identity_file, 'r', encoding='utf-8') as f:
@@ -78,7 +78,7 @@ async def main():
                     return
 
         except Exception as e:
-            logger.error(f"Error adding document to knowledge base: {e}")
+            logger.error("Error adding document to knowledge base: %s", e)
             return
 
         # Test search to verify
@@ -93,19 +93,19 @@ async def main():
                 results = []
 
             if results:
-                logger.info(f"Search returned {len(results)} results")
+                logger.info("Search returned %s results", len(results))
                 for i, result in enumerate(results[:2], 1):
-                    logger.info(f"Result {i}: {result.get('title', 'No title')} (score: {result.get('score', 'N/A')})")
+                    logger.info("Result %s: %s (score: %s)", i, result.get('title', 'No title'), result.get('score', 'N/A'))
             else:
                 logger.warning("Search returned no results - identity may not be indexed yet")
 
         except Exception as e:
-            logger.error(f"Error testing search: {e}")
+            logger.error("Error testing search: %s", e)
 
         logger.info("AutoBot identity fix completed!")
 
     except Exception as e:
-        logger.error(f"Fatal error: {e}")
+        logger.error("Fatal error: %s", e)
         import traceback
         traceback.print_exc()
 

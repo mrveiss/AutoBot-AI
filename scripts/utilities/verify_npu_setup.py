@@ -20,12 +20,12 @@ def check_npu_device():
     """Check if NPU device exists"""
     npu_device = Path("/dev/accel/accel0")
     if npu_device.exists():
-        logger.info(f"✅ NPU device found: {npu_device}")
+        logger.info("✅ NPU device found: %s", npu_device)
 
         # Check permissions
         stat = npu_device.stat()
-        logger.info(f"📋 Device permissions: {oct(stat.st_mode)[-3:]}")
-        logger.info(f"📋 Device owner:group: {stat.st_uid}:{stat.st_gid}")
+        logger.info("📋 Device permissions: %s", oct(stat.st_mode)[-3:])
+        logger.info("📋 Device owner:group: %s:%s", stat.st_uid, stat.st_gid)
 
         return True
     else:
@@ -44,7 +44,7 @@ def check_kernel_module():
             logger.error("❌ intel_vpu kernel module not loaded")
             return False
     except Exception as e:
-        logger.error(f"❌ Error checking kernel modules: {e}")
+        logger.error("❌ Error checking kernel modules: %s", e)
         return False
 
 
@@ -69,7 +69,7 @@ def check_user_groups():
 
         return has_render or has_video
     except Exception as e:
-        logger.error(f"❌ Error checking user groups: {e}")
+        logger.error("❌ Error checking user groups: %s", e)
         return False
 
 
@@ -80,11 +80,11 @@ def check_openvino_npu():
         core = ov.Core()
         devices = core.available_devices
 
-        logger.info(f"📋 Available OpenVINO devices: {devices}")
+        logger.info("📋 Available OpenVINO devices: %s", devices)
 
         npu_devices = [d for d in devices if 'NPU' in d]
         if npu_devices:
-            logger.info(f"✅ OpenVINO NPU devices found: {npu_devices}")
+            logger.info("✅ OpenVINO NPU devices found: %s", npu_devices)
             return True
         else:
             logger.warning("⚠️ No NPU devices detected by OpenVINO")
@@ -94,7 +94,7 @@ def check_openvino_npu():
         logger.warning("⚠️ OpenVINO not installed - skipping NPU device check")
         return None
     except Exception as e:
-        logger.error(f"❌ Error checking OpenVINO NPU devices: {e}")
+        logger.error("❌ Error checking OpenVINO NPU devices: %s", e)
         return False
 
 
@@ -112,7 +112,7 @@ def main():
 
     results = {}
     for name, check_func in checks:
-        logger.info(f"\n🔍 Checking {name}...")
+        logger.info("\n🔍 Checking %s...", name)
         result = check_func()
         results[name] = result
 
@@ -124,12 +124,12 @@ def main():
     all_passed = True
     for name, result in results.items():
         if result is True:
-            logger.info(f"✅ {name}: PASS")
+            logger.info("✅ %s: PASS", name)
         elif result is False:
-            logger.error(f"❌ {name}: FAIL")
+            logger.error("❌ %s: FAIL", name)
             all_passed = False
         else:
-            logger.warning(f"⚠️ {name}: SKIPPED")
+            logger.warning("⚠️ %s: SKIPPED", name)
 
     if all_passed:
         logger.info("\n🎉 NPU setup verification PASSED!")

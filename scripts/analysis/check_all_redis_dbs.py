@@ -79,7 +79,7 @@ def _log_pattern_stats(key_patterns: Dict[str, int], sampled: int, total_keys: i
     for pattern, count in sorted(key_patterns.items(), key=lambda x: x[1], reverse=True):
         percentage = (count / sampled) * 100 if sampled > 0 else 0
         estimated_total = int((count / sampled) * total_keys) if sampled > 0 else 0
-        logger.info(f"  {pattern}: {count}/{sampled} sampled ({percentage:.1f}%) ≈ {estimated_total:,} total")
+        logger.info("  %s: %s/%s sampled (%s%) ≈ %s total", pattern, count, sampled, percentage:.1f, estimated_total:,)
 
 
 def _analyze_database(client: redis.Redis, db_num: int, info: Dict) -> bool:
@@ -91,9 +91,9 @@ def _analyze_database(client: redis.Redis, db_num: int, info: Dict) -> bool:
     keys_count = info[db_key]['keys']
     expires_count = info[db_key].get('expires', 0)
 
-    logger.info(f"\n--- Database {db_num} ---")
-    logger.info(f"Keys: {keys_count:,}")
-    logger.info(f"Keys with expiry: {expires_count:,}")
+    logger.info("\n--- Database %s ---", db_num)
+    logger.info("Keys: %s", keys_count:,)
+    logger.info("Keys with expiry: %s", expires_count:,)
 
     if keys_count > 0:
         key_patterns, sampled = _sample_keys(client)
@@ -105,13 +105,13 @@ def _analyze_database(client: redis.Redis, db_num: int, info: Dict) -> bool:
 def _handle_connection_error(e: Exception, db_num: int) -> bool:
     """Handle Redis connection errors (Issue #338 - extracted helper). Returns True if should break."""
     if "NOAUTH" in str(e):
-        logger.warning(f"Database {db_num}: Authentication required")
+        logger.warning("Database %s: Authentication required", db_num)
         return False
     elif "Connection refused" in str(e):
         logger.error("Cannot connect to Redis")
         return True
     else:
-        logger.debug(f"Database {db_num}: {e}")
+        logger.debug("Database %s: %s", db_num, e)
         return False
 
 

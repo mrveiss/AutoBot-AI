@@ -396,8 +396,8 @@ class MemoryProfiler:
             f.write(self.generate_markdown_report())
 
         logger.info("📄 Memory profiling reports saved:")
-        logger.info(f"  JSON: {json_report_path}")
-        logger.info(f"  Markdown: {md_report_path}")
+        logger.info("  JSON: %s", json_report_path)
+        logger.info("  Markdown: %s", md_report_path)
 
     def generate_markdown_report(self) -> str:
         """Generate markdown memory profiling report"""
@@ -533,14 +533,14 @@ class MemoryProfiler:
         warning_recs = [r for r in recommendations if "🟡 WARNING" in r]
 
         if critical_recs:
-            logger.info(f"\n🔴 CRITICAL ISSUES: {len(critical_recs)}")
+            logger.info("\n🔴 CRITICAL ISSUES: %s", len(critical_recs))
             for rec in critical_recs:
-                logger.info(f"  - {rec}")
+                logger.info("  - %s", rec)
 
         if warning_recs:
-            logger.info(f"\n🟡 WARNINGS: {len(warning_recs)}")
+            logger.info("\n🟡 WARNINGS: %s", len(warning_recs))
             for rec in warning_recs:
-                logger.info(f"  - {rec}")
+                logger.info("  - %s", rec)
 
         logger.info("=" * 60)
 

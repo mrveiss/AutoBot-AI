@@ -187,7 +187,7 @@ async def _analyze_file_imports(
             async with aiofiles.open(py_file, "r", encoding="utf-8") as f:
                 content = await f.read()
         except OSError as e:
-            logger.debug(f"Failed to read file for import analysis {py_file}: {e}")
+            logger.debug("Failed to read file for import analysis %s: %s", py_file, e)
             return
 
         tree = ast.parse(content)
@@ -198,7 +198,7 @@ async def _analyze_file_imports(
             )
 
     except Exception as e:
-        logger.debug(f"Could not analyze {py_file}: {e}")
+        logger.debug("Could not analyze %s: %s", py_file, e)
 
 
 def _build_import_tree(

@@ -47,7 +47,7 @@ def _check_existing_task() -> Optional[JSONResponse]:
     if _current_indexing_task_id is not None:
         existing_task = _active_tasks.get(_current_indexing_task_id)
         if existing_task and not existing_task.done():
-            logger.info(f"🔒 Indexing already in progress: {_current_indexing_task_id}")
+            logger.info("🔒 Indexing already in progress: %s", _current_indexing_task_id)
             return JSONResponse({
                 "task_id": _current_indexing_task_id,
                 "status": "already_running",
@@ -86,7 +86,7 @@ def _create_cleanup_callback(task_id: str):
             _active_tasks.pop(task_id, None)
             if _current_indexing_task_id == task_id:
                 _current_indexing_task_id = None
-        logger.info(f"🧹 Task {task_id} cleaned up")
+        logger.info("🧹 Task %s cleaned up", task_id)
     return cleanup_task
 
 
@@ -115,17 +115,17 @@ async def index_codebase(request: Optional[IndexCodebaseRequest] = None):
 
         # Validate and get path
         root_path = _validate_and_get_path(request)
-        logger.info(f"📁 Indexing path = {root_path}")
+        logger.info("📁 Indexing path = %s", root_path)
 
         # Generate unique task ID and start task
         task_id = str(uuid.uuid4())
-        logger.info(f"🆔 Generated task_id = {task_id}")
+        logger.info("🆔 Generated task_id = %s", task_id)
 
         _current_indexing_task_id = task_id
 
         logger.info("🔄 About to create_task")
         task = asyncio.create_task(do_indexing_with_progress(task_id, root_path))
-        logger.info(f"✅ Task created: {task}")
+        logger.info("✅ Task created: %s", task)
         _active_tasks[task_id] = task
         logger.info("💾 Task stored in _active_tasks")
 
@@ -284,7 +284,7 @@ async def cancel_indexing_job():
         # Cancel the task
         try:
             existing_task.cancel()
-            logger.info(f"🛑 Cancelled indexing task: {task_id}")
+            logger.info("🛑 Cancelled indexing task: %s", task_id)
 
             # Update task status
             if task_id in indexing_tasks:
@@ -303,7 +303,7 @@ async def cancel_indexing_job():
             })
 
         except Exception as e:
-            logger.error(f"Failed to cancel task {task_id}: {e}")
+            logger.error("Failed to cancel task %s: %s", task_id, e)
             return JSONResponse({
                 "success": False,
                 "task_id": task_id,

@@ -219,7 +219,7 @@ class RedisConnectionManager:
         if "main" not in self._configs:
             self._configs["main"] = default_config
 
-        logger.debug(f"Loaded configurations for {len(self._configs)} databases")
+        logger.debug("Loaded configurations for %s databases", len(self._configs))
 
     # =========================================================================
     # Advanced Connection Methods
@@ -247,7 +247,7 @@ class RedisConnectionManager:
         while (datetime.now() - start_time).total_seconds() < max_wait:
             try:
                 await client.ping()
-                logger.info(f"Redis database '{database_name}' is ready")
+                logger.info("Redis database '%s' is ready", database_name)
                 return True
             except ResponseError as e:
                 if "LOADING" in str(e):
@@ -264,7 +264,7 @@ class RedisConnectionManager:
                 )
                 return False
 
-        logger.error(f"Redis '{database_name}' did not become ready within {max_wait}s")
+        logger.error("Redis '%s' did not become ready within %ss", database_name, max_wait)
         return False
 
     async def _create_async_pool_with_retry(
@@ -411,7 +411,7 @@ class RedisConnectionManager:
                 database=database_name, operation="general", success=success
             )
         except Exception as e:
-            logger.debug(f"Failed to record Prometheus metrics: {e}")
+            logger.debug("Failed to record Prometheus metrics: %s", e)
 
     def _get_database_number(self, database_name: str) -> int:
         """Get database number for a given database name."""
@@ -788,7 +788,7 @@ class RedisConnectionManager:
             yield pipe
             await pipe.execute()
         except Exception as e:
-            logger.error(f"Pipeline error for '{database}': {e}")
+            logger.error("Pipeline error for '%s': %s", database, e)
             raise
         finally:
             await pipe.reset()
@@ -829,7 +829,7 @@ class RedisConnectionManager:
                 idle_connections=idle_count,
             )
         except Exception as e:
-            logger.error(f"Error getting pool statistics for '{database}': {e}")
+            logger.error("Error getting pool statistics for '%s': %s", database, e)
             return PoolStatistics(
                 database_name=database,
                 created_connections=0,
@@ -869,7 +869,7 @@ class RedisConnectionManager:
         except ValueError:
             return False
         except Exception as e:
-            logger.debug(f"Could not remove idle connection: {e}")
+            logger.debug("Could not remove idle connection: %s", e)
             return False
 
     async def cleanup_idle_connections(self):
@@ -881,7 +881,7 @@ class RedisConnectionManager:
             cleaned_total += cleaned_count
 
         if cleaned_total > 0:
-            logger.info(f"Total idle connections cleaned: {cleaned_total}")
+            logger.info("Total idle connections cleaned: %s", cleaned_total)
 
     def _cleanup_pool_idle_connections(self, database_name: str, pool: Any) -> int:
         """Clean idle connections from a single pool."""
@@ -903,7 +903,7 @@ class RedisConnectionManager:
             return cleaned_count
 
         except Exception as e:
-            logger.error(f"Error cleaning idle connections for '{database_name}': {e}")
+            logger.error("Error cleaning idle connections for '%s': %s", database_name, e)
             return 0
 
     async def _cleanup_idle_connections_task(self):
@@ -916,7 +916,7 @@ class RedisConnectionManager:
                 logger.info("Idle connection cleanup task cancelled")
                 break
             except Exception as e:
-                logger.error(f"Error in idle connection cleanup task: {e}")
+                logger.error("Error in idle connection cleanup task: %s", e)
 
     def get_statistics(self) -> ManagerStats:
         """Get comprehensive manager statistics."""
@@ -952,13 +952,13 @@ class RedisConnectionManager:
             try:
                 await pool.aclose()
             except Exception as e:
-                logger.warning(f"Error closing async pool: {e}")
+                logger.warning("Error closing async pool: %s", e)
 
         for pool in self._sync_pools.values():
             try:
                 pool.disconnect()
             except Exception as e:
-                logger.warning(f"Error closing sync pool: {e}")
+                logger.warning("Error closing sync pool: %s", e)
 
         self._sync_pools.clear()
         self._async_pools.clear()

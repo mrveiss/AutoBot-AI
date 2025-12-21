@@ -142,7 +142,7 @@ Respond with valid JSON:
             return final_result
 
         except Exception as e:
-            logger.error(f"Gemma classification error: {e}")
+            logger.error("Gemma classification error: %s", e)
             # Fallback to keyword classification
             final_result = self._create_fallback_result(user_message, keyword_result)
             final_result.context_analysis["response_time_ms"] = (
@@ -192,7 +192,7 @@ Respond with valid JSON:
             timeout=timeout,
         ) as response:
             if response.status != 200:
-                logger.warning(f"Gemma model {model} returned status {response.status}")
+                logger.warning("Gemma model %s returned status %s", model, response.status)
                 return None
 
             response_text = await self._read_streaming_response(response)
@@ -212,7 +212,7 @@ Respond with valid JSON:
                 if result:
                     return result
             except Exception as e:
-                logger.warning(f"Failed to use Gemma model {model}: {e}")
+                logger.warning("Failed to use Gemma model %s: %s", model, e)
                 continue
 
         return None
@@ -229,7 +229,7 @@ Respond with valid JSON:
                     models_data = await response.json()
                     return [model["name"] for model in models_data.get("models", [])]
         except Exception as e:
-            logger.warning(f"Failed to get available models: {e}")
+            logger.warning("Failed to get available models: %s", e)
         return []
 
     def _parse_json_response(self, response_text: str) -> Optional[Dict[str, Any]]:
@@ -248,8 +248,8 @@ Respond with valid JSON:
             return json.loads(response_text)
 
         except Exception as e:
-            logger.warning(f"Failed to parse Gemma JSON response: {e}")
-            logger.debug(f"Response text: {response_text}")
+            logger.warning("Failed to parse Gemma JSON response: %s", e)
+            logger.debug("Response text: %s", response_text)
             return None
 
     def _create_gemma_result(
@@ -301,7 +301,7 @@ Respond with valid JSON:
             )
 
         except Exception as e:
-            logger.error(f"Error creating Gemma result: {e}")
+            logger.error("Error creating Gemma result: %s", e)
             return self._create_fallback_result(user_message, keyword_result)
 
     def _create_fallback_result(

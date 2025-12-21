@@ -153,7 +153,7 @@ class WebResearchInputValidator:
                     re.compile(pattern, re.IGNORECASE | re.MULTILINE)
                 )
             except re.error as e:
-                logger.warning(f"Failed to compile regex pattern {pattern}: {e}")
+                logger.warning("Failed to compile regex pattern %s: %s", pattern, e)
 
         # Compile suspicious keyword patterns
         self.suspicious_keyword_patterns = []
@@ -162,7 +162,7 @@ class WebResearchInputValidator:
                 pattern = re.compile(rf"\b{re.escape(keyword)}\b", re.IGNORECASE)
                 self.suspicious_keyword_patterns.append((keyword, pattern))
             except re.error as e:
-                logger.warning(f"Failed to compile keyword pattern {keyword}: {e}")
+                logger.warning("Failed to compile keyword pattern %s: %s", keyword, e)
 
     def _create_query_result(self, query: str) -> Dict[str, Any]:
         """Create initial query validation result structure."""
@@ -201,7 +201,7 @@ class WebResearchInputValidator:
             if matches:
                 dangerous_matches.extend(matches)
         if dangerous_matches:
-            logger.warning(f"Dangerous patterns detected in query: {dangerous_matches}")
+            logger.warning("Dangerous patterns detected in query: %s", dangerous_matches)
             return dangerous_matches, {
                 "safe": False, "threats_detected": ["DANGEROUS_PATTERNS"], "risk_level": "high",
                 "metadata": {"dangerous_patterns": dangerous_matches[:5]},
@@ -335,10 +335,10 @@ class WebResearchInputValidator:
             if result["warnings"] and result["risk_level"] == "low":
                 result["risk_level"] = "medium"
 
-            logger.debug(f"Query validation completed: risk={result['risk_level']}, safe={result['safe']}")
+            logger.debug("Query validation completed: risk=%s, safe=%s", result['risk_level'], result['safe'])
             return result
         except Exception as e:
-            logger.error(f"Error validating research query: {e}")
+            logger.error("Error validating research query: %s", e)
             return {
                 "safe": False, "sanitized_query": "", "threats_detected": ["VALIDATION_ERROR"],
                 "risk_level": "high", "warnings": [f"Validation error: {str(e)}"], "metadata": {},
@@ -377,7 +377,7 @@ class WebResearchInputValidator:
             }
             return result
         except Exception as e:
-            logger.error(f"Error validating URL {url}: {e}")
+            logger.error("Error validating URL %s: %s", url, e)
             return {
                 "safe": False, "sanitized_url": "", "threats_detected": ["URL_VALIDATION_ERROR"],
                 "warnings": [f"Validation error: {str(e)}"], "metadata": {},
@@ -475,7 +475,7 @@ class WebResearchInputValidator:
                 result["safe"] = len(result["threats_detected"]) <= 2
             return result
         except Exception as e:
-            logger.error(f"Error sanitizing web content: {e}")
+            logger.error("Error sanitizing web content: %s", e)
             return {
                 "safe": False, "sanitized_content": "", "threats_detected": ["SANITIZATION_ERROR"],
                 "warnings": [f"Sanitization failed: {str(e)}"], "metadata": {"original_length": len(content)},

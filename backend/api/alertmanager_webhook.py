@@ -90,7 +90,7 @@ async def receive_alertmanager_webhook(
         }
 
     except Exception as e:
-        logger.error(f"Failed to process AlertManager webhook: {e}", exc_info=True)
+        logger.error("Failed to process AlertManager webhook: %s", e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process webhook: {str(e)}"
@@ -156,7 +156,7 @@ async def _process_alert(alert: AlertInstance, group_status: str):
             )
 
     except Exception as e:
-        logger.error(f"Failed to process individual alert: {e}", exc_info=True)
+        logger.error("Failed to process individual alert: %s", e, exc_info=True)
 
 
 @router.get("/alertmanager/health")

@@ -117,7 +117,7 @@ class RequestSimilarityAnalyzer:
             return min(1.0, final_similarity)
 
         except Exception as e:
-            logger.warning(f"Error calculating similarity: {e}")
+            logger.warning("Error calculating similarity: %s", e)
             return 0.0
 
     def _calculate_content_similarity(self, content1: str, content2: str) -> float:
@@ -318,7 +318,7 @@ class IntelligentRequestBatcher:
         self.pending_requests[request.id] = request
         self.request_queues[request.priority].append(request.id)
 
-        logger.debug(f"Added request {request.id} with priority {request.priority}")
+        logger.debug("Added request %s with priority %s", request.id, request.priority)
         return request.id
 
     async def get_result(
@@ -340,7 +340,7 @@ class IntelligentRequestBatcher:
 
             await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
-        logger.warning(f"Timeout waiting for result of request {request_id}")
+        logger.warning("Timeout waiting for result of request %s", request_id)
         return None
 
     async def _batch_processing_loop(self):
@@ -350,7 +350,7 @@ class IntelligentRequestBatcher:
                 await self._process_pending_requests()
                 await asyncio.sleep(TimingConstants.MICRO_DELAY)  # Small delay to prevent CPU spinning
             except Exception as e:
-                logger.error(f"Error in batch processing loop: {e}")
+                logger.error("Error in batch processing loop: %s", e)
                 await asyncio.sleep(TimingConstants.STANDARD_DELAY)  # Longer delay on error
 
     async def _process_pending_requests(self):
@@ -559,14 +559,14 @@ class IntelligentRequestBatcher:
                         response_text = individual_responses.get(request.id, response)
                         await request.callback(response_text)
                     except Exception as e:
-                        logger.error(f"Error executing callback for {request.id}: {e}")
+                        logger.error("Error executing callback for %s: %s", request.id, e)
 
             logger.info(
                 f"Successfully executed batch {batch_id} with {len(batch)} requests"
             )
 
         except Exception as e:
-            logger.error(f"Error executing batch {batch_id}: {e}")
+            logger.error("Error executing batch %s: %s", batch_id, e)
 
             # Create error result
             result = BatchResult(

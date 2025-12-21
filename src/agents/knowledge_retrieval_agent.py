@@ -70,7 +70,7 @@ class KnowledgeRetrievalAgent:
                 self._kb_initialized = True
                 logger.info("Knowledge base initialized successfully")
             except Exception as e:
-                logger.error(f"Failed to initialize knowledge base: {e}")
+                logger.error("Failed to initialize knowledge base: %s", e)
                 self.knowledge_base = None
 
     def _build_kb_unavailable_response(self) -> Dict[str, Any]:
@@ -222,7 +222,7 @@ class KnowledgeRetrievalAgent:
             }
 
         except Exception as e:
-            logger.error(f"Similar document search error: {e}")
+            logger.error("Similar document search error: %s", e)
             return {"status": "error", "documents": [], "error": str(e)}
 
     async def quick_fact_lookup(
@@ -239,7 +239,7 @@ class KnowledgeRetrievalAgent:
             Dict containing fact or indication if not found
         """
         try:
-            logger.info(f"Quick fact lookup: {fact_query[:50]}...")
+            logger.info("Quick fact lookup: %s...", fact_query[:50])
 
             # Search for relevant documents
             search_result = await self.process_query(
@@ -270,7 +270,7 @@ class KnowledgeRetrievalAgent:
             }
 
         except Exception as e:
-            logger.error(f"Quick fact lookup error: {e}")
+            logger.error("Quick fact lookup error: %s", e)
             return {
                 "status": "error",
                 "message": str(e),
@@ -363,7 +363,7 @@ Guidelines:
             return summary
 
         except Exception as e:
-            logger.error(f"Quick summary generation error: {e}")
+            logger.error("Quick summary generation error: %s", e)
             return f"Found {len(documents)} relevant documents but couldn't generate summary."
 
     async def _extract_fact_from_documents(
@@ -406,7 +406,7 @@ If the information is not in the provided text, respond with "Information not fo
             return self._extract_response_content(response)
 
         except Exception as e:
-            logger.error(f"Fact extraction error: {e}")
+            logger.error("Fact extraction error: %s", e)
             return "Could not extract fact from documents."
 
     def _try_extract_message_content(self, response: Dict) -> Optional[str]:
@@ -446,7 +446,7 @@ If the information is not in the provided text, respond with "Information not fo
             return str(response)
 
         except Exception as e:
-            logger.error(f"Error extracting response content: {e}")
+            logger.error("Error extracting response content: %s", e)
             return "Error processing response"
 
     def _is_question(self, text: str) -> bool:

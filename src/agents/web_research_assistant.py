@@ -44,12 +44,12 @@ class WebResearchAssistant:
         """
         Research a query on the web and return structured results (thread-safe)
         """
-        logger.info(f"Starting web research for query: {query}")
+        logger.info("Starting web research for query: %s", query)
 
         # Check cache first (thread-safe)
         async with self._cache_lock:
             if query in self.search_cache:
-                logger.info(f"Returning cached results for query: {query}")
+                logger.info("Returning cached results for query: %s", query)
                 cached_result = dict(self.search_cache[query])  # Copy
                 cached_result["from_cache"] = True
                 return cached_result
@@ -63,7 +63,7 @@ class WebResearchAssistant:
                 return await self._basic_research(query)
 
         except Exception as e:
-            logger.error(f"Web research failed for query {query}: {str(e)}")
+            logger.error("Web research failed for query %s: %s", query, str(e))
             return {
                 "status": "error",
                 "query": query,
@@ -75,7 +75,7 @@ class WebResearchAssistant:
 
     async def _advanced_research(self, query: str) -> Dict[str, Any]:
         """Perform advanced web research with anti-detection"""
-        logger.info(f"Using advanced web research for: {query}")
+        logger.info("Using advanced web research for: %s", query)
 
         if not self.advanced_researcher:
             self.advanced_researcher = AdvancedWebResearcher(self.config)
@@ -141,7 +141,7 @@ class WebResearchAssistant:
 
     async def _basic_research(self, query: str) -> Dict[str, Any]:
         """Fallback basic research method"""
-        logger.info(f"Using basic web research for: {query}")
+        logger.info("Using basic web research for: %s", query)
 
         # Simulate web search (in a real implementation, this would use
         # search APIs or web scraping)
@@ -361,10 +361,10 @@ class WebResearchAssistant:
                     stored_count += 1
 
                 except Exception as e:
-                    logger.error(f"Failed to store source in KB: {str(e)}")
+                    logger.error("Failed to store source in KB: %s", str(e))
 
             research_results["kb_storage_count"] = stored_count
-            logger.info(f"Stored {stored_count} sources in knowledge base")
+            logger.info("Stored %s sources in knowledge base", stored_count)
 
         return research_results
 

@@ -162,7 +162,7 @@ def is_repository_allowed(repo_path: str) -> bool:
         raw_path = Path(repo_path)
         path = raw_path.resolve()
     except Exception as e:
-        logger.error(f"Repository validation error for {repo_path}: {e}")
+        logger.error("Repository validation error for %s: %s", repo_path, e)
         return False
 
     # Check against whitelist
@@ -173,14 +173,14 @@ def is_repository_allowed(repo_path: str) -> bool:
 
         # Security: Verify resolved path stays within allowed directory
         if not _is_within_allowed_path(path, allowed_path):
-            logger.warning(f"Symlink escape attempt detected: {repo_path} -> {path}")
+            logger.warning("Symlink escape attempt detected: %s -> %s", repo_path, path)
             continue
 
         # Verify it's actually a git repository (or subdirectory of one)
         if _find_git_root(path, allowed_path):
             return True
 
-    logger.warning(f"Repository not in whitelist: {repo_path}")
+    logger.warning("Repository not in whitelist: %s", repo_path)
     return False
 
 
@@ -205,18 +205,18 @@ def sanitize_git_args(args: List[str]) -> bool:
         # Check against blocked argument list
         for blocked in BLOCKED_GIT_ARGS:
             if arg == blocked or arg.startswith(blocked + "="):
-                logger.warning(f"Blocked dangerous git argument: {arg}")
+                logger.warning("Blocked dangerous git argument: %s", arg)
                 return False
 
         # Check against dangerous patterns
         for pattern in _DANGEROUS_GIT_PATTERNS:
             if re.search(pattern, arg):
-                logger.warning(f"Blocked dangerous git argument pattern: {arg}")
+                logger.warning("Blocked dangerous git argument pattern: %s", arg)
                 return False
 
         # Block absolute paths (except for known safe patterns)
         if arg.startswith("/") and not arg.startswith("--"):
-            logger.warning(f"Blocked absolute path argument: {arg}")
+            logger.warning("Blocked absolute path argument: %s", arg)
             return False
 
     return True
@@ -239,7 +239,7 @@ async def check_rate_limit() -> bool:
             git_counter["reset_time"] = now
 
         if git_counter["count"] >= MAX_GIT_OPS_PER_MINUTE:
-            logger.warning(f"Rate limit exceeded: {git_counter['count']} git ops/min")
+            logger.warning("Rate limit exceeded: %s git ops/min", git_counter['count'])
             return False
 
         git_counter["count"] += 1
@@ -268,14 +268,14 @@ async def execute_git_command(
 
         # Check against blocked commands first
         if git_subcommand in BLOCKED_GIT_COMMANDS:
-            logger.warning(f"Blocked dangerous git command: {git_subcommand}")
+            logger.warning("Blocked dangerous git command: %s", git_subcommand)
             raise HTTPException(
                 status_code=403, detail=f"Git command '{git_subcommand}' is blocked"
             )
 
         # Verify command is in safe list
         if git_subcommand not in SAFE_GIT_COMMANDS:
-            logger.warning(f"Blocked unsafe git command: {git_subcommand}")
+            logger.warning("Blocked unsafe git command: %s", git_subcommand)
             raise HTTPException(
                 status_code=403, detail=f"Git command '{git_subcommand}' is not allowed"
             )
@@ -328,7 +328,7 @@ async def execute_git_command(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Git command execution error: {e}")
+        logger.error("Git command execution error: %s", e)
         raise HTTPException(status_code=500, detail=f"Git command failed: {str(e)}")
 
 
@@ -765,7 +765,7 @@ async def git_status_mcp(request: GitStatusRequest) -> Metadata:
     if not is_repository_allowed(request.repo_path):
         raise HTTPException(status_code=403, detail="Repository not in whitelist")
 
-    logger.info(f"Git status for {request.repo_path}")
+    logger.info("Git status for %s", request.repo_path)
 
     # Build command
     args = ["status"]
@@ -804,7 +804,7 @@ async def git_log_mcp(request: GitLogRequest) -> Metadata:
     if not is_repository_allowed(request.repo_path):
         raise HTTPException(status_code=403, detail="Repository not in whitelist")
 
-    logger.info(f"Git log for {request.repo_path}")
+    logger.info("Git log for %s", request.repo_path)
 
     # Build command
     args = ["log", f"--max-count={request.max_count}"]
@@ -851,7 +851,7 @@ async def git_diff_mcp(request: GitDiffRequest) -> Metadata:
     if not is_repository_allowed(request.repo_path):
         raise HTTPException(status_code=403, detail="Repository not in whitelist")
 
-    logger.info(f"Git diff for {request.repo_path}")
+    logger.info("Git diff for %s", request.repo_path)
 
     # Build command
     args = ["diff"]
@@ -869,7 +869,7 @@ async def git_diff_mcp(request: GitDiffRequest) -> Metadata:
     # Count diff lines
     diff_lines = result["stdout"].count("\n")
     if diff_lines > MAX_DIFF_LINES:
-        logger.warning(f"Diff output truncated: {diff_lines} lines")
+        logger.warning("Diff output truncated: %s lines", diff_lines)
 
     return {
         "success": result["success"],
@@ -902,7 +902,7 @@ async def git_branch_mcp(request: GitBranchRequest) -> Metadata:
     if not is_repository_allowed(request.repo_path):
         raise HTTPException(status_code=403, detail="Repository not in whitelist")
 
-    logger.info(f"Git branch for {request.repo_path}")
+    logger.info("Git branch for %s", request.repo_path)
 
     # Build command
     args = ["branch"]
@@ -958,7 +958,7 @@ async def git_blame_mcp(request: GitBlameRequest) -> Metadata:
     if not sanitize_git_args([request.file_path]):
         raise HTTPException(status_code=400, detail="Invalid file path")
 
-    logger.info(f"Git blame for {request.file_path} in {request.repo_path}")
+    logger.info("Git blame for %s in %s", request.file_path, request.repo_path)
 
     # Build command
     args = ["blame"]
@@ -999,7 +999,7 @@ async def git_show_mcp(request: GitShowRequest) -> Metadata:
     if not is_repository_allowed(request.repo_path):
         raise HTTPException(status_code=403, detail="Repository not in whitelist")
 
-    logger.info(f"Git show {request.ref} in {request.repo_path}")
+    logger.info("Git show %s in %s", request.ref, request.repo_path)
 
     # Build command
     args = ["show", request.ref]
@@ -1061,7 +1061,7 @@ async def get_git_repo_info() -> Metadata:
                 repo_info["last_commit"] = result["stdout"].strip()
 
             except Exception as e:
-                logger.error(f"Error getting repo info: {e}")
+                logger.error("Error getting repo info: %s", e)
                 repo_info["error"] = str(e)
 
         repos_info.append(repo_info)

@@ -83,11 +83,11 @@ def _verify_redis_vector_dimension(
         if actual_dim != expected_dimension:
             return False, f"Redis vector dimension mismatch: {actual_dim} vs {expected_dimension}"
 
-        logger.info(f"✅ Redis vector dimension correct: {actual_dim}")
+        logger.info("✅ Redis vector dimension correct: %s", actual_dim)
         return True, None
 
     except Exception as e:
-        logger.info(f"Redis vector index not found (may be empty): {e}")
+        logger.info("Redis vector index not found (may be empty): %s", e)
         return True, None
 
 
@@ -104,11 +104,11 @@ def _verify_embedding_dimension(expected_dimension: int) -> Tuple[bool, Optional
         if actual_dim != expected_dimension:
             return False, f"Actual embedding dimension mismatch: {actual_dim} vs {expected_dimension}"
 
-        logger.info(f"✅ Actual embedding dimension correct: {actual_dim}")
+        logger.info("✅ Actual embedding dimension correct: %s", actual_dim)
         return True, None
 
     except Exception as e:
-        logger.warning(f"Could not test actual embedding dimensions: {e}")
+        logger.warning("Could not test actual embedding dimensions: %s", e)
         return True, None
 
 
@@ -137,14 +137,14 @@ class KnowledgeConsistencyVerifier:
 
             if not kb_embedding_model:
                 kb_embedding_model = expected_model
-                logger.info(f"✅ Using default embedding model: {expected_model}")
+                logger.info("✅ Using default embedding model: %s", expected_model)
 
             # 3. Verify semantic chunker uses same model (skip if not available)
             try:
                 # Check if semantic chunker is configured properly
                 logger.info("📝 Semantic chunker consistency check: ASSUMED_COMPATIBLE")
             except Exception as e:
-                logger.warning(f"Could not verify semantic chunker: {e}")
+                logger.warning("Could not verify semantic chunker: %s", e)
 
             # 4. Check Redis vector schema consistency
             try:
@@ -156,7 +156,7 @@ class KnowledgeConsistencyVerifier:
                         )
                         return False
             except Exception as e:
-                logger.warning(f"Could not instantiate KnowledgeBase for verification: {e}")
+                logger.warning("Could not instantiate KnowledgeBase for verification: %s", e)
 
             logger.info("✅ EMBEDDING MODEL CONSISTENCY: VERIFIED")
             return True
@@ -231,7 +231,7 @@ class KnowledgeConsistencyVerifier:
             with open(lock_file, 'w') as f:
                 json.dump(lock_data, f, indent=2)
 
-            logger.info(f"🔒 Configuration locked at: {lock_file}")
+            logger.info("🔒 Configuration locked at: %s", lock_file)
             logger.info("✅ CONFIGURATION LOCKS: ENFORCED")
             return True
 
@@ -277,13 +277,13 @@ class KnowledgeConsistencyVerifier:
                 result = check_func()
                 if not result:
                     all_passed = False
-                    logger.error(f"❌ CRITICAL FAILURE: {check_name}")
+                    logger.error("❌ CRITICAL FAILURE: %s", check_name)
                 else:
-                    logger.info(f"✅ VERIFIED: {check_name}")
+                    logger.info("✅ VERIFIED: %s", check_name)
             except Exception as e:
                 all_passed = False
                 self.critical_errors.append(f"EXCEPTION in {check_name}: {e}")
-                logger.error(f"💥 EXCEPTION: {check_name} - {e}")
+                logger.error("💥 EXCEPTION: %s - %s", check_name, e)
 
         # Generate report
         report = self.generate_consistency_report()
@@ -294,7 +294,7 @@ class KnowledgeConsistencyVerifier:
         with open(report_file, 'w') as f:
             json.dump(report, f, indent=2)
 
-        logger.info(f"📊 Report saved: {report_file}")
+        logger.info("📊 Report saved: %s", report_file)
 
         # Final status
         if all_passed:
@@ -305,7 +305,7 @@ class KnowledgeConsistencyVerifier:
             logger.error("🚨 CRITICAL FAILURES DETECTED!")
             logger.error("⚠️  KNOWLEDGE RETRIEVAL INCONSISTENCIES POSSIBLE!")
             for error in self.critical_errors:
-                logger.error(f"   💥 {error}")
+                logger.error("   💥 %s", error)
             return False
 
 

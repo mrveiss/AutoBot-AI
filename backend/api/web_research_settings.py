@@ -82,7 +82,7 @@ async def get_research_status():
         )
 
     except Exception as e:
-        logger.error(f"Failed to get research status: {e}")
+        logger.error("Failed to get research status: %s", e)
         return JSONResponse(
             status_code=200,  # Return 200 even on error for graceful degradation
             content={
@@ -141,7 +141,7 @@ async def enable_web_research():
             )
 
     except Exception as e:
-        logger.error(f"Failed to enable web research: {e}")
+        logger.error("Failed to enable web research: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to enable web research: {str(e)}"
         )
@@ -194,7 +194,7 @@ async def disable_web_research():
             )
 
     except Exception as e:
-        logger.error(f"Failed to disable web research: {e}")
+        logger.error("Failed to disable web research: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to disable web research: {str(e)}"
         )
@@ -248,7 +248,7 @@ async def get_research_settings():
         )
 
     except Exception as e:
-        logger.error(f"Failed to get research settings: {e}")
+        logger.error("Failed to get research settings: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to get research settings: {str(e)}"
         )
@@ -310,7 +310,7 @@ async def update_research_settings(settings: WebResearchSettings):
         )
 
     except Exception as e:
-        logger.error(f"Failed to update research settings: {e}")
+        logger.error("Failed to update research settings: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to update research settings: {str(e)}"
         )
@@ -327,7 +327,7 @@ async def test_web_research(query: str = "test query"):
     try:
         from src.agents.web_research_integration import conduct_web_research
 
-        logger.info(f"Testing web research with query: {query}")
+        logger.info("Testing web research with query: %s", query)
 
         # Conduct test research
         result = await conduct_web_research(
@@ -347,7 +347,7 @@ async def test_web_research(query: str = "test query"):
         )
 
     except Exception as e:
-        logger.error(f"Web research test failed: {e}")
+        logger.error("Web research test failed: %s", e)
         return JSONResponse(
             status_code=200,
             content={
@@ -387,7 +387,7 @@ async def clear_research_cache():
         )
 
     except Exception as e:
-        logger.error(f"Failed to clear research cache: {e}")
+        logger.error("Failed to clear research cache: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to clear research cache: {str(e)}"
         )
@@ -421,7 +421,7 @@ async def reset_circuit_breakers():
         )
 
     except Exception as e:
-        logger.error(f"Failed to reset circuit breakers: {e}")
+        logger.error("Failed to reset circuit breakers: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to reset circuit breakers: {str(e)}"
         )
@@ -463,7 +463,7 @@ async def get_usage_stats():
         )
 
     except Exception as e:
-        logger.error(f"Failed to get usage stats: {e}")
+        logger.error("Failed to get usage stats: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to get usage stats: {str(e)}"
         )

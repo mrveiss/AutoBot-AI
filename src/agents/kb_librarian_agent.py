@@ -38,11 +38,11 @@ class KBLibrarianAgent:
     ) -> List[Dict[str, Any]]:
         """Search the knowledge base for relevant information."""
         try:
-            logger.debug(f"KB-LIBRARIAN: Searching for '{query}'")
+            logger.debug("KB-LIBRARIAN: Searching for '%s'", query)
             results = await self.knowledge_base.search(query, limit=limit)
 
             if results:
-                logger.info(f"KB-LIBRARIAN: Found {len(results)} results for '{query}'")
+                logger.info("KB-LIBRARIAN: Found %s results for '%s'", len(results), query)
                 # Return formatted results with sources
                 formatted_results = []
                 for result in results:
@@ -58,11 +58,11 @@ class KBLibrarianAgent:
                     )
                 return formatted_results
             else:
-                logger.info(f"KB-LIBRARIAN: No results found for '{query}'")
+                logger.info("KB-LIBRARIAN: No results found for '%s'", query)
                 return []
 
         except Exception as e:
-            logger.error(f"KB-LIBRARIAN: Search error for '{query}': {e}")
+            logger.error("KB-LIBRARIAN: Search error for '%s': %s", query, e)
             return []
 
     async def get_context_for_question(self, question: str) -> str:
@@ -117,7 +117,7 @@ class KBLibrarianAgent:
                 "sources": [result["source"] for result in kb_results],
             }
         except Exception as e:
-            logger.error(f"KB-LIBRARIAN: LLM error: {e}")
+            logger.error("KB-LIBRARIAN: LLM error: %s", e)
             return {
                 "answer": (
                     "I'm sorry, I encountered an error while generating a response."
@@ -150,7 +150,7 @@ class KBLibrarianAgent:
     async def _trigger_auto_learning(self, question: str):
         """Trigger auto-learning process for missing knowledge."""
         try:
-            logger.info(f"AUTO-LEARNING: Triggered for question: {question}")
+            logger.info("AUTO-LEARNING: Triggered for question: %s", question)
 
             docs_dirs = [
                 f"{PATH.PROJECT_ROOT}/docs",
@@ -165,7 +165,7 @@ class KBLibrarianAgent:
             await self.knowledge_base.populate_knowledge_base()
 
         except Exception as e:
-            logger.error(f"AUTO-LEARNING: Failed to trigger population: {e}")
+            logger.error("AUTO-LEARNING: Failed to trigger population: %s", e)
 
     async def _import_document(self, file_path: str):
         """Import a single document into the knowledge base."""
@@ -196,10 +196,10 @@ class KBLibrarianAgent:
                 title=os.path.basename(file_path),
                 source=f"AutoBot Documentation: {file_path}",
             )
-            logger.info(f"AUTO-LEARNING: Added {file_path} to knowledge base")
+            logger.info("AUTO-LEARNING: Added %s to knowledge base", file_path)
 
         except Exception as e:
-            logger.error(f"AUTO-LEARNING: Failed to import {file_path}: {e}")
+            logger.error("AUTO-LEARNING: Failed to import %s: %s", file_path, e)
 
     async def get_knowledge_stats(self) -> Dict[str, Any]:
         """Get knowledge base statistics."""
@@ -207,7 +207,7 @@ class KBLibrarianAgent:
             stats = await self.knowledge_base.get_stats()
             return stats
         except Exception as e:
-            logger.error(f"KB-LIBRARIAN: Failed to get stats: {e}")
+            logger.error("KB-LIBRARIAN: Failed to get stats: %s", e)
             return {"error": str(e)}
 
     async def add_new_knowledge(self, content: str, title: str, source: str = None):
@@ -217,9 +217,9 @@ class KBLibrarianAgent:
                 source = f"Added by KB Librarian: {title}"
 
             await self.knowledge_base.add_text(content, title=title, source=source)
-            logger.info(f"KB-LIBRARIAN: Added new knowledge: {title}")
+            logger.info("KB-LIBRARIAN: Added new knowledge: %s", title)
         except Exception as e:
-            logger.error(f"KB-LIBRARIAN: Failed to add knowledge '{title}': {e}")
+            logger.error("KB-LIBRARIAN: Failed to add knowledge '%s': %s", title, e)
             raise
 
 

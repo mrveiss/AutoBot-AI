@@ -33,7 +33,7 @@ Usage:
 
     if threat:
         # Handle detected threat
-        logger.warning(f"Threat detected: {threat.threat_category.value}")
+        logger.warning("Threat detected: %s", threat.threat_category.value)
 """
 
 # Types and constants

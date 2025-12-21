@@ -54,7 +54,7 @@ class AsyncFileOperations:
 
             # Check cache first
             if await self._is_cached_and_fresh(file_path):
-                logger.debug(f"📋 Using cached content for {file_path}")
+                logger.debug("📋 Using cached content for %s", file_path)
                 return self.file_cache[file_path]["content"]
 
             # Read file asynchronously
@@ -64,17 +64,17 @@ class AsyncFileOperations:
             # Cache the content
             self._cache_file_content(file_path, content)
 
-            logger.debug(f"📖 Read {len(content)} chars from {file_path}")
+            logger.debug("📖 Read %s chars from %s", len(content), file_path)
             return content
 
         except FileNotFoundError:
-            logger.warning(f"📁 File not found: {file_path}")
+            logger.warning("📁 File not found: %s", file_path)
             return ""
         except OSError as e:
-            logger.error(f"📖 Failed to read file {file_path}: {e}")
+            logger.error("📖 Failed to read file %s: %s", file_path, e)
             return ""
         except Exception as e:
-            logger.error(f"📖 Error reading {file_path}: {e}")
+            logger.error("📖 Error reading %s: %s", file_path, e)
             return ""
 
     async def write_text_file(
@@ -105,14 +105,14 @@ class AsyncFileOperations:
             # Update cache
             self._cache_file_content(str(file_path), content)
 
-            logger.debug(f"📝 Wrote {len(content)} chars to {file_path}")
+            logger.debug("📝 Wrote %s chars to %s", len(content), file_path)
             return True
 
         except OSError as e:
-            logger.error(f"📝 Failed to write to file {file_path}: {e}")
+            logger.error("📝 Failed to write to file %s: %s", file_path, e)
             return False
         except Exception as e:
-            logger.error(f"📝 Error writing to {file_path}: {e}")
+            logger.error("📝 Error writing to %s: %s", file_path, e)
             return False
 
     async def read_json_file(self, file_path: Union[str, Path]) -> Dict[str, Any]:
@@ -129,14 +129,14 @@ class AsyncFileOperations:
             # Parse JSON in thread to avoid blocking
             json_data = await asyncio.to_thread(json.loads, content)
 
-            logger.debug(f"📊 Loaded JSON from {file_path}")
+            logger.debug("📊 Loaded JSON from %s", file_path)
             return json_data
 
         except json.JSONDecodeError as e:
-            logger.error(f"📊 JSON decode error in {file_path}: {e}")
+            logger.error("📊 JSON decode error in %s: %s", file_path, e)
             return {}
         except Exception as e:
-            logger.error(f"📊 Error loading JSON from {file_path}: {e}")
+            logger.error("📊 Error loading JSON from %s: %s", file_path, e)
             return {}
 
     async def write_json_file(
@@ -157,12 +157,12 @@ class AsyncFileOperations:
             result = await self.write_text_file(file_path, content)
 
             if result:
-                logger.debug(f"📊 Saved JSON to {file_path}")
+                logger.debug("📊 Saved JSON to %s", file_path)
 
             return result
 
         except Exception as e:
-            logger.error(f"📊 Error saving JSON to {file_path}: {e}")
+            logger.error("📊 Error saving JSON to %s: %s", file_path, e)
             return False
 
     async def file_exists(self, file_path: Union[str, Path]) -> bool:
@@ -174,7 +174,7 @@ class AsyncFileOperations:
         try:
             return await asyncio.to_thread(os.path.exists, str(file_path))
         except Exception as e:
-            logger.error(f"📁 Error checking file existence {file_path}: {e}")
+            logger.error("📁 Error checking file existence %s: %s", file_path, e)
             return False
 
     async def get_file_size(self, file_path: Union[str, Path]) -> int:
@@ -187,7 +187,7 @@ class AsyncFileOperations:
             stat_result = await asyncio.to_thread(os.stat, str(file_path))
             return stat_result.st_size
         except Exception as e:
-            logger.error(f"📏 Error getting file size {file_path}: {e}")
+            logger.error("📏 Error getting file size %s: %s", file_path, e)
             return 0
 
     async def list_directory(
@@ -213,7 +213,7 @@ class AsyncFileOperations:
                 return [str(f) for f in files]
 
         except Exception as e:
-            logger.error(f"📁 Error listing directory {dir_path}: {e}")
+            logger.error("📁 Error listing directory %s: %s", dir_path, e)
             return []
 
     async def create_temp_file(
@@ -235,14 +235,14 @@ class AsyncFileOperations:
 
             success = await self.write_text_file(temp_path, content)
             if success:
-                logger.debug(f"🗂️ Created temp file: {temp_path}")
+                logger.debug("🗂️ Created temp file: %s", temp_path)
                 return temp_path
             else:
                 await asyncio.to_thread(os.unlink, temp_path)
                 return None
 
         except Exception as e:
-            logger.error(f"🗂️ Error creating temp file: {e}")
+            logger.error("🗂️ Error creating temp file: %s", e)
             return None
 
     async def copy_file(self, src: Union[str, Path], dst: Union[str, Path]) -> bool:
@@ -265,14 +265,14 @@ class AsyncFileOperations:
                 # Write as text
                 await self.write_text_file(dst, content)
 
-            logger.debug(f"📋 Copied {src} to {dst}")
+            logger.debug("📋 Copied %s to %s", src, dst)
             return True
 
         except OSError as e:
-            logger.error(f"📋 Failed to copy file {src} to {dst}: {e}")
+            logger.error("📋 Failed to copy file %s to %s: %s", src, dst, e)
             return False
         except Exception as e:
-            logger.error(f"📋 Error copying {src} to {dst}: {e}")
+            logger.error("📋 Error copying %s to %s: %s", src, dst, e)
             return False
 
     def _cache_file_content(self, file_path: str, content: str):

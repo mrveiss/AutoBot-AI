@@ -241,7 +241,7 @@ class CFGBuilder(ast.NodeVisitor):
             if start_line < len(self.source_lines) and end_line <= len(self.source_lines):
                 return "\n".join(self.source_lines[start_line:end_line])
         except Exception as e:
-            logger.debug(f"Failed to extract code snippet from AST node: {e}")
+            logger.debug("Failed to extract code snippet from AST node: %s", e)
         return ""
 
     def _add_node(
@@ -302,7 +302,7 @@ class CFGBuilder(ast.NodeVisitor):
             tree = ast.parse(self.source_code)
             self.visit(tree)
         except SyntaxError as e:
-            logger.error(f"Syntax error parsing source: {e}")
+            logger.error("Syntax error parsing source: %s", e)
 
         return self.graphs
 

@@ -62,7 +62,7 @@ class CodebaseChromaDBMigration:
             logger.info("✅ Connected to Redis DB 11")
             return True
         except Exception as e:
-            logger.error(f"❌ Redis connection failed: {e}")
+            logger.error("❌ Redis connection failed: %s", e)
             return False
 
     def connect_chromadb(self):
@@ -83,10 +83,10 @@ class CodebaseChromaDBMigration:
                 }
             )
 
-            logger.info(f"✅ ChromaDB collection 'autobot_code' ready ({self.code_collection.count()} existing items)")
+            logger.info("✅ ChromaDB collection 'autobot_code' ready (%s existing items)", self.code_collection.count())
             return True
         except Exception as e:
-            logger.error(f"❌ ChromaDB connection failed: {e}")
+            logger.error("❌ ChromaDB connection failed: %s", e)
             return False
 
     def migrate_functions(self):
@@ -96,7 +96,7 @@ class CodebaseChromaDBMigration:
 
             # Get all function keys
             function_keys = list(self.redis_client.scan_iter(match="codebase:functions:*"))
-            logger.info(f"Found {len(function_keys)} functions")
+            logger.info("Found %s functions", len(function_keys))
 
             # Prepare batch data
             batch_ids = []
@@ -135,7 +135,7 @@ Docstring: {function_data.get('docstring', 'No documentation')}
                     })
 
                 except Exception as e:
-                    logger.warning(f"Error processing {key}: {e}")
+                    logger.warning("Error processing %s: %s", key, e)
                     self.migration_stats['errors'] += 1
 
             # Add batch to ChromaDB
@@ -146,10 +146,10 @@ Docstring: {function_data.get('docstring', 'No documentation')}
                     metadatas=batch_metadatas
                 )
                 self.migration_stats['functions'] = len(batch_ids)
-                logger.info(f"✅ Migrated {len(batch_ids)} functions to ChromaDB")
+                logger.info("✅ Migrated %s functions to ChromaDB", len(batch_ids))
 
         except Exception as e:
-            logger.error(f"❌ Function migration failed: {e}")
+            logger.error("❌ Function migration failed: %s", e)
 
     def migrate_classes(self):
         """Migrate class declarations from Redis to ChromaDB"""
@@ -158,7 +158,7 @@ Docstring: {function_data.get('docstring', 'No documentation')}
 
             # Get all class keys
             class_keys = list(self.redis_client.scan_iter(match="codebase:classes:*"))
-            logger.info(f"Found {len(class_keys)} classes")
+            logger.info("Found %s classes", len(class_keys))
 
             batch_ids = []
             batch_documents = []
@@ -195,7 +195,7 @@ Docstring: {class_data.get('docstring', 'No documentation')}
                     })
 
                 except Exception as e:
-                    logger.warning(f"Error processing {key}: {e}")
+                    logger.warning("Error processing %s: %s", key, e)
                     self.migration_stats['errors'] += 1
 
             if batch_ids:
@@ -205,10 +205,10 @@ Docstring: {class_data.get('docstring', 'No documentation')}
                     metadatas=batch_metadatas
                 )
                 self.migration_stats['classes'] = len(batch_ids)
-                logger.info(f"✅ Migrated {len(batch_ids)} classes to ChromaDB")
+                logger.info("✅ Migrated %s classes to ChromaDB", len(batch_ids))
 
         except Exception as e:
-            logger.error(f"❌ Class migration failed: {e}")
+            logger.error("❌ Class migration failed: %s", e)
 
     def migrate_problems(self):
         """Migrate code problems from Redis to ChromaDB"""
@@ -224,7 +224,7 @@ Docstring: {class_data.get('docstring', 'No documentation')}
                 return
 
             problems = json.loads(problems_data)
-            logger.info(f"Found {len(problems)} problems")
+            logger.info("Found %s problems", len(problems))
 
             batch_ids = []
             batch_documents = []
@@ -254,7 +254,7 @@ Suggestion: {problem.get('suggestion', 'No suggestion')}
                     })
 
                 except Exception as e:
-                    logger.warning(f"Error processing problem {idx}: {e}")
+                    logger.warning("Error processing problem %s: %s", idx, e)
                     self.migration_stats['errors'] += 1
 
             if batch_ids:
@@ -264,10 +264,10 @@ Suggestion: {problem.get('suggestion', 'No suggestion')}
                     metadatas=batch_metadatas
                 )
                 self.migration_stats['problems'] = len(batch_ids)
-                logger.info(f"✅ Migrated {len(batch_ids)} problems to ChromaDB")
+                logger.info("✅ Migrated %s problems to ChromaDB", len(batch_ids))
 
         except Exception as e:
-            logger.error(f"❌ Problems migration failed: {e}")
+            logger.error("❌ Problems migration failed: %s", e)
 
     def migrate_stats(self):
         """Migrate codebase statistics to ChromaDB"""
@@ -308,7 +308,7 @@ Last Indexed: {stats.get('last_indexed', 'unknown')}
             logger.info("✅ Migrated codebase statistics to ChromaDB")
 
         except Exception as e:
-            logger.error(f"❌ Stats migration failed: {e}")
+            logger.error("❌ Stats migration failed: %s", e)
 
     def run_migration(self):
         """Execute full migration"""
@@ -327,7 +327,7 @@ Last Indexed: {stats.get('last_indexed', 'unknown')}
 
         # Get Redis database size
         redis_keys = self.redis_client.dbsize()
-        logger.info(f"Redis DB 11 has {redis_keys} keys")
+        logger.info("Redis DB 11 has %s keys", redis_keys)
 
         # Run migrations
         self.migrate_functions()
@@ -346,14 +346,14 @@ Last Indexed: {stats.get('last_indexed', 'unknown')}
         # Print summary
         logger.info("=" * 60)
         logger.info("Migration Summary:")
-        logger.info(f"  Functions:  {self.migration_stats['functions']}")
-        logger.info(f"  Classes:    {self.migration_stats['classes']}")
-        logger.info(f"  Problems:   {self.migration_stats['problems']}")
-        logger.info(f"  Stats:      {self.migration_stats['stats']}")
+        logger.info("  Functions:  %s", self.migration_stats['functions'])
+        logger.info("  Classes:    %s", self.migration_stats['classes'])
+        logger.info("  Problems:   %s", self.migration_stats['problems'])
+        logger.info("  Stats:      %s", self.migration_stats['stats'])
         logger.info("  ---")
-        logger.info(f"  Total:      {self.migration_stats['total_migrated']}")
-        logger.info(f"  Errors:     {self.migration_stats['errors']}")
-        logger.info(f"  ChromaDB Collection Size: {self.code_collection.count()}")
+        logger.info("  Total:      %s", self.migration_stats['total_migrated'])
+        logger.info("  Errors:     %s", self.migration_stats['errors'])
+        logger.info("  ChromaDB Collection Size: %s", self.code_collection.count())
         logger.info("=" * 60)
 
         return True

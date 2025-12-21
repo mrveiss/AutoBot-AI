@@ -239,5 +239,5 @@ def _convert_metrics_to_csv(data: Metadata) -> str:
         return output.getvalue()
 
     except Exception as e:
-        logger.error(f"Error converting to CSV: {e}")
+        logger.error("Error converting to CSV: %s", e)
         return "Error generating CSV"

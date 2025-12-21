@@ -131,7 +131,7 @@ class SystemCommandAgent:
                         "message": f"{tool_name} is installed",
                     }
             except Exception as e:
-                logger.debug(f"Check command failed: {cmd}, error: {e}")
+                logger.debug("Check command failed: %s, error: %s", cmd, e)
                 continue
 
         return {"installed": False, "message": f"{tool_name} is not installed"}
@@ -146,7 +146,7 @@ class SystemCommandAgent:
                 result = await terminal.wait_for_completion(timeout=3.0)
 
                 if result["exit_code"] == 0:
-                    logger.info(f"Detected package manager: {pm_name}")
+                    logger.info("Detected package manager: %s", pm_name)
                     return pm_name
             except Exception:
                 continue

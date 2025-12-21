@@ -66,7 +66,7 @@ async def _handle_session_file_action(
     """
     if file_action == "delete":
         deleted_count = await conversation_file_manager.delete_session_files(session_id)
-        logger.info(f"Deleted {deleted_count} files for session {session_id}")
+        logger.info("Deleted %s files for session %s", deleted_count, session_id)
         return {
             "files_handled": True,
             "action_taken": "delete",
@@ -113,7 +113,7 @@ async def _handle_session_file_action(
 
 def log_request_context(request, endpoint, request_id):
     """Log request context for debugging"""
-    logger.info(f"[{request_id}] {endpoint} - {request.method} {request.url.path}")
+    logger.info("[%s] %s - %s %s", request_id, endpoint, request.method, request.url.path)
 
 
 # ====================================================================
@@ -284,7 +284,7 @@ async def create_session(session_data: SessionCreate, request: Request):
     if user_data and user_data.get("username"):
         metadata["owner"] = user_data["username"]
         metadata["username"] = user_data["username"]  # For backward compatibility
-        logger.info(f"Session {session_id} created with owner: {user_data['username']}")
+        logger.info("Session %s created with owner: %s", session_id, user_data['username'])
 
     # Create session
     session = await chat_history_manager.create_session(
@@ -435,7 +435,7 @@ async def _handle_conversation_files(
                 conversation_file_manager, session_id, file_action, parsed_file_options
             )
         except Exception as file_error:
-            logger.error(f"Error handling files for session {session_id}: {file_error}")
+            logger.error("Error handling files for session %s: %s", session_id, file_error)
             file_deletion_result = {
                 "files_handled": False,
                 "action_taken": file_action,

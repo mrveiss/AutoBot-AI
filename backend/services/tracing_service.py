@@ -153,9 +153,9 @@ class TracingService:
                 self._provider.add_span_processor(
                     BatchSpanProcessor(otlp_exporter)
                 )
-                logger.info(f"OTLP exporter configured for {self._jaeger_endpoint}")
+                logger.info("OTLP exporter configured for %s", self._jaeger_endpoint)
             except Exception as e:
-                logger.warning(f"Failed to configure OTLP exporter: {e}")
+                logger.warning("Failed to configure OTLP exporter: %s", e)
                 # Continue without OTLP - tracing still works locally
 
             # Optionally add console exporter for debugging
@@ -189,7 +189,7 @@ class TracingService:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to initialize OpenTelemetry tracing: {e}")
+            logger.error("Failed to initialize OpenTelemetry tracing: %s", e)
             self._enabled = False
             return False
 
@@ -216,7 +216,7 @@ class TracingService:
             logger.info("FastAPI instrumented for distributed tracing")
             return True
         except Exception as e:
-            logger.error(f"Failed to instrument FastAPI: {e}")
+            logger.error("Failed to instrument FastAPI: %s", e)
             return False
 
     @property
@@ -355,7 +355,7 @@ class TracingService:
                 self._provider.shutdown()
                 logger.info("OpenTelemetry tracing provider shutdown complete")
             except Exception as e:
-                logger.error(f"Error shutting down tracing provider: {e}")
+                logger.error("Error shutting down tracing provider: %s", e)
 
         self._enabled = False
 

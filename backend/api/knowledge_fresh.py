@@ -50,7 +50,7 @@ async def get_fresh_knowledge_stats(request: Request = None):
         logger.info("Getting fresh stats...")
         stats = await kb.get_stats()
 
-        logger.info(f"Fresh stats retrieved: {stats}")
+        logger.info("Fresh stats retrieved: %s", stats)
 
         # Return in the same format as the regular endpoint
         return {
@@ -73,7 +73,7 @@ async def get_fresh_knowledge_stats(request: Request = None):
         }
 
     except Exception as e:
-        logger.error(f"Error getting fresh KB stats: {e}")
+        logger.error("Error getting fresh KB stats: %s", e)
         import traceback
 
         traceback.print_exc()
@@ -177,7 +177,7 @@ async def rebuild_search_index():
         # Rebuild index
         result = await kb.rebuild_search_index()
 
-        logger.info(f"Index rebuild result: {result}")
+        logger.info("Index rebuild result: %s", result)
 
         return {
             "operation": "rebuild_search_index",
@@ -186,5 +186,5 @@ async def rebuild_search_index():
         }
 
     except Exception as e:
-        logger.error(f"Error rebuilding index: {e}")
+        logger.error("Error rebuilding index: %s", e)
         return {"operation": "rebuild_search_index", "error": str(e), "success": False}

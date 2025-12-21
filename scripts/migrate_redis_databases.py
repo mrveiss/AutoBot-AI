@@ -42,9 +42,9 @@ class RedisMigrator:
                 # Test connection
                 client.ping()
                 self.connections[db_enum.name] = client
-                logger.info(f"Connected to Redis database {db_enum.value} ({db_enum.name})")
+                logger.info("Connected to Redis database %s (%s)", db_enum.value, db_enum.name)
             except Exception as e:
-                logger.error(f"Failed to connect to Redis database {db_enum.value}: {e}")
+                logger.error("Failed to connect to Redis database %s: %s", db_enum.value, e)
 
         self.source_db = self.connections.get('MAIN')  # Database 0
 
@@ -128,27 +128,27 @@ class RedisMigrator:
                 analysis['other_keys'].append(key)
 
         logger.info("Data analysis complete:")
-        logger.info(f"  Total keys: {analysis['total_keys']}")
-        logger.info(f"  Vector embeddings: {len(analysis['vector_keys'])}")
-        logger.info(f"  Knowledge/Facts: {len(analysis['knowledge_keys'])}")
-        logger.info(f"  Workflow data: {len(analysis['workflow_keys'])}")
-        logger.info(f"  Session data: {len(analysis['session_keys'])}")
-        logger.info(f"  Other data: {len(analysis['other_keys'])}")
+        logger.info("  Total keys: %s", analysis['total_keys'])
+        logger.info("  Vector embeddings: %s", len(analysis['vector_keys']))
+        logger.info("  Knowledge/Facts: %s", len(analysis['knowledge_keys']))
+        logger.info("  Workflow data: %s", len(analysis['workflow_keys']))
+        logger.info("  Session data: %s", len(analysis['session_keys']))
+        logger.info("  Other data: %s", len(analysis['other_keys']))
 
         return analysis
 
     def migrate_keys(self, keys: list, target_db_name: str, description: str) -> bool:
         """Migrate keys to target database"""
         if not keys:
-            logger.info(f"No {description} keys to migrate")
+            logger.info("No %s keys to migrate", description)
             return True
 
         target_db = self.connections.get(target_db_name)
         if not target_db:
-            logger.error(f"Target database {target_db_name} not available")
+            logger.error("Target database %s not available", target_db_name)
             return False
 
-        logger.info(f"Migrating {len(keys)} {description} keys to database {target_db_name}")
+        logger.info("Migrating %s %s keys to database %s", len(keys), description, target_db_name)
 
         # Type dispatch table (Issue #315: reduces nesting)
         type_handlers = {
@@ -165,13 +165,13 @@ class RedisMigrator:
                 handler = type_handlers.get(key_type)
                 if handler:
                     handler(key, target_db)
-                logger.debug(f"Migrated {key} ({key_type}) to {target_db_name}")
+                logger.debug("Migrated %s (%s) to %s", key, key_type, target_db_name)
 
             except Exception as e:
-                logger.error(f"Failed to migrate key {key}: {e}")
+                logger.error("Failed to migrate key %s: %s", key, e)
                 return False
 
-        logger.info(f"Successfully migrated {len(keys)} {description} keys")
+        logger.info("Successfully migrated %s %s keys", len(keys), description)
         return True
 
     def cleanup_migrated_keys(self, keys: list, description: str) -> bool:
@@ -179,14 +179,14 @@ class RedisMigrator:
         if not keys:
             return True
 
-        logger.info(f"Cleaning up {len(keys)} {description} keys from source database")
+        logger.info("Cleaning up %s %s keys from source database", len(keys), description)
 
         try:
             self.source_db.delete(*keys)
-            logger.info(f"Cleaned up {len(keys)} {description} keys")
+            logger.info("Cleaned up %s %s keys", len(keys), description)
             return True
         except Exception as e:
-            logger.error(f"Failed to cleanup keys: {e}")
+            logger.error("Failed to cleanup keys: %s", e)
             return False
 
     def run_migration(self, cleanup: bool = False) -> bool:
@@ -213,7 +213,7 @@ class RedisMigrator:
             if self.migrate_keys(keys, target_db, description):
                 all_migrated_keys.extend(keys)
             else:
-                logger.error(f"Migration failed for {description}")
+                logger.error("Migration failed for %s", description)
                 return False
 
         # Optional cleanup
@@ -234,7 +234,7 @@ class RedisMigrator:
                 client = self.connections[db_name]
                 key_count = client.dbsize()
                 results[f"db_{db_enum.value}_{db_name}"] = key_count
-                logger.info(f"Database {db_enum.value} ({db_name}): {key_count} keys")
+                logger.info("Database %s (%s): %s keys", db_enum.value, db_name, key_count)
 
         return results
 

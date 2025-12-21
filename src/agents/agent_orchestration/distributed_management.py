@@ -63,7 +63,7 @@ class DistributedAgentManager:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to start distributed mode: {e}")
+            logger.error("Failed to start distributed mode: %s", e)
             self.is_running = False
             return False
 
@@ -90,7 +90,7 @@ class DistributedAgentManager:
             try:
                 agent = agent_class()
                 await self.register_agent(agent)
-                logger.info(f"Initialized distributed agent: {agent_type}")
+                logger.info("Initialized distributed agent: %s", agent_type)
             except Exception as e:
                 logger.error(
                     f"Failed to initialize distributed agent {agent_type}: {e}"
@@ -116,11 +116,11 @@ class DistributedAgentManager:
                 active_tasks=set(),
             )
 
-            logger.info(f"Registered distributed agent: {agent_id}")
+            logger.info("Registered distributed agent: %s", agent_id)
             return True
 
         except Exception as e:
-            logger.error(f"Failed to register distributed agent: {e}")
+            logger.error("Failed to register distributed agent: %s", e)
             return False
 
     async def unregister_agent(self, agent_id: str) -> bool:
@@ -133,11 +133,11 @@ class DistributedAgentManager:
             await agent_info.agent.shutdown_communication()
             del self.distributed_agents[agent_id]
 
-            logger.info(f"Unregistered distributed agent: {agent_id}")
+            logger.info("Unregistered distributed agent: %s", agent_id)
             return True
 
         except Exception as e:
-            logger.error(f"Failed to unregister distributed agent {agent_id}: {e}")
+            logger.error("Failed to unregister distributed agent %s: %s", agent_id, e)
             return False
 
     async def _check_single_agent_health(
@@ -192,7 +192,7 @@ class DistributedAgentManager:
 
         for result in results:
             if isinstance(result, Exception):
-                logger.error(f"Health check task failed: {result}")
+                logger.error("Health check task failed: %s", result)
                 continue
             agent_id, health, error = result
             self._process_health_result(agent_id, health, error)
@@ -209,7 +209,7 @@ class DistributedAgentManager:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error in distributed health monitor: {e}")
+                logger.error("Error in distributed health monitor: %s", e)
                 await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)
 
     def get_healthy_agents(self) -> list:

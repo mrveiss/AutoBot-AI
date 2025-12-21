@@ -70,7 +70,7 @@ complexity, and requirements:
             return self._fallback_intent_analysis(user_request)
 
         except Exception as e:
-            logger.error(f"Intent analysis failed: {e}")
+            logger.error("Intent analysis failed: %s", e)
             return self._fallback_intent_analysis(user_request)
 
     def _fallback_intent_analysis(self, user_request: str) -> Metadata:

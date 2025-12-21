@@ -337,7 +337,7 @@ class PhaseValidator:
         total_weight = 0
 
         for phase_name, criteria in PhaseValidationCriteria.PHASE_CRITERIA.items():
-            logger.info(f"📋 Validating {phase_name}...")
+            logger.info("📋 Validating %s...", phase_name)
 
             phase_result = await self._validate_phase(phase_name, criteria)
             validation_results["phases"][phase_name] = phase_result
@@ -645,7 +645,7 @@ class PhaseValidator:
                 return checker()
             return False
         except Exception as e:
-            logger.debug(f"Error checking service {service}: {e}")
+            logger.debug("Error checking service %s: %s", service, e)
             return False
 
     async def _validate_features(self, feature_type: str, features) -> Dict[str, Any]:
@@ -719,7 +719,7 @@ class PhaseValidator:
                     results["passed"] += 1
 
         except Exception as e:
-            logger.error(f"Error validating performance metrics: {e}")
+            logger.error("Error validating performance metrics: %s", e)
 
         return results
 
@@ -897,7 +897,7 @@ class PhaseValidator:
         with open(output_path, "w") as f:
             json.dump(self.validation_results, f, indent=2)
 
-        logger.info(f"📊 Validation report saved: {output_path}")
+        logger.info("📊 Validation report saved: %s", output_path)
         return output_path
 
 
@@ -996,7 +996,7 @@ def main() -> None:
             sys.exit(0)  # Success - system ready
 
     except Exception as e:
-        logger.error(f"Validation failed: {e}")
+        logger.error("Validation failed: %s", e)
         sys.exit(3)
 
 

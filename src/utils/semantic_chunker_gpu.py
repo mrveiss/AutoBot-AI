@@ -100,9 +100,9 @@ class GPUSemanticChunker:
         self._gpu_memory_pool_initialized = False
 
         logger.info("GPUSemanticChunker initialized:")
-        logger.info(f"  - Model: {embedding_model}")
-        logger.info(f"  - GPU Batch Size: {gpu_batch_size} (optimized for RTX 4070)")
-        logger.info(f"  - GPU Memory Pooling: {enable_gpu_memory_pool}")
+        logger.info("  - Model: %s", embedding_model)
+        logger.info("  - GPU Batch Size: %s (optimized for RTX 4070)", gpu_batch_size)
+        logger.info("  - GPU Memory Pooling: %s", enable_gpu_memory_pool)
 
     def _setup_gpu_optimizations(self) -> None:
         """Configure GPU optimizations for RTX 4070 (Issue #315: extracted)."""
@@ -130,7 +130,7 @@ class GPUSemanticChunker:
             self._gpu_memory_pool_initialized = True
             logger.info("GPU memory pool initialized for RTX 4070 (6GB reserved)")
         except Exception as pool_error:
-            logger.warning(f"GPU memory pool setup failed: {pool_error}")
+            logger.warning("GPU memory pool setup failed: %s", pool_error)
 
     def _apply_model_optimizations(self, model, device: str):
         """Apply RTX 4070 specific model optimizations (Issue #315: extracted).
@@ -173,7 +173,7 @@ class GPUSemanticChunker:
             logger.info("  - GPU kernel warmup completed")
 
         except Exception as gpu_opt_error:
-            logger.warning(f"Advanced GPU optimizations failed: {gpu_opt_error}")
+            logger.warning("Advanced GPU optimizations failed: %s", gpu_opt_error)
             # Fallback to basic GPU usage
             import torch
 
@@ -205,7 +205,7 @@ class GPUSemanticChunker:
                 logger.info("GPU model loading completed")
 
             except Exception as e:
-                logger.error(f"Failed to load GPU model: {e}")
+                logger.error("Failed to load GPU model: %s", e)
                 self._load_fallback_model()
 
     def _load_model_with_optimizations(self):
@@ -226,7 +226,7 @@ class GPUSemanticChunker:
             device = "cuda:0"
             gpu_name = torch.cuda.get_device_name(0)
             total_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
-            logger.info(f"Optimizing for GPU: {gpu_name} ({total_memory:.1f}GB)")
+            logger.info("Optimizing for GPU: %s (%sGB)", gpu_name, total_memory:.1f)
         else:
             device = "cpu"
             logger.warning("CUDA not available - falling back to CPU")
@@ -262,7 +262,7 @@ class GPUSemanticChunker:
         start_time = time.time()
 
         try:
-            logger.info(f"Starting GPU semantic chunking ({len(text)} characters)")
+            logger.info("Starting GPU semantic chunking (%s characters)", len(text))
 
             # For testing, create simple chunks based on paragraphs/sentences
             sentences = self._basic_sentence_split(text)
@@ -313,14 +313,14 @@ class GPUSemanticChunker:
             sentences_per_sec = len(sentences) / total_time if total_time > 0 else 0
 
             logger.info("GPU chunking completed:")
-            logger.info(f"  - Total time: {total_time:.3f}s")
-            logger.info(f"  - Performance: {sentences_per_sec:.1f} sentences/sec")
-            logger.info(f"  - Chunks created: {len(chunks)}")
+            logger.info("  - Total time: %ss", total_time:.3f)
+            logger.info("  - Performance: %s sentences/sec", sentences_per_sec:.1f)
+            logger.info("  - Chunks created: %s", len(chunks))
 
             return chunks
 
         except Exception as e:
-            logger.error(f"GPU chunking failed: {e}")
+            logger.error("GPU chunking failed: %s", e)
             # Fallback to basic chunking
             return await self._fallback_basic_chunking(text, metadata)
 
@@ -373,7 +373,7 @@ class GPUSemanticChunker:
                 return np.vstack(all_embeddings)
 
         except Exception as e:
-            logger.error(f"GPU embedding computation failed: {e}")
+            logger.error("GPU embedding computation failed: %s", e)
             # Return zero embeddings as fallback
             return np.zeros((len(sentences), 384))
 
@@ -424,7 +424,7 @@ class GPUSemanticChunker:
             return distances
 
         except Exception as e:
-            logger.error(f"Distance computation failed: {e}")
+            logger.error("Distance computation failed: %s", e)
             return [0.5] * (len(embeddings) - 1)  # Default distances
 
     def _find_chunk_boundaries(self, distances: List[float]) -> List[int]:

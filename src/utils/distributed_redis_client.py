@@ -117,7 +117,7 @@ class DistributedRedisClient:
             return None
 
         except Exception as e:
-            logger.error(f"❌ Unexpected Redis connection error: {e}")
+            logger.error("❌ Unexpected Redis connection error: %s", e)
             return None
 
     def _test_connection(self) -> bool:
@@ -181,10 +181,10 @@ def test_distributed_redis_connection() -> bool:
     if client:
         try:
             response = client.ping()
-            logger.info(f"✅ Redis VM connection test successful: {response}")
+            logger.info("✅ Redis VM connection test successful: %s", response)
             return True
         except Exception as e:
-            logger.error(f"❌ Redis VM connection test failed: {e}")
+            logger.error("❌ Redis VM connection test failed: %s", e)
             return False
     else:
         logger.warning("⚠️  No Redis client available for testing")

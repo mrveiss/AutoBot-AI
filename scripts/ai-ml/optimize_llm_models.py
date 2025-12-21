@@ -64,13 +64,25 @@ class LLMModelOptimizer:
         logger.info("📊 Analyzing current model inventory...")
 
         try:
-            # Get installed Ollama models
-            result = subprocess.run(
-                ["ollama", "list"],
-                capture_output=True,
-                text=True,
-                check=True
+            # Get installed Ollama models (Issue #479: Use async subprocess)
+            process = await asyncio.create_subprocess_exec(
+                "ollama", "list",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
             )
+            stdout, stderr = await process.communicate()
+
+            if process.returncode != 0:
+                raise subprocess.CalledProcessError(
+                    process.returncode, "ollama list", stderr.decode()
+                )
+
+            # Create result-like object for compatibility
+            class Result:
+                def __init__(self, stdout_bytes):
+                    self.stdout = stdout_bytes.decode()
+
+            result = Result(stdout)
 
             # Parse ollama list output
             parsed_models = {}
@@ -90,7 +102,7 @@ class LLMModelOptimizer:
                 self.installed_models.update(parsed_models)
                 installed_count = len(self.installed_models)
 
-            logger.info(f"Found {installed_count} installed models")
+            logger.info("Found %s installed models", installed_count)
 
             # Identify missing critical models
             critical_models = [
@@ -110,12 +122,12 @@ class LLMModelOptimizer:
                 missing_list = list(self.missing_models)
 
             if missing_count > 0:
-                logger.warning(f"❌ Missing {missing_count} critical models: {missing_list}")
+                logger.warning("❌ Missing %s critical models: %s", missing_count, missing_list)
             else:
                 logger.info("✅ All critical models are installed")
 
         except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to analyze models: {e}")
+            logger.error("Failed to analyze models: %s", e)
             raise
 
     async def install_missing_models(self):
@@ -128,7 +140,7 @@ class LLMModelOptimizer:
             logger.info("✅ No missing models to install")
             return
 
-        logger.info(f"📦 Installing {len(models_to_install)} missing models...")
+        logger.info("📦 Installing %s missing models...", len(models_to_install))
 
         # Model installation priority and rationale
         model_priority = {
@@ -169,7 +181,7 @@ class LLMModelOptimizer:
 
         for model in sorted_models:
             model_info = model_priority.get(model, {})
-            logger.info(f"📥 Installing {model} ({model_info.get('reason', 'N/A')})")
+            logger.info("📥 Installing %s (%s)", model, model_info.get('reason', 'N/A'))
 
             try:
                 # Install model with timeout
@@ -187,27 +199,27 @@ class LLMModelOptimizer:
 
                 if process.returncode == 0:
                     install_time = time.time() - start_time
-                    logger.info(f"✅ Successfully installed {model} in {install_time:.1f}s")
+                    logger.info("✅ Successfully installed %s in %ss", model, install_time:.1f)
                     installation_results[model] = {
                         "status": "success",
                         "install_time": install_time,
                         "size": model_info.get("size_estimate", "Unknown")
                     }
                 else:
-                    logger.error(f"❌ Failed to install {model}: {stderr.decode()}")
+                    logger.error("❌ Failed to install %s: %s", model, stderr.decode())
                     installation_results[model] = {
                         "status": "failed",
                         "error": stderr.decode()
                     }
 
             except asyncio.TimeoutError:
-                logger.error(f"❌ Installation of {model} timed out")
+                logger.error("❌ Installation of %s timed out", model)
                 installation_results[model] = {
                     "status": "timeout",
                     "error": "Installation timed out after 30 minutes"
                 }
             except Exception as e:
-                logger.error(f"❌ Error installing {model}: {e}")
+                logger.error("❌ Error installing %s: %s", model, e)
                 installation_results[model] = {
                     "status": "error",
                     "error": str(e)
@@ -256,10 +268,10 @@ class LLMModelOptimizer:
         for file_path, updates in config_updates.items():
             full_path = self.autobot_root / file_path
             if not full_path.exists():
-                logger.warning(f"⚠️ Configuration file not found: {file_path}")
+                logger.warning("⚠️ Configuration file not found: %s", file_path)
                 continue
 
-            logger.info(f"📝 Updating {file_path}")
+            logger.info("📝 Updating %s", file_path)
 
             try:
                 # Read current content
@@ -273,9 +285,9 @@ class LLMModelOptimizer:
                     if update["find"] in content:
                         content = content.replace(update["find"], update["replace"])
                         changes_made += 1
-                        logger.info(f"✅ Updated {update['line_context']}")
+                        logger.info("✅ Updated %s", update['line_context'])
                     else:
-                        logger.warning(f"⚠️ Pattern not found: {update['line_context']}")
+                        logger.warning("⚠️ Pattern not found: %s", update['line_context'])
 
                 # Write updated content if changes were made
                 if changes_made > 0:
@@ -293,7 +305,7 @@ class LLMModelOptimizer:
                         "changes": changes_made,
                         "backup": str(backup_path)
                     }
-                    logger.info(f"✅ Updated {file_path} with {changes_made} changes")
+                    logger.info("✅ Updated %s with %s changes", file_path, changes_made)
                 else:
                     update_results[file_path] = {
                         "status": "no_changes",
@@ -301,7 +313,7 @@ class LLMModelOptimizer:
                     }
 
             except Exception as e:
-                logger.error(f"❌ Failed to update {file_path}: {e}")
+                logger.error("❌ Failed to update %s: %s", file_path, e)
                 update_results[file_path] = {
                     "status": "error",
                     "error": str(e)
@@ -385,7 +397,7 @@ class LLMModelOptimizer:
             with open(config_path, 'w') as f:
                 yaml.dump(hardware_config, f, default_flow_style=False, indent=2)
 
-            logger.info(f"✅ Hardware optimization config saved to {config_path}")
+            logger.info("✅ Hardware optimization config saved to %s", config_path)
             async with self._state_lock:
                 self.optimization_results["hardware_config"] = str(config_path)
 
@@ -395,7 +407,7 @@ class LLMModelOptimizer:
             with open(config_path, 'w') as f:
                 json.dump(hardware_config, f, indent=2)
 
-            logger.info(f"✅ Hardware optimization config saved to {config_path} (JSON format)")
+            logger.info("✅ Hardware optimization config saved to %s (JSON format)", config_path)
             async with self._state_lock:
                 self.optimization_results["hardware_config"] = str(config_path)
 
@@ -431,26 +443,26 @@ class LLMModelOptimizer:
                         "status": "success",
                         "response_time": "< 30s"
                     }
-                    logger.info(f"✅ Model {model} validation successful")
+                    logger.info("✅ Model %s validation successful", model)
                 else:
                     validation_results[model] = {
                         "status": "failed",
                         "error": stderr.decode()
                     }
-                    logger.warning(f"⚠️ Model {model} validation failed")
+                    logger.warning("⚠️ Model %s validation failed", model)
 
             except asyncio.TimeoutError:
                 validation_results[model] = {
                     "status": "timeout",
                     "error": "Validation timed out"
                 }
-                logger.warning(f"⚠️ Model {model} validation timed out")
+                logger.warning("⚠️ Model %s validation timed out", model)
             except Exception as e:
                 validation_results[model] = {
                     "status": "error",
                     "error": str(e)
                 }
-                logger.error(f"❌ Model {model} validation error: {e}")
+                logger.error("❌ Model %s validation error: %s", model, e)
 
         # Thread-safe update of optimization results
         async with self._state_lock:
@@ -499,7 +511,7 @@ class LLMModelOptimizer:
         with open(report_path, 'w') as f:
             json.dump(report, f, indent=2)
 
-        logger.info(f"📄 Optimization report saved to {report_path}")
+        logger.info("📄 Optimization report saved to %s", report_path)
 
         # Print summary
         print("\n" + "="*60)

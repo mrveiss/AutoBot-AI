@@ -112,7 +112,7 @@ class WakeWordDetector:
         logger.info(
             f"WakeWordDetector initialized with {len(self.config.wake_words)} wake words"
         )
-        logger.info(f"Wake words: {self.config.wake_words}")
+        logger.info("Wake words: %s", self.config.wake_words)
 
     def add_wake_word(self, wake_word: str) -> bool:
         """Add a new wake word to detection list"""
@@ -122,7 +122,7 @@ class WakeWordDetector:
             self._adaptive_thresholds[wake_word_lower] = (
                 self.config.confidence_threshold
             )
-            logger.info(f"Added wake word: {wake_word}")
+            logger.info("Added wake word: %s", wake_word)
             return True
         return False
 
@@ -133,7 +133,7 @@ class WakeWordDetector:
             if w.lower() == wake_word_lower:
                 del self.config.wake_words[i]
                 self._adaptive_thresholds.pop(wake_word_lower, None)
-                logger.info(f"Removed wake word: {wake_word}")
+                logger.info("Removed wake word: %s", wake_word)
                 return True
         return False
 
@@ -329,7 +329,7 @@ class WakeWordDetector:
             try:
                 callback(event)
             except Exception as e:
-                logger.error(f"Error in wake word callback: {e}")
+                logger.error("Error in wake word callback: %s", e)
 
         logger.info(
             f"Wake word detected: '{event.wake_word}' "
@@ -452,7 +452,7 @@ class WakeWordDetector:
         for key, value in updates.items():
             if hasattr(self.config, key):
                 setattr(self.config, key, value)
-                logger.info(f"Updated config {key} = {value}")
+                logger.info("Updated config %s = %s", key, value)
 
         # Re-initialize adaptive thresholds if wake words changed
         if "wake_words" in updates:

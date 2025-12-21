@@ -339,7 +339,7 @@ class LLMFailsafeAgent:
                 return await self._try_emergency_response(prompt, context, start_time)
 
         except Exception as e:
-            self.logger.error(f"All LLM tiers failed: {e}")
+            self.logger.error("All LLM tiers failed: %s", e)
             return self._create_emergency_response(
                 prompt, start_time, f"Complete system failure: {e}"
             )
@@ -433,7 +433,7 @@ class LLMFailsafeAgent:
             raise Exception("All secondary models failed")
 
         except Exception as e:
-            self.logger.error(f"Secondary LLM tier failed: {e}")
+            self.logger.error("Secondary LLM tier failed: %s", e)
             self._update_tier_stats(
                 LLMTier.SECONDARY, time.time() - start_time, success=False
             )
@@ -517,7 +517,7 @@ class LLMFailsafeAgent:
             )
 
         except Exception as e:
-            self.logger.critical(f"Emergency response tier failed: {e}")
+            self.logger.critical("Emergency response tier failed: %s", e)
             return self._create_emergency_response(
                 prompt, start_time, f"Emergency tier failure: {e}"
             )
@@ -583,7 +583,7 @@ class LLMFailsafeAgent:
     def _mark_tier_unhealthy(self, tier: LLMTier):
         """Mark a tier as unhealthy"""
         self.tier_health[tier] = False
-        self.logger.warning(f"Marked {tier.value} tier as unhealthy")
+        self.logger.warning("Marked %s tier as unhealthy", tier.value)
 
         # Auto-recovery: try to restore health after some failures
         failure_rate = self.tier_stats[tier]["failures"] / max(
@@ -598,7 +598,7 @@ class LLMFailsafeAgent:
         await asyncio.sleep(delay)
         # Reset health status to allow retry
         self.tier_health[tier] = True
-        self.logger.info(f"Restored {tier.value} tier to healthy status for retry")
+        self.logger.info("Restored %s tier to healthy status for retry", tier.value)
 
     def get_system_status(self) -> Dict[str, Any]:
         """Get comprehensive system status"""
@@ -648,7 +648,7 @@ class LLMFailsafeAgent:
                 response = await self._test_tier(tier, test_prompt)
                 self.tier_health[tier] = response.success
             except Exception as e:
-                self.logger.error(f"Health check failed for {tier.value}: {e}")
+                self.logger.error("Health check failed for %s: %s", tier.value, e)
                 self.tier_health[tier] = False
 
         return self.tier_health

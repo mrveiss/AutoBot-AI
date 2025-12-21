@@ -209,9 +209,9 @@ class AnsibleExecutor:
         """Default event handler for logging"""
         event_type = event.get("event", "unknown")
         if event_type in _ANSIBLE_LOGGABLE_EVENTS:
-            logger.info(f"Ansible event: {event_type} - {event.get('event_data', {})}")
+            logger.info("Ansible event: %s - %s)}", event_type, event.get('event_data', {)
         else:
-            logger.debug(f"Ansible event: {event_type}")
+            logger.debug("Ansible event: %s", event_type)
 
     async def get_playbook_path(self, playbook_name: str) -> str:
         """

@@ -66,7 +66,7 @@ async def optimize_memory_allocation(
         }
 
     except Exception as e:
-        logger.error(f"Memory optimization failed: {e}")
+        logger.error("Memory optimization failed: %s", e)
         return {
             "success": False,
             "optimizations": [],
@@ -124,7 +124,7 @@ async def optimize_batch_processing(
         }
 
     except Exception as e:
-        logger.error(f"Batch processing optimization failed: {e}")
+        logger.error("Batch processing optimization failed: %s", e)
         return {
             "success": False,
             "optimizations": [],
@@ -172,7 +172,7 @@ async def enable_mixed_precision(
         }
 
     except Exception as e:
-        logger.error(f"Mixed precision optimization failed: {e}")
+        logger.error("Mixed precision optimization failed: %s", e)
         return {
             "success": False,
             "optimizations": [],
@@ -226,7 +226,7 @@ async def optimize_tensor_cores(
         }
 
     except Exception as e:
-        logger.error(f"Tensor Core optimization failed: {e}")
+        logger.error("Tensor Core optimization failed: %s", e)
         return {
             "success": False,
             "optimizations": [],
@@ -270,7 +270,7 @@ async def optimize_model_compilation(
         }
 
     except Exception as e:
-        logger.error(f"Model compilation optimization failed: {e}")
+        logger.error("Model compilation optimization failed: %s", e)
         return {
             "success": False,
             "optimizations": [],

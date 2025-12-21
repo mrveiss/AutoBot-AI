@@ -37,6 +37,29 @@ _PROTECTED_LOG_FILES = frozenset({"system.log", "backend.log", "frontend.log"})
 # Log directory
 LOG_DIR = Path(__file__).parent.parent.parent / "logs"
 
+# Issue #514: Per-file locking to prevent concurrent write corruption
+from typing import Dict
+_log_file_locks: Dict[str, asyncio.Lock] = {}
+_log_locks_lock = asyncio.Lock()
+
+
+async def _get_log_file_lock(filepath: str) -> asyncio.Lock:
+    """
+    Get or create a lock for a specific log file path (Issue #514).
+
+    Uses per-file locking to prevent concurrent writes to the same log file.
+
+    Args:
+        filepath: Path to the log file
+
+    Returns:
+        asyncio.Lock for the specified file
+    """
+    async with _log_locks_lock:
+        if filepath not in _log_file_locks:
+            _log_file_locks[filepath] = asyncio.Lock()
+        return _log_file_locks[filepath]
+
 # Docker container names and their tags for log access
 CONTAINER_LOGS = {
     "dns-cache": "autobot-dns-cache",
@@ -177,7 +200,7 @@ async def _collect_file_logs(
                 content = await f.read()
                 return _parse_file_content_lines(content, file_name, level)
         except OSError as e:
-            logger.debug(f"Error reading file log {file_path}: {e}")
+            logger.debug("Error reading file log %s: %s", file_path, e)
             return []
 
     results = await asyncio.gather(
@@ -204,10 +227,10 @@ async def _get_container_output(container_name: str, service: str) -> Optional[b
         stdout, _ = await asyncio.wait_for(process.communicate(), timeout=10)
         return stdout if process.returncode == 0 else None
     except asyncio.TimeoutError:
-        logger.debug(f"Timeout getting container logs for {service}")
+        logger.debug("Timeout getting container logs for %s", service)
         return None
     except OSError as e:
-        logger.debug(f"Error getting container logs for {service}: {e}")
+        logger.debug("Error getting container logs for %s: %s", service, e)
         return None
 
 
@@ -327,9 +350,9 @@ async def _check_container_status(service: str, container_name: str) -> Optional
                 "status": status,
             }
     except asyncio.TimeoutError:
-        logger.warning(f"Timeout checking container {container_name}")
+        logger.warning("Timeout checking container %s", container_name)
     except Exception as e:
-        logger.error(f"Error checking container {container_name}: {e}")
+        logger.error("Error checking container %s: %s", container_name, e)
     return None
 
 
@@ -367,7 +390,7 @@ async def get_log_sources():
             "total_sources": len(file_logs) + len(container_logs),
         }
     except Exception as e:
-        logger.error(f"Error getting log sources: {e}")
+        logger.error("Error getting log sources: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -403,7 +426,7 @@ async def _read_recent_log_lines(log_path: str, limit: int) -> List[str]:
             lines = content.splitlines(keepends=True)
             return lines[-limit:] if len(lines) > limit else lines
     except Exception as e:
-        logger.error(f"Error reading log file {log_path}: {e}")
+        logger.error("Error reading log file %s: %s", log_path, e)
         return []
 
 
@@ -431,7 +454,7 @@ async def get_recent_logs(limit: int = 100):
             "source": "file_logs",
         }
     except Exception as e:
-        logger.error(f"Error getting recent logs: {e}")
+        logger.error("Error getting recent logs: %s", e)
         return {"entries": [], "count": 0, "limit": limit, "error": str(e)}
 
 
@@ -447,7 +470,7 @@ async def list_logs() -> List[Metadata]:
         sources = await get_log_sources()
         return sources["file_logs"]
     except Exception as e:
-        logger.error(f"Error listing logs: {e}")
+        logger.error("Error listing logs: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -483,7 +506,7 @@ async def read_log(
                 file_path, lines, offset, tail
             )
         except OSError as e:
-            logger.error(f"Failed to read log file {file_path}: {e}")
+            logger.error("Failed to read log file %s: %s", file_path, e)
             raise HTTPException(status_code=500, detail=f"Failed to read log file: {e}")
 
         return {
@@ -497,7 +520,7 @@ async def read_log(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error reading log {filename}: {e}")
+        logger.error("Error reading log %s: %s", filename, e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -574,7 +597,7 @@ async def read_container_logs(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error reading container logs for {service}: {e}")
+        logger.error("Error reading container logs for %s: %s", service, e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -635,7 +658,7 @@ def parse_docker_log_line(line: str, service: str) -> Metadata:
         parsed["message"] = _parse_docker_timestamp_format(line, parsed)
         _parse_json_log_data(parsed)
     except Exception as e:
-        logger.debug(f"Failed to parse Docker log line: {e}")
+        logger.debug("Failed to parse Docker log line: %s", e)
 
     return parsed
 
@@ -678,7 +701,7 @@ async def get_unified_logs(
         }
 
     except Exception as e:
-        logger.error(f"Error getting unified logs: {e}")
+        logger.error("Error getting unified logs: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -712,7 +735,7 @@ def parse_file_log_line(line: str, source: str) -> Metadata:
             parsed["timestamp"] = timestamp
             parsed["level"] = _extract_log_level(line)
     except Exception as e:
-        logger.debug(f"Failed to parse general log line: {e}")
+        logger.debug("Failed to parse general log line: %s", e)
 
     return parsed
 
@@ -745,7 +768,7 @@ async def stream_log(filename: str):
                     async for line in f:
                         yield line
             except OSError as e:
-                logger.error(f"Failed to stream log file {file_path}: {e}")
+                logger.error("Failed to stream log file %s: %s", file_path, e)
                 # Yield error message to client and stop
                 return
 
@@ -754,7 +777,7 @@ async def stream_log(filename: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error streaming log {filename}: {e}")
+        logger.error("Error streaming log %s: %s", filename, e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -789,21 +812,21 @@ async def tail_log(websocket: WebSocket, filename: str):
         try:
             await _tail_file_to_websocket(file_path, websocket)
         except OSError as e:
-            logger.error(f"Failed to tail log file {file_path}: {e}")
+            logger.error("Failed to tail log file %s: %s", file_path, e)
             await websocket.send_json({"error": f"Failed to read log file: {e}"})
             return
 
     except Exception as e:
-        logger.error(f"WebSocket error for {filename}: {e}")
+        logger.error("WebSocket error for %s: %s", filename, e)
         try:
             await websocket.send_json({"error": str(e)})
         except Exception as send_err:
-            logger.debug(f"Failed to send error to WebSocket: {send_err}")
+            logger.debug("Failed to send error to WebSocket: %s", send_err)
     finally:
         try:
             await websocket.close()
         except Exception as close_err:
-            logger.debug(f"Failed to close WebSocket: {close_err}")
+            logger.debug("Failed to close WebSocket: %s", close_err)
 
 
 def _line_matches_query(line_content: str, query: str, case_sensitive: bool) -> bool:
@@ -881,7 +904,7 @@ async def search_logs(
                 )
                 results.extend(file_results)
             except OSError as e:
-                logger.error(f"Failed to search log file {file_path}: {e}")
+                logger.error("Failed to search log file %s: %s", file_path, e)
                 continue
 
         return {
@@ -892,7 +915,7 @@ async def search_logs(
         }
 
     except Exception as e:
-        logger.error(f"Error searching logs: {e}")
+        logger.error("Error searching logs: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -924,13 +947,16 @@ async def clear_log(filename: str):
             )
 
         # Truncate file
-        async with aiofiles.open(file_path, "w") as f:
-            await f.write("")
+        # Issue #514: Use per-file locking to prevent concurrent write corruption
+        file_lock = await _get_log_file_lock(str(file_path))
+        async with file_lock:
+            async with aiofiles.open(file_path, "w") as f:
+                await f.write("")
 
         return {"message": f"Log file {filename} cleared successfully"}
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error clearing log {filename}: {e}")
+        logger.error("Error clearing log %s: %s", filename, e)
         raise HTTPException(status_code=500, detail=str(e))

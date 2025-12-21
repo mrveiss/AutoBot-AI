@@ -48,7 +48,7 @@ async def _check_conversation_files_db(request: Request, health_status: dict) ->
         else:
             health_status["components"]["conversation_files_db"] = "healthy"
     except Exception as db_e:
-        logger.warning(f"Conversation files DB health check failed: {db_e}")
+        logger.warning("Conversation files DB health check failed: %s", db_e)
         health_status["components"]["conversation_files_db"] = "unhealthy"
         health_status["status"] = "degraded"
 
@@ -69,7 +69,7 @@ async def _check_detailed_conversation_db(request: Request, detailed_components:
             detailed_components["conversation_files_db"] = "healthy"
             detailed_components["conversation_files_schema"] = version
     except Exception as db_e:
-        logger.warning(f"Conversation files DB health check failed: {db_e}")
+        logger.warning("Conversation files DB health check failed: %s", db_e)
         detailed_components["conversation_files_db"] = "unhealthy"
         detailed_components["conversation_files_schema"] = "error"
         detailed_components["conversation_files_error"] = str(db_e)
@@ -204,7 +204,7 @@ async def get_system_health(request: Request = None):
         return health_status
 
     except Exception as e:
-        logger.error(f"Health check failed: {str(e)}")
+        logger.error("Health check failed: %s", str(e))
         return {
             "status": "unhealthy",
             "timestamp": datetime.now().isoformat(),
@@ -328,7 +328,7 @@ async def admin_check():
 @router.post("/dynamic_import")
 async def dynamic_import(request: Request, module_name: str = Form(...)):
     """Dynamically import a module (admin only)"""
-    logger.info(f"Dynamic import requested for module: {module_name}")
+    logger.info("Dynamic import requested for module: %s", module_name)
 
     # Security check - only allow specific modules (Issue #380: use module-level constant)
     if not any(module_name.startswith(allowed) for allowed in _ALLOWED_IMPORT_MODULES):
@@ -340,7 +340,7 @@ async def dynamic_import(request: Request, module_name: str = Form(...)):
     try:
         imported_module = importlib.import_module(module_name)
     except ImportError as e:
-        logger.error(f"Import failed for {module_name}: {str(e)}")
+        logger.error("Import failed for %s: %s", module_name, str(e))
         raise HTTPException(
             status_code=400, detail=f"Failed to import module: {str(e)}"
         )
@@ -436,7 +436,7 @@ async def get_detailed_health(request: Request):
         return health_status
 
     except Exception as e:
-        logger.error(f"Detailed health check failed: {str(e)}")
+        logger.error("Detailed health check failed: %s", str(e))
         return {
             "status": "unhealthy",
             "timestamp": datetime.now().isoformat(),
@@ -496,7 +496,7 @@ async def get_cache_stats():
         return stats_response
 
     except Exception as e:
-        logger.error(f"Failed to get cache stats: {str(e)}")
+        logger.error("Failed to get cache stats: %s", str(e))
         return {
             "timestamp": datetime.now().isoformat(),
             "error": str(e),
@@ -602,7 +602,7 @@ async def get_cache_activity():
         return activity_response
 
     except Exception as e:
-        logger.error(f"Failed to get cache activity: {str(e)}")
+        logger.error("Failed to get cache activity: %s", str(e))
         return {
             "timestamp": datetime.now().isoformat(),
             "error": str(e),

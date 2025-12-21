@@ -149,6 +149,16 @@ class FrontendAnalyzer:
             ]
         }
 
+        # Issue #510: Precompile frontend issue patterns at init time
+        # Reduces per-file work from O(categories * patterns) to O(categories)
+        self._compiled_issue_patterns = {}
+        for category, pattern_list in self.frontend_issues.items():
+            compiled_list = [
+                (re.compile(pattern, re.MULTILINE | re.IGNORECASE), desc, severity)
+                for pattern, desc, severity in pattern_list
+            ]
+            self._compiled_issue_patterns[category] = compiled_list
+
         logger.info("Frontend Analyzer initialized")
 
     async def analyze_frontend_code(self, root_path: str = ".",
@@ -432,14 +442,15 @@ class FrontendAnalyzer:
             if not framework:
                 return issues
 
+            # Issue #510: Use precompiled patterns for efficiency
             # Analyze different issue categories
-            for category, patterns in self.frontend_issues.items():
+            for category, compiled_list in self._compiled_issue_patterns.items():
                 # Skip framework-specific patterns for other frameworks
                 if category.endswith('_specific') and not category.startswith(framework):
                     continue
 
-                for pattern, description, severity in patterns:
-                    for match in re.finditer(pattern, content, re.MULTILINE | re.IGNORECASE):
+                for compiled_pattern, description, severity in compiled_list:
+                    for match in compiled_pattern.finditer(content):
                         line_num = content[:match.start()].count('\n') + 1
 
                         issues.append(FrontendIssue(

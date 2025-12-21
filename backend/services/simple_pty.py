@@ -44,7 +44,7 @@ def _read_pty_data(fd: int) -> tuple:
     except OSError as e:
         if e.errno == 5:  # Input/output error - PTY closed
             return ("error", "PTY closed", True)
-        logger.error(f"PTY read error: {e}")
+        logger.error("PTY read error: %s", e)
         return ("error", str(e), False)
 
 
@@ -123,7 +123,7 @@ class SimplePTY:
             return True
 
         except Exception as e:
-            logger.warning(f"Failed to configure terminal echo: {e}")
+            logger.warning("Failed to configure terminal echo: %s", e)
             return False
 
     def start(self, initial_cwd: str = None):
@@ -135,7 +135,7 @@ class SimplePTY:
             # Configure terminal echo using reusable function
             # This makes the PTY behave like a real interactive terminal
             if self.configure_terminal_echo(slave_fd, enable=True):
-                logger.info(f"Terminal echo enabled for PTY session {self.session_id}")
+                logger.info("Terminal echo enabled for PTY session %s", self.session_id)
             else:
                 logger.warning(
                     f"Terminal echo configuration failed for PTY session {self.session_id} (continuing anyway)"
@@ -191,7 +191,7 @@ class SimplePTY:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to start PTY: {e}")
+            logger.error("Failed to start PTY: %s", e)
             self.cleanup()
             return False
 
@@ -215,11 +215,11 @@ class SimplePTY:
                         break
 
             except Exception as e:
-                logger.error(f"Error in PTY read loop: {e}")
+                logger.error("Error in PTY read loop: %s", e)
                 break
 
         self.output_queue.put(("close", ""))
-        logger.info(f"PTY read loop ended for session {self.session_id}")
+        logger.info("PTY read loop ended for session %s", self.session_id)
 
     def _write_loop(self):
         """Background thread to write to PTY"""
@@ -242,10 +242,10 @@ class SimplePTY:
                     continue
 
             except Exception as e:
-                logger.error(f"Error in PTY write loop: {e}")
+                logger.error("Error in PTY write loop: %s", e)
                 break
 
-        logger.info(f"PTY write loop ended for session {self.session_id}")
+        logger.info("PTY write loop ended for session %s", self.session_id)
 
     def write_input(self, text: str) -> bool:
         """Write input to PTY"""
@@ -256,7 +256,7 @@ class SimplePTY:
             self.input_queue.put(text)
             return True
         except Exception as e:
-            logger.error(f"Error queuing input: {e}")
+            logger.error("Error queuing input: %s", e)
             return False
 
     def get_output(self) -> Optional[tuple]:
@@ -292,7 +292,7 @@ class SimplePTY:
             # Use the reusable static method on master_fd
             return self.configure_terminal_echo(self.master_fd, enable)
         except Exception as e:
-            logger.error(f"Error setting echo: {e}")
+            logger.error("Error setting echo: %s", e)
             return False
 
     def resize(self, rows: int, cols: int) -> bool:
@@ -313,7 +313,7 @@ class SimplePTY:
 
             return True
         except Exception as e:
-            logger.error(f"Error resizing PTY: {e}")
+            logger.error("Error resizing PTY: %s", e)
             return False
 
     def send_signal(self, sig: int) -> bool:
@@ -325,7 +325,7 @@ class SimplePTY:
             os.killpg(os.getpgid(self.process.pid), sig)
             return True
         except Exception as e:
-            logger.error(f"Error sending signal: {e}")
+            logger.error("Error sending signal: %s", e)
             return False
 
     def is_alive(self) -> bool:
@@ -345,14 +345,14 @@ class SimplePTY:
         try:
             self.input_queue.put(None)
         except Exception as e:
-            logger.debug(f"Failed to signal writer thread: {e}")
+            logger.debug("Failed to signal writer thread: %s", e)
 
         # Close file descriptor
         if self.master_fd:
             try:
                 os.close(self.master_fd)
             except Exception as e:
-                logger.debug(f"Failed to close master fd: {e}")
+                logger.debug("Failed to close master fd: %s", e)
             self.master_fd = None
 
         # Terminate process
@@ -369,7 +369,7 @@ class SimplePTY:
                     # Wait without timeout for kill to complete
                     self.process.wait()
             except Exception as e:
-                logger.debug(f"Failed to terminate process: {e}")
+                logger.debug("Failed to terminate process: %s", e)
             self.process = None
 
         # Wait for threads to complete naturally
@@ -380,7 +380,7 @@ class SimplePTY:
             # Thread will exit when running=False and queue is processed
             pass
 
-        logger.info(f"PTY cleanup completed for session {self.session_id}")
+        logger.info("PTY cleanup completed for session %s", self.session_id)
 
 
 class SimplePTYManager:

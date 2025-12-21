@@ -262,7 +262,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                 details=details,
             )
         except Exception as e:
-            logger.error(f"Failed to log audit entry: {e}")
+            logger.error("Failed to log audit entry: %s", e)
 
 
 def _extract_request_context(args: tuple) -> tuple:
@@ -601,4 +601,4 @@ async def _log_audit_async(
             details=details,
         )
     except Exception as e:
-        logger.error(f"Audit logging failed: {e}")
+        logger.error("Audit logging failed: %s", e)

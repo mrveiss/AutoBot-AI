@@ -91,7 +91,7 @@ class OllamaStreamProcessor(StreamProcessor):
             # Check for error in chunk
             if "error" in chunk_json:
                 error_msg = chunk_json.get("error", "Unknown error")
-                logger.error(f"Ollama streaming error: {error_msg}")
+                logger.error("Ollama streaming error: %s", error_msg)
                 return True, None  # Complete with error
 
             # Check for completion signal
@@ -191,7 +191,7 @@ class OpenAIStreamProcessor(StreamProcessor):
                     return False, content if content else None
 
             except json.JSONDecodeError:
-                logger.warning(f"Invalid JSON in OpenAI chunk: {data_content}")
+                logger.warning("Invalid JSON in OpenAI chunk: %s", data_content)
 
         return False, None
 
@@ -224,7 +224,7 @@ async def _process_stream_loop(
 
         # Safety limit to prevent infinite loops
         if chunk_count > max_chunks:
-            logger.warning(f"⚠️ Reached maximum chunk limit ({max_chunks})")
+            logger.warning("⚠️ Reached maximum chunk limit (%s)", max_chunks)
             completion_signal = StreamCompletionSignal.MAX_CHUNKS_REACHED
             break
 
@@ -232,7 +232,7 @@ async def _process_stream_loop(
         try:
             chunk_data = chunk_bytes.decode("utf-8")
         except UnicodeDecodeError as e:
-            logger.warning(f"Unicode decode error in chunk {chunk_count}: {e}")
+            logger.warning("Unicode decode error in chunk %s: %s", chunk_count, e)
             continue
 
         if not chunk_data.strip():
@@ -242,7 +242,7 @@ async def _process_stream_loop(
         error = processor.detect_error_condition(chunk_data)
         if error:
             completion_signal = StreamCompletionSignal.ERROR_CONDITION
-            logger.error(f"❌ Stream error detected: {error}")
+            logger.error("❌ Stream error detected: %s", error)
             break
 
         # Process chunk through provider-specific processor
@@ -309,7 +309,7 @@ async def process_llm_stream(
     processor = StreamProcessorFactory.create_processor(provider, max_chunks)
     processor.start_time = asyncio.get_event_loop().time()
 
-    logger.info(f"🔄 Starting {provider} stream processing (max_chunks: {max_chunks})")
+    logger.info("🔄 Starting %s stream processing (max_chunks: %s)", provider, max_chunks)
 
     # Issue #281: Use extracted helper for stream processing loop
     try:
@@ -318,7 +318,7 @@ async def process_llm_stream(
         )
     except Exception as e:
         completion_signal = StreamCompletionSignal.ERROR_CONDITION
-        logger.error(f"❌ Stream processing error: {e}")
+        logger.error("❌ Stream processing error: %s", e)
         content_parts = []
         chunk_count = 0
 

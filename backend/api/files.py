@@ -340,7 +340,7 @@ async def list_files(request: Request, path: str = ""):
                     total_directories += 1
 
             except (OSError, PermissionError) as e:
-                logger.warning(f"Skipping inaccessible file {item}: {e}")
+                logger.warning("Skipping inaccessible file %s: %s", item, e)
                 continue
 
         return files, total_size, total_files, total_directories
@@ -409,7 +409,7 @@ def validate_file_content(content: bytes, filename: str) -> bool:
 
     for pattern in _DANGEROUS_CONTENT_PATTERNS:
         if pattern in content_str:
-            logger.warning(f"Dangerous content detected in {filename}: {pattern}")
+            logger.warning("Dangerous content detected in %s: %s", filename, pattern)
             return False
 
     return True
@@ -483,7 +483,7 @@ async def _write_upload_file(target_file: Path, content: bytes, overwrite: bool)
         async with aiofiles.open(target_file, "wb") as f:
             await f.write(content)
     except OSError as e:
-        logger.error(f"Failed to write uploaded file {target_file}: {e}")
+        logger.error("Failed to write uploaded file %s: %s", target_file, e)
         raise HTTPException(status_code=500, detail=f"Failed to write file: {e}")
 
 
@@ -759,7 +759,7 @@ async def view_file(request: Request, path: str):
             async with aiofiles.open(target_file, "r", encoding="utf-8") as f:
                 content = await f.read()
         except OSError as e:
-            logger.error(f"Failed to read file {target_file}: {e}")
+            logger.error("Failed to read file %s: %s", target_file, e)
             raise HTTPException(status_code=500, detail=f"Failed to read file: {e}")
         except UnicodeDecodeError as e:
             # File is binary, don't include content
@@ -897,7 +897,7 @@ async def preview_file(request: Request, path: str):
                 async with aiofiles.open(target_file, "r", encoding="utf-8") as f:
                     content = await f.read()
             except OSError as e:
-                logger.error(f"Failed to read file {target_file}: {e}")
+                logger.error("Failed to read file %s: %s", target_file, e)
                 raise HTTPException(status_code=500, detail=f"Failed to read file: {e}")
             except UnicodeDecodeError:
                 file_type = "binary"
@@ -1081,12 +1081,12 @@ async def get_directory_tree(request: Request, path: str = ""):
 
                     items.append(item_info)
                 except (OSError, PermissionError) as e:
-                    logger.warning(f"Skipping inaccessible item {item}: {e}")
+                    logger.warning("Skipping inaccessible item %s: %s", item, e)
                     continue
 
             return items
         except Exception as e:
-            logger.error(f"Error building tree for {directory}: {e}")
+            logger.error("Error building tree for %s: %s", directory, e)
             return []
 
     # Issue #358: Run entire recursive tree building in thread to avoid blocking

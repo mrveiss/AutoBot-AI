@@ -38,7 +38,7 @@ def check_cpu_npu_support():
                 return True
         return False
     except Exception as e:
-        logger.error(f"Error checking CPU: {e}")
+        logger.error("Error checking CPU: %s", e)
         return False
 
 
@@ -49,11 +49,11 @@ def check_openvino_npu():
 
         core = Core()
         devices = core.available_devices
-        logger.info(f"OpenVINO available devices: {devices}")
+        logger.info("OpenVINO available devices: %s", devices)
 
         npu_devices = [d for d in devices if "NPU" in d]
         if npu_devices:
-            logger.info(f"✅ OpenVINO NPU devices found: {npu_devices}")
+            logger.info("✅ OpenVINO NPU devices found: %s", npu_devices)
             return True, npu_devices
         else:
             logger.warning("❌ No NPU devices found in OpenVINO")
@@ -63,7 +63,7 @@ def check_openvino_npu():
         logger.error("❌ OpenVINO not installed")
         return False, []
     except Exception as e:
-        logger.error(f"❌ Error checking OpenVINO: {e}")
+        logger.error("❌ Error checking OpenVINO: %s", e)
         return False, []
 
 
@@ -101,19 +101,19 @@ def install_intel_npu_drivers():
 
     for cmd in commands_to_try:
         try:
-            logger.info(f"Running: {' '.join(cmd)}")
+            logger.info("Running: %s", ' '.join(cmd))
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
             if result.returncode == 0:
-                logger.info(f"✅ Success: {' '.join(cmd)}")
+                logger.info("✅ Success: %s", ' '.join(cmd))
             else:
-                logger.warning(f"⚠️ Command failed: {' '.join(cmd)}")
-                logger.warning(f"   Error: {result.stderr}")
+                logger.warning("⚠️ Command failed: %s", ' '.join(cmd))
+                logger.warning("   Error: %s", result.stderr)
         except subprocess.TimeoutExpired:
-            logger.warning(f"⏰ Timeout running: {' '.join(cmd)}")
+            logger.warning("⏰ Timeout running: %s", ' '.join(cmd))
         except FileNotFoundError:
-            logger.warning(f"🚫 Command not found: {cmd[0]}")
+            logger.warning("🚫 Command not found: %s", cmd[0])
         except Exception as e:
-            logger.error(f"❌ Error running {' '.join(cmd)}: {e}")
+            logger.error("❌ Error running %s: %s", ' '.join(cmd), e)
 
     return True
 
@@ -132,7 +132,7 @@ def configure_ollama_npu():
         logger.info("🔧 Configuring environment variables for NPU support:")
         for key, value in npu_env_vars.items():
             os.environ[key] = value
-            logger.info(f"   {key}={value}")
+            logger.info("   %s=%s", key, value)
 
         # Write to AutoBot config
         config_updates = []
@@ -146,7 +146,7 @@ def configure_ollama_npu():
             f.write("\n".join(config_updates))
             f.write("\n")
 
-        logger.info(f"✅ NPU configuration written to {config_file}")
+        logger.info("✅ NPU configuration written to %s", config_file)
         logger.info(
             "   Source this file before running AutoBot: source npu_env_config.sh"
         )
@@ -154,7 +154,7 @@ def configure_ollama_npu():
         return True
 
     except Exception as e:
-        logger.error(f"❌ Error configuring NPU: {e}")
+        logger.error("❌ Error configuring NPU: %s", e)
         return False
 
 
@@ -170,14 +170,14 @@ def test_npu_inference():
             logger.warning("⚠️ No NPU devices available for testing")
             return False
 
-        logger.info(f"🧪 Testing NPU inference on device: {npu_devices[0]}")
+        logger.info("🧪 Testing NPU inference on device: %s", npu_devices[0])
 
         # Simple test would require a model, for now just confirm device availability
         logger.info("✅ NPU device available for inference")
         return True
 
     except Exception as e:
-        logger.error(f"❌ NPU inference test failed: {e}")
+        logger.error("❌ NPU inference test failed: %s", e)
         return False
 
 
@@ -215,12 +215,12 @@ def main():
     # Summary
     logger.info("\n" + "=" * 50)
     logger.info("📊 NPU Configuration Summary:")
-    logger.info(f"   CPU NPU Support: {'✅ Yes' if cpu_supports_npu else '❌ No'}")
+    logger.info("   CPU NPU Support: %s", '✅ Yes' if cpu_supports_npu else '❌ No')
     logger.info(
         f"   OpenVINO NPU: {'✅ Available' if openvino_npu_available else '❌ Not Available'}"
     )
     if npu_devices:
-        logger.info(f"   NPU Devices: {', '.join(npu_devices)}")
+        logger.info("   NPU Devices: %s", ', '.join(npu_devices))
 
     if openvino_npu_available:
         logger.info("\n🎉 NPU is configured and ready!")

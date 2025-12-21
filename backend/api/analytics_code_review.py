@@ -388,7 +388,7 @@ def analyze_code(content: str, file_path: str) -> list[ReviewComment]:
                         )
                     )
             except re.error:
-                logger.warning(f"Invalid regex pattern: {pattern_id}")
+                logger.warning("Invalid regex pattern: %s", pattern_id)
 
     # Check for long functions
     for match in _FUNC_DEFINITION_RE.finditer(content):
@@ -480,10 +480,10 @@ async def get_git_diff(commit_range: Optional[str] = None) -> str:
         except asyncio.TimeoutError:
             process.kill()
             await process.wait()
-            logger.warning(f"Git diff timed out after {TimingConstants.SHORT_TIMEOUT} seconds")
+            logger.warning("Git diff timed out after %s seconds", TimingConstants.SHORT_TIMEOUT)
             return ""
     except Exception as e:
-        logger.warning(f"Failed to get git diff: {e}")
+        logger.warning("Failed to get git diff: %s", e)
         return ""
 
 
@@ -544,7 +544,7 @@ async def analyze_diff(
                 comments = analyze_code(content, str(file_path))
                 all_comments.extend(comments)
         except Exception as e:
-            logger.warning(f"Failed to analyze {file_info['path']}: {e}")
+            logger.warning("Failed to analyze %s: %s", file_info['path'], e)
 
     score = calculate_review_score(all_comments)
     summary = generate_summary(all_comments)
@@ -720,7 +720,7 @@ async def submit_feedback(
 
             return {"status": "recorded", "feedback": feedback}
     except Exception as e:
-        logger.warning(f"Failed to store feedback: {e}")
+        logger.warning("Failed to store feedback: %s", e)
 
     return {
         "status": "recorded",

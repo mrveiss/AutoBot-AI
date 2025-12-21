@@ -126,7 +126,7 @@ async def analyze_codebase_endpoint(request: AnalysisRequest):
     - quality: Code quality consistency only
     """
     try:
-        logger.info(f"Starting {request.analysis_type} analysis: {request.root_path}")
+        logger.info("Starting %s analysis: %s", request.analysis_type, request.root_path)
 
         # Issue #336: Dispatch table lookup replaces elif chain
         handler = ANALYSIS_TYPE_HANDLERS.get(request.analysis_type)
@@ -149,7 +149,7 @@ async def analyze_codebase_endpoint(request: AnalysisRequest):
         )
 
     except Exception as e:
-        logger.error(f"Analysis endpoint error: {e}")
+        logger.error("Analysis endpoint error: %s", e)
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 
@@ -193,7 +193,7 @@ async def find_duplicates_endpoint(
     and provides detailed analysis of code duplication.
     """
     try:
-        logger.info(f"Finding duplicates in: {path}")
+        logger.info("Finding duplicates in: %s", path)
 
         # Temporarily adjust minimum lines threshold
         agent = _get_dev_speedup_agent()
@@ -218,7 +218,7 @@ async def find_duplicates_endpoint(
         )
 
     except Exception as e:
-        logger.error(f"Duplicate detection error: {e}")
+        logger.error("Duplicate detection error: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Duplicate detection failed: {str(e)}"
         )
@@ -242,7 +242,7 @@ async def analyze_patterns_endpoint(
     Identifies common code patterns, anti-patterns, and suggests improvements.
     """
     try:
-        logger.info(f"Analyzing patterns in: {path}")
+        logger.info("Analyzing patterns in: %s", path)
 
         result = await _get_dev_speedup_agent().identify_code_patterns(path)
 
@@ -268,7 +268,7 @@ async def analyze_patterns_endpoint(
         )
 
     except Exception as e:
-        logger.error(f"Pattern analysis error: {e}")
+        logger.error("Pattern analysis error: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Pattern analysis failed: {str(e)}"
         )
@@ -291,7 +291,7 @@ async def analyze_imports_endpoint(
     and optimization opportunities.
     """
     try:
-        logger.info(f"Analyzing imports in: {path}")
+        logger.info("Analyzing imports in: %s", path)
 
         result = await _get_dev_speedup_agent().analyze_imports_and_dependencies(path)
 
@@ -310,7 +310,7 @@ async def analyze_imports_endpoint(
         )
 
     except Exception as e:
-        logger.error(f"Import analysis error: {e}")
+        logger.error("Import analysis error: %s", e)
         raise HTTPException(status_code=500, detail=f"Import analysis failed: {str(e)}")
 
 
@@ -329,7 +329,7 @@ async def detect_dead_code_endpoint(
     Identifies code that may be unreachable or no longer used.
     """
     try:
-        logger.info(f"Detecting dead code in: {path}")
+        logger.info("Detecting dead code in: %s", path)
 
         result = await _get_dev_speedup_agent().detect_dead_code(path)
 
@@ -344,7 +344,7 @@ async def detect_dead_code_endpoint(
         )
 
     except Exception as e:
-        logger.error(f"Dead code detection error: {e}")
+        logger.error("Dead code detection error: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Dead code detection failed: {str(e)}"
         )
@@ -368,7 +368,7 @@ async def find_refactoring_opportunities_endpoint(
     Identifies functions and code blocks that would benefit from refactoring.
     """
     try:
-        logger.info(f"Finding refactoring opportunities in: {path}")
+        logger.info("Finding refactoring opportunities in: %s", path)
 
         result = await _get_dev_speedup_agent().find_refactoring_opportunities(path)
 
@@ -395,7 +395,7 @@ async def find_refactoring_opportunities_endpoint(
         )
 
     except Exception as e:
-        logger.error(f"Refactoring analysis error: {e}")
+        logger.error("Refactoring analysis error: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Refactoring analysis failed: {str(e)}"
         )
@@ -420,7 +420,7 @@ async def analyze_quality_endpoint(
     and other code quality metrics.
     """
     try:
-        logger.info(f"Analyzing code quality in: {path}")
+        logger.info("Analyzing code quality in: %s", path)
 
         result = await _get_dev_speedup_agent().analyze_code_quality_consistency(path)
 
@@ -453,7 +453,7 @@ async def analyze_quality_endpoint(
         )
 
     except Exception as e:
-        logger.error(f"Quality analysis error: {e}")
+        logger.error("Quality analysis error: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Quality analysis failed: {str(e)}"
         )
@@ -475,7 +475,7 @@ async def get_recommendations_endpoint(
     for improving the codebase.
     """
     try:
-        logger.info(f"Generating recommendations for: {path}")
+        logger.info("Generating recommendations for: %s", path)
 
         # Perform comprehensive analysis
         result = await analyze_codebase(path)
@@ -529,7 +529,7 @@ async def get_recommendations_endpoint(
         )
 
     except Exception as e:
-        logger.error(f"Recommendations error: {e}")
+        logger.error("Recommendations error: %s", e)
         raise HTTPException(status_code=500, detail=f"Recommendations failed: {str(e)}")
 
 
@@ -596,7 +596,7 @@ async def get_development_speedup_status():
         )
 
     except Exception as e:
-        logger.error(f"Status endpoint error: {e}")
+        logger.error("Status endpoint error: %s", e)
         raise HTTPException(status_code=500, detail=f"Status check failed: {str(e)}")
 
 

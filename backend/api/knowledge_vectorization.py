@@ -116,7 +116,7 @@ async def _check_vectorization_batch_internal(
         }
 
     except Exception as e:
-        logger.error(f"Error checking vectorization batch: {e}")
+        logger.error("Error checking vectorization batch: %s", e)
         raise
 
 
@@ -186,10 +186,10 @@ async def _get_cached_vectorization_status(
             )
             cached_result = json.loads(json_str)
             cached_result["cached"] = True
-            logger.debug(f"Cache hit for vectorization status ({fact_count} facts)")
+            logger.debug("Cache hit for vectorization status (%s facts)", fact_count)
             return cached_result
     except Exception as cache_err:
-        logger.debug(f"Cache read failed (continuing without cache): {cache_err}")
+        logger.debug("Cache read failed (continuing without cache): %s", cache_err)
 
     return None
 
@@ -214,9 +214,9 @@ async def _cache_vectorization_result(
             kb_instance.redis_client.setex,
             cache_key, 60, json.dumps(result)  # 60 second TTL
         )
-        logger.debug(f"Cached vectorization status for {fact_count} facts")
+        logger.debug("Cached vectorization status for %s facts", fact_count)
     except Exception as cache_err:
-        logger.warning(f"Failed to cache vectorization status: {cache_err}")
+        logger.warning("Failed to cache vectorization status: %s", cache_err)
 
 
 @router.post("/vectorization_status")
@@ -354,7 +354,7 @@ async def _process_single_fact(
         Tuple of (success: bool, skipped: bool, result_entry: dict or None)
     """
     if not fact_data:
-        logger.warning(f"No data found for fact key: {fact_key}")
+        logger.warning("No data found for fact key: %s", fact_key)
         return False, False, None
 
     # Check if already vectorized
@@ -372,7 +372,7 @@ async def _process_single_fact(
     if result.get("status") == "success" and result.get("vector_indexed"):
         return True, False, {"fact_id": fact_id, "status": "vectorized"}
 
-    logger.warning(f"Failed to vectorize fact {fact_id}: {result.get('message')}")
+    logger.warning("Failed to vectorize fact %s: %s", fact_id, result.get('message'))
     return False, False, None
 
 
@@ -643,7 +643,7 @@ async def _vectorize_fact_background(
     try:
         # Initialize job status
         await _update_job_status(kb_instance, job_id, job_data)
-        logger.info(f"Started vectorization job {job_id} for fact {fact_id}")
+        logger.info("Started vectorization job %s for fact %s", job_id, fact_id)
 
         # Get fact content (Issue #281: uses helper)
         content, metadata = await _get_fact_content(kb_instance, fact_id)
@@ -694,7 +694,7 @@ async def _vectorize_fact_background(
         if result.get("status") == "success" and result.get("vector_indexed"):
             job_data["status"] = "completed"
             job_data["progress"] = 100
-            logger.info(f"Successfully vectorized fact {fact_id} in job {job_id}")
+            logger.info("Successfully vectorized fact %s in job %s", fact_id, job_id)
         else:
             job_data["status"] = "failed"
             job_data["error"] = result.get("message", "Unknown error")
@@ -967,7 +967,7 @@ async def retry_vectorization_job(
         _vectorize_fact_background, kb, fact_id, new_job_id, force
     )
 
-    logger.info(f"Retrying vectorization job {job_id} as {new_job_id}")
+    logger.info("Retrying vectorization job %s as %s", job_id, new_job_id)
 
     return {
         "status": "success",
@@ -1006,7 +1006,7 @@ async def delete_vectorization_job(job_id: str, req: Request):
     if deleted == 0:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-    logger.info(f"Deleted vectorization job {job_id}")
+    logger.info("Deleted vectorization job %s", job_id)
 
     return {
         "status": "success",
@@ -1067,7 +1067,7 @@ async def clear_failed_vectorization_jobs(req: Request):
 
     deleted_count = await asyncio.to_thread(_clear_failed_jobs)
 
-    logger.info(f"Cleared {deleted_count} failed vectorization jobs")
+    logger.info("Cleared %s failed vectorization jobs", deleted_count)
 
     return {
         "status": "success",

@@ -34,7 +34,7 @@ def _terminate_process_with_fallback(process: subprocess.Popen) -> None:
             process.kill()
             process.wait(timeout=1)
     except Exception as e:
-        logger.warning(f"Error terminating process: {e}")
+        logger.warning("Error terminating process: %s", e)
 
 
 def _decode_and_process_output(
@@ -154,11 +154,11 @@ class TerminalWebSocketManager:
             await self._start_background_tasks()
 
             await self._set_state(TerminalState.RUNNING)
-            logger.info(f"Terminal session started successfully: {self.terminal_type}")
+            logger.info("Terminal session started successfully: %s", self.terminal_type)
 
         except Exception as e:
             await self._set_state(TerminalState.ERROR)
-            logger.error(f"Failed to start terminal session: {e}")
+            logger.error("Failed to start terminal session: %s", e)
             await self._cleanup_resources()
             raise
 
@@ -173,10 +173,10 @@ class TerminalWebSocketManager:
             self.pty_fd = master_fd
             self.process = process
 
-            logger.debug(f"PTY created: fd={master_fd}, pid={self.process.pid}")
+            logger.debug("PTY created: fd=%s, pid=%s", master_fd, self.process.pid)
 
         except Exception as e:
-            logger.error(f"Failed to create PTY: {e}")
+            logger.error("Failed to create PTY: %s", e)
             raise
 
     def _sync_create_pty(self):
@@ -205,7 +205,7 @@ class TerminalWebSocketManager:
                     os.setsid()
                 except OSError as e:
                     # Log but don't fail - some environments don't support setsid
-                    logger.warning(f"setsid failed in preexec_fn: {e}")
+                    logger.warning("setsid failed in preexec_fn: %s", e)
 
             process = subprocess.Popen(
                 ["/bin/bash", "-i"],  # Interactive bash
@@ -293,15 +293,15 @@ class TerminalWebSocketManager:
                     if e.errno in (9, 5):  # Bad file descriptor or I/O error
                         logger.debug("PTY closed")
                         break
-                    logger.error(f"PTY read error: {e}")
+                    logger.error("PTY read error: %s", e)
                     break
                 except Exception as e:
-                    logger.error(f"Unexpected error in PTY reader: {e}")
+                    logger.error("Unexpected error in PTY reader: %s", e)
                     _increment_stat_sync(self._stats_lock, self.stats, "errors")
                     break
 
         except Exception as e:
-            logger.error(f"PTY reader thread crashed: {e}")
+            logger.error("PTY reader thread crashed: %s", e)
         finally:
             # Signal output sender to stop
             self._queue_message_safely({"type": "pty_stopped"})
@@ -322,7 +322,7 @@ class TerminalWebSocketManager:
             }
             self._queue_message_safely(message)
         except Exception as e:
-            logger.error(f"Error processing PTY output: {e}")
+            logger.error("Error processing PTY output: %s", e)
             _increment_stat_sync(self._stats_lock, self.stats, "errors")
 
     def _queue_message_safely(self, message: Dict[str, Any]):
@@ -352,7 +352,7 @@ class TerminalWebSocketManager:
             await self.message_sender(message)
             _increment_stat_sync(self._stats_lock, self.stats, "messages_sent")
         except Exception as e:
-            logger.error(f"Error sending message: {e}")
+            logger.error("Error sending message: %s", e)
             _increment_stat_sync(self._stats_lock, self.stats, "errors")
 
     async def _get_next_queue_message(self) -> Optional[Dict[str, Any]]:
@@ -393,11 +393,11 @@ class TerminalWebSocketManager:
                     await self._send_websocket_message(message, state)
 
                 except Exception as e:
-                    logger.error(f"Error in output sender loop: {e}")
+                    logger.error("Error in output sender loop: %s", e)
                     _increment_stat_sync(self._stats_lock, self.stats, "errors")
 
         except Exception as e:
-            logger.error(f"Output sender loop crashed: {e}")
+            logger.error("Output sender loop crashed: %s", e)
         finally:
             logger.debug("Output sender loop stopped")
 
@@ -425,7 +425,7 @@ class TerminalWebSocketManager:
                 self.stats["messages_received"] += 1
 
         except Exception as e:
-            logger.error(f"Error sending input to PTY: {e}")
+            logger.error("Error sending input to PTY: %s", e)
             with self._stats_lock:
                 self.stats["errors"] += 1
             raise
@@ -437,12 +437,12 @@ class TerminalWebSocketManager:
             return
 
         await self._set_state(TerminalState.STOPPING)
-        logger.info(f"Stopping terminal session: {self.terminal_type}")
+        logger.info("Stopping terminal session: %s", self.terminal_type)
 
         try:
             await self._cleanup_resources()
         except Exception as e:
-            logger.error(f"Error during cleanup: {e}")
+            logger.error("Error during cleanup: %s", e)
         finally:
             await self._set_state(TerminalState.STOPPED)
             logger.info("Terminal session stopped")
@@ -465,7 +465,7 @@ class TerminalWebSocketManager:
                 if self.reader_thread.is_alive():
                     logger.warning("Reader thread did not stop gracefully")
             except Exception as e:
-                logger.warning(f"Error joining reader thread: {e}")
+                logger.warning("Error joining reader thread: %s", e)
 
         # Clean up PTY
         if self.pty_fd:

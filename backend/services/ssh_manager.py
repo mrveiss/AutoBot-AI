@@ -202,7 +202,7 @@ class SSHManager:
                 description=config["description"],
                 enabled=True,
             )
-        logger.info(f"Loaded {len(self.hosts)} default host configurations")
+        logger.info("Loaded %s default host configurations", len(self.hosts))
 
     def _setup_audit_logging(self):
         """Setup audit logging"""
@@ -223,10 +223,10 @@ class SSHManager:
             )
             self.audit_logger.addHandler(handler)
 
-            logger.info(f"Audit logging enabled: {self.audit_log_file}")
+            logger.info("Audit logging enabled: %s", self.audit_log_file)
 
         except Exception as e:
-            logger.error(f"Failed to setup audit logging: {e}")
+            logger.error("Failed to setup audit logging: %s", e)
             self.enable_audit_logging = False
 
     def _audit_log(self, event_type: str, data: Metadata):
@@ -242,7 +242,7 @@ class SSHManager:
             }
             self.audit_logger.info(json.dumps(audit_entry))
         except Exception as e:
-            logger.error(f"Audit logging failed: {e}")
+            logger.error("Audit logging failed: %s", e)
 
     async def start(self):
         """Start SSH manager and connection pool"""
@@ -505,7 +505,7 @@ class SSHManager:
             )
 
         except Exception as e:
-            logger.error(f"Command execution failed on {host}: {e}")
+            logger.error("Command execution failed on %s: %s", host, e)
 
             # Audit log error
             self._audit_log(
@@ -539,7 +539,7 @@ class SSHManager:
             return stdout_data, stderr_data, exit_code
 
         except Exception as e:
-            logger.error(f"Simple command execution failed: {e}")
+            logger.error("Simple command execution failed: %s", e)
             raise
 
     async def _execute_with_pty(
@@ -590,7 +590,7 @@ class SSHManager:
             return stdout_data, "", exit_code
 
         except Exception as e:
-            logger.error(f"PTY command execution failed: {e}")
+            logger.error("PTY command execution failed: %s", e)
             raise
 
     async def execute_command_all_hosts(
@@ -667,7 +667,7 @@ class SSHManager:
                 )
                 results[host_name] = result.success and "health_check" in result.stdout
             except Exception as e:
-                logger.warning(f"Health check failed for {host_name}: {e}")
+                logger.warning("Health check failed for %s: %s", host_name, e)
                 results[host_name] = False
 
         return results

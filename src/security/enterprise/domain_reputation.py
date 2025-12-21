@@ -66,7 +66,7 @@ class DomainReputationService:
             with open(self.config_path, "r") as f:
                 return yaml.safe_load(f)
         except Exception as e:
-            logger.error(f"Failed to load domain security config: {e}")
+            logger.error("Failed to load domain security config: %s", e)
             return self._get_default_config()
 
     def _get_default_config(self) -> Dict:
@@ -119,7 +119,7 @@ class DomainReputationService:
         parser = format_parsers.get(feed_format)
         if parser:
             return parser(content)
-        logger.warning(f"Unknown feed format: {feed_format}")
+        logger.warning("Unknown feed format: %s", feed_format)
         return None
 
     def _should_update_feed(self, feed_info: dict, config: dict) -> bool:
@@ -136,13 +136,13 @@ class DomainReputationService:
             if not self._should_update_feed(feed_info, config):
                 return
 
-            logger.info(f"Updating threat feed: {feed_name}")
+            logger.info("Updating threat feed: %s", feed_name)
 
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=config.get("timeout", 10))
             async with await http_client.get(config["url"], timeout=timeout) as response:
                 if response.status != 200:
-                    logger.error(f"Failed to update {feed_name}: HTTP {response.status}")
+                    logger.error("Failed to update %s: HTTP %s", feed_name, response.status)
                     return
 
                 content = await response.text()
@@ -151,10 +151,10 @@ class DomainReputationService:
                 if domains is not None:
                     feed_info["data"] = domains
                     feed_info["last_update"] = time.time()
-                    logger.info(f"Updated {feed_name}: {len(domains)} entries")
+                    logger.info("Updated %s: %s entries", feed_name, len(domains))
 
         except Exception as e:
-            logger.error(f"Error updating threat feed {feed_name}: {e}")
+            logger.error("Error updating threat feed %s: %s", feed_name, e)
 
     def _parse_csv_feed(self, content: str) -> set:
         """Parse CSV format threat feed"""
@@ -275,7 +275,7 @@ class DomainReputationService:
         for feed_name, feed_info in self.threat_feeds.items():
             if domain in feed_info["data"]:
                 threats.append(f"threat_feed_{feed_name}")
-                logger.warning(f"Domain {domain} found in threat feed: {feed_name}")
+                logger.warning("Domain %s found in threat feed: %s", domain, feed_name)
 
         return threats
 
@@ -290,7 +290,7 @@ class DomainReputationService:
         for pattern in blacklist:
             if self._match_pattern(domain, pattern):
                 threats.append(f"blacklist_pattern_{pattern}")
-                logger.warning(f"Domain {domain} matches blacklist pattern: {pattern}")
+                logger.warning("Domain %s matches blacklist pattern: %s", domain, pattern)
 
         # Check for suspicious characteristics
         if self._is_suspicious_domain(domain):
@@ -395,10 +395,10 @@ class DomainReputationService:
                         "raw_response": data,
                     }
                 else:
-                    logger.error(f"VirusTotal API error: HTTP {response.status}")
+                    logger.error("VirusTotal API error: HTTP %s", response.status)
 
         except Exception as e:
-            logger.error(f"VirusTotal check failed for {domain}: {e}")
+            logger.error("VirusTotal check failed for %s: %s", domain, e)
 
         return None
 
@@ -434,10 +434,10 @@ class DomainReputationService:
                         "raw_response": content[:500],  # Truncated for storage
                     }
                 else:
-                    logger.error(f"URLVoid API error: HTTP {response.status}")
+                    logger.error("URLVoid API error: HTTP %s", response.status)
 
         except Exception as e:
-            logger.error(f"URLVoid check failed for {domain}: {e}")
+            logger.error("URLVoid check failed for %s: %s", domain, e)
 
         return None
 
@@ -477,13 +477,7 @@ class DomainReputationService:
             self.stats["blocked_domains"] += 1
 
         # This would integrate with the enterprise audit logger
-        logger.warning(
-            f"Domain security event: {domain} | "
-            f"Risk: {checks['risk_level']} | "
-            f"Score: {checks['reputation_score']:.2f} | "
-            f"Action: {checks['action']} | "
-            f"Threats: {', '.join(checks['threats_detected'])}"
-        )
+        logger.warning("Domain security event: %s | ", domain)
 
     def get_statistics(self) -> Dict:
         """Get service statistics"""

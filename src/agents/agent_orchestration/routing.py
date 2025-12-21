@@ -89,7 +89,7 @@ class AgentRouter:
             return routing_decision
 
         except Exception as e:
-            logger.error(f"Error in routing decision: {e}")
+            logger.error("Error in routing decision: %s", e)
             # Fallback to simple routing
             return self.quick_route_analysis(request)
 
@@ -237,7 +237,7 @@ class AgentRouter:
             return str(response)
 
         except Exception as e:
-            logger.error(f"Error extracting response content: {e}")
+            logger.error("Error extracting response content: %s", e)
             return "Error extracting response"
 
     def _parse_routing_response(self, response: Any) -> Dict[str, Any]:
@@ -260,7 +260,7 @@ class AgentRouter:
             return parsed
 
         except Exception as e:
-            logger.error(f"Error parsing routing response: {e}")
+            logger.error("Error parsing routing response: %s", e)
             # Fallback routing
             return {
                 "strategy": "single_agent",

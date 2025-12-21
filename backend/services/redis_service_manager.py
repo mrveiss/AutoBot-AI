@@ -169,9 +169,9 @@ class RedisServiceManager:
                 "user_id": user_id,
                 "data": data,
             }
-            logger.info(f"AUDIT: {json.dumps(audit_entry)}")
+            logger.info("AUDIT: %s", json.dumps(audit_entry))
         except Exception as e:
-            logger.error(f"Audit logging failed: {e}")
+            logger.error("Audit logging failed: %s", e)
 
     async def _execute_systemctl_command(
         self, command: str, timeout: int = 30
@@ -201,7 +201,7 @@ class RedisServiceManager:
             return result
 
         except Exception as e:
-            logger.error(f"Failed to execute systemctl {command}: {e}")
+            logger.error("Failed to execute systemctl %s: %s", command, e)
             await self._record_error()
             raise RedisConnectionError(
                 f"Cannot execute command on Redis VM: {str(e)}"
@@ -278,7 +278,7 @@ class RedisServiceManager:
 
         except Exception as e:
             duration = (datetime.now() - start_time).total_seconds()
-            logger.error(f"Start service failed: {e}")
+            logger.error("Start service failed: %s", e)
             await self._record_error()
 
             self._audit_log(
@@ -366,7 +366,7 @@ class RedisServiceManager:
 
         except Exception as e:
             duration = (datetime.now() - start_time).total_seconds()
-            logger.error(f"Stop service failed: {e}")
+            logger.error("Stop service failed: %s", e)
             await self._record_error()
 
             self._audit_log(
@@ -441,7 +441,7 @@ class RedisServiceManager:
 
         except Exception as e:
             duration = (datetime.now() - start_time).total_seconds()
-            logger.error(f"Restart service failed: {e}")
+            logger.error("Restart service failed: %s", e)
             await self._record_error()
 
             self._audit_log(
@@ -505,7 +505,7 @@ class RedisServiceManager:
                         pid = int(pid_str) if pid_str.isdigit() else None
                         break
             except Exception as e:
-                logger.debug(f"Failed to parse PID from status output: {e}")
+                logger.debug("Failed to parse PID from status output: %s", e)
 
             service_status = ServiceStatus(
                 status=status, pid=pid, last_check=datetime.now()
@@ -518,7 +518,7 @@ class RedisServiceManager:
             return service_status
 
         except Exception as e:
-            logger.error(f"Failed to get service status: {e}")
+            logger.error("Failed to get service status: %s", e)
             await self._record_error()
             return ServiceStatus(status="unknown", last_check=datetime.now())
 
@@ -546,7 +546,7 @@ class RedisServiceManager:
             connectivity = ping_result.success and "PONG" in ping_result.stdout
             return connectivity, response_time_ms
         except Exception as e:
-            logger.warning(f"Redis connectivity check failed: {e}")
+            logger.warning("Redis connectivity check failed: %s", e)
             return False, 0.0
 
     def _determine_health_status(
@@ -616,7 +616,7 @@ class RedisServiceManager:
             )
 
         except Exception as e:
-            logger.error(f"Health check failed: {e}")
+            logger.error("Health check failed: %s", e)
             await self._record_error()
             return HealthStatus(
                 overall_status="critical",

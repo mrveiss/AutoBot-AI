@@ -50,7 +50,7 @@ class DomainSecurityConfig:
             with open(config_file, "r") as f:
                 return yaml.safe_load(f) or {}
         except Exception as e:
-            logger.error(f"Failed to load domain security config: {e}")
+            logger.error("Failed to load domain security config: %s", e)
             return self._get_default_config()
 
     def _get_default_blacklist(self) -> list:
@@ -181,7 +181,7 @@ class DomainSecurityManager:
             cached = self.domain_cache[cache_key]
             cache_duration = self.config.config.get("domain_security", {}).get("cache_duration", 3600)
             if time.time() - cached["timestamp"] < cache_duration:
-                logger.debug(f"Using cached domain validation for {domain}")
+                logger.debug("Using cached domain validation for %s", domain)
                 return cached["result"]
         return None
 
@@ -261,7 +261,7 @@ class DomainSecurityManager:
             })
 
         self._cache_result(cache_key, result)
-        logger.info(f"Domain validation for {domain}: safe={result['safe']}, reason={result['reason']}")
+        logger.info("Domain validation for %s: safe=%s, reason=%s", domain, result['safe'], result['reason'])
         return result
 
     async def validate_domain_safety(self, url: str) -> Dict[str, Any]:
@@ -298,7 +298,7 @@ class DomainSecurityManager:
             return await self._make_final_safety_decision(domain, result, cache_key)
 
         except Exception as e:
-            logger.error(f"Error validating domain {url}: {e}")
+            logger.error("Error validating domain %s: %s", url, e)
             result.update({
                 "safe": False, "reason": f"Validation error: {str(e)}",
                 "threats_detected": ["VALIDATION_ERROR"],
@@ -363,16 +363,14 @@ class DomainSecurityManager:
 
             return {"allowed": True, "reason": "Network access permitted"}
         except Exception as e:
-            logger.error(f"Network validation error for {parsed.hostname}: {e}")
+            logger.error("Network validation error for %s: %s", parsed.hostname, e)
             return {"allowed": False, "reason": f"Network validation failed: {e}"}
 
     def _is_whitelisted(self, domain: str) -> bool:
         """Check if domain matches whitelist patterns"""
         for pattern in self.whitelist_patterns:
             if pattern.match(domain):
-                logger.debug(
-                    f"Domain {domain} matched whitelist pattern: {pattern.pattern}"
-                )
+                logger.debug("Domain %s matched whitelist pattern: %s", domain, pattern.pattern)
                 return True
         return False
 
@@ -380,9 +378,7 @@ class DomainSecurityManager:
         """Check if domain matches blacklist patterns"""
         for pattern in self.blacklist_patterns:
             if pattern.match(domain):
-                logger.warning(
-                    f"Domain {domain} matched blacklist pattern: {pattern.pattern}"
-                )
+                logger.warning("Domain %s matched blacklist pattern: %s", domain, pattern.pattern)
                 return {
                     "blocked": True,
                     "reason": "Domain matches blacklist pattern",
@@ -407,7 +403,7 @@ class DomainSecurityManager:
                 continue
 
             try:
-                logger.info(f"Updating threat intelligence from {feed_config['name']}")
+                logger.info("Updating threat intelligence from %s", feed_config['name'])
 
                 async with await self._http_client.get(
                     feed_config["url"],
@@ -430,9 +426,9 @@ class DomainSecurityManager:
                         )
 
             except asyncio.TimeoutError:
-                logger.warning(f"Timeout fetching threat feed {feed_config['name']}")
+                logger.warning("Timeout fetching threat feed %s", feed_config['name'])
             except Exception as e:
-                logger.error(f"Error fetching threat feed {feed_config['name']}: {e}")
+                logger.error("Error fetching threat feed %s: %s", feed_config['name'], e)
 
         self.last_threat_update = current_time
 
@@ -488,10 +484,7 @@ class DomainSecurityManager:
         # See: Issue #164 for security implementation roadmap
         for service_name, service_config in reputation_services.items():
             if service_config.get("enabled", False) and service_config.get("api_key"):
-                logger.debug(
-                    f"Reputation service {service_name} is configured - "
-                    f"external API integration pending Issue #164 completion"
-                )
+                logger.debug("Reputation service %s is configured - external API integration pending Issue #164 completion", service_name)
 
         # Default reputation based on basic heuristics
         return self._calculate_basic_reputation(domain)

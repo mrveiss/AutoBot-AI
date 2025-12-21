@@ -66,7 +66,7 @@ async def get_phase_management_status():
             "system_maturity": capabilities["system_maturity"],
         }
     except Exception as e:
-        logger.error(f"Error getting phase management status: {e}")
+        logger.error("Error getting phase management status: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -88,7 +88,7 @@ async def run_full_phase_validation():
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"Error running phase validation: {e}")
+        logger.error("Error running phase validation: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -118,7 +118,7 @@ async def run_custom_phase_validation(request: ValidationRequest):
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"Error running custom validation: {e}")
+        logger.error("Error running custom validation: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -140,7 +140,7 @@ async def check_progression_eligibility():
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"Error checking progression eligibility: {e}")
+        logger.error("Error checking progression eligibility: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -175,7 +175,7 @@ async def execute_automated_progression(background_tasks: BackgroundTasks):
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"Error executing automated progression: {e}")
+        logger.error("Error executing automated progression: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -212,7 +212,7 @@ async def trigger_manual_progression(request: PhaseProgressionRequest):
                 },
             )
     except Exception as e:
-        logger.error(f"Error triggering manual progression: {e}")
+        logger.error("Error triggering manual progression: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -257,7 +257,7 @@ async def get_available_phases():
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"Error getting available phases: {e}")
+        logger.error("Error getting available phases: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -279,7 +279,7 @@ async def get_current_capabilities():
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"Error getting capabilities: {e}")
+        logger.error("Error getting capabilities: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -307,7 +307,7 @@ async def get_progression_history(limit: int = Query(10, ge=1, le=100)):
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"Error getting progression history: {e}")
+        logger.error("Error getting progression history: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -344,7 +344,7 @@ async def phase_management_health():
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"Phase management health check failed: {e}")
+        logger.error("Phase management health check failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
 
 
@@ -374,7 +374,7 @@ async def update_progression_config(config_update: dict):
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"Error updating progression config: {e}")
+        logger.error("Error updating progression config: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -419,5 +419,5 @@ async def get_progression_summary_report():
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"Error generating summary report: {e}")
+        logger.error("Error generating summary report: %s", e)
         raise HTTPException(status_code=500, detail=str(e))

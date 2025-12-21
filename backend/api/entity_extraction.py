@@ -274,11 +274,11 @@ async def extract_entities(
         )
 
     except ValueError as e:
-        logger.warning(f"[{request_id}] Validation error: {e}")
+        logger.warning("[%s] Validation error: %s", request_id, e)
         raise HTTPException(status_code=400, detail=str(e))
 
     except Exception as e:
-        logger.error(f"[{request_id}] Entity extraction failed: {e}", exc_info=True)
+        logger.error("[%s] Entity extraction failed: %s", request_id, e, exc_info=True)
         raise HTTPException(
             status_code=500, detail=f"Entity extraction failed: {str(e)}"
         )
@@ -335,7 +335,7 @@ def _process_extraction_results(
         conv_id = batch_request.conversations[idx].conversation_id
 
         if isinstance(result, Exception):
-            logger.error(f"[{request_id}] Extraction failed for {conv_id}: {result}")
+            logger.error("[%s] Extraction failed for %s: %s", request_id, conv_id, result)
             failed_results.append(
                 {
                     "success": False,
@@ -438,7 +438,7 @@ async def extract_entities_batch(
         )
 
     except Exception as e:
-        logger.error(f"[{request_id}] Batch extraction failed: {e}", exc_info=True)
+        logger.error("[%s] Batch extraction failed: %s", request_id, e, exc_info=True)
         raise HTTPException(
             status_code=500, detail=f"Batch extraction failed: {str(e)}"
         )
@@ -507,7 +507,7 @@ async def entity_extraction_health(
         )
 
     except Exception as e:
-        logger.error(f"Health check failed: {e}", exc_info=True)
+        logger.error("Health check failed: %s", e, exc_info=True)
         return JSONResponse(
             status_code=503,
             content={

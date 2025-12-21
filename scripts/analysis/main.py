@@ -38,9 +38,9 @@ def main():
     reload = backend_config.get("reload", False)
     log_level = backend_config.get("log_level", "info")
 
-    logger.info(f"Starting server on {host}:{port}")
-    logger.info(f"Reload enabled: {reload}")
-    logger.info(f"Log level: {log_level}")
+    logger.info("Starting server on %s:%s", host, port)
+    logger.info("Reload enabled: %s", reload)
+    logger.info("Log level: %s", log_level)
 
     # Start the server
     uvicorn.run(app, host=host, port=port, reload=reload, log_level=log_level)

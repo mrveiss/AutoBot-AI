@@ -107,7 +107,7 @@ class HotReloadManager:
             )
 
         except Exception as e:
-            logger.error(f"Failed to start hot reload manager: {e}")
+            logger.error("Failed to start hot reload manager: %s", e)
 
     async def stop(self) -> None:
         """Stop the hot reload manager.
@@ -129,7 +129,7 @@ class HotReloadManager:
             logger.info("Hot reload manager stopped")
 
         except Exception as e:
-            logger.error(f"Error stopping hot reload manager: {e}")
+            logger.error("Error stopping hot reload manager: %s", e)
 
     def register_module(
         self, module_name: str, callback: Optional[Callable] = None
@@ -146,10 +146,10 @@ class HotReloadManager:
                     self.module_callbacks[module_name] = set()
                 self.module_callbacks[module_name].add(callback)
 
-            logger.debug(f"Registered module for hot reload: {module_name}")
+            logger.debug("Registered module for hot reload: %s", module_name)
 
         except ImportError as e:
-            logger.warning(f"Could not register module {module_name}: {e}")
+            logger.warning("Could not register module %s: %s", module_name, e)
 
     def register_chat_workflow_modules(
         self, callback: Optional[Callable] = None
@@ -183,7 +183,7 @@ class HotReloadManager:
                     # Notify callbacks
                     await self._notify_callbacks(module_name, new_module)
 
-                    logger.info(f"Successfully reloaded module: {module_name}")
+                    logger.info("Successfully reloaded module: %s", module_name)
                     return True
                 else:
                     logger.warning(
@@ -192,7 +192,7 @@ class HotReloadManager:
                     return False
 
             except Exception as e:
-                logger.error(f"Failed to reload module {module_name}: {e}")
+                logger.error("Failed to reload module %s: %s", module_name, e)
                 return False
 
     async def reload_chat_workflow(self) -> Dict[str, bool]:
@@ -220,11 +220,11 @@ class HotReloadManager:
             module_name = self._path_to_module_name(file_path)
 
             if module_name and module_name in self.watched_modules:
-                logger.debug(f"File changed: {file_path} -> reloading {module_name}")
+                logger.debug("File changed: %s -> reloading %s", file_path, module_name)
                 await self.reload_module(module_name)
 
         except Exception as e:
-            logger.error(f"Error handling file change for {file_path}: {e}")
+            logger.error("Error handling file change for %s: %s", file_path, e)
 
     def _path_to_module_name(self, file_path: Path) -> Optional[str]:
         """Convert a file path to a Python module name"""
@@ -252,7 +252,7 @@ class HotReloadManager:
                     else:
                         callback(module_name, new_module)
                 except Exception as e:
-                    logger.error(f"Callback error for {module_name}: {e}")
+                    logger.error("Callback error for %s: %s", module_name, e)
 
     def get_module(self, module_name: str) -> Optional[Any]:
         """Get a registered module"""

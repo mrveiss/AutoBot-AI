@@ -85,7 +85,7 @@ async def _read_file_content(py_file: Path) -> str | None:
         async with aiofiles.open(py_file, "r", encoding="utf-8") as f:
             return await f.read()
     except OSError as e:
-        logger.debug(f"Failed to read file {py_file}: {e}")
+        logger.debug("Failed to read file %s: %s", py_file, e)
         return None
 
 
@@ -154,7 +154,7 @@ async def _analyze_file_imports(
     try:
         tree = ast.parse(content)
     except SyntaxError:
-        logger.debug(f"Syntax error parsing {py_file}")
+        logger.debug("Syntax error parsing %s", py_file)
         return
 
     file_imports, file_ext_deps = _extract_imports_from_ast(tree, STDLIB_MODULES)
@@ -272,10 +272,10 @@ async def get_dependencies():
             for metadata in results.get("metadatas", []):
                 _process_chromadb_metadata(metadata, modules, seen_files)
 
-            logger.info(f"Found {len(modules)} modules in ChromaDB")
+            logger.info("Found %s modules in ChromaDB", len(modules))
 
         except Exception as chroma_error:
-            logger.warning(f"ChromaDB query failed: {chroma_error}")
+            logger.warning("ChromaDB query failed: %s", chroma_error)
             code_collection = None
 
     # Scan filesystem for detailed import analysis

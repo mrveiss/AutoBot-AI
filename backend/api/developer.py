@@ -138,7 +138,7 @@ async def update_developer_config(config: dict):
     unified_config_manager.save_settings()
     ConfigService.clear_cache()
 
-    logger.info(f"Developer configuration updated: {config}")
+    logger.info("Developer configuration updated: %s", config)
     return {"status": "success", "config": current_config}
 
 

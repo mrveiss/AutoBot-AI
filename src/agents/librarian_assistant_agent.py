@@ -104,7 +104,7 @@ class LibrarianAssistantAgent:
                 logger.info("Playwright browser initialized successfully")
             return True
         except Exception as e:
-            logger.error(f"Failed to initialize Playwright: {e}")
+            logger.error("Failed to initialize Playwright: %s", e)
             return False
 
     async def _cleanup_playwright(self):
@@ -118,7 +118,7 @@ class LibrarianAssistantAgent:
             self.playwright = None
             logger.info("Playwright resources cleaned up")
         except Exception as e:
-            logger.error(f"Error cleaning up Playwright: {e}")
+            logger.error("Error cleaning up Playwright: %s", e)
 
     async def _setup_search_page(self, page, search_engine: str, query: str) -> None:
         """Setup page for search (Issue #398: extracted)."""
@@ -198,10 +198,10 @@ class LibrarianAssistantAgent:
                     if result:
                         results.append(result)
                 except Exception as e:
-                    logger.debug(f"Error extracting DuckDuckGo result: {e}")
+                    logger.debug("Error extracting DuckDuckGo result: %s", e)
 
         except Exception as e:
-            logger.error(f"Error extracting DuckDuckGo results: {e}")
+            logger.error("Error extracting DuckDuckGo results: %s", e)
 
         return results
 
@@ -236,10 +236,10 @@ class LibrarianAssistantAgent:
                     if result:
                         results.append(result)
                 except Exception as e:
-                    logger.debug(f"Error extracting Bing result: {e}")
+                    logger.debug("Error extracting Bing result: %s", e)
 
         except Exception as e:
-            logger.error(f"Error extracting Bing results: {e}")
+            logger.error("Error extracting Bing results: %s", e)
 
         return results
 
@@ -277,10 +277,10 @@ class LibrarianAssistantAgent:
                     if result:
                         results.append(result)
                 except Exception as e:
-                    logger.debug(f"Error extracting Google result: {e}")
+                    logger.debug("Error extracting Google result: %s", e)
 
         except Exception as e:
-            logger.error(f"Error extracting Google results: {e}")
+            logger.error("Error extracting Google results: %s", e)
 
         return results
 
@@ -584,7 +584,7 @@ Format sources as: [Source: Domain Name]
             return summary
 
         except Exception as e:
-            logger.error(f"Error creating research summary: {e}")
+            logger.error("Error creating research summary: %s", e)
             return f"Research completed but summary generation failed: {str(e)}"
 
 

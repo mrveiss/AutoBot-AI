@@ -21,7 +21,7 @@ def log_initialization_step(
 ):
     """Log initialization steps with consistent formatting."""
     icon = "✅" if success else "❌" if percentage == 100 else "🔄"
-    logger.info(f"{icon} [{percentage:3d}%] {stage}: {message}")
+    logger.info("%s [%s%] %s: %s", icon, percentage:3d, stage, message)
 
 
 async def update_init_status(key: str, value: str) -> None:
@@ -75,7 +75,7 @@ async def initialize_ai_stack(
                 )
 
             except Exception as e:
-                logger.warning(f"AI Stack agent verification failed: {e}")
+                logger.warning("AI Stack agent verification failed: %s", e)
                 await update_status_fn("ai_stack_agents", "partial")
                 await append_error_fn(f"Agent verification: {str(e)}")
 
@@ -87,7 +87,7 @@ async def initialize_ai_stack(
             )
 
     except Exception as e:
-        logger.error(f"AI Stack initialization failed: {e}")
+        logger.error("AI Stack initialization failed: %s", e)
         await update_status_fn("ai_stack", "failed")
         await append_error_fn(f"AI Stack init: {str(e)}")
         log_initialization_step(

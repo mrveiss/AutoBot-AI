@@ -48,7 +48,7 @@ class ChatAgent(StandardizedAgent):
             }
         )
 
-        logger.info(f"Chat Agent initialized with model: {self.model_name}")
+        logger.info("Chat Agent initialized with model: %s", self.model_name)
 
     async def handle_chat(self, request: AgentRequest) -> Dict[str, Any]:
         """Handle chat action - replaces duplicate process_request logic"""
@@ -81,7 +81,7 @@ class ChatAgent(StandardizedAgent):
             Dict containing the chat response and metadata
         """
         try:
-            logger.info(f"Chat Agent processing message: {message[:50]}...")
+            logger.info("Chat Agent processing message: %s...", message[:50])
 
             # Prepare chat-optimized system prompt
             system_prompt = self._get_chat_system_prompt()
@@ -122,7 +122,7 @@ class ChatAgent(StandardizedAgent):
             }
 
         except Exception as e:
-            logger.error(f"Chat Agent error processing message: {e}")
+            logger.error("Chat Agent error processing message: %s", e)
             return {
                 "status": "error",
                 "response_text": (
@@ -216,7 +216,7 @@ For complex technical tasks, analysis, or system commands, you should "
             return str(response)
 
         except Exception as e:
-            logger.error(f"Error extracting response content: {e}")
+            logger.error("Error extracting response content: %s", e)
             return "I had trouble generating a proper response. Please try again."
 
     def is_chat_appropriate(self, message: str) -> bool:

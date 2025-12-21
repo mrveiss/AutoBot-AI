@@ -151,7 +151,7 @@ async def _get_chat_context(
                 f"Retrieved {len(chat_context)} messages for model {model_name or 'default'}"
             )
         except Exception as e:
-            logger.warning(f"Could not retrieve chat context: {e}")
+            logger.warning("Could not retrieve chat context: %s", e)
 
     return chat_context
 
@@ -176,9 +176,9 @@ async def _enhance_with_knowledge_base(
                     ]
                 )
                 enhanced_context = f"Relevant knowledge context:\n{kb_summary}"
-                logger.info(f"Enhanced context with {len(kb_results)} KB results")
+                logger.info("Enhanced context with %s KB results", len(kb_results))
         except Exception as e:
-            logger.warning(f"Knowledge base context enhancement failed: {e}")
+            logger.warning("Knowledge base context enhancement failed: %s", e)
 
     return enhanced_context, knowledge_sources
 
@@ -239,7 +239,7 @@ async def _generate_ai_stack_response(
         }
 
     except AIStackError as e:
-        logger.error(f"AI Stack chat failed: {e}")
+        logger.error("AI Stack chat failed: %s", e)
         return {
             "content": (
                 "I apologize, but I'm experiencing technical difficulties with my "
@@ -384,7 +384,7 @@ async def process_enhanced_chat_message(
         }
 
     except Exception as e:
-        logger.error(f"Error processing enhanced chat message: {e}")
+        logger.error("Error processing enhanced chat message: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to process enhanced chat message: {str(e)}"
         )
@@ -454,7 +454,7 @@ async def enhanced_chat(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[{request_id}] Enhanced chat error: {e}")
+        logger.error("[%s] Enhanced chat error: %s", request_id, e)
         return create_error_response(
             error_code="INTERNAL_ERROR",
             message=str(e),
@@ -615,7 +615,7 @@ async def enhanced_chat_health_check():
             ai_stack_health = await ai_client.health_check()
             health_status["components"]["ai_stack"] = ai_stack_health["status"]
         except Exception as e:
-            logger.warning(f"AI Stack health check failed: {e}")
+            logger.warning("AI Stack health check failed: %s", e)
             health_status["components"]["ai_stack"] = "unavailable"
 
         # Overall health assessment
@@ -628,7 +628,7 @@ async def enhanced_chat_health_check():
         )
 
     except Exception as e:
-        logger.error(f"Enhanced chat health check failed: {e}")
+        logger.error("Enhanced chat health check failed: %s", e)
         return JSONResponse(
             status_code=503,
             content={
@@ -675,7 +675,7 @@ async def get_enhanced_chat_capabilities():
         )
 
     except Exception as e:
-        logger.warning(f"Failed to get full capabilities: {e}")
+        logger.warning("Failed to get full capabilities: %s", e)
         # Return basic capabilities as fallback
         return create_success_response(
             {

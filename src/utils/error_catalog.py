@@ -42,7 +42,7 @@ def _parse_single_error(
     """Parse single error definition from catalog data. (Issue #315 - extracted)"""
     required_keys = ("category", "message", "status_code", "retry")
     if not all(key in error_data for key in required_keys):
-        logger.warning(f"Skipping incomplete error definition: {error_code}")
+        logger.warning("Skipping incomplete error definition: %s", error_code)
         return None
 
     try:
@@ -57,7 +57,7 @@ def _parse_single_error(
             details=error_data.get("details"),
         )
     except Exception as e:
-        logger.warning(f"Failed to parse error {error_code}: {e}", exc_info=True)
+        logger.warning("Failed to parse error %s: %s", error_code, e, exc_info=True)
         return None
 
 
@@ -132,7 +132,7 @@ class ErrorCatalog:
             catalog_path = PATH.CONFIG_DIR / "error_messages.yaml"
 
         if not catalog_path.exists():
-            logger.error(f"Error catalog not found: {catalog_path}")
+            logger.error("Error catalog not found: %s", catalog_path)
             return False
 
         try:
@@ -150,7 +150,7 @@ class ErrorCatalog:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to load error catalog: {e}", exc_info=True)
+            logger.error("Failed to load error catalog: %s", e, exc_info=True)
             return False
 
     def _parse_catalog(self):

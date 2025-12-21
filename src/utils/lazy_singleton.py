@@ -35,7 +35,7 @@ def get_chat_history_manager(request):
             request.app.state.chat_history_manager = manager
             logger.info("✅ Lazy-initialized chat_history_manager")
         except Exception as e:
-            logger.error(f"Failed to lazy-initialize chat_history_manager: {e}")
+            logger.error("Failed to lazy-initialize chat_history_manager: %s", e)
     return manager
 
 # New pattern (3 lines)
@@ -161,11 +161,11 @@ def lazy_init_singleton(
         # Store on storage object
         setattr(storage, attribute_name, instance)
 
-        logger.info(f"✅ Lazy-initialized {attribute_name}")
+        logger.info("✅ Lazy-initialized %s", attribute_name)
         return instance
 
     except Exception as e:
-        logger.error(f"❌ Failed to lazy-initialize {attribute_name}: {e}")
+        logger.error("❌ Failed to lazy-initialize %s: %s", attribute_name, e)
         return None
 
 
@@ -230,11 +230,11 @@ async def lazy_init_singleton_async(
         # Store on storage object
         setattr(storage, attribute_name, instance)
 
-        logger.info(f"✅ Lazy-initialized {attribute_name} (async)")
+        logger.info("✅ Lazy-initialized %s (async)", attribute_name)
         return instance
 
     except Exception as e:
-        logger.error(f"❌ Failed to lazy-initialize {attribute_name} (async): {e}")
+        logger.error("❌ Failed to lazy-initialize %s (async): %s", attribute_name, e)
         return None
 
 
@@ -301,16 +301,16 @@ def lazy_init_singleton_with_check(
             # Validate if validator provided
             if validator is not None:
                 if not validator(instance):
-                    logger.error(f"Newly created {attribute_name} failed validation")
+                    logger.error("Newly created %s failed validation", attribute_name)
                     return None
 
             # Store on storage object
             setattr(storage, attribute_name, instance)
 
-            logger.info(f"✅ Lazy-initialized {attribute_name} (with validation)")
+            logger.info("✅ Lazy-initialized %s (with validation)", attribute_name)
 
         except Exception as e:
-            logger.error(f"❌ Failed to lazy-initialize {attribute_name}: {e}")
+            logger.error("❌ Failed to lazy-initialize %s: %s", attribute_name, e)
             return None
 
     return instance

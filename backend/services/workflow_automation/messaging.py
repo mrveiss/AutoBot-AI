@@ -26,20 +26,20 @@ class WorkflowMessenger:
     def register_session(self, session_id: str, websocket: Any) -> None:
         """Register a WebSocket session"""
         self.terminal_sessions[session_id] = websocket
-        logger.debug(f"Registered WebSocket session: {session_id}")
+        logger.debug("Registered WebSocket session: %s", session_id)
 
     def unregister_session(self, session_id: str) -> None:
         """Unregister a WebSocket session"""
         if session_id in self.terminal_sessions:
             del self.terminal_sessions[session_id]
-            logger.debug(f"Unregistered WebSocket session: {session_id}")
+            logger.debug("Unregistered WebSocket session: %s", session_id)
 
     async def send_message(self, session_id: str, message: Metadata) -> bool:
         """Send workflow control message to frontend terminal"""
         try:
             # This would integrate with the existing WebSocket system
             # For now, just log the message
-            logger.info(f"Sending workflow message to {session_id}: {message}")
+            logger.info("Sending workflow message to %s: %s", session_id, message)
 
             # In real implementation, this would send via WebSocket to the terminal
             # websocket = self.terminal_sessions.get(session_id)
@@ -49,5 +49,5 @@ class WorkflowMessenger:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to send workflow message: {e}")
+            logger.error("Failed to send workflow message: %s", e)
             return False

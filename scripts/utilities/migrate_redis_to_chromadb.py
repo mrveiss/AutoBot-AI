@@ -89,7 +89,7 @@ class RedisToChromaDBMigration:
         self.migrated_vectors = 0
         self.failed_vectors = 0
 
-        logger.info(f"ChromaDB config loaded: path={chromadb_path}, collection={self.collection_name}")
+        logger.info("ChromaDB config loaded: path=%s, collection=%s", chromadb_path, self.collection_name)
 
     async def initialize(self):
         """Initialize connections to both Redis and ChromaDB"""
@@ -118,7 +118,7 @@ class RedisToChromaDBMigration:
         # Get vector dimensions from Redis
         logger.info("Detecting vector dimensions from Redis...")
         vector_dims = await self._get_redis_vector_dimensions()
-        logger.info(f"Vector dimensions: {vector_dims}")
+        logger.info("Vector dimensions: %s", vector_dims)
 
         # Create or get collection (from central config)
         collection_name = self.collection_name
@@ -143,7 +143,7 @@ class RedisToChromaDBMigration:
                     "migration_date": datetime.now().isoformat()
                 }
             )
-            logger.info(f"✅ ChromaDB collection ready: {collection_name} ({vector_dims}D vectors)")
+            logger.info("✅ ChromaDB collection ready: %s (%sD vectors)", collection_name, vector_dims)
 
         except Exception as e:
             raise RuntimeError(f"Failed to initialize ChromaDB: {e}")
@@ -173,7 +173,7 @@ class RedisToChromaDBMigration:
             return 768
 
         except Exception as e:
-            logger.error(f"Failed to detect vector dimensions: {e}")
+            logger.error("Failed to detect vector dimensions: %s", e)
             return 768  # Safe default
 
     async def get_redis_vector_count(self) -> int:
@@ -194,7 +194,7 @@ class RedisToChromaDBMigration:
             logger.warning("Could not find num_docs in FT.INFO, returning 0")
             return 0
         except Exception as e:
-            logger.error(f"Failed to get Redis vector count: {e}")
+            logger.error("Failed to get Redis vector count: %s", e)
             return 0
 
     def _decode_field_value(self, field_name: str, field_value, field_dict: Dict) -> bool:
@@ -206,7 +206,7 @@ class RedisToChromaDBMigration:
             try:
                 field_value = field_value.decode('utf-8')
             except UnicodeDecodeError:
-                logger.debug(f"Skipping non-UTF8 field: {field_name}")
+                logger.debug("Skipping non-UTF8 field: %s", field_name)
                 return False
         field_dict[field_name] = field_value
         return True
@@ -223,7 +223,7 @@ class RedisToChromaDBMigration:
             if text_content:
                 return text_content
         except json.JSONDecodeError:
-            logger.warning(f"Failed to parse _node_content JSON for {doc_key}")
+            logger.warning("Failed to parse _node_content JSON for %s", doc_key)
 
         return f"Document {doc_key}"
 
@@ -251,7 +251,7 @@ class RedisToChromaDBMigration:
             doc_key = doc_key.decode()
 
         if not doc_fields:
-            logger.warning(f"No fields found for {doc_key}, skipping")
+            logger.warning("No fields found for %s, skipping", doc_key)
             return None
 
         # Parse fields
@@ -262,7 +262,7 @@ class RedisToChromaDBMigration:
         # Extract embedding
         embedding_bytes = field_dict.get('vector', field_dict.get('embedding'))
         if not embedding_bytes:
-            logger.warning(f"No embedding found for {doc_key}, skipping")
+            logger.warning("No embedding found for %s, skipping", doc_key)
             return None
 
         embedding = np.frombuffer(embedding_bytes, dtype=np.float32).tolist()
@@ -306,14 +306,14 @@ class RedisToChromaDBMigration:
                         documents.append(full_text)
                         metadatas.append(metadata)
                 except Exception as e:
-                    logger.error(f"Failed to parse document {doc_key}: {e}")
+                    logger.error("Failed to parse document %s: %s", doc_key, e)
                     self.failed_vectors += 1
                     continue
 
             return new_cursor, ids, embeddings, documents, metadatas
 
         except Exception as e:
-            logger.error(f"Failed to export batch: {e}", exc_info=True)
+            logger.error("Failed to export batch: %s", e, exc_info=True)
             return 0, [], [], [], []
 
     async def _get_embedding_for_doc(self, doc_id: str) -> Optional[List[float]]:
@@ -332,7 +332,7 @@ class RedisToChromaDBMigration:
 
             return None
         except Exception as e:
-            logger.debug(f"Could not get embedding for {doc_id}: {e}")
+            logger.debug("Could not get embedding for %s: %s", doc_id, e)
             return None
 
     async def import_vectors_batch(
@@ -353,7 +353,7 @@ class RedisToChromaDBMigration:
 
         try:
             if self.dry_run:
-                logger.info(f"[DRY RUN] Would import {len(ids)} vectors")
+                logger.info("[DRY RUN] Would import %s vectors", len(ids))
                 return len(ids)
 
             # Add to ChromaDB (CRITICAL: include documents parameter)
@@ -367,7 +367,7 @@ class RedisToChromaDBMigration:
             return len(ids)
 
         except Exception as e:
-            logger.error(f"Failed to import batch: {e}")
+            logger.error("Failed to import batch: %s", e)
             return 0
 
     async def verify_migration(self, sample_size: int = 100) -> bool:
@@ -377,7 +377,7 @@ class RedisToChromaDBMigration:
         Returns:
             True if verification passes
         """
-        logger.info(f"Verifying migration with {sample_size} random samples...")
+        logger.info("Verifying migration with %s random samples...", sample_size)
 
         try:
             # Get sample IDs
@@ -390,7 +390,7 @@ class RedisToChromaDBMigration:
                 logger.warning("No vector IDs found in Redis for verification")
                 logger.info("Verifying by comparing total counts instead...")
                 chroma_count = self.chroma_collection.count()
-                logger.info(f"ChromaDB count: {chroma_count}, Expected: {self.total_vectors}")
+                logger.info("ChromaDB count: %s, Expected: %s", chroma_count, self.total_vectors)
                 return chroma_count == self.total_vectors
 
             sample_ids = np.random.choice(all_ids, sample_size, replace=False)
@@ -409,7 +409,7 @@ class RedisToChromaDBMigration:
                 )
 
                 if not chroma_result['embeddings']:
-                    logger.warning(f"Doc {doc_id} not found in ChromaDB")
+                    logger.warning("Doc %s not found in ChromaDB", doc_id)
                     continue
 
                 chroma_embedding = chroma_result['embeddings'][0]
@@ -419,12 +419,12 @@ class RedisToChromaDBMigration:
                     matches += 1
 
             accuracy = matches / sample_size * 100
-            logger.info(f"Verification: {matches}/{sample_size} matches ({accuracy:.1f}%)")
+            logger.info("Verification: %s/%s matches (%s%)", matches, sample_size, accuracy:.1f)
 
             return accuracy > 95  # Require >95% match
 
         except Exception as e:
-            logger.error(f"Verification failed: {e}")
+            logger.error("Verification failed: %s", e)
             return False
 
     async def migrate(self):
@@ -440,7 +440,7 @@ class RedisToChromaDBMigration:
 
         # Get total count
         self.total_vectors = await self.get_redis_vector_count()
-        logger.info(f"Total vectors to migrate: {self.total_vectors}")
+        logger.info("Total vectors to migrate: %s", self.total_vectors)
 
         if self.total_vectors == 0:
             logger.warning("No vectors found in Redis. Nothing to migrate.")
@@ -455,7 +455,7 @@ class RedisToChromaDBMigration:
             batch_num += 1
             batch_start = time.time()
 
-            logger.info(f"\nBatch {batch_num}: SCAN cursor={cursor}")
+            logger.info("\nBatch %s: SCAN cursor=%s", batch_num, cursor)
 
             # Export from Redis using SCAN (CRITICAL: now includes documents)
             cursor, ids, embeddings, documents, metadatas = await self.export_vectors_batch(
@@ -464,7 +464,7 @@ class RedisToChromaDBMigration:
             )
 
             if not ids:
-                logger.warning(f"No vectors exported in batch {batch_num}")
+                logger.warning("No vectors exported in batch %s", batch_num)
                 # If cursor is 0, we've completed the full scan
                 if cursor == 0:
                     break
@@ -492,10 +492,10 @@ class RedisToChromaDBMigration:
         logger.info("\n" + "="*50)
         logger.info("Migration Complete")
         logger.info("="*50)
-        logger.info(f"Total time: {total_time:.1f}s")
-        logger.info(f"Migrated: {self.migrated_vectors}/{self.total_vectors}")
-        logger.info(f"Failed: {self.failed_vectors}")
-        logger.info(f"Speed: {self.migrated_vectors/total_time:.0f} vectors/sec")
+        logger.info("Total time: %ss", total_time:.1f)
+        logger.info("Migrated: %s/%s", self.migrated_vectors, self.total_vectors)
+        logger.info("Failed: %s", self.failed_vectors)
+        logger.info("Speed: %s vectors/sec", self.migrated_vectors/total_time:.0f)
 
         # Save migration log
         self._save_migration_log()
@@ -519,7 +519,7 @@ class RedisToChromaDBMigration:
         with open(log_file, 'w') as f:
             json.dump(log_data, f, indent=2)
 
-        logger.info(f"Migration log saved: {log_file}")
+        logger.info("Migration log saved: %s", log_file)
 
 
 async def main():
@@ -550,7 +550,7 @@ async def main():
                 sys.exit(1)
 
     except Exception as e:
-        logger.error(f"Migration failed: {e}", exc_info=True)
+        logger.error("Migration failed: %s", e, exc_info=True)
         sys.exit(1)
 
 

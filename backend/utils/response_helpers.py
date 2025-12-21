@@ -113,7 +113,7 @@ async def handle_ai_stack_error(error: "AIStackError", context: str):
     Raises:
         HTTPException with appropriate status code and details
     """
-    logger.error(f"{context} failed: {error.message}")
+    logger.error("%s failed: %s", context, error.message)
     status_code = (
         503 if error.status_code is None else (400 if error.status_code < 500 else 503)
     )

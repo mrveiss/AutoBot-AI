@@ -155,7 +155,7 @@ async def _search_local_knowledge_base(
         return {"results": [], "source": "local_kb", "error": "KB not available"}
 
     except Exception as e:
-        logger.warning(f"Local knowledge base search failed: {e}")
+        logger.warning("Local knowledge base search failed: %s", e)
         return {"results": [], "error": str(e), "source": "local_kb"}
 
 
@@ -189,7 +189,7 @@ async def _search_rag_enhanced(
         return {"results": rag_results, "source": "ai_stack_rag"}
 
     except AIStackError as e:
-        logger.warning(f"AI Stack RAG search failed: {e}")
+        logger.warning("AI Stack RAG search failed: %s", e)
         return {"results": [], "error": e.message, "source": "ai_stack_rag"}
 
 
@@ -223,7 +223,7 @@ async def _search_enhanced_librarian(
         return {"results": enhanced_results, "source": "ai_stack_librarian"}
 
     except AIStackError as e:
-        logger.warning(f"Enhanced librarian search failed: {e}")
+        logger.warning("Enhanced librarian search failed: %s", e)
         return {"results": [], "error": e.message, "source": "ai_stack_librarian"}
 
 
@@ -330,7 +330,7 @@ async def enhanced_search(
         )
 
     except Exception as e:
-        logger.error(f"Enhanced search failed: {e}")
+        logger.error("Enhanced search failed: %s", e)
         return create_error_response(
             error_code="SEARCH_ERROR",
             message=f"Enhanced search failed: {str(e)}",
@@ -369,7 +369,7 @@ async def rag_search(
                     f"Retrieved {len(documents)} documents from local KB for RAG"
                 )
             except Exception as e:
-                logger.warning(f"Local KB document retrieval failed: {e}")
+                logger.warning("Local KB document retrieval failed: %s", e)
                 documents = []
 
         # Perform RAG query
@@ -416,7 +416,7 @@ async def _store_single_fact_with_semaphore(
                 },
             )
         except Exception as e:
-            logger.warning(f"Failed to store extracted fact: {e}")
+            logger.warning("Failed to store extracted fact: %s", e)
             return {"status": "error", "message": str(e)}
 
 
@@ -454,7 +454,7 @@ async def _store_extracted_facts(
         if isinstance(result, dict) and result.get("status") != "error"
     ]
 
-    logger.info(f"Stored {len(stored_facts)} extracted facts in knowledge base")
+    logger.info("Stored %s extracted facts in knowledge base", len(stored_facts))
     return stored_facts
 
 
@@ -489,7 +489,7 @@ async def extract_knowledge(request_data: KnowledgeExtractionRequest, req: Reque
                     req, extraction_result, request_data
                 )
             except Exception as e:
-                logger.warning(f"Auto-storage of extracted knowledge failed: {e}")
+                logger.warning("Auto-storage of extracted knowledge failed: %s", e)
 
         return create_success_response(
             {
@@ -632,7 +632,7 @@ async def get_enhanced_stats(req: Request):
             if kb_to_use:
                 local_stats = await kb_to_use.get_stats()
         except Exception as e:
-            logger.warning(f"Failed to get local KB stats: {e}")
+            logger.warning("Failed to get local KB stats: %s", e)
             local_stats = {"error": str(e)}
 
         # Get AI Stack system knowledge insights
@@ -642,7 +642,7 @@ async def get_enhanced_stats(req: Request):
             ai_insights = await ai_client.get_system_knowledge()
             ai_stats = ai_insights
         except Exception as e:
-            logger.warning(f"Failed to get AI Stack stats: {e}")
+            logger.warning("Failed to get AI Stack stats: %s", e)
             ai_stats = {"error": str(e)}
 
         return create_success_response(
@@ -655,7 +655,7 @@ async def get_enhanced_stats(req: Request):
         )
 
     except Exception as e:
-        logger.error(f"Enhanced stats retrieval failed: {e}")
+        logger.error("Enhanced stats retrieval failed: %s", e)
         return create_error_response(
             error_code="STATS_ERROR",
             message=f"Failed to retrieve enhanced stats: {str(e)}",
@@ -699,7 +699,7 @@ async def enhanced_knowledge_health():
         )
 
     except Exception as e:
-        logger.error(f"Enhanced knowledge health check failed: {e}")
+        logger.error("Enhanced knowledge health check failed: %s", e)
         return JSONResponse(
             status_code=503,
             content={

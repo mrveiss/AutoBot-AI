@@ -213,7 +213,7 @@ class TaskQueue:
             func: Function to execute for this task
         """
         self.task_registry[name] = func
-        self.logger.info(f"Registered task: {name}")
+        self.logger.info("Registered task: %s", name)
 
     def task(self, name: str = None):
         """
@@ -302,10 +302,10 @@ class TaskQueue:
                 priority_score = priority.value * 1000000 + int(time.time())
                 await self.redis.zadd(self.pending_key, {task_id: priority_score})
         except RedisError as e:
-            self.logger.error(f"Failed to enqueue task {task_id}: {e}")
+            self.logger.error("Failed to enqueue task %s: %s", task_id, e)
             raise RuntimeError(f"Failed to enqueue task: {e}")
 
-        self.logger.info(f"Enqueued task {task_id}: {function_name}")
+        self.logger.info("Enqueued task %s: %s", task_id, function_name)
         return task_id
 
     async def _store_task(self, task: Task) -> None:
@@ -316,7 +316,7 @@ class TaskQueue:
             task_data = json.dumps(task.to_dict())
             await self.redis.hset(f"{self.queue_name}:tasks", task.id, task_data)
         except RedisError as e:
-            self.logger.error(f"Failed to store task {task.id}: {e}")
+            self.logger.error("Failed to store task %s: %s", task.id, e)
             raise RuntimeError(f"Failed to store task: {e}")
 
     async def _get_task(self, task_id: str) -> Optional[Task]:
@@ -329,7 +329,7 @@ class TaskQueue:
                 return Task.from_dict(json.loads(task_data))
             return None
         except RedisError as e:
-            self.logger.error(f"Failed to get task {task_id}: {e}")
+            self.logger.error("Failed to get task %s: %s", task_id, e)
             raise RuntimeError(f"Failed to get task: {e}")
 
     async def start_workers(self) -> None:
@@ -351,7 +351,7 @@ class TaskQueue:
             scheduler = asyncio.create_task(self._scheduler_loop())
             self.workers.append(scheduler)
 
-        self.logger.info(f"Started {len(self.workers)} workers")
+        self.logger.info("Started %s workers", len(self.workers))
 
     async def stop_workers(self) -> None:
         """Stop all workers."""
@@ -370,7 +370,7 @@ class TaskQueue:
 
     async def _worker_loop(self, worker_name: str) -> None:
         """Main worker loop."""
-        self.logger.info(f"Worker {worker_name} started")
+        self.logger.info("Worker %s started", worker_name)
 
         while self.is_running:
             try:
@@ -386,10 +386,10 @@ class TaskQueue:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                self.logger.error(f"Worker {worker_name} error: {e}")
+                self.logger.error("Worker %s error: %s", worker_name, e)
                 await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
-        self.logger.info(f"Worker {worker_name} stopped")
+        self.logger.info("Worker %s stopped", worker_name)
 
     async def _scheduler_loop(self) -> None:
         """Scheduler loop for delayed tasks."""
@@ -420,14 +420,14 @@ class TaskQueue:
                         )
                         await self.redis.zrem(self.scheduled_key, task_id)
 
-                        self.logger.debug(f"Moved scheduled task to pending: {task_id}")
+                        self.logger.debug("Moved scheduled task to pending: %s", task_id)
 
                 await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)  # Check every 5 seconds
 
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                self.logger.error(f"Scheduler error: {e}")
+                self.logger.error("Scheduler error: %s", e)
                 await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)
 
         self.logger.info("Scheduler stopped")
@@ -451,7 +451,7 @@ class TaskQueue:
 
             return task_id
         except RedisError as e:
-            self.logger.error(f"Failed to get next task from queue: {e}")
+            self.logger.error("Failed to get next task from queue: %s", e)
             return None  # Return None to allow worker to continue
 
     async def _record_task_success(
@@ -680,7 +680,7 @@ class TaskQueue:
             # Issue #361 - avoid blocking
             await asyncio.to_thread(self.redis.hset, self.results_key, task_id, result_data)
 
-            self.logger.info(f"Cancelled task {task_id}")
+            self.logger.info("Cancelled task %s", task_id)
             return True
 
         return False
@@ -758,7 +758,7 @@ class TaskQueue:
 
         cleaned_count = await asyncio.to_thread(_cleanup_old_tasks)
         if cleaned_count > 0:
-            self.logger.info(f"Cleaned up {cleaned_count} old tasks")
+            self.logger.info("Cleaned up %s old tasks", cleaned_count)
 
         return cleaned_count
 

@@ -109,7 +109,7 @@ class SystemKnowledgeManager:
             return needs_update, changed_files
 
         except Exception as e:
-            logger.warning(f"Error checking system knowledge changes: {e}")
+            logger.warning("Error checking system knowledge changes: %s", e)
             # On error, assume update is needed
             return True, ["error-triggered-update"]
 
@@ -137,9 +137,9 @@ class SystemKnowledgeManager:
                 file_states[relative_path] = file_hash
 
             except OSError as e:
-                logger.warning(f"Failed to read file {file_path}: {e}")
+                logger.warning("Failed to read file %s: %s", file_path, e)
             except Exception as e:
-                logger.warning(f"Error processing file {file_path}: {e}")
+                logger.warning("Error processing file %s: %s", file_path, e)
 
         return file_states
 
@@ -167,7 +167,7 @@ class SystemKnowledgeManager:
                 return data.get("file_states", data)
 
         except Exception as e:
-            logger.debug(f"Redis cache load failed for system knowledge: {e}")
+            logger.debug("Redis cache load failed for system knowledge: %s", e)
 
         return None
 
@@ -212,7 +212,7 @@ class SystemKnowledgeManager:
             )
 
         except Exception as e:
-            logger.warning(f"Failed to update system knowledge cache: {e}")
+            logger.warning("Failed to update system knowledge cache: %s", e)
 
     async def _mark_system_knowledge_imported(self):
         """Mark system knowledge as imported (legacy method)"""
@@ -228,7 +228,7 @@ class SystemKnowledgeManager:
                     )
                 )
         except OSError as e:
-            logger.error(f"Failed to mark system knowledge as imported: {e}")
+            logger.error("Failed to mark system knowledge as imported: %s", e)
 
     async def _backup_current_knowledge(self):
         """Backup current system knowledge"""
@@ -242,7 +242,7 @@ class SystemKnowledgeManager:
         dir_exists = await asyncio.to_thread(self.runtime_knowledge_dir.exists)
         if dir_exists:
             await asyncio.to_thread(shutil.copytree, self.runtime_knowledge_dir, backup_path)
-            logger.info(f"Backed up system knowledge to {backup_path}")
+            logger.info("Backed up system knowledge to %s", backup_path)
 
     async def _clear_system_knowledge(self):
         """Clear current system knowledge"""
@@ -359,7 +359,7 @@ class SystemKnowledgeManager:
                 await f.write(yaml.dump(data, default_flow_style=False, indent=2))
             return True
         except OSError as e:
-            logger.error(f"Failed to save YAML file {file_path}: {e}")
+            logger.error("Failed to save YAML file %s: %s", file_path, e)
             return False
 
     async def _create_default_system_knowledge(self):
@@ -394,7 +394,7 @@ class SystemKnowledgeManager:
         # Issue #358 - wrap glob in lambda to avoid blocking
         yaml_files = await asyncio.to_thread(lambda: list(tools_dir.glob("*.yaml")))
         for yaml_file in yaml_files:
-            logger.info(f"Importing tools from {yaml_file}")
+            logger.info("Importing tools from %s", yaml_file)
 
             try:
                 async with aiofiles.open(
@@ -403,7 +403,7 @@ class SystemKnowledgeManager:
                     content = await f.read()
                     tools_data = yaml.safe_load(content)
             except OSError as e:
-                logger.error(f"Failed to read tools file {yaml_file}: {e}")
+                logger.error("Failed to read tools file %s: %s", yaml_file, e)
                 continue
 
             # Copy to runtime directory
@@ -442,7 +442,7 @@ class SystemKnowledgeManager:
         }
 
         await self.librarian.store_tool_knowledge(tool_info)
-        logger.info(f"Imported tool: {tool_name}")
+        logger.info("Imported tool: %s", tool_name)
 
     def _format_installation(self, install_data: Dict[str, str]) -> str:
         """Format installation commands from YAML"""
@@ -491,7 +491,7 @@ class SystemKnowledgeManager:
         # Issue #358 - wrap glob in lambda to avoid blocking
         yaml_files = await asyncio.to_thread(lambda: list(workflows_dir.glob("*.yaml")))
         for yaml_file in yaml_files:
-            logger.info(f"Importing workflow from {yaml_file}")
+            logger.info("Importing workflow from %s", yaml_file)
 
             try:
                 async with aiofiles.open(
@@ -500,7 +500,7 @@ class SystemKnowledgeManager:
                     content = await f.read()
                     workflow_data = yaml.safe_load(content)
             except OSError as e:
-                logger.error(f"Failed to read workflow file {yaml_file}: {e}")
+                logger.error("Failed to read workflow file %s: %s", yaml_file, e)
                 continue
 
             # Copy to runtime directory
@@ -533,7 +533,7 @@ class SystemKnowledgeManager:
         }
 
         await self.librarian.store_workflow_knowledge(workflow_info)
-        logger.info(f"Imported workflow: {workflow_name}")
+        logger.info("Imported workflow: %s", workflow_name)
 
     def _format_pitfalls(
         self, pitfalls_data: List[Dict[str, str]]
@@ -559,7 +559,7 @@ class SystemKnowledgeManager:
         # Issue #358 - wrap glob in lambda to avoid blocking
         yaml_files = await asyncio.to_thread(lambda: list(procedures_dir.glob("*.yaml")))
         for yaml_file in yaml_files:
-            logger.info(f"Importing procedure from {yaml_file}")
+            logger.info("Importing procedure from %s", yaml_file)
 
             try:
                 async with aiofiles.open(
@@ -568,7 +568,7 @@ class SystemKnowledgeManager:
                     content = await f.read()
                     procedure_data = yaml.safe_load(content)
             except OSError as e:
-                logger.error(f"Failed to read procedure file {yaml_file}: {e}")
+                logger.error("Failed to read procedure file %s: %s", yaml_file, e)
                 continue
 
             # Copy to runtime directory
@@ -600,7 +600,7 @@ class SystemKnowledgeManager:
         }
 
         await self.librarian.store_system_documentation(doc_info)
-        logger.info(f"Imported procedure: {title}")
+        logger.info("Imported procedure: %s", title)
 
     def _format_procedure_issues(
         self, issues_data: List[Dict[str, str]]
@@ -641,7 +641,7 @@ class SystemKnowledgeManager:
                 for tool_data in tools_data.get("tools", []):
                     await self._import_single_tool(tool_data)
             except OSError as e:
-                logger.error(f"Failed to read tools file {yaml_file}: {e}")
+                logger.error("Failed to read tools file %s: %s", yaml_file, e)
 
     async def _import_runtime_workflows(self):
         """Import workflows from runtime directory."""
@@ -654,7 +654,7 @@ class SystemKnowledgeManager:
                 async with aiofiles.open(yaml_file, "r", encoding="utf-8") as f:
                     await self._import_single_workflow(yaml.safe_load(await f.read()))
             except OSError as e:
-                logger.error(f"Failed to read workflow file {yaml_file}: {e}")
+                logger.error("Failed to read workflow file %s: %s", yaml_file, e)
 
     async def _import_runtime_procedures(self):
         """Import procedures from runtime directory."""
@@ -667,7 +667,7 @@ class SystemKnowledgeManager:
                 async with aiofiles.open(yaml_file, "r", encoding="utf-8") as f:
                     await self._import_single_procedure(yaml.safe_load(await f.read()))
             except OSError as e:
-                logger.error(f"Failed to read procedure file {yaml_file}: {e}")
+                logger.error("Failed to read procedure file %s: %s", yaml_file, e)
 
     async def _import_from_runtime_files(self):
         """Import system knowledge from runtime files."""
@@ -717,5 +717,5 @@ class SystemKnowledgeManager:
             return {"success": True, "categories": categories}
 
         except Exception as e:
-            logger.error(f"Failed to get knowledge categories: {e}")
+            logger.error("Failed to get knowledge categories: %s", e)
             return {"success": False, "error": str(e), "categories": {}}

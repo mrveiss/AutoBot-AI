@@ -57,7 +57,7 @@ def _clear_single_redis_database(db_name: str, db_number: int) -> Metadata:
             "keys_cleared": keys_before,
         }
     except Exception as e:
-        logger.error(f"Failed to clear Redis database {db_name} ({db_number}): {str(e)}")
+        logger.error("Failed to clear Redis database %s (%s): %s", db_name, db_number, str(e))
         return {
             "name": db_name,
             "database": db_number,
@@ -89,7 +89,7 @@ def get_redis_connection(database: str = "main"):
             )
         return client
     except Exception as e:
-        logger.error(f"Failed to connect to Redis database '{database}': {str(e)}")
+        logger.error("Failed to connect to Redis database '%s': %s", database, str(e))
         raise
 
 
@@ -144,7 +144,7 @@ async def get_cache_stats():
         return {"status": "success", "stats": stats}
 
     except Exception as e:
-        logger.error(f"Error getting cache statistics: {str(e)}")
+        logger.error("Error getting cache statistics: %s", str(e))
         raise HTTPException(
             status_code=500, detail=f"Error getting cache statistics: {str(e)}"
         )
@@ -198,7 +198,7 @@ async def clear_redis_cache(database: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error clearing Redis cache for {database}: {str(e)}")
+        logger.error("Error clearing Redis cache for %s: %s", database, str(e))
         raise HTTPException(
             status_code=500,
             detail=f"Error clearing Redis cache for {database}: {str(e)}",
@@ -242,7 +242,7 @@ async def clear_cache_type(cache_type: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error clearing {cache_type} cache: {str(e)}")
+        logger.error("Error clearing %s cache: %s", cache_type, str(e))
         raise HTTPException(
             status_code=500, detail=f"Error clearing {cache_type} cache: {str(e)}"
         )
@@ -257,7 +257,7 @@ async def clear_cache_type(cache_type: str):
 async def save_cache_config(config_data: Metadata):
     """Save cache configuration settings"""
     try:
-        logger.info(f"Cache configuration update requested: {config_data}")
+        logger.info("Cache configuration update requested: %s", config_data)
 
         # Validate configuration
         required_fields = [
@@ -281,7 +281,7 @@ async def save_cache_config(config_data: Metadata):
             )
             logger.info("Cache configuration saved to Redis")
         except Exception as e:
-            logger.warning(f"Could not save cache config to Redis: {str(e)}")
+            logger.warning("Could not save cache config to Redis: %s", str(e))
 
         return {
             "status": "success",
@@ -292,7 +292,7 @@ async def save_cache_config(config_data: Metadata):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error saving cache configuration: {str(e)}")
+        logger.error("Error saving cache configuration: %s", str(e))
         raise HTTPException(
             status_code=500, detail=f"Error saving cache configuration: {str(e)}"
         )
@@ -319,7 +319,7 @@ async def get_cache_config():
                     "source": "redis",
                 }
         except Exception as e:
-            logger.warning(f"Could not load cache config from Redis: {str(e)}")
+            logger.warning("Could not load cache config from Redis: %s", str(e))
 
         # Return default configuration
         default_config = {
@@ -332,7 +332,7 @@ async def get_cache_config():
         return {"status": "success", "config": default_config, "source": "default"}
 
     except Exception as e:
-        logger.error(f"Error getting cache configuration: {str(e)}")
+        logger.error("Error getting cache configuration: %s", str(e))
         raise HTTPException(
             status_code=500, detail=f"Error getting cache configuration: {str(e)}"
         )
@@ -368,7 +368,7 @@ async def warmup_caches():
         }
 
     except Exception as e:
-        logger.error(f"Error during cache warmup: {str(e)}")
+        logger.error("Error during cache warmup: %s", str(e))
         raise HTTPException(
             status_code=500, detail=f"Error during cache warmup: {str(e)}"
         )

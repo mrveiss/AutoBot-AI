@@ -63,7 +63,7 @@ async def get_awareness_status():
             "system_maturity": context["system_identity"]["system_maturity"],
         }
     except Exception as e:
-        logger.error(f"Error getting awareness status: {e}")
+        logger.error("Error getting awareness status: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -133,7 +133,7 @@ async def get_system_context(
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"Error getting system context: {e}")
+        logger.error("Error getting system context: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -173,7 +173,7 @@ async def get_capabilities_summary():
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"Error getting capabilities summary: {e}")
+        logger.error("Error getting capabilities summary: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -212,7 +212,7 @@ async def inject_awareness_context(request: PromptInjectionRequest):
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"Error injecting context: {e}")
+        logger.error("Error injecting context: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -236,7 +236,7 @@ async def analyze_query_with_awareness(request: QueryAnalysisRequest):
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"Error analyzing query: {e}")
+        logger.error("Error analyzing query: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -259,7 +259,7 @@ async def get_capability_summary_text():
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"Error creating summary: {e}")
+        logger.error("Error creating summary: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -290,7 +290,7 @@ async def get_phase_information():
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"Error getting phase information: {e}")
+        logger.error("Error getting phase information: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -330,7 +330,7 @@ async def get_awareness_metrics():
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"Error getting awareness metrics: {e}")
+        logger.error("Error getting awareness metrics: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -359,7 +359,7 @@ async def export_awareness_data(
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"Error exporting awareness data: {e}")
+        logger.error("Error exporting awareness data: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -398,5 +398,5 @@ async def llm_awareness_health():
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"LLM awareness health check failed: {e}")
+        logger.error("LLM awareness health check failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")

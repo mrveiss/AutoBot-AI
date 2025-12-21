@@ -78,8 +78,8 @@ class MicroserviceArchitectureEvaluator:
         # Architecture patterns
         structure["architecture_patterns"] = self._identify_architecture_patterns()
 
-        logger.info(f"📊 Analyzed {len(structure['directories'])} directories")
-        logger.info(f"🔍 Identified {len(structure['key_components'])} key components")
+        logger.info("📊 Analyzed %s directories", len(structure['directories']))
+        logger.info("🔍 Identified %s key components", len(structure['key_components']))
 
         return structure
 
@@ -192,7 +192,7 @@ class MicroserviceArchitectureEvaluator:
             endpoints["endpoint_groups"][api_file.stem] = router_info["endpoints"]
 
         except Exception as e:
-            logger.warning(f"Could not analyze API file {api_file}: {e}")
+            logger.warning("Could not analyze API file %s: %s", api_file, e)
 
     def _extract_routes(self, content: str, router_info: Dict[str, Any]) -> None:
         """(Issue #315 - extracted) Extract FastAPI routes from file content"""
@@ -260,7 +260,7 @@ class MicroserviceArchitectureEvaluator:
             models["model_classes"].extend(model_info["classes"])
 
         except Exception as e:
-            logger.debug(f"Could not analyze model file {py_file}: {e}")
+            logger.debug("Could not analyze model file %s: %s", py_file, e)
 
     def _has_database_framework(self, content: str) -> bool:
         """(Issue #315 - extracted) Check if content uses database frameworks"""
@@ -335,7 +335,7 @@ class MicroserviceArchitectureEvaluator:
             self._group_agent_by_type(agent_info, agents)
 
         except Exception as e:
-            logger.warning(f"Could not analyze agent file {agent_file}: {e}")
+            logger.warning("Could not analyze agent file %s: %s", agent_file, e)
 
     def _extract_agent_classes_and_functions(self, tree: ast.AST, agent_info: Dict[str, Any]) -> None:
         """(Issue #315 - extracted) Extract classes and functions from agent AST"""
@@ -431,7 +431,7 @@ class MicroserviceArchitectureEvaluator:
             self._categorize_and_group_utility(util_info, utilities)
 
         except Exception as e:
-            logger.debug(f"Could not analyze utility file {util_file}: {e}")
+            logger.debug("Could not analyze utility file %s: %s", util_file, e)
 
     def _extract_utility_functions_and_classes(self, content: str, util_info: Dict[str, Any]) -> None:
         """(Issue #315 - extracted) Extract functions and classes from utility"""
@@ -528,7 +528,7 @@ class MicroserviceArchitectureEvaluator:
             self._group_service_by_type(pattern, service_info, services)
 
         except Exception as e:
-            logger.debug(f"Could not analyze service file {py_file}: {e}")
+            logger.debug("Could not analyze service file %s: %s", py_file, e)
 
     def _extract_service_classes_and_functions(self, content: str, service_info: Dict[str, Any]) -> None:
         """(Issue #315 - extracted) Extract classes and functions from service file"""
@@ -694,7 +694,7 @@ class MicroserviceArchitectureEvaluator:
                     import_graph[file_module].add(imported_module)
 
             except Exception as e:
-                logger.debug(f"Could not analyze imports in {py_file}: {e}")
+                logger.debug("Could not analyze imports in %s: %s", py_file, e)
 
         dependencies["import_graph"] = {k: list(v) for k, v in import_graph.items()}
 
@@ -716,8 +716,8 @@ class MicroserviceArchitectureEvaluator:
         # Detect potential circular dependencies (simplified)
         dependencies["circular_dependencies"] = self._detect_circular_dependencies(import_graph)
 
-        logger.info(f"📊 Analyzed {len(import_graph)} modules")
-        logger.info(f"🔄 Found {len(dependencies['circular_dependencies'])} potential circular dependencies")
+        logger.info("📊 Analyzed %s modules", len(import_graph))
+        logger.info("🔄 Found %s potential circular dependencies", len(dependencies['circular_dependencies']))
 
         return dependencies
 
@@ -858,9 +858,9 @@ class MicroserviceArchitectureEvaluator:
         for service in boundaries["proposed_services"] + boundaries["shared_services"] + boundaries["data_services"]:
             boundaries["boundary_rationale"][service["name"]] = self._generate_boundary_rationale(service)
 
-        logger.info(f"🎯 Identified {len(boundaries['proposed_services'])} proposed services")
-        logger.info(f"🔧 Identified {len(boundaries['shared_services'])} shared services")
-        logger.info(f"💾 Identified {len(boundaries['data_services'])} data services")
+        logger.info("🎯 Identified %s proposed services", len(boundaries['proposed_services']))
+        logger.info("🔧 Identified %s shared services", len(boundaries['shared_services']))
+        logger.info("💾 Identified %s data services", len(boundaries['data_services']))
 
         return boundaries
 
@@ -1017,7 +1017,7 @@ class MicroserviceArchitectureEvaluator:
         # Rollback strategy
         strategy["rollback_strategy"] = self._create_rollback_strategy()
 
-        logger.info(f"📋 Created {len(strategy['migration_phases'])}-phase migration strategy")
+        logger.info("📋 Created %s-phase migration strategy", len(strategy['migration_phases']))
 
         return strategy
 
@@ -1182,8 +1182,8 @@ class MicroserviceArchitectureEvaluator:
             f.write(self._generate_markdown_report())
 
         logger.info("📄 Microservice analysis reports saved:")
-        logger.info(f"  JSON: {json_report_path}")
-        logger.info(f"  Markdown: {md_report_path}")
+        logger.info("  JSON: %s", json_report_path)
+        logger.info("  Markdown: %s", md_report_path)
 
         return {"json": json_report_path, "markdown": md_report_path}
 
@@ -1471,7 +1471,7 @@ This analysis evaluates the AutoBot codebase for microservice architecture migra
             return self.analysis_results
 
         except Exception as e:
-            logger.error(f"Microservice evaluation failed: {e}")
+            logger.error("Microservice evaluation failed: %s", e)
             raise
 
     def _print_evaluation_summary(self):
@@ -1485,23 +1485,23 @@ This analysis evaluates the AutoBot codebase for microservice architecture migra
         logger.info("=" * 70)
 
         logger.info("📊 CODEBASE ANALYSIS:")
-        logger.info(f"  • Total Lines of Code: {structure['file_statistics']['total_loc']:,}")
-        logger.info(f"  • Python Files: {structure['file_statistics']['python_files']:,}")
-        logger.info(f"  • API Endpoints: {structure['key_components']['api_endpoints']['total_endpoints']}")
-        logger.info(f"  • AI Agents: {structure['key_components']['agents']['total_agents']}")
+        logger.info("  • Total Lines of Code: %s", structure['file_statistics']['total_loc']:,)
+        logger.info("  • Python Files: %s", structure['file_statistics']['python_files']:,)
+        logger.info("  • API Endpoints: %s", structure['key_components']['api_endpoints']['total_endpoints'])
+        logger.info("  • AI Agents: %s", structure['key_components']['agents']['total_agents'])
 
         logger.info("\n🎯 SERVICE BOUNDARIES:")
-        logger.info(f"  • Proposed Services: {len(boundaries['proposed_services'])}")
-        logger.info(f"  • Shared Services: {len(boundaries['shared_services'])}")
-        logger.info(f"  • Data Services: {len(boundaries['data_services'])}")
+        logger.info("  • Proposed Services: %s", len(boundaries['proposed_services']))
+        logger.info("  • Shared Services: %s", len(boundaries['shared_services']))
+        logger.info("  • Data Services: %s", len(boundaries['data_services']))
 
         logger.info("\n📋 MIGRATION STRATEGY:")
-        logger.info(f"  • Migration Phases: {len(migration['migration_phases'])}")
-        logger.info(f"  • Estimated Duration: {sum(phase['estimated_duration_weeks'] for phase in migration['migration_phases'])} weeks")
+        logger.info("  • Migration Phases: %s", len(migration['migration_phases']))
+        logger.info("  • Estimated Duration: %s weeks", sum(phase['estimated_duration_weeks'] for phase in migration['migration_phases']))
 
         logger.info("\n⚡ READINESS ASSESSMENT:")
         readiness = structure["architecture_patterns"]["microservice_readiness"]
-        logger.info(f"  • Microservice Readiness: {readiness}/10")
+        logger.info("  • Microservice Readiness: %s/10", readiness)
 
         if readiness >= 7:
             logger.info("  ✅ HIGH READINESS - Excellent candidate for microservices")
@@ -1523,7 +1523,7 @@ def main():
         return 0
 
     except Exception as e:
-        logger.error(f"Microservice evaluation failed: {e}")
+        logger.error("Microservice evaluation failed: %s", e)
         return 1
 
 

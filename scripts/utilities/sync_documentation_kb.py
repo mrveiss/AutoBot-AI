@@ -80,7 +80,7 @@ class DocumentationSyncManager:
             with open(self.state_file, 'r') as f:
                 return json.load(f)
         except Exception as e:
-            logger.error(f"Failed to load sync state: {e}")
+            logger.error("Failed to load sync state: %s", e)
             return {}
 
     def save_sync_state(self, state: Dict):
@@ -88,9 +88,9 @@ class DocumentationSyncManager:
         try:
             with open(self.state_file, 'w') as f:
                 json.dump(state, f, indent=2)
-            logger.debug(f"Sync state saved: {len(state)} files tracked")
+            logger.debug("Sync state saved: %s files tracked", len(state))
         except Exception as e:
-            logger.error(f"Failed to save sync state: {e}")
+            logger.error("Failed to save sync state: %s", e)
 
     def scan_documentation_files(self) -> Dict[str, str]:
         """
@@ -111,9 +111,9 @@ class DocumentationSyncManager:
                     current_files[relative_path] = content_hash
 
                 except Exception as e:
-                    logger.warning(f"Failed to read {md_file}: {e}")
+                    logger.warning("Failed to read %s: %s", md_file, e)
 
-        logger.info(f"Scanned {len(current_files)} documentation files")
+        logger.info("Scanned %s documentation files", len(current_files))
         return current_files
 
     def detect_changes(
@@ -155,9 +155,9 @@ class DocumentationSyncManager:
                 if result.get("status") == "success":
                     removed_count += 1
             except Exception as e:
-                logger.error(f"Failed to remove fact {fact_id}: {e}")
+                logger.error("Failed to remove fact %s: %s", fact_id, e)
 
-        logger.info(f"Removed {removed_count}/{len(fact_ids)} chunks for {file_path}")
+        logger.info("Removed %s/%s chunks for %s", removed_count, len(fact_ids), file_path)
         return removed_count
 
     async def index_document(self, file_path: str) -> Dict:
@@ -199,7 +199,7 @@ class DocumentationSyncManager:
                 if result.get("status") == "success":
                     fact_ids.append(result["fact_id"])
 
-            logger.info(f"Indexed {file_path}: {len(fact_ids)} chunks")
+            logger.info("Indexed %s: %s chunks", file_path, len(fact_ids))
 
             return {
                 "fact_ids": fact_ids,
@@ -208,7 +208,7 @@ class DocumentationSyncManager:
             }
 
         except Exception as e:
-            logger.error(f"Failed to index {file_path}: {e}")
+            logger.error("Failed to index %s: %s", file_path, e)
             return {"fact_ids": [], "content_hash": "", "indexed_at": ""}
 
     def _chunk_content(self, content: str, max_chunk_size: int = 2000) -> List[str]:
@@ -253,16 +253,16 @@ class DocumentationSyncManager:
         # Detect changes
         added, modified, deleted = self.detect_changes(current_files, previous_state)
 
-        logger.info(f"Changes detected: +{len(added)} ~{len(modified)} -{len(deleted)}")
+        logger.info("Changes detected: +%s ~%s -%s", len(added), len(modified), len(deleted))
 
         if dry_run:
             logger.info("[DRY RUN] No changes will be applied")
             if added:
-                logger.info(f"Would add: {list(added)}")
+                logger.info("Would add: %s", list(added))
             if modified:
-                logger.info(f"Would update: {list(modified)}")
+                logger.info("Would update: %s", list(modified))
             if deleted:
-                logger.info(f"Would delete: {list(deleted)}")
+                logger.info("Would delete: %s", list(deleted))
             return
 
         # Apply changes
@@ -277,7 +277,7 @@ class DocumentationSyncManager:
 
         # 2. Update modified documents (remove old + add new)
         for file_path in modified:
-            logger.info(f"Updating modified: {file_path}")
+            logger.info("Updating modified: %s", file_path)
             # Remove old chunks
             if file_path in previous_state:
                 old_fact_ids = previous_state[file_path].get("fact_ids", [])
@@ -288,7 +288,7 @@ class DocumentationSyncManager:
 
         # 3. Add new documents
         for file_path in added:
-            logger.info(f"Adding new: {file_path}")
+            logger.info("Adding new: %s", file_path)
             result = await self.index_document(file_path)
             new_state[file_path] = result
 
@@ -296,7 +296,7 @@ class DocumentationSyncManager:
         self.save_sync_state(new_state)
 
         logger.info("=== Sync Complete ===")
-        logger.info(f"Total documents in KB: {len(new_state)}")
+        logger.info("Total documents in KB: %s", len(new_state))
 
 
 async def main():
@@ -311,7 +311,7 @@ async def main():
     docs_dir = PROJECT_ROOT / "docs"
 
     if not docs_dir.exists():
-        logger.error(f"Documentation directory not found: {docs_dir}")
+        logger.error("Documentation directory not found: %s", docs_dir)
         return
 
     manager = DocumentationSyncManager(docs_dir)

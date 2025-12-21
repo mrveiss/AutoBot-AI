@@ -83,10 +83,10 @@ class AsyncSQLiteConnectionPool:
                 self._created_connections += 1
                 self._stats.connections_created += 1
 
-            logger.debug(f"Created new async SQLite connection #{self._created_connections}")
+            logger.debug("Created new async SQLite connection #%s", self._created_connections)
             return conn
         except aiosqlite.Error as e:
-            logger.error(f"Failed to create async SQLite connection: {e}")
+            logger.error("Failed to create async SQLite connection: %s", e)
             if conn:
                 await self._close_connection_safely(conn)
             raise RuntimeError(f"Failed to create database connection: {e}")
@@ -107,7 +107,7 @@ class AsyncSQLiteConnectionPool:
                     conn = await self._create_connection()
                     await self._pool.put(conn)
                 except Exception as e:
-                    logger.error(f"Failed to create initial async connection: {e}")
+                    logger.error("Failed to create initial async connection: %s", e)
 
             self._initialized = True
             logger.info(
@@ -154,7 +154,7 @@ class AsyncSQLiteConnectionPool:
         except asyncio.QueueFull:
             await self._close_connection_safely(conn)
         except Exception as e:
-            logger.error(f"Error returning connection to pool: {e}")
+            logger.error("Error returning connection to pool: %s", e)
             await self._close_connection_safely(conn)
 
     @asynccontextmanager
@@ -186,7 +186,7 @@ class AsyncSQLiteConnectionPool:
             yield conn
 
         except Exception as e:
-            logger.error(f"Error with async database connection: {e}")
+            logger.error("Error with async database connection: %s", e)
             # Connection is bad, don't return it to pool
             if conn:
                 await self._close_connection_safely(conn)
@@ -209,9 +209,9 @@ class AsyncSQLiteConnectionPool:
             except asyncio.QueueEmpty:
                 break
             except Exception as e:
-                logger.error(f"Error closing connection: {e}")
+                logger.error("Error closing connection: %s", e)
 
-        logger.info(f"Closed {closed} async connections from pool")
+        logger.info("Closed %s async connections from pool", closed)
         async with self._lock:
             self._created_connections = 0
             self._initialized = False
@@ -280,7 +280,7 @@ async def close_all_async_pools():
     """Close all async connection pools."""
     async with _async_pools_lock:
         for db_path, pool in _async_connection_pools.items():
-            logger.info(f"Closing async pool for {db_path}")
+            logger.info("Closing async pool for %s", db_path)
             await pool.close_all()
         _async_connection_pools.clear()
 
@@ -425,7 +425,7 @@ class AsyncBatchOperations:
         for i in range(0, len(data), batch_size):
             batch = data[i : i + batch_size]
             await conn.executemany(query, batch)
-            logger.debug(f"Inserted batch {i//batch_size + 1}: {len(batch)} records")
+            logger.debug("Inserted batch %s: %s records", i//batch_size + 1, len(batch))
 
     @staticmethod
     async def batch_update(
@@ -453,4 +453,4 @@ class AsyncBatchOperations:
         for i in range(0, len(data), batch_size):
             batch = data[i : i + batch_size]
             await conn.executemany(query, batch)
-            logger.debug(f"Updated batch {i//batch_size + 1}: {len(batch)} records")
+            logger.debug("Updated batch %s: %s records", i//batch_size + 1, len(batch))

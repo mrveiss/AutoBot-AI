@@ -260,7 +260,7 @@ class AuditLogger:
             # Use canonical Redis client pattern with 'audit' database
             return await get_redis_client(async_client=True, database="audit")
         except Exception as e:
-            logger.error(f"Failed to get audit database: {e}")
+            logger.error("Failed to get audit database: %s", e)
             self._redis_failures += 1
             return None
 
@@ -339,7 +339,7 @@ class AuditLogger:
             return True
 
         except Exception as e:
-            logger.error(f"Audit logging failed: {e}")
+            logger.error("Audit logging failed: %s", e)
             self._total_failed += 1
 
             # Fallback to file logging
@@ -358,7 +358,7 @@ class AuditLogger:
         except asyncio.CancelledError:
             logger.debug("Task cancelled")
         except Exception as e:
-            logger.error(f"Batch timer error: {e}")
+            logger.error("Batch timer error: %s", e)
 
     async def _flush_batch(self):
         """
@@ -387,10 +387,10 @@ class AuditLogger:
                     await self._write_entry_to_redis(pipe, entry)
                 await pipe.execute()
 
-            logger.debug(f"Flushed {len(entries_to_flush)} audit entries to Redis")
+            logger.debug("Flushed %s audit entries to Redis", len(entries_to_flush))
 
         except Exception as e:
-            logger.error(f"Batch flush failed: {e}")
+            logger.error("Batch flush failed: %s", e)
             # Issue #370: Fallback to file in parallel for all entries
             await asyncio.gather(
                 *[self._fallback_log(entry, error=str(e)) for entry in entries_to_flush],
@@ -468,10 +468,10 @@ class AuditLogger:
                 ) as f:
                     await f.write(json.dumps(log_data, default=str) + "\n")
             except OSError as e:
-                logger.error(f"Fallback log file write failed: {e}")
+                logger.error("Fallback log file write failed: %s", e)
 
         except Exception as e:
-            logger.error(f"Fallback logging also failed: {e}")
+            logger.error("Fallback logging also failed: %s", e)
 
     async def _execute_query(
         self,
@@ -556,7 +556,7 @@ class AuditLogger:
             )
 
         except Exception as e:
-            logger.error(f"Audit query failed: {e}")
+            logger.error("Audit query failed: %s", e)
             return []
 
     async def _query_time_range(
@@ -853,7 +853,7 @@ class AuditLogger:
             return stats
 
         except Exception as e:
-            logger.error(f"Failed to get audit statistics: {e}")
+            logger.error("Failed to get audit statistics: %s", e)
             return {
                 "error": str(e),
                 "total_logged": self._total_logged,
@@ -901,10 +901,10 @@ class AuditLogger:
                     results = await pipe.execute()
                 deleted_count = sum(1 for r in results if r)
 
-            logger.info(f"Audit cleanup complete: {deleted_count} keys deleted")
+            logger.info("Audit cleanup complete: %s keys deleted", deleted_count)
 
         except Exception as e:
-            logger.error(f"Audit cleanup failed: {e}")
+            logger.error("Audit cleanup failed: %s", e)
 
     async def flush(self):
         """Force flush any pending batched entries"""

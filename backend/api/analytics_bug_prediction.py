@@ -386,7 +386,7 @@ async def get_git_bug_history() -> dict[str, Any]:
         return _parse_git_bug_history_lines(lines)
 
     except Exception as e:
-        logger.warning(f"Failed to get git bug history: {e}")
+        logger.warning("Failed to get git bug history: %s", e)
         return {}
 
 
@@ -422,7 +422,7 @@ async def get_file_change_frequency() -> dict[str, int]:
         return change_counts
 
     except Exception as e:
-        logger.warning(f"Failed to get change frequency: {e}")
+        logger.warning("Failed to get change frequency: %s", e)
         return {}
 
 
@@ -606,7 +606,7 @@ async def analyze_codebase(
         }
 
     except Exception as e:
-        logger.error(f"Failed to analyze codebase: {e}")
+        logger.error("Failed to analyze codebase: %s", e)
         demo = generate_demo_predictions()
         return {
             "timestamp": datetime.now().isoformat(),
@@ -912,7 +912,7 @@ async def record_bug(
                 "message": "Bug recorded for model improvement",
             }
     except Exception as e:
-        logger.warning(f"Failed to record bug in Redis: {e}")
+        logger.warning("Failed to record bug in Redis: %s", e)
 
     return {
         "status": "recorded",

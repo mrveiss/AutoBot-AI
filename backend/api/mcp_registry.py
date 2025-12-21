@@ -58,7 +58,7 @@ router = APIRouter(prefix="", tags=["mcp", "registry"])
 CACHE_ENABLED = os.getenv("MCP_REGISTRY_CACHE_ENABLED", "true").lower() == "true"
 CACHE_TTL_SECONDS = int(os.getenv("MCP_REGISTRY_CACHE_TTL", "60"))
 
-logger.info(f"MCP Registry Cache: enabled={CACHE_ENABLED}, TTL={CACHE_TTL_SECONDS}s")
+logger.info("MCP Registry Cache: enabled=%s, TTL=%ss", CACHE_ENABLED, CACHE_TTL_SECONDS)
 
 
 class MCPToolCache:
@@ -96,11 +96,11 @@ class MCPToolCache:
 
         age = datetime.now() - self._tools_updated
         if age > self.ttl:
-            logger.debug(f"MCP tools cache expired (age: {age.total_seconds():.1f}s)")
+            logger.debug("MCP tools cache expired (age: %ss)", age.total_seconds():.1f)
             self._stats["cache_misses"] += 1
             return None
 
-        logger.debug(f"MCP tools cache hit (age: {age.total_seconds():.1f}s)")
+        logger.debug("MCP tools cache hit (age: %ss)", age.total_seconds():.1f)
         self._stats["cache_hits"] += 1
         return self._tools_cache
 
@@ -111,7 +111,7 @@ class MCPToolCache:
 
         self._tools_cache = data
         self._tools_updated = datetime.now()
-        logger.info(f"MCP tools cache updated (TTL: {self.ttl.seconds}s)")
+        logger.info("MCP tools cache updated (TTL: %ss)", self.ttl.seconds)
 
     def get_bridges(self) -> Optional[Metadata]:
         """Get cached bridges if still valid"""
@@ -124,11 +124,11 @@ class MCPToolCache:
 
         age = datetime.now() - self._bridges_updated
         if age > self.ttl:
-            logger.debug(f"MCP bridges cache expired (age: {age.total_seconds():.1f}s)")
+            logger.debug("MCP bridges cache expired (age: %ss)", age.total_seconds():.1f)
             self._stats["cache_misses"] += 1
             return None
 
-        logger.debug(f"MCP bridges cache hit (age: {age.total_seconds():.1f}s)")
+        logger.debug("MCP bridges cache hit (age: %ss)", age.total_seconds():.1f)
         self._stats["cache_hits"] += 1
         return self._bridges_cache
 
@@ -139,7 +139,7 @@ class MCPToolCache:
 
         self._bridges_cache = data
         self._bridges_updated = datetime.now()
-        logger.info(f"MCP bridges cache updated (TTL: {self.ttl.seconds}s)")
+        logger.info("MCP bridges cache updated (TTL: %ss)", self.ttl.seconds)
 
     def invalidate_all(self) -> None:
         """Invalidate all caches"""
@@ -327,15 +327,15 @@ async def _fetch_bridge_tools(
             timeout=aiohttp.ClientTimeout(total=3),
         ) as response:
             if response.status != 200:
-                logger.warning(f"MCP bridge {bridge_name} returned status {response.status}")
+                logger.warning("MCP bridge %s returned status %s", bridge_name, response.status)
                 return [], False
             tools = await response.json()
             entries = [_build_tool_entry(t, bridge_name, bridge_desc, endpoint, features) for t in tools]
             return entries, True
     except aiohttp.ClientError as e:
-        logger.error(f"HTTP error fetching tools from {bridge_name}: {e}")
+        logger.error("HTTP error fetching tools from %s: %s", bridge_name, e)
     except Exception as e:
-        logger.error(f"Failed to fetch tools from {bridge_name}: {e}")
+        logger.error("Failed to fetch tools from %s: %s", bridge_name, e)
     return [], False
 
 
@@ -406,11 +406,11 @@ async def _fetch_bridges_info() -> Metadata:
         except aiohttp.ClientError as e:
             bridge_info["status"] = "unavailable"
             bridge_info["error"] = str(e)
-            logger.error(f"HTTP error during health check for {bridge_name}: {e}")
+            logger.error("HTTP error during health check for %s: %s", bridge_name, e)
         except Exception as e:
             bridge_info["status"] = "unavailable"
             bridge_info["error"] = str(e)
-            logger.error(f"Health check failed for {bridge_name}: {e}")
+            logger.error("Health check failed for %s: %s", bridge_name, e)
 
         bridges.append(bridge_info)
 
@@ -471,7 +471,7 @@ async def list_all_mcp_tools() -> Metadata:
         return cached_data
 
     # Cache miss - fetch from bridges
-    logger.info(f"Cache miss - fetching MCP tools from {len(MCP_BRIDGES)} bridges")
+    logger.info("Cache miss - fetching MCP tools from %s bridges", len(MCP_BRIDGES))
     tools_data = await _fetch_tools_from_bridges()
 
     # Update cache
@@ -515,7 +515,7 @@ async def get_mcp_bridges() -> Metadata:
         return cached_data
 
     # Cache miss - fetch from bridges
-    logger.info(f"Cache miss - fetching bridge info from {len(MCP_BRIDGES)} bridges")
+    logger.info("Cache miss - fetching bridge info from %s bridges", len(MCP_BRIDGES))
     bridges_data = await _fetch_bridges_info()
 
     # Update cache
@@ -650,10 +650,10 @@ async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Metadata:
     except HTTPException:
         raise
     except aiohttp.ClientError as e:
-        logger.error(f"HTTP error fetching tool details from {bridge_name}: {e}")
+        logger.error("HTTP error fetching tool details from %s: %s", bridge_name, e)
         raise HTTPException(status_code=502, detail=f"Failed to connect to MCP bridge: {str(e)}")
     except Exception as e:
-        logger.error(f"Failed to get tool details: {e}")
+        logger.error("Failed to get tool details: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 

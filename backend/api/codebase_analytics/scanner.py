@@ -176,7 +176,7 @@ Suggestion: {problem.get('suggestion', '')}
             metadatas=[metadata],
         )
     except Exception as e:
-        logger.debug(f"Failed to store problem immediately: {e}")
+        logger.debug("Failed to store problem immediately: %s", e)
 
 
 def _prepare_problem_document(problem: Dict, problem_idx: int) -> tuple:
@@ -226,9 +226,9 @@ async def _store_problems_batch_to_chromadb(collection, problems: list, start_id
             metadatas.append(metadata)
 
         await collection.add(ids=ids, documents=documents, metadatas=metadatas)
-        logger.debug(f"Batch stored {len(problems)} problems to ChromaDB")
+        logger.debug("Batch stored %s problems to ChromaDB", len(problems))
     except Exception as e:
-        logger.debug(f"Failed to batch store problems: {e}")
+        logger.debug("Failed to batch store problems: %s", e)
 
 
 def _aggregate_stats_for_countable(stats: Dict, file_analysis: Dict, file_line_count: int) -> None:
@@ -393,9 +393,9 @@ async def _clear_redis_codebase_cache(task_id: str) -> None:
             keys_to_delete = [key for key in redis_client.scan_iter(match="codebase:*")]
             if keys_to_delete:
                 redis_client.delete(*keys_to_delete)
-                logger.info(f"[Task {task_id}] Cleared {len(keys_to_delete)} Redis cache entries")
+                logger.info("[Task %s] Cleared %s Redis cache entries", task_id, len(keys_to_delete))
     except Exception as e:
-        logger.warning(f"[Task {task_id}] Error clearing Redis cache: {e}")
+        logger.warning("[Task %s] Error clearing Redis cache: %s", task_id, e)
 
 
 async def _clear_chromadb_collection(code_collection, task_id: str) -> None:
@@ -409,9 +409,9 @@ async def _clear_chromadb_collection(code_collection, task_id: str) -> None:
         existing_ids = existing_data["ids"]
         if existing_ids:
             await code_collection.delete(ids=existing_ids)
-            logger.info(f"[Task {task_id}] Cleared {len(existing_ids)} existing items from ChromaDB")
+            logger.info("[Task %s] Cleared %s existing items from ChromaDB", task_id, len(existing_ids))
     except Exception as e:
-        logger.warning(f"[Task {task_id}] Error clearing collection: {e}")
+        logger.warning("[Task %s] Error clearing collection: %s", task_id, e)
 
 
 async def _initialize_chromadb_collection(task_id: str, update_progress, update_phase):
@@ -697,7 +697,7 @@ async def _store_batches_to_chromadb(
         )
 
     update_phase("store", "completed")
-    logger.info(f"[Task {task_id}] ✅ Stored total of {items_stored} items in ChromaDB")
+    logger.info("[Task %s] ✅ Stored total of %s items in ChromaDB", task_id, items_stored)
     return items_stored
 
 
@@ -719,14 +719,14 @@ async def _store_hardcodes_to_redis(
         Number of hardcodes stored
     """
     if not hardcodes:
-        logger.info(f"[Task {task_id}] No hardcodes to store")
+        logger.info("[Task %s] No hardcodes to store", task_id)
         return 0
 
     from .storage import get_redis_connection
 
     redis_client = await get_redis_connection()
     if not redis_client:
-        logger.warning(f"[Task {task_id}] Redis unavailable, skipping hardcodes storage")
+        logger.warning("[Task %s] Redis unavailable, skipping hardcodes storage", task_id)
         return 0
 
     # Group hardcodes by type
@@ -744,11 +744,11 @@ async def _store_hardcodes_to_redis(
         try:
             redis_client.set(key, json.dumps(items))
             stored_count += len(items)
-            logger.debug(f"[Task {task_id}] Stored {len(items)} hardcodes of type '{htype}'")
+            logger.debug("[Task %s] Stored %s hardcodes of type '%s'", task_id, len(items), htype)
         except Exception as e:
-            logger.error(f"[Task {task_id}] Failed to store hardcodes type '{htype}': {e}")
+            logger.error("[Task %s] Failed to store hardcodes type '%s': %s", task_id, htype, e)
 
-    logger.info(f"[Task {task_id}] ✅ Stored {stored_count} hardcodes to Redis ({len(grouped)} types)")
+    logger.info("[Task %s] ✅ Stored %s hardcodes to Redis (%s types)", task_id, stored_count, len(grouped))
     return stored_count
 
 
@@ -974,7 +974,7 @@ async def scan_codebase(
         return analysis_results
 
     except Exception as e:
-        logger.error(f"Error scanning codebase: {e}")
+        logger.error("Error scanning codebase: %s", e)
         raise HTTPException(status_code=500, detail=f"Codebase scan failed: {str(e)}")
 
 
@@ -1071,7 +1071,7 @@ def _create_progress_updater(task_id: str, update_phase, update_batch_info):
             update_phase(phase, "running")
         if batch_info:
             update_batch_info(batch_info.get("current", 0), batch_info.get("total", 0), batch_info.get("items", 0))
-        logger.debug(f"[Task {task_id}] Progress: {operation} - {current}/{total} ({percent}%)")
+        logger.debug("[Task %s] Progress: %s - %s/%s (%s%)", task_id, operation, current, total, percent)
     return update_progress
 
 
@@ -1126,7 +1126,7 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
     Issue #281, #398: Refactored with extracted helpers for reduced complexity.
     """
     try:
-        logger.info(f"[Task {task_id}] Starting background codebase indexing for: {root_path}")
+        logger.info("[Task %s] Starting background codebase indexing for: %s", task_id, root_path)
 
         async with _tasks_lock:
             indexing_tasks[task_id] = _create_initial_task_state()
@@ -1150,8 +1150,8 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
         update_phase("finalize", "running")
         _mark_task_completed(task_id, analysis_results, hardcodes_stored, "chromadb")
         update_phase("finalize", "completed")
-        logger.info(f"[Task {task_id}] ✅ Indexing completed successfully")
+        logger.info("[Task %s] ✅ Indexing completed successfully", task_id)
 
     except Exception as e:
-        logger.error(f"[Task {task_id}] ❌ Indexing failed: {e}", exc_info=True)
+        logger.error("[Task %s] ❌ Indexing failed: %s", task_id, e, exc_info=True)
         _mark_task_failed(task_id, e)

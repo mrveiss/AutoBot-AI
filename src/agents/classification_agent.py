@@ -189,7 +189,7 @@ and requirements of the request.
             return final_result
 
         except Exception as e:
-            logger.error(f"Classification error: {e}")
+            logger.error("Classification error: %s", e)
             # Fallback to keyword classification
             return self._create_fallback_result(user_message, keyword_result)
 
@@ -238,17 +238,17 @@ and requirements of the request.
                         )
                     return parse_result.data
                 else:
-                    logger.warning(f"JSON parsing failed: {parse_result.warnings}")
+                    logger.warning("JSON parsing failed: %s", parse_result.warnings)
                     return {}
             elif isinstance(response, dict):
                 # Response is already a dict
                 return response
             else:
-                logger.warning(f"Unexpected response type: {type(response)}")
+                logger.warning("Unexpected response type: %s", type(response))
                 return {}
 
         except Exception as e:
-            logger.error(f"LLM classification failed: {e}")
+            logger.error("LLM classification failed: %s", e)
             return {}
 
     def _combine_classifications(
@@ -306,7 +306,7 @@ and requirements of the request.
             )
 
         except Exception as e:
-            logger.error(f"Error combining classifications: {e}")
+            logger.error("Error combining classifications: %s", e)
             return self._create_fallback_result(user_message, keyword_result)
 
     def _extract_agents(self, llm_result: Dict[str, Any]) -> List[str]:
@@ -399,7 +399,7 @@ and requirements of the request.
             )  # 24h expiry
 
         except Exception as e:
-            logger.error(f"Failed to log classification: {e}")
+            logger.error("Failed to log classification: %s", e)
 
     def get_classification_history(self, limit: int = 10) -> List[Dict[str, Any]]:
         """Get recent classification history for analysis."""
@@ -423,7 +423,7 @@ and requirements of the request.
             return sorted(history, key=lambda x: x.get("timestamp", ""), reverse=True)
 
         except Exception as e:
-            logger.error(f"Failed to get classification history: {e}")
+            logger.error("Failed to get classification history: %s", e)
             return []
 
 

@@ -72,7 +72,7 @@ async def _get_services_from_monitoring() -> list:
             )
         return services
     except Exception as e:
-        logger.warning(f"Could not get monitoring services data: {e}")
+        logger.warning("Could not get monitoring services data: %s", e)
         return []
 
 
@@ -88,7 +88,7 @@ async def _get_redis_status():
         manager = await get_service_manager()
         return await manager.get_service_status()
     except Exception as e:
-        logger.warning(f"Could not get Redis service status: {e}")
+        logger.warning("Could not get Redis service status: %s", e)
         return None
 
 
@@ -214,7 +214,7 @@ async def get_services():
         )
 
     except Exception as e:
-        logger.error(f"Failed to get services: {e}")
+        logger.error("Failed to get services: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get services: {str(e)}")
 
 
@@ -243,7 +243,7 @@ async def get_services_health():
             try:
                 return await monitoring_services_health()
             except Exception as e:
-                logger.warning(f"Monitoring services health failed: {e}")
+                logger.warning("Monitoring services health failed: %s", e)
 
         # Fallback response when monitoring unavailable
         services_data = await get_services()
@@ -274,7 +274,7 @@ async def get_services_health():
         return result
 
     except Exception as e:
-        logger.error(f"Failed to get services health: {e}")
+        logger.error("Failed to get services health: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to get services health: {str(e)}"
         )
@@ -364,7 +364,7 @@ async def get_vms_status():
         }
 
     except Exception as e:
-        logger.error(f"Failed to get VM status: {e}")
+        logger.error("Failed to get VM status: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to get VM status: {str(e)}"
         )
@@ -405,7 +405,7 @@ async def get_version():
         )
 
     except Exception as e:
-        logger.error(f"Failed to get version info: {e}")
+        logger.error("Failed to get version info: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to get version info: {str(e)}"
         )

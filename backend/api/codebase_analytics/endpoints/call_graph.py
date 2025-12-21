@@ -277,7 +277,7 @@ async def get_call_graph():
                 async with aiofiles.open(py_file, "r", encoding="utf-8") as f:
                     content = await f.read()
             except OSError as e:
-                logger.debug(f"Failed to read file for call graph {py_file}: {e}")
+                logger.debug("Failed to read file for call graph %s: %s", py_file, e)
                 continue
 
             tree = ast.parse(content)
@@ -285,7 +285,7 @@ async def get_call_graph():
             visitor.visit(tree)
 
         except Exception as e:
-            logger.debug(f"Could not analyze {py_file}: {e}")
+            logger.debug("Could not analyze %s: %s", py_file, e)
             continue
 
     # Build graph data (Issue #281: uses helpers)

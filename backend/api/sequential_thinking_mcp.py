@@ -233,7 +233,7 @@ def _enrich_thought_record(thought_record: dict, request: SequentialThinkingRequ
     """Add revision/branch info to thought record (Issue #398: extracted)."""
     if request.is_revision and request.revises_thought:
         thought_record["revision_of"] = request.revises_thought
-        logger.info(f"Thought {request.thought_number} revises thought {request.revises_thought}")
+        logger.info("Thought %s revises thought %s", request.thought_number, request.revises_thought)
 
     if request.branch_from_thought:
         thought_record["branched_from"] = request.branch_from_thought
@@ -300,7 +300,7 @@ async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Metadat
     if thinking_complete:
         async with _thinking_sessions_lock:
             response["summary"] = _calculate_session_summary(thinking_sessions[session_id], request.thought_number)
-        logger.info(f"Sequential thinking session '{session_id}' completed with {request.thought_number} thoughts")
+        logger.info("Sequential thinking session '%s' completed with %s thoughts", session_id, request.thought_number)
 
     return response
 

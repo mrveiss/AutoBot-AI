@@ -145,7 +145,7 @@ async def index_codebase(request: IndexRequest):
     creating optimized data structures for fast searching.
     """
     try:
-        logger.info(f"Starting codebase indexing: {request.root_path}")
+        logger.info("Starting codebase indexing: %s", request.root_path)
 
         result = await index_project(request.root_path, request.force_reindex)
 
@@ -179,7 +179,7 @@ async def index_codebase(request: IndexRequest):
             )
 
     except Exception as e:
-        logger.error(f"Indexing endpoint error: {e}")
+        logger.error("Indexing endpoint error: %s", e)
         raise HTTPException(status_code=500, detail=f"Indexing failed: {str(e)}")
 
 
@@ -200,7 +200,7 @@ async def search_code(request: SearchRequest):
     - element: Search for specific code elements (functions, classes, etc.)
     """
     try:
-        logger.info(f"Code search: '{request.query}' (type: {request.search_type})")
+        logger.info("Code search: '%s' (type: %s)", request.query, request.search_type)
 
         # Validate search type (Issue #380: use module-level constant)
         if request.search_type not in _VALID_SEARCH_TYPES:
@@ -251,7 +251,7 @@ async def search_code(request: SearchRequest):
         )
 
     except Exception as e:
-        logger.error(f"Search endpoint error: {e}")
+        logger.error("Search endpoint error: %s", e)
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 
@@ -333,7 +333,7 @@ async def get_search_status():
         )
 
     except Exception as e:
-        logger.error(f"Status endpoint error: {e}")
+        logger.error("Status endpoint error: %s", e)
         raise HTTPException(status_code=500, detail=f"Status check failed: {str(e)}")
 
 
@@ -371,7 +371,7 @@ async def clear_search_cache():
             )
 
     except Exception as e:
-        logger.error(f"Cache clear endpoint error: {e}")
+        logger.error("Cache clear endpoint error: %s", e)
         raise HTTPException(status_code=500, detail=f"Cache clear failed: {str(e)}")
 
 
@@ -618,7 +618,7 @@ async def analyze_declarations(request: AnalyticsRequest):
     patterns across the codebase. Uses Redis caching for performance.
     """
     try:
-        logger.info(f"Starting declaration analysis for: {request.root_path}")
+        logger.info("Starting declaration analysis for: %s", request.root_path)
 
         # First ensure the codebase is indexed
         index_result = await index_project(request.root_path, force_reindex=False)
@@ -629,7 +629,7 @@ async def analyze_declarations(request: AnalyticsRequest):
         analysis_results = {}
 
         for pattern_type, pattern_list in DECLARATION_PATTERNS.items():
-            logger.info(f"Analyzing {pattern_type} patterns...")
+            logger.info("Analyzing %s patterns...", pattern_type)
 
             # Fresh stats for each pattern type
             declaration_stats = defaultdict(
@@ -678,7 +678,7 @@ async def analyze_declarations(request: AnalyticsRequest):
         )
 
     except Exception as e:
-        logger.error(f"Declaration analysis error: {e}")
+        logger.error("Declaration analysis error: %s", e)
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 
@@ -696,7 +696,7 @@ async def find_code_duplicates(request: AnalyticsRequest):
     into reusable functions or modules.
     """
     try:
-        logger.info(f"Starting duplicate detection for: {request.root_path}")
+        logger.info("Starting duplicate detection for: %s", request.root_path)
 
         # Index codebase if needed
         index_result = await index_project(request.root_path, force_reindex=False)
@@ -769,7 +769,7 @@ async def find_code_duplicates(request: AnalyticsRequest):
         )
 
     except Exception as e:
-        logger.error(f"Duplicate detection error: {e}")
+        logger.error("Duplicate detection error: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Duplicate detection failed: {str(e)}"
         )
@@ -837,7 +837,7 @@ async def get_codebase_statistics():
         return JSONResponse(status_code=200, content=stats)
 
     except Exception as e:
-        logger.error(f"Statistics error: {e}")
+        logger.error("Statistics error: %s", e)
         raise HTTPException(status_code=500, detail=f"Statistics failed: {str(e)}")
 
 
@@ -855,7 +855,7 @@ async def get_refactor_suggestions(request: AnalyticsRequest):
     specific refactoring opportunities for improved maintainability.
     """
     try:
-        logger.info(f"Generating refactor suggestions for: {request.root_path}")
+        logger.info("Generating refactor suggestions for: %s", request.root_path)
 
         # Get declaration analysis (for future integration)
         await analyze_declarations(request)
@@ -926,5 +926,5 @@ async def get_refactor_suggestions(request: AnalyticsRequest):
         )
 
     except Exception as e:
-        logger.error(f"Refactor suggestions error: {e}")
+        logger.error("Refactor suggestions error: %s", e)
         raise HTTPException(status_code=500, detail=f"Suggestions failed: {str(e)}")

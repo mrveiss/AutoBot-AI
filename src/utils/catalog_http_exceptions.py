@@ -42,7 +42,7 @@ def raise_catalog_error(
     error = get_error(error_code)
 
     if error is None:
-        logger.error(f"Unknown error code: {error_code}")
+        logger.error("Unknown error code: %s", error_code)
         raise HTTPException(
             status_code=500,
             detail=f"Internal error (invalid error code: {error_code})",
@@ -93,7 +93,7 @@ def raise_catalog_error_simple(
     error = get_error(error_code)
 
     if error is None:
-        logger.error(f"Unknown error code: {error_code}")
+        logger.error("Unknown error code: %s", error_code)
         raise HTTPException(status_code=500, detail="Internal error")
 
     message = error.message
@@ -129,7 +129,7 @@ def get_catalog_http_exception(
     error = get_error(error_code)
 
     if error is None:
-        logger.error(f"Unknown error code: {error_code}")
+        logger.error("Unknown error code: %s", error_code)
         return HTTPException(status_code=500, detail="Internal error")
 
     message = error.message
@@ -168,7 +168,7 @@ def catalog_error_response(
     error = get_error(error_code)
 
     if error is None:
-        logger.error(f"Unknown error code: {error_code}")
+        logger.error("Unknown error code: %s", error_code)
         return {"error": "Internal error", "code": "UNKNOWN"}
 
     response = {

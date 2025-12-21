@@ -352,7 +352,7 @@ class PatternLearningEngine:
                 logger.info("Pattern Learning Engine initialized successfully")
                 return True
             except Exception as e:
-                logger.error(f"Failed to initialize Pattern Learning Engine: {e}")
+                logger.error("Failed to initialize Pattern Learning Engine: %s", e)
                 # Continue with in-memory storage
                 self._initialized = True
                 return True
@@ -382,9 +382,9 @@ class PatternLearningEngine:
                         pattern = PatternDefinition(**pattern_data)
                         self.patterns[pattern.pattern_id] = pattern
 
-            logger.info(f"Loaded {len(self.patterns)} patterns from Redis")
+            logger.info("Loaded %s patterns from Redis", len(self.patterns))
         except Exception as e:
-            logger.warning(f"Failed to load patterns from Redis: {e}")
+            logger.warning("Failed to load patterns from Redis: %s", e)
 
     def _parse_pattern_stats(self, stats_data: dict) -> PatternStats:
         """Parse stats data into PatternStats object."""
@@ -435,9 +435,9 @@ class PatternLearningEngine:
                     continue
                 self.pattern_stats[pattern_id] = self._parse_pattern_stats(stats_data)
 
-            logger.info(f"Loaded stats for {len(self.pattern_stats)} patterns")
+            logger.info("Loaded stats for %s patterns", len(self.pattern_stats))
         except Exception as e:
-            logger.warning(f"Failed to load stats from Redis: {e}")
+            logger.warning("Failed to load stats from Redis: %s", e)
 
     async def submit_feedback(self, feedback: PatternFeedback) -> Dict[str, Any]:
         """
@@ -609,7 +609,7 @@ class PatternLearningEngine:
                 key, json.dumps(data), ex=60 * 60 * 24 * 90
             )  # 90 day TTL
         except Exception as e:
-            logger.warning(f"Failed to store feedback in Redis: {e}")
+            logger.warning("Failed to store feedback in Redis: %s", e)
 
     async def _persist_pattern_stats(self, stats: PatternStats):
         """Persist pattern stats to Redis."""
@@ -632,7 +632,7 @@ class PatternLearningEngine:
             }
             await self.redis_client.set(key, json.dumps(data))
         except Exception as e:
-            logger.warning(f"Failed to persist pattern stats: {e}")
+            logger.warning("Failed to persist pattern stats: %s", e)
 
     async def _check_learning_trigger(self) -> bool:
         """Check if we should trigger active learning."""
@@ -875,7 +875,7 @@ class PatternLearningEngine:
                 key = f"pattern:definition:{pattern.pattern_id}"
                 await self.redis_client.set(key, pattern.model_dump_json())
             except Exception as e:
-                logger.warning(f"Failed to persist pattern definition: {e}")
+                logger.warning("Failed to persist pattern definition: %s", e)
 
         return {
             "pattern_id": pattern.pattern_id,
@@ -949,7 +949,7 @@ class PatternLearningEngine:
             }
 
         except Exception as e:
-            logger.error(f"Learning cycle failed: {e}")
+            logger.error("Learning cycle failed: %s", e)
             self.learning_phase = LearningPhase.COLLECTING
             return {
                 "success": False,

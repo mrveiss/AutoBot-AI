@@ -86,7 +86,7 @@ def add_startup_message(
         if len(startup_state["messages"]) > 20:
             startup_state["messages"] = startup_state["messages"][-20:]
 
-    logger.info(f"Startup: [{phase.value}] {message} ({progress}%)")
+    logger.info("Startup: [%s] %s (%s%)", phase.value, message, progress)
 
     # Broadcast to connected WebSocket clients (only if event loop is running)
     try:
@@ -177,7 +177,7 @@ async def startup_websocket(websocket: WebSocket):
                 break
 
     except Exception as e:
-        logger.error(f"Startup WebSocket error: {e}")
+        logger.error("Startup WebSocket error: %s", e)
     finally:
         async with _ws_lock:
             startup_state["websocket_clients"].discard(websocket)

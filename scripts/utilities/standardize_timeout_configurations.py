@@ -181,21 +181,28 @@ class TimeoutConfigurationAnalyzer:
                     self._scan_file_for_patterns(file_path, patterns, issue_type)
 
     def _scan_file_for_patterns(self, file_path: Path, patterns: List[str], issue_type: str):
-        """Scan a single file for timeout patterns"""
+        """Scan a single file for timeout patterns.
+
+        Issue #511: Optimized O(n³) → O(n²) by combining patterns into a single
+        compiled regex. Now iterates: lines × (single combined regex) instead of
+        lines × patterns × matches.
+        """
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
 
+            # Issue #511: Combine patterns into single regex for O(1) pattern matching
+            combined = "|".join(f"({p})" for p in patterns)
+            compiled = re.compile(combined, re.IGNORECASE)
+
             for line_num, line in enumerate(lines, 1):
-                for pattern in patterns:
-                    matches = re.finditer(pattern, line, re.IGNORECASE)
-                    for match in matches:
-                        self._create_timeout_issue(
-                            file_path, line_num, line.strip(), match, issue_type
-                        )
+                for match in compiled.finditer(line):
+                    self._create_timeout_issue(
+                        file_path, line_num, line.strip(), match, issue_type
+                    )
 
         except (UnicodeDecodeError, PermissionError) as e:
-            logger.warning(f"Could not read file {file_path}: {e}")
+            logger.warning("Could not read file %s: %s", file_path, e)
 
     def _create_timeout_issue(self, file_path: Path, line_num: int, line: str, match: re.Match, issue_type: str):
         """Create a timeout issue from a pattern match"""
@@ -406,7 +413,7 @@ def validate_timeout_hierarchy():
         with open(config_file_path, 'w') as f:
             f.write(config_content)
 
-        logger.info(f"Generated unified timeout configuration: {config_file_path}")
+        logger.info("Generated unified timeout configuration: %s", config_file_path)
         return str(config_file_path)
 
     def fix_redis_timeouts(self, dry_run: bool = True) -> List[str]:
@@ -471,14 +478,14 @@ def validate_timeout_hierarchy():
                 with open(full_path, 'w') as f:
                     f.writelines(lines)
 
-                logger.info(f"Fixed Redis timeouts in {file_path} (backup: {backup_path})")
+                logger.info("Fixed Redis timeouts in %s (backup: %s)", file_path, backup_path)
                 return True
             elif modified:
-                logger.info(f"[DRY RUN] Would fix Redis timeouts in {file_path}")
+                logger.info("[DRY RUN] Would fix Redis timeouts in %s", file_path)
                 return True
 
         except Exception as e:
-            logger.error(f"Error fixing {file_path}: {e}")
+            logger.error("Error fixing %s: %s", file_path, e)
 
         return False
 
@@ -558,13 +565,13 @@ async def main():
     if args.generate_config:
         logger.info("Generating unified timeout configuration module...")
         config_path = analyzer.generate_unified_config_module()
-        logger.info(f"Generated: {config_path}")
+        logger.info("Generated: %s", config_path)
 
     # Fix Redis timeouts if requested
     if args.fix_redis:
         logger.info("Fixing Redis timeout configurations...")
         fixed_files = analyzer.fix_redis_timeouts(dry_run=args.dry_run)
-        logger.info(f"Fixed {len(fixed_files)} files")
+        logger.info("Fixed %s files", len(fixed_files))
 
     # Generate and save report
     report = analyzer.generate_report()
@@ -577,17 +584,17 @@ async def main():
 
     # Print summary
     logger.info("\n=== TIMEOUT CONFIGURATION ANALYSIS SUMMARY ===")
-    logger.info(f"Total issues found: {report['total_issues']}")
-    logger.info(f"Critical issues: {report['critical_issues']}")
-    logger.info(f"High priority issues: {report['high_priority_issues']}")
-    logger.info(f"Medium priority issues: {report['medium_priority_issues']}")
-    logger.info(f"Low priority issues: {report['low_priority_issues']}")
-    logger.info(f"\nDetailed report saved to: {report_path}")
+    logger.info("Total issues found: %s", report['total_issues'])
+    logger.info("Critical issues: %s", report['critical_issues'])
+    logger.info("High priority issues: %s", report['high_priority_issues'])
+    logger.info("Medium priority issues: %s", report['medium_priority_issues'])
+    logger.info("Low priority issues: %s", report['low_priority_issues'])
+    logger.info("\nDetailed report saved to: %s", report_path)
 
     if report['recommendations']:
         logger.info("\nRecommendations:")
         for i, rec in enumerate(report['recommendations'], 1):
-            logger.info(f"{i}. {rec}")
+            logger.info("%s. %s", i, rec)
 
     # Exit with appropriate code
     if report['critical_issues'] > 0:

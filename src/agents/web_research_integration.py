@@ -121,7 +121,7 @@ class RateLimiter:
                 wait_time = self.window_seconds - (now - oldest_request)
 
                 if wait_time > 0:
-                    logger.info(f"Rate limit reached, waiting {wait_time:.2f}s")
+                    logger.info("Rate limit reached, waiting %ss", wait_time:.2f)
                     # Release lock while sleeping to allow other operations
                     self._lock.release()
                     try:
@@ -151,7 +151,7 @@ class RateLimiter:
             wait_time = self.window_seconds - (now - oldest_request)
 
             if wait_time > 0:
-                logger.info(f"Rate limit reached, waiting {wait_time:.2f}s")
+                logger.info("Rate limit reached, waiting %ss", wait_time:.2f)
                 # Release lock while sleeping to allow other operations
                 self._lock.release()
                 try:
@@ -298,11 +298,11 @@ class WebResearchIntegration:
         circuit_breaker = self.circuit_breakers[research_method]
 
         if not circuit_breaker.can_execute():
-            logger.warning(f"Circuit breaker open for {research_method.value}, skipping")
+            logger.warning("Circuit breaker open for %s, skipping", research_method.value)
             return None
 
         try:
-            logger.info(f"Attempting research using {research_method.value} method")
+            logger.info("Attempting research using %s method", research_method.value)
             research_task = asyncio.create_task(
                 self._execute_research_method(research_method, query, max_res)
             )
@@ -315,14 +315,14 @@ class WebResearchIntegration:
             if result.get("status") == "success":
                 self._cache_result(cache_key, result)
 
-            logger.info(f"Research completed successfully using {research_method.value}")
+            logger.info("Research completed successfully using %s", research_method.value)
             return result
 
         except asyncio.TimeoutError:
-            logger.warning(f"Research timed out after {timeout_secs}s using {research_method.value}")
+            logger.warning("Research timed out after %ss using %s", timeout_secs, research_method.value)
             circuit_breaker.call_failed()
         except Exception as e:
-            logger.error(f"Research failed using {research_method.value}: {str(e)}")
+            logger.error("Research failed using %s: %s", research_method.value, str(e))
             circuit_breaker.call_failed()
 
         return None
@@ -345,7 +345,7 @@ class WebResearchIntegration:
         cache_key = self._generate_cache_key(query, research_type, max_results)
         cached_result = self._get_cached_result(cache_key)
         if cached_result:
-            logger.info(f"Returning cached research result for query: {query[:50]}...")
+            logger.info("Returning cached research result for query: %s...", query[:50])
             cached_result["from_cache"] = True
             return cached_result
 
@@ -404,7 +404,7 @@ class WebResearchIntegration:
             return result
 
         except Exception as e:
-            logger.error(f"Basic research failed: {e}")
+            logger.error("Basic research failed: %s", e)
             raise
 
     async def _advanced_research(self, query: str, max_results: int) -> Dict[str, Any]:
@@ -426,7 +426,7 @@ class WebResearchIntegration:
             return result
 
         except Exception as e:
-            logger.error(f"Advanced research failed: {e}")
+            logger.error("Advanced research failed: %s", e)
             raise
 
     async def _api_based_research(self, query: str, max_results: int) -> Dict[str, Any]:
@@ -458,7 +458,7 @@ class WebResearchIntegration:
             }
 
         except Exception as e:
-            logger.error(f"API research failed: {e}")
+            logger.error("API research failed: %s", e)
             raise
 
     def _generate_cache_key(
@@ -506,7 +506,7 @@ class WebResearchIntegration:
         for key in expired_keys:
             del self.cache[key]
 
-        logger.debug(f"Cleaned up {len(expired_keys)} expired cache entries")
+        logger.debug("Cleaned up %s expired cache entries", len(expired_keys))
 
     def get_circuit_breaker_status(self) -> Dict[str, Any]:
         """Get status of all circuit breakers"""
@@ -588,7 +588,7 @@ def _load_web_research_config() -> Dict[str, Any]:
         from src.unified_config_manager import config_manager
         return config_manager.get_nested("web_research", {})
     except Exception as e:
-        logger.warning(f"Could not load web research config: {e}")
+        logger.warning("Could not load web research config: %s", e)
         return {}
 
 

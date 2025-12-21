@@ -25,7 +25,7 @@ async def get_redis_config():
     try:
         return ConfigService.get_redis_config()
     except Exception as e:
-        logger.error(f"Error getting Redis config: {str(e)}")
+        logger.error("Error getting Redis config: %s", str(e))
         raise HTTPException(
             status_code=500, detail=f"Error getting Redis config: {str(e)}"
         )
@@ -43,7 +43,7 @@ async def update_redis_config(config_data: dict):
         result = ConfigService.update_redis_config(config_data)
         return result
     except Exception as e:
-        logger.error(f"Error updating Redis config: {str(e)}")
+        logger.error("Error updating Redis config: %s", str(e))
         raise HTTPException(
             status_code=500, detail=f"Error updating Redis config: {str(e)}"
         )
@@ -61,7 +61,7 @@ async def get_redis_status():
         result = ConnectionTester.test_redis_connection()
         return result
     except Exception as e:
-        logger.error(f"Redis status check failed: {str(e)}")
+        logger.error("Redis status check failed: %s", str(e))
         return {
             "status": "disconnected",
             "message": f"Failed to connect to Redis: {str(e)}",
@@ -80,7 +80,7 @@ async def test_redis_connection():
         result = ConnectionTester.test_redis_connection()
         return result
     except Exception as e:
-        logger.error(f"Redis connection test failed: {str(e)}")
+        logger.error("Redis connection test failed: %s", str(e))
         return {
             "status": "disconnected",
             "message": f"Failed to connect to Redis: {str(e)}",

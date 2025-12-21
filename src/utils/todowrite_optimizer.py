@@ -174,14 +174,14 @@ class TodoWriteOptimizer:
 
             # Check for duplicates and similar items
             if self._is_duplicate_or_similar(todo_item):
-                logger.info(f"Skipping duplicate/similar todo: {content[:50]}...")
+                logger.info("Skipping duplicate/similar todo: %s...", content[:50])
                 return False
 
             # Add to pending optimization queue
             self.pending_todos.append(todo_item)
             self.content_cache[todo_item.similarity_hash] = todo_item
 
-            logger.debug(f"Added todo for optimization: {content[:50]}...")
+            logger.debug("Added todo for optimization: %s...", content[:50])
 
             # Check if we should trigger optimization
             if self._should_trigger_optimization():
@@ -190,7 +190,7 @@ class TodoWriteOptimizer:
             return True
 
         except Exception as e:
-            logger.error(f"Error adding todo for optimization: {e}")
+            logger.error("Error adding todo for optimization: %s", e)
             return False
 
     def _is_duplicate_or_similar(self, todo_item: OptimizedTodoItem) -> bool:
@@ -206,7 +206,7 @@ class TodoWriteOptimizer:
                 todo_item.content, existing_todo.content
             )
             if similarity > self.similarity_threshold:
-                logger.debug(f"Similar todo found: {similarity:.2f} similarity")
+                logger.debug("Similar todo found: %s similarity", similarity:.2f)
                 return True
 
         # Check recent operations to prevent rapid duplicates
@@ -314,7 +314,7 @@ class TodoWriteOptimizer:
                 return batch
 
         except Exception as e:
-            logger.error(f"Error processing optimization batch: {e}")
+            logger.error("Error processing optimization batch: %s", e)
 
         return None
 
@@ -531,7 +531,7 @@ class TodoWriteOptimizer:
 
             # Here we would call the actual TodoWrite tool
             # For now, we'll simulate success
-            logger.info(f"Executing optimized TodoWrite with {len(todos)} todos")
+            logger.info("Executing optimized TodoWrite with %s todos", len(todos))
 
             # Simulate API call delay
             await asyncio.sleep(0.1)
@@ -539,7 +539,7 @@ class TodoWriteOptimizer:
             return True
 
         except Exception as e:
-            logger.error(f"Error executing optimized TodoWrite: {e}")
+            logger.error("Error executing optimized TodoWrite: %s", e)
             return False
 
     def record_tool_usage(self, tool_name: str, response_time: float, success: bool):

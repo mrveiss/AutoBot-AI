@@ -221,7 +221,7 @@ async def _handle_command_approval(websocket: WebSocket, data: dict) -> None:
         websocket: The WebSocket connection
         data: The command approval data
     """
-    logger.info(f"Received command approval via WebSocket: {data}")
+    logger.info("Received command approval via WebSocket: %s", data)
 
     terminal_session_id = data.get("terminal_session_id")
     if not terminal_session_id:
@@ -241,7 +241,7 @@ async def _handle_command_approval(websocket: WebSocket, data: dict) -> None:
             user_id=user_id,
         )
 
-        logger.info(f"Command approval result: {result.get('status')}")
+        logger.info("Command approval result: %s", result.get('status'))
 
         await websocket.send_json(
             {
@@ -254,7 +254,7 @@ async def _handle_command_approval(websocket: WebSocket, data: dict) -> None:
             }
         )
     except Exception as approval_error:
-        logger.error(f"Error processing approval: {approval_error}", exc_info=True)
+        logger.error("Error processing approval: %s", approval_error, exc_info=True)
         await websocket.send_json(
             {
                 "type": "approval_error",
@@ -279,7 +279,7 @@ async def _add_to_chat_history(chat_history_manager, message_type: str, raw_data
         try:
             await chat_history_manager.add_message(sender, text, message_type, raw_data)
         except Exception as e:
-            logger.error(f"Failed to add message to chat history: {e}")
+            logger.error("Failed to add message to chat history: %s", e)
 
 
 async def _create_broadcast_event_handler(websocket: WebSocket, chat_history_manager):
@@ -305,11 +305,11 @@ async def _create_broadcast_event_handler(websocket: WebSocket, chat_history_man
 
         except RuntimeError as e:
             if "websocket" in str(e).lower() or "connection" in str(e).lower():
-                logger.info(f"WebSocket connection lost during broadcast: {e}")
+                logger.info("WebSocket connection lost during broadcast: %s", e)
             else:
-                logger.error(f"Runtime error in WebSocket broadcast: {e}")
+                logger.error("Runtime error in WebSocket broadcast: %s", e)
         except Exception as e:
-            logger.error(f"Unexpected error in WebSocket broadcast: {e}")
+            logger.error("Unexpected error in WebSocket broadcast: %s", e)
 
     return broadcast_event
 
@@ -338,7 +338,7 @@ async def _websocket_message_receive_loop(websocket: WebSocket) -> None:
             )
             break
         except Exception as e:
-            logger.error(f"Error receiving message: {e}")
+            logger.error("Error receiving message: %s", e)
             # Check if it's a connection error vs other error
             if "connection" in str(e).lower() or "closed" in str(e).lower():
                 logger.info(
@@ -365,13 +365,13 @@ async def _handle_websocket_message(websocket: WebSocket, message: str) -> None:
         msg_type = data.get("type")
 
         if msg_type == "user_message":
-            logger.debug(f"Received user message via WebSocket: {data}")
+            logger.debug("Received user message via WebSocket: %s", data)
         elif msg_type == "pong":
             logger.debug("Received pong from client")
         elif msg_type == "command_approval":
             await _handle_command_approval(websocket, data)
     except json.JSONDecodeError:
-        logger.warning(f"Received invalid JSON via WebSocket: {message}")
+        logger.warning("Received invalid JSON via WebSocket: %s", message)
 
 # Connected WebSocket clients for NPU workers
 _npu_worker_ws_clients: list[WebSocket] = []
@@ -379,6 +379,10 @@ _npu_events_subscribed = False
 
 # Lock for thread-safe access to _npu_worker_ws_clients
 _ws_clients_lock = asyncio.Lock()
+
+# Lock for thread-safe access to _npu_events_subscribed (Issue #513 - race condition fix)
+import threading
+_npu_events_lock = threading.Lock()
 
 
 @with_error_handling(
@@ -406,11 +410,11 @@ async def websocket_test_endpoint(websocket: WebSocket):
                 logger.info("Test WebSocket client disconnected")
                 break
             except Exception as e:
-                logger.error(f"Error in test WebSocket: {e}")
+                logger.error("Error in test WebSocket: %s", e)
                 break
 
     except Exception as e:
-        logger.error(f"Test WebSocket error: {e}")
+        logger.error("Test WebSocket error: %s", e)
     finally:
         logger.info("Test WebSocket disconnected")
 
@@ -434,7 +438,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     try:
         await websocket.accept()
-        logger.info(f"WebSocket connected from client: {websocket.client}")
+        logger.info("WebSocket connected from client: %s", websocket.client)
 
         # Send immediate connection confirmation
         await websocket.send_json(
@@ -445,7 +449,7 @@ async def websocket_endpoint(websocket: WebSocket):
         )
 
     except Exception as e:
-        logger.error(f"Failed to accept WebSocket connection: {e}", exc_info=True)
+        logger.error("Failed to accept WebSocket connection: %s", e, exc_info=True)
         return
 
     # Access chat_history_manager from app.state via scope with error handling
@@ -461,7 +465,7 @@ async def websocket_endpoint(websocket: WebSocket):
         else:
             logger.warning("app.state not available in WebSocket scope")
     except Exception as e:
-        logger.error(f"Failed to access chat_history_manager: {e}")
+        logger.error("Failed to access chat_history_manager: %s", e)
         # Don't send error to client here, just continue without chat history
 
     # Create broadcast event handler (Issue #315 - refactored)
@@ -474,10 +478,10 @@ async def websocket_endpoint(websocket: WebSocket):
         event_manager.register_websocket_broadcast(broadcast_event)
         logger.info("Successfully registered WebSocket broadcast with event manager")
     except ImportError as e:
-        logger.warning(f"Event manager not available, continuing without it: {e}")
+        logger.warning("Event manager not available, continuing without it: %s", e)
         # Continue without event manager - this is not critical
     except Exception as e:
-        logger.warning(f"Failed to register WebSocket broadcast, continuing: {e}")
+        logger.warning("Failed to register WebSocket broadcast, continuing: %s", e)
         # Continue without event manager registration - this is not critical
 
     try:
@@ -487,7 +491,7 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected normally")
     except Exception as e:
-        logger.error(f"WebSocket error: {e}", exc_info=True)
+        logger.error("WebSocket error: %s", e, exc_info=True)
     finally:
         # Unregister the broadcast function when connection closes
         try:
@@ -498,7 +502,7 @@ async def websocket_endpoint(websocket: WebSocket):
         except ImportError:
             logger.debug("Event manager not available for cleanup")
         except Exception as e:
-            logger.error(f"Error during event manager cleanup: {e}")
+            logger.error("Error during event manager cleanup: %s", e)
         logger.info("WebSocket connection cleanup completed")
 
 
@@ -520,7 +524,7 @@ async def npu_workers_websocket_endpoint(websocket: WebSocket):
     """
     try:
         await websocket.accept()
-        logger.info(f"NPU Worker WebSocket connected from client: {websocket.client}")
+        logger.info("NPU Worker WebSocket connected from client: %s", websocket.client)
 
         # Add to connected clients (thread-safe)
         async with _ws_clients_lock:
@@ -533,7 +537,7 @@ async def npu_workers_websocket_endpoint(websocket: WebSocket):
         await _npu_message_receive_loop(websocket)
 
     except Exception as e:
-        logger.error(f"NPU Worker WebSocket error: {e}", exc_info=True)
+        logger.error("NPU Worker WebSocket error: %s", e, exc_info=True)
     finally:
         # Remove from connected clients (thread-safe)
         async with _ws_clients_lock:
@@ -645,7 +649,7 @@ async def _send_initial_worker_list(websocket: WebSocket) -> None:
         )
 
     except Exception as e:
-        logger.error(f"Failed to send initial worker list: {e}", exc_info=True)
+        logger.error("Failed to send initial worker list: %s", e, exc_info=True)
 
 
 async def _npu_message_receive_loop(websocket: WebSocket) -> None:
@@ -664,7 +668,7 @@ async def _npu_message_receive_loop(websocket: WebSocket) -> None:
             logger.info("NPU Worker WebSocket client disconnected")
             break
         except Exception as e:
-            logger.error(f"Error in NPU worker WebSocket: {e}")
+            logger.error("Error in NPU worker WebSocket: %s", e)
             if "connection" in str(e).lower() or "closed" in str(e).lower():
                 logger.info("Connection-related error, ending WebSocket loop")
                 break
@@ -684,9 +688,9 @@ async def _handle_npu_websocket_message(websocket: WebSocket, message: str) -> N
         if data.get("type") == "ping":
             await websocket.send_json({"type": "pong"})
         else:
-            logger.debug(f"Received NPU worker WebSocket message: {data}")
+            logger.debug("Received NPU worker WebSocket message: %s", data)
     except json.JSONDecodeError:
-        logger.warning(f"Received invalid JSON via NPU worker WebSocket: {message}")
+        logger.warning("Received invalid JSON via NPU worker WebSocket: %s", message)
 
 
 async def _broadcast_to_client(client: WebSocket, message: dict) -> bool:
@@ -705,10 +709,10 @@ async def _broadcast_to_client(client: WebSocket, message: dict) -> bool:
             return True
         return False
     except RuntimeError as e:
-        logger.debug(f"WebSocket send failed (client disconnected): {e}")
+        logger.debug("WebSocket send failed (client disconnected): %s", e)
         return False
     except Exception as e:
-        logger.error(f"Error broadcasting NPU worker event: {e}")
+        logger.error("Error broadcasting NPU worker event: %s", e)
         return False
 
 
@@ -730,28 +734,38 @@ async def _cleanup_disconnected_clients(disconnected_clients: list) -> None:
 def init_npu_worker_websocket():
     """
     Initialize NPU worker WebSocket by subscribing to events.
-    Should be called during app startup.
+    Should be called during app startup. Thread-safe.
+
+    Issue #513: Added thread-safe locking for global state modification.
     """
     global _npu_events_subscribed
 
+    # Quick check without lock (optimization)
     if _npu_events_subscribed:
         logger.debug("NPU worker WebSocket events already subscribed")
         return
 
-    try:
-        from src.event_manager import event_manager
+    # Thread-safe double-checked locking pattern (Issue #513 - race condition fix)
+    with _npu_events_lock:
+        # Double-check after acquiring lock
+        if _npu_events_subscribed:
+            logger.debug("NPU worker WebSocket events already subscribed (after lock)")
+            return
 
-        # Subscribe to all NPU worker events
-        event_manager.subscribe("npu.worker.status.changed", broadcast_npu_worker_event)
-        event_manager.subscribe("npu.worker.added", broadcast_npu_worker_event)
-        event_manager.subscribe("npu.worker.updated", broadcast_npu_worker_event)
-        event_manager.subscribe("npu.worker.removed", broadcast_npu_worker_event)
-        event_manager.subscribe(
-            "npu.worker.metrics.updated", broadcast_npu_worker_event
-        )
+        try:
+            from src.event_manager import event_manager
 
-        _npu_events_subscribed = True
-        logger.info("NPU worker WebSocket event subscriptions initialized")
+            # Subscribe to all NPU worker events
+            event_manager.subscribe("npu.worker.status.changed", broadcast_npu_worker_event)
+            event_manager.subscribe("npu.worker.added", broadcast_npu_worker_event)
+            event_manager.subscribe("npu.worker.updated", broadcast_npu_worker_event)
+            event_manager.subscribe("npu.worker.removed", broadcast_npu_worker_event)
+            event_manager.subscribe(
+                "npu.worker.metrics.updated", broadcast_npu_worker_event
+            )
 
-    except Exception as e:
-        logger.error(f"Failed to subscribe to NPU worker events: {e}", exc_info=True)
+            _npu_events_subscribed = True
+            logger.info("NPU worker WebSocket event subscriptions initialized")
+
+        except Exception as e:
+            logger.error("Failed to subscribe to NPU worker events: %s", e, exc_info=True)

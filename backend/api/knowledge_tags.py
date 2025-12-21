@@ -92,7 +92,7 @@ async def add_tags_to_fact(
             detail="Knowledge base not initialized - please check logs for errors",
         )
 
-    logger.info(f"Adding tags to fact {fact_id}: {request.tags}")
+    logger.info("Adding tags to fact %s: %s", fact_id, request.tags)
 
     # Call add_tags method
     result = await kb.add_tags_to_fact(fact_id=fact_id, tags=request.tags)
@@ -148,7 +148,7 @@ async def remove_tags_from_fact(
             detail="Knowledge base not initialized - please check logs for errors",
         )
 
-    logger.info(f"Removing tags from fact {fact_id}: {request.tags}")
+    logger.info("Removing tags from fact %s: %s", fact_id, request.tags)
 
     # Call remove_tags method
     result = await kb.remove_tags_from_fact(fact_id=fact_id, tags=request.tags)

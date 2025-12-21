@@ -80,7 +80,7 @@ async def get_security_status(request: Request):
                 pending_approvals=pending_approvals,
             )
     except Exception as e:
-        logger.error(f"Error getting security status: {e}")
+        logger.error("Error getting security status: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -109,7 +109,7 @@ async def approve_command(request: Request, approval: CommandApprovalRequest):
 
         return CommandApprovalResponse(success=True, message=message)
     except Exception as e:
-        logger.error(f"Error approving command: {e}")
+        logger.error("Error approving command: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -131,7 +131,7 @@ async def get_pending_approvals(request: Request):
 
         return {"success": True, "pending_approvals": pending, "count": len(pending)}
     except Exception as e:
-        logger.error(f"Error getting pending approvals: {e}")
+        logger.error("Error getting pending approvals: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -153,7 +153,7 @@ async def get_command_history(request: Request, user: str = None, limit: int = 5
 
         return {"success": True, "command_history": history, "count": len(history)}
     except Exception as e:
-        logger.error(f"Error getting command history: {e}")
+        logger.error("Error getting command history: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -180,7 +180,7 @@ async def _read_audit_log_file(log_file: str, limit: int) -> list:
     except FileNotFoundError:
         return []
     except OSError as e:
-        logger.error(f"Failed to read audit log file: {e}")
+        logger.error("Failed to read audit log file: %s", e)
         return []
 
 
@@ -210,5 +210,5 @@ async def get_audit_log(request: Request, limit: int = 100):
             "count": len(audit_entries),
         }
     except Exception as e:
-        logger.error(f"Error getting audit log: {e}")
+        logger.error("Error getting audit log: %s", e)
         raise HTTPException(status_code=500, detail=str(e))

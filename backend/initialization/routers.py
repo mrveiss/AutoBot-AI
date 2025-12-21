@@ -57,7 +57,7 @@ def load_optional_routers():
     optional_routers.extend(load_feature_routers())
     optional_routers.extend(load_mcp_routers())
 
-    logger.info(f"✅ Loaded {len(optional_routers)} optional routers")
+    logger.info("✅ Loaded %s optional routers", len(optional_routers))
     return optional_routers
 
 

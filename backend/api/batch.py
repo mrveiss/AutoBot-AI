@@ -51,7 +51,7 @@ def _process_session_file(filename: str, chats_directory: str) -> dict | None:
             "message_count": 0,  # Skip message count for speed
         }
     except Exception as e:
-        logger.warning(f"Failed to get stats for {filename}: {e}")
+        logger.warning("Failed to get stats for %s: %s", filename, e)
         return None
 
 
@@ -143,7 +143,7 @@ async def batch_load(batch_request: BatchRequest):
             timing[endpoint] = time.time() - start_time
 
         except Exception as e:
-            logger.error(f"Error in batch request for {endpoint}: {e}")
+            logger.error("Error in batch request for %s: %s", endpoint, e)
             errors[endpoint] = str(e)
             timing[endpoint] = time.time() - start_time
 
@@ -212,7 +212,7 @@ async def batch_chat_initialization():
         return response
 
     except Exception as e:
-        logger.error(f"Batch chat initialization failed: {e}")
+        logger.error("Batch chat initialization failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -230,7 +230,7 @@ async def get_chat_sessions():
             )
             return {"sessions": sessions}
         except Exception as e:
-            logger.warning(f"Failed to get chat sessions: {e}")
+            logger.warning("Failed to get chat sessions: %s", e)
             return {"sessions": []}
     return {"sessions": []}
 
@@ -254,7 +254,7 @@ def _get_sessions_sync(chat_history_manager):
         return sessions
 
     except Exception as e:
-        logger.error(f"Failed to list chat sessions: {e}")
+        logger.error("Failed to list chat sessions: %s", e)
         return []
 
 
@@ -298,5 +298,5 @@ async def get_settings():
             "auto_scroll": True,
         }
     except Exception as e:
-        logger.warning(f"Failed to get settings: {e}")
+        logger.warning("Failed to get settings: %s", e)
         return {}

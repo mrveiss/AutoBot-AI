@@ -776,32 +776,24 @@ async def get_intelligent_agent(
 
 if __name__ == "__main__":
     """Test the intelligent agent functionality."""
+    import sys
+    from pathlib import Path
 
-    # Mock components for testing
-    class MockLLMInterface:
-        async def generate_response(self, prompt, **kwargs):
-            """Return mock LLM response for testing."""
-            return (
-                "COMMAND: echo 'This is a test response'\n"
-                "EXPLANATION: Testing the system"
-            )
+    # Add project root for test imports
+    project_root = Path(__file__).parent.parent.parent
+    sys.path.insert(0, str(project_root))
 
-    class MockKnowledgeBase:
-        async def store_fact(self, content, metadata=None):
-            """Print fact content without actually storing."""
-            print(f"Storing: {content[:100]}...")
-
-    class MockWorkerNode:
-        pass
-
-    class MockCommandValidator:
-        def is_command_safe(self, command):
-            """Return True for all commands in mock validator."""
-            return True
+    # Import mock components from test fixtures (Issue #458)
+    from tests.fixtures.mocks import (
+        MockCommandValidator,
+        MockKnowledgeBase,
+        MockLLMInterface,
+        MockWorkerNode,
+    )
 
     async def test_agent():
         """Test intelligent agent with mock components."""
-        # Create mock components
+        # Create mock components from tests/fixtures/mocks.py
         llm = MockLLMInterface()
         kb = MockKnowledgeBase()
         wn = MockWorkerNode()

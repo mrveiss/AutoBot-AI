@@ -150,7 +150,7 @@ def find_best_agent_for_task(
         suitable_agents.append((agent_id, suitability_score))
 
     if not suitable_agents:
-        logger.warning(f"No suitable agent found for task type: {task_type}")
+        logger.warning("No suitable agent found for task type: %s", task_type)
         return None
 
     # Return agent with highest suitability score
@@ -200,7 +200,7 @@ def update_agent_performance(
         ... )
     """
     if agent_id not in agent_registry:
-        logger.warning(f"Cannot update performance for unknown agent: {agent_id}")
+        logger.warning("Cannot update performance for unknown agent: %s", agent_id)
         return False
 
     agent = agent_registry[agent_id]

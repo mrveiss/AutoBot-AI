@@ -174,7 +174,7 @@ async def get_quality_data_from_storage() -> dict[str, Any]:
             if data:
                 return json.loads(data)
     except Exception as e:
-        logger.warning(f"Failed to get quality data from Redis: {e}")
+        logger.warning("Failed to get quality data from Redis: %s", e)
 
     # Return demo data if storage unavailable
     return generate_demo_quality_data()
@@ -748,7 +748,7 @@ async def websocket_quality_updates(websocket: WebSocket):
     except WebSocketDisconnect:
         manager.disconnect(websocket)
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        logger.error("WebSocket error: %s", e)
         manager.disconnect(websocket)
 
 

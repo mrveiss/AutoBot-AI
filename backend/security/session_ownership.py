@@ -77,11 +77,11 @@ class SessionOwnershipValidator:
             await self.redis.sadd(user_sessions_key, session_id)
             await self.redis.expire(user_sessions_key, 2592000)  # 30 days
 
-            logger.info(f"Session {session_id[:8]}... assigned to owner {username}")
+            logger.info("Session %s... assigned to owner %s", session_id[:8], username)
             return True
 
         except Exception as e:
-            logger.error(f"Failed to set session owner: {e}")
+            logger.error("Failed to set session owner: %s", e)
             return False
 
     async def get_session_owner(self, session_id: str) -> Optional[str]:
@@ -102,7 +102,7 @@ class SessionOwnershipValidator:
                 return None
             return owner.decode() if isinstance(owner, bytes) else owner
         except Exception as e:
-            logger.error(f"Failed to get session owner: {e}")
+            logger.error("Failed to get session owner: %s", e)
             return None
 
     def _get_authenticated_user(self, session_id: str, request: Request) -> Dict:
@@ -189,7 +189,7 @@ class SessionOwnershipValidator:
                 },
             )
         except Exception as e:
-            logger.error(f"Failed to write audit log: {e}")
+            logger.error("Failed to write audit log: %s", e)
 
     async def _record_violation_metrics(
         self,
@@ -224,7 +224,7 @@ class SessionOwnershipValidator:
                 enforcement_mode=enforcement_mode,
             )
         except Exception as e:
-            logger.error(f"Failed to record violation metrics: {e}")
+            logger.error("Failed to record violation metrics: %s", e)
 
     def _audit_log_success(
         self, username: str, session_id: str, request: Request, enforcement_mode: str
@@ -252,7 +252,7 @@ class SessionOwnershipValidator:
                 },
             )
         except Exception as e:
-            logger.error(f"Failed to write audit log: {e}")
+            logger.error("Failed to write audit log: %s", e)
 
     async def _handle_unauthorized_access(
         self,
@@ -369,7 +369,7 @@ class SessionOwnershipValidator:
 
         # Handle legacy session (no owner stored)
         if not stored_owner:
-            logger.warning(f"Session {session_id[:8]}... has no owner (legacy session)")
+            logger.warning("Session %s... has no owner (legacy session)", session_id[:8])
             await self.set_session_owner(session_id, username)
             return {
                 "authorized": True,
@@ -409,7 +409,7 @@ class SessionOwnershipValidator:
             # Handle both bytes and str responses from Redis
             return [s.decode() if isinstance(s, bytes) else s for s in sessions]
         except Exception as e:
-            logger.error(f"Failed to get user sessions: {e}")
+            logger.error("Failed to get user sessions: %s", e)
             return []
 
 
@@ -455,14 +455,14 @@ async def validate_session_ownership(session_id: str, request: Request) -> Dict:
     try:
         feature_flags = await get_feature_flags()
     except Exception as e:
-        logger.warning(f"Feature flags unavailable, defaulting to disabled mode: {e}")
+        logger.warning("Feature flags unavailable, defaulting to disabled mode: %s", e)
         feature_flags = None
 
     # Get metrics service (optional)
     try:
         metrics_service = await get_metrics_service()
     except Exception as e:
-        logger.warning(f"Metrics service unavailable: {e}")
+        logger.warning("Metrics service unavailable: %s", e)
         metrics_service = None
 
     # Create validator with all dependencies

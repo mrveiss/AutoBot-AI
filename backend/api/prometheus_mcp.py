@@ -173,7 +173,7 @@ async def prometheus_query(query: str) -> Metadata:
                 return None
             return data.get("data", {})
     except Exception as e:
-        logger.error(f"Prometheus query failed: {e}")
+        logger.error("Prometheus query failed: %s", e)
         return None
 
 
@@ -401,5 +401,5 @@ async def execute_prometheus_tool(tool_name: str, request: Metadata) -> Metadata
     try:
         return await handler(request)
     except Exception as e:
-        logger.error(f"Error executing Prometheus tool {tool_name}: {e}", exc_info=True)
+        logger.error("Error executing Prometheus tool %s: %s", tool_name, e, exc_info=True)
         return {"status": "error", "error": str(e)}

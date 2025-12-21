@@ -105,7 +105,7 @@ async def populate_docs_knowledge():
             if not _should_exclude_file(fp, exclude_patterns) and os.path.isfile(fp)
         ]
 
-        logger.info(f"Found {len(filtered_files)} documentation files to index")
+        logger.info("Found %s documentation files to index", len(filtered_files))
 
         # Process each documentation file
         successful_adds = 0
@@ -118,7 +118,7 @@ async def populate_docs_knowledge():
                     content = f.read()
 
                 if not content.strip():
-                    logger.warning(f"Skipping empty file: {file_path}")
+                    logger.warning("Skipping empty file: %s", file_path)
                     continue
 
                 # Issue #338: Use helper for category determination
@@ -136,21 +136,21 @@ async def populate_docs_knowledge():
                     }
                 )
 
-                logger.info(f"✓ Added: {rel_path} (category: {category})")
+                logger.info("✓ Added: %s (category: %s)", rel_path, category)
                 successful_adds += 1
 
             except Exception as e:
-                logger.error(f"Failed to add {file_path}: {e}")
+                logger.error("Failed to add %s: %s", file_path, e)
                 failed_adds += 1
 
         logger.info("=== Documentation Population Complete ===")
-        logger.info(f"✓ Successfully added: {successful_adds} documents")
+        logger.info("✓ Successfully added: %s documents", successful_adds)
         if failed_adds > 0:
-            logger.error(f"Failed to add: {failed_adds} documents")
+            logger.error("Failed to add: %s documents", failed_adds)
 
         # Get updated stats
         stats = await kb.get_stats()
-        logger.info(f"Total documents in knowledge base: {stats.get('total_documents', 'unknown')}")
+        logger.info("Total documents in knowledge base: %s", stats.get('total_documents', 'unknown'))
 
         return {
             "success": True,
@@ -160,7 +160,7 @@ async def populate_docs_knowledge():
         }
 
     except Exception as e:
-        logger.error(f"Error during documentation population: {e}")
+        logger.error("Error during documentation population: %s", e)
         return {
             "success": False,
             "error": str(e)
@@ -173,9 +173,9 @@ async def main():
 
     if result["success"]:
         logger.info("Documentation population completed successfully!")
-        logger.info(f"Added {result['documents_added']} documents to knowledge base")
+        logger.info("Added %s documents to knowledge base", result['documents_added'])
     else:
-        logger.error(f"Documentation population failed: {result['error']}")
+        logger.error("Documentation population failed: %s", result['error'])
         sys.exit(1)
 
 

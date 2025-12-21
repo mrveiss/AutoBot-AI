@@ -436,7 +436,7 @@ class AdvancedRAGOptimizer:
         for result, ce_score in zip(results, cross_encoder_scores):
             result.rerank_score = float(ce_score) * 0.8 + result.hybrid_score * 0.2
 
-        logger.debug(f"Cross-encoder reranking completed for {len(results)} results")
+        logger.debug("Cross-encoder reranking completed for %s results", len(results))
 
     def _apply_fallback_reranking(self, query: str, results: List[SearchResult]) -> None:
         """Apply term-based fallback reranking (Issue #398: extracted)."""
@@ -459,7 +459,7 @@ class AdvancedRAGOptimizer:
         results.sort(key=lambda x: x.rerank_score or 0, reverse=True)
         for i, result in enumerate(results):
             result.relevance_rank = i + 1
-        logger.debug(f"Reranking completed: top score = {results[0].rerank_score:.3f}")
+        logger.debug("Reranking completed: top score = %.3f", results[0].rerank_score)
         return results
 
     async def _rerank_with_cross_encoder(

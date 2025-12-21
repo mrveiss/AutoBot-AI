@@ -174,7 +174,7 @@ class AdaptiveTimeout:
 
         except Exception as e:
             elapsed = time.time() - self.start_time
-            logger.error(f"Operation failed after {elapsed:.2f}s: {e}")
+            logger.error("Operation failed after %ss: %s", elapsed:.2f, e)
             return fallback_result
 
     async def _send_timeout_warning(
@@ -220,7 +220,7 @@ class AdaptiveTimeout:
 
         else:
             # Generic fallback
-            logger.info(f"Using fallback result for {self.category.value} timeout")
+            logger.info("Using fallback result for %s timeout", self.category.value)
             return fallback_result
 
     async def _handle_background_installation(
@@ -244,7 +244,7 @@ class AdaptiveTimeout:
         """Execute installation in background with extended timeout"""
         try:
             extended_timeout = 1200.0  # 20 minutes for background installations
-            logger.info(f"Background installation with {extended_timeout}s timeout")
+            logger.info("Background installation with %ss timeout", extended_timeout)
 
             if asyncio.iscoroutinefunction(operation):
                 result = await asyncio.wait_for(operation(), timeout=extended_timeout)
@@ -257,7 +257,7 @@ class AdaptiveTimeout:
             return result
 
         except Exception as e:
-            logger.error(f"Background installation failed: {e}")
+            logger.error("Background installation failed: %s", e)
             return {"status": "failed", "error": str(e)}
 
     async def _handle_user_interaction_timeout(

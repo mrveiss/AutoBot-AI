@@ -50,8 +50,29 @@ class SimplePerformanceAnalyzer:
             ],
         }
 
+        # Issue #510: Precompile and combine patterns per category at init time
+        # Reduces per-file work from O(categories * patterns) to O(categories)
+        self._compiled_patterns = {}
+        for category, pattern_list in self.patterns.items():
+            # Build combined pattern with named groups for description lookup
+            combined_parts = []
+            self._pattern_descriptions = {}
+            for i, (pattern, description) in enumerate(pattern_list):
+                group_name = f"{category}_{i}"
+                combined_parts.append(f"(?P<{group_name}>{pattern})")
+                self._pattern_descriptions[group_name] = description
+            combined = "|".join(combined_parts)
+            self._compiled_patterns[category] = re.compile(
+                combined, re.MULTILINE | re.DOTALL
+            )
+
     def analyze_file(self, file_path: Path) -> List[Dict[str, Any]]:
-        """Analyze single file for performance issues"""
+        """Analyze single file for performance issues.
+
+        Issue #510: Optimized O(n³) → O(n²) by using precompiled combined patterns.
+        Now iterates: categories × (single regex per category) instead of
+        categories × patterns × matches.
+        """
 
         if not file_path.suffix == ".py" or "test" in str(file_path):
             return []
@@ -65,33 +86,36 @@ class SimplePerformanceAnalyzer:
         issues = []
         lines = content.splitlines()
 
-        for category, pattern_list in self.patterns.items():
-            for pattern, description in pattern_list:
-                try:
-                    for match in re.finditer(
-                        pattern, content, re.MULTILINE | re.DOTALL
-                    ):
-                        line_num = content[: match.start()].count("\n") + 1
+        # Issue #510: Use precompiled combined patterns
+        for category, compiled in self._compiled_patterns.items():
+            try:
+                for match in compiled.finditer(content):
+                    line_num = content[: match.start()].count("\n") + 1
+                    # Find which pattern matched using lastgroup
+                    group_name = match.lastgroup
+                    description = self._pattern_descriptions.get(
+                        group_name, "Performance issue"
+                    )
 
-                        # Get context
-                        context = lines[line_num - 1] if line_num <= len(lines) else ""
+                    # Get context
+                    context = lines[line_num - 1] if line_num <= len(lines) else ""
 
-                        # Skip comments and obvious false positives
-                        if "#" in context or "test" in context.lower():
-                            continue
+                    # Skip comments and obvious false positives
+                    if "#" in context or "test" in context.lower():
+                        continue
 
-                        issues.append(
-                            {
-                                "file": str(file_path),
-                                "line": line_num,
-                                "category": category,
-                                "description": description,
-                                "context": context.strip(),
-                                "severity": self._get_severity(category),
-                            }
-                        )
-                except re.error:
-                    continue
+                    issues.append(
+                        {
+                            "file": str(file_path),
+                            "line": line_num,
+                            "category": category,
+                            "description": description,
+                            "context": context.strip(),
+                            "severity": self._get_severity(category),
+                        }
+                    )
+            except re.error:
+                continue
 
         return issues
 

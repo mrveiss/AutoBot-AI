@@ -95,7 +95,7 @@ async def create_streaming_session(request: StreamingSessionRequest):
         response = StreamingSessionResponse(**result)
         task_context.set_outputs({"session_id": response.session_id})
 
-        logger.info(f"Desktop streaming session created: {response.session_id}")
+        logger.info("Desktop streaming session created: %s", response.session_id)
         return response
 
 
@@ -109,7 +109,7 @@ async def terminate_streaming_session(session_id: str):
     """Terminate a desktop streaming session"""
     success = await desktop_streaming.terminate_streaming_session(session_id)
     if success:
-        logger.info(f"Desktop streaming session terminated: {session_id}")
+        logger.info("Desktop streaming session terminated: %s", session_id)
         return {"success": True, "session_id": session_id}
     else:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -185,7 +185,7 @@ async def request_takeover(request: TakeoverRequest):
         auto_approve=request.auto_approve,
     )
 
-    logger.info(f"Takeover requested: {request_id}")
+    logger.info("Takeover requested: %s", request_id)
     return {"success": True, "request_id": request_id}
 
 
@@ -204,7 +204,7 @@ async def approve_takeover(request_id: str, approval: TakeoverApprovalRequest):
             takeover_scope=approval.takeover_scope,
         )
 
-        logger.info(f"Takeover approved: {request_id} -> {session_id}")
+        logger.info("Takeover approved: %s -> %s", request_id, session_id)
         return {"success": True, "session_id": session_id}
 
     except ValueError as e:
@@ -386,7 +386,7 @@ async def emergency_system_stop():
         auto_approve=True,
     )
 
-    logger.warning(f"Emergency stop activated: {request_id}")
+    logger.warning("Emergency stop activated: %s", request_id)
     return {
         "success": True,
         "message": "Emergency stop activated",
@@ -418,7 +418,7 @@ async def get_system_health():
         return health_status
 
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
+        logger.error("Health check failed: %s", e)
         return {"status": "unhealthy", "error": str(e)}
 
 
@@ -449,7 +449,7 @@ async def monitoring_websocket(websocket: WebSocket):
             except WebSocketDisconnect:
                 break
             except Exception as e:
-                logger.error(f"Error in monitoring WebSocket: {e}")
+                logger.error("Error in monitoring WebSocket: %s", e)
                 await websocket.send_json({"type": "error", "message": str(e)})
                 break
 
@@ -479,7 +479,7 @@ async def desktop_streaming_websocket(websocket: WebSocket, session_id: str):
             websocket, f"/ws/desktop/{session_id}"
         )
     except WebSocketDisconnect:
-        logger.info(f"Desktop streaming WebSocket client disconnected: {session_id}")
+        logger.info("Desktop streaming WebSocket client disconnected: %s", session_id)
 
 
 @with_error_handling(

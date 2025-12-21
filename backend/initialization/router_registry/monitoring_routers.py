@@ -81,13 +81,13 @@ def _try_load_router(
     try:
         module = importlib.import_module(module_path)
         router = getattr(module, router_attr)
-        logger.info(f"✅ Optional router loaded: {name}")
+        logger.info("✅ Optional router loaded: %s", name)
         return (router, prefix, tags, name)
     except ImportError as e:
-        logger.warning(f"⚠️ Optional router not available: {name} - {e}")
+        logger.warning("⚠️ Optional router not available: %s - %s", name, e)
         return None
     except AttributeError as e:
-        logger.warning(f"⚠️ Router attribute missing: {name} - {e}")
+        logger.warning("⚠️ Router attribute missing: %s - %s", name, e)
         return None
 
 

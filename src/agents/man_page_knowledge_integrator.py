@@ -305,11 +305,11 @@ class ManPageKnowledgeIntegrator:
             except asyncio.TimeoutError:
                 proc.kill()
                 await proc.wait()
-                logger.warning(f"Timeout extracting man page for {command}")
+                logger.warning("Timeout extracting man page for %s", command)
                 return None
 
             if proc.returncode != 0:
-                logger.debug(f"Man page not found for {command}({section})")
+                logger.debug("Man page not found for %s(%s)", command, section)
                 return None
 
             # Parse the content
@@ -324,11 +324,11 @@ class ManPageKnowledgeIntegrator:
             if hasattr(os_info, "machine_id"):
                 man_info.machine_id = getattr(os_info, "machine_id", "unknown")
 
-            logger.info(f"Extracted man page for {command}({section})")
+            logger.info("Extracted man page for %s(%s)", command, section)
             return man_info
 
         except Exception as e:
-            logger.error(f"Error extracting man page for {command}: {e}")
+            logger.error("Error extracting man page for %s: %s", command, e)
             return None
 
     async def cache_man_page(self, man_info: ManPageInfo) -> Path:
@@ -355,9 +355,9 @@ class ManPageKnowledgeIntegrator:
                 cache_file, "w", encoding="utf-8"
             ) as f:
                 await f.write(json.dumps(man_data, indent=2))
-            logger.info(f"Cached man page for {man_info.command} to {cache_file}")
+            logger.info("Cached man page for %s to %s", man_info.command, cache_file)
         except OSError as e:
-            logger.error(f"Failed to cache man page to {cache_file}: {e}")
+            logger.error("Failed to cache man page to %s: %s", cache_file, e)
         return cache_file
 
     async def load_cached_man_page(
@@ -389,13 +389,13 @@ class ManPageKnowledgeIntegrator:
             )
 
         except OSError as e:
-            logger.error(f"Failed to read cached man page {cache_file}: {e}")
+            logger.error("Failed to read cached man page %s: %s", cache_file, e)
             return None
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse cached man page JSON {cache_file}: {e}")
+            logger.error("Failed to parse cached man page JSON %s: %s", cache_file, e)
             return None
         except Exception as e:
-            logger.error(f"Error processing cached man page {cache_file}: {e}")
+            logger.error("Error processing cached man page %s: %s", cache_file, e)
             return None
 
     def convert_to_knowledge_yaml(self, man_info: ManPageInfo) -> Dict[str, Any]:
@@ -557,7 +557,7 @@ class ManPageKnowledgeIntegrator:
 
     async def update_man_page_cache(self, max_age_days: int = 7):
         """Update man page cache for commands older than max_age_days"""
-        logger.info(f"Updating man page cache (max age: {max_age_days} days)")
+        logger.info("Updating man page cache (max age: %s days)", max_age_days)
 
         current_time = time.time()
         max_age_seconds = max_age_days * 24 * 60 * 60
@@ -576,7 +576,7 @@ class ManPageKnowledgeIntegrator:
                 command = cache_file.stem.split("_")[0]
                 section = int(cache_file.stem.split("_")[1])
 
-                logger.info(f"Updating cached man page for {command}({section})")
+                logger.info("Updating cached man page for %s(%s)", command, section)
 
                 # Re-extract man page
                 man_info = await self.extract_man_page(command, section)
@@ -585,7 +585,7 @@ class ManPageKnowledgeIntegrator:
                     await self._save_as_knowledge_yaml(man_info)
                     updated_count += 1
 
-        logger.info(f"Updated {updated_count} man page cache entries")
+        logger.info("Updated %s man page cache entries", updated_count)
         return updated_count
 
 

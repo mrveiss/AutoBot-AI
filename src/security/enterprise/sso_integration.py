@@ -144,7 +144,7 @@ class SSOIntegrationFramework:
                 self._save_config(default_config)
                 return default_config
         except Exception as e:
-            logger.error(f"Failed to load SSO config: {e}")
+            logger.error("Failed to load SSO config: %s", e)
             return self._get_default_config()
 
     def _get_default_config(self) -> Dict:
@@ -224,7 +224,7 @@ class SSOIntegrationFramework:
                 with open(self.config_path, "w", encoding="utf-8") as f:
                     yaml.dump(config, f, default_flow_style=False)
             except Exception as e:
-                logger.error(f"Failed to save SSO config: {e}")
+                logger.error("Failed to save SSO config: %s", e)
 
     def _load_providers(self):
         """Load SSO providers from storage"""
@@ -248,10 +248,10 @@ class SSOIntegrationFramework:
                 self.providers[provider.provider_id] = provider
 
             self._update_provider_statistics()
-            logger.info(f"Loaded {len(self.providers)} SSO providers")
+            logger.info("Loaded %s SSO providers", len(self.providers))
 
         except Exception as e:
-            logger.error(f"Failed to load SSO providers: {e}")
+            logger.error("Failed to load SSO providers: %s", e)
 
     def _save_provider(self, provider: SSOProvider):
         """Save SSO provider to storage (thread-safe, Issue #378)"""
@@ -274,7 +274,7 @@ class SSOIntegrationFramework:
                     json.dump(provider_dict, f, indent=2, ensure_ascii=False)
 
             except Exception as e:
-                logger.error(f"Failed to save SSO provider {provider.provider_id}: {e}")
+                logger.error("Failed to save SSO provider %s: %s", provider.provider_id, e)
 
     def _initialize_crypto_keys(self):
         """Initialize cryptographic keys for SAML and JWT signing (thread-safe, Issue #378)"""
@@ -327,7 +327,7 @@ class SSOIntegrationFramework:
                     logger.info("Generated new SSO cryptographic keys")
 
             except Exception as e:
-                logger.error(f"Failed to initialize crypto keys: {e}")
+                logger.error("Failed to initialize crypto keys: %s", e)
 
     def _initialize_default_providers(self):
         """Initialize default SSO providers based on configuration"""
@@ -378,14 +378,14 @@ class SSOIntegrationFramework:
         self._save_provider(provider)
         self._update_provider_statistics()
 
-        logger.info(f"Created SSO provider: {name} ({protocol.value})")
+        logger.info("Created SSO provider: %s (%s)", name, protocol.value)
         return provider_id
 
     def update_provider(self, provider_id: str, updates: Dict) -> bool:
         """Update an existing SSO provider"""
 
         if provider_id not in self.providers:
-            logger.error(f"SSO provider not found: {provider_id}")
+            logger.error("SSO provider not found: %s", provider_id)
             return False
 
         provider = self.providers[provider_id]
@@ -400,7 +400,7 @@ class SSOIntegrationFramework:
         self._save_provider(provider)
         self._update_provider_statistics()
 
-        logger.info(f"Updated SSO provider {provider_id}")
+        logger.info("Updated SSO provider %s", provider_id)
         return True
 
     def enable_provider(self, provider_id: str) -> bool:
@@ -484,7 +484,7 @@ class SSOIntegrationFramework:
             }
 
         except Exception as e:
-            logger.error(f"SAML auth initiation failed: {e}")
+            logger.error("SAML auth initiation failed: %s", e)
             return {"error": "Failed to initiate SAML authentication"}
 
     async def _initiate_oauth_auth(
@@ -530,7 +530,7 @@ class SSOIntegrationFramework:
             return {"auth_url": auth_url, "state": auth_state, "method": "redirect"}
 
         except Exception as e:
-            logger.error(f"OAuth auth initiation failed: {e}")
+            logger.error("OAuth auth initiation failed: %s", e)
             return {"error": "Failed to initiate OAuth authentication"}
 
     async def handle_sso_callback(self, provider_id: str, callback_data: Dict) -> Dict:
@@ -554,7 +554,7 @@ class SSOIntegrationFramework:
                 return {"error": "Unsupported protocol for callback"}
 
         except Exception as e:
-            logger.error(f"SSO callback handling failed: {e}")
+            logger.error("SSO callback handling failed: %s", e)
             self.stats["failed_authentications"] += 1
             return {"error": "Authentication failed"}
 
@@ -584,7 +584,7 @@ class SSOIntegrationFramework:
                 return {"error": "Failed to parse SAML assertion"}
 
         except Exception as e:
-            logger.error(f"SAML callback failed: {e}")
+            logger.error("SAML callback failed: %s", e)
             return {"error": "SAML authentication failed"}
 
     async def _handle_oauth_callback(
@@ -630,7 +630,7 @@ class SSOIntegrationFramework:
                 return {"error": "Failed to get user information"}
 
         except Exception as e:
-            logger.error(f"OAuth callback failed: {e}")
+            logger.error("OAuth callback failed: %s", e)
             return {"error": "OAuth authentication failed"}
 
     async def _exchange_oauth_code(
@@ -659,13 +659,11 @@ class SSOIntegrationFramework:
                     return await response.json()
                 else:
                     error_text = await response.text()
-                    logger.error(
-                        f"Token exchange failed: {response.status} - {error_text}"
-                    )
+                    logger.error("Token exchange failed: %s - %s", response.status, error_text)
                     return {"error": "Token exchange failed"}
 
         except Exception as e:
-            logger.error(f"OAuth code exchange failed: {e}")
+            logger.error("OAuth code exchange failed: %s", e)
             return {"error": "Token exchange failed"}
 
     async def _get_oauth_user_info(
@@ -683,11 +681,11 @@ class SSOIntegrationFramework:
                 if response.status == 200:
                     return await response.json()
                 else:
-                    logger.error(f"User info request failed: {response.status}")
+                    logger.error("User info request failed: %s", response.status)
                     return None
 
         except Exception as e:
-            logger.error(f"OAuth user info failed: {e}")
+            logger.error("OAuth user info failed: %s", e)
             return None
 
     def _parse_saml_assertion(
@@ -710,7 +708,7 @@ class SSOIntegrationFramework:
             return user_attributes
 
         except Exception as e:
-            logger.error(f"SAML assertion parsing failed: {e}")
+            logger.error("SAML assertion parsing failed: %s", e)
             return None
 
     async def _create_sso_session(
@@ -761,7 +759,7 @@ class SSOIntegrationFramework:
             }
 
         except Exception as e:
-            logger.error(f"SSO session creation failed: {e}")
+            logger.error("SSO session creation failed: %s", e)
             return {"error": "Session creation failed"}
 
     def _map_user_attributes(self, provider: SSOProvider, attributes: Dict) -> Dict:
@@ -840,7 +838,7 @@ class SSOIntegrationFramework:
         if session_id in self.active_sessions:
             del self.active_sessions[session_id]
             self.stats["active_sessions"] = len(self.active_sessions)
-            logger.info(f"Invalidated SSO session {session_id}")
+            logger.info("Invalidated SSO session %s", session_id)
             return True
         return False
 
@@ -873,7 +871,7 @@ class SSOIntegrationFramework:
                 return {"error": "Invalid credentials"}
 
         except Exception as e:
-            logger.error(f"LDAP authentication failed: {e}")
+            logger.error("LDAP authentication failed: %s", e)
             return {"error": "LDAP authentication failed"}
 
     def list_providers(self, enabled_only: bool = False) -> List[SSOProvider]:
@@ -963,7 +961,7 @@ class SSOIntegrationFramework:
 
         if expired_sessions:
             self.stats["active_sessions"] = len(self.active_sessions)
-            logger.info(f"Cleaned up {len(expired_sessions)} expired SSO sessions")
+            logger.info("Cleaned up %s expired SSO sessions", len(expired_sessions))
 
     async def refresh_session(self, session_id: str) -> bool:
         """Refresh SSO session timeout"""
@@ -974,7 +972,7 @@ class SSOIntegrationFramework:
             session.expires_at = datetime.utcnow() + timedelta(hours=session_timeout)
             session.last_activity = datetime.utcnow()
 
-            logger.debug(f"Refreshed SSO session {session_id}")
+            logger.debug("Refreshed SSO session %s", session_id)
             return True
 
         return False

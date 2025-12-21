@@ -152,7 +152,7 @@ class CommandValidator:
                 return error
 
             # Success
-            self.logger.info(f"Command validated successfully: {command_parts[0]} with {len(command_parts) - 1} args")
+            self.logger.info("Command validated successfully: %s with %s args", command_parts[0], len(command_parts) - 1)
             return {
                 "valid": True,
                 "reason": f"Command '{command_parts[0]}' validated successfully",
@@ -161,7 +161,7 @@ class CommandValidator:
             }
 
         except Exception as e:
-            self.logger.error(f"Command validation error: {str(e)}")
+            self.logger.error("Command validation error: %s", str(e))
             return self._invalid_result(f"Validation error: {str(e)}")
 
     def _check_dangerous_patterns(self, command: str) -> Dict[str, Union[bool, str]]:
@@ -242,10 +242,10 @@ class CommandValidator:
         """
         try:
             self.whitelist[command_pattern.command] = command_pattern
-            self.logger.info(f"Added '{command_pattern.command}' to command whitelist")
+            self.logger.info("Added '%s' to command whitelist", command_pattern.command)
             return True
         except Exception as e:
-            self.logger.error(f"Failed to add command to whitelist: {str(e)}")
+            self.logger.error("Failed to add command to whitelist: %s", str(e))
             return False
 
 

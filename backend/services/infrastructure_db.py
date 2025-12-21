@@ -72,7 +72,7 @@ class InfrastructureDB:
 
         # Create all tables if they don't exist
         Base.metadata.create_all(self.engine)
-        logger.info(f"Infrastructure database initialized at {db_path}")
+        logger.info("Infrastructure database initialized at %s", db_path)
 
         # Create session factory
         self.SessionLocal = sessionmaker(bind=self.engine, expire_on_commit=False)
@@ -89,7 +89,7 @@ class InfrastructureDB:
                 with open(key_path, "wb") as f:
                     f.write(encryption_key)
                 os.chmod(key_path, 0o600)  # Restrict permissions
-                logger.warning(f"Generated new encryption key at {key_path}")
+                logger.warning("Generated new encryption key at %s", key_path)
 
         self.fernet = Fernet(encryption_key)
 
@@ -176,7 +176,7 @@ class InfrastructureDB:
                 details={"hostname": host.hostname, "ip_address": host.ip_address},
             )
 
-            logger.info(f"Created host: {host.hostname} ({host.ip_address})")
+            logger.info("Created host: %s (%s)", host.hostname, host.ip_address)
             return host
 
     def get_host(self, host_id: int) -> Optional[InfraHost]:
@@ -316,7 +316,7 @@ class InfrastructureDB:
                     user_id=user_id,
                 )
 
-                logger.info(f"Updated host {host_id} status: {old_status} → {status}")
+                logger.info("Updated host %s status: %s → %s", host_id, old_status, status)
 
     def delete_host(self, host_id: int, user_id: Optional[str] = None):
         """
@@ -343,7 +343,7 @@ class InfrastructureDB:
                     user_id=user_id,
                 )
 
-                logger.info(f"Deleted host {host_id} ({hostname})")
+                logger.info("Deleted host %s (%s)", host_id, hostname)
 
     # ==================== Credential Management ====================
 
@@ -390,7 +390,7 @@ class InfrastructureDB:
                 user_id=user_id,
             )
 
-            logger.info(f"Stored {credential_type} credential for host {host_id}")
+            logger.info("Stored %s credential for host %s", credential_type, host_id)
             return credential
 
     def get_active_credential(

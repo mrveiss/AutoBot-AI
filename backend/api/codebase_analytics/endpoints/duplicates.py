@@ -60,7 +60,7 @@ async def get_duplicate_code():
                 all_duplicates.append(duplicate)
 
             storage_type = "chromadb"
-            logger.info(f"Retrieved {len(all_duplicates)} duplicates from ChromaDB")
+            logger.info("Retrieved %s duplicates from ChromaDB", len(all_duplicates))
 
         except Exception as chroma_error:
             logger.warning(

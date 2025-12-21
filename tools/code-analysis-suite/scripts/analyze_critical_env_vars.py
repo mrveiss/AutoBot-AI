@@ -51,7 +51,11 @@ class CriticalEnvAnalyzer:
         }
 
     async def find_critical_hardcoded_values(self) -> Dict[str, List[Dict[str, Any]]]:
-        """Find critical hardcoded values that should be configurable"""
+        """Find critical hardcoded values that should be configurable.
+
+        Issue #510: Optimized O(n³) → O(n²) by precompiling and combining patterns
+        per category. Now iterates: categories × files × (single combined regex).
+        """
 
         results = {}
 
@@ -59,13 +63,19 @@ class CriticalEnvAnalyzer:
         python_files = list(Path(".").rglob("*.py"))
         python_files = [f for f in python_files if not self._should_skip_file(f)]
 
+        # Issue #510: Precompile and combine patterns per category
+        # O(c) compile time, reduces per-file work from O(p) to O(1)
+        compiled_patterns = {}
         for category, patterns in self.critical_patterns.items():
+            combined = "|".join(f"({p})" for p in patterns)
+            compiled_patterns[category] = re.compile(combined)
+
+        for category, compiled in compiled_patterns.items():
             results[category] = []
 
-            for pattern in patterns:
-                for file_path in python_files:
-                    matches = self._find_pattern_in_file(file_path, pattern, category)
-                    results[category].extend(matches)
+            for file_path in python_files:
+                matches = self._find_pattern_in_file(file_path, compiled, category)
+                results[category].extend(matches)
 
         return results
 
@@ -85,8 +95,13 @@ class CriticalEnvAnalyzer:
         path_str = str(file_path)
         return any(pattern in path_str for pattern in skip_patterns)
 
-    def _find_pattern_in_file(self, file_path: Path, pattern: str, category: str) -> List[Dict[str, Any]]:
-        """Find pattern matches in a file"""
+    def _find_pattern_in_file(
+        self, file_path: Path, pattern: "re.Pattern | str", category: str
+    ) -> List[Dict[str, Any]]:
+        """Find pattern matches in a file.
+
+        Issue #510: Now accepts pre-compiled regex Pattern objects for efficiency.
+        """
         matches = []
 
         try:
@@ -94,7 +109,9 @@ class CriticalEnvAnalyzer:
                 content = f.read()
                 lines = content.splitlines()
 
-            for match in re.finditer(pattern, content):
+            # Issue #510: Handle both compiled Pattern and string
+            regex = pattern if hasattr(pattern, 'finditer') else re.compile(pattern)
+            for match in regex.finditer(content):
                 line_num = content[:match.start()].count('\n') + 1
                 value = match.group(1) if match.groups() else match.group(0)
 

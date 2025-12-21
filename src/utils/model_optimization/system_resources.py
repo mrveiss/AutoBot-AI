@@ -36,7 +36,7 @@ class SystemResourceAnalyzer:
                 available_memory_gb=memory.available / (1024**3),
             )
         except Exception as e:
-            self._logger.error(f"Error getting system resources: {e}")
+            self._logger.error("Error getting system resources: %s", e)
             # Conservative defaults
             return SystemResources(
                 cpu_percent=50.0, memory_percent=50.0, available_memory_gb=8.0

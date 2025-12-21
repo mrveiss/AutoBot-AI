@@ -25,7 +25,7 @@ async def get_settings():
     try:
         return ConfigService.get_full_config()
     except Exception as e:
-        logger.error(f"Error getting settings: {str(e)}")
+        logger.error("Error getting settings: %s", str(e))
         raise_server_error("API_0003", f"Error getting settings: {str(e)}")
 
 
@@ -40,7 +40,7 @@ async def get_settings_explicit():
     try:
         return ConfigService.get_full_config()
     except Exception as e:
-        logger.error(f"Error getting settings: {str(e)}")
+        logger.error("Error getting settings: %s", str(e))
         raise_server_error("API_0003", f"Error getting settings: {str(e)}")
 
 
@@ -61,7 +61,7 @@ async def save_settings(settings_data: dict):
         result = ConfigService.save_full_config(settings_data)
         return result
     except Exception as e:
-        logger.error(f"Error saving settings: {str(e)}")
+        logger.error("Error saving settings: %s", str(e))
         raise_server_error("API_0003", f"Error saving settings: {str(e)}")
 
 
@@ -82,7 +82,7 @@ async def save_settings_explicit(settings_data: dict):
         result = ConfigService.save_full_config(settings_data)
         return result
     except Exception as e:
-        logger.error(f"Error saving settings: {str(e)}")
+        logger.error("Error saving settings: %s", str(e))
         raise_server_error("API_0003", f"Error saving settings: {str(e)}")
 
 
@@ -97,7 +97,7 @@ async def get_backend_settings():
     try:
         return ConfigService.get_backend_settings()
     except Exception as e:
-        logger.error(f"Error getting backend settings: {str(e)}")
+        logger.error("Error getting backend settings: %s", str(e))
         raise_server_error("API_0003", f"Error getting backend settings: {str(e)}")
 
 
@@ -113,7 +113,7 @@ async def save_backend_settings(backend_settings: dict):
         result = ConfigService.update_backend_settings(backend_settings)
         return result
     except Exception as e:
-        logger.error(f"Error saving backend settings: {str(e)}")
+        logger.error("Error saving backend settings: %s", str(e))
         raise_server_error("API_0003", f"Error saving backend settings: {str(e)}")
 
 
@@ -128,7 +128,7 @@ async def get_full_config():
     try:
         return ConfigService.get_full_config()
     except Exception as e:
-        logger.error(f"Error getting full config: {str(e)}")
+        logger.error("Error getting full config: %s", str(e))
         raise_server_error("API_0003", f"Error getting full config: {str(e)}")
 
 
@@ -145,7 +145,7 @@ async def save_full_config(config_data: dict):
         result = ConfigService.save_full_config(config_data)
         return result
     except Exception as e:
-        logger.error(f"Error saving full config: {str(e)}")
+        logger.error("Error saving full config: %s", str(e))
         raise_server_error("API_0003", f"Error saving full config: {str(e)}")
 
 
@@ -175,5 +175,5 @@ async def clear_cache():
             },
         }
     except Exception as e:
-        logger.error(f"Error in clear-cache endpoint: {str(e)}")
+        logger.error("Error in clear-cache endpoint: %s", str(e))
         raise_server_error("API_0003", f"Error in clear-cache endpoint: {str(e)}")

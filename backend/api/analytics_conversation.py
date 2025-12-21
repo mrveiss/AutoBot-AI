@@ -575,9 +575,9 @@ async def load_chat_sessions(hours: int = 24) -> List[Dict[str, Any]]:
                 if _is_session_in_range(session, cutoff):
                     sessions.append(session)
         except OSError as e:
-            logger.debug(f"Failed to read session file {session_file}: {e}")
+            logger.debug("Failed to read session file %s: %s", session_file, e)
         except Exception as e:
-            logger.debug(f"Error loading session {session_file}: {e}")
+            logger.debug("Error loading session %s: %s", session_file, e)
 
     return sessions
 
@@ -633,7 +633,7 @@ async def analyze_conversations(
         return result
 
     except Exception as e:
-        logger.error(f"Error analyzing conversations: {e}")
+        logger.error("Error analyzing conversations: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -685,7 +685,7 @@ async def get_intent_stats(
         }
 
     except Exception as e:
-        logger.error(f"Error getting intent stats: {e}")
+        logger.error("Error getting intent stats: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -738,7 +738,7 @@ async def get_flow_paths(
         }
 
     except Exception as e:
-        logger.error(f"Error getting flow paths: {e}")
+        logger.error("Error getting flow paths: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -772,7 +772,7 @@ async def get_bottlenecks(
         }
 
     except Exception as e:
-        logger.error(f"Error getting bottlenecks: {e}")
+        logger.error("Error getting bottlenecks: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -811,7 +811,7 @@ async def get_hourly_distribution(
         }
 
     except Exception as e:
-        logger.error(f"Error getting distribution: {e}")
+        logger.error("Error getting distribution: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -834,5 +834,5 @@ async def detect_intent(message: str = Query(..., description="Message to analyz
         }
 
     except Exception as e:
-        logger.error(f"Error detecting intent: {e}")
+        logger.error("Error detecting intent: %s", e)
         raise HTTPException(status_code=500, detail=str(e))

@@ -66,7 +66,7 @@ class ConsolidatedHealthService:
             else:
                 return component_name, checker
         except Exception as e:
-            logger.error(f"Error checking health for {component_name}: {e}")
+            logger.error("Error checking health for %s: %s", component_name, e)
             return component_name, {
                 "status": "unhealthy",
                 "error": str(e),
@@ -105,7 +105,7 @@ class ConsolidatedHealthService:
         # Process results
         for result in results:
             if isinstance(result, Exception):
-                logger.error(f"Health check task failed: {result}")
+                logger.error("Health check task failed: %s", result)
                 continue
 
             component_name, component_health = result

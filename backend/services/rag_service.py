@@ -94,7 +94,7 @@ class RAGService:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to initialize RAG optimizer: {e}")
+            logger.error("Failed to initialize RAG optimizer: %s", e)
             self._initialized = False
             return False
 
@@ -125,7 +125,7 @@ class RAGService:
         cache_key = f"{query}:{max_results}:{enable_reranking}"
         cached_result = await self._get_from_cache(cache_key)
         if cached_result:
-            logger.debug(f"Cache hit for query: '{query[:50]}...'")
+            logger.debug("Cache hit for query: '%s...'", query[:50])
             return cached_result
 
         # Ensure initialized
@@ -164,7 +164,7 @@ class RAGService:
             raise
 
         except Exception as e:
-            logger.error(f"Advanced search failed: {e}")
+            logger.error("Advanced search failed: %s", e)
             if self.config.fallback_to_basic_search:
                 return await self._fallback_basic_search(query, max_results)
             raise
@@ -204,7 +204,7 @@ class RAGService:
             return context, metrics
 
         except Exception as e:
-            logger.error(f"Failed to get optimized context: {e}")
+            logger.error("Failed to get optimized context: %s", e)
             return f"Error: {str(e)}", RAGMetrics()
 
     async def rerank_results(
@@ -256,11 +256,11 @@ class RAGService:
                 result_dict["original_rank"] = result.relevance_rank
                 reranked_dicts.append(result_dict)
 
-            logger.info(f"Reranked {len(reranked_dicts)} results")
+            logger.info("Reranked %s results", len(reranked_dicts))
             return reranked_dicts
 
         except Exception as e:
-            logger.error(f"Reranking failed: {e}")
+            logger.error("Reranking failed: %s", e)
             return results
 
     async def _fallback_basic_search(
@@ -305,7 +305,7 @@ class RAGService:
             return search_results, metrics
 
         except Exception as e:
-            logger.error(f"Basic search fallback failed: {e}")
+            logger.error("Basic search fallback failed: %s", e)
             return [], metrics
 
     async def _get_from_cache(

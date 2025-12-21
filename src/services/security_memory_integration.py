@@ -193,7 +193,7 @@ class SecurityMemoryIntegration:
             tags=["security", "assessment", "pentest"],
         )
 
-        logger.info(f"Created assessment entity: {assessment_id}")
+        logger.info("Created assessment entity: %s", assessment_id)
         return entity
 
     async def create_host_entity(
@@ -259,7 +259,7 @@ class SecurityMemoryIntegration:
             relation_type="contains",
         )
 
-        logger.info(f"Created host entity: {ip} for assessment {assessment_id}")
+        logger.info("Created host entity: %s for assessment %s", ip, assessment_id)
         return entity
 
     async def create_service_entity(
@@ -329,7 +329,7 @@ class SecurityMemoryIntegration:
             relation_type="runs",
         )
 
-        logger.info(f"Created service entity: {entity_name}")
+        logger.info("Created service entity: %s", entity_name)
         return entity
 
     def _build_vuln_observations(
@@ -462,7 +462,7 @@ class SecurityMemoryIntegration:
         )
 
         await self._create_vuln_relations(host_ip, entity_name, affected_port, affected_service)
-        logger.info(f"Created vulnerability entity: {entity_name}")
+        logger.info("Created vulnerability entity: %s", entity_name)
         return entity
 
     async def _create_security_relation(
@@ -500,7 +500,7 @@ class SecurityMemoryIntegration:
             )
             return True
         except Exception as e:
-            logger.warning(f"Failed to create relation {from_entity} -> {to_entity}: {e}")
+            logger.warning("Failed to create relation %s -> %s: %s", from_entity, to_entity, e)
             return False
 
     async def search_security_findings(

@@ -70,10 +70,10 @@ class DisplayDetector:
         try:
             resolution = self._detect_resolution()
             self.cached_resolution = resolution
-            logger.info(f"Detected display resolution: {resolution[0]}x{resolution[1]}")
+            logger.info("Detected display resolution: %sx%s", resolution[0], resolution[1])
             return resolution
         except Exception as e:
-            logger.warning(f"Failed to detect display resolution: {e}")
+            logger.warning("Failed to detect display resolution: %s", e)
             logger.info(
                 f"Using fallback resolution: {self.fallback_resolution[0]}x{self.fallback_resolution[1]}"
             )
@@ -90,7 +90,7 @@ class DisplayDetector:
         elif platform.startswith("win"):
             return self._detect_windows_resolution()
         else:
-            logger.warning(f"Unsupported platform: {platform}")
+            logger.warning("Unsupported platform: %s", platform)
             return self.fallback_resolution
 
     def _detect_linux_resolution(self) -> Tuple[int, int]:

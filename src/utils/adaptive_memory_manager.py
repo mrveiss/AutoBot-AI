@@ -81,7 +81,7 @@ class AdaptiveMemoryManager:
         while len(cache) > max_size:
             oldest_key = next(iter(cache))
             cache.pop(oldest_key)
-            logger.debug(f"Evicted {oldest_key} from {cache_name} cache")
+            logger.debug("Evicted %s from %s cache", oldest_key, cache_name)
 
     def get_cache_stats(self) -> Dict[str, Dict]:
         """Get statistics for all caches"""
@@ -144,7 +144,7 @@ class AdaptiveMemoryManager:
             memory = psutil.virtual_memory()
 
             if memory.percent <= (self.memory_threshold * 100):
-                logger.debug(f"Memory usage normal: {memory.percent:.1f}%")
+                logger.debug("Memory usage normal: %s%", memory.percent:.1f)
                 return
 
             logger.warning(
@@ -153,7 +153,7 @@ class AdaptiveMemoryManager:
 
             # Clean up LRU caches using helper
             total_cleaned = self._cleanup_all_caches()
-            logger.info(f"Cleaned {total_cleaned} cache entries")
+            logger.info("Cleaned %s cache entries", total_cleaned)
 
             # Force garbage collection
             collected = gc.collect()
@@ -165,7 +165,7 @@ class AdaptiveMemoryManager:
             )
 
         except Exception as e:
-            logger.error(f"Error during memory cleanup: {e}")
+            logger.error("Error during memory cleanup: %s", e)
 
     async def start_memory_monitor(self):
         """Start background memory monitoring"""
@@ -179,7 +179,7 @@ class AdaptiveMemoryManager:
             logger.info("Memory monitor stopped")
             raise
         except Exception as e:
-            logger.error(f"Memory monitor error: {e}")
+            logger.error("Memory monitor error: %s", e)
 
     def start_monitoring(self):
         """Start memory monitoring task"""
@@ -207,7 +207,7 @@ class AdaptiveMemoryManager:
     def cleanup_specific_cache(self, cache_name: str, percentage: float = 0.5):
         """Clean up specific cache by percentage"""
         if cache_name not in self.lru_caches:
-            logger.warning(f"Cache {cache_name} not found")
+            logger.warning("Cache %s not found", cache_name)
             return 0
 
         cache = self.lru_caches[cache_name]["cache"]
@@ -220,7 +220,7 @@ class AdaptiveMemoryManager:
                 cache.pop(removed_key)
                 cleaned += 1
 
-        logger.info(f"Cleaned {cleaned} entries from {cache_name} cache")
+        logger.info("Cleaned %s entries from %s cache", cleaned, cache_name)
         return cleaned
 
 

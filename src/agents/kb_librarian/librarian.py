@@ -43,7 +43,7 @@ class EnhancedKBLibrarian:
 
     async def search_tool_knowledge(self, tool_type: str) -> Dict[str, Any]:
         """Search for tool information in KB."""
-        logger.info(f"Searching KB for tool type: {tool_type}")
+        logger.info("Searching KB for tool type: %s", tool_type)
 
         search_queries = [
             f"{tool_type} tool",
@@ -121,18 +121,18 @@ class EnhancedKBLibrarian:
 
     async def request_tool_research(self, tool_type: str) -> List[Dict[str, Any]]:
         """Ask WebAssistant to research tools when KB doesn't have info (thread-safe)."""
-        logger.info(f"Requesting web research for tool type: {tool_type}")
+        logger.info("Requesting web research for tool type: %s", tool_type)
 
         async with self._cache_lock:
             if tool_type in self.tool_cache:
-                logger.info(f"Returning cached results for {tool_type}")
+                logger.info("Returning cached results for %s", tool_type)
                 return list(self.tool_cache[tool_type])
 
         research_query = f"best {tool_type} tools linux command line"
         web_results = await self.web_assistant.research_query(research_query)
 
         if web_results.get("status") != "success":
-            logger.error(f"Web research failed for {tool_type}")
+            logger.error("Web research failed for %s", tool_type)
             return []
 
         detailed_tools = await self._process_web_research_results(tool_type, web_results)
@@ -224,7 +224,7 @@ METADATA:
 
         await self.knowledge_base.store_fact(document_content, metadata=metadata)
 
-        logger.info(f"Stored knowledge for tool: {tool_name}")
+        logger.info("Stored knowledge for tool: %s", tool_name)
 
         await event_manager.publish(
             "knowledge_update",
@@ -248,7 +248,7 @@ METADATA:
             if instructions:
                 return instructions
 
-        logger.info(f"Tool {tool_name} not found in KB, researching...")
+        logger.info("Tool %s not found in KB, researching...", tool_name)
         tool_info = await self._research_specific_tool(tool_name)
 
         if tool_info:
@@ -277,7 +277,7 @@ METADATA:
                     return (query_type, result)
                 return (query_type, None)
             except Exception as e:
-                logger.debug(f"Research query failed for {query_type}: {e}")
+                logger.debug("Research query failed for %s: %s", query_type, e)
                 return (query_type, None)
 
         query_results = await asyncio.gather(
@@ -456,7 +456,7 @@ METADATA:
         }
 
         await self.knowledge_base.store_fact(document_content, metadata=metadata)
-        logger.info(f"Stored system documentation: {doc_title}")
+        logger.info("Stored system documentation: %s", doc_title)
 
     async def store_workflow_knowledge(self, workflow_info: Dict[str, Any]):
         """Store complete workflow documentation for complex procedures."""
@@ -516,7 +516,7 @@ METADATA:
         }
 
         await self.knowledge_base.store_fact(document_content, metadata=metadata)
-        logger.info(f"Stored workflow documentation: {workflow_name}")
+        logger.info("Stored workflow documentation: %s", workflow_name)
 
 
 __all__ = ["EnhancedKBLibrarian"]

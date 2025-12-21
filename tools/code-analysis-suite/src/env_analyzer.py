@@ -109,6 +109,13 @@ class EnvironmentAnalyzer:
             ]
         }
 
+        # Issue #510: Precompile and combine patterns per category at init time
+        # Reduces per-file work from O(categories * patterns) to O(categories)
+        self._compiled_patterns = {}
+        for category, pattern_list in self.patterns.items():
+            combined = "|".join(f"({p})" for p in pattern_list)
+            self._compiled_patterns[category] = re.compile(combined)
+
         logger.info("Environment Analyzer initialized")
 
     async def analyze_codebase(self, root_path: str = ".", patterns: List[str] = None) -> Dict[str, Any]:
@@ -281,21 +288,26 @@ class EnvironmentAnalyzer:
         return self._create_hardcoded_value(file_path, lineno, var_name, value, lines)
 
     async def _regex_scan_file(self, file_path: str, content: str, lines: List[str]) -> List[HardcodedValue]:
-        """Scan file using regex patterns"""
+        """Scan file using regex patterns.
+
+        Issue #510: Optimized O(n³) → O(n²) by using precompiled combined patterns.
+        Now iterates: categories × (single regex per category) instead of
+        categories × patterns × matches.
+        """
 
         hardcoded_values = []
 
-        for category, pattern_list in self.patterns.items():
-            for pattern in pattern_list:
-                for match in re.finditer(pattern, content):
-                    line_num = content[:match.start()].count('\n') + 1
-                    value = match.group(1) if match.groups() else match.group(0)
+        # Issue #510: Use precompiled combined patterns
+        for category, compiled in self._compiled_patterns.items():
+            for match in compiled.finditer(content):
+                line_num = content[:match.start()].count('\n') + 1
+                value = match.group(1) if match.groups() else match.group(0)
 
-                    # Skip if already found by AST scanning
-                    if not any(hv.line_number == line_num and hv.value == value for hv in hardcoded_values):
-                        hardcoded_values.append(self._create_hardcoded_value(
-                            file_path, line_num, None, value, lines, category
-                        ))
+                # Skip if already found by AST scanning
+                if not any(hv.line_number == line_num and hv.value == value for hv in hardcoded_values):
+                    hardcoded_values.append(self._create_hardcoded_value(
+                        file_path, line_num, None, value, lines, category
+                    ))
 
         return hardcoded_values
 

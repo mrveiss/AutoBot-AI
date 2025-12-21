@@ -78,7 +78,7 @@ class SecureLLMCommandParser:
             "safe_commands": 0,
         }
 
-        logger.info(f"SecureLLMCommandParser initialized (strict_mode={strict_mode})")
+        logger.info("SecureLLMCommandParser initialized (strict_mode=%s)", strict_mode)
 
     def _get_security_layer(self) -> EnhancedSecurityLayer:
         """Lazy initialization of security layer for audit logging."""
@@ -101,7 +101,7 @@ class SecureLLMCommandParser:
         """
         self.stats["total_parses"] += 1
 
-        logger.debug(f"Parsing LLM response (length: {len(llm_response)})")
+        logger.debug("Parsing LLM response (length: %s)", len(llm_response))
 
         # Step 1: Detect injection attempts in entire response
         response_validation = self.injection_detector.detect_injection(
@@ -110,8 +110,8 @@ class SecureLLMCommandParser:
 
         if response_validation.blocked:
             logger.error("🚨 BLOCKED: LLM response contains injection patterns")
-            logger.error(f"User goal: {user_goal}")
-            logger.error(f"Detected patterns: {response_validation.detected_patterns}")
+            logger.error("User goal: %s", user_goal)
+            logger.error("Detected patterns: %s", response_validation.detected_patterns)
             self.stats["blocked_responses"] += 1
 
             # Log security event
@@ -131,7 +131,7 @@ class SecureLLMCommandParser:
             logger.debug("No commands found in LLM response")
             return []
 
-        logger.debug(f"Found {len(raw_commands)} commands in response")
+        logger.debug("Found %s commands in response", len(raw_commands))
 
         # Step 3: Validate each command individually
         validated_commands = []
@@ -145,9 +145,7 @@ class SecureLLMCommandParser:
             else:
                 self.stats["blocked_commands"] += 1
 
-        logger.info(
-            f"✅ Validated {len(validated_commands)}/{len(raw_commands)} commands"
-        )
+        logger.info("✅ Validated %s/%s commands", len(validated_commands), len(raw_commands))
 
         return validated_commands
 
@@ -215,8 +213,8 @@ class SecureLLMCommandParser:
 
         if command_validation.blocked:
             logger.warning("🚨 BLOCKED: Command contains injection patterns")
-            logger.warning(f"Command: {command}")
-            logger.warning(f"Patterns: {command_validation.detected_patterns}")
+            logger.warning("Command: %s", command)
+            logger.warning("Patterns: %s", command_validation.detected_patterns)
 
             self._log_security_event(
                 event_type="command_blocked",
@@ -232,8 +230,8 @@ class SecureLLMCommandParser:
         validator_result = self.command_validator.validate_command(command)
         if not validator_result.get("valid", False):
             logger.warning("🚨 BLOCKED: Command failed CommandValidator")
-            logger.warning(f"Command: {command}")
-            logger.warning(f"Reason: {validator_result.get('reason', 'Unknown')}")
+            logger.warning("Command: %s", command)
+            logger.warning("Reason: %s", validator_result.get('reason', 'Unknown'))
 
             self._log_security_event(
                 event_type="command_validator_blocked",
@@ -257,12 +255,8 @@ class SecureLLMCommandParser:
                 InjectionRisk.HIGH,
                 InjectionRisk.CRITICAL,
             }:
-                logger.warning(
-                    f"⚠️ Suspicious explanation detected for command: {command}"
-                )
-                logger.warning(
-                    f"Explanation patterns: {explanation_validation.detected_patterns}"
-                )
+                logger.warning("⚠️ Suspicious explanation detected for command: %s", command)
+                logger.warning("Explanation patterns: %s", explanation_validation.detected_patterns)
 
         # Command passed all validation - create ValidatedCommand
         return ValidatedCommand(
@@ -307,7 +301,7 @@ class SecureLLMCommandParser:
         }
 
         # Log to standard logger
-        logger.warning(f"SECURITY EVENT: {log_entry}")
+        logger.warning("SECURITY EVENT: %s", log_entry)
 
         # Log to enhanced security layer audit system
         try:
@@ -319,7 +313,7 @@ class SecureLLMCommandParser:
                 details=log_entry,
             )
         except Exception as e:
-            logger.error(f"Failed to write to security audit log: {e}")
+            logger.error("Failed to write to security audit log: %s", e)
 
     def get_statistics(self) -> Dict[str, int]:
         """

@@ -101,7 +101,7 @@ class PayloadOptimizer:
         self.compression_count = 0
         self.chunking_count = 0
 
-        logger.info(f"PayloadOptimizer initialized: max={max_size}, chunk={chunk_size}")
+        logger.info("PayloadOptimizer initialized: max=%s, chunk=%s", max_size, chunk_size)
 
     def optimize_payload(self, payload: Any, context: str = "") -> OptimizationResult:
         """
@@ -200,7 +200,7 @@ class PayloadOptimizer:
             chunk = file_paths[i : i + max_files_per_chunk]
             chunks.append(chunk)
 
-        logger.info(f"Split {len(file_paths)} file reads into {len(chunks)} chunks")
+        logger.info("Split %s file reads into %s chunks", len(file_paths), len(chunks))
         return chunks
 
     def _calculate_size(self, payload: Any) -> int:
@@ -215,7 +215,7 @@ class PayloadOptimizer:
             else:
                 return len(str(payload).encode("utf-8"))
         except Exception as e:
-            logger.warning(f"Failed to calculate payload size: {e}")
+            logger.warning("Failed to calculate payload size: %s", e)
             return 0
 
     def _compress_payload(

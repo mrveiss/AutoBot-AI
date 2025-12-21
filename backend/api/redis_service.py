@@ -180,7 +180,7 @@ async def start_redis_service(
         # Check permissions
         user_id = check_operator_permission(request)
 
-        logger.info(f"Starting Redis service, requested by user: {user_id}")
+        logger.info("Starting Redis service, requested by user: %s", user_id)
 
         # Execute start operation
         result = await manager.start_service(user_id=user_id)
@@ -198,12 +198,12 @@ async def start_redis_service(
     except HTTPException:
         raise
     except RedisConnectionError as e:
-        logger.error(f"Redis connection error: {e}")
+        logger.error("Redis connection error: %s", e)
         raise HTTPException(
             status_code=503, detail=f"Cannot connect to Redis VM: {str(e)}"
         )
     except Exception as e:
-        logger.error(f"Start service error: {e}")
+        logger.error("Start service error: %s", e)
         raise HTTPException(status_code=500, detail=f"Service start failed: {str(e)}")
 
 
@@ -227,7 +227,7 @@ async def stop_redis_service(
         # Check permissions (admin only for stop)
         user_id = check_admin_permission(request)
 
-        logger.warning(f"Stopping Redis service, requested by admin: {user_id}")
+        logger.warning("Stopping Redis service, requested by admin: %s", user_id)
 
         # Execute stop operation
         result = await manager.stop_service(user_id=user_id)
@@ -245,12 +245,12 @@ async def stop_redis_service(
     except HTTPException:
         raise
     except RedisConnectionError as e:
-        logger.error(f"Redis connection error: {e}")
+        logger.error("Redis connection error: %s", e)
         raise HTTPException(
             status_code=503, detail=f"Cannot connect to Redis VM: {str(e)}"
         )
     except Exception as e:
-        logger.error(f"Stop service error: {e}")
+        logger.error("Stop service error: %s", e)
         raise HTTPException(status_code=500, detail=f"Service stop failed: {str(e)}")
 
 
@@ -272,7 +272,7 @@ async def restart_redis_service(
         # Check permissions
         user_id = check_operator_permission(request)
 
-        logger.info(f"Restarting Redis service, requested by user: {user_id}")
+        logger.info("Restarting Redis service, requested by user: %s", user_id)
 
         # Execute restart operation
         result = await manager.restart_service(user_id=user_id)
@@ -290,12 +290,12 @@ async def restart_redis_service(
     except HTTPException:
         raise
     except RedisConnectionError as e:
-        logger.error(f"Redis connection error: {e}")
+        logger.error("Redis connection error: %s", e)
         raise HTTPException(
             status_code=503, detail=f"Cannot connect to Redis VM: {str(e)}"
         )
     except Exception as e:
-        logger.error(f"Restart service error: {e}")
+        logger.error("Restart service error: %s", e)
         raise HTTPException(status_code=500, detail=f"Service restart failed: {str(e)}")
 
 
@@ -323,7 +323,7 @@ async def get_redis_status(manager: RedisServiceManager = Depends(get_service_ma
         )
 
     except Exception as e:
-        logger.error(f"Get status error: {e}")
+        logger.error("Get status error: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
 
 
@@ -353,7 +353,7 @@ async def get_redis_health(manager: RedisServiceManager = Depends(get_service_ma
         )
 
     except Exception as e:
-        logger.error(f"Get health error: {e}")
+        logger.error("Get health error: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to get health status: {str(e)}"
         )

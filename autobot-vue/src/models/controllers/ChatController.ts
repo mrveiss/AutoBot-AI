@@ -393,7 +393,7 @@ export class ChatController {
                   type: messageType,
                   metadata: {
                     ...existingMetadata,  // Preserve existing metadata (including terminal_session_id)
-                    ...(data.metadata || {})  // Merge in new metadata
+                    ...data.metadata  // Merge in new metadata
                   }
                 })
               }

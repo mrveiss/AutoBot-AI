@@ -102,7 +102,7 @@ def is_url_allowed(url: str) -> bool:
 
         # Block dangerous schemes
         if parsed.scheme not in ALLOWED_URL_SCHEMES:
-            logger.warning(f"Blocked non-HTTP scheme: {parsed.scheme}")
+            logger.warning("Blocked non-HTTP scheme: %s", parsed.scheme)
             return False
 
         # Check against whitelist patterns
@@ -110,11 +110,11 @@ def is_url_allowed(url: str) -> bool:
             if re.match(pattern, url):
                 return True
 
-        logger.warning(f"URL not in whitelist: {url}")
+        logger.warning("URL not in whitelist: %s", url)
         return False
 
     except Exception as e:
-        logger.error(f"URL validation error for {url}: {e}")
+        logger.error("URL validation error for %s: %s", url, e)
         return False
 
 
@@ -131,11 +131,11 @@ def is_script_safe(script: str) -> bool:
     try:
         for pattern in BLOCKED_JS_PATTERNS:
             if re.search(pattern, script, re.IGNORECASE):
-                logger.warning(f"Blocked dangerous JavaScript pattern: {pattern}")
+                logger.warning("Blocked dangerous JavaScript pattern: %s", pattern)
                 return False
         return True
     except Exception as e:
-        logger.error(f"Script validation error: {e}")
+        logger.error("Script validation error: %s", e)
         return False
 
 
@@ -516,7 +516,7 @@ async def send_to_browser_vm(action: str, params: Metadata) -> Metadata:
             try:
                 return await response.json()
             except json.JSONDecodeError as e:
-                logger.error(f"Invalid JSON response from Browser VM: {e}")
+                logger.error("Invalid JSON response from Browser VM: %s", e)
                 raise HTTPException(
                     status_code=502,
                     detail="Invalid JSON response from Browser VM",
@@ -528,7 +528,7 @@ async def send_to_browser_vm(action: str, params: Metadata) -> Metadata:
             detail="Browser VM request timed out",
         )
     except aiohttp.ClientError as e:
-        logger.error(f"Browser VM connection error: {e}")
+        logger.error("Browser VM connection error: %s", e)
         raise HTTPException(
             status_code=503,
             detail=f"Browser VM unavailable: {str(e)}",
@@ -552,7 +552,7 @@ async def navigate_mcp(request: NavigateRequest) -> Metadata:
             detail=f"URL not in whitelist: {request.url}",
         )
 
-    logger.info(f"Browser navigation to: {request.url}")
+    logger.info("Browser navigation to: %s", request.url)
 
     result = await send_to_browser_vm(
         "navigate",
@@ -583,7 +583,7 @@ async def click_mcp(request: ClickRequest) -> Metadata:
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
-    logger.info(f"Browser click on: {request.selector}")
+    logger.info("Browser click on: %s", request.selector)
 
     result = await send_to_browser_vm(
         "click",
@@ -610,7 +610,7 @@ async def fill_mcp(request: FillRequest) -> Metadata:
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
-    logger.info(f"Browser fill: {request.selector}")
+    logger.info("Browser fill: %s", request.selector)
 
     result = await send_to_browser_vm(
         "fill",
@@ -679,7 +679,7 @@ async def evaluate_mcp(request: EvaluateRequest) -> Metadata:
             detail="JavaScript contains blocked patterns (security restriction)",
         )
 
-    logger.info(f"Browser evaluate: {request.script[:100]}...")
+    logger.info("Browser evaluate: %s...", request.script[:100])
 
     result = await send_to_browser_vm("evaluate", {"script": request.script})
 
@@ -703,7 +703,7 @@ async def wait_for_selector_mcp(request: WaitForSelectorRequest) -> Metadata:
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
-    logger.info(f"Browser wait_for_selector: {request.selector} ({request.state})")
+    logger.info("Browser wait_for_selector: %s (%s)", request.selector, request.state)
 
     result = await send_to_browser_vm(
         "wait_for_selector",
@@ -735,7 +735,7 @@ async def get_text_mcp(request: GetTextRequest) -> Metadata:
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
-    logger.info(f"Browser get_text: {request.selector}")
+    logger.info("Browser get_text: %s", request.selector)
 
     result = await send_to_browser_vm("get_text", {"selector": request.selector})
 
@@ -759,7 +759,7 @@ async def get_attribute_mcp(request: GetAttributeRequest) -> Metadata:
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
-    logger.info(f"Browser get_attribute: {request.selector} -> {request.attribute}")
+    logger.info("Browser get_attribute: %s -> %s", request.selector, request.attribute)
 
     result = await send_to_browser_vm(
         "get_attribute",
@@ -787,7 +787,7 @@ async def select_mcp(request: SelectRequest) -> Metadata:
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
-    logger.info(f"Browser select: {request.selector} -> {request.value}")
+    logger.info("Browser select: %s -> %s", request.selector, request.value)
 
     result = await send_to_browser_vm(
         "select",
@@ -815,7 +815,7 @@ async def hover_mcp(request: HoverRequest) -> Metadata:
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
-    logger.info(f"Browser hover: {request.selector}")
+    logger.info("Browser hover: %s", request.selector)
 
     result = await send_to_browser_vm("hover", {"selector": request.selector})
 

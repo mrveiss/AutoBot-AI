@@ -139,7 +139,7 @@ async def ai_stack_health_check():
             ),
         )
     except Exception as e:
-        logger.error(f"AI Stack health check failed: {e}")
+        logger.error("AI Stack health check failed: %s", e)
         return JSONResponse(
             status_code=503,
             content={
@@ -196,7 +196,7 @@ async def rag_query(
             )
             documents = kb_results if isinstance(kb_results, list) else []
         except Exception as e:
-            logger.warning(f"Knowledge base search failed: {e}")
+            logger.warning("Knowledge base search failed: %s", e)
             documents = []
 
     # Perform RAG query with AI Stack
@@ -274,7 +274,7 @@ async def enhanced_chat(
                     f"{request.context or ''}\n\nRelevant knowledge:\n{kb_summary}"
                 )
         except Exception as e:
-            logger.warning(f"Knowledge base context enhancement failed: {e}")
+            logger.warning("Knowledge base context enhancement failed: %s", e)
 
     # Get response from AI Stack chat agent
     chat_result = await ai_client.chat_message(
@@ -337,7 +337,7 @@ async def enhanced_knowledge_search(
             local_results = await knowledge_base.search(query=query, top_k=max_results)
             results["local_kb"] = local_results
         except Exception as e:
-            logger.warning(f"Local KB search failed: {e}")
+            logger.warning("Local KB search failed: %s", e)
             results["local_kb"] = []
 
     # AI Stack enhanced search
@@ -347,7 +347,7 @@ async def enhanced_knowledge_search(
         )
         results["enhanced"] = enhanced_results
     except AIStackError as e:
-        logger.warning(f"AI Stack enhanced search failed: {e}")
+        logger.warning("AI Stack enhanced search failed: %s", e)
         results["enhanced"] = {}
 
     return create_success_response(results, "Enhanced knowledge search completed")
@@ -399,7 +399,7 @@ async def comprehensive_research(request: ResearchRequest):
             )
             results["web_research"] = web_result
         except AIStackError as e:
-            logger.warning(f"Web research failed: {e}")
+            logger.warning("Web research failed: %s", e)
             results["web_research"] = {"error": str(e)}
 
     return create_success_response(

@@ -237,11 +237,11 @@ async def graph_rag_search(
         )
 
     except ValueError as e:
-        logger.warning(f"[{request_id}] Validation error: {e}")
+        logger.warning("[%s] Validation error: %s", request_id, e)
         raise HTTPException(status_code=400, detail=str(e))
 
     except Exception as e:
-        logger.error(f"[{request_id}] Graph-RAG search failed: {e}", exc_info=True)
+        logger.error("[%s] Graph-RAG search failed: %s", request_id, e, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Graph-RAG search failed: {str(e)}")
 
 
@@ -296,7 +296,7 @@ async def graph_rag_health(
         )
 
     except Exception as e:
-        logger.error(f"Health check failed: {e}", exc_info=True)
+        logger.error("Health check failed: %s", e, exc_info=True)
         return JSONResponse(
             status_code=503,
             content={
@@ -350,7 +350,7 @@ async def graph_rag_metrics(
         )
 
     except Exception as e:
-        logger.error(f"Metrics retrieval failed: {e}", exc_info=True)
+        logger.error("Metrics retrieval failed: %s", e, exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to retrieve metrics: {str(e)}"

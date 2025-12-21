@@ -176,7 +176,7 @@ class EnhancedNPUWorker:
                 )
 
             except Exception as e:
-                logger.error(f"Enhanced inference failed for task {task_id}: {e}")
+                logger.error("Enhanced inference failed for task %s: %s", task_id, e)
                 return NPUTaskResponse(task_id=task_id, status="failed", error=str(e))
 
         @self.app.post("/embedding/generate")
@@ -207,7 +207,7 @@ class EnhancedNPUWorker:
                 }
 
             except Exception as e:
-                logger.error(f"Embedding generation failed: {e}")
+                logger.error("Embedding generation failed: %s", e)
                 raise HTTPException(status_code=500, detail=str(e))
 
         @self.app.post("/search/semantic")
@@ -242,7 +242,7 @@ class EnhancedNPUWorker:
                 }
 
             except Exception as e:
-                logger.error(f"Semantic search failed: {e}")
+                logger.error("Semantic search failed: %s", e)
                 raise HTTPException(status_code=500, detail=str(e))
 
         @self.app.post("/model/optimize")
@@ -260,7 +260,7 @@ class EnhancedNPUWorker:
                     "optimized_for_npu": True
                 }
             except Exception as e:
-                logger.error(f"Model optimization failed: {e}")
+                logger.error("Model optimization failed: %s", e)
                 raise HTTPException(status_code=500, detail=str(e))
 
         @self.app.get("/performance/benchmark")
@@ -273,13 +273,13 @@ class EnhancedNPUWorker:
                     "timestamp": datetime.now().isoformat()
                 }
             except Exception as e:
-                logger.error(f"Performance benchmark failed: {e}")
+                logger.error("Performance benchmark failed: %s", e)
                 raise HTTPException(status_code=500, detail=str(e))
 
     async def initialize(self):
         """Initialize enhanced NPU worker."""
         self.start_time = time.time()
-        logger.info(f"🚀 Starting Enhanced NPU Worker {self.worker_id}")
+        logger.info("🚀 Starting Enhanced NPU Worker %s", self.worker_id)
 
         # Initialize Redis connection
         try:
@@ -289,7 +289,7 @@ class EnhancedNPUWorker:
             else:
                 logger.warning("⚠️ Redis client not available, continuing without Redis")
         except Exception as e:
-            logger.error(f"❌ Redis connection failed: {e}")
+            logger.error("❌ Redis connection failed: %s", e)
             self.redis_client = None
 
         # Initialize NPU with enhanced capabilities
@@ -299,7 +299,7 @@ class EnhancedNPUWorker:
         if self.redis_client:
             asyncio.create_task(self.enhanced_task_processing_loop())
 
-        logger.info(f"🎯 Enhanced NPU Worker initialized - NPU Available: {self.npu_available}")
+        logger.info("🎯 Enhanced NPU Worker initialized - NPU Available: %s", self.npu_available)
 
     async def initialize_enhanced_npu(self):
         """Initialize enhanced NPU with OpenVINO optimization."""
@@ -321,7 +321,7 @@ class EnhancedNPUWorker:
 
                 if npu_devices:
                     self.npu_available = True
-                    logger.info(f"✅ Enhanced NPU initialized - Devices: {npu_devices}")
+                    logger.info("✅ Enhanced NPU initialized - Devices: %s", npu_devices)
 
                     # Configure NPU optimization properties
                     await self._configure_npu_optimization()
@@ -337,11 +337,11 @@ class EnhancedNPUWorker:
                 logger.error("❌ OpenVINO not installed - install with: pip install openvino")
                 self.npu_available = False
             except Exception as e:
-                logger.error(f"❌ Enhanced NPU initialization failed: {e}")
+                logger.error("❌ Enhanced NPU initialization failed: %s", e)
                 self.npu_available = False
 
         except Exception as e:
-            logger.error(f"❌ NPU setup error: {e}")
+            logger.error("❌ NPU setup error: %s", e)
             self.npu_available = False
 
     async def _configure_npu_optimization(self):
@@ -363,7 +363,7 @@ class EnhancedNPUWorker:
                 logger.info("✅ NPU optimization configured")
 
             except Exception as e:
-                logger.warning(f"⚠️ NPU optimization configuration failed: {e}")
+                logger.warning("⚠️ NPU optimization configuration failed: %s", e)
 
     async def load_optimized_default_models(self):
         """Load and optimize default models for NPU execution."""
@@ -387,7 +387,7 @@ class EnhancedNPUWorker:
                     model_config["optimization"]
                 )
             except Exception as e:
-                logger.warning(f"⚠️ Failed to load optimized model {model_config['name']}: {e}")
+                logger.warning("⚠️ Failed to load optimized model %s: %s", model_config['name'], e)
 
     async def load_and_optimize_model(self, model_name: str, optimization_level: str = "balanced"):
         """Load and optimize model for NPU execution."""
@@ -395,7 +395,7 @@ class EnhancedNPUWorker:
 
         try:
             if self.npu_available:
-                logger.info(f"📥 Loading and optimizing {model_name} for NPU...")
+                logger.info("📥 Loading and optimizing %s for NPU...", model_name)
 
                 # Model optimization for NPU (simulation)
                 await asyncio.sleep(2)  # Simulate optimization time
@@ -411,11 +411,11 @@ class EnhancedNPUWorker:
                     "precision": self.npu_optimization["precision"],
                 }
 
-                logger.info(f"✅ Model {model_name} optimized for NPU ({time.time() - start_time:.2f}s)")
+                logger.info("✅ Model %s optimized for NPU (%ss)", model_name, time.time() - start_time:.2f)
 
             else:
                 # CPU fallback
-                logger.info(f"📥 Loading {model_name} for CPU fallback...")
+                logger.info("📥 Loading %s for CPU fallback...", model_name)
                 await asyncio.sleep(1)
 
                 self.loaded_models[model_name] = {
@@ -427,7 +427,7 @@ class EnhancedNPUWorker:
                 }
 
         except Exception as e:
-            logger.error(f"❌ Failed to load and optimize model {model_name}: {e}")
+            logger.error("❌ Failed to load and optimize model %s: %s", model_name, e)
             raise
 
     async def process_enhanced_task(self, task_id: str, task_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -463,7 +463,7 @@ class EnhancedNPUWorker:
         if cache_key in self.embedding_cache:
             self.task_stats["cache_hits"] += 1
             cached_result = self.embedding_cache[cache_key]
-            logger.info(f"Cache hit for embedding: {text[:30]}...")
+            logger.info("Cache hit for embedding: %s...", text[:30])
             return {
                 "embedding": cached_result["embedding"],
                 "model_used": model_name,
@@ -684,7 +684,7 @@ class EnhancedNPUWorker:
         for key in expired_keys:
             del self.embedding_cache[key]
 
-        logger.info(f"🧹 Cleaned {len(expired_keys)} expired cache entries")
+        logger.info("🧹 Cleaned %s expired cache entries", len(expired_keys))
 
     def _calculate_cache_hit_rate(self) -> float:
         """Calculate cache hit rate."""
@@ -831,7 +831,7 @@ class EnhancedNPUWorker:
                     await self.handle_enhanced_queued_task(task)
 
             except Exception as e:
-                logger.error(f"❌ Enhanced task processing error: {e}")
+                logger.error("❌ Enhanced task processing error: %s", e)
                 await asyncio.sleep(1)
 
     async def handle_enhanced_queued_task(self, task: Dict[str, Any]):
@@ -839,7 +839,7 @@ class EnhancedNPUWorker:
         task_id = task.get("task_id")
 
         try:
-            logger.info(f"🔄 Processing enhanced task {task_id}")
+            logger.info("🔄 Processing enhanced task %s", task_id)
 
             # Move task to processing queue
             await self.redis_client.lpush("npu_tasks_processing", json.dumps(task))
@@ -867,10 +867,10 @@ class EnhancedNPUWorker:
             # Update stats
             self.task_stats["tasks_completed"] += 1
 
-            logger.info(f"✅ Enhanced task {task_id} completed in {(end_time - start_time)*1000:.2f}ms")
+            logger.info("✅ Enhanced task %s completed in %sms", task_id, (end_time - start_time)*1000:.2f)
 
         except Exception as e:
-            logger.error(f"❌ Enhanced task {task_id} failed: {e}")
+            logger.error("❌ Enhanced task %s failed: %s", task_id, e)
 
             # Move to failed queue
             error_response = {
@@ -912,7 +912,7 @@ def main():
     worker = EnhancedNPUWorker(redis_host=args.redis_host, redis_port=args.redis_port)
 
     # Run the server
-    logger.info(f"🚀 Starting Enhanced NPU Worker on {args.host}:{args.port}")
+    logger.info("🚀 Starting Enhanced NPU Worker on %s:%s", args.host, args.port)
     uvicorn.run(worker.app, host=args.host, port=args.port, log_level="info")
 
 

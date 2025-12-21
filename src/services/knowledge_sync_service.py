@@ -79,7 +79,7 @@ class KnowledgeSyncService:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to initialize sync service: {e}")
+            logger.error("Failed to initialize sync service: %s", e)
             return False
 
     async def start_daemon(self, interval_minutes: int = 15):
@@ -91,7 +91,7 @@ class KnowledgeSyncService:
         self.sync_interval_minutes = interval_minutes
         self.is_running = True
 
-        logger.info(f"Starting sync daemon (interval: {interval_minutes} minutes)")
+        logger.info("Starting sync daemon (interval: %s minutes)", interval_minutes)
 
         try:
             while self.is_running:
@@ -109,7 +109,7 @@ class KnowledgeSyncService:
                     logger.info("Sync daemon cancelled")
                     break
                 except Exception as e:
-                    logger.error(f"Background sync error: {e}")
+                    logger.error("Background sync error: %s", e)
                     # Continue running despite errors
                     await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Wait 1 minute before retry
 
@@ -163,19 +163,17 @@ class KnowledgeSyncService:
 
             # Log results
             if metrics.files_changed + metrics.files_added + metrics.files_removed > 0:
-                logger.info(
-                    f"Background sync completed: {metrics.files_changed + metrics.files_added} files processed"
-                )
+                logger.info("Background sync completed: %s files processed", metrics.files_changed + metrics.files_added)
             else:
                 logger.debug("Background sync: no changes detected")
 
         except Exception as e:
-            logger.error(f"Background sync failed: {e}")
+            logger.error("Background sync failed: %s", e)
 
     async def manual_sync(self, force_full: bool = False) -> Dict[str, Any]:
         """Perform manual sync operation."""
         try:
-            logger.info(f"Manual sync triggered (force_full={force_full})")
+            logger.info("Manual sync triggered (force_full=%s)", force_full)
             start_time = time.time()
 
             if force_full:
@@ -211,7 +209,7 @@ class KnowledgeSyncService:
             }
 
         except Exception as e:
-            logger.error(f"Manual sync failed: {e}")
+            logger.error("Manual sync failed: %s", e)
             return {
                 "status": "error",
                 "message": str(e),
@@ -262,7 +260,7 @@ class KnowledgeSyncService:
             return status
 
         except Exception as e:
-            logger.error(f"Failed to get sync status: {e}")
+            logger.error("Failed to get sync status: %s", e)
             return {
                 "status": "error",
                 "message": str(e),
@@ -334,7 +332,7 @@ class KnowledgeSyncService:
             }
 
         except Exception as e:
-            logger.error(f"Failed to get performance metrics: {e}")
+            logger.error("Failed to get performance metrics: %s", e)
             return {
                 "status": "error",
                 "message": str(e),
@@ -392,7 +390,7 @@ async def trigger_manual_sync(
             return JSONResponse(result)
 
     except Exception as e:
-        logger.error(f"Manual sync API error: {e}")
+        logger.error("Manual sync API error: %s", e)
         raise_kb_error("KB_0004", str(e))
 
 
@@ -405,7 +403,7 @@ async def get_sync_status():
         return JSONResponse(status)
 
     except Exception as e:
-        logger.error(f"Sync status API error: {e}")
+        logger.error("Sync status API error: %s", e)
         raise_kb_error("KB_0004", str(e))
 
 
@@ -418,7 +416,7 @@ async def get_performance_metrics():
         return JSONResponse(metrics)
 
     except Exception as e:
-        logger.error(f"Performance metrics API error: {e}")
+        logger.error("Performance metrics API error: %s", e)
         raise_kb_error("KB_0004", str(e))
 
 
@@ -452,7 +450,7 @@ async def start_sync_daemon(interval_minutes: int = 15):
         )
 
     except Exception as e:
-        logger.error(f"Start daemon API error: {e}")
+        logger.error("Start daemon API error: %s", e)
         raise_kb_error("KB_0004", str(e))
 
 
@@ -478,7 +476,7 @@ async def stop_sync_daemon():
         )
 
     except Exception as e:
-        logger.error(f"Stop daemon API error: {e}")
+        logger.error("Stop daemon API error: %s", e)
         raise_kb_error("KB_0004", str(e))
 
 
@@ -503,7 +501,7 @@ async def get_sync_history(limit: int = 20):
         )
 
     except Exception as e:
-        logger.error(f"Sync history API error: {e}")
+        logger.error("Sync history API error: %s", e)
         raise_kb_error("KB_0004", str(e))
 
 
@@ -521,5 +519,5 @@ async def initialize_sync_service():
         logger.info("Knowledge sync service initialized for main application")
         return service
     except Exception as e:
-        logger.error(f"Failed to initialize sync service: {e}")
+        logger.error("Failed to initialize sync service: %s", e)
         return None

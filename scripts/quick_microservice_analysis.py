@@ -372,8 +372,8 @@ def quick_microservice_analysis():
     _print_summary(analysis)
 
     logger.info("📄 Reports saved:")
-    logger.info(f"  JSON: {json_file}")
-    logger.info(f"  Markdown: {md_file}")
+    logger.info("  JSON: %s", json_file)
+    logger.info("  Markdown: %s", md_file)
 
     return analysis
 

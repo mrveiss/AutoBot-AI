@@ -193,7 +193,7 @@ async def download_mhtml(session_id: str, filename: str):
                 while chunk := await f.read(8192):
                     yield chunk
         except OSError as e:
-            logger.error(f"Failed to read MHTML file {mhtml_path}: {e}")
+            logger.error("Failed to read MHTML file %s: %s", mhtml_path, e)
             # Yield empty to signal error - caller will handle
             return
 

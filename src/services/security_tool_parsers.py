@@ -238,7 +238,7 @@ class NmapParser(BaseToolParser):
 
         except ET.ParseError as e:
             result.errors.append(f"XML parse error: {e}")
-            logger.error(f"Failed to parse nmap XML: {e}")
+            logger.error("Failed to parse nmap XML: %s", e)
 
         return result
 
@@ -543,11 +543,11 @@ class ToolParserRegistry:
         """
         for parser in self._parsers:
             if parser.can_parse(output):
-                logger.info(f"Detected tool: {parser.TOOL_NAME}")
+                logger.info("Detected tool: %s", parser.TOOL_NAME)
                 try:
                     return parser.parse(output)
                 except Exception as e:
-                    logger.error(f"Parser {parser.TOOL_NAME} failed: {e}")
+                    logger.error("Parser %s failed: %s", parser.TOOL_NAME, e)
                     continue
 
         logger.warning("No parser matched the output")
@@ -568,7 +568,7 @@ class ToolParserRegistry:
             if parser.TOOL_NAME.lower() == tool.lower():
                 return parser.parse(output)
 
-        logger.warning(f"No parser found for tool: {tool}")
+        logger.warning("No parser found for tool: %s", tool)
         return None
 
 

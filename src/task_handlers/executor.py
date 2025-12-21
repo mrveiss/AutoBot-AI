@@ -126,7 +126,7 @@ class TaskExecutor:
         handler = self.handlers.get(task_type)
 
         if not handler:
-            logger.warning(f"Unknown task type: {task_type}")
+            logger.warning("Unknown task type: %s", task_type)
             return {
                 "status": "error",
                 "message": f"Unsupported task type: {task_type}",
@@ -147,7 +147,7 @@ class TaskExecutor:
         except KeyError as e:
             # Missing required parameter
             error_msg = f"Missing required parameter: {str(e)}"
-            logger.error(f"Task {task_id} failed: {error_msg}")
+            logger.error("Task %s failed: %s", task_id, error_msg)
             return {
                 "status": "error",
                 "message": error_msg,
@@ -155,7 +155,7 @@ class TaskExecutor:
         except Exception as e:
             # Unexpected error during handler execution
             error_msg = f"Handler execution error: {str(e)}"
-            logger.error(f"Task {task_id} failed: {error_msg}", exc_info=True)
+            logger.error("Task %s failed: %s", task_id, error_msg, exc_info=True)
 
             # Audit log the failure using context
             ctx.audit_log(
@@ -184,7 +184,7 @@ class TaskExecutor:
             handler: TaskHandler instance
         """
         self.handlers[task_type] = handler
-        logger.info(f"Registered handler for task type: {task_type}")
+        logger.info("Registered handler for task type: %s", task_type)
 
     def get_supported_task_types(self):
         """

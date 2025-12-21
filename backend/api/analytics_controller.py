@@ -97,7 +97,7 @@ class AnalyticsController:
         try:
             return await self.redis_manager.get_async_connection(database)
         except Exception as e:
-            logger.error(f"Failed to get Redis connection for {database}: {e}")
+            logger.error("Failed to get Redis connection for %s: %s", database, e)
             return None
 
     async def track_api_call(
@@ -133,22 +133,22 @@ class AnalyticsController:
         try:
             redis_conn = await self.get_redis_connection(RedisDatabase.METRICS)
             if redis_conn:
-                await redis_conn.lpush(
-                    "analytics:api_calls",
-                    json.dumps(
-                        {
-                            "endpoint": endpoint,
-                            "response_time": response_time,
-                            "status_code": status_code,
-                            "timestamp": timestamp,
-                        }
-                    ),
+                call_data = json.dumps(
+                    {
+                        "endpoint": endpoint,
+                        "response_time": response_time,
+                        "status_code": status_code,
+                        "timestamp": timestamp,
+                    }
                 )
-                await redis_conn.ltrim(
-                    "analytics:api_calls", 0, 9999
-                )  # Keep last 10k calls
+                # Issue #483: Parallelize independent Redis operations
+                await asyncio.gather(
+                    redis_conn.lpush("analytics:api_calls", call_data),
+                    redis_conn.ltrim("analytics:api_calls", 0, 9999),  # Keep last 10k
+                    return_exceptions=True,
+                )
         except Exception as e:
-            logger.error(f"Failed to store API call analytics: {e}")
+            logger.error("Failed to store API call analytics: %s", e)
 
     async def analyze_communication_patterns(self) -> Metadata:
         """Analyze communication patterns across the system"""
@@ -228,7 +228,7 @@ class AnalyticsController:
                 analytics_state["last_analysis_time"] = datetime.now().isoformat()
 
         except Exception as e:
-            logger.error(f"Code analysis failed: {e}")
+            logger.error("Code analysis failed: %s", e)
             analysis_results["status"] = "error"
             analysis_results["error"] = str(e)
 
@@ -380,7 +380,7 @@ class AnalyticsController:
             }
 
         except Exception as e:
-            logger.error(f"Failed to collect performance metrics: {e}")
+            logger.error("Failed to collect performance metrics: %s", e)
             metrics["error"] = str(e)
 
         return metrics
@@ -444,7 +444,7 @@ class AnalyticsController:
                 stats["knowledge_base_usage"] = {"error": "Unable to retrieve KB stats"}
 
         except Exception as e:
-            logger.error(f"Failed to get usage statistics: {e}")
+            logger.error("Failed to get usage statistics: %s", e)
             stats["error"] = str(e)
 
         return stats
@@ -500,7 +500,7 @@ class AnalyticsController:
             }
 
         except Exception as e:
-            logger.error(f"Failed to detect trends: {e}")
+            logger.error("Failed to detect trends: %s", e)
             trends["error"] = str(e)
 
         return trends

@@ -83,7 +83,7 @@ class ModelPerformanceTracker:
             await self._redis_client.expire(key, self._cache_ttl)
 
         except Exception as e:
-            self._logger.error(f"Error saving performance for {model_info.name}: {e}")
+            self._logger.error("Error saving performance for %s: %s", model_info.name, e)
 
     async def update_and_save(
         self,
@@ -167,4 +167,4 @@ class ModelPerformanceTracker:
             )
             await self._redis_client.expire(key, self._cache_ttl)
         except Exception as e:
-            self._logger.error(f"Error saving performance for {model_name}: {e}")
+            self._logger.error("Error saving performance for %s: %s", model_name, e)

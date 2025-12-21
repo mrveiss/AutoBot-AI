@@ -41,7 +41,7 @@ async def get_llm_config():
     try:
         return ConfigService.get_llm_config()
     except Exception as e:
-        logger.error(f"Error getting LLM config: {str(e)}")
+        logger.error("Error getting LLM config: %s", str(e))
         raise HTTPException(
             status_code=500, detail=f"Error getting LLM config: {str(e)}"
         )
@@ -59,7 +59,7 @@ async def update_llm_config(config_data: dict):
         result = ConfigService.update_llm_config(config_data)
         return result
     except Exception as e:
-        logger.error(f"Error updating LLM config: {str(e)}")
+        logger.error("Error updating LLM config: %s", str(e))
         raise HTTPException(
             status_code=500, detail=f"Error updating LLM config: {str(e)}"
         )
@@ -77,7 +77,7 @@ async def test_llm_connection():
         result = await ConnectionTester.test_ollama_connection()
         return result
     except Exception as e:
-        logger.error(f"LLM connection test failed: {str(e)}")
+        logger.error("LLM connection test failed: %s", str(e))
         return {
             "status": "disconnected",
             "message": f"Failed to test LLM connection: {str(e)}",
@@ -102,7 +102,7 @@ async def get_available_llm_models():
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting available models: {str(e)}")
+        logger.error("Error getting available models: %s", str(e))
         raise HTTPException(
             status_code=500, detail=f"Error getting available models: {str(e)}"
         )
@@ -127,7 +127,7 @@ async def get_current_llm():
             "config": config,
         }
     except Exception as e:
-        logger.error(f"Error getting current LLM: {str(e)}")
+        logger.error("Error getting current LLM: %s", str(e))
         raise HTTPException(
             status_code=500, detail=f"Error getting current LLM: {str(e)}"
         )
@@ -142,7 +142,7 @@ async def get_current_llm():
 async def update_llm_provider(provider_data: dict):
     """Update LLM provider configuration using unified config system"""
     try:
-        logger.info(f"UNIFIED CONFIG: Received LLM provider update: {provider_data}")
+        logger.info("UNIFIED CONFIG: Received LLM provider update: %s", provider_data)
 
         # Use unified configuration system
 
@@ -158,7 +158,7 @@ async def update_llm_provider(provider_data: dict):
             "local_model"
         ):
             model_name = provider_data.get("local_model")
-            logger.info(f"UNIFIED CONFIG: Updating Ollama model to: {model_name}")
+            logger.info("UNIFIED CONFIG: Updating Ollama model to: %s", model_name)
 
             # Use the unified model update method (wrapped for async - Issue #362)
             await asyncio.to_thread(config.update_llm_model, model_name)
@@ -209,7 +209,7 @@ async def update_llm_provider(provider_data: dict):
         }
 
     except Exception as e:
-        logger.error(f"Error updating LLM provider: {str(e)}")
+        logger.error("Error updating LLM provider: %s", str(e))
         raise HTTPException(
             status_code=500, detail=f"Error updating LLM provider: {str(e)}"
         )
@@ -259,7 +259,7 @@ async def get_available_embedding_models():
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting available embedding models: {str(e)}")
+        logger.error("Error getting available embedding models: %s", str(e))
         raise HTTPException(
             status_code=500,
             detail=f"Error getting available embedding models: {str(e)}",
@@ -287,7 +287,7 @@ async def update_embedding_model(embedding_data: dict):
         if not model:
             raise HTTPException(status_code=400, detail="Model name is required")
 
-        logger.info(f"UNIFIED CONFIG: Updating embedding model to: {provider}/{model}")
+        logger.info("UNIFIED CONFIG: Updating embedding model to: %s/%s", provider, model)
 
         # Update embedding configuration in unified config
         config.set("backend.llm.embedding.provider", provider)
@@ -327,7 +327,7 @@ async def update_embedding_model(embedding_data: dict):
         }
 
     except Exception as e:
-        logger.error(f"Error updating embedding model: {str(e)}")
+        logger.error("Error updating embedding model: %s", str(e))
         raise HTTPException(
             status_code=500, detail=f"Error updating embedding model: {str(e)}"
         )
@@ -484,7 +484,7 @@ async def get_comprehensive_llm_status():
         return JSONResponse(status_code=200, content=status)
 
     except Exception as e:
-        logger.error(f"Failed to get comprehensive LLM status: {e}")
+        logger.error("Failed to get comprehensive LLM status: %s", e)
         return JSONResponse(
             status_code=500, content={"error": f"Failed to get LLM status: {str(e)}"}
         )
@@ -553,7 +553,7 @@ async def get_quick_llm_status():
         )
 
     except Exception as e:
-        logger.error(f"Failed to get quick LLM status: {e}")
+        logger.error("Failed to get quick LLM status: %s", e)
         return JSONResponse(
             status_code=200,
             content={

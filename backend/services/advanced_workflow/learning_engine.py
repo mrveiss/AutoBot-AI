@@ -59,7 +59,7 @@ class WorkflowLearningEngine:
             )
 
         except Exception as e:
-            logger.error(f"Failed to record learning data: {e}")
+            logger.error("Failed to record learning data: %s", e)
 
     async def get_optimization_recommendations(
         self, workflow_id: str, user_feedback: Metadata = None

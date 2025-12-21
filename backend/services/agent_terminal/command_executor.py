@@ -89,7 +89,7 @@ class CommandExecutor:
             )
             return True
         except Exception as sigint_error:
-            logger.warning(f"[CANCEL] Failed to send SIGINT: {sigint_error}")
+            logger.warning("[CANCEL] Failed to send SIGINT: %s", sigint_error)
             return False
 
     async def _log_cancellation_to_chat(
@@ -165,7 +165,7 @@ class CommandExecutor:
                 )
 
                 if new_pty:
-                    logger.info(f"Recreated PTY session {session.pty_session_id}")
+                    logger.info("Recreated PTY session %s", session.pty_session_id)
                     pty = new_pty
                 else:
                     logger.error(
@@ -176,11 +176,11 @@ class CommandExecutor:
             # Write to PTY
             success = pty.write_input(text)
             if success:
-                logger.debug(f"Wrote to PTY {session.pty_session_id}: {text[:50]}...")
+                logger.debug("Wrote to PTY %s: %s...", session.pty_session_id, text[:50])
             return success
 
         except Exception as e:
-            logger.error(f"Error writing to PTY: {e}")
+            logger.error("Error writing to PTY: %s", e)
             return False
 
     async def cancel_command(
@@ -270,7 +270,7 @@ class CommandExecutor:
             return True
 
         except Exception as e:
-            logger.error(f"[CANCEL] Error during command cancellation: {e}", exc_info=True)
+            logger.error("[CANCEL] Error during command cancellation: %s", e, exc_info=True)
             return False
 
     def _search_for_exit_marker(
@@ -325,7 +325,7 @@ class CommandExecutor:
             logger.warning("[PTY_EXEC] Failed to inject exit code marker")
             return None
 
-        logger.debug(f"[PTY_EXEC] Injected unique marker: {marker}")
+        logger.debug("[PTY_EXEC] Injected unique marker: %s", marker)
 
         # Poll with exponential backoff
         base_delay = TimingConstants.MICRO_DELAY  # Start with 100ms
@@ -359,7 +359,7 @@ class CommandExecutor:
         """Check if text contains any error patterns. (Issue #315 - extracted)"""
         for pattern in error_patterns:
             if re.search(pattern, clean_text):
-                logger.debug(f"[PTY_EXEC] Error pattern detected: {pattern}")
+                logger.debug("[PTY_EXEC] Error pattern detected: %s", pattern)
                 return True
         return False
 
@@ -397,7 +397,7 @@ class CommandExecutor:
                     return 1  # Error detected
 
         except Exception as e:
-            logger.warning(f"[PTY_EXEC] Error pattern analysis failed: {e}")
+            logger.warning("[PTY_EXEC] Error pattern analysis failed: %s", e)
 
         return 0  # Assume success if no errors detected
 
@@ -463,7 +463,7 @@ class CommandExecutor:
                     poll_interval = 0.1
 
             except Exception as e:
-                logger.warning(f"[PTY_EXEC] Polling error: {e}")
+                logger.warning("[PTY_EXEC] Polling error: %s", e)
 
             # Progressive backoff
             await asyncio.sleep(poll_interval)
@@ -509,7 +509,7 @@ class CommandExecutor:
         Returns:
             Dict with status, stdout, stderr, return_code
         """
-        logger.info(f"[PTY_EXEC] Executing in PTY: {command}")
+        logger.info("[PTY_EXEC] Executing in PTY: %s", command)
 
         # Write command to PTY (shell will execute it)
         if not self._write_to_pty(session, f"{command}\n"):

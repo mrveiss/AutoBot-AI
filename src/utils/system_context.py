@@ -52,7 +52,7 @@ def get_system_context(machine_id: Optional[str] = None) -> Dict[str, any]:
         "kernel_version": platform.release(),
     }
 
-    logger.debug(f"System context: {context}")
+    logger.debug("System context: %s", context)
     return context
 
 
@@ -85,7 +85,7 @@ def get_machine_id() -> str:
         return hostname.split(".")[0]
 
     except Exception as e:
-        logger.warning(f"Failed to get machine ID: {e}")
+        logger.warning("Failed to get machine ID: %s", e)
         return "unknown"
 
 
@@ -115,7 +115,7 @@ def get_local_ip() -> str:
 
         return ip
     except Exception as e:
-        logger.warning(f"Failed to get local IP: {e}")
+        logger.warning("Failed to get local IP: %s", e)
         return "unknown"
 
 
@@ -135,7 +135,7 @@ def get_os_name() -> str:
         # Fallback to platform system
         return platform.system()
     except Exception as e:
-        logger.warning(f"Failed to get OS name: {e}")
+        logger.warning("Failed to get OS name: %s", e)
         return platform.system()
 
 
@@ -154,7 +154,7 @@ def get_os_version() -> str:
         # Fallback to platform release
         return platform.release()
     except Exception as e:
-        logger.warning(f"Failed to get OS version: {e}")
+        logger.warning("Failed to get OS version: %s", e)
         return platform.release()
 
 
