@@ -341,132 +341,60 @@ async def export_prometheus():
 # ============================================================================
 
 
-def _get_grafana_panels() -> list:
-    """
-    Return Grafana dashboard panel configurations.
-
-    Issue #281: Extracted from export_grafana_dashboard to reduce function
-    length and separate panel configuration from endpoint logic.
-
-    Returns:
-        List of panel configuration dictionaries for Grafana dashboard.
-    """
+def _get_cost_panels() -> list:
+    """Return Grafana panels for cost metrics. Issue #484: Extracted from _get_grafana_panels."""
     return [
-        # Cost Overview Panel
         {
             "id": 1,
             "title": "LLM Cost Overview",
             "type": "stat",
             "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
-            "targets": [
-                {
-                    "expr": "autobot_llm_cost_total_usd",
-                    "legendFormat": "Total Cost (USD)",
-                }
-            ],
-            "options": {
-                "colorMode": "value",
-                "graphMode": "area",
-                "justifyMode": "auto",
-            },
+            "targets": [{"expr": "autobot_llm_cost_total_usd", "legendFormat": "Total Cost (USD)"}],
+            "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto"},
         },
-        # Daily Cost Panel
         {
             "id": 2,
             "title": "Daily Cost Average",
             "type": "stat",
             "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
-            "targets": [
-                {
-                    "expr": "autobot_llm_daily_cost_usd",
-                    "legendFormat": "Avg Daily Cost (USD)",
-                }
-            ],
+            "targets": [{"expr": "autobot_llm_daily_cost_usd", "legendFormat": "Avg Daily Cost (USD)"}],
         },
-        # Cost by Model
         {
             "id": 3,
             "title": "Cost by Model",
             "type": "piechart",
             "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
-            "targets": [
-                {
-                    "expr": "autobot_llm_model_cost_usd",
-                    "legendFormat": "{{model}}",
-                }
-            ],
+            "targets": [{"expr": "autobot_llm_model_cost_usd", "legendFormat": "{{model}}"}],
         },
-        # Agent Success Rate
+    ]
+
+
+def _get_agent_panels() -> list:
+    """Return Grafana panels for agent metrics. Issue #484: Extracted from _get_grafana_panels."""
+    return [
         {
             "id": 4,
             "title": "Agent Success Rates",
             "type": "bargauge",
             "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
-            "targets": [
-                {
-                    "expr": "autobot_agent_success_rate",
-                    "legendFormat": "{{agent_id}}",
-                }
-            ],
-            "options": {
-                "orientation": "horizontal",
-                "displayMode": "gradient",
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "max": 100,
-                    "min": 0,
-                    "unit": "percent",
-                }
-            },
+            "targets": [{"expr": "autobot_agent_success_rate", "legendFormat": "{{agent_id}}"}],
+            "options": {"orientation": "horizontal", "displayMode": "gradient"},
+            "fieldConfig": {"defaults": {"max": 100, "min": 0, "unit": "percent"}},
         },
-        # Token Usage Timeline
-        {
-            "id": 5,
-            "title": "Token Usage Over Time",
-            "type": "timeseries",
-            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 12},
-            "targets": [
-                {
-                    "expr": 'rate(autobot_llm_model_tokens{type="input"}[5m])',
-                    "legendFormat": "{{model}} - Input",
-                },
-                {
-                    "expr": 'rate(autobot_llm_model_tokens{type="output"}[5m])',
-                    "legendFormat": "{{model}} - Output",
-                },
-            ],
-        },
-        # Agent Performance
         {
             "id": 6,
             "title": "Agent Task Duration",
             "type": "timeseries",
             "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
-            "targets": [
-                {
-                    "expr": "autobot_agent_avg_duration_ms",
-                    "legendFormat": "{{agent_id}}",
-                }
-            ],
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "ms",
-                }
-            },
+            "targets": [{"expr": "autobot_agent_avg_duration_ms", "legendFormat": "{{agent_id}}"}],
+            "fieldConfig": {"defaults": {"unit": "ms"}},
         },
-        # Error Rates
         {
             "id": 7,
             "title": "Agent Error Rates",
             "type": "timeseries",
             "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
-            "targets": [
-                {
-                    "expr": "autobot_agent_error_rate",
-                    "legendFormat": "{{agent_id}}",
-                }
-            ],
+            "targets": [{"expr": "autobot_agent_error_rate", "legendFormat": "{{agent_id}}"}],
             "fieldConfig": {
                 "defaults": {
                     "unit": "percent",
@@ -482,6 +410,37 @@ def _get_grafana_panels() -> list:
             },
         },
     ]
+
+
+def _get_token_usage_panel() -> dict:
+    """Return Grafana panel for token usage timeline. Issue #484: Extracted from _get_grafana_panels."""
+    return {
+        "id": 5,
+        "title": "Token Usage Over Time",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 12},
+        "targets": [
+            {"expr": 'rate(autobot_llm_model_tokens{type="input"}[5m])', "legendFormat": "{{model}} - Input"},
+            {"expr": 'rate(autobot_llm_model_tokens{type="output"}[5m])', "legendFormat": "{{model}} - Output"},
+        ],
+    }
+
+
+def _get_grafana_panels() -> list:
+    """
+    Return Grafana dashboard panel configurations.
+
+    Issue #281: Extracted from export_grafana_dashboard to reduce function length.
+    Issue #484: Further refactored into category-specific helpers for maintainability.
+
+    Returns:
+        List of panel configuration dictionaries for Grafana dashboard.
+    """
+    panels = []
+    panels.extend(_get_cost_panels())
+    panels.extend(_get_agent_panels())
+    panels.append(_get_token_usage_panel())
+    return panels
 
 
 @with_error_handling(

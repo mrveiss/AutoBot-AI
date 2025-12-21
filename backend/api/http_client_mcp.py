@@ -385,141 +385,109 @@ def _get_http_read_tools() -> List[MCPTool]:
     ]
 
 
+def _build_url_property() -> dict:
+    """Build common URL property schema. Issue #484: Extracted for DRY."""
+    return {"type": "string", "description": "Target URL (must be in allowed domains)"}
+
+
+def _build_headers_property() -> dict:
+    """Build common headers property schema. Issue #484: Extracted for DRY."""
+    return {"type": "object", "description": "Optional HTTP headers", "additionalProperties": {"type": "string"}}
+
+
+def _build_timeout_property() -> dict:
+    """Build common timeout property schema. Issue #484: Extracted for DRY."""
+    return {"type": "integer", "description": f"Request timeout (default: {DEFAULT_TIMEOUT}s)", "minimum": 1, "maximum": MAX_TIMEOUT}
+
+
+def _build_json_body_property(desc: str = "JSON request body") -> dict:
+    """Build JSON body property schema. Issue #484: Extracted for DRY."""
+    return {"type": "object", "description": desc}
+
+
+def _get_http_post_tool() -> MCPTool:
+    """Build HTTP POST tool definition. Issue #484: Extracted from _get_http_write_tools."""
+    return MCPTool(
+        name="http_post",
+        description="Perform HTTP POST request to send data to a URL. Supports JSON body or form data. Rate limited to 120 requests/minute.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "url": _build_url_property(),
+                "headers": _build_headers_property(),
+                "json_body": _build_json_body_property(),
+                "form_data": {"type": "object", "description": "Form data (mutually exclusive with json_body)", "additionalProperties": {"type": "string"}},
+                "timeout": _build_timeout_property(),
+            },
+            "required": ["url"],
+        },
+    )
+
+
+def _get_http_put_tool() -> MCPTool:
+    """Build HTTP PUT tool definition. Issue #484: Extracted from _get_http_write_tools."""
+    return MCPTool(
+        name="http_put",
+        description="Perform HTTP PUT request to update/replace resource. Typically used for complete resource replacement. Rate limited.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "url": _build_url_property(),
+                "headers": _build_headers_property(),
+                "json_body": _build_json_body_property("JSON request body for replacement"),
+                "timeout": _build_timeout_property(),
+            },
+            "required": ["url"],
+        },
+    )
+
+
+def _get_http_patch_tool() -> MCPTool:
+    """Build HTTP PATCH tool definition. Issue #484: Extracted from _get_http_write_tools."""
+    return MCPTool(
+        name="http_patch",
+        description="Perform HTTP PATCH request for partial resource update. More efficient than PUT for small changes. Rate limited.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "url": _build_url_property(),
+                "headers": _build_headers_property(),
+                "json_body": _build_json_body_property("JSON body with fields to update"),
+                "timeout": _build_timeout_property(),
+            },
+            "required": ["url"],
+        },
+    )
+
+
+def _get_http_delete_tool() -> MCPTool:
+    """Build HTTP DELETE tool definition. Issue #484: Extracted from _get_http_write_tools."""
+    return MCPTool(
+        name="http_delete",
+        description="Perform HTTP DELETE request to remove a resource. Use with caution as this is destructive. Rate limited.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "Target URL of resource to delete"},
+                "headers": _build_headers_property(),
+                "timeout": _build_timeout_property(),
+            },
+            "required": ["url"],
+        },
+    )
+
+
 def _get_http_write_tools() -> List[MCPTool]:
     """
     Get MCP tools for HTTP write operations (POST, PUT, PATCH, DELETE).
 
-    Issue #281: Extracted from get_http_client_mcp_tools to reduce function length
-    and improve maintainability of tool definitions by category.
+    Issue #281: Extracted from get_http_client_mcp_tools to reduce function length.
+    Issue #484: Further refactored - each tool definition extracted to helper function.
 
     Returns:
         List of MCPTool definitions for write operations
     """
-    return [
-        MCPTool(
-            name="http_post",
-            description=(
-                "Perform HTTP POST request to send data to a URL. Supports JSON body or"
-                "form data. Rate limited to 120 requests/minute."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "url": {
-                        "type": "string",
-                        "description": "Target URL (must be in allowed domains)",
-                    },
-                    "headers": {
-                        "type": "object",
-                        "description": "Optional HTTP headers",
-                        "additionalProperties": {"type": "string"},
-                    },
-                    "json_body": {
-                        "type": "object",
-                        "description": "JSON request body",
-                    },
-                    "form_data": {
-                        "type": "object",
-                        "description": "Form data (mutually exclusive with json_body)",
-                        "additionalProperties": {"type": "string"},
-                    },
-                    "timeout": {
-                        "type": "integer",
-                        "description": f"Request timeout (default: {DEFAULT_TIMEOUT}s)",
-                        "minimum": 1,
-                        "maximum": MAX_TIMEOUT,
-                    },
-                },
-                "required": ["url"],
-            },
-        ),
-        MCPTool(
-            name="http_put",
-            description=(
-                "Perform HTTP PUT request to update/replace resource. Typically used for"
-                "complete resource replacement. Rate limited."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "url": {
-                        "type": "string",
-                        "description": "Target URL (must be in allowed domains)",
-                    },
-                    "headers": {
-                        "type": "object",
-                        "description": "Optional HTTP headers",
-                        "additionalProperties": {"type": "string"},
-                    },
-                    "json_body": {
-                        "type": "object",
-                        "description": "JSON request body for replacement",
-                    },
-                    "timeout": {
-                        "type": "integer",
-                        "description": f"Request timeout (default: {DEFAULT_TIMEOUT}s)",
-                    },
-                },
-                "required": ["url"],
-            },
-        ),
-        MCPTool(
-            name="http_patch",
-            description=(
-                "Perform HTTP PATCH request for partial resource update. More efficient than PUT for"
-                "small changes. Rate limited."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "url": {
-                        "type": "string",
-                        "description": "Target URL (must be in allowed domains)",
-                    },
-                    "headers": {
-                        "type": "object",
-                        "description": "Optional HTTP headers",
-                        "additionalProperties": {"type": "string"},
-                    },
-                    "json_body": {
-                        "type": "object",
-                        "description": "JSON body with fields to update",
-                    },
-                    "timeout": {
-                        "type": "integer",
-                        "description": f"Request timeout (default: {DEFAULT_TIMEOUT}s)",
-                    },
-                },
-                "required": ["url"],
-            },
-        ),
-        MCPTool(
-            name="http_delete",
-            description=(
-                "Perform HTTP DELETE request to remove a resource. Use with"
-                "caution as this is destructive. Rate limited."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "url": {
-                        "type": "string",
-                        "description": "Target URL of resource to delete",
-                    },
-                    "headers": {
-                        "type": "object",
-                        "description": "Optional HTTP headers",
-                        "additionalProperties": {"type": "string"},
-                    },
-                    "timeout": {
-                        "type": "integer",
-                        "description": f"Request timeout (default: {DEFAULT_TIMEOUT}s)",
-                    },
-                },
-                "required": ["url"],
-            },
-        ),
-    ]
+    return [_get_http_post_tool(), _get_http_put_tool(), _get_http_patch_tool(), _get_http_delete_tool()]
 
 
 def _load_tools_from_yaml() -> List[MCPTool]:
