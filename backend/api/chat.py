@@ -809,31 +809,36 @@ async def stream_message(message: ChatMessage, request: Request):
 )
 @router.get("/chat/health")
 async def chat_health_check(request: Request):
-    """Health check for chat service"""
+    """Health check for chat service.
+
+    Note: llm_service is lazily initialized on first chat request, so we report
+    it as 'available' (can be initialized) rather than requiring it to exist.
+    Only chat_history_manager is critical for the health check.
+    """
     chat_history_manager = getattr(request.app.state, "chat_history_manager", None)
     llm_service = getattr(request.app.state, "llm_service", None)
+
+    # chat_history_manager is critical - must be present
+    chat_history_status = "healthy" if chat_history_manager else "unavailable"
+
+    # llm_service is lazily initialized - report as "available" if not yet created
+    llm_status = "healthy" if llm_service else "available"
 
     health_status = {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
         "components": {
-            "chat_history_manager": (
-                "healthy" if chat_history_manager else "unavailable"
-            ),
-            "llm_service": "healthy" if llm_service else "unavailable",
+            "chat_history_manager": chat_history_status,
+            "llm_service": llm_status,
         },
     }
 
-    overall_healthy = all(
-        status == "healthy" for status in health_status["components"].values()
-    )
+    # Only chat_history_manager is critical for health
+    if chat_history_status != "healthy":
+        health_status["status"] = "unavailable"
+        return JSONResponse(status_code=503, content=health_status)
 
-    if not overall_healthy:
-        health_status["status"] = "degraded"
-
-    return JSONResponse(
-        status_code=200 if overall_healthy else 503, content=health_status
-    )
+    return JSONResponse(status_code=200, content=health_status)
 
 
 @with_error_handling(
