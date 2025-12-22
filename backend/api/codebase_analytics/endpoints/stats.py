@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 from ..storage import get_redis_connection, get_code_collection
-from ..scanner import indexing_tasks
+from ..scanner import indexing_tasks, _tasks_sync_lock
 from .shared import _in_memory_storage
 
 logger = logging.getLogger(__name__)
@@ -66,24 +66,64 @@ def _no_data_response(message: str = "No codebase data found. Run indexing first
     return JSONResponse({"status": "no_data", "message": message, "stats": None})
 
 
+# Issue #540: Maximum time (seconds) before a task is considered stale
+_STALE_TASK_TIMEOUT_SECONDS = 3600  # 1 hour
+
+
+def _is_task_stale(task_info: dict) -> bool:
+    """
+    Check if an indexing task is stale (stuck in running state too long).
+
+    Issue #540: Prevents perpetual "indexing" status from crashed tasks.
+
+    Args:
+        task_info: Task dictionary with started_at timestamp.
+
+    Returns:
+        True if task has been running longer than _STALE_TASK_TIMEOUT_SECONDS.
+    """
+    started_at = task_info.get("started_at")
+    if not started_at:
+        return False
+
+    try:
+        from datetime import datetime
+        start_time = datetime.fromisoformat(started_at)
+        elapsed = (datetime.now() - start_time).total_seconds()
+        return elapsed > _STALE_TASK_TIMEOUT_SECONDS
+    except (ValueError, TypeError):
+        return False
+
+
 def _get_active_indexing_task() -> Optional[dict]:
     """
     Check if there's an active indexing task and return its info.
 
     Issue #540: Used to show indexing status in stats endpoint.
+    Uses _tasks_sync_lock for thread safety when accessing indexing_tasks.
+    Ignores stale tasks that have been running for more than 1 hour.
 
     Returns:
         Task info dict if indexing is in progress, None otherwise.
     """
-    for task_id, task_info in indexing_tasks.items():
-        if task_info.get("status") == "running":
-            return {
-                "task_id": task_id,
-                "progress": task_info.get("progress", {}),
-                "phases": task_info.get("phases", {}),
-                "stats": task_info.get("stats", {}),
-                "started_at": task_info.get("started_at"),
-            }
+    with _tasks_sync_lock:
+        for task_id, task_info in indexing_tasks.items():
+            if task_info.get("status") == "running":
+                # Issue #540: Skip stale tasks (stuck for >1 hour)
+                if _is_task_stale(task_info):
+                    logger.warning(
+                        "Ignoring stale indexing task %s (started: %s)",
+                        task_id, task_info.get("started_at")
+                    )
+                    continue
+
+                return {
+                    "task_id": task_id,
+                    "progress": task_info.get("progress", {}),
+                    "phases": task_info.get("phases", {}),
+                    "stats": task_info.get("stats", {}),
+                    "started_at": task_info.get("started_at"),
+                }
     return None
 
 
