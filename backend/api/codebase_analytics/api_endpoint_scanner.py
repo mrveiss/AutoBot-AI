@@ -13,7 +13,7 @@ import logging
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set
 
 from .endpoints.shared import get_project_root
 from .models import (
@@ -629,7 +629,7 @@ class EndpointMatcher:
                     path=call.path,
                     file_path=call.file_path,
                     line_number=call.line_number,
-                    details=f"Called but no backend endpoint found",
+                    details="Called but no backend endpoint found",
                 ))
 
         # Find orphaned endpoints
@@ -641,7 +641,7 @@ class EndpointMatcher:
                     path=ep.path,
                     file_path=ep.file_path,
                     line_number=ep.line_number,
-                    details=f"Defined but no frontend calls found",
+                    details="Defined but no frontend calls found",
                 ))
 
         # Calculate coverage
