@@ -222,7 +222,15 @@ export default {
     }
 
     // Use composable for async data fetching
-    const { execute: refreshData, loading: isLoading } = useAsyncOperation(async () => {
+    const { execute, loading: isLoading } = useAsyncOperation({
+      onError: (error: Error) => {
+        logger.error('Error refreshing data:', error)
+        logPerformanceIssue('RumDashboard', 'Data refresh failed', { error: error.message })
+      }
+    })
+
+    // Wrapper function to execute the data refresh operation
+    const refreshData = () => execute(async () => {
       // PERFORMANCE: Only fetch essential data in performance mode
       if (isPerformanceModeEnabled()) {
         // Lightweight data collection
@@ -241,11 +249,6 @@ export default {
       }
 
       lastUpdated.value = Date.now()
-    }, {
-      onError: (error) => {
-        logger.error('Error refreshing data:', error)
-        logPerformanceIssue('RumDashboard', 'Data refresh failed', { error: error.message })
-      }
     })
 
     const fetchSystemDataLightweight = async () => {

@@ -3964,6 +3964,9 @@ const getDeclarationTypeClass = (type) => {
   background: #0f0f0f;
   color: #ffffff;
   min-height: 100vh;
+  max-height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .analytics-header {
