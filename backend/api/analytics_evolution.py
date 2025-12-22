@@ -282,6 +282,17 @@ def _parse_date_range(start_date: Optional[str], end_date: Optional[str]) -> tup
     return start_ts, end_ts
 
 
+def _no_data_response(message: str = "No evolution data. Redis required for timeline tracking.") -> dict:
+    """Standardized no-data response (Issue #543)."""
+    return {
+        "status": "no_data",
+        "message": message,
+        "timeline": [],
+        "patterns": {},
+        "trends": {},
+    }
+
+
 def _build_timeline_response(timeline: list, start_date: str, end_date: str, granularity: str, metrics: list) -> dict:
     """Build timeline success response (Issue #398: extracted)."""
     return {
@@ -308,8 +319,10 @@ async def get_evolution_timeline(
 
     if not redis_client:
         return JSONResponse({
-            "status": "demo", "message": "Redis unavailable, returning demo timeline data",
-            "timeline": _generate_demo_timeline(start_date, end_date, granularity), "metrics_available": requested_metrics,
+            "status": "no_data",
+            "message": "Evolution tracking unavailable. Redis connection required.",
+            "timeline": [],
+            "metrics_available": requested_metrics,
         })
 
     try:
@@ -324,7 +337,11 @@ async def get_evolution_timeline(
 
     except Exception as e:
         logger.error("Error retrieving evolution timeline: %s", e)
-        return JSONResponse({"status": "error", "message": str(e), "timeline": _generate_demo_timeline(start_date, end_date, granularity)})
+        return JSONResponse({
+            "status": "no_data",
+            "message": f"Evolution timeline unavailable: {str(e)}",
+            "timeline": [],
+        })
 
 
 @with_error_handling(
@@ -349,9 +366,9 @@ async def get_pattern_evolution(
 
     if not redis_client:
         return JSONResponse({
-            "status": "demo",
-            "message": "Redis unavailable, returning demo pattern data",
-            "patterns": _generate_demo_patterns(),
+            "status": "no_data",
+            "message": "Pattern evolution tracking unavailable. Redis connection required.",
+            "patterns": {},
         })
 
     try:
@@ -380,9 +397,11 @@ async def get_pattern_evolution(
 
     except Exception as e:
         logger.error("Error retrieving pattern evolution: %s", e)
-        return JSONResponse(
-            {"status": "error", "message": str(e), "patterns": _generate_demo_patterns()}
-        )
+        return JSONResponse({
+            "status": "no_data",
+            "message": f"Pattern evolution unavailable: {str(e)}",
+            "patterns": {},
+        })
 
 
 def _fetch_trend_snapshots_sync(
@@ -476,7 +495,11 @@ async def get_quality_trends(days: int = Query(30, description="Number of days t
     redis_client = get_evolution_redis()
 
     if not redis_client:
-        return JSONResponse({"status": "demo", "message": "Redis unavailable", "trends": _generate_demo_trends(days)})
+        return JSONResponse({
+            "status": "no_data",
+            "message": "Quality trend analysis unavailable. Redis connection required.",
+            "trends": {},
+        })
 
     try:
         start_ts = (datetime.now() - timedelta(days=days)).timestamp()
@@ -485,9 +508,9 @@ async def get_quality_trends(days: int = Query(30, description="Number of days t
 
         if len(snapshots) < 2:
             return JSONResponse({
-                "status": "insufficient_data",
-                "message": f"Need at least 2 snapshots, found {len(snapshots)}",
-                "trends": _generate_demo_trends(days),
+                "status": "no_data",
+                "message": f"Insufficient data for trend analysis. Need at least 2 snapshots, found {len(snapshots)}.",
+                "trends": {},
             })
 
         snapshots.sort(key=lambda x: x.get("timestamp", ""))
@@ -495,7 +518,11 @@ async def get_quality_trends(days: int = Query(30, description="Number of days t
 
     except Exception as e:
         logger.error("Error calculating quality trends: %s", e)
-        return JSONResponse({"status": "error", "message": str(e), "trends": _generate_demo_trends(days)})
+        return JSONResponse({
+            "status": "no_data",
+            "message": f"Quality trend analysis failed: {str(e)}",
+            "trends": {},
+        })
 
 
 @with_error_handling(
@@ -632,21 +659,39 @@ async def export_evolution_data(
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
     end_date: Optional[str] = Query(None, description="End date (ISO format)"),
 ):
-    """Export evolution data in JSON or CSV format (Issue #398: refactored)."""
+    """Export evolution data in JSON or CSV format (Issue #398: refactored, #543: no demo data)."""
     redis_client = get_evolution_redis()
-    timeline_data = []
 
-    if redis_client:
-        try:
-            start_ts, end_ts = _parse_export_date_range(start_date, end_date)
-            timeline_data = await asyncio.to_thread(_fetch_export_data_sync, redis_client, start_ts, end_ts)
-        except Exception as e:
-            logger.error("Error exporting evolution data: %s", e)
-            timeline_data = _generate_demo_timeline(start_date, end_date, "daily")
-    else:
-        timeline_data = _generate_demo_timeline(start_date, end_date, "daily")
+    if not redis_client:
+        return JSONResponse({
+            "status": "no_data",
+            "message": "Export unavailable. Redis connection required.",
+            "data": [],
+            "export_format": format,
+        })
 
-    return _generate_csv_response(timeline_data) if format == "csv" else _generate_json_export_response(timeline_data)
+    try:
+        start_ts, end_ts = _parse_export_date_range(start_date, end_date)
+        timeline_data = await asyncio.to_thread(_fetch_export_data_sync, redis_client, start_ts, end_ts)
+
+        if not timeline_data:
+            return JSONResponse({
+                "status": "no_data",
+                "message": "No evolution data available for the specified date range.",
+                "data": [],
+                "export_format": format,
+            })
+
+        return _generate_csv_response(timeline_data) if format == "csv" else _generate_json_export_response(timeline_data)
+
+    except Exception as e:
+        logger.error("Error exporting evolution data: %s", e)
+        return JSONResponse({
+            "status": "no_data",
+            "message": f"Export failed: {str(e)}",
+            "data": [],
+            "export_format": format,
+        })
 
 
 @with_error_handling(
@@ -785,7 +830,10 @@ def _create_demo_data_point(current: datetime, start: datetime, base_score: floa
 def _generate_demo_timeline(
     start_date: Optional[str], end_date: Optional[str], granularity: str
 ) -> List[Dict[str, Any]]:
-    """Generate demo timeline data for visualization testing (Issue #398: refactored)."""
+    """Generate demo timeline data for visualization testing (Issue #398: refactored).
+
+    TEST ONLY - Not used in production responses (Issue #543).
+    """
     start = datetime.fromisoformat(start_date) if start_date else datetime.now() - timedelta(days=30)
     end = datetime.fromisoformat(end_date) if end_date else datetime.now()
     step = _get_granularity_step(granularity)
@@ -799,7 +847,10 @@ def _generate_demo_timeline(
 
 
 def _generate_demo_patterns() -> Dict[str, List[Dict[str, Any]]]:
-    """Generate demo pattern evolution data"""
+    """Generate demo pattern evolution data.
+
+    TEST ONLY - Not used in production responses (Issue #543).
+    """
     patterns = {
         "god_class": [],
         "long_method": [],
@@ -851,6 +902,9 @@ def _build_demo_trend_entry(first: float, last: float, direction: str, days: int
 
 
 def _generate_demo_trends(days: int) -> Dict[str, Any]:
-    """Generate demo trend data (Issue #398: refactored)."""
+    """Generate demo trend data (Issue #398: refactored).
+
+    TEST ONLY - Not used in production responses (Issue #543).
+    """
     return {metric: _build_demo_trend_entry(first, last, direction, days)
             for metric, (first, last, direction) in _DEMO_TREND_CONFIG.items()}

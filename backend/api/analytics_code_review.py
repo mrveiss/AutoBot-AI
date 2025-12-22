@@ -12,7 +12,7 @@ import asyncio
 import json
 import logging
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
@@ -33,85 +33,6 @@ REVIEWABLE_EXTENSIONS = {".py", ".vue", ".ts", ".js"}
 _HUNK_HEADER_RE = re.compile(r"@@ -(\d+),?\d* \+(\d+),?\d* @@")
 _FUNC_DEFINITION_RE = re.compile(r'^(async\s+)?def\s+(\w+)\s*\(', re.MULTILINE)
 _NEXT_TOPLEVEL_RE = re.compile(r'\n(?=\S)')
-
-# Issue #281: Demo review comments extracted from generate_demo_review
-DEMO_REVIEW_COMMENTS = (
-    {
-        "id": "SEC001-15",
-        "file_path": "src/config.py",
-        "line_number": 15,
-        "severity": "critical",
-        "category": "security",
-        "message": "Potential hardcoded secret detected. Use environment variables.",
-        "suggestion": "Move this value to an environment variable.",
-        "code_snippet": 'API_KEY = "sk-abc123..."',
-        "pattern_id": "SEC001",
-    },
-    {
-        "id": "BUG002-42",
-        "file_path": "src/utils.py",
-        "line_number": 42,
-        "severity": "warning",
-        "category": "bug_risk",
-        "message": "Mutable default argument can cause unexpected behavior.",
-        "suggestion": "Use None as default and initialize inside the function.",
-        "code_snippet": "def process_items(items=[]):",
-        "pattern_id": "BUG002",
-    },
-    {
-        "id": "PERF001-78",
-        "file_path": "src/services/data.py",
-        "line_number": 78,
-        "severity": "warning",
-        "category": "performance",
-        "message": "Potential N+1 query pattern. Consider using bulk operations.",
-        "suggestion": "Use prefetch_related to optimize.",
-        "code_snippet": "for user in users: user.profile.load()",
-        "pattern_id": "PERF001",
-    },
-    {
-        "id": "DOC001-120",
-        "file_path": "src/api/handlers.py",
-        "line_number": 120,
-        "severity": "info",
-        "category": "documentation",
-        "message": "Public function missing docstring.",
-        "suggestion": "Add a docstring describing the function.",
-        "code_snippet": "def handle_request(request):",
-        "pattern_id": "DOC001",
-    },
-    {
-        "id": "BP001-55",
-        "file_path": "src/debug.py",
-        "line_number": 55,
-        "severity": "suggestion",
-        "category": "best_practice",
-        "message": "Print statement found. Use logging for production code.",
-        "suggestion": "Replace with logger.info().",
-        "code_snippet": 'print("Debug output")',
-        "pattern_id": "BP001",
-    },
-)
-
-# Issue #281: Demo review summary extracted from generate_demo_review
-DEMO_REVIEW_SUMMARY = {
-    "by_severity": {"critical": 1, "warning": 2, "info": 1, "suggestion": 1},
-    "by_category": {
-        "security": 1,
-        "bug_risk": 1,
-        "performance": 1,
-        "documentation": 1,
-        "best_practice": 1,
-    },
-    "critical_count": 1,
-    "warning_count": 2,
-    "info_count": 2,
-    "top_issues": [
-        {"category": "security", "count": 1},
-        {"category": "performance", "count": 1},
-        {"category": "bug_risk", "count": 1},
-    ],
-}
 
 
 # ============================================================================
@@ -292,6 +213,17 @@ REVIEW_PATTERNS = {
 # ============================================================================
 
 
+def _no_data_response(message: str = "No code review data. Run a code review first.") -> dict:
+    """Standardized no-data response (Issue #543)."""
+    return {
+        "status": "no_data",
+        "message": message,
+        "review": None,
+        "comments": [],
+        "summary": {},
+    }
+
+
 def _parse_hunk_header(line: str) -> dict[str, Any] | None:
     """Parse a diff hunk header line (Issue #315)."""
     match = _HUNK_HEADER_RE.match(line)
@@ -399,6 +331,9 @@ def analyze_code(content: str, file_path: str) -> list[ReviewComment]:
         if indent_match:
             func_end = func_start + remaining[:indent_match.start()].count("\n")
             if func_end - func_start > 50:
+                func_length = func_end - func_start
+                func_name = match.group(2)
+                message = f"Function '{func_name}' is {func_length} lines long. Consider refactoring."
                 comments.append(
                     ReviewComment(
                         id=f"STYLE002-{func_start}",
@@ -406,7 +341,7 @@ def analyze_code(content: str, file_path: str) -> list[ReviewComment]:
                         line_number=func_start,
                         severity=ReviewSeverity.WARNING,
                         category=ReviewCategory.MAINTAINABILITY,
-                        message=f"Function '{match.group(2)}' is {func_end - func_start} lines long. Consider refactoring.",
+                        message=message,
                         suggestion="Break this function into smaller, focused functions.",
                         pattern_id="STYLE002",
                     )
@@ -487,23 +422,6 @@ async def get_git_diff(commit_range: Optional[str] = None) -> str:
         return ""
 
 
-def generate_demo_review() -> dict[str, Any]:
-    """Generate demo review data.
-
-    Issue #281: Refactored to use module-level constants.
-    Reduced from 84 to ~15 lines (82% reduction).
-    """
-    return {
-        "id": "review-demo-001",
-        "timestamp": datetime.now().isoformat(),
-        "files_reviewed": 5,
-        "total_comments": len(DEMO_REVIEW_COMMENTS),
-        "score": 72.5,
-        "comments": list(DEMO_REVIEW_COMMENTS),
-        "summary": DEMO_REVIEW_SUMMARY,
-    }
-
-
 # ============================================================================
 # REST Endpoints
 # ============================================================================
@@ -521,8 +439,8 @@ async def analyze_diff(
     diff_content = await get_git_diff(commit_range)
 
     if not diff_content:
-        # Return demo data
-        return generate_demo_review()
+        # Issue #543: Return no-data response instead of demo data
+        return _no_data_response("No git diff available. Make changes or specify a commit range.")
 
     # Parse diff
     files = parse_diff(diff_content)
@@ -550,6 +468,7 @@ async def analyze_diff(
     summary = generate_summary(all_comments)
 
     return {
+        "status": "success",
         "id": f"review-{datetime.now().strftime('%Y%m%d%H%M%S')}",
         "timestamp": datetime.now().isoformat(),
         "files_reviewed": len(files),
@@ -587,6 +506,7 @@ async def review_file(
     score = calculate_review_score(comments)
 
     return {
+        "status": "success",
         "file_path": file_path,
         "timestamp": datetime.now().isoformat(),
         "total_comments": len(comments),
@@ -621,30 +541,14 @@ async def get_review_patterns() -> list[dict[str, Any]]:
 async def get_review_history(
     limit: int = Query(20, ge=1, le=100),
     since: Optional[str] = Query(None, description="ISO date string"),
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     """
     Get review history.
 
     Returns past reviews for trend analysis.
     """
-    import random
-    random.seed(42)
-
-    # Generate demo history
-    history = []
-    for i in range(limit):
-        date = datetime.now() - timedelta(days=i)
-        history.append({
-            "id": f"review-{date.strftime('%Y%m%d')}",
-            "timestamp": date.isoformat(),
-            "files_reviewed": random.randint(2, 15),
-            "total_comments": random.randint(0, 25),
-            "score": round(60 + random.random() * 35, 1),
-            "critical_count": random.randint(0, 3),
-            "warning_count": random.randint(0, 8),
-        })
-
-    return history
+    # Issue #543: Return no-data response instead of demo data
+    return _no_data_response("No review history available. Reviews will be stored here once you run code reviews.")
 
 
 @router.get("/metrics")
@@ -656,36 +560,8 @@ async def get_review_metrics(
 
     Returns aggregated statistics for trend analysis.
     """
-    import random
-    random.seed(42)
-
-    days = int(period[:-1])
-    daily_data = []
-
-    for i in range(days):
-        date = datetime.now() - timedelta(days=days - 1 - i)
-        daily_data.append({
-            "date": date.strftime("%Y-%m-%d"),
-            "reviews": random.randint(1, 5),
-            "comments": random.randint(5, 30),
-            "average_score": round(65 + random.random() * 25, 1),
-        })
-
-    scores = [d["average_score"] for d in daily_data]
-
-    return {
-        "period": period,
-        "data_points": daily_data,
-        "totals": {
-            "reviews": sum(d["reviews"] for d in daily_data),
-            "comments": sum(d["comments"] for d in daily_data),
-            "average_score": sum(scores) / len(scores),
-        },
-        "trends": {
-            "score_change": scores[-1] - scores[0] if scores else 0,
-            "direction": "improving" if scores[-1] > scores[0] else "declining",
-        },
-    }
+    # Issue #543: Return no-data response instead of demo data
+    return _no_data_response("No review metrics available. Metrics will accumulate as you run code reviews.")
 
 
 @router.post("/feedback")
@@ -718,12 +594,12 @@ async def submit_feedback(
                 redis.ltrim, "code_review:feedback", 0, 999
             )  # Keep last 1000
 
-            return {"status": "recorded", "feedback": feedback}
+            return {"status": "success", "feedback": feedback}
     except Exception as e:
         logger.warning("Failed to store feedback: %s", e)
 
     return {
-        "status": "recorded",
+        "status": "success",
         "feedback": {
             "comment_id": comment_id,
             "is_helpful": is_helpful,
@@ -738,42 +614,10 @@ async def get_review_summary() -> dict[str, Any]:
 
     Returns dashboard-level metrics.
     """
-    import random
-    random.seed(42)
-
-    return {
-        "timestamp": datetime.now().isoformat(),
-        "total_reviews_30d": random.randint(50, 100),
-        "total_comments_30d": random.randint(200, 500),
-        "average_score": round(72 + random.random() * 10, 1),
-        "pattern_stats": {
-            "most_common": [
-                {"pattern_id": "BP001", "name": "Print statement", "count": 45},
-                {"pattern_id": "DOC001", "name": "Missing docstring", "count": 38},
-                {"pattern_id": "BUG002", "name": "Mutable default", "count": 22},
-                {"pattern_id": "STYLE001", "name": "Magic Number", "count": 18},
-                {"pattern_id": "SEC001", "name": "Hardcoded Secret", "count": 5},
-            ],
-            "by_category": {
-                "best_practice": 45,
-                "documentation": 38,
-                "bug_risk": 25,
-                "style": 20,
-                "security": 8,
-                "performance": 12,
-            },
-        },
-        "feedback_stats": {
-            "total_feedback": 150,
-            "helpful_rate": 0.85,
-            "false_positive_rate": 0.12,
-        },
-        "recommendations": [
-            "Focus on improving documentation coverage",
-            "Replace print statements with logging",
-            "Review mutable default arguments in utility functions",
-        ],
-    }
+    # Issue #543: Return no-data response instead of demo data
+    return _no_data_response(
+        "No review summary available. Summary statistics will be generated after running code reviews."
+    )
 
 
 @router.get("/categories")

@@ -32,109 +32,25 @@ CONTROL_FLOW_KEYWORDS = {"if ", "elif ", "else:", "try:", "except:", "for ", "wh
 # Issue #380: Module-level tuple for function definition prefixes
 _FUNCTION_DEF_PREFIXES = ("def ", "async def ")
 
-# Issue #281: Demo prediction data extracted from generate_demo_predictions
-# Static demo data for testing the bug prediction system
-DEMO_PREDICTION_FILES = (
-    {
-        "file_path": "src/services/agent_service.py",
-        "risk_score": 78.5,
-        "factors": {
-            "complexity": 85,
-            "change_frequency": 72,
-            "bug_history": 80,
-            "test_coverage": 65,
-            "file_size": 70,
-        },
-        "bug_count_history": 12,
-        "last_bug_date": "2025-01-15",
-    },
-    {
-        "file_path": "src/core/workflow_engine.py",
-        "risk_score": 72.3,
-        "factors": {
-            "complexity": 78,
-            "change_frequency": 65,
-            "bug_history": 75,
-            "test_coverage": 70,
-            "file_size": 60,
-        },
-        "bug_count_history": 8,
-        "last_bug_date": "2025-01-10",
-    },
-    {
-        "file_path": "src/api/endpoints.py",
-        "risk_score": 68.1,
-        "factors": {
-            "complexity": 60,
-            "change_frequency": 85,
-            "bug_history": 55,
-            "test_coverage": 75,
-            "file_size": 80,
-        },
-        "bug_count_history": 6,
-        "last_bug_date": "2025-01-08",
-    },
-    {
-        "file_path": "src/utils/redis_client.py",
-        "risk_score": 55.2,
-        "factors": {
-            "complexity": 45,
-            "change_frequency": 55,
-            "bug_history": 60,
-            "test_coverage": 50,
-            "file_size": 40,
-        },
-        "bug_count_history": 4,
-        "last_bug_date": "2024-12-20",
-    },
-    {
-        "file_path": "backend/api/analytics.py",
-        "risk_score": 48.7,
-        "factors": {
-            "complexity": 55,
-            "change_frequency": 40,
-            "bug_history": 45,
-            "test_coverage": 55,
-            "file_size": 45,
-        },
-        "bug_count_history": 3,
-        "last_bug_date": "2024-12-15",
-    },
-    {
-        "file_path": "src/models/user.py",
-        "risk_score": 35.4,
-        "factors": {
-            "complexity": 30,
-            "change_frequency": 35,
-            "bug_history": 40,
-            "test_coverage": 30,
-            "file_size": 25,
-        },
-        "bug_count_history": 2,
-        "last_bug_date": "2024-11-10",
-    },
-    {
-        "file_path": "src/config/settings.py",
-        "risk_score": 22.1,
-        "factors": {
-            "complexity": 20,
-            "change_frequency": 25,
-            "bug_history": 20,
-            "test_coverage": 25,
-            "file_size": 15,
-        },
-        "bug_count_history": 1,
-        "last_bug_date": "2024-10-05",
-    },
-)
 
-# Issue #281: Demo summary data
-DEMO_PREDICTION_SUMMARY = {
-    "total_files": 247,
-    "high_risk_count": 3,
-    "predicted_bugs": 8,
-    "accuracy_score": 72.5,
-}
+def _no_data_response(message: str = "No bug prediction data available. Run codebase analysis first.") -> dict:
+    """
+    Standardized no-data response.
+
+    Issue #543: Replaces all demo data responses.
+
+    Args:
+        message: Custom message explaining why no data is available
+
+    Returns:
+        Dict with status="no_data", message, and empty data structures
+    """
+    return {
+        "status": "no_data",
+        "message": message,
+        "files": [],
+        "summary": {},
+    }
 
 
 def _parse_git_bug_history_lines(lines: list[str]) -> dict[str, int]:
@@ -490,19 +406,6 @@ async def analyze_file_complexity(file_path: str) -> float:
         return 30
 
 
-def generate_demo_predictions() -> dict[str, Any]:
-    """
-    Generate demo prediction data for testing.
-
-    Issue #281: Refactored to use module-level constants DEMO_PREDICTION_FILES
-    and DEMO_PREDICTION_SUMMARY. Reduced from 103 lines to ~10 lines.
-    """
-    return {
-        "files": list(DEMO_PREDICTION_FILES),
-        **DEMO_PREDICTION_SUMMARY,
-    }
-
-
 # ============================================================================
 # REST Endpoints
 # ============================================================================
@@ -551,21 +454,6 @@ async def _analyze_single_file(
     return _build_file_risk_dict(rel_path, risk_score, factors, bug_count)
 
 
-def _build_demo_response() -> Dict[str, Any]:
-    """Build demo response when no files found (Issue #398: extracted)."""
-    demo = generate_demo_predictions()
-    return {
-        "timestamp": datetime.now().isoformat(),
-        "total_files": demo["total_files"],
-        "analyzed_files": len(demo["files"]),
-        "high_risk_count": demo["high_risk_count"],
-        "files": [
-            _build_file_risk_dict(f["file_path"], f["risk_score"], f["factors"])
-            for f in demo["files"]
-        ],
-    }
-
-
 @router.get("/analyze")
 async def analyze_codebase(
     path: str = Query(".", description="Path to analyze"),
@@ -573,7 +461,7 @@ async def analyze_codebase(
     limit: int = Query(50, ge=1, le=200),
 ) -> dict[str, Any]:
     """
-    Analyze codebase for bug risk (Issue #398: refactored).
+    Analyze codebase for bug risk (Issue #543: no demo data).
 
     Returns risk assessment for all files matching the pattern.
     """
@@ -586,7 +474,7 @@ async def analyze_codebase(
         )
 
         if not files_to_analyze:
-            return _build_demo_response()
+            return _no_data_response(f"No files matching '{include_pattern}' found in '{path}'")
 
         # Analyze each file using extracted helper
         analyzed_files = [
@@ -598,6 +486,7 @@ async def analyze_codebase(
         high_risk = sum(1 for f in analyzed_files if f["risk_score"] >= 60)
 
         return {
+            "status": "success",
             "timestamp": datetime.now().isoformat(),
             "total_files": len(files_to_analyze),
             "analyzed_files": len(analyzed_files),
@@ -606,37 +495,53 @@ async def analyze_codebase(
         }
 
     except Exception as e:
-        logger.error("Failed to analyze codebase: %s", e)
-        demo = generate_demo_predictions()
-        return {
-            "timestamp": datetime.now().isoformat(),
-            "error": str(e),
-            **demo,
-        }
+        logger.error("Failed to analyze codebase: %s", e, exc_info=True)
+        return _no_data_response(f"Analysis failed: {str(e)}")
 
 
 @router.get("/high-risk")
 async def get_high_risk_files(
     threshold: float = Query(60, ge=0, le=100),
     limit: int = Query(20, ge=1, le=100),
-) -> list[dict[str, Any]]:
+    path: str = Query(".", description="Path to analyze"),
+    include_pattern: str = Query("*.py", description="File pattern to include"),
+) -> dict[str, Any]:
     """
-    Get files with high bug risk.
+    Get files with high bug risk (Issue #543: no demo data).
 
     Returns files with risk score above the threshold.
     """
-    demo = generate_demo_predictions()
-    high_risk_files = [f for f in demo["files"] if f["risk_score"] >= threshold]
+    try:
+        bug_history = await get_git_bug_history()
+        change_freq = await get_file_change_frequency()
 
-    return [
-        {
-            **f,
-            "risk_level": get_risk_level(f["risk_score"]).value,
-            "prevention_tips": get_prevention_tips(f["factors"]),
-            "suggested_tests": get_suggested_tests(f["file_path"], f["factors"]),
+        files_to_analyze = await asyncio.to_thread(
+            _find_files_sync, path, include_pattern, 200  # Higher limit to find high-risk files
+        )
+
+        if not files_to_analyze:
+            return _no_data_response(f"No files matching '{include_pattern}' found in '{path}'")
+
+        # Analyze each file
+        analyzed_files = [
+            await _analyze_single_file(fp, change_freq, bug_history)
+            for fp in files_to_analyze
+        ]
+
+        # Filter high-risk files
+        high_risk_files = [f for f in analyzed_files if f["risk_score"] >= threshold]
+        high_risk_files.sort(key=lambda x: x["risk_score"], reverse=True)
+
+        return {
+            "status": "success",
+            "threshold": threshold,
+            "high_risk_count": len(high_risk_files),
+            "files": high_risk_files[:limit],
         }
-        for f in high_risk_files[:limit]
-    ]
+
+    except Exception as e:
+        logger.error("Failed to get high-risk files: %s", e, exc_info=True)
+        return _no_data_response(f"Analysis failed: {str(e)}")
 
 
 def _build_file_risk_response(file_path: str, factors: dict, bug_history: dict) -> dict:
@@ -653,36 +558,34 @@ def _build_file_risk_response(file_path: str, factors: dict, bug_history: dict) 
     }
 
 
-def _get_demo_file_risk_response(file_path: str) -> dict:
-    """Get demo file risk response for non-existent files (Issue #398: extracted)."""
-    demo_factors = {"complexity": 50, "change_frequency": 40, "bug_history": 45, "test_coverage": 50, "file_size": 35}
-    return {
-        "file_path": file_path, "risk_score": 45.0, "risk_level": "medium", "factors": demo_factors,
-        "factor_weights": {k.value: v for k, v in RISK_WEIGHTS.items()}, "bug_count_history": 2,
-        "prevention_tips": get_prevention_tips({"complexity": 50, "bug_history": 45}),
-        "suggested_tests": [f"Add unit tests for {Path(file_path).stem}"],
-        "recommendation": "Monitor this file for potential issues",
-    }
-
-
 @router.get("/file/{file_path:path}")
 async def get_file_risk(file_path: str) -> dict[str, Any]:
-    """Get detailed risk assessment for a specific file (Issue #398: refactored)."""
+    """Get detailed risk assessment for a specific file (Issue #543: no demo data)."""
     path = Path(file_path)
     if not await asyncio.to_thread(path.exists):
-        return _get_demo_file_risk_response(file_path)
+        return _no_data_response(f"File not found: {file_path}")
 
-    complexity = await analyze_file_complexity(str(path))
-    bug_history = await get_git_bug_history()
-    change_freq = await get_file_change_frequency()
-    file_stat = await asyncio.to_thread(path.stat)
+    try:
+        complexity = await analyze_file_complexity(str(path))
+        bug_history = await get_git_bug_history()
+        change_freq = await get_file_change_frequency()
+        file_stat = await asyncio.to_thread(path.stat)
 
-    factors = {
-        "complexity": complexity, "change_frequency": min(100, change_freq.get(file_path, 0) * 10),
-        "bug_history": min(100, bug_history.get(file_path, 0) * 15), "test_coverage": 50,
-        "file_size": min(100, file_stat.st_size / 500),
-    }
-    return _build_file_risk_response(file_path, factors, bug_history)
+        factors = {
+            "complexity": complexity,
+            "change_frequency": min(100, change_freq.get(file_path, 0) * 10),
+            "bug_history": min(100, bug_history.get(file_path, 0) * 15),
+            "test_coverage": 50,
+            "file_size": min(100, file_stat.st_size / 500),
+        }
+
+        response = _build_file_risk_response(file_path, factors, bug_history)
+        response["status"] = "success"
+        return response
+
+    except Exception as e:
+        logger.error("Failed to analyze file %s: %s", file_path, e, exc_info=True)
+        return _no_data_response(f"Analysis failed for {file_path}: {str(e)}")
 
 
 def _get_file_recommendation(risk_score: float, factors: dict[str, float]) -> str:
@@ -733,11 +636,41 @@ def _get_flat_heatmap_data(files: list) -> list:
 @router.get("/heatmap")
 async def get_risk_heatmap(
     grouping: str = Query("directory", regex="^(directory|module|flat)$"),
+    path: str = Query(".", description="Path to analyze"),
+    include_pattern: str = Query("*.py", description="File pattern to include"),
+    limit: int = Query(100, ge=1, le=300),
 ) -> dict[str, Any]:
-    """Get risk heatmap data for visualization (Issue #398: refactored)."""
-    files = generate_demo_predictions()["files"]
-    data = _group_files_by_directory(files) if grouping == "directory" else _get_flat_heatmap_data(files)
-    return {"grouping": grouping if grouping == "directory" else "flat", "data": data, "legend": _HEATMAP_LEGEND}
+    """Get risk heatmap data for visualization (Issue #543: no demo data)."""
+    try:
+        bug_history = await get_git_bug_history()
+        change_freq = await get_file_change_frequency()
+
+        files_to_analyze = await asyncio.to_thread(
+            _find_files_sync, path, include_pattern, limit
+        )
+
+        if not files_to_analyze:
+            return _no_data_response(f"No files matching '{include_pattern}' found in '{path}'")
+
+        # Analyze each file
+        analyzed_files = [
+            await _analyze_single_file(fp, change_freq, bug_history)
+            for fp in files_to_analyze
+        ]
+
+        # Generate heatmap data
+        data = _group_files_by_directory(analyzed_files) if grouping == "directory" else _get_flat_heatmap_data(analyzed_files)
+
+        return {
+            "status": "success",
+            "grouping": grouping if grouping == "directory" else "flat",
+            "data": data,
+            "legend": _HEATMAP_LEGEND,
+        }
+
+    except Exception as e:
+        logger.error("Failed to generate heatmap: %s", e, exc_info=True)
+        return _no_data_response(f"Heatmap generation failed: {str(e)}")
 
 
 @router.get("/trends")
@@ -785,51 +718,82 @@ async def get_prediction_trends(
 
 
 @router.get("/summary")
-async def get_prediction_summary() -> dict[str, Any]:
+async def get_prediction_summary(
+    path: str = Query(".", description="Path to analyze"),
+    include_pattern: str = Query("*.py", description="File pattern to include"),
+    limit: int = Query(100, ge=1, le=300),
+) -> dict[str, Any]:
     """
-    Get summary of bug predictions and risk assessment.
+    Get summary of bug predictions and risk assessment (Issue #543: no demo data).
 
     Returns high-level metrics for dashboard display.
     """
-    demo = generate_demo_predictions()
-    files = demo["files"]
+    try:
+        bug_history = await get_git_bug_history()
+        change_freq = await get_file_change_frequency()
 
-    # Risk distribution
-    risk_dist = {level.value: 0 for level in RiskLevel}
-    for f in files:
-        level = get_risk_level(f["risk_score"])
-        risk_dist[level.value] += 1
+        files_to_analyze = await asyncio.to_thread(
+            _find_files_sync, path, include_pattern, limit
+        )
 
-    # Top risk factors across all files
-    factor_totals: dict[str, float] = {}
-    for f in files:
-        for factor, score in f["factors"].items():
-            factor_totals[factor] = factor_totals.get(factor, 0) + score
+        if not files_to_analyze:
+            return _no_data_response(f"No files matching '{include_pattern}' found in '{path}'")
 
-    top_factors = sorted(factor_totals.items(), key=lambda x: x[1], reverse=True)
+        # Analyze each file
+        analyzed_files = [
+            await _analyze_single_file(fp, change_freq, bug_history)
+            for fp in files_to_analyze
+        ]
 
-    return {
-        "timestamp": datetime.now().isoformat(),
-        "total_files_analyzed": demo["total_files"],
-        "high_risk_files": demo["high_risk_count"],
-        "predicted_bugs_next_sprint": demo["predicted_bugs"],
-        "model_accuracy": demo["accuracy_score"],
-        "risk_distribution": risk_dist,
-        "top_risk_factors": [
-            {
-                "factor": f[0].replace("_", " ").title(),
-                "total_score": round(f[1], 1),
-                "average": round(f[1] / len(files), 1),
-            }
-            for f in top_factors[:5]
-        ],
-        "recommendations": [
-            f"Focus testing efforts on {demo['high_risk_count']} high-risk files",
-            "Reduce complexity in src/services/agent_service.py",
-            "Increase test coverage for frequently changed files",
-            "Review bug patterns in workflow_engine.py",
-        ],
-    }
+        # Risk distribution
+        risk_dist = {level.value: 0 for level in RiskLevel}
+        for f in analyzed_files:
+            level = get_risk_level(f["risk_score"])
+            risk_dist[level.value] += 1
+
+        # Top risk factors across all files
+        factor_totals: dict[str, float] = {}
+        for f in analyzed_files:
+            for factor, score in f["factors"].items():
+                factor_totals[factor] = factor_totals.get(factor, 0) + score
+
+        top_factors = sorted(factor_totals.items(), key=lambda x: x[1], reverse=True)
+
+        # Generate recommendations based on actual data
+        high_risk_count = risk_dist.get("high", 0) + risk_dist.get("critical", 0)
+        recommendations = []
+        if high_risk_count > 0:
+            recommendations.append(f"Focus testing efforts on {high_risk_count} high-risk files")
+
+        # Get top 3 highest risk files for recommendations
+        top_risky = sorted(analyzed_files, key=lambda x: x["risk_score"], reverse=True)[:3]
+        for f in top_risky:
+            if f["risk_score"] >= 60:
+                recommendations.append(f"Review {f['file_path']} (risk score: {f['risk_score']:.1f})")
+
+        if not recommendations:
+            recommendations.append("All files are within acceptable risk levels")
+
+        return {
+            "status": "success",
+            "timestamp": datetime.now().isoformat(),
+            "total_files_analyzed": len(analyzed_files),
+            "high_risk_files": high_risk_count,
+            "risk_distribution": risk_dist,
+            "top_risk_factors": [
+                {
+                    "factor": f[0].replace("_", " ").title(),
+                    "total_score": round(f[1], 1),
+                    "average": round(f[1] / len(analyzed_files), 1),
+                }
+                for f in top_factors[:5]
+            ],
+            "recommendations": recommendations[:5],
+        }
+
+    except Exception as e:
+        logger.error("Failed to generate summary: %s", e, exc_info=True)
+        return _no_data_response(f"Summary generation failed: {str(e)}")
 
 
 @router.get("/factors")

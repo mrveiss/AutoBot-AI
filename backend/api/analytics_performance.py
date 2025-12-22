@@ -15,9 +15,10 @@ import re
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,7 @@ class PerformanceIssue(BaseModel):
 class PerformanceAnalysisResult(BaseModel):
     """Result of performance analysis."""
 
+    status: str = "success"
     total_issues: int
     critical_count: int
     high_count: int
@@ -353,7 +355,31 @@ class PerformanceVisitor(ast.NodeVisitor):
 
     def visit_While(self, node: ast.While):
         """Visit while loop using same nested loop detection as for loops."""
-        self.visit_For(node)  # Same logic for while loops
+        old_in_loop = self.in_loop
+        old_depth = self.loop_depth
+        self.in_loop = True
+        self.loop_depth += 1
+
+        # Check for nested loops (O(n²))
+        if old_depth > 0:
+            self.issues.append(
+                PerformanceIssue(
+                    id=f"issue-{len(self.issues)}",
+                    pattern_id="PERF-L001",
+                    name="Nested Loop O(n²)",
+                    category=PatternCategory.LOOP,
+                    impact=ImpactLevel.HIGH,
+                    file=self.filename,
+                    line=node.lineno,
+                    description=f"Nested loop at depth {self.loop_depth} - O(n^{self.loop_depth})",
+                    suggestion="Consider using dict/set for O(1) lookup",
+                    estimated_impact=f"O(n^{self.loop_depth})",
+                )
+            )
+
+        self.generic_visit(node)
+        self.in_loop = old_in_loop
+        self.loop_depth = old_depth
 
     def visit_Call(self, node: ast.Call):
         """Visit function call and detect blocking calls in async context."""
@@ -468,7 +494,7 @@ async def _get_files_to_analyze(target_path: Path) -> list[Path]:
         all_py_files = await asyncio.to_thread(lambda: list(target_path.rglob("*.py")))
         return all_py_files[:100]  # Limit files
 
-    return []  # Demo mode
+    return []  # Path not found
 
 
 def _deduplicate_issues(issues: list[PerformanceIssue]) -> list[PerformanceIssue]:
@@ -504,12 +530,19 @@ def _calculate_analysis_score(issues: list[PerformanceIssue]) -> tuple[int, int,
 async def analyze_path(
     path: str = Query(..., description="Path to analyze"),
     include_ast: bool = Query(True, description="Include AST analysis"),
-) -> PerformanceAnalysisResult:
+) -> Union[PerformanceAnalysisResult, JSONResponse]:
     """Analyze code for performance anti-patterns (Issue #398: refactored)."""
     start_time = datetime.now()
 
     # Issue #398: Use extracted helper
     files_to_analyze = await _get_files_to_analyze(Path(path))
+
+    # Return no_data response if no files to analyze
+    if not files_to_analyze:
+        return JSONResponse(
+            content=_no_data_response("No files found to analyze. Please provide a valid path."),
+            status_code=200
+        )
 
     all_issues: list[PerformanceIssue] = []
     for filepath in files_to_analyze:
@@ -520,10 +553,6 @@ async def analyze_path(
                 all_issues.extend(analyze_with_ast(str(filepath), content))
         except Exception as e:
             logger.warning("Failed to analyze %s: %s", filepath, e)
-
-    # Use demo data if no files found
-    if not files_to_analyze:
-        all_issues = get_demo_issues()
 
     # Issue #398: Use extracted helpers
     all_issues = _deduplicate_issues(all_issues)
@@ -713,49 +742,15 @@ async def get_hotspots(
 
 
 # ============================================================================
-# Demo Data (Issue #398: Extracted to module-level for cleaner function)
+# Utility Functions
 # ============================================================================
 
-# Demo issue data tuples: (id, pattern_id, name, category, impact, file, line, desc, suggestion, snippet, est_impact)
-_DEMO_ISSUE_DATA = (
-    ("demo-1", "PERF-Q001", "N+1 Query Pattern", PatternCategory.QUERY, ImpactLevel.CRITICAL,
-     "src/services/users.py", 45, "Database query inside loop - causes N+1 query problem",
-     "Use eager loading, batch queries, or SELECT ... IN (...)",
-     "44: for user in users:\n45:     orders = db.query(Order).filter_by(user_id=user.id)", "100 users = 101 queries"),
-    ("demo-2", "PERF-A001", "Sync Call in Async Function", PatternCategory.ASYNC, ImpactLevel.CRITICAL,
-     "src/api/endpoints.py", 78, "Blocking synchronous call in async function blocks event loop",
-     "Use async version or run_in_executor()",
-     "77: async def fetch_data():\n78:     response = requests.get(url)", None),
-    ("demo-3", "PERF-L001", "Nested Loop O(n²)", PatternCategory.LOOP, ImpactLevel.HIGH,
-     "src/utils/matcher.py", 23, "Nested loops with O(n²) complexity",
-     "Consider using dict/set for O(1) lookup", None, "O(n²)"),
-    ("demo-4", "PERF-C001", "Repeated Redis GET in Loop", PatternCategory.CACHE, ImpactLevel.HIGH,
-     "src/cache/session.py", 56, "Multiple Redis GET calls in loop",
-     "Use MGET for batch retrieval or pipeline", "55: for key in keys:\n56:     value = redis.get(key)", None),
-    ("demo-5", "PERF-M001", "Global Mutable Default", PatternCategory.MEMORY, ImpactLevel.HIGH,
-     "src/handlers/events.py", 12, "Mutable default argument causes shared state bug",
-     "Use None default and create mutable in function body", "12: def process_items(items=[]):", None),
-    ("demo-6", "PERF-A002", "Sequential Awaits", PatternCategory.ASYNC, ImpactLevel.HIGH,
-     "src/services/aggregator.py", 34, "Multiple awaits that could run concurrently",
-     "Use asyncio.gather() for concurrent execution",
-     "34:     user = await get_user(id)\n35:     orders = await get_orders(id)", None),
-    ("demo-7", "PERF-L002", "List Concatenation in Loop", PatternCategory.LOOP, ImpactLevel.MEDIUM,
-     "src/utils/collector.py", 67, "Repeated list concatenation in loop is O(n²)",
-     "Use list.append() or list comprehension", None, None),
-)
 
-
-def _create_demo_issue(data: tuple) -> PerformanceIssue:
-    """Create PerformanceIssue from data tuple (Issue #398: extracted)."""
-    id_, pattern_id, name, category, impact, file, line, desc, suggestion, snippet, est_impact = (
-        data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8],
-        data[9] if len(data) > 9 else None, data[10] if len(data) > 10 else None)
-    return PerformanceIssue(
-        id=id_, pattern_id=pattern_id, name=name, category=category, impact=impact,
-        file=file, line=line, description=desc, suggestion=suggestion,
-        code_snippet=snippet, estimated_impact=est_impact)
-
-
-def get_demo_issues() -> list[PerformanceIssue]:
-    """Get demo issues for testing (Issue #398: refactored)."""
-    return [_create_demo_issue(data) for data in _DEMO_ISSUE_DATA]
+def _no_data_response(message: str = "No performance analysis data. Run codebase indexing first.") -> dict:
+    """Standardized no-data response for analytics endpoints."""
+    return {
+        "status": "no_data",
+        "message": message,
+        "issues": [],
+        "summary": {},
+    }

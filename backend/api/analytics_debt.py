@@ -35,6 +35,25 @@ router = APIRouter(prefix="/debt", tags=["technical-debt", "analytics"])
 DEBT_PREFIX = "debt:"
 
 
+def _no_data_response(message: str = "No technical debt analysis data. Run codebase indexing first.") -> dict:
+    """
+    Standardized no-data response for debt analytics (Issue #543).
+
+    Args:
+        message: Custom message explaining why no data is available
+
+    Returns:
+        Dictionary with no_data status and empty structures
+    """
+    return {
+        "status": "no_data",
+        "message": message,
+        "summary": {},
+        "items": [],
+        "total_hours": 0,
+    }
+
+
 class DebtCategory(str, Enum):
     """Categories of technical debt"""
 
@@ -530,7 +549,7 @@ async def calculate_technical_debt(request: DebtCalculationRequest):
 @router.get("/summary")
 async def get_debt_summary():
     """
-    Get summary of current technical debt (Issue #315 - refactored).
+    Get summary of current technical debt (Issue #543 - refactored).
 
     Returns high-level metrics for dashboard display.
     """
@@ -545,18 +564,8 @@ async def get_debt_summary():
             "timestamp": data.get("timestamp"),
         })
 
-    # Return demo data if no real data available
-    return JSONResponse({
-        "status": "demo",
-        "message": "No debt analysis found. Run POST /calculate first.",
-        "summary": {
-            "total_items": 0,
-            "total_hours": 0,
-            "total_cost_usd": 0,
-            "by_category": {},
-            "by_severity": {},
-        },
-    })
+    # Return no_data response if no analysis exists (Issue #543)
+    return JSONResponse(_no_data_response("No debt analysis found. Run POST /calculate first."))
 
 
 @with_error_handling(

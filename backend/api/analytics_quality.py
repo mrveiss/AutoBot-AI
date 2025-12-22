@@ -184,7 +184,7 @@ async def get_quality_data_from_storage() -> dict[str, Any]:
     except Exception as e:
         logger.warning("Failed to get quality data from Redis: %s", e)
 
-    # Calculate real metrics from ChromaDB (Issue #541)
+    # Calculate real metrics from ChromaDB (Issue #541, #543)
     real_data = await calculate_real_quality_metrics()
     if real_data:
         # Cache the calculated data
@@ -204,8 +204,8 @@ async def get_quality_data_from_storage() -> dict[str, Any]:
             logger.debug("Failed to cache quality data: %s", e)
         return real_data
 
-    # Return demo data only if no real data available
-    return generate_demo_quality_data()
+    # Issue #543: Return None instead of demo data - endpoints handle no_data response
+    return None
 
 
 # ============================================================================
@@ -539,9 +539,9 @@ async def calculate_real_quality_metrics() -> Optional[dict[str, Any]]:
     # Fetch data from ChromaDB
     problems, stats = await _get_problems_from_chromadb()
 
-    # If no data, return None to fall back to demo
+    # Issue #543: If no data, return None - endpoints will return no_data status
     if not problems and not stats:
-        logger.info("No analysis data found in ChromaDB, using demo data")
+        logger.info("No analysis data found in ChromaDB")
         return None
 
     # Get file counts
@@ -600,60 +600,20 @@ async def calculate_real_quality_metrics() -> Optional[dict[str, Any]]:
     }
 
 
-def generate_demo_quality_data() -> dict[str, Any]:
+def _no_data_response(message: str = "No analysis data. Run codebase indexing first.") -> dict:
     """
-    Generate demo quality data for testing.
+    Standardized no-data response for quality endpoints.
 
-    Note: This is only used when no real analysis data is available.
-    Issue #541: Real metrics are now calculated from ChromaDB data when available.
+    Issue #543: Replaces demo data with proper no_data status.
     """
-    import random
-
-    random.seed(42)  # Consistent demo data
-
     return {
-        "metrics": {
-            "maintainability": 75.5,
-            "reliability": 82.3,
-            "security": 78.9,
-            "performance": 71.2,
-            "testability": 65.4,
-            "documentation": 58.7,
-        },
-        "patterns": [
-            {"type": "anti_pattern", "count": 23, "severity": "high"},
-            {"type": "code_smell", "count": 45, "severity": "medium"},
-            {"type": "best_practice", "count": 156, "severity": "info"},
-            {"type": "security_vulnerability", "count": 8, "severity": "critical"},
-            {"type": "performance_issue", "count": 12, "severity": "high"},
-        ],
-        "complexity": {
-            "average_cyclomatic": 4.2,
-            "max_cyclomatic": 28,
-            "average_cognitive": 6.8,
-            "max_cognitive": 45,
-            "hotspots": [
-                {
-                    "file": "src/services/agent_service.py",
-                    "complexity": 28,
-                    "lines": 450,
-                },
-                {
-                    "file": "src/core/workflow_engine.py",
-                    "complexity": 24,
-                    "lines": 380,
-                },
-                {"file": "src/api/endpoints.py", "complexity": 22, "lines": 520},
-                {"file": "src/utils/parser.py", "complexity": 19, "lines": 290},
-                {"file": "backend/api/analytics.py", "complexity": 18, "lines": 340},
-            ],
-        },
-        "stats": {"file_count": 247, "line_count": 45230, "issues_count": 88},
-        "trends": [
-            {"date": (datetime.now() - timedelta(days=i)).isoformat(), "score": 70 + random.uniform(-5, 5)}
-            for i in range(30, -1, -1)
-        ],
-        "source": "demo",  # Issue #541: Mark as demo data
+        "status": "no_data",
+        "message": message,
+        "metrics": {},
+        "patterns": [],
+        "complexity": {},
+        "stats": {},
+        "trends": [],
     }
 
 
@@ -712,13 +672,22 @@ async def get_health_score() -> dict[str, Any]:
     Get current codebase health score with breakdown.
 
     Returns overall health score, grade, and recommendations.
+    Issue #543: Returns no_data status when no analysis data available.
     """
     data = await get_quality_data_from_storage()
+
+    # Issue #543: Handle no data case
+    if data is None:
+        return _no_data_response()
+
     metrics = data.get("metrics", {})
+    if not metrics:
+        return _no_data_response()
 
     health = calculate_health_score(metrics)
 
     return {
+        "status": "success",
         "overall": health.overall,
         "grade": health.grade.value,
         "trend": health.trend,
@@ -731,14 +700,22 @@ async def get_health_score() -> dict[str, Any]:
 @router.get("/metrics")
 async def get_quality_metrics(
     category: Optional[MetricCategory] = Query(None, description="Filter by category"),
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     """
     Get all quality metrics or filter by category.
 
     Returns detailed metrics with grades and trends.
+    Issue #543: Returns no_data status when no analysis data available.
     """
     data = await get_quality_data_from_storage()
+
+    # Issue #543: Handle no data case
+    if data is None:
+        return _no_data_response()
+
     raw_metrics = data.get("metrics", {})
+    if not raw_metrics:
+        return _no_data_response()
 
     metrics = []
     for cat, value in raw_metrics.items():
@@ -767,20 +744,26 @@ async def get_quality_metrics(
         except ValueError:
             continue
 
-    return sorted(metrics, key=lambda x: x["value"], reverse=True)
+    return {"status": "success", "metrics": sorted(metrics, key=lambda x: x["value"], reverse=True)}
 
 
 @router.get("/patterns")
 async def get_pattern_distribution(
     severity: Optional[str] = Query(None, description="Filter by severity"),
     limit: int = Query(20, ge=1, le=100),
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     """
     Get distribution of code patterns detected in the codebase.
 
     Returns pattern types with counts, percentages, and severity.
+    Issue #543: Returns no_data status when no analysis data available.
     """
     data = await get_quality_data_from_storage()
+
+    # Issue #543: Handle no data case
+    if data is None:
+        return _no_data_response()
+
     patterns = data.get("patterns", [])
 
     if severity:
@@ -808,7 +791,7 @@ async def get_pattern_distribution(
             }
         )
 
-    return result
+    return {"status": "success", "patterns": result}
 
 
 @router.get("/complexity")
@@ -819,8 +802,14 @@ async def get_complexity_metrics(
     Get code complexity analysis with hotspots.
 
     Returns cyclomatic and cognitive complexity metrics.
+    Issue #543: Returns no_data status when no analysis data available.
     """
     data = await get_quality_data_from_storage()
+
+    # Issue #543: Handle no data case
+    if data is None:
+        return _no_data_response()
+
     complexity = data.get("complexity", {})
 
     # Calculate complexity distribution
@@ -861,6 +850,7 @@ async def get_complexity_metrics(
             "cognitive_warning": 15,
             "cognitive_critical": 25,
         },
+        "status": "success",
     }
 
 
@@ -873,8 +863,14 @@ async def get_quality_trends(
     Get quality score trends over time.
 
     Returns historical data for trend analysis.
+    Issue #543: Returns no_data status when no analysis data available.
     """
     data = await get_quality_data_from_storage()
+
+    # Issue #543: Handle no data case
+    if data is None:
+        return _no_data_response()
+
     trends = data.get("trends", [])
 
     # Filter by period
@@ -919,6 +915,7 @@ async def get_quality_trends(
         }
 
     return {
+        "status": "success",
         "period": period,
         "data_points": filtered_trends,
         "statistics": stats,
@@ -932,16 +929,25 @@ async def get_quality_snapshot() -> dict[str, Any]:
     Get complete quality snapshot for the current state.
 
     Returns all metrics, patterns, and statistics in one response.
+    Issue #543: Returns no_data status when no analysis data available.
     """
     data = await get_quality_data_from_storage()
 
+    # Issue #543: Handle no data case
+    if data is None:
+        return _no_data_response()
+
     metrics = data.get("metrics", {})
+    if not metrics:
+        return _no_data_response()
+
     health = calculate_health_score(metrics)
     patterns = data.get("patterns", [])
     complexity = data.get("complexity", {})
     stats = data.get("stats", {})
 
     return {
+        "status": "success",
         "timestamp": datetime.now().isoformat(),
         "health_score": {
             "overall": health.overall,
@@ -991,53 +997,75 @@ async def drill_down_category(
     Drill down into a specific quality category.
 
     Returns detailed issues and files for the category.
+    Issue #543: Now queries real ChromaDB data instead of demo data.
     """
-    # In real implementation, this would query ChromaDB for detailed data
-    demo_files = [
-        {
-            "path": "src/services/agent_service.py",
-            "issues": 12,
-            "score": 65,
-            "top_issue": "High cyclomatic complexity",
-        },
-        {
-            "path": "src/core/workflow_engine.py",
-            "issues": 8,
-            "score": 72,
-            "top_issue": "Missing documentation",
-        },
-        {
-            "path": "src/api/endpoints.py",
-            "issues": 15,
-            "score": 58,
-            "top_issue": "Code duplication detected",
-        },
-        {
-            "path": "src/utils/parser.py",
-            "issues": 5,
-            "score": 78,
-            "top_issue": "Security consideration",
-        },
-        {
-            "path": "backend/api/analytics.py",
-            "issues": 3,
-            "score": 85,
-            "top_issue": "Minor style issues",
-        },
+    # Issue #543: Query real data from ChromaDB
+    problems, stats = await _get_problems_from_chromadb()
+
+    if not problems:
+        return _no_data_response("No analysis data for category drill-down.")
+
+    # Map category to problem types
+    category_type_map = {
+        "maintainability": {"code_smell", "long_function", "complexity", "technical_debt"},
+        "reliability": {"race_condition", "bug_prediction", "error_handling"},
+        "security": {"hardcode", "ip", "port", "url", "security", "vulnerability"},
+        "performance": {"performance", "optimization", "loop"},
+        "testability": {"test_coverage", "complexity"},
+        "documentation": {"missing_docstring", "documentation"},
+    }
+
+    # Filter problems by category
+    target_types = category_type_map.get(category.lower(), set())
+    category_problems = [
+        p for p in problems
+        if any(t in p.get("type", "").lower() for t in target_types)
     ]
 
-    if file_filter:
-        demo_files = [f for f in demo_files if file_filter.lower() in f["path"].lower()]
+    # Filter by severity if provided
+    if severity:
+        category_problems = [p for p in category_problems if p.get("severity") == severity]
+
+    # Group problems by file
+    file_issues: dict[str, list] = {}
+    for problem in category_problems:
+        file_path = problem.get("file_path", "unknown")
+        if file_filter and file_filter.lower() not in file_path.lower():
+            continue
+        if file_path not in file_issues:
+            file_issues[file_path] = []
+        file_issues[file_path].append(problem)
+
+    # Build result files list
+    result_files = []
+    for file_path, issues in file_issues.items():
+        # Calculate score: fewer issues = higher score
+        issue_count = len(issues)
+        high_count = sum(1 for i in issues if i.get("severity") == "high")
+        score = max(0, 100 - (issue_count * 5) - (high_count * 10))
+
+        top_issue = issues[0].get("description", "Quality issue") if issues else ""
+
+        result_files.append({
+            "path": file_path,
+            "issues": issue_count,
+            "score": score,
+            "top_issue": top_issue[:100],  # Truncate long descriptions
+        })
+
+    # Sort by issues descending
+    result_files.sort(key=lambda x: x["issues"], reverse=True)
 
     return {
+        "status": "success",
         "category": category,
         "display_name": category.replace("_", " ").title(),
-        "total_files": len(demo_files),
-        "total_issues": sum(f["issues"] for f in demo_files),
-        "average_score": sum(f["score"] for f in demo_files) / len(demo_files)
-        if demo_files
+        "total_files": len(result_files),
+        "total_issues": sum(f["issues"] for f in result_files),
+        "average_score": sum(f["score"] for f in result_files) / len(result_files)
+        if result_files
         else 0,
-        "files": demo_files[:limit],
+        "files": result_files[:limit],
         "filters_applied": {
             "file": file_filter,
             "severity": severity,
@@ -1053,9 +1081,18 @@ async def export_quality_report(
     Export quality report in specified format.
 
     Supports JSON, CSV, and PDF formats.
+    Issue #543: Returns no_data status when no analysis data available.
     """
     data = await get_quality_data_from_storage()
+
+    # Issue #543: Handle no data case
+    if data is None:
+        return JSONResponse(content=_no_data_response())
+
     metrics = data.get("metrics", {})
+    if not metrics:
+        return JSONResponse(content=_no_data_response())
+
     health = calculate_health_score(metrics)
 
     report = {

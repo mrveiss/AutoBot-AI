@@ -452,8 +452,42 @@ async def get_code_quality_score():
             maintainability, 40
         )
 
-        # Security score (placeholder - would need security analysis)
-        quality_factors["security"] = 75  # Default security score
+        # Issue #543: Calculate security score from actual problems
+        try:
+            from backend.api.codebase_analytics.storage import get_code_collection
+
+            code_collection = get_code_collection()
+            if code_collection:
+                security_results = code_collection.get(
+                    where={
+                        "type": "problem",
+                        "problem_type": {
+                            "$in": ["security", "hardcode", "vulnerability"]
+                        },
+                    },
+                    include=["metadatas"],
+                )
+                security_issue_count = len(security_results.get("metadatas", []))
+
+                # Get total files from codebase_metrics
+                total_files = cached_analysis.get("codebase_metrics", {}).get(
+                    "total_files", 100
+                )
+
+                # Score: 100 - (issues per file * 100), min 0
+                if total_files > 0:
+                    security_score = max(
+                        0, 100 - (security_issue_count / total_files * 100)
+                    )
+                else:
+                    security_score = 0  # No files analyzed
+
+                quality_factors["security"] = round(security_score, 1)
+            else:
+                quality_factors["security"] = 0  # No data available
+        except Exception as e:
+            logger.warning("Failed to calculate security score: %s", e)
+            quality_factors["security"] = 0  # Unknown when can't calculate
 
     # Calculate overall score
     overall_score = sum(quality_factors.values()) / len(quality_factors)

@@ -347,16 +347,12 @@ async def get_trends():
     """
     Get analytics trends over time.
 
-    Note: Currently returns placeholder as trend storage is not implemented.
+    Note: Returns no_data status as trend storage requires historical snapshots.
     """
     return JSONResponse(
         content={
-            "status": "placeholder",
-            "message": "Trend tracking requires historical data storage. "
-            "Currently returns current snapshot only.",
-            "current_snapshot": {
-                "timestamp": datetime.utcnow().isoformat() + "Z",
-                "health_score": 74.2,  # Will be replaced with real data
-            },
+            "status": "no_data",
+            "message": "Trend data requires historical snapshots.",
+            "data": [],
         }
     )
