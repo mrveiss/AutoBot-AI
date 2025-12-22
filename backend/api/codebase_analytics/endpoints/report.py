@@ -1048,6 +1048,8 @@ async def generate_analysis_report(
     format: str = "markdown",
     include_api_analysis: bool = True,
     include_duplicate_analysis: bool = True,
+    include_bug_prediction: bool = True,
+    quick: bool = False,
 ):
     """
     Generate a code analysis report from the indexed data.
@@ -1056,6 +1058,8 @@ async def generate_analysis_report(
         format: Output format (currently only 'markdown' supported)
         include_api_analysis: Whether to include API endpoint analysis (Issue #527)
         include_duplicate_analysis: Whether to include duplicate code analysis (Issue #528)
+        include_bug_prediction: Whether to include bug prediction analysis (Issue #505)
+        quick: If True, skip expensive analyses for faster export (just problems report)
 
     Returns:
         Markdown formatted report as plain text
@@ -1087,18 +1091,48 @@ async def generate_analysis_report(
         except Exception as e:
             logger.error("Failed to fetch problems from ChromaDB: %s", e)
 
-    # Get bug prediction data (Issue #505)
-    bug_prediction = await _get_bug_prediction()
+    # Quick mode: Skip expensive analyses for faster export
+    if quick:
+        logger.info("Quick mode: Skipping expensive analyses")
+        bug_prediction = None
+        api_endpoint_analysis = None
+        duplicate_analysis = None
+    else:
+        # Run analyses in parallel for better performance
+        analysis_tasks = []
 
-    # Get API endpoint analysis (Issue #527)
-    api_endpoint_analysis = None
-    if include_api_analysis:
-        api_endpoint_analysis = await _get_api_endpoint_analysis()
+        if include_bug_prediction:
+            analysis_tasks.append(("bug_prediction", _get_bug_prediction()))
+        if include_api_analysis:
+            analysis_tasks.append(("api_endpoint", _get_api_endpoint_analysis()))
+        if include_duplicate_analysis:
+            analysis_tasks.append(("duplicate", _get_duplicate_analysis()))
 
-    # Get duplicate code analysis (Issue #528)
-    duplicate_analysis = None
-    if include_duplicate_analysis:
-        duplicate_analysis = await _get_duplicate_analysis()
+        # Initialize results
+        bug_prediction = None
+        api_endpoint_analysis = None
+        duplicate_analysis = None
+
+        if analysis_tasks:
+            # Run all analyses in parallel with individual error handling
+            results = await asyncio.gather(
+                *[task for _, task in analysis_tasks],
+                return_exceptions=True,
+            )
+
+            # Map results back to variables
+            for i, (task_name, _) in enumerate(analysis_tasks):
+                result = results[i]
+                if isinstance(result, Exception):
+                    logger.warning("Analysis %s failed: %s", task_name, result)
+                    continue
+
+                if task_name == "bug_prediction":
+                    bug_prediction = result
+                elif task_name == "api_endpoint":
+                    api_endpoint_analysis = result
+                elif task_name == "duplicate":
+                    duplicate_analysis = result
 
     if not problems:
         # Even with no issues, include other analyses if available

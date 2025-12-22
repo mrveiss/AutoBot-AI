@@ -3354,13 +3354,16 @@ const getCodeHealthScore = async () => {
 }
 
 // Export analysis report as Markdown
-const exportReport = async () => {
+// Use quick=true by default for fast export (skips expensive analyses)
+// Set quick=false for comprehensive report with bug prediction, duplicates, API analysis
+const exportReport = async (quick: boolean = true) => {
   exportingReport.value = true
-  progressStatus.value = 'Generating report...'
+  progressStatus.value = quick ? 'Generating quick report...' : 'Generating comprehensive report (this may take a minute)...'
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const reportEndpoint = `${backendUrl}/api/analytics/codebase/report?format=markdown`
+    // Use quick mode by default for responsive UI - skips expensive analyses
+    const reportEndpoint = `${backendUrl}/api/analytics/codebase/report?format=markdown&quick=${quick}`
     const response = await fetch(reportEndpoint, {
       method: 'GET',
       headers: {
@@ -3382,7 +3385,8 @@ const exportReport = async () => {
     const link = document.createElement('a')
     link.href = url
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-    link.download = `code-analysis-report-${timestamp}.md`
+    const reportType = quick ? 'quick' : 'full'
+    link.download = `code-analysis-report-${reportType}-${timestamp}.md`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
