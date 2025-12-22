@@ -1427,6 +1427,19 @@ watch(() => props.mode, () => {
   transform: translateY(-5px);
 }
 
+/* Refresh status button (Issue #162) */
+.refresh-status-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.refresh-status-btn i {
+  font-size: 0.875rem;
+}
+
 /* Batch Toolbar */
 .batch-toolbar {
   position: sticky;
