@@ -1216,6 +1216,438 @@
           message="No API endpoint analysis available. Click 'API Coverage' button to scan."
         />
       </div>
+
+      <!-- Issue #538: Config Duplicates Detection Section -->
+      <div class="config-duplicates-section analytics-section">
+        <h3>
+          <i class="fas fa-clone"></i> Configuration Duplicates
+          <span v-if="configDuplicatesAnalysis" class="total-count">
+            ({{ configDuplicatesAnalysis.duplicates_found }} duplicates)
+          </span>
+          <button @click="loadConfigDuplicates" :disabled="loadingConfigDuplicates" class="refresh-btn" style="margin-left: 10px;">
+            <i :class="loadingConfigDuplicates ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+          </button>
+        </h3>
+
+        <!-- Loading State -->
+        <div v-if="loadingConfigDuplicates" class="loading-state">
+          <i class="fas fa-spinner fa-spin"></i> Scanning for config duplicates...
+        </div>
+
+        <!-- Error State -->
+        <div v-else-if="configDuplicatesError" class="error-state">
+          <i class="fas fa-exclamation-triangle"></i> {{ configDuplicatesError }}
+          <button @click="loadConfigDuplicates" class="btn-link">Retry</button>
+        </div>
+
+        <!-- Analysis Results -->
+        <div v-else-if="configDuplicatesAnalysis && configDuplicatesAnalysis.duplicates_found > 0" class="section-content">
+          <!-- Summary Cards -->
+          <div class="summary-cards">
+            <div class="summary-card warning">
+              <div class="summary-value">{{ configDuplicatesAnalysis.duplicates_found }}</div>
+              <div class="summary-label">Duplicate Values</div>
+            </div>
+            <div class="summary-card info">
+              <div class="summary-value">{{ configDuplicatesAnalysis.duplicates?.length || 0 }}</div>
+              <div class="summary-label">Unique Patterns</div>
+            </div>
+          </div>
+
+          <!-- Duplicates List -->
+          <div class="duplicates-list">
+            <div
+              v-for="(dup, index) in configDuplicatesAnalysis.duplicates?.slice(0, 20)"
+              :key="'config-dup-' + index"
+              class="list-item item-warning"
+            >
+              <div class="item-header">
+                <span class="config-value-badge">{{ truncateValue(dup.value) }}</span>
+                <span class="location-count">{{ dup.locations?.length || 0 }} locations</span>
+              </div>
+              <div class="item-locations">
+                <div v-for="(loc, locIdx) in dup.locations?.slice(0, 5)" :key="'loc-' + locIdx" class="location-item">
+                  📁 {{ loc.file }}:{{ loc.line }}
+                </div>
+                <div v-if="dup.locations?.length > 5" class="more-locations">
+                  ... and {{ dup.locations.length - 5 }} more locations
+                </div>
+              </div>
+            </div>
+            <div v-if="configDuplicatesAnalysis.duplicates?.length > 20" class="show-more">
+              <span class="muted">Showing 20 of {{ configDuplicatesAnalysis.duplicates.length }} duplicate patterns</span>
+            </div>
+          </div>
+
+          <!-- Recommendation -->
+          <div class="recommendation-box">
+            <i class="fas fa-lightbulb"></i>
+            <span>Move duplicate values to <code>src/constants/</code> or <code>backend/constants/</code> for single-source-of-truth.</span>
+          </div>
+        </div>
+
+        <!-- No Duplicates Found -->
+        <div v-else-if="configDuplicatesAnalysis && configDuplicatesAnalysis.duplicates_found === 0" class="success-state">
+          <i class="fas fa-check-circle"></i> No configuration duplicates found. Single-source-of-truth principle is maintained.
+        </div>
+
+        <!-- Empty State -->
+        <EmptyState
+          v-else
+          icon="fas fa-clone"
+          message="No config duplicate analysis available. Run 'Analyze All' to scan."
+        />
+      </div>
+
+      <!-- Issue #538: Bug Prediction Section -->
+      <div class="bug-prediction-section analytics-section">
+        <h3>
+          <i class="fas fa-bug"></i> Bug Risk Prediction
+          <span v-if="bugPredictionAnalysis" class="total-count">
+            ({{ bugPredictionAnalysis.high_risk_count }} high-risk files)
+          </span>
+          <button @click="loadBugPrediction" :disabled="loadingBugPrediction" class="refresh-btn" style="margin-left: 10px;">
+            <i :class="loadingBugPrediction ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+          </button>
+        </h3>
+
+        <!-- Loading State -->
+        <div v-if="loadingBugPrediction" class="loading-state">
+          <i class="fas fa-spinner fa-spin"></i> Analyzing bug risk patterns...
+        </div>
+
+        <!-- Error State -->
+        <div v-else-if="bugPredictionError" class="error-state">
+          <i class="fas fa-exclamation-triangle"></i> {{ bugPredictionError }}
+          <button @click="loadBugPrediction" class="btn-link">Retry</button>
+        </div>
+
+        <!-- Analysis Results -->
+        <div v-else-if="bugPredictionAnalysis && bugPredictionAnalysis.files.length > 0" class="section-content">
+          <!-- Summary Cards -->
+          <div class="summary-cards">
+            <div class="summary-card total">
+              <div class="summary-value">{{ bugPredictionAnalysis.analyzed_files }}</div>
+              <div class="summary-label">Files Analyzed</div>
+            </div>
+            <div class="summary-card critical">
+              <div class="summary-value">{{ bugPredictionAnalysis.high_risk_count }}</div>
+              <div class="summary-label">High Risk</div>
+            </div>
+            <div class="summary-card warning">
+              <div class="summary-value">{{ bugPredictionAnalysis.files.filter(f => f.risk_score >= 40 && f.risk_score < 60).length }}</div>
+              <div class="summary-label">Medium Risk</div>
+            </div>
+            <div class="summary-card success">
+              <div class="summary-value">{{ bugPredictionAnalysis.files.filter(f => f.risk_score < 40).length }}</div>
+              <div class="summary-label">Low Risk</div>
+            </div>
+          </div>
+
+          <!-- High Risk Files List -->
+          <div class="risk-files-list">
+            <h4>High Risk Files</h4>
+            <div
+              v-for="(file, index) in bugPredictionAnalysis.files.filter(f => f.risk_score >= 60).slice(0, 15)"
+              :key="'risk-file-' + index"
+              class="list-item"
+              :class="getRiskClass(file.risk_score)"
+            >
+              <div class="item-header">
+                <span class="risk-badge" :class="getRiskClass(file.risk_score)">
+                  {{ file.risk_score.toFixed(0) }}%
+                </span>
+                <span class="item-path">{{ file.file_path }}</span>
+                <span class="risk-level-badge" :class="file.risk_level">{{ file.risk_level }}</span>
+              </div>
+              <div class="risk-factors" v-if="file.factors">
+                <span v-for="(value, factor) in (file.factors || {})" :key="factor" class="factor-badge">
+                  {{ formatFactorName(String(factor)) }}: {{ value }}
+                </span>
+              </div>
+              <div v-if="file.prevention_tips && file.prevention_tips.length > 0" class="prevention-tips">
+                <i class="fas fa-lightbulb"></i>
+                <span>{{ file.prevention_tips[0] }}</span>
+              </div>
+            </div>
+            <div v-if="bugPredictionAnalysis.files.filter(f => f.risk_score >= 60).length > 15" class="show-more">
+              <span class="muted">Showing 15 of {{ bugPredictionAnalysis.files.filter(f => f.risk_score >= 60).length }} high-risk files</span>
+            </div>
+          </div>
+
+          <!-- Timestamp -->
+          <div v-if="bugPredictionAnalysis.timestamp" class="scan-timestamp">
+            <i class="fas fa-clock"></i> Last analysis: {{ formatTimestamp(bugPredictionAnalysis.timestamp) }}
+          </div>
+        </div>
+
+        <!-- No High Risk Files -->
+        <div v-else-if="bugPredictionAnalysis && bugPredictionAnalysis.high_risk_count === 0" class="success-state">
+          <i class="fas fa-check-circle"></i> No high-risk files detected. Codebase appears healthy.
+        </div>
+
+        <!-- Empty State -->
+        <EmptyState
+          v-else
+          icon="fas fa-bug"
+          message="No bug prediction analysis available. Run 'Analyze All' to scan."
+        />
+      </div>
+
+      <!-- Issue #538: Code Intelligence Scores Section -->
+      <div class="code-intelligence-scores-section analytics-section">
+        <h3>
+          <i class="fas fa-shield-alt"></i> Code Intelligence Scores
+          <button
+            @click="loadSecurityScore(); loadPerformanceScore(); loadRedisHealth()"
+            :disabled="loadingSecurityScore || loadingPerformanceScore || loadingRedisHealth"
+            class="refresh-btn"
+            style="margin-left: 10px;"
+          >
+            <i :class="(loadingSecurityScore || loadingPerformanceScore || loadingRedisHealth) ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+          </button>
+        </h3>
+
+        <!-- Score Cards Grid -->
+        <div class="scores-grid">
+          <!-- Security Score Card -->
+          <div class="score-card security-card">
+            <div class="score-header">
+              <i class="fas fa-shield-alt"></i>
+              <span>Security</span>
+            </div>
+            <div v-if="loadingSecurityScore" class="score-loading">
+              <i class="fas fa-spinner fa-spin"></i>
+            </div>
+            <div v-else-if="securityScoreError" class="score-error">
+              <i class="fas fa-exclamation-triangle"></i>
+              <span>{{ securityScoreError }}</span>
+            </div>
+            <div v-else-if="securityScore" class="score-content">
+              <div class="score-value" :class="getScoreClass(securityScore.security_score)">
+                {{ securityScore.security_score }}
+              </div>
+              <div class="score-grade" :class="getGradeClass(securityScore.grade)">
+                {{ securityScore.grade }}
+              </div>
+              <div class="score-status">{{ securityScore.status_message }}</div>
+              <div class="score-details">
+                <span class="detail-item critical" v-if="securityScore.critical_issues > 0">
+                  <i class="fas fa-times-circle"></i> {{ securityScore.critical_issues }} critical
+                </span>
+                <span class="detail-item warning" v-if="securityScore.high_issues > 0">
+                  <i class="fas fa-exclamation-circle"></i> {{ securityScore.high_issues }} high
+                </span>
+                <span class="detail-item info">
+                  <i class="fas fa-file-code"></i> {{ securityScore.files_analyzed }} files
+                </span>
+              </div>
+            </div>
+            <div v-else class="score-empty">
+              <span>No data</span>
+            </div>
+          </div>
+
+          <!-- Performance Score Card -->
+          <div class="score-card performance-card">
+            <div class="score-header">
+              <i class="fas fa-tachometer-alt"></i>
+              <span>Performance</span>
+            </div>
+            <div v-if="loadingPerformanceScore" class="score-loading">
+              <i class="fas fa-spinner fa-spin"></i>
+            </div>
+            <div v-else-if="performanceScoreError" class="score-error">
+              <i class="fas fa-exclamation-triangle"></i>
+              <span>{{ performanceScoreError }}</span>
+            </div>
+            <div v-else-if="performanceScore" class="score-content">
+              <div class="score-value" :class="getScoreClass(performanceScore.performance_score)">
+                {{ performanceScore.performance_score }}
+              </div>
+              <div class="score-grade" :class="getGradeClass(performanceScore.grade)">
+                {{ performanceScore.grade }}
+              </div>
+              <div class="score-status">{{ performanceScore.status_message }}</div>
+              <div class="score-details">
+                <span class="detail-item warning" v-if="performanceScore.total_issues > 0">
+                  <i class="fas fa-exclamation-triangle"></i> {{ performanceScore.total_issues }} issues
+                </span>
+                <span class="detail-item info">
+                  <i class="fas fa-file-code"></i> {{ performanceScore.files_analyzed }} files
+                </span>
+              </div>
+            </div>
+            <div v-else class="score-empty">
+              <span>No data</span>
+            </div>
+          </div>
+
+          <!-- Redis Health Score Card -->
+          <div class="score-card redis-card">
+            <div class="score-header">
+              <i class="fas fa-database"></i>
+              <span>Redis Usage</span>
+            </div>
+            <div v-if="loadingRedisHealth" class="score-loading">
+              <i class="fas fa-spinner fa-spin"></i>
+            </div>
+            <div v-else-if="redisHealthError" class="score-error">
+              <i class="fas fa-exclamation-triangle"></i>
+              <span>{{ redisHealthError }}</span>
+            </div>
+            <div v-else-if="redisHealth" class="score-content">
+              <div class="score-value" :class="getScoreClass(redisHealth.redis_health_score)">
+                {{ redisHealth.redis_health_score }}
+              </div>
+              <div class="score-grade" :class="getGradeClass(redisHealth.grade)">
+                {{ redisHealth.grade }}
+              </div>
+              <div class="score-status">{{ redisHealth.status_message }}</div>
+              <div class="score-details">
+                <span class="detail-item warning" v-if="redisHealth.total_issues > 0">
+                  <i class="fas fa-exclamation-triangle"></i> {{ redisHealth.total_issues }} issues
+                </span>
+                <span class="detail-item info">
+                  <i class="fas fa-file-code"></i> {{ redisHealth.total_files }} files
+                </span>
+              </div>
+            </div>
+            <div v-else class="score-empty">
+              <span>No data</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Empty State when no path -->
+        <EmptyState
+          v-if="!rootPath && !securityScore && !performanceScore && !redisHealth"
+          icon="fas fa-shield-alt"
+          message="Enter a path and run 'Analyze All' to see code intelligence scores."
+        />
+      </div>
+
+      <!-- Issue #538: Environment Analysis Section -->
+      <div class="environment-analysis-section analytics-section">
+        <h3>
+          <i class="fas fa-leaf"></i> Environment Variable Analysis
+          <span v-if="environmentAnalysis" class="total-count">
+            ({{ environmentAnalysis.total_hardcoded_values }} hardcoded values)
+          </span>
+          <button @click="loadEnvironmentAnalysis" :disabled="loadingEnvAnalysis" class="refresh-btn" style="margin-left: 10px;">
+            <i :class="loadingEnvAnalysis ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+          </button>
+        </h3>
+
+        <!-- Loading State -->
+        <div v-if="loadingEnvAnalysis" class="loading-state">
+          <i class="fas fa-spinner fa-spin"></i> Scanning for hardcoded values...
+        </div>
+
+        <!-- Error State -->
+        <div v-else-if="envAnalysisError" class="error-state">
+          <i class="fas fa-exclamation-triangle"></i> {{ envAnalysisError }}
+          <button @click="loadEnvironmentAnalysis" class="btn-link">Retry</button>
+        </div>
+
+        <!-- Analysis Results -->
+        <div v-else-if="environmentAnalysis && environmentAnalysis.total_hardcoded_values > 0" class="section-content">
+          <!-- Summary Cards -->
+          <div class="summary-cards">
+            <div class="summary-card total">
+              <div class="summary-value">{{ environmentAnalysis.total_hardcoded_values }}</div>
+              <div class="summary-label">Hardcoded Values</div>
+            </div>
+            <div class="summary-card critical">
+              <div class="summary-value">{{ environmentAnalysis.high_priority_count }}</div>
+              <div class="summary-label">High Priority</div>
+            </div>
+            <div class="summary-card warning">
+              <div class="summary-value">{{ environmentAnalysis.recommendations_count }}</div>
+              <div class="summary-label">Recommendations</div>
+            </div>
+            <div class="summary-card info">
+              <div class="summary-value">{{ Object.keys(environmentAnalysis.categories).length }}</div>
+              <div class="summary-label">Categories</div>
+            </div>
+          </div>
+
+          <!-- Categories Breakdown -->
+          <div v-if="Object.keys(environmentAnalysis.categories).length > 0" class="categories-breakdown">
+            <h4>Categories</h4>
+            <div class="category-badges">
+              <span
+                v-for="(count, category) in environmentAnalysis.categories"
+                :key="category"
+                class="category-badge"
+              >
+                {{ formatFactorName(String(category)) }}: {{ count }}
+              </span>
+            </div>
+          </div>
+
+          <!-- Recommendations List -->
+          <div v-if="environmentAnalysis.recommendations.length > 0" class="recommendations-list">
+            <h4>Environment Variable Recommendations</h4>
+            <div
+              v-for="(rec, index) in environmentAnalysis.recommendations.slice(0, 10)"
+              :key="'rec-' + index"
+              class="recommendation-item"
+              :class="'priority-' + rec.priority"
+            >
+              <div class="rec-header">
+                <code class="env-var-name">{{ rec.env_var_name }}</code>
+                <span class="priority-badge" :class="rec.priority">{{ rec.priority }}</span>
+              </div>
+              <div class="rec-description">{{ rec.description }}</div>
+              <div class="rec-default">Default: <code>{{ truncateValue(rec.default_value, 50) }}</code></div>
+            </div>
+            <div v-if="environmentAnalysis.recommendations.length > 10" class="show-more">
+              <span class="muted">Showing 10 of {{ environmentAnalysis.recommendations.length }} recommendations</span>
+            </div>
+          </div>
+
+          <!-- Hardcoded Values Preview -->
+          <div v-if="environmentAnalysis.hardcoded_values.length > 0" class="hardcoded-preview">
+            <h4>Sample Hardcoded Values</h4>
+            <div
+              v-for="(hv, index) in environmentAnalysis.hardcoded_values.slice(0, 8)"
+              :key="'hv-' + index"
+              class="hardcoded-item"
+              :class="'severity-' + hv.severity"
+            >
+              <div class="hv-location">
+                <span class="file-path">{{ hv.file_path }}</span>
+                <span class="line-number">:{{ hv.line_number }}</span>
+              </div>
+              <div class="hv-value">
+                <code>{{ truncateValue(hv.value, 60) }}</code>
+                <span class="value-type">{{ hv.value_type }}</span>
+              </div>
+              <div v-if="hv.suggestion" class="hv-suggestion">
+                <i class="fas fa-lightbulb"></i> Use: <code>{{ hv.suggestion }}</code>
+              </div>
+            </div>
+          </div>
+
+          <!-- Analysis Time -->
+          <div class="scan-timestamp">
+            <i class="fas fa-clock"></i> Analysis completed in {{ environmentAnalysis.analysis_time_seconds.toFixed(2) }}s
+          </div>
+        </div>
+
+        <!-- No Hardcoded Values -->
+        <div v-else-if="environmentAnalysis && environmentAnalysis.total_hardcoded_values === 0" class="success-state">
+          <i class="fas fa-check-circle"></i> No hardcoded values detected. Configuration looks clean.
+        </div>
+
+        <!-- Empty State -->
+        <EmptyState
+          v-else
+          icon="fas fa-leaf"
+          message="No environment analysis available. Run 'Analyze All' to scan."
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -1370,6 +1802,106 @@ const expandedApiEndpointGroups = reactive({
   missing: false,
   used: false
 })
+
+// Issue #538: Config Duplicates Detection data
+interface ConfigDuplicatesResult {
+  duplicates_found: number
+  duplicates: Array<{ value: string; locations: Array<{ file: string; line: number }> }>
+  report: string
+}
+const configDuplicatesAnalysis = ref<ConfigDuplicatesResult | null>(null)
+const loadingConfigDuplicates = ref(false)
+const configDuplicatesError = ref('')
+
+// Issue #538: Bug Prediction data
+interface BugPredictionFile {
+  file_path: string
+  risk_score: number
+  risk_level: string
+  factors: Record<string, number>
+  prevention_tips?: string[]
+  suggested_tests?: string[]
+}
+interface BugPredictionResult {
+  timestamp: string
+  total_files: number
+  analyzed_files: number
+  high_risk_count: number
+  files: BugPredictionFile[]
+}
+const bugPredictionAnalysis = ref<BugPredictionResult | null>(null)
+const loadingBugPrediction = ref(false)
+const bugPredictionError = ref('')
+
+// Issue #538: Code Intelligence Scores (Security, Performance, Redis)
+interface SecurityScoreResult {
+  security_score: number
+  grade: string
+  risk_level: string
+  status_message: string
+  total_findings: number
+  critical_issues: number
+  high_issues: number
+  files_analyzed: number
+  severity_breakdown: Record<string, number>
+  owasp_breakdown: Record<string, number>
+}
+interface PerformanceScoreResult {
+  performance_score: number
+  grade: string
+  status_message: string
+  total_issues: number
+  files_analyzed: number
+  severity_breakdown: Record<string, number>
+  issue_type_breakdown: Record<string, number>
+}
+interface RedisHealthResult {
+  redis_health_score: number
+  grade: string
+  status_message: string
+  total_files: number
+  total_issues: number
+  files_with_issues: number
+}
+const securityScore = ref<SecurityScoreResult | null>(null)
+const loadingSecurityScore = ref(false)
+const securityScoreError = ref('')
+const performanceScore = ref<PerformanceScoreResult | null>(null)
+const loadingPerformanceScore = ref(false)
+const performanceScoreError = ref('')
+const redisHealth = ref<RedisHealthResult | null>(null)
+const loadingRedisHealth = ref(false)
+const redisHealthError = ref('')
+
+// Issue #538: Environment Analysis data
+interface HardcodedValue {
+  file_path: string
+  line_number: number
+  variable_name?: string
+  value: string
+  value_type: string
+  severity: string
+  suggestion: string
+}
+interface EnvRecommendation {
+  env_var_name: string
+  default_value: string
+  description: string
+  category: string
+  priority: string
+}
+interface EnvironmentAnalysisResult {
+  total_hardcoded_values: number
+  high_priority_count: number
+  recommendations_count: number
+  categories: Record<string, number>
+  analysis_time_seconds: number
+  hardcoded_values: HardcodedValue[]
+  recommendations: EnvRecommendation[]
+}
+const environmentAnalysis = ref<EnvironmentAnalysisResult | null>(null)
+const loadingEnvAnalysis = ref(false)
+const envAnalysisError = ref('')
 
 // Loading states for individual data types
 const loadingProgress = reactive({
@@ -1625,19 +2157,27 @@ const loadCodebaseAnalyticsData = async () => {
     await Promise.all([
       getCodebaseStats(),
       getProblemsReport(),
-      loadDeclarations(),    // Silent version
-      loadDuplicates(),      // Silent version
-      loadHardcodes(),       // Silent version - hardcoded values detection
-      loadChartData(),       // Load chart data for visualizations
-      loadDependencyData(),  // Load dependency analysis
-      loadImportTreeData(),  // Load import tree data
-      loadCallGraphData()    // Load function call graph
+      loadDeclarations(),       // Silent version
+      loadDuplicates(),         // Silent version
+      loadHardcodes(),          // Silent version - hardcoded values detection
+      loadChartData(),          // Load chart data for visualizations
+      loadDependencyData(),     // Load dependency analysis
+      loadImportTreeData(),     // Load import tree data
+      loadCallGraphData(),      // Load function call graph
+      loadConfigDuplicates(),   // Issue #538: Config duplicates detection
+      loadApiEndpointAnalysis(), // Issue #538: API endpoint analysis
+      loadBugPrediction(),      // Issue #538: Bug prediction analysis
+      loadSecurityScore(),      // Issue #538: Security score
+      loadPerformanceScore(),   // Issue #538: Performance score
+      loadRedisHealth(),        // Issue #538: Redis health score
+      loadEnvironmentAnalysis() // Issue #538: Environment analysis
     ])
 
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Failed to load codebase analytics data:', error)
     // Provide user feedback for critical failures
-    progressStatus.value = `Failed to load analytics: ${error.message}`
+    progressStatus.value = `Failed to load analytics: ${errorMessage}`
   }
 }
 
@@ -1954,6 +2494,259 @@ const loadHardcodes = async () => {
   }
 }
 
+// Issue #538: Silent version of config duplicates loading
+const loadConfigDuplicates = async () => {
+  loadingConfigDuplicates.value = true
+  configDuplicatesError.value = ''
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/analytics/codebase/config-duplicates`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    })
+    if (!response.ok) {
+      throw new Error(`Config duplicates endpoint returned ${response.status}`)
+    }
+    const data = await response.json()
+    if (data.status === 'success') {
+      configDuplicatesAnalysis.value = {
+        duplicates_found: data.duplicates_found || 0,
+        duplicates: data.duplicates || [],
+        report: data.report || ''
+      }
+    } else {
+      throw new Error('Invalid response format')
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    logger.error('Failed to load config duplicates:', error)
+    configDuplicatesError.value = errorMessage
+  } finally {
+    loadingConfigDuplicates.value = false
+  }
+}
+
+// Issue #538: Silent version of bug prediction loading
+const loadBugPrediction = async () => {
+  loadingBugPrediction.value = true
+  bugPredictionError.value = ''
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/analytics/bug-prediction/analyze?limit=50`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    })
+    if (!response.ok) {
+      throw new Error(`Bug prediction endpoint returned ${response.status}`)
+    }
+    const data = await response.json()
+    bugPredictionAnalysis.value = {
+      timestamp: data.timestamp || new Date().toISOString(),
+      total_files: data.total_files || 0,
+      analyzed_files: data.analyzed_files || 0,
+      high_risk_count: data.high_risk_count || 0,
+      files: data.files || []
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    logger.error('Failed to load bug prediction:', error)
+    bugPredictionError.value = errorMessage
+  } finally {
+    loadingBugPrediction.value = false
+  }
+}
+
+// Issue #538: Silent version of API endpoint analysis loading
+const loadApiEndpointAnalysis = async () => {
+  loadingApiEndpoints.value = true
+  apiEndpointsError.value = ''
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/analytics/codebase/endpoint-analysis`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    })
+    if (!response.ok) {
+      throw new Error(`Endpoint analysis returned ${response.status}`)
+    }
+    const data = await response.json()
+    if (data.status === 'success' && data.analysis) {
+      apiEndpointAnalysis.value = data.analysis
+    } else {
+      throw new Error('Invalid response format')
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    logger.error('Failed to load API endpoint analysis:', error)
+    apiEndpointsError.value = errorMessage
+  } finally {
+    loadingApiEndpoints.value = false
+  }
+}
+
+// Issue #538: Load security score from code intelligence
+const loadSecurityScore = async () => {
+  if (!rootPath.value) return
+  loadingSecurityScore.value = true
+  securityScoreError.value = ''
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/code-intelligence/security/score?path=${encodeURIComponent(rootPath.value)}`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    })
+    if (!response.ok) {
+      throw new Error(`Security score endpoint returned ${response.status}`)
+    }
+    const data = await response.json()
+    if (data.status === 'success') {
+      securityScore.value = {
+        security_score: data.security_score || 0,
+        grade: data.grade || 'N/A',
+        risk_level: data.risk_level || 'unknown',
+        status_message: data.status_message || '',
+        total_findings: data.total_findings || 0,
+        critical_issues: data.critical_issues || 0,
+        high_issues: data.high_issues || 0,
+        files_analyzed: data.files_analyzed || 0,
+        severity_breakdown: data.severity_breakdown || {},
+        owasp_breakdown: data.owasp_breakdown || {}
+      }
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    logger.error('Failed to load security score:', error)
+    securityScoreError.value = errorMessage
+  } finally {
+    loadingSecurityScore.value = false
+  }
+}
+
+// Issue #538: Load performance score from code intelligence
+const loadPerformanceScore = async () => {
+  if (!rootPath.value) return
+  loadingPerformanceScore.value = true
+  performanceScoreError.value = ''
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/code-intelligence/performance/score?path=${encodeURIComponent(rootPath.value)}`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    })
+    if (!response.ok) {
+      throw new Error(`Performance score endpoint returned ${response.status}`)
+    }
+    const data = await response.json()
+    if (data.status === 'success') {
+      performanceScore.value = {
+        performance_score: data.performance_score || 0,
+        grade: data.grade || 'N/A',
+        status_message: data.status_message || '',
+        total_issues: data.total_issues || 0,
+        files_analyzed: data.files_analyzed || 0,
+        severity_breakdown: data.severity_breakdown || {},
+        issue_type_breakdown: data.issue_type_breakdown || {}
+      }
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    logger.error('Failed to load performance score:', error)
+    performanceScoreError.value = errorMessage
+  } finally {
+    loadingPerformanceScore.value = false
+  }
+}
+
+// Issue #538: Load Redis health score from code intelligence
+const loadRedisHealth = async () => {
+  if (!rootPath.value) return
+  loadingRedisHealth.value = true
+  redisHealthError.value = ''
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/code-intelligence/redis/health-score?path=${encodeURIComponent(rootPath.value)}`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    })
+    if (!response.ok) {
+      throw new Error(`Redis health endpoint returned ${response.status}`)
+    }
+    const data = await response.json()
+    if (data.status === 'success') {
+      redisHealth.value = {
+        redis_health_score: data.redis_health_score || 0,
+        grade: data.grade || 'N/A',
+        status_message: data.status_message || '',
+        total_files: data.total_files || 0,
+        total_issues: data.total_issues || 0,
+        files_with_issues: data.files_with_issues || 0
+      }
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    logger.error('Failed to load Redis health:', error)
+    redisHealthError.value = errorMessage
+  } finally {
+    loadingRedisHealth.value = false
+  }
+}
+
+// Issue #538: Load environment analysis from codebase analytics
+const loadEnvironmentAnalysis = async () => {
+  if (!rootPath.value) return
+  loadingEnvAnalysis.value = true
+  envAnalysisError.value = ''
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/analytics/codebase/env-analysis?path=${encodeURIComponent(rootPath.value)}`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    })
+    if (!response.ok) {
+      throw new Error(`Environment analysis endpoint returned ${response.status}`)
+    }
+    const data = await response.json()
+    if (data.status === 'success') {
+      environmentAnalysis.value = {
+        total_hardcoded_values: data.total_hardcoded_values || 0,
+        high_priority_count: data.high_priority_count || 0,
+        recommendations_count: data.recommendations_count || 0,
+        categories: data.categories || {},
+        analysis_time_seconds: data.analysis_time_seconds || 0,
+        hardcoded_values: data.hardcoded_values || [],
+        recommendations: data.recommendations || []
+      }
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    logger.error('Failed to load environment analysis:', error)
+    envAnalysisError.value = errorMessage
+  } finally {
+    loadingEnvAnalysis.value = false
+  }
+}
+
 onUnmounted(() => {
   if (refreshInterval.value) {
     clearInterval(refreshInterval.value)
@@ -2224,6 +3017,39 @@ const getCoverageClass = (percentage) => {
   if (percentage < 75) return 'warning'
   if (percentage < 90) return 'info'
   return 'success'
+}
+
+// Issue #538: Truncate long config values for display
+const truncateValue = (value: string, maxLength = 50): string => {
+  if (!value) return 'Unknown'
+  const str = String(value)
+  if (str.length <= maxLength) return str
+  return str.substring(0, maxLength) + '...'
+}
+
+// Issue #538: Get CSS class based on risk score
+const getRiskClass = (riskScore: number): string => {
+  if (riskScore >= 80) return 'item-critical'
+  if (riskScore >= 60) return 'item-warning'
+  if (riskScore >= 40) return 'item-info'
+  return 'item-success'
+}
+
+// Issue #538: Format factor name for display
+const formatFactorName = (factor: string): string => {
+  return factor
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, l => l.toUpperCase())
+}
+
+// Issue #538: Get CSS class based on grade letter
+const getGradeClass = (grade: string): string => {
+  const gradeUpper = grade?.toUpperCase() || ''
+  if (gradeUpper === 'A' || gradeUpper === 'A+') return 'grade-a'
+  if (gradeUpper === 'B' || gradeUpper === 'B+') return 'grade-b'
+  if (gradeUpper === 'C' || gradeUpper === 'C+') return 'grade-c'
+  if (gradeUpper === 'D' || gradeUpper === 'D+') return 'grade-d'
+  return 'grade-f'
 }
 
 // Issue #527: Format timestamp for display
@@ -5551,5 +6377,787 @@ const getDeclarationTypeClass = (type) => {
 
 .scan-timestamp i {
   color: #94a3b8;
+}
+
+/* Issue #538: Config Duplicates Section */
+.config-duplicates-section {
+  margin-top: 32px;
+  padding: 24px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 12px;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.config-duplicates-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #f9fafb;
+  margin-bottom: 16px;
+  font-size: 1.2em;
+  font-weight: 600;
+}
+
+.config-duplicates-section h3 i {
+  color: #f59e0b;
+}
+
+.config-duplicates-section .loading-state,
+.config-duplicates-section .error-state,
+.config-duplicates-section .success-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.config-duplicates-section .loading-state {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #93c5fd;
+}
+
+.config-duplicates-section .error-state {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+.config-duplicates-section .success-state {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #86efac;
+}
+
+.config-duplicates-section .success-state i {
+  color: #22c55e;
+}
+
+.config-duplicates-section .duplicates-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.config-duplicates-section .item-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.config-duplicates-section .config-value-badge {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 0.85em;
+}
+
+.config-duplicates-section .location-count {
+  color: #9ca3af;
+  font-size: 0.85em;
+}
+
+.config-duplicates-section .item-locations {
+  padding-left: 12px;
+  border-left: 2px solid rgba(245, 158, 11, 0.3);
+}
+
+.config-duplicates-section .location-item {
+  color: #94a3b8;
+  font-size: 0.85em;
+  padding: 2px 0;
+}
+
+.config-duplicates-section .more-locations {
+  color: #64748b;
+  font-size: 0.8em;
+  font-style: italic;
+  padding-top: 4px;
+}
+
+.config-duplicates-section .recommendation-box {
+  margin-top: 20px;
+  padding: 12px 16px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 8px;
+  color: #93c5fd;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.config-duplicates-section .recommendation-box i {
+  color: #fbbf24;
+}
+
+.config-duplicates-section .recommendation-box code {
+  background: rgba(30, 41, 59, 0.8);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+/* Issue #538: Bug Prediction Section */
+.bug-prediction-section {
+  margin-top: 32px;
+  padding: 24px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 12px;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.bug-prediction-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #f9fafb;
+  margin-bottom: 16px;
+  font-size: 1.2em;
+  font-weight: 600;
+}
+
+.bug-prediction-section h3 i {
+  color: #ef4444;
+}
+
+.bug-prediction-section .loading-state,
+.bug-prediction-section .error-state,
+.bug-prediction-section .success-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.bug-prediction-section .loading-state {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #93c5fd;
+}
+
+.bug-prediction-section .error-state {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+.bug-prediction-section .success-state {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #86efac;
+}
+
+.bug-prediction-section .success-state i {
+  color: #22c55e;
+}
+
+/* Risk Files List */
+.bug-prediction-section .risk-files-list {
+  margin-top: 20px;
+}
+
+.bug-prediction-section .risk-files-list h4 {
+  color: #e5e7eb;
+  font-size: 1em;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
+.bug-prediction-section .list-item {
+  padding: 16px;
+  background: rgba(17, 24, 39, 0.5);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  border-left: 4px solid #6b7280;
+  transition: all 0.2s ease;
+}
+
+.bug-prediction-section .list-item:hover {
+  background: rgba(17, 24, 39, 0.7);
+}
+
+.bug-prediction-section .list-item.item-critical {
+  border-left-color: #ef4444;
+}
+
+.bug-prediction-section .list-item.item-warning {
+  border-left-color: #f59e0b;
+}
+
+.bug-prediction-section .list-item.item-info {
+  border-left-color: #3b82f6;
+}
+
+.bug-prediction-section .list-item.item-success {
+  border-left-color: #22c55e;
+}
+
+.bug-prediction-section .item-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.bug-prediction-section .risk-badge {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.85em;
+  min-width: 50px;
+  text-align: center;
+}
+
+.bug-prediction-section .risk-badge.item-critical {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+.bug-prediction-section .risk-badge.item-warning {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+}
+
+.bug-prediction-section .risk-badge.item-info {
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+}
+
+.bug-prediction-section .risk-badge.item-success {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+}
+
+.bug-prediction-section .item-path {
+  color: #d1d5db;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 0.9em;
+  flex: 1;
+  word-break: break-all;
+}
+
+.bug-prediction-section .risk-level-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.bug-prediction-section .risk-level-badge.critical,
+.bug-prediction-section .risk-level-badge.high {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+.bug-prediction-section .risk-level-badge.medium {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+}
+
+.bug-prediction-section .risk-level-badge.low {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+}
+
+/* Risk Factors */
+.bug-prediction-section .risk-factors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.bug-prediction-section .factor-badge {
+  padding: 3px 8px;
+  background: rgba(71, 85, 105, 0.4);
+  border-radius: 4px;
+  font-size: 0.8em;
+  color: #94a3b8;
+}
+
+/* Prevention Tips */
+.bug-prediction-section .prevention-tips {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 6px;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.bug-prediction-section .prevention-tips i {
+  color: #fbbf24;
+  margin-top: 2px;
+}
+
+.bug-prediction-section .prevention-tips span {
+  color: #93c5fd;
+  font-size: 0.85em;
+  line-height: 1.4;
+}
+
+.bug-prediction-section .show-more {
+  text-align: center;
+  padding: 10px;
+}
+
+.bug-prediction-section .show-more .muted {
+  color: #64748b;
+  font-size: 0.85em;
+}
+
+/* Issue #538: Code Intelligence Scores Section */
+.code-intelligence-scores-section {
+  margin-top: 32px;
+  padding: 24px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 12px;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.code-intelligence-scores-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #f9fafb;
+  margin-bottom: 20px;
+  font-size: 1.2em;
+  font-weight: 600;
+}
+
+.code-intelligence-scores-section h3 i {
+  color: #3b82f6;
+}
+
+/* Score Cards Grid */
+.scores-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.score-card {
+  background: rgba(17, 24, 39, 0.6);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid rgba(71, 85, 105, 0.4);
+  transition: all 0.2s ease;
+}
+
+.score-card:hover {
+  border-color: rgba(71, 85, 105, 0.7);
+  background: rgba(17, 24, 39, 0.8);
+}
+
+.score-card .score-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.score-card.security-card .score-header i {
+  color: #ef4444;
+}
+
+.score-card.performance-card .score-header i {
+  color: #f59e0b;
+}
+
+.score-card.redis-card .score-header i {
+  color: #22c55e;
+}
+
+.score-card .score-loading {
+  display: flex;
+  justify-content: center;
+  padding: 30px;
+  color: #93c5fd;
+  font-size: 1.5em;
+}
+
+.score-card .score-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 8px;
+  color: #fca5a5;
+  font-size: 0.85em;
+}
+
+.score-card .score-error i {
+  color: #ef4444;
+}
+
+.score-card .score-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.score-card .score-value {
+  font-size: 3em;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.score-card .score-value.score-high {
+  color: #22c55e;
+}
+
+.score-card .score-value.score-medium {
+  color: #f59e0b;
+}
+
+.score-card .score-value.score-low {
+  color: #ef4444;
+}
+
+.score-card .score-grade {
+  font-size: 1.5em;
+  font-weight: 700;
+  padding: 4px 16px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+.score-card .score-grade.grade-a {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+}
+
+.score-card .score-grade.grade-b {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+
+.score-card .score-grade.grade-c {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+}
+
+.score-card .score-grade.grade-d {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+
+.score-card .score-grade.grade-f {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+.score-card .score-status {
+  color: #94a3b8;
+  font-size: 0.9em;
+  margin-bottom: 12px;
+}
+
+.score-card .score-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.score-card .detail-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.8em;
+}
+
+.score-card .detail-item.critical {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+.score-card .detail-item.warning {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+}
+
+.score-card .detail-item.info {
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+}
+
+.score-card .score-empty {
+  display: flex;
+  justify-content: center;
+  padding: 30px;
+  color: #64748b;
+  font-style: italic;
+}
+
+/* Issue #538: Environment Analysis Section */
+.environment-analysis-section {
+  margin-top: 32px;
+  padding: 24px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 12px;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.environment-analysis-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #f9fafb;
+  margin-bottom: 16px;
+  font-size: 1.2em;
+  font-weight: 600;
+}
+
+.environment-analysis-section h3 i {
+  color: #22c55e;
+}
+
+.environment-analysis-section .loading-state,
+.environment-analysis-section .error-state,
+.environment-analysis-section .success-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.environment-analysis-section .loading-state {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #93c5fd;
+}
+
+.environment-analysis-section .error-state {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+.environment-analysis-section .success-state {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #86efac;
+}
+
+.environment-analysis-section .success-state i {
+  color: #22c55e;
+}
+
+/* Categories Breakdown */
+.environment-analysis-section .categories-breakdown {
+  margin-top: 20px;
+}
+
+.environment-analysis-section .categories-breakdown h4 {
+  color: #e5e7eb;
+  font-size: 1em;
+  margin-bottom: 12px;
+}
+
+.environment-analysis-section .category-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.environment-analysis-section .category-badge {
+  padding: 4px 10px;
+  background: rgba(71, 85, 105, 0.4);
+  border-radius: 4px;
+  font-size: 0.85em;
+  color: #94a3b8;
+}
+
+/* Recommendations List */
+.environment-analysis-section .recommendations-list {
+  margin-top: 20px;
+}
+
+.environment-analysis-section .recommendations-list h4 {
+  color: #e5e7eb;
+  font-size: 1em;
+  margin-bottom: 12px;
+}
+
+.environment-analysis-section .recommendation-item {
+  padding: 14px;
+  background: rgba(17, 24, 39, 0.5);
+  border-radius: 8px;
+  margin-bottom: 10px;
+  border-left: 4px solid #6b7280;
+}
+
+.environment-analysis-section .recommendation-item.priority-high {
+  border-left-color: #ef4444;
+}
+
+.environment-analysis-section .recommendation-item.priority-medium {
+  border-left-color: #f59e0b;
+}
+
+.environment-analysis-section .recommendation-item.priority-low {
+  border-left-color: #22c55e;
+}
+
+.environment-analysis-section .rec-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.environment-analysis-section .env-var-name {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.environment-analysis-section .priority-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.7em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.environment-analysis-section .priority-badge.high {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+.environment-analysis-section .priority-badge.medium {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+}
+
+.environment-analysis-section .priority-badge.low {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+}
+
+.environment-analysis-section .rec-description {
+  color: #d1d5db;
+  font-size: 0.9em;
+  margin-bottom: 6px;
+}
+
+.environment-analysis-section .rec-default {
+  color: #9ca3af;
+  font-size: 0.85em;
+}
+
+.environment-analysis-section .rec-default code {
+  background: rgba(30, 41, 59, 0.8);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+/* Hardcoded Values Preview */
+.environment-analysis-section .hardcoded-preview {
+  margin-top: 20px;
+}
+
+.environment-analysis-section .hardcoded-preview h4 {
+  color: #e5e7eb;
+  font-size: 1em;
+  margin-bottom: 12px;
+}
+
+.environment-analysis-section .hardcoded-item {
+  padding: 12px;
+  background: rgba(17, 24, 39, 0.5);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  border-left: 3px solid #6b7280;
+}
+
+.environment-analysis-section .hardcoded-item.severity-high {
+  border-left-color: #ef4444;
+}
+
+.environment-analysis-section .hardcoded-item.severity-medium {
+  border-left-color: #f59e0b;
+}
+
+.environment-analysis-section .hardcoded-item.severity-low {
+  border-left-color: #22c55e;
+}
+
+.environment-analysis-section .hv-location {
+  margin-bottom: 6px;
+}
+
+.environment-analysis-section .file-path {
+  color: #93c5fd;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 0.85em;
+}
+
+.environment-analysis-section .line-number {
+  color: #64748b;
+  font-size: 0.85em;
+}
+
+.environment-analysis-section .hv-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.environment-analysis-section .hv-value code {
+  background: rgba(245, 158, 11, 0.1);
+  color: #fcd34d;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+.environment-analysis-section .value-type {
+  color: #64748b;
+  font-size: 0.75em;
+  text-transform: uppercase;
+}
+
+.environment-analysis-section .hv-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+.environment-analysis-section .hv-suggestion i {
+  color: #fbbf24;
+}
+
+.environment-analysis-section .hv-suggestion code {
+  color: #86efac;
+  background: transparent;
 }
 </style>

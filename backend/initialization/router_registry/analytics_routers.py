@@ -47,6 +47,8 @@ ANALYTICS_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     # Learning and patterns
     ("backend.api.analytics_pattern_learning", "/pattern-learning", ["pattern-learning", "analytics", "self-improving"], "analytics_pattern_learning"),
     ("backend.api.analytics_continuous_learning", "/continuous-learning", ["continuous-learning", "analytics", "learning"], "analytics_continuous_learning"),
+    # Advanced analytics - Issue #59
+    ("backend.api.analytics_advanced", "", ["advanced-analytics", "analytics", "bi"], "analytics_advanced"),
 ]
 
 
