@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 from ..storage import get_redis_connection, get_code_collection
+from ..scanner import indexing_tasks
 from .shared import _in_memory_storage
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,27 @@ def _no_data_response(message: str = "No codebase data found. Run indexing first
     return JSONResponse({"status": "no_data", "message": message, "stats": None})
 
 
+def _get_active_indexing_task() -> Optional[dict]:
+    """
+    Check if there's an active indexing task and return its info.
+
+    Issue #540: Used to show indexing status in stats endpoint.
+
+    Returns:
+        Task info dict if indexing is in progress, None otherwise.
+    """
+    for task_id, task_info in indexing_tasks.items():
+        if task_info.get("status") == "running":
+            return {
+                "task_id": task_id,
+                "progress": task_info.get("progress", {}),
+                "phases": task_info.get("phases", {}),
+                "stats": task_info.get("stats", {}),
+                "started_at": task_info.get("started_at"),
+            }
+    return None
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_codebase_stats",
@@ -72,32 +94,72 @@ def _no_data_response(message: str = "No codebase data found. Run indexing first
 )
 @router.get("/stats")
 async def get_codebase_stats():
-    """Get real codebase statistics from storage"""
+    """
+    Get real codebase statistics from storage.
+
+    Issue #540: Returns indexing status when indexing is in progress,
+    along with any available stats from the previous indexing run.
+    """
+    # Issue #540: Check if indexing is in progress
+    active_task = _get_active_indexing_task()
+
     code_collection = get_code_collection()
 
     if not code_collection:
+        # Issue #540: Even if ChromaDB fails, show indexing status if available
+        if active_task:
+            return JSONResponse({
+                "status": "indexing",
+                "message": "Indexing in progress. ChromaDB connection pending.",
+                "indexing": active_task,
+                "stats": None,
+            })
         return _no_data_response("ChromaDB connection failed.")
 
     try:
         results = code_collection.get(ids=["codebase_stats"], include=["metadatas"])
     except Exception as chroma_error:
         logger.warning("ChromaDB stats query failed: %s", chroma_error)
+        # Issue #540: Show indexing status even on query failure
+        if active_task:
+            return JSONResponse({
+                "status": "indexing",
+                "message": "Indexing in progress.",
+                "indexing": active_task,
+                "stats": None,
+            })
         return _no_data_response()
 
     # Check if we have data
     if not results.get("metadatas") or len(results["metadatas"]) == 0:
+        # Issue #540: Show indexing status when no stats yet
+        if active_task:
+            return JSONResponse({
+                "status": "indexing",
+                "message": "Indexing in progress. Stats will be available when complete.",
+                "indexing": active_task,
+                "stats": None,
+            })
         return _no_data_response()
 
     # Parse and return stats (Issue #315 - use extracted helper)
     stats_metadata = results["metadatas"][0]
     stats = _parse_stats_metadata(stats_metadata)
 
-    return JSONResponse({
-        "status": "success",
+    # Issue #540: Include indexing info if indexing is in progress
+    # This shows both the previous stats AND current indexing progress
+    response = {
+        "status": "indexing" if active_task else "success",
         "stats": stats,
         "last_indexed": stats_metadata.get("last_indexed", "Never"),
         "storage_type": "chromadb",
-    })
+    }
+
+    if active_task:
+        response["message"] = "Showing previous stats. New indexing in progress."
+        response["indexing"] = active_task
+
+    return JSONResponse(response)
 
 
 @with_error_handling(

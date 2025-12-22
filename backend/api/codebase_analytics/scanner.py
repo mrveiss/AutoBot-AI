@@ -400,16 +400,24 @@ async def _clear_redis_codebase_cache(task_id: str) -> None:
 
 async def _clear_chromadb_collection(code_collection, task_id: str) -> None:
     """
-    Clear existing entries from ChromaDB collection.
+    Clear existing entries from ChromaDB collection, preserving codebase_stats.
 
     Issue #398: Extracted from _initialize_chromadb_collection to reduce method length.
+    Issue #540: Preserve codebase_stats document during clearing so stats remain
+                available while indexing is in progress.
     """
     try:
         existing_data = await code_collection.get()
         existing_ids = existing_data["ids"]
         if existing_ids:
-            await code_collection.delete(ids=existing_ids)
-            logger.info("[Task %s] Cleared %s existing items from ChromaDB", task_id, len(existing_ids))
+            # Issue #540: Preserve codebase_stats so stats endpoint returns data during indexing
+            ids_to_delete = [id for id in existing_ids if id != "codebase_stats"]
+            if ids_to_delete:
+                await code_collection.delete(ids=ids_to_delete)
+                logger.info(
+                    "[Task %s] Cleared %s existing items from ChromaDB (preserved codebase_stats)",
+                    task_id, len(ids_to_delete)
+                )
     except Exception as e:
         logger.warning("[Task %s] Error clearing collection: %s", task_id, e)
 

@@ -35,9 +35,17 @@ def _get_environment_analyzer():
 
     Lazy import to avoid circular dependencies and allow graceful degradation
     if the tools module is not available.
+
+    Issue #542: Fixed import path resolution by adding project root to sys.path
+    before the tools path, allowing env_analyzer.py to import from src.utils.
     """
     try:
-        # Add tools path if not present
+        # Issue #542: Add project root FIRST so env_analyzer.py can import from src.utils
+        project_root = str(Path(__file__).resolve().parents[4])
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+
+        # Add tools path second for importing the analyzer module itself
         tools_path = str(Path(__file__).resolve().parents[4] / "tools" / "code-analysis-suite")
         if tools_path not in sys.path:
             sys.path.insert(0, tools_path)

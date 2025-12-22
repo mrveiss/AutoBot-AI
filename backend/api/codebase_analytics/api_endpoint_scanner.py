@@ -91,10 +91,15 @@ _PATH_PARAM_RE = re.compile(r'\{[^}]+\}')
 class BackendEndpointScanner:
     """Scans backend Python files for FastAPI route definitions."""
 
+    # Global API prefix applied to all routers in app_factory.py
+    API_PREFIX = "/api"
+
     def __init__(self, project_root: Optional[Path] = None):
         self.project_root = project_root or get_project_root()
         self.backend_path = self.project_root / "backend" / "api"
         self._router_prefixes: Dict[str, str] = {}
+        # Map module name to router prefix (e.g., "chat" -> "", "system" -> "/system")
+        self._module_prefix_map: Dict[str, str] = {}
 
     def scan_all_endpoints(self) -> List[APIEndpointItem]:
         """
@@ -109,7 +114,7 @@ class BackendEndpointScanner:
             logger.warning("Backend API path not found: %s", self.backend_path)
             return endpoints
 
-        # First pass: collect router prefixes from registry
+        # First pass: collect router prefixes from registry files
         self._collect_router_prefixes()
 
         # Second pass: scan all Python files
@@ -129,17 +134,112 @@ class BackendEndpointScanner:
         return endpoints
 
     def _collect_router_prefixes(self) -> None:
-        """Collect router prefixes from registry.py and app factory."""
-        registry_file = self.backend_path / "registry.py"
-        if registry_file.exists():
-            try:
-                content = registry_file.read_text(encoding="utf-8")
-                # Find all include_router calls with prefixes
-                for match in _ROUTER_INCLUDE_RE.finditer(content):
-                    prefix = match.group(1)
-                    self._router_prefixes[prefix] = prefix
-            except Exception as e:
-                logger.debug("Error reading registry: %s", e)
+        """
+        Collect router prefixes from router registry files.
+
+        Parses:
+        - backend/initialization/router_registry/core_routers.py
+        - backend/initialization/router_registry/analytics_routers.py
+        - backend/initialization/router_registry/optional_routers.py
+        """
+        router_registry_path = self.project_root / "backend" / "initialization" / "router_registry"
+
+        # Parse core_routers.py for module -> prefix mapping
+        core_routers_file = router_registry_path / "core_routers.py"
+        if core_routers_file.exists():
+            self._parse_router_registry(core_routers_file)
+
+        # Parse optional_routers.py
+        optional_routers_file = router_registry_path / "optional_routers.py"
+        if optional_routers_file.exists():
+            self._parse_router_registry(optional_routers_file)
+
+        # Parse analytics_routers.py (uses config tuples)
+        analytics_routers_file = router_registry_path / "analytics_routers.py"
+        if analytics_routers_file.exists():
+            self._parse_analytics_registry(analytics_routers_file)
+
+        logger.debug("Collected %d module prefix mappings", len(self._module_prefix_map))
+
+    def _parse_router_registry(self, file_path: Path) -> None:
+        """Parse a router registry file to extract module -> prefix mappings."""
+        try:
+            content = file_path.read_text(encoding="utf-8")
+
+            # Pattern to match: (router_name, "/prefix", [...], "name")
+            # Matches tuples like: (chat_router, "", ["chat"], "chat")
+            tuple_pattern = re.compile(
+                r'\(\s*(\w+_router)\s*,\s*["\']([^"\']*)["\']',
+                re.MULTILINE
+            )
+
+            for match in tuple_pattern.finditer(content):
+                router_var = match.group(1)  # e.g., "chat_router"
+                prefix = match.group(2)      # e.g., "" or "/system"
+
+                # Extract module name from router variable (chat_router -> chat)
+                module_name = router_var.replace("_router", "")
+
+                # Store mapping: module_name -> full API prefix
+                full_prefix = f"{self.API_PREFIX}{prefix}"
+                self._module_prefix_map[module_name] = full_prefix
+
+                # Also map the file name pattern
+                self._module_prefix_map[f"backend/api/{module_name}.py"] = full_prefix
+
+        except Exception as e:
+            logger.debug("Error parsing router registry %s: %s", file_path, e)
+
+    def _parse_analytics_registry(self, file_path: Path) -> None:
+        """Parse analytics router registry which uses config tuples."""
+        try:
+            content = file_path.read_text(encoding="utf-8")
+
+            # Pattern for ANALYTICS_ROUTER_CONFIGS tuples:
+            # ("module_path", "/prefix", ["tags"], "name")
+            config_pattern = re.compile(
+                r'\(\s*["\']([^"\']+)["\'],\s*["\']([^"\']*)["\']',
+                re.MULTILINE
+            )
+
+            for match in config_pattern.finditer(content):
+                module_path = match.group(1)  # e.g., "backend.api.codebase_analytics"
+                prefix = match.group(2)       # e.g., "/analytics"
+
+                # Map the module path to full prefix
+                full_prefix = f"{self.API_PREFIX}{prefix}"
+                self._module_prefix_map[module_path] = full_prefix
+
+                # Also derive file path mapping
+                file_path_str = module_path.replace(".", "/")
+                self._module_prefix_map[file_path_str] = full_prefix
+
+        except Exception as e:
+            logger.debug("Error parsing analytics registry %s: %s", file_path, e)
+
+    def _get_module_prefix(self, file_path: Path) -> str:
+        """Get the API prefix for a given file based on router registry."""
+        relative_path = str(file_path.relative_to(self.project_root))
+
+        # Try direct file path match
+        if relative_path in self._module_prefix_map:
+            return self._module_prefix_map[relative_path]
+
+        # Try module name from file name (e.g., chat.py -> chat)
+        module_name = file_path.stem
+        if module_name in self._module_prefix_map:
+            return self._module_prefix_map[module_name]
+
+        # Check if file is in codebase_analytics subdirectory
+        if "codebase_analytics" in str(file_path):
+            # Check for router prefix in parent
+            if "backend.api.codebase_analytics" in self._module_prefix_map:
+                base_prefix = self._module_prefix_map["backend.api.codebase_analytics"]
+                # Check for additional prefix from codebase/router.py
+                return f"{base_prefix}/codebase"
+
+        # Default: use /api prefix with no additional router prefix
+        return self.API_PREFIX
 
     def _scan_file(self, file_path: Path) -> List[APIEndpointItem]:
         """Scan a single Python file for endpoints."""
@@ -157,15 +257,31 @@ class BackendEndpointScanner:
                 # Fall back to regex
                 endpoints.extend(self._scan_with_regex(content, file_path))
 
-            # Get file-level router prefix
+            # Get the module prefix from router registry (includes /api)
+            module_prefix = self._get_module_prefix(file_path)
+
+            # Get file-level router prefix (from APIRouter(prefix=...))
             file_prefix = self._get_file_router_prefix(content)
-            if file_prefix:
-                for ep in endpoints:
-                    if ep.router_prefix is None:
-                        ep.router_prefix = file_prefix
-                    # Apply prefix to path if not already present
-                    if not ep.path.startswith(file_prefix):
-                        ep.path = file_prefix + ep.path
+
+            # Apply prefixes to build full API path
+            for ep in endpoints:
+                # Start with the endpoint path from decorator
+                endpoint_path = ep.path
+
+                # Apply file-level router prefix if present
+                if file_prefix and not endpoint_path.startswith(file_prefix):
+                    endpoint_path = file_prefix + endpoint_path
+                    ep.router_prefix = file_prefix
+
+                # Apply module prefix if path doesn't already have /api
+                if not endpoint_path.startswith("/api"):
+                    ep.path = module_prefix + endpoint_path
+                else:
+                    ep.path = endpoint_path
+
+                # Store the full router prefix for reference
+                if ep.router_prefix is None:
+                    ep.router_prefix = module_prefix
 
         except Exception as e:
             logger.debug("Error scanning file %s: %s", file_path, e)
@@ -297,6 +413,9 @@ class FrontendAPICallScanner:
                 if "node_modules" in str(file):
                     continue
                 if file.name.endswith(".d.ts"):
+                    continue
+                # Skip test files - they contain mock data, not real API calls
+                if "__tests__" in str(file) or ".test." in file.name or ".spec." in file.name:
                     continue
 
                 try:

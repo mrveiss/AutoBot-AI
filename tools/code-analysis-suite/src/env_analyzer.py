@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Environment Variable Analyzer using Redis and NPU acceleration
 Analyzes codebase for hardcoded values that should be environment variables
@@ -8,17 +11,34 @@ import asyncio
 import json
 import logging
 import re
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 
-from src.utils.redis_client import get_redis_client
-from src.unified_config import UnifiedConfig
+# Issue #542: Handle imports for both standalone execution and backend import
+# When imported from backend, project root is in sys.path
+# When running standalone, we need to add it manually
+_project_root = Path(__file__).resolve().parents[3]  # tools/code-analysis-suite/src -> project root
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
+try:
+    from src.utils.redis_client import get_redis_client
+    from src.unified_config import UnifiedConfig
+    _REDIS_AVAILABLE = True
+    _CONFIG_AVAILABLE = True
+except ImportError:
+    # Fallback for when running without project context
+    get_redis_client = None
+    UnifiedConfig = None
+    _REDIS_AVAILABLE = False
+    _CONFIG_AVAILABLE = False
 
 
-# Initialize unified config
-config = UnifiedConfig()
+# Initialize unified config (with fallback)
+config = UnifiedConfig() if _CONFIG_AVAILABLE else None
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level tuple for literal value AST types
@@ -62,7 +82,14 @@ class EnvironmentAnalyzer:
     """Analyzes code for hardcoded values that should be configurable"""
 
     def __init__(self, redis_client=None):
-        self.redis_client = redis_client or get_redis_client(async_client=True)
+        # Issue #542: Handle case where Redis is not available
+        if redis_client is not None:
+            self.redis_client = redis_client
+        elif _REDIS_AVAILABLE and get_redis_client is not None:
+            self.redis_client = get_redis_client(async_client=True)
+        else:
+            self.redis_client = None
+            logger.info("Redis not available - caching disabled for EnvironmentAnalyzer")
         self.config = config
 
         # Caching keys

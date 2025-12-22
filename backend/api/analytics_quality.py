@@ -163,7 +163,12 @@ def calculate_health_score(metrics: dict[str, float]) -> HealthScore:
 
 
 async def get_quality_data_from_storage() -> dict[str, Any]:
-    """Retrieve quality data from Redis or ChromaDB."""
+    """Retrieve quality data from Redis or ChromaDB.
+
+    Issue #541: Now calculates real quality metrics from actual analysis data
+    instead of returning static demo values.
+    """
+    # First try Redis cache for pre-calculated metrics
     try:
         from src.utils.redis_client import get_redis_client
 
@@ -172,16 +177,436 @@ async def get_quality_data_from_storage() -> dict[str, Any]:
             # Issue #361 - avoid blocking
             data = await asyncio.to_thread(redis.get, "code_quality:latest")
             if data:
-                return json.loads(data)
+                cached = json.loads(data)
+                # Only use cache if it has real data (not demo)
+                if cached.get("source") == "calculated":
+                    return cached
     except Exception as e:
         logger.warning("Failed to get quality data from Redis: %s", e)
 
-    # Return demo data if storage unavailable
+    # Calculate real metrics from ChromaDB (Issue #541)
+    real_data = await calculate_real_quality_metrics()
+    if real_data:
+        # Cache the calculated data
+        try:
+            from src.utils.redis_client import get_redis_client
+
+            redis = get_redis_client(async_client=False, database="analytics")
+            if redis:
+                real_data["source"] = "calculated"
+                await asyncio.to_thread(
+                    redis.setex,
+                    "code_quality:latest",
+                    300,  # 5 minute cache
+                    json.dumps(real_data),
+                )
+        except Exception as e:
+            logger.debug("Failed to cache quality data: %s", e)
+        return real_data
+
+    # Return demo data only if no real data available
     return generate_demo_quality_data()
 
 
+# ============================================================================
+# Real Quality Metrics Calculation (Issue #541)
+# ============================================================================
+
+
+async def _get_problems_from_chromadb() -> tuple[list[dict], dict[str, Any]]:
+    """
+    Fetch problems and stats from ChromaDB.
+
+    Returns:
+        Tuple of (problems list, codebase stats dict)
+    """
+    problems = []
+    stats = {}
+
+    try:
+        from backend.api.codebase_analytics.storage import get_code_collection_async
+
+        collection = await get_code_collection_async()
+        if not collection:
+            return problems, stats
+
+        # Fetch all problems
+        results = await collection.get(
+            where={"type": "problem"},
+            include=["metadatas"],
+        )
+        if results and results.get("metadatas"):
+            for metadata in results["metadatas"]:
+                problems.append({
+                    "type": metadata.get("problem_type", "unknown"),
+                    "severity": metadata.get("severity", "low"),
+                    "file_path": metadata.get("file_path", ""),
+                    "description": metadata.get("description", ""),
+                })
+
+        # Fetch codebase stats
+        stats_results = await collection.get(
+            ids=["codebase_stats"],
+            include=["metadatas"],
+        )
+        if stats_results and stats_results.get("metadatas"):
+            stats = stats_results["metadatas"][0]
+
+        logger.debug("Fetched %d problems from ChromaDB", len(problems))
+    except Exception as e:
+        logger.warning("Failed to fetch problems from ChromaDB: %s", e)
+
+    return problems, stats
+
+
+def _calculate_maintainability_score(
+    problems: list[dict],
+    total_files: int,
+) -> float:
+    """
+    Calculate maintainability score based on problem density.
+
+    Fewer problems per file = higher maintainability score.
+    Score formula: 100 - (problem_count * severity_weight / total_files * 10)
+    """
+    if total_files == 0:
+        return 75.0  # Default when no data
+
+    severity_weights = {"high": 3.0, "medium": 1.5, "low": 0.5}
+
+    # Filter for maintainability-related problems
+    maintainability_types = {
+        "long_function", "code_smell", "technical_debt", "complexity",
+        "code_smell_god_class", "code_smell_long_method",
+        "code_smell_duplicate_code", "code_smell_feature_envy",
+    }
+
+    weighted_problems = 0.0
+    for problem in problems:
+        problem_type = problem.get("type", "").lower()
+        # Include general code smells and technical debt
+        if any(mt in problem_type for mt in maintainability_types):
+            severity = problem.get("severity", "low")
+            weighted_problems += severity_weights.get(severity, 0.5)
+
+    # Calculate score: fewer problems = higher score
+    # Normalize by file count to handle different project sizes
+    problem_density = weighted_problems / max(total_files, 1)
+    score = 100.0 - (problem_density * 15.0)  # 15 points per problem per file
+
+    return max(0.0, min(100.0, score))
+
+
+def _calculate_reliability_score(problems: list[dict]) -> float:
+    """
+    Calculate reliability score based on error handling and bug prediction.
+
+    Fewer reliability issues = higher score.
+    """
+    severity_weights = {"high": 5.0, "medium": 2.0, "low": 0.5}
+
+    # Filter for reliability-related problems
+    reliability_types = {
+        "race_condition", "bug_prediction", "parse_error",
+        "error_handling", "null_check", "exception",
+    }
+
+    weighted_problems = 0.0
+    for problem in problems:
+        problem_type = problem.get("type", "").lower()
+        if any(rt in problem_type for rt in reliability_types):
+            severity = problem.get("severity", "low")
+            weighted_problems += severity_weights.get(severity, 0.5)
+
+    # Base score of 95, reduced by reliability issues
+    score = 95.0 - (weighted_problems * 2.0)
+
+    return max(0.0, min(100.0, score))
+
+
+def _calculate_security_score(problems: list[dict]) -> float:
+    """
+    Calculate security score based on security vulnerabilities and hardcoded values.
+
+    Security issues heavily impact the score.
+    """
+    severity_weights = {"high": 10.0, "medium": 5.0, "low": 1.0}
+
+    # Filter for security-related problems
+    security_types = {
+        "hardcode", "ip", "port", "url", "api_key", "secret",
+        "race_condition", "security", "vulnerability", "injection",
+    }
+
+    weighted_problems = 0.0
+    for problem in problems:
+        problem_type = problem.get("type", "").lower()
+        if any(st in problem_type for st in security_types):
+            severity = problem.get("severity", "low")
+            weighted_problems += severity_weights.get(severity, 1.0)
+
+    # Base score of 100, heavily reduced by security issues
+    score = 100.0 - (weighted_problems * 3.0)
+
+    return max(0.0, min(100.0, score))
+
+
+def _calculate_performance_score(problems: list[dict]) -> float:
+    """
+    Calculate performance score based on performance-related issues.
+    """
+    severity_weights = {"high": 4.0, "medium": 2.0, "low": 0.5}
+
+    # Filter for performance-related problems
+    performance_types = {
+        "performance", "optimization", "complexity", "loop",
+        "n_plus_one", "blocking", "async",
+    }
+
+    weighted_problems = 0.0
+    for problem in problems:
+        problem_type = problem.get("type", "").lower()
+        if any(pt in problem_type for pt in performance_types):
+            severity = problem.get("severity", "low")
+            weighted_problems += severity_weights.get(severity, 0.5)
+
+    # Base score of 90, reduced by performance issues
+    score = 90.0 - (weighted_problems * 2.0)
+
+    return max(0.0, min(100.0, score))
+
+
+def _calculate_testability_score(
+    stats: dict[str, Any],
+    total_files: int,
+) -> float:
+    """
+    Calculate testability score based on test file presence and complexity.
+
+    Higher test coverage and simpler code = higher testability.
+    """
+    # Get test file count from stats
+    test_files = int(stats.get("test_files", 0))
+
+    if total_files == 0:
+        return 65.0  # Default when no data
+
+    # Calculate test file ratio
+    test_ratio = test_files / total_files
+
+    # Base score from test coverage (target: 20% of files should be tests)
+    coverage_score = min(100.0, test_ratio * 500.0)  # 20% = 100 score
+
+    # Adjust for code complexity (if available)
+    avg_complexity = float(stats.get("average_cyclomatic", 0))
+    if avg_complexity > 0:
+        # Higher complexity = lower testability
+        complexity_penalty = min(30.0, avg_complexity * 2.0)
+        coverage_score -= complexity_penalty
+
+    return max(0.0, min(100.0, coverage_score))
+
+
+def _calculate_documentation_score(stats: dict[str, Any]) -> float:
+    """
+    Calculate documentation score based on docstring ratio.
+
+    Uses actual docstring_ratio from codebase analysis.
+    """
+    # Get docstring ratio from stats
+    docstring_ratio = stats.get("docstring_ratio", "0%")
+
+    # Parse percentage string
+    if isinstance(docstring_ratio, str):
+        try:
+            score = float(docstring_ratio.rstrip("%"))
+        except (ValueError, AttributeError):
+            score = 0.0
+    else:
+        score = float(docstring_ratio) * 100.0 if docstring_ratio < 1 else float(docstring_ratio)
+
+    # Scale the score (target: 30% docstrings = 100% score)
+    # This means 15% docstrings = 50% score
+    scaled_score = min(100.0, score * 3.33)
+
+    return max(0.0, min(100.0, scaled_score))
+
+
+def _categorize_problems_for_patterns(
+    problems: list[dict],
+) -> list[dict[str, Any]]:
+    """
+    Categorize problems into pattern distribution for display.
+    """
+    # Count by type category
+    categories = {
+        "anti_pattern": {"count": 0, "severity": "high"},
+        "code_smell": {"count": 0, "severity": "medium"},
+        "best_practice": {"count": 0, "severity": "info"},
+        "security_vulnerability": {"count": 0, "severity": "critical"},
+        "performance_issue": {"count": 0, "severity": "high"},
+        "technical_debt": {"count": 0, "severity": "medium"},
+        "bug_risk": {"count": 0, "severity": "high"},
+    }
+
+    for problem in problems:
+        problem_type = problem.get("type", "").lower()
+        severity = problem.get("severity", "low")
+
+        if "security" in problem_type or "hardcode" in problem_type:
+            categories["security_vulnerability"]["count"] += 1
+            if severity == "high":
+                categories["security_vulnerability"]["severity"] = "critical"
+        elif "performance" in problem_type:
+            categories["performance_issue"]["count"] += 1
+        elif "code_smell" in problem_type or "anti_pattern" in problem_type:
+            if severity == "high":
+                categories["anti_pattern"]["count"] += 1
+            else:
+                categories["code_smell"]["count"] += 1
+        elif "technical_debt" in problem_type or "todo" in problem_type or "fixme" in problem_type:
+            categories["technical_debt"]["count"] += 1
+        elif "bug" in problem_type or "race" in problem_type:
+            categories["bug_risk"]["count"] += 1
+        else:
+            # Default to code smell
+            categories["code_smell"]["count"] += 1
+
+    # Convert to list format
+    patterns = [
+        {"type": key, "count": val["count"], "severity": val["severity"]}
+        for key, val in categories.items()
+        if val["count"] > 0
+    ]
+
+    # Sort by count descending
+    patterns.sort(key=lambda x: x["count"], reverse=True)
+
+    return patterns
+
+
+def _calculate_complexity_metrics(
+    stats: dict[str, Any],
+    problems: list[dict],
+) -> dict[str, Any]:
+    """
+    Calculate complexity metrics from stats and problems.
+    """
+    # Extract complexity from stats
+    avg_cyclomatic = float(stats.get("average_cyclomatic", 0)) or 4.0
+    max_cyclomatic = int(stats.get("max_cyclomatic", 0)) or 20
+
+    # Find complexity-related problems for hotspots
+    hotspots = []
+    seen_files = set()
+
+    for problem in problems:
+        problem_type = problem.get("type", "").lower()
+        file_path = problem.get("file_path", "")
+
+        if file_path in seen_files:
+            continue
+
+        if "complexity" in problem_type or "long_function" in problem_type:
+            hotspots.append({
+                "file": file_path,
+                "complexity": max_cyclomatic,  # Estimate
+                "lines": 0,  # Would need file analysis
+            })
+            seen_files.add(file_path)
+
+    # Limit hotspots
+    hotspots = hotspots[:10]
+
+    return {
+        "average_cyclomatic": avg_cyclomatic,
+        "max_cyclomatic": max_cyclomatic,
+        "average_cognitive": avg_cyclomatic * 1.5,  # Estimate
+        "max_cognitive": max_cyclomatic * 1.5,
+        "hotspots": hotspots,
+    }
+
+
+async def calculate_real_quality_metrics() -> Optional[dict[str, Any]]:
+    """
+    Calculate real quality metrics from ChromaDB analysis data.
+
+    Issue #541: This replaces static demo values with actual calculated metrics.
+
+    Returns:
+        Dict with calculated quality metrics, or None if no data available
+    """
+    # Fetch data from ChromaDB
+    problems, stats = await _get_problems_from_chromadb()
+
+    # If no data, return None to fall back to demo
+    if not problems and not stats:
+        logger.info("No analysis data found in ChromaDB, using demo data")
+        return None
+
+    # Get file counts
+    total_files = int(stats.get("total_files", 0)) or 100  # Default estimate
+    total_lines = int(stats.get("total_lines", 0)) or 10000
+
+    # Calculate individual metrics
+    maintainability = _calculate_maintainability_score(problems, total_files)
+    reliability = _calculate_reliability_score(problems)
+    security = _calculate_security_score(problems)
+    performance = _calculate_performance_score(problems)
+    testability = _calculate_testability_score(stats, total_files)
+    documentation = _calculate_documentation_score(stats)
+
+    logger.info(
+        "Calculated quality metrics: maintainability=%.1f, reliability=%.1f, "
+        "security=%.1f, performance=%.1f, testability=%.1f, documentation=%.1f",
+        maintainability, reliability, security, performance, testability, documentation,
+    )
+
+    # Build patterns from problems
+    patterns = _categorize_problems_for_patterns(problems)
+
+    # Calculate complexity metrics
+    complexity = _calculate_complexity_metrics(stats, problems)
+
+    # Build trends (would need historical data, for now just current)
+    trends = [
+        {
+            "date": (datetime.now() - timedelta(days=i)).isoformat(),
+            "score": (maintainability * 0.25 + reliability * 0.20 + security * 0.20 +
+                     performance * 0.15 + testability * 0.10 + documentation * 0.10),
+        }
+        for i in range(30, -1, -1)
+    ]
+
+    return {
+        "metrics": {
+            "maintainability": round(maintainability, 1),
+            "reliability": round(reliability, 1),
+            "security": round(security, 1),
+            "performance": round(performance, 1),
+            "testability": round(testability, 1),
+            "documentation": round(documentation, 1),
+        },
+        "patterns": patterns,
+        "complexity": complexity,
+        "stats": {
+            "file_count": total_files,
+            "line_count": total_lines,
+            "issues_count": len(problems),
+        },
+        "trends": trends,
+        "source": "calculated",
+        "calculated_at": datetime.now().isoformat(),
+    }
+
+
 def generate_demo_quality_data() -> dict[str, Any]:
-    """Generate demo quality data for testing."""
+    """
+    Generate demo quality data for testing.
+
+    Note: This is only used when no real analysis data is available.
+    Issue #541: Real metrics are now calculated from ChromaDB data when available.
+    """
     import random
 
     random.seed(42)  # Consistent demo data
@@ -228,6 +653,7 @@ def generate_demo_quality_data() -> dict[str, Any]:
             {"date": (datetime.now() - timedelta(days=i)).isoformat(), "score": 70 + random.uniform(-5, 5)}
             for i in range(30, -1, -1)
         ],
+        "source": "demo",  # Issue #541: Mark as demo data
     }
 
 
