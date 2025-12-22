@@ -369,7 +369,7 @@ const getTrendIcon = (trend: string): string => {
 
 const fetchDashboard = async () => {
   try {
-    const res = await api.get('/analytics/advanced/dashboard')
+    const res = await api.get<{ data: any }>('/analytics/advanced/dashboard')
     dashboard.value = res.data
   } catch (error) {
     logger.error('Failed to fetch dashboard:', error)
@@ -378,7 +378,7 @@ const fetchDashboard = async () => {
 
 const fetchMaintenance = async () => {
   try {
-    const res = await api.get('/analytics/advanced/maintenance')
+    const res = await api.get<{ data: any }>('/analytics/advanced/maintenance')
     maintenance.value = res.data
   } catch (error) {
     logger.error('Failed to fetch maintenance:', error)
@@ -387,7 +387,7 @@ const fetchMaintenance = async () => {
 
 const fetchOptimization = async () => {
   try {
-    const res = await api.get('/analytics/advanced/optimization')
+    const res = await api.get<{ data: any }>('/analytics/advanced/optimization')
     optimization.value = res.data
   } catch (error) {
     logger.error('Failed to fetch optimization:', error)
@@ -396,7 +396,7 @@ const fetchOptimization = async () => {
 
 const fetchInsights = async () => {
   try {
-    const res = await api.get('/analytics/advanced/insights')
+    const res = await api.get<{ data: any }>('/analytics/advanced/insights')
     insights.value = res.data
   } catch (error) {
     logger.error('Failed to fetch insights:', error)
@@ -406,7 +406,7 @@ const fetchInsights = async () => {
 const generateReport = async (reportType: string) => {
   try {
     loading.value = true
-    const res = await api.post('/analytics/advanced/report', {
+    const res = await api.post<{ data: any }>('/analytics/advanced/report', {
       report_type: reportType,
       days: 30
     })

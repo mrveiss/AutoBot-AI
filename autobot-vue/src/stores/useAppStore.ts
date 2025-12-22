@@ -3,7 +3,8 @@ import { defineStore } from 'pinia'
 import { generateChatId } from '@/utils/ChatIdGenerator.js'
 
 // Issue #156 Fix: Changed 'desktop' to 'infrastructure' to match router routes
-export type TabType = 'chat' | 'infrastructure' | 'knowledge' | 'tools' | 'monitoring' | 'secrets' | 'settings'
+// Issue #545: Added 'analytics' for consolidated analytics section
+export type TabType = 'chat' | 'infrastructure' | 'knowledge' | 'tools' | 'monitoring' | 'analytics' | 'secrets' | 'settings'
 
 export interface BackendStatus {
   text: string
