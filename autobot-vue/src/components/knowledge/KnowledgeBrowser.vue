@@ -117,6 +117,20 @@
           <i class="fas fa-times"></i>
         </BaseButton>
       </div>
+
+      <!-- Refresh vectorization status button (Issue #162) -->
+      <BaseButton
+        variant="outline"
+        size="sm"
+        :loading="isRefreshingStatus"
+        :disabled="isRefreshingStatus"
+        @click="refreshVectorizationStatus"
+        class="refresh-status-btn"
+        title="Refresh vectorization status for all documents"
+      >
+        <i v-if="!isRefreshingStatus" class="fas fa-sync-alt"></i>
+        <span>Status</span>
+      </BaseButton>
     </div>
 
     <!-- Batch Selection Toolbar (Floating) -->
@@ -332,6 +346,7 @@ const {
   vectorizeDocument,
   vectorizeBatch,
   vectorizeSelected: vectorizeSelectedDocs,
+  fetchBatchStatus,
   cleanup: cleanupVectorization
 } = useKnowledgeVectorization()
 
@@ -369,6 +384,7 @@ const mainCategories = ref<any[]>([])
 const categoryCounts = ref<Record<string, number>>({})
 const isVectorizing = ref(false)
 const showProgressModal = ref(false)
+const isRefreshingStatus = ref(false)  // Issue #162: Loading state for status refresh
 const populationStates = ref<Record<string, { isPopulating: boolean; progress: number }>>({
   'autobot-documentation': { isPopulating: false, progress: 0 },
   'system-knowledge': { isPopulating: false, progress: 0 }
@@ -698,6 +714,45 @@ const loadMainCategories = async () => {
 }
 
 
+// Helper function to extract all file IDs from tree (Issue #162: Vectorization status tracking)
+const extractFileIds = (nodes: TreeNode[]): string[] => {
+  const ids: string[] = []
+  const traverse = (nodeList: TreeNode[]) => {
+    for (const node of nodeList) {
+      if (node.type === 'file') {
+        ids.push(node.id)
+      } else if (node.children) {
+        traverse(node.children)
+      }
+    }
+  }
+  traverse(nodes)
+  return ids
+}
+
+// Fetch vectorization status for all files in tree (Issue #162)
+const fetchVectorizationStatuses = async (tree: TreeNode[]) => {
+  const fileIds = extractFileIds(tree)
+  if (fileIds.length > 0) {
+    logger.info(`Fetching vectorization status for ${fileIds.length} documents`)
+    await fetchBatchStatus(fileIds)
+  }
+}
+
+// Manual refresh of vectorization status (Issue #162)
+const refreshVectorizationStatus = async () => {
+  if (isRefreshingStatus.value) return
+  isRefreshingStatus.value = true
+  try {
+    await fetchVectorizationStatuses(treeData.value)
+    logger.info('Vectorization status refreshed')
+  } catch (error) {
+    logger.error('Failed to refresh vectorization status:', error)
+  } finally {
+    isRefreshingStatus.value = false
+  }
+}
+
 // Load main knowledge tree with useAsyncOperation wrapper
 const loadKnowledgeTreeFn = async () => {
   // Load facts from knowledge base by category
@@ -730,6 +785,9 @@ const loadKnowledgeTreeFn = async () => {
         children: children
       }
     })
+
+    // Issue #162: Fetch vectorization status for all files after tree is built
+    await fetchVectorizationStatuses(treeData.value)
   }
 }
 
