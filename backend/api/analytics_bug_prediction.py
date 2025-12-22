@@ -12,7 +12,7 @@ and targeted testing suggestions.
 import asyncio
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -680,41 +680,18 @@ async def get_prediction_trends(
     """
     Get historical bug prediction accuracy trends.
 
-    Returns accuracy metrics over time for model validation.
+    Issue #543: Returns no_data until real trend tracking is implemented.
+    Real implementation would require:
+    - Storing prediction results over time
+    - Tracking actual bugs found vs predicted
+    - Calculating accuracy metrics from historical data
     """
-    import random
-
-    random.seed(42)
-
-    days = int(period[:-1])
-    trends = []
-
-    for i in range(days):
-        date = datetime.now() - timedelta(days=days - 1 - i)
-        trends.append(
-            {
-                "date": date.strftime("%Y-%m-%d"),
-                "predicted_bugs": random.randint(5, 15),
-                "actual_bugs": random.randint(4, 12),
-                "accuracy": 65 + random.uniform(0, 20),
-                "high_risk_count": random.randint(2, 8),
-            }
-        )
-
-    # Calculate overall stats
-    accuracies = [t["accuracy"] for t in trends]
-
-    return {
-        "period": period,
-        "data_points": trends,
-        "statistics": {
-            "average_accuracy": sum(accuracies) / len(accuracies),
-            "min_accuracy": min(accuracies),
-            "max_accuracy": max(accuracies),
-            "total_predicted": sum(t["predicted_bugs"] for t in trends),
-            "total_actual": sum(t["actual_bugs"] for t in trends),
-        },
-    }
+    # Issue #543: Return no_data instead of fake random data
+    # TODO: Implement real trend tracking by storing prediction history
+    return _no_data_response(
+        f"Bug prediction trend data for period '{period}' not available. "
+        "Trend tracking requires storing prediction history over time."
+    )
 
 
 @router.get("/summary")

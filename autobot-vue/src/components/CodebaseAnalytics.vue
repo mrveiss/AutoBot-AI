@@ -2276,6 +2276,10 @@ const loadUnifiedReport = async () => {
         totalIssues: data.summary?.total_issues,
         categories: Object.keys(data.categories || {}).length
       })
+    } else if (data.status === 'no_data') {
+      // Issue #543: Handle no_data status from backend
+      unifiedReport.value = null
+      logger.debug('No unified report data - run indexing first')
     }
   } catch (error) {
     logger.error('Failed to load unified report:', error)
@@ -2343,6 +2347,10 @@ const loadDependencyData = async () => {
         externalDeps: data.dependency_data.external_dependencies?.length || 0,
         circularDeps: data.dependency_data.circular_dependencies?.length || 0
       })
+    } else if (data.status === 'no_data') {
+      // Issue #543: Handle no_data status from backend
+      dependencyData.value = null
+      logger.debug('No dependency data - run indexing first')
     }
 
   } catch (error) {
@@ -2380,6 +2388,10 @@ const loadImportTreeData = async () => {
         files: data.import_tree.length,
         summary: data.summary
       })
+    } else if (data.status === 'no_data') {
+      // Issue #543: Handle no_data status from backend
+      importTreeData.value = null
+      logger.debug('No import tree data - run indexing first')
     }
 
   } catch (error) {
@@ -2427,6 +2439,11 @@ const loadCallGraphData = async () => {
         edges: data.call_graph.edges?.length || 0,
         summary: data.summary
       })
+    } else if (data.status === 'no_data') {
+      // Issue #543: Handle no_data status from backend
+      callGraphData.value = null
+      callGraphSummary.value = null
+      logger.debug('No call graph data - run indexing first')
     }
 
   } catch (error) {
@@ -2570,12 +2587,18 @@ const loadBugPrediction = async () => {
       throw new Error(`Bug prediction endpoint returned ${response.status}`)
     }
     const data = await response.json()
-    bugPredictionAnalysis.value = {
-      timestamp: data.timestamp || new Date().toISOString(),
-      total_files: data.total_files || 0,
-      analyzed_files: data.analyzed_files || 0,
-      high_risk_count: data.high_risk_count || 0,
-      files: data.files || []
+    // Issue #543: Handle no_data status from backend
+    if (data.status === 'no_data') {
+      bugPredictionAnalysis.value = null
+      logger.debug('No bug prediction data - run indexing first')
+    } else {
+      bugPredictionAnalysis.value = {
+        timestamp: data.timestamp || new Date().toISOString(),
+        total_files: data.total_files || 0,
+        analyzed_files: data.analyzed_files || 0,
+        high_risk_count: data.high_risk_count || 0,
+        files: data.files || []
+      }
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
@@ -2605,6 +2628,10 @@ const loadApiEndpointAnalysis = async () => {
     const data = await response.json()
     if (data.status === 'success' && data.analysis) {
       apiEndpointAnalysis.value = data.analysis
+    } else if (data.status === 'no_data') {
+      // Issue #543: Handle no_data status from backend
+      apiEndpointAnalysis.value = null
+      logger.debug('No API endpoint data - run indexing first')
     } else {
       throw new Error('Invalid response format')
     }
@@ -2648,6 +2675,10 @@ const loadSecurityScore = async () => {
         severity_breakdown: data.severity_breakdown || {},
         owasp_breakdown: data.owasp_breakdown || {}
       }
+    } else if (data.status === 'no_data') {
+      // Issue #543: Handle no_data status from backend
+      securityScore.value = null
+      logger.debug('No security score data - run indexing first')
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
@@ -2686,6 +2717,10 @@ const loadPerformanceScore = async () => {
         severity_breakdown: data.severity_breakdown || {},
         issue_type_breakdown: data.issue_type_breakdown || {}
       }
+    } else if (data.status === 'no_data') {
+      // Issue #543: Handle no_data status from backend
+      performanceScore.value = null
+      logger.debug('No performance score data - run indexing first')
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
@@ -2723,6 +2758,10 @@ const loadRedisHealth = async () => {
         total_issues: data.total_issues || 0,
         files_with_issues: data.files_with_issues || 0
       }
+    } else if (data.status === 'no_data') {
+      // Issue #543: Handle no_data status from backend
+      redisHealth.value = null
+      logger.debug('No Redis health data - run indexing first')
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
@@ -2761,6 +2800,10 @@ const loadEnvironmentAnalysis = async () => {
         hardcoded_values: data.hardcoded_values || [],
         recommendations: data.recommendations || []
       }
+    } else if (data.status === 'no_data') {
+      // Issue #543: Handle no_data status from backend
+      environmentAnalysis.value = null
+      logger.debug('No environment analysis data - run indexing first')
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
@@ -2856,6 +2899,10 @@ const getCodebaseStats = async () => {
     const data = await response.json()
     if (data.status === 'success' && data.stats) {
       codebaseStats.value = data.stats
+    } else if (data.status === 'no_data' || data.status === 'indexing') {
+      // Issue #543: Handle no_data and indexing status from backend
+      codebaseStats.value = null
+      logger.debug('No codebase stats - run indexing first')
     }
   } catch (error) {
     logger.error('Failed to get stats:', error)
@@ -2875,7 +2922,13 @@ const getProblemsReport = async () => {
       throw new Error(`Problems endpoint returned ${response.status}`)
     }
     const data = await response.json()
-    problemsReport.value = data.problems || []
+    // Issue #543: Handle no_data status from backend
+    if (data.status === 'no_data') {
+      problemsReport.value = []
+      logger.debug('No problems report - run indexing first')
+    } else {
+      problemsReport.value = data.problems || []
+    }
   } catch (error) {
     logger.error('Failed to get problems:', error)
   } finally {
@@ -3500,6 +3553,14 @@ const loadCodeQuality = async () => {
     const debtResponse = await fetch(`${backendUrl}/api/debt/summary`)
     const debtData = debtResponse.ok ? await debtResponse.json() : null
 
+    // Issue #543: Handle no_data status from backend
+    // If all primary APIs return no_data, set codeQuality to null
+    if (healthData?.status === 'no_data' && debtData?.status === 'no_data') {
+      codeQuality.value = null
+      logger.debug('No code quality data - run indexing first')
+      return
+    }
+
     // Calculate test coverage from testability score
     const testCoverage = healthData?.breakdown?.testability || 0
 
@@ -3531,6 +3592,13 @@ const loadPerformanceMetrics = async () => {
     // Fetch quality metrics for performance breakdown
     const qualityResponse = await fetch(`${backendUrl}/api/quality/health-score`)
     const qualityData = qualityResponse.ok ? await qualityResponse.json() : null
+
+    // Issue #543: Handle no_data status from backend
+    if (summaryData?.status === 'no_data' && qualityData?.status === 'no_data') {
+      performanceMetrics.value = null
+      logger.debug('No performance metrics data - run indexing first')
+      return
+    }
 
     // Get performance score from quality breakdown or performance analysis
     const performanceScore = qualityData?.breakdown?.performance || 0
