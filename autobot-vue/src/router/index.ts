@@ -288,11 +288,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'analytics',
         name: 'monitoring-analytics',
-        component: () => import('@/components/CodebaseAnalytics.vue'),
-        meta: {
-          title: 'Analytics',
-          parent: 'monitoring'
-        }
+        redirect: '/analytics/codebase'
       },
       {
         path: 'rum',
@@ -324,11 +320,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'bi',
         name: 'monitoring-bi',
-        component: () => import('@/components/analytics/AdvancedAnalytics.vue'),
-        meta: {
-          title: 'Business Intelligence',
-          parent: 'monitoring'
-        }
+        redirect: '/analytics/bi'
       },
       {
         path: 'dashboards',
@@ -346,11 +338,36 @@ const routes: RouteRecordRaw[] = [
     name: 'analytics',
     component: AnalyticsView,
     meta: {
-      title: 'Analytics & BI',
+      title: 'Analytics',
       icon: 'fas fa-chart-pie',
-      description: 'Advanced analytics and business intelligence',
+      description: 'Codebase analytics and business intelligence',
       requiresAuth: false
-    }
+    },
+    children: [
+      {
+        path: '',
+        name: 'analytics-default',
+        redirect: '/analytics/codebase'
+      },
+      {
+        path: 'codebase',
+        name: 'analytics-codebase',
+        component: () => import('@/components/CodebaseAnalytics.vue'),
+        meta: {
+          title: 'Codebase Analytics',
+          parent: 'analytics'
+        }
+      },
+      {
+        path: 'bi',
+        name: 'analytics-bi',
+        component: () => import('@/views/BusinessIntelligenceView.vue'),
+        meta: {
+          title: 'Business Intelligence',
+          parent: 'analytics'
+        }
+      }
+    ]
   },
   {
     path: '/infrastructure',
