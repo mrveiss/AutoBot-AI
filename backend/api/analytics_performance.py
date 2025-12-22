@@ -15,7 +15,7 @@ import re
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -526,11 +526,11 @@ def _calculate_analysis_score(issues: list[PerformanceIssue]) -> tuple[int, int,
     return critical, high, medium, low, score
 
 
-@router.get("/analyze")
+@router.get("/analyze", response_model=None)
 async def analyze_path(
     path: str = Query(..., description="Path to analyze"),
     include_ast: bool = Query(True, description="Include AST analysis"),
-) -> Union[PerformanceAnalysisResult, JSONResponse]:
+):
     """Analyze code for performance anti-patterns (Issue #398: refactored)."""
     start_time = datetime.now()
 
