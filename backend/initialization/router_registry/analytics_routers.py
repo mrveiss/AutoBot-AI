@@ -32,7 +32,7 @@ ANALYTICS_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("backend.api.analytics_code_review", "", ["code-review", "analytics"], "analytics_code_review"),
     ("backend.api.analytics_precommit", "", ["precommit", "analytics"], "analytics_precommit"),
     # AI/ML analytics
-    ("backend.api.analytics_bug_prediction", "", ["bug-prediction", "analytics"], "analytics_bug_prediction"),
+    ("backend.api.analytics_bug_prediction", "/analytics", ["bug-prediction", "analytics"], "analytics_bug_prediction"),
     ("backend.api.analytics_llm_patterns", "", ["llm-patterns", "analytics"], "analytics_llm_patterns"),
     ("backend.api.analytics_code_generation", "", ["code-generation", "analytics"], "analytics_code_generation"),
     ("backend.api.analytics_embedding_patterns", "/embedding-analytics", ["embedding-analytics", "analytics"], "analytics_embedding_patterns"),

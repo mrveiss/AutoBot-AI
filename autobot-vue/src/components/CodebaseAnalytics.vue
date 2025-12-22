@@ -1415,6 +1415,14 @@
             <div class="score-header">
               <i class="fas fa-shield-alt"></i>
               <span>Security</span>
+              <button
+                @click="loadSecurityScore"
+                :disabled="loadingSecurityScore"
+                class="card-refresh-btn"
+                title="Refresh Security Score"
+              >
+                <i :class="loadingSecurityScore ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+              </button>
             </div>
             <div v-if="loadingSecurityScore" class="score-loading">
               <i class="fas fa-spinner fa-spin"></i>
@@ -1453,6 +1461,14 @@
             <div class="score-header">
               <i class="fas fa-tachometer-alt"></i>
               <span>Performance</span>
+              <button
+                @click="loadPerformanceScore"
+                :disabled="loadingPerformanceScore"
+                class="card-refresh-btn"
+                title="Refresh Performance Score"
+              >
+                <i :class="loadingPerformanceScore ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+              </button>
             </div>
             <div v-if="loadingPerformanceScore" class="score-loading">
               <i class="fas fa-spinner fa-spin"></i>
@@ -1488,6 +1504,14 @@
             <div class="score-header">
               <i class="fas fa-database"></i>
               <span>Redis Usage</span>
+              <button
+                @click="loadRedisHealth"
+                :disabled="loadingRedisHealth"
+                class="card-refresh-btn"
+                title="Refresh Redis Health"
+              >
+                <i :class="loadingRedisHealth ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+              </button>
             </div>
             <div v-if="loadingRedisHealth" class="score-loading">
               <i class="fas fa-spinner fa-spin"></i>
@@ -6767,6 +6791,29 @@ const getDeclarationTypeClass = (type) => {
   font-size: 1.1em;
   font-weight: 600;
   color: #e5e7eb;
+}
+
+.score-card .score-header .card-refresh-btn {
+  margin-left: auto;
+  padding: 4px 8px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 4px;
+  color: #93c5fd;
+  cursor: pointer;
+  font-size: 0.8em;
+  transition: all 0.2s ease;
+}
+
+.score-card .score-header .card-refresh-btn:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.5);
+  color: #60a5fa;
+}
+
+.score-card .score-header .card-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .score-card.security-card .score-header i {

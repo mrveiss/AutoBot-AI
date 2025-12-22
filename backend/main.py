@@ -17,6 +17,11 @@ the best features from all previous implementations:
 import os
 import sys
 
+# CRITICAL: Disable HuggingFace tokenizers parallelism BEFORE any imports
+# This prevents deadlocks when using run_in_executor() with forked processes
+# See: https://github.com/huggingface/tokenizers/issues/1062
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 from backend.app_factory import create_app
 from src.constants.network_constants import NetworkConstants
 from src.utils.logging_manager import get_logger

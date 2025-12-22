@@ -12,9 +12,16 @@ Handles application startup and shutdown with 2-phase initialization:
 import asyncio
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
 from backend.type_defs.common import Metadata
+
+# Bounded thread pool to prevent unbounded thread creation
+# Default asyncio executor creates min(32, cpu_count + 4) threads per invocation
+# This shared executor limits total threads across all run_in_executor calls
+MAX_WORKER_THREADS = 16
+_executor: ThreadPoolExecutor | None = None
 
 from fastapi import FastAPI
 
@@ -414,10 +421,18 @@ def create_lifespan_manager():
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         """Application lifespan manager with critical and background initialization"""
+        global _executor
 
         # Configure logging
         configure_logging()
         logger.info("🚀 AutoBot Backend starting up...")
+
+        # Create bounded thread pool executor to prevent thread explosion
+        # This replaces the default unbounded asyncio executor
+        _executor = ThreadPoolExecutor(max_workers=MAX_WORKER_THREADS, thread_name_prefix="autobot_worker")
+        loop = asyncio.get_event_loop()
+        loop.set_default_executor(_executor)
+        logger.info("🧵 Bounded thread pool configured (max %d workers)", MAX_WORKER_THREADS)
 
         # Phase 1: Critical initialization (BLOCKING)
         await initialize_critical_services(app)
@@ -430,6 +445,11 @@ def create_lifespan_manager():
 
         # Cleanup on shutdown
         await cleanup_services(app)
+
+        # Shutdown thread pool
+        if _executor:
+            _executor.shutdown(wait=True, cancel_futures=False)
+            logger.info("🧵 Thread pool shutdown complete")
 
     return lifespan
 

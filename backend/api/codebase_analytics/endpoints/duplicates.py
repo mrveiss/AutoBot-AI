@@ -203,11 +203,24 @@ async def detect_config_duplicates_endpoint():
     # Run detection
     result = detect_config_duplicates(str(project_root))
 
+    # Convert duplicates dict to array format for frontend compatibility
+    # Backend returns: {value: {value, count, sources, duplicates}}
+    # Frontend expects: [{value, locations: [{file, line}]}]
+    duplicates_dict = result["duplicates"]
+    duplicates_array = []
+    for value, details in duplicates_dict.items():
+        all_locations = details.get("sources", []) + details.get("duplicates", [])
+        duplicates_array.append({
+            "value": value,
+            "count": details.get("count", len(all_locations)),
+            "locations": [{"file": loc["file"], "line": loc["line"]} for loc in all_locations],
+        })
+
     return JSONResponse(
         {
             "status": "success",
             "duplicates_found": result["duplicates_found"],
-            "duplicates": result["duplicates"],
+            "duplicates": duplicates_array,
             "report": result["report"],
         }
     )

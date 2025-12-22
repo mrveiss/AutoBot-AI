@@ -105,6 +105,9 @@ class Thresholds:
     # Complex conditional detection
     COMPLEX_CONDITIONAL_THRESHOLD = 3
 
+    # Magic number detection
+    MAGIC_NUMBER_THRESHOLD = 3  # Same number appears more than N times
+
 
 # ============================================================================
 # Default ignore patterns
