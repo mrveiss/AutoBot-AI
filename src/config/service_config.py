@@ -214,19 +214,19 @@ class ServiceConfigMixin:
         """Get distributed services configuration from NetworkConstants"""
         return {
             "frontend": {
-                "host": str(NetworkConstants.FRONTEND_HOST),
+                "host": str(NetworkConstants.FRONTEND_VM_IP),
                 "port": NetworkConstants.FRONTEND_PORT,
             },
             "npu_worker": {
-                "host": str(NetworkConstants.NPU_WORKER_HOST),
+                "host": str(NetworkConstants.NPU_WORKER_VM_IP),
                 "port": NetworkConstants.NPU_WORKER_PORT,
             },
             "redis": {
-                "host": str(NetworkConstants.REDIS_HOST),
+                "host": str(NetworkConstants.REDIS_VM_IP),
                 "port": NetworkConstants.REDIS_PORT,
             },
             "ai_stack": {
-                "host": str(NetworkConstants.AI_STACK_HOST),
+                "host": str(NetworkConstants.AI_STACK_VM_IP),
                 "port": NetworkConstants.AI_STACK_PORT,
             },
             "browser": {
