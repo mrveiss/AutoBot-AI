@@ -236,8 +236,9 @@ export class KnowledgeRepository extends ApiRepository {
   }
 
   // Legacy add text method
+  // Issue #552: Fixed path - backend uses /api/knowledge_base/add_text
   async addKnowledge(content: string, metadata: Record<string, any> = {}): Promise<any> {
-    const response = await this.post('/api/knowledge_base/add', {
+    const response = await this.post('/api/knowledge_base/add_text', {
       content,
       metadata
     })
@@ -372,10 +373,13 @@ export class KnowledgeRepository extends ApiRepository {
 
   /**
    * Bulk delete multiple documents
+   * Issue #552: Note - Backend uses collection-based bulk delete at
+   * POST /api/knowledge_base/collections/{collection_id}/bulk-delete
+   * This endpoint may need adjustment based on collection context
    */
-  async bulkDeleteDocuments(documentIds: string[]): Promise<{ success: boolean; deleted_count: number }> {
-    const response = await this.post('/api/knowledge_base/facts/bulk_delete', {
-      document_ids: documentIds
+  async bulkDeleteDocuments(documentIds: string[], collectionId: string = 'default'): Promise<{ success: boolean; deleted_count: number }> {
+    const response = await this.post(`/api/knowledge_base/collections/${collectionId}/bulk-delete`, {
+      fact_ids: documentIds
     })
     return response.data
   }
@@ -420,9 +424,11 @@ export class KnowledgeRepository extends ApiRepository {
 
   /**
    * Reindex knowledge base for improved search performance
+   * Issue #552: Note - Backend uses /api/rebuild_index for global reindex
+   * Consider using vectorize_facts/background for knowledge base specific reindex
    */
   async reindexKnowledgeBase(): Promise<{ success: boolean; message: string }> {
-    const response = await this.post('/api/knowledge_base/reindex')
+    const response = await this.post('/api/rebuild_index')
     return response.data
   }
 

@@ -303,7 +303,8 @@ export function useKnowledgeBase() {
    */
   const fetchMachineProfiles = async (): Promise<MachineProfile[]> => {
     try {
-      const response = await apiClient.get('/api/knowledge_base/machine_profiles')
+      // Issue #552: Fixed path - backend uses singular /api/knowledge_base/machine_profile
+      const response = await apiClient.get('/api/knowledge_base/machine_profile')
 
       if (!response) {
         throw new Error('Failed to fetch machine profiles: No response from server');
@@ -362,7 +363,8 @@ export function useKnowledgeBase() {
    */
   const getVectorizationStatus = async (): Promise<VectorizationStatusResponse> => {
     try {
-      const response = await apiClient.get('/api/knowledge_base/vectorization/status')
+      // Issue #552: Fixed path - backend uses /api/knowledge_base/vectorize_facts/status
+      const response = await apiClient.get('/api/knowledge_base/vectorize_facts/status')
 
       if (!response) {
         throw new Error('Failed to get vectorization status: No response from server');

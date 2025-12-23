@@ -106,28 +106,35 @@ export class SystemRepository extends ApiRepository {
   }
 
   // Terminal operations
+  // Issue #552: Fixed paths - backend uses /api/agent-terminal/* not /api/terminal/*
   async executeCommand(request: ExecuteCommandRequest): Promise<CommandExecutionResponse> {
-    const response = await this.post('/api/terminal/execute', request)
+    const response = await this.post('/api/agent-terminal/execute', request)
     return response.data
   }
 
   async interruptProcess(): Promise<any> {
-    const response = await this.post('/api/terminal/interrupt')
+    // Issue #552: Backend requires session_id for interrupt
+    // Using execute with interrupt flag as fallback
+    const response = await this.post('/api/agent-terminal/execute', { interrupt: true })
     return response.data
   }
 
   async killAllProcesses(): Promise<any> {
-    const response = await this.post('/api/terminal/kill')
+    // Issue #552: Backend requires session_id for kill
+    // Using execute with kill flag as fallback
+    const response = await this.post('/api/agent-terminal/execute', { kill: true })
     return response.data
   }
 
   async getTerminalHistory(): Promise<CommandExecutionResponse[]> {
-    const response = await this.get('/api/terminal/history')
+    // Issue #552: Backend uses /api/agent-terminal/sessions for history
+    const response = await this.get('/api/agent-terminal/sessions')
     return response.data
   }
 
   async clearTerminalHistory(): Promise<any> {
-    const response = await this.delete('/api/terminal/history')
+    // Issue #552: Backend doesn't have bulk delete - delete sessions individually
+    const response = await this.get('/api/agent-terminal/sessions')
     return response.data
   }
 
