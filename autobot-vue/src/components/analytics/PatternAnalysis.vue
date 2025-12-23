@@ -242,7 +242,7 @@
 </template>
 
 <script setup lang="ts">
-import { watch, onMounted } from 'vue'
+import { watch, onMounted, reactive } from 'vue'
 import { usePatternAnalysis } from '@/composables/usePatternAnalysis'
 
 // Props
@@ -275,10 +275,24 @@ const {
   hasResults,
   analyzePatterns,
   getSummary,
+  getCachedSummary,
+  getDuplicates,
+  getRegexOpportunities,
+  getComplexityHotspots,
+  getRefactoringSuggestions,
   getStorageStats,
   clearStorage: clearStorageApi,
-  reset
+  reset,
+  loadCachedData
 } = usePatternAnalysis()
+
+// Track which sections have been loaded (lazy loading)
+const sectionsLoaded = reactive({
+  duplicates: false,
+  regex: false,
+  complexity: false,
+  refactoring: false
+})
 
 // Run full analysis
 const runAnalysis = async () => {
@@ -354,17 +368,51 @@ watch(error, (newError) => {
   }
 })
 
-// Auto-load on mount
+// Lazy loading watchers - load section data when expanded
+watch(() => expandedSections.duplicates, async (expanded) => {
+  if (expanded && !sectionsLoaded.duplicates && duplicatePatterns.value.length === 0) {
+    sectionsLoaded.duplicates = true
+    await getDuplicates(props.rootPath)
+  }
+})
+
+watch(() => expandedSections.regex, async (expanded) => {
+  if (expanded && !sectionsLoaded.regex && regexOpportunities.value.length === 0) {
+    sectionsLoaded.regex = true
+    await getRegexOpportunities(props.rootPath)
+  }
+})
+
+watch(() => expandedSections.complexity, async (expanded) => {
+  if (expanded && !sectionsLoaded.complexity && complexityHotspots.value.length === 0) {
+    sectionsLoaded.complexity = true
+    await getComplexityHotspots(props.rootPath)
+  }
+})
+
+watch(() => expandedSections.refactoring, async (expanded) => {
+  if (expanded && !sectionsLoaded.refactoring && refactoringSuggestions.value.length === 0) {
+    sectionsLoaded.refactoring = true
+    await getRefactoringSuggestions(props.rootPath)
+  }
+})
+
+// Auto-load on mount - use fast cached loading (Issue #208)
 onMounted(async () => {
-  if (props.autoLoad && props.rootPath) {
-    await getSummary(props.rootPath)
-    await getStorageStats()
+  if (props.autoLoad) {
+    // Fast path: load from cache in parallel
+    await loadCachedData()
   }
 })
 
 // Watch for path changes
 watch(() => props.rootPath, async (newPath) => {
   if (newPath && props.autoLoad) {
+    // Reset section loading state when path changes
+    sectionsLoaded.duplicates = false
+    sectionsLoaded.regex = false
+    sectionsLoaded.complexity = false
+    sectionsLoaded.refactoring = false
     await getSummary(newPath)
   }
 })

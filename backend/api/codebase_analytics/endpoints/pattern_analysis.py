@@ -446,6 +446,170 @@ async def get_pattern_storage_stats() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/patterns/cached-summary")
+async def get_cached_pattern_summary() -> Dict[str, Any]:
+    """Get cached pattern summary from ChromaDB without re-analyzing.
+
+    Issue #208: Fast loading endpoint for already indexed patterns.
+    Returns summary data from stored patterns, not requiring full analysis.
+    """
+    try:
+        from src.code_intelligence.pattern_analysis.storage import (
+            get_pattern_collection_async,
+        )
+
+        collection = await get_pattern_collection_async()
+        if collection is None:
+            return {
+                "status": "empty",
+                "total_patterns": 0,
+                "severity_distribution": {},
+                "pattern_type_distribution": {},
+                "has_cached_data": False,
+            }
+
+        count = await collection.count()
+        if count == 0:
+            return {
+                "status": "empty",
+                "total_patterns": 0,
+                "severity_distribution": {},
+                "pattern_type_distribution": {},
+                "has_cached_data": False,
+            }
+
+        # Get all metadata for aggregation (limit to 2000 for performance)
+        sample_size = min(count, 2000)
+        sample = await collection.get(
+            limit=sample_size,
+            include=["metadatas"],
+        )
+
+        # Aggregate statistics
+        type_counts = {}
+        severity_counts = {}
+        total_loc_reduction = 0
+        files_seen = set()
+
+        if sample.get("metadatas"):
+            for meta in sample["metadatas"]:
+                # Count pattern types
+                ptype = meta.get("pattern_type", "unknown")
+                type_counts[ptype] = type_counts.get(ptype, 0) + 1
+
+                # Count severities
+                severity = meta.get("severity", "info")
+                severity_counts[severity] = severity_counts.get(severity, 0) + 1
+
+                # Track LOC reduction potential
+                if "code_reduction_potential" in meta:
+                    try:
+                        total_loc_reduction += int(meta["code_reduction_potential"])
+                    except (ValueError, TypeError):
+                        pass
+
+                # Track unique files
+                if "file_path" in meta:
+                    files_seen.add(meta["file_path"])
+
+        return {
+            "status": "success",
+            "total_patterns": count,
+            "sampled_patterns": sample_size,
+            "severity_distribution": severity_counts,
+            "pattern_type_distribution": type_counts,
+            "potential_loc_reduction": total_loc_reduction,
+            "files_analyzed": len(files_seen),
+            "has_cached_data": True,
+        }
+
+    except Exception as e:
+        logger.error("Cached summary failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/patterns/cached-patterns")
+async def get_cached_patterns(
+    pattern_type: Optional[str] = Query(None, description="Filter by pattern type"),
+    severity: Optional[str] = Query(None, description="Filter by severity"),
+    limit: int = Query(default=50, ge=1, le=200, description="Maximum results"),
+    offset: int = Query(default=0, ge=0, description="Offset for pagination"),
+) -> Dict[str, Any]:
+    """Get cached patterns from ChromaDB with filtering and pagination.
+
+    Issue #208: Fast loading of already indexed patterns without re-analysis.
+    Supports filtering by pattern_type and severity, with pagination.
+    """
+    try:
+        from src.code_intelligence.pattern_analysis.storage import (
+            get_pattern_collection_async,
+        )
+
+        collection = await get_pattern_collection_async()
+        if collection is None:
+            return {
+                "status": "empty",
+                "patterns": [],
+                "total": 0,
+            }
+
+        count = await collection.count()
+        if count == 0:
+            return {
+                "status": "empty",
+                "patterns": [],
+                "total": 0,
+            }
+
+        # Build where filter
+        where_filter = None
+        if pattern_type or severity:
+            conditions = []
+            if pattern_type:
+                conditions.append({"pattern_type": pattern_type})
+            if severity:
+                conditions.append({"severity": severity})
+
+            if len(conditions) == 1:
+                where_filter = conditions[0]
+            else:
+                where_filter = {"$and": conditions}
+
+        # Query with filters
+        results = await collection.get(
+            limit=limit,
+            offset=offset,
+            where=where_filter,
+            include=["metadatas", "documents"],
+        )
+
+        # Format results
+        patterns = []
+        if results.get("ids"):
+            for i, pattern_id in enumerate(results["ids"]):
+                pattern = {
+                    "id": pattern_id,
+                    "metadata": results["metadatas"][i] if results.get("metadatas") else {},
+                    "code_snippet": (
+                        results["documents"][i][:500] if results.get("documents") else ""
+                    ),
+                }
+                patterns.append(pattern)
+
+        return {
+            "status": "success",
+            "patterns": patterns,
+            "total": count,
+            "limit": limit,
+            "offset": offset,
+            "has_more": offset + len(patterns) < count,
+        }
+
+    except Exception as e:
+        logger.error("Cached patterns fetch failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/patterns/storage/clear")
 async def clear_pattern_storage() -> Dict[str, str]:
     """Clear all stored patterns from ChromaDB.

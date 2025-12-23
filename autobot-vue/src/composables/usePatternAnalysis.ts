@@ -192,7 +192,7 @@ export function usePatternAnalysis() {
 
     try {
       const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/codebase/patterns/analyze`, {
+      const response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -256,7 +256,7 @@ export function usePatternAnalysis() {
 
       try {
         const backendUrl = await getBackendUrl()
-        const response = await fetch(`${backendUrl}/api/codebase/patterns/status/${taskId}`)
+        const response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/status/${taskId}`)
 
         if (!response.ok) {
           throw new Error(`Status check failed: ${response.statusText}`)
@@ -292,17 +292,70 @@ export function usePatternAnalysis() {
   }
 
   /**
+   * Get quick pattern summary from cache (Issue #208 optimization)
+   * Uses cached data from ChromaDB instead of re-analyzing
+   */
+  const getCachedSummary = async (): Promise<boolean> => {
+    try {
+      const backendUrl = await getBackendUrl()
+      const response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/cached-summary`)
+
+      if (!response.ok) {
+        return false
+      }
+
+      const data = await response.json()
+      if (data.has_cached_data && data.total_patterns > 0) {
+        // Update report from cached data
+        analysisReport.value = {
+          analysis_summary: {
+            scan_path: '',
+            timestamp: new Date().toISOString(),
+            files_analyzed: data.files_analyzed || 0,
+            lines_analyzed: 0,
+            duration_seconds: 0,
+            total_patterns_found: data.total_patterns || 0,
+            potential_loc_reduction: data.potential_loc_reduction || 0,
+            complexity_score: 'N/A'
+          },
+          pattern_counts: data.pattern_type_distribution || {},
+          severity_distribution: data.severity_distribution || {},
+          duplicate_patterns: [],
+          regex_opportunities: [],
+          complexity_hotspots: [],
+          modularization_suggestions: [],
+          other_patterns: []
+        }
+        return true
+      }
+      return false
+    } catch (e: any) {
+      logger.debug('Cached summary not available:', e.message)
+      return false
+    }
+  }
+
+  /**
    * Get quick pattern summary
+   * First tries cached data, falls back to full analysis if no cache
    */
   const getSummary = async (path?: string): Promise<void> => {
     loading.value = true
     error.value = null
 
     try {
+      // First try to get cached summary (fast path)
+      const hasCached = await getCachedSummary()
+      if (hasCached) {
+        loading.value = false
+        return
+      }
+
+      // Fall back to full summary if no cached data
       const backendUrl = await getBackendUrl()
       const url = path
-        ? `${backendUrl}/api/codebase/patterns/summary?path=${encodeURIComponent(path)}`
-        : `${backendUrl}/api/codebase/patterns/summary`
+        ? `${backendUrl}/api/analytics/codebase/patterns/summary?path=${encodeURIComponent(path)}`
+        : `${backendUrl}/api/analytics/codebase/patterns/summary`
 
       const response = await fetch(url)
 
@@ -362,7 +415,7 @@ export function usePatternAnalysis() {
       })
       if (path) params.append('path', path)
 
-      const response = await fetch(`${backendUrl}/api/codebase/patterns/duplicates?${params}`)
+      const response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/duplicates?${params}`)
 
       if (!response.ok) {
         throw new Error(`Duplicates fetch failed: ${response.statusText}`)
@@ -395,7 +448,7 @@ export function usePatternAnalysis() {
       const params = new URLSearchParams({ limit: limit.toString() })
       if (path) params.append('path', path)
 
-      const response = await fetch(`${backendUrl}/api/codebase/patterns/regex-opportunities?${params}`)
+      const response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/regex-opportunities?${params}`)
 
       if (!response.ok) {
         throw new Error(`Regex opportunities fetch failed: ${response.statusText}`)
@@ -432,7 +485,7 @@ export function usePatternAnalysis() {
       })
       if (path) params.append('path', path)
 
-      const response = await fetch(`${backendUrl}/api/codebase/patterns/complexity-hotspots?${params}`)
+      const response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/complexity-hotspots?${params}`)
 
       if (!response.ok) {
         throw new Error(`Complexity hotspots fetch failed: ${response.statusText}`)
@@ -465,7 +518,7 @@ export function usePatternAnalysis() {
       const params = new URLSearchParams({ max_suggestions: maxSuggestions.toString() })
       if (path) params.append('path', path)
 
-      const response = await fetch(`${backendUrl}/api/codebase/patterns/refactoring-suggestions?${params}`)
+      const response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/refactoring-suggestions?${params}`)
 
       if (!response.ok) {
         throw new Error(`Refactoring suggestions fetch failed: ${response.statusText}`)
@@ -491,7 +544,7 @@ export function usePatternAnalysis() {
 
     try {
       const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/codebase/patterns/storage/stats`)
+      const response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/storage/stats`)
 
       if (!response.ok) {
         throw new Error(`Storage stats fetch failed: ${response.statusText}`)
@@ -516,7 +569,7 @@ export function usePatternAnalysis() {
 
     try {
       const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/codebase/patterns/storage/clear`, {
+      const response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/storage/clear`, {
         method: 'DELETE'
       })
 
@@ -547,7 +600,7 @@ export function usePatternAnalysis() {
     try {
       const backendUrl = await getBackendUrl()
       const params = path ? `?path=${encodeURIComponent(path)}` : ''
-      const response = await fetch(`${backendUrl}/api/codebase/patterns/report${params}`)
+      const response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/report${params}`)
 
       if (!response.ok) {
         throw new Error(`Report fetch failed: ${response.statusText}`)
@@ -581,6 +634,30 @@ export function usePatternAnalysis() {
     complexityHotspots.value = []
     refactoringSuggestions.value = []
     storageStats.value = null
+  }
+
+  /**
+   * Fast initial load - only loads summary and stats from cache
+   * Issue #208: Optimized loading for already indexed data
+   */
+  const loadCachedData = async (): Promise<boolean> => {
+    loading.value = true
+    error.value = null
+
+    try {
+      // Load summary and stats in parallel from cache
+      const [hasCachedSummary] = await Promise.all([
+        getCachedSummary(),
+        getStorageStats()
+      ])
+
+      return hasCachedSummary
+    } catch (e: any) {
+      logger.error('Failed to load cached data:', e)
+      return false
+    } finally {
+      loading.value = false
+    }
   }
 
   /**
@@ -620,6 +697,7 @@ export function usePatternAnalysis() {
     // Methods
     analyzePatterns,
     getSummary,
+    getCachedSummary,
     getDuplicates,
     getRegexOpportunities,
     getComplexityHotspots,
@@ -628,7 +706,8 @@ export function usePatternAnalysis() {
     clearStorage,
     getReport,
     reset,
-    loadAllData
+    loadAllData,
+    loadCachedData
   }
 }
 
