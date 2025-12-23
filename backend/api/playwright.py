@@ -417,6 +417,94 @@ async def reload_page(request: ReloadRequest):
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
+    operation="go_back",
+    error_code_prefix="PLAYWRIGHT",
+)
+@router.post("/back")
+async def go_back():
+    """
+    Navigate back in browser history using Playwright on Browser VM
+
+    Forwards back navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
+    Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
+    """
+    try:
+        logger.info("Back navigation request")
+
+        http_client = get_http_client()
+        async with await http_client.post(
+            f"{BROWSER_VM_URL}/back",
+            json={},
+            timeout=aiohttp.ClientTimeout(total=35),
+        ) as response:
+            result = await response.json()
+
+            if response.status == 200:
+                logger.info("Back navigation successful: %s", result.get("final_url"))
+                return result
+            else:
+                logger.error("Back navigation failed: %s", result)
+                raise HTTPException(
+                    status_code=response.status,
+                    detail=result.get("error", "Back navigation failed"),
+                )
+
+    except aiohttp.ClientError as e:
+        logger.error("Browser VM connection error: %s", e)
+        raise HTTPException(status_code=503, detail=f"Browser VM unavailable: {str(e)}")
+    except Exception as e:
+        logger.error("Back navigation error: %s", e)
+        raise HTTPException(status_code=500, detail=f"Back navigation failed: {str(e)}")
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="go_forward",
+    error_code_prefix="PLAYWRIGHT",
+)
+@router.post("/forward")
+async def go_forward():
+    """
+    Navigate forward in browser history using Playwright on Browser VM
+
+    Forwards forward navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
+    Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
+    """
+    try:
+        logger.info("Forward navigation request")
+
+        http_client = get_http_client()
+        async with await http_client.post(
+            f"{BROWSER_VM_URL}/forward",
+            json={},
+            timeout=aiohttp.ClientTimeout(total=35),
+        ) as response:
+            result = await response.json()
+
+            if response.status == 200:
+                logger.info(
+                    "Forward navigation successful: %s", result.get("final_url")
+                )
+                return result
+            else:
+                logger.error("Forward navigation failed: %s", result)
+                raise HTTPException(
+                    status_code=response.status,
+                    detail=result.get("error", "Forward navigation failed"),
+                )
+
+    except aiohttp.ClientError as e:
+        logger.error("Browser VM connection error: %s", e)
+        raise HTTPException(status_code=503, detail=f"Browser VM unavailable: {str(e)}")
+    except Exception as e:
+        logger.error("Forward navigation error: %s", e)
+        raise HTTPException(
+            status_code=500, detail=f"Forward navigation failed: {str(e)}"
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
     operation="get_capabilities",
     error_code_prefix="PLAYWRIGHT",
 )
@@ -459,6 +547,10 @@ async def get_capabilities():
             "/api/playwright/send-test-message",
             "/api/playwright/screenshot",
             "/api/playwright/automation/quick-test",
+            "/api/playwright/navigate",
+            "/api/playwright/reload",
+            "/api/playwright/back",
+            "/api/playwright/forward",
         ],
         "container_integration": {
             "type": "embedded",

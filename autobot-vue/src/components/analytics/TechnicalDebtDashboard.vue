@@ -679,9 +679,12 @@ async function refreshData(): Promise<void> {
 async function loadSummary(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/debt/* not /api/analytics/debt/*
+    // Backend returns {status, summary: {...}, top_files: [...], ...}
     const response = await fetch('/api/debt/summary');
     if (response.ok) {
-      summary.value = await response.json();
+      const result = await response.json();
+      // Issue #552: Extract summary from response structure
+      summary.value = result.summary || result;
       loadError.value = null;
     } else {
       logger.warn('Failed to load summary: HTTP', response.status);
@@ -696,10 +699,12 @@ async function loadSummary(): Promise<void> {
 async function loadCategoryBreakdown(): Promise<void> {
   try {
     // Issue #552: Fixed - backend uses POST for calculate, GET for summary
+    // Backend returns {status, summary: {by_category: {...}, ...}, ...}
     const response = await fetch('/api/debt/summary');
     if (response.ok) {
-      const data = await response.json();
-      categoryBreakdown.value = data.by_category || [];
+      const result = await response.json();
+      // Issue #552: Extract by_category from nested summary structure
+      categoryBreakdown.value = result.summary?.by_category || result.by_category || [];
     } else {
       logger.warn('Failed to load category breakdown: HTTP', response.status);
       categoryBreakdown.value = [];
@@ -713,9 +718,12 @@ async function loadCategoryBreakdown(): Promise<void> {
 async function loadRoiPriorities(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/debt/* not /api/analytics/debt/*
+    // Backend returns {status, priorities: [...], total_available: N}
     const response = await fetch('/api/debt/roi-priorities?limit=10');
     if (response.ok) {
-      roiPriorities.value = await response.json();
+      const result = await response.json();
+      // Issue #552: Extract priorities from response structure
+      roiPriorities.value = result.priorities || result;
     } else {
       logger.warn('Failed to load ROI priorities: HTTP', response.status);
       roiPriorities.value = [];
@@ -729,10 +737,12 @@ async function loadRoiPriorities(): Promise<void> {
 async function loadDebtItems(): Promise<void> {
   try {
     // Issue #552: Fixed - backend uses POST for /api/debt/calculate
+    // Backend returns {status, data: {items, summary, ...}} structure
     const response = await fetch('/api/debt/calculate', { method: 'POST' });
     if (response.ok) {
-      const data = await response.json();
-      allDebtItems.value = data.items || [];
+      const result = await response.json();
+      // Issue #552: Access items from nested data structure
+      allDebtItems.value = result.data?.items || result.items || [];
     } else {
       logger.warn('Failed to load debt items: HTTP', response.status);
       allDebtItems.value = [];
@@ -746,9 +756,12 @@ async function loadDebtItems(): Promise<void> {
 async function loadTrends(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/debt/* not /api/analytics/debt/*
+    // Backend returns {status, trends: [...], data_points: N, change: {...}, direction: "..."}
     const response = await fetch(`/api/debt/trends?period=${selectedPeriod.value}`);
     if (response.ok) {
-      trendData.value = await response.json();
+      const result = await response.json();
+      // Issue #552: Extract trends from response structure
+      trendData.value = result.trends || result;
     } else {
       logger.warn('Failed to load trends: HTTP', response.status);
       trendData.value = [];
@@ -762,9 +775,13 @@ async function loadTrends(): Promise<void> {
 async function exportReport(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/debt/* not /api/analytics/debt/*
+    // Backend returns {status, format, report: "markdown content"} for markdown format
     const response = await fetch('/api/debt/report?format=markdown');
     if (response.ok) {
-      const blob = await response.blob();
+      const result = await response.json();
+      // Issue #552: Extract markdown report from JSON response
+      const markdownContent = result.report || '';
+      const blob = new Blob([markdownContent], { type: 'text/markdown' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
