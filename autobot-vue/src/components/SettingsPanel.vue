@@ -414,7 +414,8 @@ const loadSettings = async () => {
   settingsLoadingStatus.value = 'loading'
 
   const { execute: fetchSettings } = useAsyncHandler(
-    async () => axios.get('/api/settings'),
+    // Issue #552: Use trailing slash to match backend endpoint /api/settings/
+    async () => axios.get('/api/settings/'),
     {
       errorMessage: 'Failed to load settings',
       notify,
@@ -455,7 +456,8 @@ const saveSettings = async () => {
   isSaving.value = true
 
   const { execute: postSettings } = useAsyncHandler(
-    async () => axios.post('/api/settings', settings.value),
+    // Issue #552: Use trailing slash to match backend endpoint /api/settings/
+    async () => axios.post('/api/settings/', settings.value),
     {
       errorMessage: 'Failed to save settings',
       successMessage: 'Settings saved successfully',

@@ -169,7 +169,8 @@ export const ENDPOINTS = {
   KNOWLEDGE_CLEANUP: '/api/knowledge-maintenance/cleanup',
 
   // Settings
-  SETTINGS: '/api/settings',
+  // Issue #552: Use trailing slash to match backend endpoint
+  SETTINGS: '/api/settings/',
   SETTINGS_BACKEND: '/api/settings/backend',
 
   // Files
