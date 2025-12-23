@@ -184,7 +184,8 @@ const getMockResponseData = (endpoint: string, method: string) => {
   }
 
   // Terminal endpoints
-  if (endpoint.includes('/api/terminal')) {
+  // Issue #552: Backend uses /api/agent-terminal/* not /api/terminal/*
+  if (endpoint.includes('/api/agent-terminal') || endpoint.includes('/api/terminal')) {
     return {
       ...baseResponse,
       data: {

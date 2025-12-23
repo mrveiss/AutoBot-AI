@@ -620,10 +620,10 @@ async function loadPatterns() {
 async function togglePattern(pattern: Pattern) {
   pattern.enabled = !pattern.enabled
   try {
-    await api.post('/api/code-review/patterns/toggle', {
-      pattern_id: pattern.id,
-      enabled: pattern.enabled
-    })
+    // Issue #552: Backend doesn't have /patterns/toggle endpoint yet
+    // Pattern state is managed client-side only for now
+    // TODO: Implement backend endpoint for persistent pattern preferences
+    logger.debug('Pattern toggled (client-side only):', pattern.id, pattern.enabled)
   } catch (error) {
     logger.warn('Failed to toggle pattern:', error)
     pattern.enabled = !pattern.enabled
