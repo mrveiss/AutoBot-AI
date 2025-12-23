@@ -82,6 +82,7 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("backend.api.validation_dashboard", "/validation-dashboard", ["validation-dashboard"], "validation_dashboard"),
     # Knowledge and conversation
     ("backend.api.knowledge_test", "/knowledge-test", ["knowledge-test"], "knowledge_test"),
+    ("backend.api.knowledge_maintenance", "/knowledge-maintenance", ["knowledge-maintenance"], "knowledge_maintenance"),
     ("backend.api.conversation_files", "/conversation-files", ["conversation-files"], "conversation_files"),
     ("backend.api.chat_knowledge", "/chat-knowledge", ["chat-knowledge"], "chat_knowledge"),
     # NPU and Redis
