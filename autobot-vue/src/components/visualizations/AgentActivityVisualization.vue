@@ -339,8 +339,9 @@ async function fetchAgents() {
 
 async function fetchEvents() {
   try {
-    // Issue #552: Fixed path - backend uses /api/agents/tasks/recent
-    const response = await fetch('/api/agents/tasks/recent?limit=10')
+    // Issue #552: Fixed path - backend uses /api/analytics/agents/tasks/recent
+    // (analytics_agents.py has prefix="/agents" and is included into analytics.py router)
+    const response = await fetch('/api/analytics/agents/tasks/recent?limit=10')
     if (response.ok) {
       const data = await response.json()
       // Backend returns tasks, not events - adapt response structure

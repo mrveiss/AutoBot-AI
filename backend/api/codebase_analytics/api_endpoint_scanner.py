@@ -248,16 +248,26 @@ class BackendEndpointScanner:
                         child_module = imported_modules[router_ref]
 
                     if child_module:
-                        # Child inherits parent's prefix
-                        # Note: The child's own APIRouter(prefix=...) is handled separately
-                        # in _get_file_router_prefix during scanning
-                        self._module_prefix_map[child_module] = parent_prefix
-                        self._module_prefix_map[f"backend/api/{child_module}.py"] = parent_prefix
-                        self._module_prefix_map[f"backend.api.{child_module}"] = parent_prefix
-                        logger.debug(
-                            "Nested router: %s -> %s (from %s)",
-                            child_module, parent_prefix, parent_module
-                        )
+                        # Issue #552: Only inherit parent prefix if module doesn't have
+                        # its own standalone registration (e.g., in feature_routers.py).
+                        # This prevents dual-mounted routers (like knowledge_maintenance)
+                        # from being incorrectly mapped to parent's prefix.
+                        if child_module not in self._module_prefix_map:
+                            # Child inherits parent's prefix
+                            # Note: The child's own APIRouter(prefix=...) is handled separately
+                            # in _get_file_router_prefix during scanning
+                            self._module_prefix_map[child_module] = parent_prefix
+                            self._module_prefix_map[f"backend/api/{child_module}.py"] = parent_prefix
+                            self._module_prefix_map[f"backend.api.{child_module}"] = parent_prefix
+                            logger.debug(
+                                "Nested router: %s -> %s (from %s)",
+                                child_module, parent_prefix, parent_module
+                            )
+                        else:
+                            logger.debug(
+                                "Skipping nested router %s (already registered at %s)",
+                                child_module, self._module_prefix_map[child_module]
+                            )
 
             except Exception as e:
                 logger.debug("Error scanning include_router in %s: %s", py_file, e)
@@ -695,6 +705,10 @@ class EndpointMatcher:
 
     def _normalize_path(self, path: str) -> str:
         """Normalize a path for matching (replace params with placeholder)."""
+        # Issue #552: Strip query parameters before normalization
+        # e.g., "/api/foo?dry_run=true" -> "/api/foo"
+        if "?" in path:
+            path = path.split("?")[0]
         # Replace {param} style with wildcard
         normalized = _PATH_PARAM_RE.sub("*", path)
         # Remove trailing slash

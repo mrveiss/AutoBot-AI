@@ -164,8 +164,9 @@ export const ENDPOINTS = {
   // Issue #552: Fixed paths - backend uses add_document for URL/file
   KNOWLEDGE_ADD_URL: '/api/knowledge_base/url',
   KNOWLEDGE_ADD_FILE: '/api/knowledge_base/upload',
-  KNOWLEDGE_EXPORT: '/api/knowledge_base/export',
-  KNOWLEDGE_CLEANUP: '/api/knowledge_base/cleanup',
+  // Issue #552: Fixed paths - backend uses /api/knowledge-maintenance/* for these
+  KNOWLEDGE_EXPORT: '/api/knowledge-maintenance/export',
+  KNOWLEDGE_CLEANUP: '/api/knowledge-maintenance/cleanup',
 
   // Settings
   SETTINGS: '/api/settings',

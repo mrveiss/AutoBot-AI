@@ -301,7 +301,8 @@ export class KnowledgeRepository extends ApiRepository {
    * Export knowledge base as downloadable file
    */
   async exportKnowledge(): Promise<Blob> {
-    const response = await this.get('/api/knowledge_base/export')
+    // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
+    const response = await this.post('/api/knowledge-maintenance/export')
     return response.data
   }
 
@@ -309,7 +310,8 @@ export class KnowledgeRepository extends ApiRepository {
    * Cleanup knowledge base - removes orphaned entries
    */
   async cleanupKnowledge(): Promise<{ success: boolean; message: string; removed_count?: number }> {
-    const response = await this.post('/api/knowledge_base/cleanup')
+    // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
+    const response = await this.post('/api/knowledge-maintenance/cleanup')
     return response.data
   }
 

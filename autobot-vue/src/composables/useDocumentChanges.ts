@@ -119,7 +119,8 @@ export function useDocumentChanges() {
     isScanning.value = true
 
     try {
-      const response = await ApiClient.post('/api/knowledge_base/scan_host_changes', {
+      // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
+      const response = await ApiClient.post('/api/knowledge-maintenance/scan_host_changes', {
         machine_id: machineId.value,
         force,
         scan_type: 'manpages',
