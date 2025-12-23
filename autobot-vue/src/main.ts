@@ -9,6 +9,9 @@ const logger = createLogger('main');
 
 import './assets/tailwind.css'
 import './assets/vue-notus.css'
+// Import centralized theme system (Issue #548)
+import './assets/styles/theme.css'
+import './assets/styles/view.css'
 // Import xterm CSS globally to avoid dependency resolution issues
 import '@xterm/xterm/css/xterm.css'
 

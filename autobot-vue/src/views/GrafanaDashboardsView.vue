@@ -7,7 +7,7 @@
   Phase 4: Grafana Integration (Issue #347) - Navigation Integration
 -->
 <template>
-  <div class="grafana-dashboards-view">
+  <div class="grafana-dashboards-view view-container">
     <div class="dashboard-header">
       <h2 class="text-2xl font-bold text-blueGray-700">Grafana Dashboards</h2>
       <p class="text-blueGray-600 mt-1">Prometheus + Grafana monitoring dashboards (Phase 4: Issue #347)</p>

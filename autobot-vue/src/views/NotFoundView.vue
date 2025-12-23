@@ -1,5 +1,5 @@
 <template>
-  <div class="not-found-view">
+  <div class="not-found-view view-container-centered">
     <div class="container mx-auto px-4 py-12">
       <div class="text-center">
         <!-- 404 Icon -->
@@ -75,9 +75,5 @@ Go to Chat
 </script>
 
 <style scoped>
-.not-found-view {
-  min-height: calc(100vh - 80px);
-  display: flex;
-  align-items: center;
-}
+/* View-specific styles - centered layout provided by .view-container-centered (Issue #548) */
 </style>

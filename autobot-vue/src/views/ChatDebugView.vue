@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-gray-100 p-4">
+  <div class="chat-debug-view view-container bg-gray-100 p-4">
     <div class="max-w-6xl mx-auto">
       <h1 class="text-3xl font-bold text-gray-800 mb-6">Chat Persistence Debug Page</h1>
 

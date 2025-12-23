@@ -1,5 +1,5 @@
 <template>
-  <div class="knowledge-view">
+  <div class="knowledge-view view-container">
     <div class="container mx-auto px-4 py-6">
       <div class="mb-6">
         <h1 class="text-3xl font-bold text-blueGray-700">Knowledge Base</h1>
@@ -65,29 +65,5 @@
 </script>
 
 <style scoped>
-.knowledge-view {
-  min-height: calc(100vh - 80px);
-  max-height: calc(100vh - 80px);
-  overflow-y: auto;
-  overflow-x: hidden;
-  scroll-behavior: smooth;
-}
-
-/* Custom scrollbar styling for better UX */
-.knowledge-view::-webkit-scrollbar {
-  width: 8px;
-}
-
-.knowledge-view::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
-
-.knowledge-view::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
-}
-
-.knowledge-view::-webkit-scrollbar-thumb:hover {
-  background: #555;
-}
+/* View-specific styles only - scroll styling provided by .view-container (Issue #548) */
 </style>

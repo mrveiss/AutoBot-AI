@@ -1,5 +1,5 @@
 <template>
-  <div class="component-review">
+  <div class="component-review view-container">
     <div class="review-header">
       <h1>Knowledge Component Review</h1>
       <p>Review all knowledge-related components and their usage</p>

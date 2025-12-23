@@ -1,5 +1,5 @@
 <template>
-  <div class="h-full flex flex-col bg-gray-50">
+  <div class="infrastructure-manager view-container-flex bg-gray-50">
     <!-- Header -->
     <div class="bg-white border-b border-gray-200 px-6 py-4">
       <div class="flex items-center justify-between">

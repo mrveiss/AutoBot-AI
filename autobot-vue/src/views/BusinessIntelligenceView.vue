@@ -1,5 +1,5 @@
 <template>
-  <div class="bi-view">
+  <div class="bi-view view-container">
     <!-- Health Overview Cards -->
     <div class="health-overview" v-if="dashboard">
       <div class="health-card" :class="dashboard.health?.status">

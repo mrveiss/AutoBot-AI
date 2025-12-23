@@ -1,5 +1,5 @@
 <template>
-  <div class="tools-view">
+  <div class="tools-view view-container">
     <div class="container mx-auto px-4 py-6">
       <div class="mb-6">
         <h1 class="text-3xl font-bold text-blueGray-700">Developer Tools</h1>
@@ -65,29 +65,5 @@
 </script>
 
 <style scoped>
-.tools-view {
-  min-height: calc(100vh - 80px);
-  max-height: calc(100vh - 80px);
-  overflow-y: auto;
-  overflow-x: hidden;
-  scroll-behavior: smooth;
-}
-
-/* Custom scrollbar styling for better UX */
-.tools-view::-webkit-scrollbar {
-  width: 8px;
-}
-
-.tools-view::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
-
-.tools-view::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
-}
-
-.tools-view::-webkit-scrollbar-thumb:hover {
-  background: #555;
-}
+/* View-specific styles only - scroll styling provided by .view-container (Issue #548) */
 </style>

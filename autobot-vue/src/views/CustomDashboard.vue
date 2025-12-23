@@ -2,7 +2,7 @@
 <!-- Copyright (c) 2025 mrveiss -->
 <!-- Author: mrveiss -->
 <template>
-  <div class="custom-dashboard">
+  <div class="custom-dashboard view-container-flex">
     <!-- Header -->
     <div class="dashboard-header">
       <div class="header-content">

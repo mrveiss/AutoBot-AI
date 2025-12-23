@@ -1,5 +1,5 @@
 <template>
-  <div class="secrets-view">
+  <div class="secrets-view view-container">
     <div class="container mx-auto px-4 py-6">
       <div class="mb-6">
         <h1 class="text-3xl font-bold text-blueGray-700">Secrets Manager</h1>
@@ -30,29 +30,5 @@
 </script>
 
 <style scoped>
-.secrets-view {
-  min-height: calc(100vh - 80px);
-  max-height: calc(100vh - 80px);
-  overflow-y: auto;
-  overflow-x: hidden;
-  scroll-behavior: smooth;
-}
-
-/* Custom scrollbar styling for better UX */
-.secrets-view::-webkit-scrollbar {
-  width: 8px;
-}
-
-.secrets-view::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
-
-.secrets-view::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
-}
-
-.secrets-view::-webkit-scrollbar-thumb:hover {
-  background: #555;
-}
+/* View-specific styles only - scroll styling provided by .view-container (Issue #548) */
 </style>
