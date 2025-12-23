@@ -33,84 +33,91 @@ def is_core_autobot_file(file_path: str) -> bool:
     return False
 
 
-def analyze_core_duplicates():
-    """Analyze duplicates in core AutoBot files only"""
-
-    # Load the full analysis results
-    with open('/home/kali/Desktop/AutoBot/analysis/refactoring/duplicate_analysis_results.json', 'r') as f:
-        results = json.load(f)
-
-    print("🎯 CORE AUTOBOT DUPLICATE ANALYSIS")
-    print("="*60)
-
-    # Filter duplicates to core files only
-    core_function_duplicates = []
-    core_class_duplicates = []
-    core_config_duplicates = []
-    core_string_duplicates = []
-    core_api_duplicates = []
-
-    # Function duplicates
+def _filter_function_duplicates(results: dict) -> list:
+    """Filter function duplicates to core files only (Issue #560: extracted)."""
+    core_duplicates = []
     for dup in results['duplicate_functions']:
-        core_functions = [f for f in dup['functions'] if is_core_autobot_file(f['file'])]
-        if len(core_functions) >= 2:
-            core_function_duplicates.append({
-                'count': len(core_functions),
-                'functions': core_functions,
+        core_funcs = [f for f in dup['functions'] if is_core_autobot_file(f['file'])]
+        if len(core_funcs) >= 2:
+            core_duplicates.append({
+                'count': len(core_funcs),
+                'functions': core_funcs,
                 'sample_code': dup['sample_code']
             })
+    return core_duplicates
 
-    # Class duplicates
+
+def _filter_class_duplicates(results: dict) -> list:
+    """Filter class duplicates to core files only (Issue #560: extracted)."""
+    core_duplicates = []
     for dup in results['duplicate_classes']:
         core_classes = [c for c in dup['classes'] if is_core_autobot_file(c['file'])]
         if len(core_classes) >= 2:
-            core_class_duplicates.append({
+            core_duplicates.append({
                 'count': len(core_classes),
                 'classes': core_classes,
                 'sample_code': dup['sample_code']
             })
+    return core_duplicates
 
-    # Config duplicates
+
+def _filter_config_duplicates(results: dict) -> list:
+    """Filter config duplicates to core files only (Issue #560: extracted)."""
+    core_duplicates = []
     for dup in results['duplicate_config_patterns']:
         core_configs = [p for p in dup['patterns'] if is_core_autobot_file(p['file'])]
         if len(core_configs) >= 2:
-            core_config_duplicates.append({
+            core_duplicates.append({
                 'count': len(core_configs),
                 'patterns': core_configs,
                 'sample_code': dup['sample_code']
             })
+    return core_duplicates
 
-    # String duplicates
+
+def _filter_string_duplicates(results: dict) -> list:
+    """Filter string duplicates to core files only (Issue #560: extracted)."""
+    core_duplicates = []
     for dup in results['duplicate_strings']:
         core_strings = [s for s in dup['occurrences'] if is_core_autobot_file(s['file'])]
         if len(core_strings) >= 3:  # Higher threshold for strings
-            core_string_duplicates.append({
+            core_duplicates.append({
                 'count': len(core_strings),
                 'value': dup['value'],
                 'type': dup['type'],
                 'occurrences': core_strings
             })
+    return core_duplicates
 
-    # API duplicates
+
+def _filter_api_duplicates(results: dict) -> list:
+    """Filter API duplicates to core files only (Issue #560: extracted)."""
+    core_duplicates = []
     for dup in results['duplicate_api_patterns']:
         core_apis = [a for a in dup['patterns'] if is_core_autobot_file(a['file'])]
         if len(core_apis) >= 2:
-            core_api_duplicates.append({
+            core_duplicates.append({
                 'count': len(core_apis),
                 'patterns': core_apis,
                 'sample_code': dup['sample_code']
             })
+    return core_duplicates
 
+
+def _print_summary(duplicates: dict) -> None:
+    """Print duplicate summary (Issue #560: extracted)."""
     print("📊 CORE DUPLICATE SUMMARY:")
-    print(f"   Core function duplicates: {len(core_function_duplicates)}")
-    print(f"   Core class duplicates: {len(core_class_duplicates)}")
-    print(f"   Core config duplicates: {len(core_config_duplicates)}")
-    print(f"   Core string duplicates: {len(core_string_duplicates)}")
-    print(f"   Core API duplicates: {len(core_api_duplicates)}")
+    print(f"   Core function duplicates: {len(duplicates['functions'])}")
+    print(f"   Core class duplicates: {len(duplicates['classes'])}")
+    print(f"   Core config duplicates: {len(duplicates['configs'])}")
+    print(f"   Core string duplicates: {len(duplicates['strings'])}")
+    print(f"   Core API duplicates: {len(duplicates['apis'])}")
 
+
+def _print_top_duplicates(sorted_funcs: list, sorted_configs: list, sorted_strings: list) -> None:
+    """Print top duplicates for each category (Issue #560: extracted)."""
     # Top function duplicates
     print("\n🔄 TOP CORE FUNCTION DUPLICATES:")
-    sorted_funcs = sorted(core_function_duplicates, key=lambda x: x['count'], reverse=True)
     for i, dup in enumerate(sorted_funcs[:10]):
         print(f"   {i+1}. {dup['count']} occurrences: {dup['functions'][0]['name']}")
         for func in dup['functions']:
@@ -119,7 +126,6 @@ def analyze_core_duplicates():
 
     # Top config duplicates
     print("\n🔧 TOP CORE CONFIG DUPLICATES:")
-    sorted_configs = sorted(core_config_duplicates, key=lambda x: x['count'], reverse=True)
     for i, dup in enumerate(sorted_configs[:5]):
         pattern = dup['patterns'][0]['pattern'][:60] + "..." if len(dup['patterns'][0]['pattern']) > 60 else dup['patterns'][0]['pattern']
         print(f"   {i+1}. {dup['count']} occurrences: {pattern}")
@@ -127,16 +133,17 @@ def analyze_core_duplicates():
             print(f"      - {pat['file']}:{pat['line']}")
         print()
 
-    # Top string duplicates (IP addresses, URLs, etc.)
+    # Top string duplicates
     print("\n🌐 TOP CORE STRING DUPLICATES:")
-    sorted_strings = sorted(core_string_duplicates, key=lambda x: x['count'], reverse=True)
     for i, dup in enumerate(sorted_strings[:5]):
         print(f"   {i+1}. {dup['count']} occurrences: {dup['value']} ({dup['type']})")
-        for occ in dup['occurrences'][:3]:  # Show first 3
+        for occ in dup['occurrences'][:3]:
             print(f"      - {occ['file']}:{occ['line']}")
         print()
 
-    # Refactoring recommendations
+
+def _print_recommendations() -> None:
+    """Print refactoring recommendations (Issue #560: extracted)."""
     print("\n💡 REFACTORING RECOMMENDATIONS:")
     print("   1. Create shared utility functions for path resolution")
     print("   2. Consolidate Redis connection patterns")
@@ -144,15 +151,19 @@ def analyze_core_duplicates():
     print("   4. Extract common API endpoint patterns")
     print("   5. Centralize hardcoded URLs and IP addresses")
 
-    # Save core results
-    core_results = {
+
+def _build_results(sorted_funcs: list, core_class_duplicates: list, sorted_configs: list,
+                   sorted_strings: list, core_api_duplicates: list) -> dict:
+    """Build results dictionary (Issue #560: extracted)."""
+    return {
         'function_duplicates': sorted_funcs,
         'class_duplicates': core_class_duplicates,
         'config_duplicates': sorted_configs,
         'string_duplicates': sorted_strings,
         'api_duplicates': core_api_duplicates,
         'summary': {
-            'total_core_duplicates': len(sorted_funcs) + len(core_class_duplicates) + len(sorted_configs) + len(sorted_strings) + len(core_api_duplicates),
+            'total_core_duplicates': (len(sorted_funcs) + len(core_class_duplicates) +
+                                      len(sorted_configs) + len(sorted_strings) + len(core_api_duplicates)),
             'function_count': len(sorted_funcs),
             'class_count': len(core_class_duplicates),
             'config_count': len(sorted_configs),
@@ -160,6 +171,45 @@ def analyze_core_duplicates():
             'api_count': len(core_api_duplicates)
         }
     }
+
+
+def analyze_core_duplicates():
+    """Analyze duplicates in core AutoBot files only (Issue #560: decomposed)."""
+    # Load the full analysis results
+    with open('/home/kali/Desktop/AutoBot/analysis/refactoring/duplicate_analysis_results.json', 'r') as f:
+        results = json.load(f)
+
+    print("🎯 CORE AUTOBOT DUPLICATE ANALYSIS")
+    print("=" * 60)
+
+    # Filter duplicates to core files only
+    core_function_duplicates = _filter_function_duplicates(results)
+    core_class_duplicates = _filter_class_duplicates(results)
+    core_config_duplicates = _filter_config_duplicates(results)
+    core_string_duplicates = _filter_string_duplicates(results)
+    core_api_duplicates = _filter_api_duplicates(results)
+
+    # Print summary
+    _print_summary({
+        'functions': core_function_duplicates,
+        'classes': core_class_duplicates,
+        'configs': core_config_duplicates,
+        'strings': core_string_duplicates,
+        'apis': core_api_duplicates
+    })
+
+    # Sort by count
+    sorted_funcs = sorted(core_function_duplicates, key=lambda x: x['count'], reverse=True)
+    sorted_configs = sorted(core_config_duplicates, key=lambda x: x['count'], reverse=True)
+    sorted_strings = sorted(core_string_duplicates, key=lambda x: x['count'], reverse=True)
+
+    # Print top duplicates and recommendations
+    _print_top_duplicates(sorted_funcs, sorted_configs, sorted_strings)
+    _print_recommendations()
+
+    # Build and save results
+    core_results = _build_results(sorted_funcs, core_class_duplicates, sorted_configs,
+                                  sorted_strings, core_api_duplicates)
 
     output_file = '/home/kali/Desktop/AutoBot/analysis/refactoring/core_duplicates_analysis.json'
     with open(output_file, 'w') as f:

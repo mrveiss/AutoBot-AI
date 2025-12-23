@@ -48,9 +48,75 @@ from backend.api.voice import router as voice_router
 from backend.api.wake_word import router as wake_word_router
 
 
+def _get_system_routers() -> list:
+    """Get system and settings routers (Issue #560: extracted)."""
+    return [
+        (chat_router, "", ["chat"], "chat"),
+        (system_router, "/system", ["system"], "system"),
+        (settings_router, "/settings", ["settings"], "settings"),
+        (prompts_router, "/prompts", ["prompts"], "prompts"),
+        (frontend_config_router, "", ["frontend-config"], "frontend_config"),
+    ]
+
+
+def _get_knowledge_routers() -> list:
+    """Get knowledge base routers (Issue #560: extracted)."""
+    return [
+        (knowledge_router, "/knowledge_base", ["knowledge"], "knowledge"),
+        (knowledge_search_router, "/knowledge_base", ["knowledge-search"], "knowledge_search"),
+        (knowledge_tags_router, "/knowledge_base", ["knowledge-tags"], "knowledge_tags"),
+        (knowledge_categories_router, "/knowledge_base", ["knowledge-categories"], "knowledge_categories"),
+        (knowledge_collections_router, "/knowledge_base", ["knowledge-collections"], "knowledge_collections"),
+        (knowledge_suggestions_router, "/knowledge_base", ["knowledge-suggestions"], "knowledge_suggestions"),
+        (knowledge_metadata_router, "/knowledge_base", ["knowledge-metadata"], "knowledge_metadata"),
+        (knowledge_population_router, "/knowledge_base", ["knowledge-population"], "knowledge_population"),
+    ]
+
+
+def _get_service_routers() -> list:
+    """Get LLM, Redis, voice, and VNC routers (Issue #560: extracted)."""
+    return [
+        (llm_router, "/llm", ["llm"], "llm"),
+        (redis_router, "/redis", ["redis"], "redis"),
+        (voice_router, "/voice", ["voice"], "voice"),
+        (wake_word_router, "/wake_word", ["wake_word", "voice"], "wake_word"),
+        (vnc_router, "/vnc", ["vnc"], "vnc"),
+        (vnc_proxy_router, "/vnc-proxy", ["vnc-proxy"], "vnc_proxy"),
+    ]
+
+
+def _get_mcp_routers() -> list:
+    """Get MCP bridge routers (Issue #560: extracted)."""
+    return [
+        (knowledge_mcp_router, "/knowledge", ["knowledge_mcp", "mcp"], "knowledge_mcp"),
+        (vnc_mcp_router, "/vnc", ["vnc", "mcp"], "vnc_mcp"),
+        (mcp_registry_router, "/mcp", ["mcp", "registry"], "mcp_registry"),
+        (sequential_thinking_mcp_router, "/sequential_thinking", ["sequential_thinking_mcp", "mcp"], "sequential_thinking_mcp"),
+        (structured_thinking_mcp_router, "/structured_thinking", ["structured_thinking_mcp", "mcp"], "structured_thinking_mcp"),
+        (filesystem_mcp_router, "/filesystem", ["filesystem_mcp", "mcp"], "filesystem_mcp"),
+        (browser_mcp_router, "/browser", ["browser_mcp", "mcp"], "browser_mcp"),
+        (http_client_mcp_router, "/http_client", ["http_client_mcp", "mcp"], "http_client_mcp"),
+        (database_mcp_router, "/database", ["database_mcp", "mcp"], "database_mcp"),
+        (git_mcp_router, "/git", ["git_mcp", "mcp"], "git_mcp"),
+        (prometheus_mcp_router, "/prometheus", ["prometheus_mcp", "mcp"], "prometheus_mcp"),
+    ]
+
+
+def _get_agent_routers() -> list:
+    """Get agent and utility routers (Issue #560: extracted)."""
+    return [
+        (agent_router, "/agent", ["agent"], "agent"),
+        (agent_config_router, "/agent_config", ["agent_config"], "agent_config"),
+        (intelligent_agent_router, "/intelligent_agent", ["intelligent_agent"], "intelligent_agent"),
+        (files_router, "/files", ["files"], "files"),
+        (developer_router, "/developer", ["developer"], "developer"),
+        (memory_router, "/memory", ["memory"], "memory"),
+    ]
+
+
 def load_core_routers():
     """
-    Load and return core API routers.
+    Load and return core API routers (Issue #560: decomposed).
 
     Core routers provide essential functionality and should always be available.
     These routers are imported at module level to ensure they fail fast if missing.
@@ -62,91 +128,10 @@ def load_core_routers():
               - tags: List of OpenAPI tags for documentation
               - name: Identifier for logging/debugging
     """
-    return [
-        (chat_router, "", ["chat"], "chat"),
-        (system_router, "/system", ["system"], "system"),
-        (settings_router, "/settings", ["settings"], "settings"),
-        (prompts_router, "/prompts", ["prompts"], "prompts"),
-        (knowledge_router, "/knowledge_base", ["knowledge"], "knowledge"),
-        (knowledge_search_router, "/knowledge_base", ["knowledge-search"], "knowledge_search"),
-        (knowledge_tags_router, "/knowledge_base", ["knowledge-tags"], "knowledge_tags"),
-        (
-            knowledge_categories_router,
-            "/knowledge_base",
-            ["knowledge-categories"],
-            "knowledge_categories",
-        ),
-        (
-            knowledge_collections_router,
-            "/knowledge_base",
-            ["knowledge-collections"],
-            "knowledge_collections",
-        ),
-        (
-            knowledge_suggestions_router,
-            "/knowledge_base",
-            ["knowledge-suggestions"],
-            "knowledge_suggestions",
-        ),
-        (
-            knowledge_metadata_router,
-            "/knowledge_base",
-            ["knowledge-metadata"],
-            "knowledge_metadata",
-        ),
-        (
-            knowledge_population_router,
-            "/knowledge_base",
-            ["knowledge-population"],
-            "knowledge_population",
-        ),
-        (llm_router, "/llm", ["llm"], "llm"),
-        (redis_router, "/redis", ["redis"], "redis"),
-        (voice_router, "/voice", ["voice"], "voice"),
-        (wake_word_router, "/wake_word", ["wake_word", "voice"], "wake_word"),
-        (vnc_router, "/vnc", ["vnc"], "vnc"),
-        (vnc_proxy_router, "/vnc-proxy", ["vnc-proxy"], "vnc_proxy"),
-        (knowledge_mcp_router, "/knowledge", ["knowledge_mcp", "mcp"], "knowledge_mcp"),
-        (vnc_mcp_router, "/vnc", ["vnc", "mcp"], "vnc_mcp"),
-        (mcp_registry_router, "/mcp", ["mcp", "registry"], "mcp_registry"),
-        (
-            sequential_thinking_mcp_router,
-            "/sequential_thinking",
-            ["sequential_thinking_mcp", "mcp"],
-            "sequential_thinking_mcp",
-        ),
-        (
-            structured_thinking_mcp_router,
-            "/structured_thinking",
-            ["structured_thinking_mcp", "mcp"],
-            "structured_thinking_mcp",
-        ),
-        (
-            filesystem_mcp_router,
-            "/filesystem",
-            ["filesystem_mcp", "mcp"],
-            "filesystem_mcp",
-        ),
-        (browser_mcp_router, "/browser", ["browser_mcp", "mcp"], "browser_mcp"),
-        (
-            http_client_mcp_router,
-            "/http_client",
-            ["http_client_mcp", "mcp"],
-            "http_client_mcp",
-        ),
-        (database_mcp_router, "/database", ["database_mcp", "mcp"], "database_mcp"),
-        (git_mcp_router, "/git", ["git_mcp", "mcp"], "git_mcp"),
-        (prometheus_mcp_router, "/prometheus", ["prometheus_mcp", "mcp"], "prometheus_mcp"),
-        (agent_router, "/agent", ["agent"], "agent"),
-        (agent_config_router, "/agent_config", ["agent_config"], "agent_config"),
-        (
-            intelligent_agent_router,
-            "/intelligent_agent",
-            ["intelligent_agent"],
-            "intelligent_agent",
-        ),
-        (files_router, "/files", ["files"], "files"),
-        (developer_router, "/developer", ["developer"], "developer"),
-        (frontend_config_router, "", ["frontend-config"], "frontend_config"),
-        (memory_router, "/memory", ["memory"], "memory"),
-    ]
+    routers = []
+    routers.extend(_get_system_routers())
+    routers.extend(_get_knowledge_routers())
+    routers.extend(_get_service_routers())
+    routers.extend(_get_mcp_routers())
+    routers.extend(_get_agent_routers())
+    return routers
