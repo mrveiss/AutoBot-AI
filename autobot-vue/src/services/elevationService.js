@@ -33,8 +33,8 @@ class ElevationService {
    */
   async requestElevation(operation, command, reason, riskLevel = 'MEDIUM') {
     try {
-      // Issue #552: Fixed missing /api prefix
-      const response = await apiService.post('/api/system/elevation/request', {
+      // Issue #552: Fixed path to match backend /api/elevation/*
+      const response = await apiService.post('/api/elevation/request', {
         operation,
         command,
         reason,
@@ -123,8 +123,8 @@ class ElevationService {
     }
 
     try {
-      // Issue #552: Fixed missing /api prefix
-      const response = await apiService.post(`/api/system/elevation/execute/${token}`, {
+      // Issue #552: Fixed path to match backend /api/elevation/*
+      const response = await apiService.post(`/api/elevation/execute/${token}`, {
         command
       });
 
@@ -162,8 +162,8 @@ class ElevationService {
   async clearSession() {
     if (this.activeSession.value) {
       try {
-        // Issue #552: Fixed missing /api prefix
-        await apiService.delete(`/api/system/elevation/session/${this.activeSession.value}`);
+        // Issue #552: Fixed path to match backend /api/elevation/*
+        await apiService.delete(`/api/elevation/session/${this.activeSession.value}`);
       } catch (error) {
         logger.error('Failed to revoke session:', error);
       }
@@ -196,8 +196,8 @@ class ElevationService {
    */
   async getPendingRequests() {
     try {
-      // Issue #552: Fixed missing /api prefix
-      const response = await apiService.get('/api/system/elevation/pending');
+      // Issue #552: Fixed path to match backend /api/elevation/*
+      const response = await apiService.get('/api/elevation/pending');
       if (response.data.success) {
         return response.data.pending_requests;
       }

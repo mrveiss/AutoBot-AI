@@ -160,8 +160,9 @@ class ApiService {
   }
 
   // Knowledge Base API - Updated to match backend specs
+  // Issue #552: Fixed paths to use hyphen instead of underscore
   async searchKnowledge(query: string, limit = 5): Promise<ApiResponse> {
-    return this.post('/api/chat_knowledge/search', {
+    return this.post('/api/chat-knowledge/search', {
       query,
       n_results: limit
     })
@@ -172,15 +173,16 @@ class ApiService {
   }
 
   async addKnowledge(content: string, metadata: Record<string, any> = {}): Promise<ApiResponse> {
-    return this.post('/api/chat_knowledge/add', {
+    return this.post('/api/chat-knowledge/add', {
       content,
       metadata
     })
   }
 
   // Chat Knowledge Management - New endpoints per backend specs
+  // Issue #552: Fixed paths to use hyphen instead of underscore
   async getChatKnowledgeContext(chatId: string): Promise<ApiResponse> {
-    return this.get(`/api/chat_knowledge/context/${chatId}`)
+    return this.get(`/api/chat-knowledge/context/${chatId}`)
   }
 
   async associateFileWithChat(data: {
@@ -189,7 +191,7 @@ class ApiService {
     association_type: string;
     metadata?: Record<string, any>;
   }): Promise<ApiResponse> {
-    return this.post('/api/chat_knowledge/files/associate', data)
+    return this.post('/api/chat-knowledge/files/associate', data)
   }
 
   async getKnowledgeBaseStats(): Promise<ApiResponse> {

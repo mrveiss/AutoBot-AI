@@ -371,7 +371,8 @@ async def _get_container_log_sources() -> List[Metadata]:
     operation="get_log_sources",
     error_code_prefix="LOGS",
 )
-@router.get("/logs/sources")
+# Issue #552: Fixed duplicate /logs prefix - router already mounted at /api/logs
+@router.get("/sources")
 async def get_log_sources():
     """Get all available log sources (files + Docker containers) (Issue #315 - refactored)."""
     try:
@@ -435,7 +436,7 @@ async def _read_recent_log_lines(log_path: str, limit: int) -> List[str]:
     operation="get_recent_logs",
     error_code_prefix="LOGS",
 )
-@router.get("/logs/recent")
+@router.get("/recent")
 async def get_recent_logs(limit: int = 100):
     """Get recent log entries across all log files (Issue #315 - refactored)."""
     try:
@@ -463,7 +464,7 @@ async def get_recent_logs(limit: int = 100):
     operation="list_logs",
     error_code_prefix="LOGS",
 )
-@router.get("/logs/list")
+@router.get("/list")
 async def list_logs() -> List[Metadata]:
     """List all available log files (backward compatibility)"""
     try:
@@ -479,7 +480,7 @@ async def list_logs() -> List[Metadata]:
     operation="read_log",
     error_code_prefix="LOGS",
 )
-@router.get("/logs/read/{filename}")
+@router.get("/read/{filename}")
 async def read_log(
     filename: str,
     lines: int = Query(100, description="Number of lines to read"),
@@ -529,7 +530,7 @@ async def read_log(
     operation="read_container_logs",
     error_code_prefix="LOGS",
 )
-@router.get("/logs/container/{service}")
+@router.get("/container/{service}")
 async def read_container_logs(
     service: str,
     lines: int = Query(100, ge=1, le=10000, description="Number of lines to read"),
@@ -668,7 +669,7 @@ def parse_docker_log_line(line: str, service: str) -> Metadata:
     operation="get_unified_logs",
     error_code_prefix="LOGS",
 )
-@router.get("/logs/unified")
+@router.get("/unified")
 async def get_unified_logs(
     lines: int = Query(
         100, ge=1, le=1000, description="Total number of lines to return"
@@ -745,7 +746,7 @@ def parse_file_log_line(line: str, source: str) -> Metadata:
     operation="stream_log",
     error_code_prefix="LOGS",
 )
-@router.get("/logs/stream/{filename}")
+@router.get("/stream/{filename}")
 async def stream_log(filename: str):
     """Stream log file content"""
     try:
@@ -786,7 +787,7 @@ async def stream_log(filename: str):
     operation="tail_log",
     error_code_prefix="LOGS",
 )
-@router.websocket("/logs/tail/{filename}")
+@router.websocket("/tail/{filename}")
 async def tail_log(websocket: WebSocket, filename: str):
     """WebSocket endpoint to tail log file in real-time"""
     await websocket.accept()
@@ -873,7 +874,7 @@ async def _search_single_log_file(
     operation="search_logs",
     error_code_prefix="LOGS",
 )
-@router.get("/logs/search")
+@router.get("/search")
 async def search_logs(
     query: str = Query(..., description="Search query"),
     filename: Optional[str] = Query(None, description="Specific file to search"),
@@ -924,7 +925,7 @@ async def search_logs(
     operation="clear_log",
     error_code_prefix="LOGS",
 )
-@router.delete("/logs/clear/{filename}")
+@router.delete("/clear/{filename}")
 async def clear_log(filename: str):
     """Clear a log file (truncate to 0 bytes)"""
     try:

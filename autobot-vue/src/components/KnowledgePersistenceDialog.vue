@@ -325,7 +325,8 @@ const decisionsCount = computed(() => {
 const loadPendingItems = async () => {
   try {
     loading.value = true;
-    const response = await apiService.get(`/api/chat_knowledge/knowledge/pending/${props.chatId}`);
+    // Issue #552: Fixed path to match backend (hyphen instead of underscore)
+    const response = await apiService.get(`/api/chat-knowledge/knowledge/pending/${props.chatId}`);
     
     if (response.success) {
       pendingItems.value = response.pending_items;
@@ -404,9 +405,10 @@ const applyAllDecisions = async () => {
     });
     
     // Apply decisions in parallel - eliminates N+1 sequential API calls
+    // Issue #552: Fixed path to match backend (hyphen instead of underscore)
     await Promise.all(
       decisions.map(decision =>
-        apiService.post('/api/chat_knowledge/knowledge/decide', decision)
+        apiService.post('/api/chat-knowledge/knowledge/decide', decision)
       )
     );
     
@@ -425,8 +427,9 @@ const applyAllDecisions = async () => {
 const compileChat = async () => {
   try {
     loading.value = true;
-    
-    const response = await apiService.post('/api/chat_knowledge/compile', {
+
+    // Issue #552: Fixed path to match backend (hyphen instead of underscore)
+    const response = await apiService.post('/api/chat-knowledge/compile', {
       chat_id: props.chatId,
       title: compileOptions.value.title || null,
       include_system_messages: compileOptions.value.includeSystemMessages
