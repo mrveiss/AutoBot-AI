@@ -47,10 +47,9 @@ def load_terminal_routers():
     except ImportError as e:
         logger.warning("⚠️ Optional router not available: agent_terminal - %s", e)
 
-    # NOTE: remote_terminal and base_terminal were archived during terminal consolidation
-    # - remote_terminal: Future feature, archived at backend/api/archive/remote_terminal.py.feature
-    #   Re-enable when Vue UI components are built for SSH multi-host terminal
-    # - base_terminal: Features migrated to terminal.py, archived at backend/api/archive/base_terminal.py.unused
+    # NOTE: remote_terminal and base_terminal were archived and deleted in Issue #567
+    # - remote_terminal: Future feature - implement with new architecture when Vue UI components are built
+    # - base_terminal: Features migrated to terminal.py
     #   All endpoints now available in terminal.py (/health, /status, /capabilities, /security, /features, /stats)
 
     return optional_routers

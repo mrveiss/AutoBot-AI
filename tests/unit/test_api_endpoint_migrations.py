@@ -25695,11 +25695,11 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("cache system health", source)
 
     # ==============================================
-    # BATCH 144: base_terminal.py - ARCHIVED (Migrated to terminal.py)
+    # BATCH 144: base_terminal.py - DELETED (Migrated to terminal.py)
     # ==============================================
-    # NOTE: base_terminal.py has been archived to backend/api/archive/base_terminal.py.unused
+    # NOTE: base_terminal.py was deleted in Issue #567 archive cleanup
     # All endpoints from base_terminal.py have been migrated to terminal.py in Phase 1
-    # These tests are skipped as the file no longer exists in the active codebase
+    # These tests are skipped as the file no longer exists in the codebase
 
     @unittest.skip("base_terminal.py archived - endpoints migrated to terminal.py")
     def test_batch_144_get_terminal_system_status_simple_pattern(self):
@@ -27994,11 +27994,11 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("max_results", test_source)
 
     # ==============================================
-    # BATCH 156: remote_terminal.py - ARCHIVED (Future Feature)
+    # BATCH 156: remote_terminal.py - DELETED (Future Feature)
     # ==============================================
-    # NOTE: remote_terminal.py has been archived to backend/api/archive/remote_terminal.py.feature
-    # This is a complete SSH multi-host terminal feature not yet exposed in the UI
-    # These tests are skipped as the file is archived pending future UI implementation
+    # NOTE: remote_terminal.py was deleted in Issue #567 archive cleanup
+    # This was a complete SSH multi-host terminal feature not yet exposed in the UI
+    # These tests are skipped - feature should be reimplemented when Vue UI components are built
 
     @unittest.skip("remote_terminal.py archived - future feature not yet in UI")
     def test_batch_156_remote_terminal_info_simple_pattern(self):

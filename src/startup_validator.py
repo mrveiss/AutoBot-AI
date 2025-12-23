@@ -95,12 +95,13 @@ class StartupValidator:
         ]
 
         # Optional modules (warnings only if missing)
+        # Note: Obsolete chat_workflow_consolidated removed in Issue #567 archive cleanup
         self.optional_modules = [
             "src.agents.kb_librarian_agent",
             "src.agents.librarian_assistant_agent",
             "src.agents.llm_failsafe_agent",
             "src.conversation",
-            "src.chat_workflow_consolidated",
+            "src.async_chat_workflow",
             "src.llm_interface",
             "src.circuit_breaker",
         ]

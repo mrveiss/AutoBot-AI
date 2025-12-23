@@ -76,12 +76,9 @@ class HotReloadManager:
         self.reload_lock = asyncio.Lock()
 
         # Chat workflow specific modules to watch
+        # Note: Obsolete modules removed in Issue #567 archive cleanup
         self.chat_workflow_modules = [
-            "src.chat_workflow_consolidated",
             "src.async_chat_workflow",
-            "src.simple_chat_workflow",
-            "src.chat_workflow_manager",
-            "src.consolidated_chat_workflow",
         ]
 
     async def start(self) -> None:
