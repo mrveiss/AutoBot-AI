@@ -321,48 +321,115 @@ export class ApiClient {
   // ==================================================================================
 
   /**
-   * Create a new terminal session
-   * Backend endpoint: POST /api/agent-terminal/sessions
-   * Issue #552: Fixed path to match backend
+   * Create a new terminal session (Tools Terminal - direct PTY)
+   * Backend endpoint: POST /api/terminal/sessions
+   *
+   * NOTE: This is for Tools Terminal (standalone, no agent control).
+   * For Chat Terminal with agent control, use createAgentTerminalSession().
+   * Issue #73: Fixed to use correct endpoint for Tools Terminal
    */
   async createTerminalSession(options: any): Promise<any> {
-    const response = await this.post('/api/agent-terminal/sessions', options);
+    const response = await this.post('/api/terminal/sessions', options);
     return response.json();
   }
 
   /**
-   * Get all terminal sessions
-   * Backend endpoint: GET /api/agent-terminal/sessions
+   * Create an agent terminal session (Chat Terminal - with agent control)
+   * Backend endpoint: POST /api/agent-terminal/sessions
+   *
+   * NOTE: This is for Chat Terminal with AI agent control and approval workflow.
+   * For Tools Terminal (direct PTY), use createTerminalSession().
+   * Issue #73: Agent Terminal for Chat Terminal with approval workflow
+   */
+  async createAgentTerminalSession(options: {
+    agent_id?: string;
+    agent_role?: string;
+    conversation_id?: string;
+    host?: string;
+    metadata?: Record<string, any>;
+  }): Promise<any> {
+    const payload = {
+      agent_id: options.agent_id || `agent_${Date.now()}`,
+      agent_role: options.agent_role || 'chat_agent',
+      conversation_id: options.conversation_id || null,
+      host: options.host || 'main',
+      metadata: options.metadata || null
+    };
+    const response = await this.post('/api/agent-terminal/sessions', payload);
+    return response.json();
+  }
+
+  /**
+   * Get all terminal sessions (Tools Terminal)
+   * Backend endpoint: GET /api/terminal/sessions
+   * Issue #73: Fixed to use correct endpoint
    */
   async getTerminalSessions(): Promise<any> {
-    const response = await this.get('/api/agent-terminal/sessions');
+    const response = await this.get('/api/terminal/sessions');
     return response.json();
   }
 
   /**
-   * Get terminal session info
-   * Backend endpoint: GET /api/agent-terminal/sessions/{sessionId}
+   * Get all agent terminal sessions (Chat Terminal)
+   * Backend endpoint: GET /api/agent-terminal/sessions
+   */
+  async getAgentTerminalSessions(filters: {
+    agent_id?: string;
+    conversation_id?: string;
+  } = {}): Promise<any> {
+    const params = new URLSearchParams();
+    if (filters.agent_id) params.append('agent_id', filters.agent_id);
+    if (filters.conversation_id) params.append('conversation_id', filters.conversation_id);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const response = await this.get(`/api/agent-terminal/sessions${query}`);
+    return response.json();
+  }
+
+  /**
+   * Get terminal session info (Tools Terminal)
+   * Backend endpoint: GET /api/terminal/sessions/{sessionId}
+   * Issue #73: Fixed to use correct endpoint
    */
   async getTerminalSessionInfo(sessionId: string): Promise<any> {
+    const response = await this.get(`/api/terminal/sessions/${sessionId}`);
+    return response.json();
+  }
+
+  /**
+   * Get agent terminal session info (Chat Terminal)
+   * Backend endpoint: GET /api/agent-terminal/sessions/{sessionId}
+   */
+  async getAgentTerminalSessionInfo(sessionId: string): Promise<any> {
     const response = await this.get(`/api/agent-terminal/sessions/${sessionId}`);
     return response.json();
   }
 
   /**
-   * Delete terminal session
-   * Backend endpoint: DELETE /api/agent-terminal/sessions/{sessionId}
+   * Delete terminal session (Tools Terminal)
+   * Backend endpoint: DELETE /api/terminal/sessions/{sessionId}
+   * Issue #73: Fixed to use correct endpoint
    */
   async deleteTerminalSession(sessionId: string): Promise<any> {
+    const response = await this.delete(`/api/terminal/sessions/${sessionId}`);
+    return response.json();
+  }
+
+  /**
+   * Delete agent terminal session (Chat Terminal)
+   * Backend endpoint: DELETE /api/agent-terminal/sessions/{sessionId}
+   */
+  async deleteAgentTerminalSession(sessionId: string): Promise<any> {
     const response = await this.delete(`/api/agent-terminal/sessions/${sessionId}`);
     return response.json();
   }
 
   /**
-   * Execute terminal command
-   * Backend endpoint: POST /api/agent-terminal/execute
+   * Execute terminal command (deprecated - use WebSocket for real-time I/O)
+   * Backend endpoint: POST /api/terminal/command
+   * Issue #552: Fixed path - backend uses /command not /execute
    */
   async executeTerminalCommand(command: string, options: any = {}): Promise<any> {
-    const response = await this.post('/api/agent-terminal/execute', {
+    const response = await this.post('/api/terminal/command', {
       command,
       ...options
     });

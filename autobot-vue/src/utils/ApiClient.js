@@ -503,7 +503,11 @@ class ApiClient {
   // ========== Terminal API Methods ==========
 
   /**
-   * Create a new terminal session
+   * Create a new terminal session (Tools Terminal - direct PTY)
+   *
+   * NOTE: This is for Tools Terminal (standalone, no agent control).
+   * For Chat Terminal with agent control, use createAgentTerminalSession().
+   *
    * @param {Object} config - Session configuration
    * @returns {Promise<Object>} Session info with session_id
    */
@@ -516,32 +520,86 @@ class ApiClient {
       initial_directory: config.initial_directory || null
     };
 
-    // Issue #552: Fixed path - backend uses /api/agent-terminal/*
+    // Issue #73: Tools Terminal uses /api/terminal/sessions (direct PTY)
+    // Chat Terminal uses /api/agent-terminal/sessions (agent control)
+    return await this.post('/api/terminal/sessions', payload);
+  }
+
+  /**
+   * Create an agent terminal session (Chat Terminal - with agent control)
+   *
+   * NOTE: This is for Chat Terminal with AI agent control and approval workflow.
+   * For Tools Terminal (direct PTY), use createTerminalSession().
+   *
+   * @param {Object} config - Agent session configuration
+   * @param {string} config.agent_id - Unique identifier for the agent
+   * @param {string} config.agent_role - Role: chat_agent, automation_agent, system_agent, admin_agent
+   * @param {string} config.conversation_id - Chat conversation ID to link
+   * @param {string} config.host - Target host (main, frontend, npu-worker, redis, ai-stack, browser)
+   * @returns {Promise<Object>} Session info with session_id and pty_session_id
+   */
+  async createAgentTerminalSession(config = {}) {
+    const payload = {
+      agent_id: config.agent_id || `agent_${Date.now()}`,
+      agent_role: config.agent_role || 'chat_agent',
+      conversation_id: config.conversation_id || null,
+      host: config.host || 'main',
+      metadata: config.metadata || null
+    };
+
+    // Issue #73: Agent Terminal for Chat Terminal with approval workflow
     return await this.post('/api/agent-terminal/sessions', payload);
   }
 
   /**
-   * Delete a terminal session
+   * Delete a terminal session (Tools Terminal)
    * @param {string} sessionId - Session ID to delete
    * @returns {Promise<Object>} Deletion result
    */
   async deleteTerminalSession(sessionId) {
-    // Issue #552: Fixed path - backend uses /api/agent-terminal/*
+    // Issue #73: Tools Terminal uses /api/terminal/*
+    return await this.delete(`/api/terminal/sessions/${sessionId}`);
+  }
+
+  /**
+   * Delete an agent terminal session (Chat Terminal)
+   * @param {string} sessionId - Agent session ID to delete
+   * @returns {Promise<Object>} Deletion result
+   */
+  async deleteAgentTerminalSession(sessionId) {
+    // Issue #73: Agent Terminal for Chat Terminal
     return await this.delete(`/api/agent-terminal/sessions/${sessionId}`);
   }
 
   /**
-   * Get list of active terminal sessions
+   * Get list of active terminal sessions (Tools Terminal)
    * @returns {Promise<Array>} List of sessions
    */
   async getTerminalSessions() {
-    // Issue #552: Fixed path - backend uses /api/agent-terminal/*
-    const response = await this.get('/api/agent-terminal/sessions');
+    // Issue #73: Tools Terminal uses /api/terminal/*
+    const response = await this.get('/api/terminal/sessions');
     return response.sessions || [];
   }
 
   /**
-   * Execute a terminal command
+   * Get list of agent terminal sessions (Chat Terminal)
+   * @param {Object} filters - Optional filters
+   * @param {string} filters.agent_id - Filter by agent ID
+   * @param {string} filters.conversation_id - Filter by conversation ID
+   * @returns {Promise<Array>} List of agent sessions
+   */
+  async getAgentTerminalSessions(filters = {}) {
+    // Issue #73: Agent Terminal for Chat Terminal
+    const params = new URLSearchParams();
+    if (filters.agent_id) params.append('agent_id', filters.agent_id);
+    if (filters.conversation_id) params.append('conversation_id', filters.conversation_id);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const response = await this.get(`/api/agent-terminal/sessions${query}`);
+    return response.sessions || [];
+  }
+
+  /**
+   * Execute a terminal command (deprecated - use WebSocket for real-time I/O)
    * @param {string} command - Command to execute
    * @param {Object} options - Execution options
    * @returns {Promise<Object>} Command result
@@ -554,8 +612,8 @@ class ApiClient {
       env: options.env || {}
     };
 
-    // Issue #552: Fixed path - backend uses /api/agent-terminal/*
-    return await this.post('/api/agent-terminal/execute', payload);
+    // Issue #552: Fixed path - backend uses /command not /execute
+    return await this.post('/api/terminal/command', payload);
   }
 
   /**
@@ -564,8 +622,53 @@ class ApiClient {
    * @returns {Promise<Object>} Session info
    */
   async getTerminalSessionInfo(sessionId) {
-    // Issue #552: Fixed path - backend uses /api/agent-terminal/*
-    return await this.get(`/api/agent-terminal/sessions/${sessionId}`);
+    // Issue #73: Fixed path - Tools Terminal uses /api/terminal/*
+    return await this.get(`/api/terminal/sessions/${sessionId}`);
+  }
+
+  // ========== Chat Browser Session API Methods (Issue #73) ==========
+
+  /**
+   * Get or create browser session for a chat conversation
+   * Similar to how terminal sessions are tied to chat via agent-terminal API
+   *
+   * @param {Object} config - Session configuration
+   * @param {string} config.conversation_id - Chat conversation ID
+   * @param {boolean} config.headless - Run browser in headless mode (default: false)
+   * @param {string} config.initial_url - Initial URL to navigate to
+   * @returns {Promise<Object>} Session info with session_id
+   */
+  async getOrCreateChatBrowserSession(config = {}) {
+    const payload = {
+      conversation_id: config.conversation_id,
+      headless: config.headless || false,
+      initial_url: config.initial_url || null
+    };
+
+    // Issue #73: Chat browser sessions tied to conversations
+    return await this.post('/api/research-browser/chat-session', payload);
+  }
+
+  /**
+   * Get browser session info for a chat conversation
+   *
+   * @param {string} conversationId - Chat conversation ID
+   * @returns {Promise<Object>} Session info
+   */
+  async getChatBrowserSession(conversationId) {
+    // Issue #73: Chat browser sessions tied to conversations
+    return await this.get(`/api/research-browser/chat-session/${conversationId}`);
+  }
+
+  /**
+   * Close browser session for a chat conversation
+   *
+   * @param {string} conversationId - Chat conversation ID
+   * @returns {Promise<Object>} Deletion result
+   */
+  async deleteChatBrowserSession(conversationId) {
+    // Issue #73: Chat browser sessions tied to conversations
+    return await this.delete(`/api/research-browser/chat-session/${conversationId}`);
   }
 
   // Update base URL (useful for settings changes)
