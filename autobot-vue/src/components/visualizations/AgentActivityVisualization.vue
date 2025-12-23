@@ -339,11 +339,20 @@ async function fetchAgents() {
 
 async function fetchEvents() {
   try {
-    const response = await fetch('/api/agents/activity?limit=10')
+    // Issue #552: Fixed path - backend uses /api/agents/tasks/recent
+    const response = await fetch('/api/agents/tasks/recent?limit=10')
     if (response.ok) {
       const data = await response.json()
-      if (data.events) {
-        recentEvents.value = data.events
+      // Backend returns tasks, not events - adapt response structure
+      if (data.tasks || data.data?.tasks) {
+        const tasks = data.tasks || data.data?.tasks
+        recentEvents.value = tasks.map((task: any) => ({
+          id: task.id || task.task_id,
+          type: task.status === 'completed' ? 'task_complete' : 'task_start',
+          agentId: task.agent_id,
+          timestamp: task.completed_at || task.started_at || new Date().toISOString(),
+          details: task.details || task.description || ''
+        }))
         return
       }
     }

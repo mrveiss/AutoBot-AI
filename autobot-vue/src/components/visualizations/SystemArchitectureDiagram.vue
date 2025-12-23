@@ -655,8 +655,8 @@ async function refreshArchitecture() {
   isLoading.value = true
 
   try {
-    // Fetch service health to determine component status
-    const healthResponse = await apiClient.get('/api/monitoring/health')
+    // Issue #552: Fixed path - backend uses /api/monitoring/services/health
+    const healthResponse = await apiClient.get('/api/monitoring/services/health')
     const healthData = await parseApiResponse(healthResponse)
 
     // Generate architecture based on known infrastructure

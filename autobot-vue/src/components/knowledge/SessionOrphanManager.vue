@@ -117,7 +117,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import ApiClient from '@/utils/ApiClient'
+import apiClient from '@/utils/ApiClient'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -182,7 +182,7 @@ const scanSessionOrphans = async () => {
     statusMessage.value = null
 
     // Issue #552: Fixed path to match backend /api/knowledge-maintenance/session-orphans
-    const response = await ApiClient.get('/api/knowledge-maintenance/session-orphans')
+    const response = await apiClient.get('/api/knowledge-maintenance/session-orphans')
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -229,7 +229,7 @@ const cleanupSessionOrphans = async () => {
     isCleaningOrphans.value = true
 
     // Issue #552: Fixed path to match backend /api/knowledge-maintenance/session-orphans
-    const response = await ApiClient.delete('/api/knowledge-maintenance/session-orphans?dry_run=false&preserve_important=true')
+    const response = await apiClient.delete('/api/knowledge-maintenance/session-orphans?dry_run=false&preserve_important=true')
 
     if (!response.ok) {
       const errorText = await response.text()

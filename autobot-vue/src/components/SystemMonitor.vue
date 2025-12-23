@@ -412,8 +412,8 @@ const fetchApiHealth = async () => {
       { path: '/api/chat/health', group: 'Core APIs' },
       { path: '/api/knowledge_base/health', group: 'Core APIs' },
       { path: '/api/monitoring/status', group: 'System APIs' },
-      { path: '/api/agent-terminal/health', group: 'System APIs' },
-      { path: '/api/redis/health', group: 'System APIs' }
+      { path: '/api/agent-terminal/sessions', group: 'System APIs' },  // Issue #552: No /health endpoint, use /sessions instead
+      { path: '/api/redis-service/health', group: 'System APIs' }  // Issue #552: Fixed - router is at /redis-service
     ]
 
     const groups: Record<string, ApiEndpoint[]> = {
