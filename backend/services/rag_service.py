@@ -11,7 +11,7 @@ Handles initialization, caching, error handling, and graceful degradation.
 
 import asyncio
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from backend.type_defs.common import Metadata
 from backend.services.knowledge_base_adapter import KnowledgeBaseAdapter
@@ -104,25 +104,31 @@ class RAGService:
         max_results: int = 5,
         enable_reranking: bool = True,
         timeout: Optional[float] = None,
+        categories: Optional[List[str]] = None,
     ) -> Tuple[List[SearchResult], RAGMetrics]:
         """
         Perform advanced RAG search with reranking.
+
+        Issue #556: Added categories parameter for category-based filtering.
 
         Args:
             query: Search query string
             max_results: Maximum number of results to return
             enable_reranking: Whether to apply cross-encoder reranking
             timeout: Optional timeout in seconds (uses config default if not provided)
+            categories: Optional list of categories to filter results
+                       (e.g., ["system_knowledge", "user_knowledge", "autobot_knowledge"])
 
         Returns:
             Tuple of (search_results, metrics)
         """
         if not self.config.enable_advanced_rag:
             logger.info("Advanced RAG disabled in configuration")
-            return await self._fallback_basic_search(query, max_results)
+            return await self._fallback_basic_search(query, max_results, categories)
 
-        # Check cache first
-        cache_key = f"{query}:{max_results}:{enable_reranking}"
+        # Issue #556: Include categories in cache key for proper caching
+        categories_key = ",".join(sorted(categories)) if categories else "all"
+        cache_key = f"{query}:{max_results}:{enable_reranking}:{categories_key}"
         cached_result = await self._get_from_cache(cache_key)
         if cached_result:
             logger.debug("Cache hit for query: '%s...'", query[:50])
@@ -131,21 +137,36 @@ class RAGService:
         # Ensure initialized
         if not await self.initialize():
             logger.warning("RAG optimizer initialization failed, using fallback")
-            return await self._fallback_basic_search(query, max_results)
+            return await self._fallback_basic_search(query, max_results, categories)
 
         # Apply timeout
         timeout_seconds = timeout or self.config.timeout_seconds
 
         try:
+            # Fetch more results to account for category filtering
+            fetch_multiplier = 2 if categories else 1
+            fetch_limit = max_results * fetch_multiplier
+
             # Run advanced search with timeout protection
             results, metrics = await asyncio.wait_for(
                 self.optimizer.advanced_search(
                     query=query,
-                    max_results=max_results,
+                    max_results=fetch_limit,
                     enable_reranking=enable_reranking and self.config.enable_reranking,
                 ),
                 timeout=timeout_seconds,
             )
+
+            # Issue #556: Apply category filtering if specified
+            if categories:
+                results = self._filter_by_categories(results, categories)
+                # Trim to requested max_results after filtering
+                results = results[:max_results]
+                metrics.final_results_count = len(results)
+                logger.info(
+                    "Category filter applied: %s, results: %d",
+                    categories, len(results)
+                )
 
             # Cache successful results
             await self._add_to_cache(cache_key, (results, metrics))
@@ -263,15 +284,73 @@ class RAGService:
             logger.error("Reranking failed: %s", e)
             return results
 
+    def _filter_by_categories(
+        self,
+        results: List[SearchResult],
+        categories: List[str],
+    ) -> List[SearchResult]:
+        """
+        Filter search results by category.
+
+        Issue #556: Category-based filtering for chat RAG.
+
+        Args:
+            results: List of search results to filter
+            categories: List of category names to include
+
+        Returns:
+            Filtered list of results matching any of the specified categories
+        """
+        if not categories:
+            return results
+
+        categories_set: Set[str] = set(categories)
+        filtered = []
+
+        for result in results:
+            # Check category in metadata
+            result_category = result.metadata.get("category", "")
+
+            # Also check category_id or category_path
+            if not result_category:
+                result_category = result.metadata.get("category_id", "")
+            if not result_category:
+                result_category = result.metadata.get("category_path", "")
+
+            # Match against categories (exact match or path prefix)
+            if result_category:
+                # Handle hierarchical categories (e.g., "system_knowledge/commands")
+                category_parts = result_category.split("/")
+                if any(part in categories_set for part in category_parts):
+                    filtered.append(result)
+                elif result_category in categories_set:
+                    filtered.append(result)
+            else:
+                # If no category metadata, include by default (uncategorized)
+                # This can be changed to exclude if strict category filtering is needed
+                filtered.append(result)
+
+        logger.debug(
+            "Category filter: %d/%d results matched categories %s",
+            len(filtered), len(results), categories
+        )
+        return filtered
+
     async def _fallback_basic_search(
-        self, query: str, max_results: int
+        self,
+        query: str,
+        max_results: int,
+        categories: Optional[List[str]] = None,
     ) -> Tuple[List[SearchResult], RAGMetrics]:
         """
         Fallback to basic search when advanced RAG fails.
 
+        Issue #556: Added categories parameter for filtering.
+
         Args:
             query: Search query
             max_results: Maximum results to return
+            categories: Optional list of categories to filter
 
         Returns:
             Tuple of (basic_results, empty_metrics)
@@ -282,11 +361,11 @@ class RAGService:
         try:
             start_time = time.time()
 
-            # Use knowledge base adapter for consistent interface
-            basic_results = await self.kb_adapter.search(query=query, top_k=max_results)
+            # Fetch more if filtering by category
+            fetch_limit = max_results * 2 if categories else max_results
 
-            metrics.total_time = time.time() - start_time
-            metrics.final_results_count = len(basic_results)
+            # Use knowledge base adapter for consistent interface
+            basic_results = await self.kb_adapter.search(query=query, top_k=fetch_limit)
 
             # Convert to SearchResult objects
             search_results = []
@@ -301,6 +380,14 @@ class RAGService:
                     source_path=result.get("metadata", {}).get("source", "unknown"),
                 )
                 search_results.append(sr)
+
+            # Apply category filter if specified
+            if categories:
+                search_results = self._filter_by_categories(search_results, categories)
+                search_results = search_results[:max_results]
+
+            metrics.total_time = time.time() - start_time
+            metrics.final_results_count = len(search_results)
 
             return search_results, metrics
 

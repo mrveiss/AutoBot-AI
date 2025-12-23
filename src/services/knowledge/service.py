@@ -18,7 +18,14 @@ from src.utils.logging_manager import get_llm_logger
 from .context_enhancer import get_context_enhancer
 from .doc_searcher import DocumentationSearcher, get_documentation_searcher
 from .intent_detector import get_query_intent_detector
-from .types import EnhancedQuery, QueryIntentResult
+from .types import EnhancedQuery, QueryIntentResult, QueryKnowledgeIntent
+
+# Issue #556: Standard knowledge categories for chat RAG
+KNOWLEDGE_CATEGORIES = {
+    "system_knowledge": "OS commands, man pages, system configurations",
+    "user_knowledge": "User-specific facts, preferences, learned behaviors",
+    "autobot_knowledge": "AutoBot documentation, capabilities, how-to guides",
+}
 
 logger = get_llm_logger("chat_knowledge_service")
 
@@ -65,14 +72,19 @@ class ChatKnowledgeService:
         query: str,
         top_k: int = 5,
         score_threshold: float = 0.7,
+        categories: Optional[List[str]] = None,
     ) -> Tuple[str, List[Dict]]:
         """
         Retrieve relevant knowledge facts for a chat query.
+
+        Issue #556: Added categories parameter for category-based filtering.
 
         Args:
             query: User's chat message/query
             top_k: Maximum number of knowledge facts to retrieve
             score_threshold: Minimum relevance score (0.0-1.0) to include
+            categories: Optional list of categories to filter results
+                       (e.g., ["system_knowledge", "user_knowledge", "autobot_knowledge"])
 
         Returns:
             Tuple of (formatted_context_string, citation_list)
@@ -83,7 +95,8 @@ class ChatKnowledgeService:
             context, citations = await service.retrieve_relevant_knowledge(
                 "How do I configure Redis?",
                 top_k=5,
-                score_threshold=0.7
+                score_threshold=0.7,
+                categories=["system_knowledge"]
             )
         """
         start_time = time.time()
@@ -91,10 +104,12 @@ class ChatKnowledgeService:
         try:
             # Perform advanced search using RAGService
             # Issue #382: metrics unused, using _ to indicate intentionally discarded
+            # Issue #556: Pass categories for filtering
             results, _ = await self.rag_service.advanced_search(
                 query=query,
                 max_results=top_k,
                 enable_reranking=True,
+                categories=categories,
             )
 
             # Filter by score threshold
@@ -237,12 +252,71 @@ class ChatKnowledgeService:
 
         return citations
 
+    def _select_categories_for_intent(
+        self,
+        intent_result: QueryIntentResult,
+        query: str,
+    ) -> Optional[List[str]]:
+        """
+        Select appropriate categories based on query intent.
+
+        Issue #556: Smart category selection for optimized retrieval.
+
+        Args:
+            intent_result: Detected query intent
+            query: Original query string
+
+        Returns:
+            List of categories to search, or None for all categories
+        """
+        query_lower = query.lower()
+
+        # AutoBot-specific queries
+        autobot_keywords = {
+            "autobot", "how do i use", "how to use autobot",
+            "what can you do", "help me with autobot", "autobot feature",
+            "this tool", "your capability", "your feature",
+        }
+        if any(kw in query_lower for kw in autobot_keywords):
+            logger.debug("[Smart Category] Selected: autobot_knowledge")
+            return ["autobot_knowledge"]
+
+        # System/technical queries
+        system_keywords = {
+            "command", "terminal", "bash", "shell", "linux", "install",
+            "configure", "config", "setup", "man page", "syntax",
+            "chmod", "chown", "grep", "awk", "sed", "systemctl",
+            "docker", "kubernetes", "service", "daemon", "process",
+        }
+        if any(kw in query_lower for kw in system_keywords):
+            logger.debug("[Smart Category] Selected: system_knowledge")
+            return ["system_knowledge"]
+
+        # User preference queries
+        user_keywords = {
+            "my preference", "i like", "i prefer", "remember that",
+            "last time", "as i mentioned", "my settings",
+        }
+        if any(kw in query_lower for kw in user_keywords):
+            logger.debug("[Smart Category] Selected: user_knowledge")
+            return ["user_knowledge"]
+
+        # For KNOWLEDGE_QUERY intent, search all relevant categories
+        if intent_result.intent == QueryKnowledgeIntent.KNOWLEDGE_QUERY:
+            # Return None to search all categories
+            logger.debug("[Smart Category] No specific category - searching all")
+            return None
+
+        return None
+
     async def smart_retrieve_knowledge(
         self,
         query: str,
         top_k: int = 5,
         score_threshold: float = 0.7,
         force_retrieval: bool = False,
+        categories: Optional[List[str]] = None,
+        enable_smart_categories: bool = True,
     ) -> Tuple[str, List[Dict], QueryIntentResult]:
         """
         Smart knowledge retrieval with intent detection.
@@ -251,11 +325,16 @@ class ChatKnowledgeService:
         to perform knowledge retrieval, optimizing performance by skipping
         RAG for queries that don't need it.
 
+        Issue #556: Added categories parameter and smart category selection.
+
         Args:
             query: User's chat message/query
             top_k: Maximum number of knowledge facts to retrieve
             score_threshold: Minimum relevance score (0.0-1.0) to include
             force_retrieval: If True, bypass intent detection and always retrieve
+            categories: Optional list of categories to filter results
+            enable_smart_categories: If True, automatically select categories
+                                    based on query intent
 
         Returns:
             Tuple of (context_string, citations, intent_result)
@@ -278,17 +357,26 @@ class ChatKnowledgeService:
             )
             return "", [], intent_result
 
+        # Issue #556: Smart category selection if not explicitly provided
+        effective_categories = categories
+        if effective_categories is None and enable_smart_categories:
+            effective_categories = self._select_categories_for_intent(
+                intent_result, query
+            )
+
         # Perform retrieval
         logger.info(
-            "[Smart RAG] Retrieving - intent=%s, confidence=%.2f",
+            "[Smart RAG] Retrieving - intent=%s, confidence=%.2f, categories=%s",
             intent_result.intent.value,
-            intent_result.confidence
+            intent_result.confidence,
+            effective_categories or "all"
         )
 
         context_string, citations = await self.retrieve_relevant_knowledge(
             query=query,
             top_k=top_k,
             score_threshold=score_threshold,
+            categories=effective_categories,
         )
 
         retrieval_time = time.time() - start_time
@@ -321,6 +409,8 @@ class ChatKnowledgeService:
         top_k: int = 5,
         score_threshold: float = 0.7,
         force_retrieval: bool = False,
+        categories: Optional[List[str]] = None,
+        enable_smart_categories: bool = True,
     ) -> Tuple[str, List[Dict], QueryIntentResult, Optional[EnhancedQuery]]:
         """
         Conversation-aware knowledge retrieval with context enhancement.
@@ -329,6 +419,8 @@ class ChatKnowledgeService:
         before performing RAG retrieval. Combines intent detection (Phase 2)
         with context enhancement for optimal results.
 
+        Issue #556: Added categories parameter and smart category selection.
+
         Args:
             query: User's chat message/query
             conversation_history: List of conversation exchanges
@@ -336,6 +428,9 @@ class ChatKnowledgeService:
             top_k: Maximum number of knowledge facts to retrieve
             score_threshold: Minimum relevance score (0.0-1.0) to include
             force_retrieval: If True, bypass intent detection and always retrieve
+            categories: Optional list of categories to filter results
+            enable_smart_categories: If True, automatically select categories
+                                    based on query intent
 
         Returns:
             Tuple of (context_string, citations, intent_result, enhanced_query)
@@ -379,6 +474,13 @@ class ChatKnowledgeService:
                 query[:50]
             )
 
+        # Issue #556: Smart category selection if not explicitly provided
+        effective_categories = categories
+        if effective_categories is None and enable_smart_categories:
+            effective_categories = self._select_categories_for_intent(
+                intent_result, query
+            )
+
         # Step 4: Perform retrieval with enhanced query
         search_query = (
             enhanced_query.enhanced_query
@@ -390,14 +492,16 @@ class ChatKnowledgeService:
             query=search_query,
             top_k=top_k,
             score_threshold=score_threshold,
+            categories=effective_categories,
         )
 
         retrieval_time = time.time() - start_time
         logger.info(
-            "[Conversation RAG] Completed in %.3fs - %d citations, enhanced=%s",
+            "[Conversation RAG] Completed in %.3fs - %d citations, enhanced=%s, categories=%s",
             retrieval_time,
             len(citations),
-            enhanced_query.enhancement_applied
+            enhanced_query.enhancement_applied,
+            effective_categories or "all"
         )
 
         return context_string, citations, intent_result, enhanced_query
@@ -473,6 +577,7 @@ class ChatKnowledgeService:
         doc_results: int = 3,
         score_threshold: float = 0.7,
         doc_threshold: float = 0.6,
+        categories: Optional[List[str]] = None,
     ) -> Tuple[str, List[Dict], List[Dict[str, Any]]]:
         """
         Retrieve combined knowledge from RAG and documentation sources.
@@ -480,12 +585,15 @@ class ChatKnowledgeService:
         Issue #250: Combines general knowledge retrieval with documentation
         search for comprehensive context.
 
+        Issue #556: Added categories parameter for filtering RAG results.
+
         Args:
             query: User's chat message/query
             top_k: Maximum knowledge facts from RAG
             doc_results: Maximum documentation chunks
             score_threshold: Minimum RAG relevance score
             doc_threshold: Minimum documentation relevance score
+            categories: Optional list of categories to filter RAG results
 
         Returns:
             Tuple of (combined_context, rag_citations, doc_results)
@@ -501,6 +609,7 @@ class ChatKnowledgeService:
             query=query,
             top_k=top_k,
             score_threshold=score_threshold,
+            categories=categories,
         )
 
         # Combine contexts

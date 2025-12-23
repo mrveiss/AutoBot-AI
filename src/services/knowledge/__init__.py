@@ -18,7 +18,7 @@ Components:
 from .context_enhancer import ConversationContextEnhancer, get_context_enhancer
 from .doc_searcher import DocumentationSearcher, get_documentation_searcher
 from .intent_detector import QueryKnowledgeIntentDetector, get_query_intent_detector
-from .service import ChatKnowledgeService
+from .service import KNOWLEDGE_CATEGORIES, ChatKnowledgeService
 from .types import EnhancedQuery, QueryIntentResult, QueryKnowledgeIntent
 
 __all__ = [
@@ -26,6 +26,8 @@ __all__ = [
     "QueryKnowledgeIntent",
     "QueryIntentResult",
     "EnhancedQuery",
+    # Constants
+    "KNOWLEDGE_CATEGORIES",
     # Classes
     "QueryKnowledgeIntentDetector",
     "ConversationContextEnhancer",

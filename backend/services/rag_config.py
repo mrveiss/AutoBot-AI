@@ -47,6 +47,12 @@ class RAGConfig:
     enable_advanced_rag: bool = True
     fallback_to_basic_search: bool = True
 
+    # Issue #556: Category-based filtering for chat RAG
+    # Default categories to search when no specific categories are specified
+    # Available categories: system_knowledge, user_knowledge, autobot_knowledge
+    default_chat_categories: Optional[list] = None
+    enable_smart_category_selection: bool = True
+
     def __post_init__(self):
         """Validate configuration values."""
         self._validate()
@@ -135,6 +141,8 @@ class RAGConfig:
             "timeout_seconds": self.timeout_seconds,
             "enable_advanced_rag": self.enable_advanced_rag,
             "fallback_to_basic_search": self.fallback_to_basic_search,
+            "default_chat_categories": self.default_chat_categories,
+            "enable_smart_category_selection": self.enable_smart_category_selection,
         }
 
 
