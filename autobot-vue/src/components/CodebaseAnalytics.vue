@@ -1436,6 +1436,14 @@
         />
       </div>
 
+      <!-- Issue #208: Code Pattern Analysis Section -->
+      <PatternAnalysis
+        :root-path="rootPath"
+        :auto-load="true"
+        @analysis-complete="onPatternAnalysisComplete"
+        @error="onPatternAnalysisError"
+      />
+
       <!-- Issue #538: Config Duplicates Detection Section -->
       <div class="config-duplicates-section analytics-section">
         <h3>
@@ -1901,6 +1909,7 @@ import appConfig from '@/config/AppConfig.js'
 import { NetworkConstants } from '@/constants/network.ts'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
+import PatternAnalysis from '@/components/analytics/PatternAnalysis.vue'
 import { useToast } from '@/composables/useToast'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -3559,6 +3568,17 @@ const getCrossLanguageSeverityClass = (severity: string): string => {
     case 'low': return 'success'
     default: return 'info'
   }
+}
+
+// Issue #208: Pattern Analysis event handlers
+const onPatternAnalysisComplete = (report: any) => {
+  logger.info('Pattern analysis complete:', report?.analysis_summary)
+  notify(`Pattern analysis found ${report?.analysis_summary?.total_patterns_found || 0} patterns`, 'success')
+}
+
+const onPatternAnalysisError = (message: string) => {
+  logger.error('Pattern analysis error:', message)
+  notify(`Pattern analysis error: ${message}`, 'error')
 }
 
 // Issue #538: Truncate long config values for display

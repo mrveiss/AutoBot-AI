@@ -22,6 +22,12 @@ Provides advanced code analysis capabilities including:
 - Metrics and severity scoring
 - Test pattern analysis and quality metrics
 - Automated documentation generation
+- Code pattern detection & optimization (Issue #208)
+  - Duplicate code detection with vector embeddings
+  - Regex optimization opportunities
+  - Complexity hotspot analysis (cyclomatic/cognitive)
+  - Refactoring suggestion generation
+  - ChromaDB storage for pattern similarity search
 
 Part of EPIC #217 - Advanced Code Intelligence Methods
 """
@@ -241,6 +247,35 @@ from .doc_generator import (
     get_element_types,
     get_diagram_types,
     get_completeness_levels,
+)
+# Code Pattern Detection & Optimization (Issue #208)
+from .pattern_analysis import (
+    CodePatternAnalyzer,
+    ComplexityAnalyzer,
+    RefactoringSuggestionGenerator,
+    RegexPatternDetector,
+    # Types
+    CodeLocation,
+    CodePattern,
+    ComplexityHotspot,
+    DuplicatePattern,
+    ModularizationSuggestion,
+    PatternAnalysisReport,
+    PatternCluster,
+    PatternSeverity,
+    PatternType as CodePatternType,
+    RegexOpportunity,
+    # Refactoring types
+    RefactoringSuggestion,
+    # Storage functions
+    get_pattern_collection,
+    get_pattern_collection_async,
+    store_pattern,
+    store_patterns_batch,
+    search_similar_patterns,
+    delete_pattern,
+    get_pattern_stats,
+    clear_patterns,
 )
 # Multi-language analysis framework (Issue #386)
 from .base_analyzer import (
@@ -474,6 +509,30 @@ __all__ = [
     "get_element_types",
     "get_diagram_types",
     "get_completeness_levels",
+    # Code Pattern Detection & Optimization (Issue #208)
+    "CodePatternAnalyzer",
+    "ComplexityAnalyzer",
+    "RefactoringSuggestionGenerator",
+    "RegexPatternDetector",
+    "CodeLocation",
+    "CodePattern",
+    "ComplexityHotspot",
+    "DuplicatePattern",
+    "ModularizationSuggestion",
+    "PatternAnalysisReport",
+    "PatternCluster",
+    "PatternSeverity",
+    "CodePatternType",
+    "RegexOpportunity",
+    "RefactoringSuggestion",
+    "get_pattern_collection",
+    "get_pattern_collection_async",
+    "store_pattern",
+    "store_patterns_batch",
+    "search_similar_patterns",
+    "delete_pattern",
+    "get_pattern_stats",
+    "clear_patterns",
     # Multi-language analysis framework (Issue #386)
     "MultiLangIssue",
     "MultiLangResult",

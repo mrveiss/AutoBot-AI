@@ -59,11 +59,13 @@ Usage:
 from .types import (
     PatternType,
     PatternSeverity,
+    CodeLocation,
     CodePattern,
     DuplicatePattern,
     RegexOpportunity,
     ModularizationSuggestion,
     ComplexityHotspot,
+    PatternCluster,
     PatternAnalysisReport,
 )
 
@@ -72,8 +74,15 @@ from .storage import (
     get_pattern_collection,
     get_pattern_collection_async,
     store_pattern,
+    store_patterns_batch,
     search_similar_patterns,
+    delete_pattern,
+    get_pattern_stats,
+    clear_patterns,
 )
+
+# Refactoring types
+from .refactoring_generator import RefactoringSuggestion
 
 # Analyzers
 from .regex_detector import RegexPatternDetector
@@ -87,17 +96,25 @@ __all__ = [
     # Types
     "PatternType",
     "PatternSeverity",
+    "CodeLocation",
     "CodePattern",
     "DuplicatePattern",
     "RegexOpportunity",
     "ModularizationSuggestion",
     "ComplexityHotspot",
+    "PatternCluster",
     "PatternAnalysisReport",
     # Storage
     "get_pattern_collection",
     "get_pattern_collection_async",
     "store_pattern",
+    "store_patterns_batch",
     "search_similar_patterns",
+    "delete_pattern",
+    "get_pattern_stats",
+    "clear_patterns",
+    # Refactoring types
+    "RefactoringSuggestion",
     # Analyzers
     "RegexPatternDetector",
     "ComplexityAnalyzer",
