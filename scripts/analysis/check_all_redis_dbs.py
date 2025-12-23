@@ -79,7 +79,7 @@ def _log_pattern_stats(key_patterns: Dict[str, int], sampled: int, total_keys: i
     for pattern, count in sorted(key_patterns.items(), key=lambda x: x[1], reverse=True):
         percentage = (count / sampled) * 100 if sampled > 0 else 0
         estimated_total = int((count / sampled) * total_keys) if sampled > 0 else 0
-        logger.info("  %s: %s/%s sampled (%s%) ≈ %s total", pattern, count, sampled, percentage:.1f, estimated_total:,)
+        logger.info(f"  {pattern}: {count}/{sampled} sampled ({percentage:.1f}%) ≈ {estimated_total:,} total")
 
 
 def _analyze_database(client: redis.Redis, db_num: int, info: Dict) -> bool:
@@ -92,8 +92,8 @@ def _analyze_database(client: redis.Redis, db_num: int, info: Dict) -> bool:
     expires_count = info[db_key].get('expires', 0)
 
     logger.info("\n--- Database %s ---", db_num)
-    logger.info("Keys: %s", keys_count:,)
-    logger.info("Keys with expiry: %s", expires_count:,)
+    logger.info(f"Keys: {keys_count:,}")
+    logger.info(f"Keys with expiry: {expires_count:,}")
 
     if keys_count > 0:
         key_patterns, sampled = _sample_keys(client)

@@ -148,8 +148,8 @@ def _log_impact_assessment(key_patterns: Dict[str, int]) -> None:
         if pattern != 'llama_index/vector'
     )
 
-    logger.info("Vector keys: %s", vector_keys:,)
-    logger.info("Non-vector keys: %s", total_other_keys:,)
+    logger.info(f"Vector keys: {vector_keys:,}")
+    logger.info(f"Non-vector keys: {total_other_keys:,}")
 
     if total_other_keys == 0:
         logger.info("✅ Database 0 appears to be EXCLUSIVELY for vectors")
@@ -182,7 +182,7 @@ def analyze_redis_db0():
         logger.info("Total keys scanned: %s", total_keys)
         logger.info("\nKey patterns found:")
         for pattern, count in sorted(key_patterns.items(), key=lambda x: x[1], reverse=True):
-            logger.info("  %s: %s keys", pattern, count:,)
+            logger.info(f"  {pattern}: {count:,} keys")
             if pattern in key_samples and key_samples[pattern]:
                 logger.info("    Samples: %s", key_samples[pattern])
 

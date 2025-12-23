@@ -21,7 +21,7 @@ def log_initialization_step(
 ):
     """Log initialization steps with consistent formatting."""
     icon = "✅" if success else "❌" if percentage == 100 else "🔄"
-    logger.info("%s [%s%] %s: %s", icon, percentage:3d, stage, message)
+    logger.info(f"{icon} [{percentage:3d}%] {stage}: {message}")
 
 
 async def update_init_status(key: str, value: str) -> None:

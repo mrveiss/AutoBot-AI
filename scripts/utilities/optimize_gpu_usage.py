@@ -219,7 +219,7 @@ def create_model_recommendations():
         logger.info("📋 Model Recommendations for %sMB GPU:", total_memory)
         logger.info("   Parallel Capacity: %s", parallel_capacity)
         for agent, model in recommended_models.items():
-            logger.info("   %s: %s", agent:20, model)
+            logger.info(f"   {agent:20}: {model}")
 
         # Write recommendations to file
         recommendations_file = Path(__file__).parent / "gpu_model_recommendations.json"

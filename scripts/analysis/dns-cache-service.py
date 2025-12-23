@@ -151,7 +151,7 @@ class DNSCacheService:
                     self.cache[hostname] = results[i]
 
         total_time = time.time() - start_time
-        logger.info("✅ DNS cache refreshed in %ss (%s entries)", total_time:.1f, len(self.cache))
+        logger.info(f"✅ DNS cache refreshed in {total_time:.1f}s ({len(self.cache)} entries)")
 
         self.save_cache()
 

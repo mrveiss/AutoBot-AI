@@ -1485,8 +1485,8 @@ This analysis evaluates the AutoBot codebase for microservice architecture migra
         logger.info("=" * 70)
 
         logger.info("📊 CODEBASE ANALYSIS:")
-        logger.info("  • Total Lines of Code: %s", structure['file_statistics']['total_loc']:,)
-        logger.info("  • Python Files: %s", structure['file_statistics']['python_files']:,)
+        logger.info(f"  • Total Lines of Code: {structure['file_statistics']['total_loc']:,}")
+        logger.info(f"  • Python Files: {structure['file_statistics']['python_files']:,}")
         logger.info("  • API Endpoints: %s", structure['key_components']['api_endpoints']['total_endpoints'])
         logger.info("  • AI Agents: %s", structure['key_components']['agents']['total_agents'])
 

@@ -165,7 +165,7 @@ class BackendDiagnostic:
             except Exception as e:
                 elapsed = time.time() - start_time
                 results[endpoint] = False
-                logger.error("❌ %s: Failed in %ss - %s", endpoint, elapsed:.3f, e)
+                logger.error(f"❌ {endpoint}: Failed in {elapsed:.3f}s - {e}")
 
         return results
 
