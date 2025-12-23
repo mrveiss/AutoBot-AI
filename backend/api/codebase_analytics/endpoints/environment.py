@@ -27,6 +27,8 @@ router = APIRouter()
 
 # Cache for environment analysis (in-memory, refreshed on demand)
 _env_analysis_cache: Optional[dict] = None
+# Lock for thread-safe access to _env_analysis_cache (Issue #559)
+_env_analysis_cache_lock = asyncio.Lock()
 
 
 def _get_environment_analyzer():
@@ -88,13 +90,14 @@ async def get_environment_analysis(
     """
     global _env_analysis_cache
 
-    # Use cached results if available and not refreshing
-    if _env_analysis_cache and not refresh:
-        logger.info(
-            "Returning cached environment analysis (%d hardcoded values)",
-            _env_analysis_cache.get("total_hardcoded_values", 0)
-        )
-        return JSONResponse(_env_analysis_cache)
+    # Use cached results if available and not refreshing (thread-safe, Issue #559)
+    async with _env_analysis_cache_lock:
+        if _env_analysis_cache and not refresh:
+            logger.info(
+                "Returning cached environment analysis (%d hardcoded values)",
+                _env_analysis_cache.get("total_hardcoded_values", 0)
+            )
+            return JSONResponse(_env_analysis_cache)
 
     # Get project root if path not specified
     project_root = str(Path(__file__).resolve().parents[4])
@@ -176,8 +179,9 @@ async def get_environment_analysis(
             "storage_type": "live_analysis",
         }
 
-        # Cache the results
-        _env_analysis_cache = result
+        # Cache the results (thread-safe, Issue #559)
+        async with _env_analysis_cache_lock:
+            _env_analysis_cache = result
         logger.info(
             "Environment analysis complete: %d hardcoded values, %d recommendations",
             result["total_hardcoded_values"],
@@ -220,14 +224,15 @@ async def get_env_recommendations(
     """
     global _env_analysis_cache
 
-    # Check cache first
-    if _env_analysis_cache and _env_analysis_cache.get("recommendations"):
-        return JSONResponse({
-            "status": "success",
-            "recommendations": _env_analysis_cache["recommendations"],
-            "total": len(_env_analysis_cache["recommendations"]),
-            "source": "cache",
-        })
+    # Check cache first (thread-safe, Issue #559)
+    async with _env_analysis_cache_lock:
+        if _env_analysis_cache and _env_analysis_cache.get("recommendations"):
+            return JSONResponse({
+                "status": "success",
+                "recommendations": _env_analysis_cache["recommendations"],
+                "total": len(_env_analysis_cache["recommendations"]),
+                "source": "cache",
+            })
 
     # Run fresh analysis if no cache
     if not path:

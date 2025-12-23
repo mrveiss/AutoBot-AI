@@ -12,6 +12,7 @@ Provides endpoints to:
 - Get semantic pattern matches
 """
 
+import asyncio
 import logging
 from typing import Optional
 
@@ -30,6 +31,8 @@ router = APIRouter()
 
 # Cache for analysis results
 _analysis_cache: dict = {}
+# Lock for thread-safe access to _analysis_cache (Issue #559)
+_analysis_cache_lock = asyncio.Lock()
 
 
 def _get_detector() -> CrossLanguagePatternDetector:
@@ -74,8 +77,9 @@ async def run_cross_language_analysis(
 
     analysis = await detector.run_analysis()
 
-    # Cache the result
-    _analysis_cache["latest"] = analysis
+    # Cache the result (thread-safe, Issue #559)
+    async with _analysis_cache_lock:
+        _analysis_cache["latest"] = analysis
 
     return JSONResponse({
         "status": "success",
@@ -95,12 +99,14 @@ async def get_cross_language_summary() -> JSONResponse:
 
     Returns cached results if available, otherwise runs new analysis.
     """
-    if "latest" not in _analysis_cache:
-        detector = _get_detector()
-        analysis = await detector.run_analysis()
-        _analysis_cache["latest"] = analysis
-    else:
-        analysis = _analysis_cache["latest"]
+    # Check cache first (thread-safe, Issue #559)
+    async with _analysis_cache_lock:
+        if "latest" not in _analysis_cache:
+            detector = _get_detector()
+            analysis = await detector.run_analysis()
+            _analysis_cache["latest"] = analysis
+        else:
+            analysis = _analysis_cache["latest"]
 
     return JSONResponse({
         "status": "success",
@@ -152,13 +158,14 @@ async def get_dto_mismatches() -> JSONResponse:
 
     Returns mismatches where Python models and TypeScript interfaces differ.
     """
-    if "latest" not in _analysis_cache:
-        return JSONResponse({
-            "status": "error",
-            "message": "No analysis available. Run /cross-language/analyze first.",
-        }, status_code=400)
-
-    analysis = _analysis_cache["latest"]
+    # Check cache (thread-safe, Issue #559)
+    async with _analysis_cache_lock:
+        if "latest" not in _analysis_cache:
+            return JSONResponse({
+                "status": "error",
+                "message": "No analysis available. Run /cross-language/analyze first.",
+            }, status_code=400)
+        analysis = _analysis_cache["latest"]
 
     return JSONResponse({
         "status": "success",
@@ -179,13 +186,14 @@ async def get_validation_duplications() -> JSONResponse:
 
     Returns validation rules that exist in both Python and TypeScript.
     """
-    if "latest" not in _analysis_cache:
-        return JSONResponse({
-            "status": "error",
-            "message": "No analysis available. Run /cross-language/analyze first.",
-        }, status_code=400)
-
-    analysis = _analysis_cache["latest"]
+    # Check cache (thread-safe, Issue #559)
+    async with _analysis_cache_lock:
+        if "latest" not in _analysis_cache:
+            return JSONResponse({
+                "status": "error",
+                "message": "No analysis available. Run /cross-language/analyze first.",
+            }, status_code=400)
+        analysis = _analysis_cache["latest"]
 
     return JSONResponse({
         "status": "success",
@@ -208,13 +216,14 @@ async def get_api_contract_mismatches() -> JSONResponse:
     - Orphaned (backend has, frontend doesn't call)
     - Missing (frontend calls, backend doesn't have)
     """
-    if "latest" not in _analysis_cache:
-        return JSONResponse({
-            "status": "error",
-            "message": "No analysis available. Run /cross-language/analyze first.",
-        }, status_code=400)
-
-    analysis = _analysis_cache["latest"]
+    # Check cache (thread-safe, Issue #559)
+    async with _analysis_cache_lock:
+        if "latest" not in _analysis_cache:
+            return JSONResponse({
+                "status": "error",
+                "message": "No analysis available. Run /cross-language/analyze first.",
+            }, status_code=400)
+        analysis = _analysis_cache["latest"]
 
     orphaned = [m for m in analysis.api_contract_mismatches if m.mismatch_type == "orphaned_endpoint"]
     missing = [m for m in analysis.api_contract_mismatches if m.mismatch_type == "missing_endpoint"]
@@ -249,13 +258,14 @@ async def get_semantic_matches(
         min_similarity: Minimum similarity score (0.0-1.0, default: 0.7)
         limit: Maximum number of matches to return (default: 50)
     """
-    if "latest" not in _analysis_cache:
-        return JSONResponse({
-            "status": "error",
-            "message": "No analysis available. Run /cross-language/analyze first.",
-        }, status_code=400)
-
-    analysis = _analysis_cache["latest"]
+    # Check cache (thread-safe, Issue #559)
+    async with _analysis_cache_lock:
+        if "latest" not in _analysis_cache:
+            return JSONResponse({
+                "status": "error",
+                "message": "No analysis available. Run /cross-language/analyze first.",
+            }, status_code=400)
+        analysis = _analysis_cache["latest"]
 
     # Filter by similarity threshold
     filtered_matches = [
@@ -296,13 +306,15 @@ async def get_patterns_by_category(
         severity: Filter by severity (critical, high, medium, low, info)
         limit: Maximum patterns to return (default: 100)
     """
-    if "latest" not in _analysis_cache:
-        return JSONResponse({
-            "status": "error",
-            "message": "No analysis available. Run /cross-language/analyze first.",
-        }, status_code=400)
+    # Check cache (thread-safe, Issue #559)
+    async with _analysis_cache_lock:
+        if "latest" not in _analysis_cache:
+            return JSONResponse({
+                "status": "error",
+                "message": "No analysis available. Run /cross-language/analyze first.",
+            }, status_code=400)
+        analysis = _analysis_cache["latest"]
 
-    analysis = _analysis_cache["latest"]
     patterns = analysis.patterns
 
     # Apply filters
@@ -339,7 +351,10 @@ async def clear_cross_language_cache() -> JSONResponse:
     Call this after making code changes to get fresh results.
     """
     global _analysis_cache
-    _analysis_cache = {}
+
+    # Clear cache (thread-safe, Issue #559)
+    async with _analysis_cache_lock:
+        _analysis_cache = {}
 
     return JSONResponse({
         "status": "success",

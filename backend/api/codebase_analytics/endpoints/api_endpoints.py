@@ -12,6 +12,7 @@ Provides endpoints to:
 - Find missing endpoints (called but not defined)
 """
 
+import asyncio
 import logging
 from typing import Dict, List
 
@@ -34,6 +35,8 @@ router = APIRouter()
 
 # Cache for analysis results (simple in-memory cache)
 _analysis_cache: Dict[str, APIEndpointAnalysis] = {}
+# Lock for thread-safe access to _analysis_cache (Issue #559)
+_analysis_cache_lock = asyncio.Lock()
 
 
 def _get_checker() -> APIEndpointChecker:
@@ -106,8 +109,9 @@ async def get_endpoint_coverage() -> JSONResponse:
     checker = _get_checker()
     analysis = checker.run_full_analysis()
 
-    # Cache the result
-    _analysis_cache["latest"] = analysis
+    # Cache the result (thread-safe, Issue #559)
+    async with _analysis_cache_lock:
+        _analysis_cache["latest"] = analysis
 
     return JSONResponse({
         "status": "success",
@@ -139,8 +143,9 @@ async def get_endpoint_analysis_full() -> JSONResponse:
     checker = _get_checker()
     analysis = checker.run_full_analysis()
 
-    # Cache the result
-    _analysis_cache["latest"] = analysis
+    # Cache the result (thread-safe, Issue #559)
+    async with _analysis_cache_lock:
+        _analysis_cache["latest"] = analysis
 
     return JSONResponse({
         "status": "success",
@@ -161,13 +166,14 @@ async def get_orphaned_endpoints() -> JSONResponse:
     These are backend endpoints that have no matching frontend calls.
     They may be unused code that can be removed.
     """
-    # Check cache first
-    if "latest" in _analysis_cache:
-        analysis = _analysis_cache["latest"]
-    else:
-        checker = _get_checker()
-        analysis = checker.run_full_analysis()
-        _analysis_cache["latest"] = analysis
+    # Check cache first (thread-safe, Issue #559)
+    async with _analysis_cache_lock:
+        if "latest" in _analysis_cache:
+            analysis = _analysis_cache["latest"]
+        else:
+            checker = _get_checker()
+            analysis = checker.run_full_analysis()
+            _analysis_cache["latest"] = analysis
 
     return JSONResponse({
         "status": "success",
@@ -189,13 +195,14 @@ async def get_missing_endpoints() -> JSONResponse:
     These are frontend API calls that have no matching backend endpoint.
     They may indicate bugs or deprecated endpoint usage.
     """
-    # Check cache first
-    if "latest" in _analysis_cache:
-        analysis = _analysis_cache["latest"]
-    else:
-        checker = _get_checker()
-        analysis = checker.run_full_analysis()
-        _analysis_cache["latest"] = analysis
+    # Check cache first (thread-safe, Issue #559)
+    async with _analysis_cache_lock:
+        if "latest" in _analysis_cache:
+            analysis = _analysis_cache["latest"]
+        else:
+            checker = _get_checker()
+            analysis = checker.run_full_analysis()
+            _analysis_cache["latest"] = analysis
 
     return JSONResponse({
         "status": "success",
@@ -216,13 +223,14 @@ async def get_used_endpoints() -> JSONResponse:
 
     Returns endpoints that are both defined in backend and called from frontend.
     """
-    # Check cache first
-    if "latest" in _analysis_cache:
-        analysis = _analysis_cache["latest"]
-    else:
-        checker = _get_checker()
-        analysis = checker.run_full_analysis()
-        _analysis_cache["latest"] = analysis
+    # Check cache first (thread-safe, Issue #559)
+    async with _analysis_cache_lock:
+        if "latest" in _analysis_cache:
+            analysis = _analysis_cache["latest"]
+        else:
+            checker = _get_checker()
+            analysis = checker.run_full_analysis()
+            _analysis_cache["latest"] = analysis
 
     # Sort by call count (most used first)
     sorted_used = sorted(
@@ -258,11 +266,14 @@ async def refresh_endpoint_cache() -> JSONResponse:
     Call this after making code changes to get updated results.
     """
     global _analysis_cache
-    _analysis_cache = {}
 
     checker = _get_checker()
     analysis = checker.run_full_analysis()
-    _analysis_cache["latest"] = analysis
+
+    # Update cache (thread-safe, Issue #559)
+    async with _analysis_cache_lock:
+        _analysis_cache = {}
+        _analysis_cache["latest"] = analysis
 
     return JSONResponse({
         "status": "success",
