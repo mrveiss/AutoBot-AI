@@ -116,6 +116,92 @@ For comprehensive security concerns, defer to specialized security agents.
 - **API Design**: RESTful patterns, proper status codes, comprehensive docs
 - **Testing**: Minimum 80% coverage, meaningful test names, isolated tests
 
+## Function Length & Decomposition Rules (Issue #560)
+
+**MANDATORY**: Enforce function length thresholds and decomposition patterns.
+
+### Function Length Thresholds
+
+| Lines    | Priority     | Action Required                                              |
+| -------- | ------------ | ------------------------------------------------------------ |
+| **100+** | 🔴 CRITICAL  | MUST be refactored immediately - block PR if not addressed   |
+| **70-99**| 🟡 MEDIUM    | Should be decomposed when file is touched                    |
+| **50-69**| 🟢 LOW       | Flag for future refactoring, recommend decomposition         |
+| **<50**  | ✅ OK        | Acceptable function length                                   |
+
+### Decomposition Patterns
+
+When flagging long functions, recommend one of these patterns:
+
+**1. Extract Helper Functions** (Most Common)
+
+```python
+# Before: 100+ line function
+def big_function():
+    # validation (15 lines)
+    # processing (40 lines)
+    # formatting (25 lines)
+    # response (20 lines)
+
+# After: Focused functions
+def big_function():
+    _validate_input()
+    result = _process_data()
+    formatted = _format_result(result)
+    return _build_response(formatted)
+```
+
+**2. Extract Strategy Classes** (For Many Conditionals)
+
+```python
+# Before: Multiple if/elif branches
+def process_item(item_type, data):
+    if item_type == "A":
+        # 30 lines of logic
+    elif item_type == "B":
+        # 25 lines of logic
+    # ... more branches
+
+# After: Strategy pattern
+class ItemProcessor(ABC):
+    @abstractmethod
+    def process(self, data): pass
+
+class TypeAProcessor(ItemProcessor):
+    def process(self, data): ...
+
+PROCESSORS = {"A": TypeAProcessor(), "B": TypeBProcessor()}
+def process_item(item_type, data):
+    return PROCESSORS[item_type].process(data)
+```
+
+**3. Extract Data Builders** (For MCP Tool Definitions)
+
+```python
+# Before: Large dict literals in _get_*_tools functions
+def _get_knowledge_tools():
+    return [
+        {"name": "tool1", ...},  # 20 lines
+        {"name": "tool2", ...},  # 20 lines
+        # ... 100+ lines of definitions
+    ]
+
+# After: External data files
+# tools/knowledge_tools.yaml contains definitions
+def _get_knowledge_tools():
+    return load_tool_definitions("knowledge_tools.yaml")
+```
+
+### Review Checklist for Function Length
+
+When reviewing code, ALWAYS check:
+
+- [ ] Count lines in new/modified functions
+- [ ] Flag any function exceeding 50 lines
+- [ ] Block functions exceeding 100 lines
+- [ ] Suggest specific decomposition pattern
+- [ ] Reference issue #560 for context
+
 ## Performance Metrics to Review
 
 - **Response Times**: API endpoints < 200ms, database queries < 50ms
