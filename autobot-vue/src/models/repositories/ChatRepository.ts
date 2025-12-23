@@ -441,7 +441,8 @@ export class ChatRepository {
    */
   async getSessionFacts(sessionId: string): Promise<SessionFactsResponse> {
     try {
-      const response = await this.get(`/api/chat/sessions/${sessionId}/facts`)
+      // Issue #552: Fixed path - backend uses /api/chat-knowledge/chat/sessions/*
+      const response = await this.get(`/api/chat-knowledge/chat/sessions/${sessionId}/facts`)
       return response.data || response
     } catch (error: any) {
       logger.error('Failed to get session facts:', error)
@@ -459,7 +460,8 @@ export class ChatRepository {
     preserve: boolean = true
   ): Promise<PreserveFactsResponse> {
     try {
-      const response = await this.post(`/api/chat/sessions/${sessionId}/facts/preserve`, {
+      // Issue #552: Fixed path - backend uses /api/chat-knowledge/chat/sessions/*
+      const response = await this.post(`/api/chat-knowledge/chat/sessions/${sessionId}/facts/preserve`, {
         fact_ids: factIds,
         preserve
       })

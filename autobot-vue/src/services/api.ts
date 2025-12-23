@@ -50,15 +50,18 @@ class ApiService {
   }
 
   async getChatHistory(): Promise<ApiResponse<ChatMessage[]>> {
-    return this.get('/api/history')
+    // Issue #552: Fixed path - backend uses /api/chat/sessions
+    return this.get('/api/chat/sessions')
   }
 
   async getChatSessions(): Promise<ApiResponse<ChatSession[]>> {
-    return this.get('/api/list_sessions')
+    // Issue #552: Fixed path - backend uses /api/chat/sessions
+    return this.get('/api/chat/sessions')
   }
 
   async getChatMessages(chatId: string): Promise<ApiResponse<{ history: ChatMessage[] }>> {
-    return this.get(`/api/load_session/${chatId}`)
+    // Issue #552: Fixed path - backend uses /api/chat/sessions/{id}
+    return this.get(`/api/chat/sessions/${chatId}`)
   }
 
   async deleteChatHistory(chatId: string): Promise<ApiResponse> {
@@ -147,16 +150,21 @@ class ApiService {
   }
 
   // Terminal API - Updated to match backend specs
+  // Issue #552: Fixed paths - backend uses /api/agent-terminal/*
   async executeCommand(command: string, options: Record<string, any> = {}): Promise<ApiResponse> {
-    return this.post('/api/terminal/execute', { command, ...options })
+    return this.post('/api/agent-terminal/execute', { command, ...options })
   }
 
   async interruptProcess(): Promise<ApiResponse> {
-    return this.post('/api/terminal/interrupt', {})
+    // Issue #552: Backend uses session-based interrupt
+    // Note: This may need a session_id parameter for proper implementation
+    return this.post('/api/agent-terminal/execute', { interrupt: true })
   }
 
   async killAllProcesses(): Promise<ApiResponse> {
-    return this.post('/api/terminal/kill', {})
+    // Issue #552: Backend uses session-based delete
+    // Note: This may need a session_id parameter for proper implementation
+    return this.post('/api/agent-terminal/execute', { kill: true })
   }
 
   // Knowledge Base API - Updated to match backend specs

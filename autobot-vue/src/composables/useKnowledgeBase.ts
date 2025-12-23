@@ -233,7 +233,8 @@ export function useKnowledgeBase() {
    */
   const searchKnowledge = async (query: string): Promise<SearchResponse> => {
     try {
-      const response = await apiClient.get(`/api/knowledge_base/search?query=${encodeURIComponent(query)}`)
+      // Issue #552: Backend expects POST for search
+      const response = await apiClient.post('/api/knowledge_base/search', { query })
 
       if (!response) {
         throw new Error('Search failed: No response from server');
