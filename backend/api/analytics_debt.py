@@ -598,19 +598,36 @@ async def get_debt_by_category(category: str):
 
 
 def _get_debt_trend_data() -> List[Dict[str, Any]]:
-    """Get historical debt trend data from Redis (Issue #315 - extracted helper)."""
+    """Get historical debt trend data from Redis.
+
+    Issue #315: Extracted helper.
+    Issue #561: Fixed N+1 query pattern - now uses pipeline batching.
+    """
     redis_client = get_debt_redis()
     if not redis_client:
         return []
 
     trend_data = []
     try:
+        # Issue #561: Collect all keys first, then batch fetch with pipeline
+        keys = []
         for key in redis_client.scan_iter(match=f"{DEBT_PREFIX}calculation:*"):
-            key_str = _decode_redis_value(key)
-            data = _decode_redis_value(redis_client.get(key_str))
+            keys.append(_decode_redis_value(key))
+
+        if not keys:
+            return []
+
+        # Batch fetch all values using pipeline (eliminates N+1 pattern)
+        pipe = redis_client.pipeline()
+        for key_str in keys:
+            pipe.get(key_str)
+        results = pipe.execute()
+
+        for data in results:
             if not data:
                 continue
-            calc = json.loads(data)
+            data_str = _decode_redis_value(data)
+            calc = json.loads(data_str)
             summary = calc.get("summary", {})
             trend_data.append({
                 "timestamp": calc.get("timestamp"),

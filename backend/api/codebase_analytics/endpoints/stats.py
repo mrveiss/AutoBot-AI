@@ -216,6 +216,7 @@ async def get_hardcoded_values(hardcode_type: Optional[str] = None):
 
     if redis_client:
         # Issue #361 - avoid blocking - wrap Redis ops in thread pool
+        # Issue #561 - fix N+1 query pattern with pipeline batching
         def _fetch_hardcodes():
             results = []
             if hardcode_type:
@@ -223,10 +224,16 @@ async def get_hardcoded_values(hardcode_type: Optional[str] = None):
                 if hardcodes_data:
                     results = json.loads(hardcodes_data)
             else:
-                for key in redis_client.scan_iter(match="codebase:hardcodes:*"):
-                    hardcodes_data = redis_client.get(key)
-                    if hardcodes_data:
-                        results.extend(json.loads(hardcodes_data))
+                # Issue #561: Collect keys first, then batch fetch with pipeline
+                keys = list(redis_client.scan_iter(match="codebase:hardcodes:*"))
+                if keys:
+                    pipe = redis_client.pipeline()
+                    for key in keys:
+                        pipe.get(key)
+                    pipe_results = pipe.execute()
+                    for hardcodes_data in pipe_results:
+                        if hardcodes_data:
+                            results.extend(json.loads(hardcodes_data))
             return results
 
         all_hardcodes = await asyncio.to_thread(_fetch_hardcodes)
@@ -247,6 +254,8 @@ async def get_hardcoded_values(hardcode_type: Optional[str] = None):
             if hardcodes_data:
                 all_hardcodes = json.loads(hardcodes_data)
         else:
+            # Note: In-memory storage uses dict, which is O(1) per access.
+            # No pipeline needed - N+1 is only a problem for network operations.
             for key in storage.scan_iter("codebase:hardcodes:*"):
                 hardcodes_data = storage.get(key)
                 if hardcodes_data:
@@ -294,12 +303,18 @@ def _fetch_problems_from_chromadb(code_collection, problem_type: Optional[str]) 
 
 
 async def _fetch_problems_from_redis(problem_type: Optional[str]) -> tuple:
-    """Fetch problems from Redis. Returns (problems, success). (Issue #315 - extracted)"""
+    """Fetch problems from Redis. Returns (problems, success).
+
+    Issue #315: Extracted helper.
+    Issue #361: Avoid blocking with asyncio.to_thread.
+    Issue #561: Fixed N+1 query pattern with pipeline batching.
+    """
     redis_client = await get_redis_connection()
     if not redis_client:
         return [], False
 
     # Issue #361 - avoid blocking - wrap Redis ops in thread pool
+    # Issue #561 - fix N+1 query pattern with pipeline batching
     def _fetch_problems():
         results = []
         if problem_type:
@@ -307,10 +322,16 @@ async def _fetch_problems_from_redis(problem_type: Optional[str]) -> tuple:
             if problems_data:
                 results = json.loads(problems_data)
         else:
-            for key in redis_client.scan_iter(match="codebase:problems:*"):
-                problems_data = redis_client.get(key)
-                if problems_data:
-                    results.extend(json.loads(problems_data))
+            # Issue #561: Collect keys first, then batch fetch with pipeline
+            keys = list(redis_client.scan_iter(match="codebase:problems:*"))
+            if keys:
+                pipe = redis_client.pipeline()
+                for key in keys:
+                    pipe.get(key)
+                pipe_results = pipe.execute()
+                for problems_data in pipe_results:
+                    if problems_data:
+                        results.extend(json.loads(problems_data))
         return results
 
     problems = await asyncio.to_thread(_fetch_problems)

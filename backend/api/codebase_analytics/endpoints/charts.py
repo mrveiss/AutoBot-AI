@@ -57,12 +57,26 @@ async def _aggregate_from_redis(
     race_conditions: Dict[str, int],
     file_problems: Dict[str, int],
 ) -> int:
-    """Aggregate problem data from Redis (Issue #315 - extracted helper)."""
-    # Issue #361 - avoid blocking
+    """Aggregate problem data from Redis.
+
+    Issue #315: Extracted helper.
+    Issue #361: Avoid blocking with asyncio.to_thread.
+    Issue #561: Fixed N+1 query pattern - now uses pipeline batching.
+    """
     def _scan_and_aggregate():
+        # Issue #561: Collect all keys first, then batch fetch with pipeline
+        keys = list(redis_client.scan_iter(match="codebase:problems:*"))
+        if not keys:
+            return 0
+
+        # Batch fetch all values using pipeline (eliminates N+1 pattern)
+        pipe = redis_client.pipeline()
+        for key in keys:
+            pipe.get(key)
+        results = pipe.execute()
+
         total_problems = 0
-        for key in redis_client.scan_iter(match="codebase:problems:*"):
-            problems_data = redis_client.get(key)
+        for problems_data in results:
             if not problems_data:
                 continue
             problems = json.loads(problems_data)
