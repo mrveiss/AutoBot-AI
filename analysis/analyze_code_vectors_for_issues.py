@@ -261,21 +261,21 @@ class CodeIssueAnalyzer:
                         matches = compiled_pattern.findall(text)
 
                         for match in matches:
-                                # Extract the actual value (handle tuple results from groups)
-                                value = match[0] if isinstance(match, tuple) and len(match) > 0 else match
+                            # Extract the actual value (handle tuple results from groups)
+                            value = match[0] if isinstance(match, tuple) and len(match) > 0 else match
 
-                                # Skip common false positives
-                                if self.is_likely_hardcoded_value(category, value):
-                                    hardcoded[category].append({
-                                        "value": value,
-                                        "file": doc_id,
-                                        "context": text[max(0, text.find(value)-50):text.find(value)+100],
-                                        "severity": self.assess_hardcode_severity(category, value)
-                                    })
+                            # Skip common false positives
+                            if self.is_likely_hardcoded_value(category, value):
+                                hardcoded[category].append({
+                                    "value": value,
+                                    "file": doc_id,
+                                    "context": text[max(0, text.find(value)-50):text.find(value)+100],
+                                    "severity": self.assess_hardcode_severity(category, value)
+                                })
 
-                        except Exception as e:
-                            logger.warning(f"⚠️ Pattern matching failed for {category}: {e}")
-                            continue
+                    except Exception as e:
+                        logger.warning(f"⚠️ Pattern matching failed for {category}: {e}")
+                        continue
 
             # Remove duplicates and sort by severity
             for category in hardcoded:

@@ -174,7 +174,7 @@ class AdaptiveTimeout:
 
         except Exception as e:
             elapsed = time.time() - self.start_time
-            logger.error("Operation failed after %ss: %s", elapsed:.2f, e)
+            logger.error("Operation failed after %.2fs: %s", elapsed, e)
             return fallback_result
 
     async def _send_timeout_warning(

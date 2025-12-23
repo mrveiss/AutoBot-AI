@@ -833,7 +833,7 @@ class AdvancedWebResearcher:
 
         # Wait outside lock if needed
         if wait_time > 0:
-            logger.info("Rate limiting: waiting %ss for %s", wait_time:.2f, domain)
+            logger.info("Rate limiting: waiting %.2fs for %s", wait_time, domain)
             await asyncio.sleep(wait_time)
 
     async def _random_delay(self, min_seconds: float, max_seconds: float):

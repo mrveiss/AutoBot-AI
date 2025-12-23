@@ -698,7 +698,7 @@ async def main():
             response = await manager.handle_request(request)
             logger.debug("\nRequest %s: %s", i+1, request)
             logger.debug("Response: %s...", response.content[:100])
-            logger.debug("Source: %s, Confidence: %s", response.source, response.confidence:.2f)
+            logger.debug("Source: %s, Confidence: %.2f", response.source, response.confidence)
             logger.debug("Degradation Level: %s", response.degradation_level.name)
 
             # Simulate some delay between requests
