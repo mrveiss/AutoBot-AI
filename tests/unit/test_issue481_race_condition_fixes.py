@@ -90,77 +90,8 @@ class TestTracingServiceSingleton:
         assert isinstance(TracingService._lock, type(threading.Lock()))
 
 
-class TestAnalyticsMonitoringThreadSafety:
-    """Test thread-safe global state for analytics_monitoring (Issue #481)"""
-
-    def test_lock_exists(self):
-        """Test that analytics_monitoring has thread lock"""
-        from backend.api import analytics_monitoring
-
-        assert hasattr(analytics_monitoring, "_analytics_deps_lock")
-        assert isinstance(
-            analytics_monitoring._analytics_deps_lock, type(threading.Lock())
-        )
-
-    def test_set_dependencies_is_protected(self):
-        """Test that set_analytics_dependencies uses lock"""
-        from backend.api import analytics_monitoring
-
-        # Mock objects
-        mock_controller = MagicMock()
-        mock_state = MagicMock()
-        mock_hw_monitor = MagicMock()
-
-        # Track lock usage
-        lock_acquired = []
-        original_lock = analytics_monitoring._analytics_deps_lock
-
-        class TrackingLock:
-            def __enter__(self):
-                lock_acquired.append(True)
-                return original_lock.__enter__()
-
-            def __exit__(self, *args):
-                return original_lock.__exit__(*args)
-
-        # Patch the lock
-        analytics_monitoring._analytics_deps_lock = TrackingLock()
-
-        try:
-            analytics_monitoring.set_analytics_dependencies(
-                mock_controller, mock_state, mock_hw_monitor
-            )
-            assert len(lock_acquired) == 1, "Lock was not acquired"
-        finally:
-            analytics_monitoring._analytics_deps_lock = original_lock
-
-    def test_concurrent_set_dependencies(self):
-        """Test concurrent calls to set_analytics_dependencies"""
-        from backend.api import analytics_monitoring
-
-        errors = []
-        call_count = {"count": 0}
-
-        def set_deps(i):
-            try:
-                mock_controller = MagicMock(name=f"controller_{i}")
-                mock_state = MagicMock(name=f"state_{i}")
-                mock_hw = MagicMock(name=f"hw_{i}")
-                analytics_monitoring.set_analytics_dependencies(
-                    mock_controller, mock_state, mock_hw
-                )
-                call_count["count"] += 1
-            except Exception as e:
-                errors.append(e)
-
-        # Run 10 concurrent calls
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [executor.submit(set_deps, i) for i in range(10)]
-            for f in futures:
-                f.result()
-
-        assert len(errors) == 0, f"Errors during concurrent access: {errors}"
-        assert call_count["count"] == 10
+# TestAnalyticsMonitoringThreadSafety class removed in Issue #532
+# analytics_monitoring.py was deleted - monitoring endpoints consolidated in monitoring.py
 
 
 class TestAnalyticsCodeThreadSafety:

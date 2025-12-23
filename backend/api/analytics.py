@@ -341,14 +341,14 @@ async def get_usage_statistics():
 # IMPORT SUB-ROUTERS FROM SPLIT MODULES
 # ============================================================================
 
-# Import monitoring and code analysis routers (split to maintain <20 functions)
-from backend.api import analytics_monitoring, analytics_code
+# Import code analysis router (split to maintain <20 functions)
+# NOTE: analytics_monitoring.py removed in Issue #532 - monitoring endpoints consolidated in monitoring.py
+from backend.api import analytics_code
 
 # Import new analytics modules (Issue #59 - Advanced Analytics & BI)
 from backend.api import analytics_cost, analytics_agents, analytics_export, analytics_behavior
 
 # Include sub-routers
-router.include_router(analytics_monitoring.router)
 router.include_router(analytics_code.router)
 
 # Include Issue #59 sub-routers (Advanced Analytics & BI)
@@ -358,9 +358,6 @@ router.include_router(analytics_export.router)
 router.include_router(analytics_behavior.router)
 
 # Set dependencies for sub-modules
-analytics_monitoring.set_analytics_dependencies(
-    analytics_controller, analytics_state, hardware_monitor
-)
 analytics_code.set_analytics_dependencies(analytics_controller, analytics_state)
 
 # ============================================================================
