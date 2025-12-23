@@ -192,6 +192,86 @@ def _get_knowledge_tools():
     return load_tool_definitions("knowledge_tools.yaml")
 ```
 
+### MCP Tool Definitions: Move to YAML/JSON (Issue #515)
+
+**MANDATORY for `_get_*_tools` functions**: Large dictionary literals defining MCP tools MUST be externalized to data files.
+
+**Known Long Functions to Flag:**
+
+| File | Function | Lines | Action |
+| ---- | -------- | ----- | ------ |
+| `backend/api/http_client_mcp.py` | `_get_http_write_tools` | 135 | Move to YAML |
+| `backend/api/knowledge_mcp.py` | `_get_knowledge_search_tools` | 102 | Move to YAML |
+| `backend/api/browser_mcp.py` | `_get_browser_interaction_tools` | 80 | Move to YAML |
+| `backend/api/database_mcp.py` | `_get_database_query_tools` | 80 | Move to YAML |
+
+**Recommended Directory Structure:**
+
+```text
+data/
+└── mcp_tools/
+    ├── http_client_tools.yaml
+    ├── knowledge_tools.yaml
+    ├── browser_tools.yaml
+    └── database_tools.yaml
+```
+
+**YAML Schema Example:**
+
+```yaml
+# data/mcp_tools/knowledge_tools.yaml
+tools:
+  - name: search_knowledge
+    description: Search the knowledge base
+    parameters:
+      - name: query
+        type: string
+        required: true
+        description: Search query
+      - name: limit
+        type: integer
+        required: false
+        default: 10
+    returns:
+      type: array
+      items: KnowledgeResult
+
+  - name: add_knowledge
+    description: Add entry to knowledge base
+    parameters:
+      - name: content
+        type: string
+        required: true
+```
+
+**Loader Pattern:**
+
+```python
+import yaml
+from pathlib import Path
+
+_TOOLS_DIR = Path(__file__).parent.parent.parent / "data" / "mcp_tools"
+
+def load_tool_definitions(filename: str) -> list[dict]:
+    """Load MCP tool definitions from YAML file."""
+    yaml_path = _TOOLS_DIR / filename
+    with open(yaml_path, encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    return data.get("tools", [])
+
+# Usage in MCP modules
+def _get_knowledge_search_tools() -> list[dict]:
+    return load_tool_definitions("knowledge_tools.yaml")
+```
+
+**Benefits:**
+
+- Reduces Python file complexity
+- IDE support for YAML/JSON editing
+- Non-developers can modify tool definitions
+- Easier testing and validation of tool schemas
+- Clear separation of code and configuration
+
 ### Review Checklist for Function Length
 
 When reviewing code, ALWAYS check:
@@ -212,12 +292,11 @@ When reviewing code, ALWAYS check:
 
 Remember: Your role is code quality and performance. For comprehensive security concerns, defer to specialized security agents.
 
-
 ## 📋 AUTOBOT POLICIES
 
 **See CLAUDE.md for:**
+
 - No temporary fixes policy (MANDATORY)
 - Local-only development workflow
 - Repository cleanliness standards
 - VM sync procedures and SSH requirements
-
