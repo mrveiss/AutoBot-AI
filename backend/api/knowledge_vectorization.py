@@ -361,13 +361,9 @@ async def _process_single_fact(
     if skip_existing and vector_exists.get(fact_id):
         return False, True, None
 
-    content = _extract_fact_content(fact_data)
-    metadata = _extract_fact_metadata(fact_data)
-
-    # Vectorize existing fact without duplication
-    result = await kb.vectorize_existing_fact(
-        fact_id=fact_id, content=content, metadata=metadata
-    )
+    # Issue #552: vectorize_existing_fact() only takes fact_id
+    # The method retrieves content/metadata internally via _get_fact_for_vectorization
+    result = await kb.vectorize_existing_fact(fact_id=fact_id)
 
     if result.get("status") == "success" and result.get("vector_indexed"):
         return True, False, {"fact_id": fact_id, "status": "vectorized"}
@@ -682,10 +678,9 @@ async def _vectorize_fact_background(
             f"llama_index_configured={getattr(kb_instance, 'llama_index_configured', 'N/A')}"
         )
 
-        # Vectorize the fact
-        result = await kb_instance.vectorize_existing_fact(
-            fact_id=fact_id, content=content, metadata=metadata
-        )
+        # Issue #552: vectorize_existing_fact() only takes fact_id
+        # The method retrieves content/metadata internally via _get_fact_for_vectorization
+        result = await kb_instance.vectorize_existing_fact(fact_id=fact_id)
 
         # Update job with result
         job_data["progress"] = 90
