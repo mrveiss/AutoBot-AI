@@ -38,6 +38,12 @@ from ..api_endpoint_scanner import APIEndpointChecker
 from ..models import APIEndpointAnalysis
 from ..duplicate_detector import DuplicateCodeDetector, DuplicateAnalysis  # noqa: F401
 
+# Issue #244: Cross-Language Pattern Detection
+from src.code_intelligence.cross_language_patterns import (
+    CrossLanguagePatternDetector,
+    CrossLanguageAnalysis,
+)
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -721,6 +727,283 @@ def _generate_duplicate_code_section(analysis: Optional[DuplicateAnalysis]) -> L
     return lines
 
 
+# =============================================================================
+# Cross-Language Pattern Analysis Section (Issue #244)
+# =============================================================================
+
+
+def _get_severity_color(severity: str) -> str:
+    """Get color indicator for severity level."""
+    return {
+        "critical": "🔴",
+        "high": "🟠",
+        "medium": "🟡",
+        "low": "🟢",
+        "info": "🔵",
+    }.get(severity.lower(), "⚪")
+
+
+def _generate_cross_language_overview(analysis: CrossLanguageAnalysis) -> List[str]:
+    """Generate cross-language analysis overview section."""
+    total_files = (
+        analysis.python_files_analyzed +
+        analysis.typescript_files_analyzed +
+        analysis.vue_files_analyzed
+    )
+
+    lines = [
+        "### Overview",
+        "",
+        "| Metric | Value |",
+        "|--------|-------|",
+        f"| Python Files | {analysis.python_files_analyzed} |",
+        f"| TypeScript Files | {analysis.typescript_files_analyzed} |",
+        f"| Vue Files | {analysis.vue_files_analyzed} |",
+        f"| Total Files | {total_files} |",
+        f"| Patterns Detected | {analysis.total_patterns} |",
+        f"| DTO Mismatches | {len(analysis.dto_mismatches)} |",
+        f"| API Mismatches | {len(analysis.api_contract_mismatches)} |",
+        f"| Validation Duplications | {len(analysis.validation_duplications)} |",
+        f"| Semantic Matches | {len(analysis.pattern_matches)} |",
+        "",
+    ]
+    return lines
+
+
+def _generate_dto_mismatches_section(analysis: CrossLanguageAnalysis) -> List[str]:
+    """Generate DTO mismatches section for report."""
+    if not analysis.dto_mismatches:
+        return []
+
+    lines = [
+        "### 🔴 DTO/Type Mismatches",
+        "",
+        "> Fields or types that differ between Python models and TypeScript interfaces.",
+        "",
+        "| Type | Field | Mismatch | Recommendation |",
+        "|------|-------|----------|----------------|",
+    ]
+
+    for m in analysis.dto_mismatches[:15]:
+        lines.append(
+            f"| `{m.backend_type}` | `{m.field_name}` | {m.mismatch_type} | {m.recommendation[:50]}... |"
+        )
+
+    if len(analysis.dto_mismatches) > 15:
+        lines.append(f"| ... | *{len(analysis.dto_mismatches) - 15} more* | | |")
+
+    lines.append("")
+    return lines
+
+
+def _generate_api_mismatches_section(analysis: CrossLanguageAnalysis) -> List[str]:
+    """Generate API contract mismatches section for report."""
+    if not analysis.api_contract_mismatches:
+        return []
+
+    orphaned = [m for m in analysis.api_contract_mismatches if m.mismatch_type == "orphaned_endpoint"]
+    missing = [m for m in analysis.api_contract_mismatches if m.mismatch_type == "missing_endpoint"]
+
+    lines = [
+        "### 🟠 API Contract Mismatches",
+        "",
+    ]
+
+    if missing:
+        lines.extend([
+            "#### Missing Endpoints (Called but not defined)",
+            "",
+            "> Frontend calls endpoints that don't exist in the backend.",
+            "",
+            "| Method | Path | Called From |",
+            "|--------|------|-------------|",
+        ])
+        for m in missing[:10]:
+            loc = m.frontend_location
+            file_info = f"`{loc.file_path}:{loc.line_start}`" if loc else "Unknown"
+            lines.append(f"| {m.http_method} | `{m.endpoint_path}` | {file_info} |")
+        if len(missing) > 10:
+            lines.append(f"| ... | *{len(missing) - 10} more* | |")
+        lines.append("")
+
+    if orphaned:
+        lines.extend([
+            "#### Orphaned Endpoints (Defined but not called)",
+            "",
+            "> Backend endpoints with no frontend usage.",
+            "",
+            "| Method | Path | Defined In |",
+            "|--------|------|------------|",
+        ])
+        for m in orphaned[:10]:
+            loc = m.backend_location
+            file_info = f"`{loc.file_path}:{loc.line_start}`" if loc else "Unknown"
+            lines.append(f"| {m.http_method} | `{m.endpoint_path}` | {file_info} |")
+        if len(orphaned) > 10:
+            lines.append(f"| ... | *{len(orphaned) - 10} more* | |")
+        lines.append("")
+
+    return lines
+
+
+def _generate_validation_duplications_section(analysis: CrossLanguageAnalysis) -> List[str]:
+    """Generate validation duplications section for report."""
+    if not analysis.validation_duplications:
+        return []
+
+    lines = [
+        "### 🟡 Validation Logic Duplications",
+        "",
+        "> Same validation rules implemented in both Python and TypeScript.",
+        "",
+        "| Validation Type | Python Location | TypeScript Location |",
+        "|-----------------|-----------------|---------------------|",
+    ]
+
+    for v in analysis.validation_duplications[:10]:
+        py_loc = f"`{v.python_location.file_path}:{v.python_location.line_start}`" if v.python_location else "N/A"
+        ts_loc = f"`{v.typescript_location.file_path}:{v.typescript_location.line_start}`" if v.typescript_location else "N/A"
+        lines.append(f"| {v.validation_type} | {py_loc} | {ts_loc} |")
+
+    if len(analysis.validation_duplications) > 10:
+        lines.append(f"| ... | *{len(analysis.validation_duplications) - 10} more* | |")
+
+    lines.extend([
+        "",
+        "**Recommendation:** Consider using a shared validation schema (e.g., JSON Schema, Zod) to ensure consistency.",
+        "",
+    ])
+
+    return lines
+
+
+def _generate_semantic_matches_section(analysis: CrossLanguageAnalysis) -> List[str]:
+    """Generate semantic pattern matches section for report."""
+    if not analysis.pattern_matches:
+        return []
+
+    # Filter high-similarity matches
+    high_similarity = [m for m in analysis.pattern_matches if m.similarity_score >= 0.8]
+
+    if not high_similarity:
+        return []
+
+    lines = [
+        "### 🔵 Semantic Pattern Matches",
+        "",
+        "> Similar code patterns detected across Python and TypeScript using AI embeddings.",
+        "",
+        "| Similarity | Python Pattern | TypeScript Pattern |",
+        "|------------|----------------|-------------------|",
+    ]
+
+    for m in high_similarity[:10]:
+        py_name = m.metadata.get("python_name", "Unknown") if m.metadata else "Unknown"
+        ts_name = m.metadata.get("typescript_name", "Unknown") if m.metadata else "Unknown"
+        lines.append(f"| {m.similarity_score:.0%} | `{py_name}` | `{ts_name}` |")
+
+    if len(high_similarity) > 10:
+        lines.append(f"| ... | *{len(high_similarity) - 10} more* | |")
+
+    lines.extend([
+        "",
+        "**Note:** High semantic similarity may indicate duplicated business logic that could be consolidated.",
+        "",
+    ])
+
+    return lines
+
+
+def _generate_cross_language_section(analysis: Optional[CrossLanguageAnalysis]) -> List[str]:
+    """
+    Generate the Cross-Language Pattern Analysis section for the report (Issue #244).
+
+    Args:
+        analysis: CrossLanguageAnalysis from CrossLanguagePatternDetector
+
+    Returns:
+        List of markdown lines for the cross-language section
+    """
+    if not analysis:
+        return []
+
+    # Skip if no findings
+    has_findings = (
+        analysis.dto_mismatches or
+        analysis.api_contract_mismatches or
+        analysis.validation_duplications or
+        analysis.pattern_matches
+    )
+
+    if not has_findings:
+        return []
+
+    lines = [
+        "## 🌐 Cross-Language Pattern Analysis",
+        "",
+        "> **Analysis of patterns across Python (backend) and TypeScript/Vue (frontend).**",
+        "",
+    ]
+
+    lines.extend(_generate_cross_language_overview(analysis))
+    lines.extend(_generate_dto_mismatches_section(analysis))
+    lines.extend(_generate_api_mismatches_section(analysis))
+    lines.extend(_generate_validation_duplications_section(analysis))
+    lines.extend(_generate_semantic_matches_section(analysis))
+
+    # Summary statistics
+    critical_count = analysis.critical_issues
+    high_count = analysis.high_issues
+
+    if critical_count > 0 or high_count > 0:
+        lines.extend([
+            "### Issue Summary",
+            "",
+            f"- 🔴 **Critical Issues:** {critical_count}",
+            f"- 🟠 **High Issues:** {high_count}",
+            f"- 🟡 **Medium Issues:** {analysis.medium_issues}",
+            f"- 🟢 **Low Issues:** {analysis.low_issues}",
+            "",
+        ])
+
+    lines.extend(["---", ""])
+
+    return lines
+
+
+async def _get_cross_language_analysis() -> Optional[CrossLanguageAnalysis]:
+    """
+    Get cross-language pattern analysis for the project (Issue #244).
+
+    Returns:
+        CrossLanguageAnalysis or None if analysis fails
+    """
+    try:
+        detector = CrossLanguagePatternDetector(
+            use_llm=True,
+            use_cache=True,
+        )
+
+        analysis = await asyncio.wait_for(
+            detector.run_analysis(),
+            timeout=120.0,  # 2 minute timeout
+        )
+
+        logger.info(
+            "Cross-language analysis: %d patterns, %d DTO mismatches, %d API mismatches",
+            analysis.total_patterns,
+            len(analysis.dto_mismatches),
+            len(analysis.api_contract_mismatches),
+        )
+        return analysis
+    except asyncio.TimeoutError:
+        logger.warning("Cross-language analysis timed out")
+        return None
+    except Exception as e:
+        logger.error("Cross-language analysis failed: %s", e, exc_info=True)
+        return None
+
+
 async def _get_duplicate_analysis() -> Optional[DuplicateAnalysis]:
     """
     Get duplicate code analysis for the project (Issue #528).
@@ -967,6 +1250,7 @@ def _generate_markdown_report(
     bug_prediction: Optional[PredictionResult] = None,
     api_endpoint_analysis: Optional[APIEndpointAnalysis] = None,
     duplicate_analysis: Optional[DuplicateAnalysis] = None,
+    cross_language_analysis: Optional[CrossLanguageAnalysis] = None,
 ) -> str:
     """
     Generate a Markdown report from problems list (Issue #398: refactored, Issue #505: bug prediction).
@@ -990,6 +1274,12 @@ def _generate_markdown_report(
     - Duplicate code detection
     - Similarity grouping
     - Recommendations
+
+    Cross-language pattern analysis added (Issue #244):
+    - DTO/type mismatches
+    - API contract mismatches
+    - Validation duplications
+    - Semantic pattern matches
     """
     path_info = analyzed_path or "Unknown"
     by_category = _separate_by_category(problems)
@@ -1009,6 +1299,10 @@ def _generate_markdown_report(
     # Add duplicate code analysis section (Issue #528)
     if duplicate_analysis:
         lines.extend(_generate_duplicate_code_section(duplicate_analysis))
+
+    # Add cross-language pattern analysis section (Issue #244)
+    if cross_language_analysis:
+        lines.extend(_generate_cross_language_section(cross_language_analysis))
 
     # Add bug risk section if prediction available (Issue #505)
     if bug_prediction:
@@ -1049,6 +1343,7 @@ async def generate_analysis_report(
     include_api_analysis: bool = True,
     include_duplicate_analysis: bool = True,
     include_bug_prediction: bool = True,
+    include_cross_language_analysis: bool = True,
     quick: bool = False,
 ):
     """
@@ -1059,6 +1354,7 @@ async def generate_analysis_report(
         include_api_analysis: Whether to include API endpoint analysis (Issue #527)
         include_duplicate_analysis: Whether to include duplicate code analysis (Issue #528)
         include_bug_prediction: Whether to include bug prediction analysis (Issue #505)
+        include_cross_language_analysis: Whether to include cross-language pattern analysis (Issue #244)
         quick: If True, skip expensive analyses for faster export (just problems report)
 
     Returns:
@@ -1097,6 +1393,7 @@ async def generate_analysis_report(
         bug_prediction = None
         api_endpoint_analysis = None
         duplicate_analysis = None
+        cross_language_analysis = None
     else:
         # Run analyses in parallel for better performance
         analysis_tasks = []
@@ -1107,11 +1404,14 @@ async def generate_analysis_report(
             analysis_tasks.append(("api_endpoint", _get_api_endpoint_analysis()))
         if include_duplicate_analysis:
             analysis_tasks.append(("duplicate", _get_duplicate_analysis()))
+        if include_cross_language_analysis:
+            analysis_tasks.append(("cross_language", _get_cross_language_analysis()))
 
         # Initialize results
         bug_prediction = None
         api_endpoint_analysis = None
         duplicate_analysis = None
+        cross_language_analysis = None
 
         if analysis_tasks:
             # Run all analyses in parallel with individual error handling
@@ -1133,6 +1433,8 @@ async def generate_analysis_report(
                     api_endpoint_analysis = result
                 elif task_name == "duplicate":
                     duplicate_analysis = result
+                elif task_name == "cross_language":
+                    cross_language_analysis = result
 
     if not problems:
         # Even with no issues, include other analyses if available
@@ -1157,6 +1459,10 @@ async def generate_analysis_report(
         if duplicate_analysis and duplicate_analysis.total_duplicates > 0:
             lines.extend(_generate_duplicate_code_section(duplicate_analysis))
 
+        # Add cross-language pattern analysis even with no code issues (Issue #244)
+        if cross_language_analysis and cross_language_analysis.total_patterns > 0:
+            lines.extend(_generate_cross_language_section(cross_language_analysis))
+
         # Add bug prediction if available (Issue #505)
         if bug_prediction and bug_prediction.analyzed_files > 0:
             lines.extend(_generate_bug_risk_section(bug_prediction))
@@ -1164,6 +1470,7 @@ async def generate_analysis_report(
         has_analyses = (
             api_endpoint_analysis or
             (duplicate_analysis and duplicate_analysis.total_duplicates > 0) or
+            (cross_language_analysis and cross_language_analysis.total_patterns > 0) or
             (bug_prediction and bug_prediction.analyzed_files > 0)
         )
         if not has_analyses:
@@ -1181,6 +1488,7 @@ async def generate_analysis_report(
             bug_prediction=bug_prediction,
             api_endpoint_analysis=api_endpoint_analysis,
             duplicate_analysis=duplicate_analysis,
+            cross_language_analysis=cross_language_analysis,
         )
 
     return PlainTextResponse(

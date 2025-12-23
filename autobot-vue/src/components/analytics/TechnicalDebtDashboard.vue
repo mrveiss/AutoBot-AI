@@ -678,7 +678,8 @@ async function refreshData(): Promise<void> {
 
 async function loadSummary(): Promise<void> {
   try {
-    const response = await fetch('/api/analytics/debt/summary');
+    // Issue #552: Fixed path - backend uses /api/debt/* not /api/analytics/debt/*
+    const response = await fetch('/api/debt/summary');
     if (response.ok) {
       summary.value = await response.json();
       loadError.value = null;
@@ -694,7 +695,8 @@ async function loadSummary(): Promise<void> {
 
 async function loadCategoryBreakdown(): Promise<void> {
   try {
-    const response = await fetch('/api/analytics/debt/calculate');
+    // Issue #552: Fixed path - backend uses /api/debt/* not /api/analytics/debt/*
+    const response = await fetch('/api/debt/calculate');
     if (response.ok) {
       const data = await response.json();
       categoryBreakdown.value = data.by_category || [];
@@ -710,7 +712,8 @@ async function loadCategoryBreakdown(): Promise<void> {
 
 async function loadRoiPriorities(): Promise<void> {
   try {
-    const response = await fetch('/api/analytics/debt/roi-priorities?limit=10');
+    // Issue #552: Fixed path - backend uses /api/debt/* not /api/analytics/debt/*
+    const response = await fetch('/api/debt/roi-priorities?limit=10');
     if (response.ok) {
       roiPriorities.value = await response.json();
     } else {
@@ -725,7 +728,8 @@ async function loadRoiPriorities(): Promise<void> {
 
 async function loadDebtItems(): Promise<void> {
   try {
-    const response = await fetch('/api/analytics/debt/calculate');
+    // Issue #552: Fixed path - backend uses /api/debt/* not /api/analytics/debt/*
+    const response = await fetch('/api/debt/calculate');
     if (response.ok) {
       const data = await response.json();
       allDebtItems.value = data.items || [];
@@ -741,7 +745,8 @@ async function loadDebtItems(): Promise<void> {
 
 async function loadTrends(): Promise<void> {
   try {
-    const response = await fetch(`/api/analytics/debt/trends?period=${selectedPeriod.value}`);
+    // Issue #552: Fixed path - backend uses /api/debt/* not /api/analytics/debt/*
+    const response = await fetch(`/api/debt/trends?period=${selectedPeriod.value}`);
     if (response.ok) {
       trendData.value = await response.json();
     } else {
@@ -756,7 +761,8 @@ async function loadTrends(): Promise<void> {
 
 async function exportReport(): Promise<void> {
   try {
-    const response = await fetch('/api/analytics/debt/report?format=markdown');
+    // Issue #552: Fixed path - backend uses /api/debt/* not /api/analytics/debt/*
+    const response = await fetch('/api/debt/report?format=markdown');
     if (response.ok) {
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);

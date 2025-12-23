@@ -112,3 +112,128 @@ class APIEndpointAnalysis(BaseModel):
     missing: List[EndpointMismatchItem]
     used: List[EndpointUsageItem]
     scan_timestamp: str
+
+
+# =============================================================================
+# Cross-Language Pattern Detection Models (Issue #244)
+# =============================================================================
+
+
+class PatternLocationItem(BaseModel):
+    """Location of a pattern in source code"""
+    file_path: str
+    line_start: int
+    line_end: int
+    column_start: int = 0
+    column_end: int = 0
+    language: str = "unknown"
+
+
+class DTOMismatchItem(BaseModel):
+    """Mismatch between backend and frontend data types"""
+    mismatch_id: str
+    backend_type: str
+    frontend_type: str
+    backend_location: Optional[PatternLocationItem] = None
+    frontend_location: Optional[PatternLocationItem] = None
+    field_name: str
+    mismatch_type: str  # "missing_field", "type_mismatch", "optional_mismatch"
+    backend_definition: str = ""
+    frontend_definition: str = ""
+    severity: str = "high"
+    recommendation: str = ""
+
+
+class ValidationDuplicationItem(BaseModel):
+    """Duplicated validation logic across languages"""
+    duplication_id: str
+    validation_type: str  # "email", "phone", "required", etc.
+    python_location: Optional[PatternLocationItem] = None
+    typescript_location: Optional[PatternLocationItem] = None
+    python_code: str = ""
+    typescript_code: str = ""
+    similarity_score: float = 0.0
+    severity: str = "medium"
+    recommendation: str = ""
+
+
+class APIContractMismatchItem(BaseModel):
+    """Mismatch between backend API endpoint and frontend API call"""
+    mismatch_id: str
+    endpoint_path: str
+    http_method: str
+    mismatch_type: str  # "missing_endpoint", "orphaned_endpoint", "method_mismatch"
+    backend_location: Optional[PatternLocationItem] = None
+    frontend_location: Optional[PatternLocationItem] = None
+    backend_definition: str = ""
+    frontend_call: str = ""
+    severity: str = "critical"
+    details: str = ""
+    recommendation: str = ""
+
+
+class PatternMatchItem(BaseModel):
+    """A match between patterns in different languages"""
+    pattern_id: str
+    similarity_score: float  # 0.0 to 1.0
+    source_location: Optional[PatternLocationItem] = None
+    target_location: Optional[PatternLocationItem] = None
+    source_code: str = ""
+    target_code: str = ""
+    match_type: str = "semantic"  # "semantic", "structural", "exact"
+    confidence: float = 1.0
+
+
+class CrossLanguagePatternItem(BaseModel):
+    """A pattern detected across multiple languages"""
+    pattern_id: str
+    pattern_type: str
+    category: str
+    severity: str
+    name: str
+    description: str
+    python_locations: List[PatternLocationItem] = []
+    typescript_locations: List[PatternLocationItem] = []
+    vue_locations: List[PatternLocationItem] = []
+    python_code: str = ""
+    typescript_code: str = ""
+    confidence: float = 1.0
+    recommendation: str = ""
+    tags: List[str] = []
+
+
+class CrossLanguageAnalysisSummary(BaseModel):
+    """Summary of cross-language analysis results"""
+    analysis_id: str
+    scan_timestamp: str
+    python_files_analyzed: int
+    typescript_files_analyzed: int
+    vue_files_analyzed: int
+    total_patterns: int
+    critical_issues: int
+    high_issues: int
+    medium_issues: int
+    low_issues: int
+    dto_mismatches_count: int
+    validation_duplications_count: int
+    api_contract_mismatches_count: int
+    semantic_matches_count: int
+    analysis_time_ms: float
+    embeddings_generated: int
+    cache_hits: int
+    cache_misses: int
+
+
+class CrossLanguageAnalysisResult(BaseModel):
+    """Complete cross-language analysis result"""
+    analysis_id: str
+    scan_timestamp: str
+    files_analyzed: dict
+    statistics: dict
+    performance: dict
+    patterns: List[CrossLanguagePatternItem]
+    dto_mismatches: List[DTOMismatchItem]
+    validation_duplications: List[ValidationDuplicationItem]
+    api_contract_mismatches: List[APIContractMismatchItem]
+    pattern_matches: List[PatternMatchItem]
+    errors: List[str] = []

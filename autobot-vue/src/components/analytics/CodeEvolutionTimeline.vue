@@ -325,10 +325,11 @@ async function fetchTimeline() {
       metrics: selectedMetrics.value.join(',')
     })
 
+    // Issue #552: Fixed path - backend uses /api/evolution/* not /api/analytics/evolution/*
     const [timelineRes, trendsRes, patternsRes] = await Promise.all([
-      fetch(`/api/analytics/evolution/timeline?${params}`),
-      fetch(`/api/analytics/evolution/trends?days=${selectedDays.value}`),
-      fetch('/api/analytics/evolution/patterns')
+      fetch(`/api/evolution/timeline?${params}`),
+      fetch(`/api/evolution/trends?days=${selectedDays.value}`),
+      fetch('/api/evolution/patterns')
     ])
 
     if (!timelineRes.ok || !trendsRes.ok) {
@@ -360,8 +361,9 @@ async function exportData() {
       .toISOString().split('T')[0]
     const endDate = new Date().toISOString().split('T')[0]
 
+    // Issue #552: Fixed path - backend uses /api/evolution/* not /api/analytics/evolution/*
     const response = await fetch(
-      `/api/analytics/evolution/export?format=csv&start_date=${startDate}&end_date=${endDate}`
+      `/api/evolution/export?format=csv&start_date=${startDate}&end_date=${endDate}`
     )
 
     if (!response.ok) throw new Error('Export failed')

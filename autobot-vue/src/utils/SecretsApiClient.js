@@ -34,7 +34,8 @@ class SecretsApiClient {
             params.append('chat_id', options.chatId || this.currentChatId);
         }
 
-        const response = await this.apiClient.get(`/api/secrets/secrets?${params.toString()}`);
+        // Issue #552: Fixed path - removed duplicate /secrets prefix
+        const response = await this.apiClient.get(`/api/secrets/?${params.toString()}`);
         return response;
     }
 
@@ -48,7 +49,8 @@ class SecretsApiClient {
             params.append('chat_id', options.chatId || this.currentChatId);
         }
 
-        const response = await this.apiClient.get(`/api/secrets/secrets/${secretId}?${params.toString()}`);
+        // Issue #552: Fixed path - removed duplicate /secrets prefix
+        const response = await this.apiClient.get(`/api/secrets/${secretId}?${params.toString()}`);
         return response;
     }
 
@@ -61,7 +63,8 @@ class SecretsApiClient {
             secretData.chat_id = this.currentChatId;
         }
 
-        const response = await this.apiClient.post('/api/secrets/secrets', secretData);
+        // Issue #552: Fixed path - removed duplicate /secrets prefix
+        const response = await this.apiClient.post('/api/secrets/', secretData);
         return response;
     }
 
@@ -75,7 +78,8 @@ class SecretsApiClient {
             params.append('chat_id', options.chatId || this.currentChatId);
         }
 
-        const response = await this.apiClient.put(`/api/secrets/secrets/${secretId}?${params.toString()}`, updateData);
+        // Issue #552: Fixed path - removed duplicate /secrets prefix
+        const response = await this.apiClient.put(`/api/secrets/${secretId}?${params.toString()}`, updateData);
         return response;
     }
 
@@ -89,7 +93,8 @@ class SecretsApiClient {
             params.append('chat_id', options.chatId || this.currentChatId);
         }
 
-        const response = await this.apiClient.delete(`/api/secrets/secrets/${secretId}?${params.toString()}`);
+        // Issue #552: Fixed path - removed duplicate /secrets prefix
+        const response = await this.apiClient.delete(`/api/secrets/${secretId}?${params.toString()}`);
         return response;
     }
 
@@ -103,7 +108,8 @@ class SecretsApiClient {
             params.append('chat_id', options.chatId || this.currentChatId);
         }
 
-        const response = await this.apiClient.post(`/api/secrets/secrets/transfer?${params.toString()}`, transferData);
+        // Issue #552: Fixed path - removed duplicate /secrets prefix
+        const response = await this.apiClient.post(`/api/secrets/transfer?${params.toString()}`, transferData);
         return response;
     }
 
@@ -111,7 +117,8 @@ class SecretsApiClient {
      * Get secrets cleanup information for a chat
      */
     async getChatCleanupInfo(chatId) {
-        const response = await this.apiClient.get(`/api/secrets/secrets/chat/${chatId}/cleanup`);
+        // Issue #552: Fixed path - removed duplicate /secrets prefix
+        const response = await this.apiClient.get(`/api/secrets/chat/${chatId}/cleanup`);
         return response;
     }
 
@@ -125,7 +132,8 @@ class SecretsApiClient {
             secretIds.forEach(id => params.append('secret_ids', id));
         }
 
-        const response = await this.apiClient.delete(`/api/secrets/secrets/chat/${chatId}?${params.toString()}`);
+        // Issue #552: Fixed path - removed duplicate /secrets prefix
+        const response = await this.apiClient.delete(`/api/secrets/chat/${chatId}?${params.toString()}`);
         return response;
     }
 
@@ -133,7 +141,8 @@ class SecretsApiClient {
      * Get available secret types and scopes
      */
     async getSecretTypes() {
-        const response = await this.apiClient.get('/api/secrets/secrets/types');
+        // Issue #552: Fixed path - removed duplicate /secrets prefix
+        const response = await this.apiClient.get('/api/secrets/types');
         return response;
     }
 
@@ -141,7 +150,8 @@ class SecretsApiClient {
      * Get secrets statistics
      */
     async getSecretsStats() {
-        const response = await this.apiClient.get('/api/secrets/secrets/stats');
+        // Issue #552: Fixed path - removed duplicate /secrets prefix
+        const response = await this.apiClient.get('/api/secrets/stats');
         return response;
     }
 

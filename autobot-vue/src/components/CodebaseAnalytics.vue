@@ -1217,6 +1217,225 @@
         />
       </div>
 
+      <!-- Issue #244: Cross-Language Pattern Analysis Section -->
+      <div class="cross-language-section analytics-section">
+        <h3>
+          <i class="fas fa-language"></i> Cross-Language Pattern Analysis
+          <span v-if="crossLanguageAnalysis" class="total-count">
+            ({{ crossLanguageAnalysis.total_patterns }} patterns)
+          </span>
+          <button @click="getCrossLanguageAnalysis" :disabled="loadingCrossLanguage" class="refresh-btn" style="margin-left: 10px;">
+            <i :class="loadingCrossLanguage ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+          </button>
+          <button @click="runCrossLanguageAnalysis" :disabled="loadingCrossLanguage" class="btn-scan" style="margin-left: 5px;">
+            <i :class="loadingCrossLanguage ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
+            {{ loadingCrossLanguage ? 'Scanning...' : 'Full Scan' }}
+          </button>
+        </h3>
+
+        <!-- Loading State -->
+        <div v-if="loadingCrossLanguage" class="loading-state">
+          <i class="fas fa-spinner fa-spin"></i> Analyzing cross-language patterns (Python ↔ TypeScript/Vue)...
+        </div>
+
+        <!-- Error State -->
+        <div v-else-if="crossLanguageError" class="error-state">
+          <i class="fas fa-exclamation-triangle"></i> {{ crossLanguageError }}
+          <button @click="getCrossLanguageAnalysis" class="btn-link">Retry</button>
+        </div>
+
+        <!-- Analysis Results -->
+        <div v-else-if="crossLanguageAnalysis" class="section-content">
+          <!-- Summary Cards -->
+          <div class="summary-cards">
+            <div class="summary-card total">
+              <div class="summary-value">{{ crossLanguageAnalysis.python_files_analyzed + crossLanguageAnalysis.typescript_files_analyzed + crossLanguageAnalysis.vue_files_analyzed }}</div>
+              <div class="summary-label">Files Analyzed</div>
+            </div>
+            <div class="summary-card critical">
+              <div class="summary-value">{{ crossLanguageAnalysis.critical_issues }}</div>
+              <div class="summary-label">Critical</div>
+            </div>
+            <div class="summary-card warning">
+              <div class="summary-value">{{ crossLanguageAnalysis.high_issues }}</div>
+              <div class="summary-label">High</div>
+            </div>
+            <div class="summary-card info">
+              <div class="summary-value">{{ crossLanguageAnalysis.dto_mismatches?.length || 0 }}</div>
+              <div class="summary-label">DTO Mismatches</div>
+            </div>
+            <div class="summary-card success">
+              <div class="summary-value">{{ crossLanguageAnalysis.pattern_matches?.length || 0 }}</div>
+              <div class="summary-label">Semantic Matches</div>
+            </div>
+          </div>
+
+          <!-- Language Breakdown -->
+          <div class="language-breakdown">
+            <span class="language-badge python">
+              <i class="fab fa-python"></i> {{ crossLanguageAnalysis.python_files_analyzed }} Python
+            </span>
+            <span class="language-badge typescript">
+              <i class="fab fa-js-square"></i> {{ crossLanguageAnalysis.typescript_files_analyzed }} TypeScript
+            </span>
+            <span class="language-badge vue">
+              <i class="fab fa-vuejs"></i> {{ crossLanguageAnalysis.vue_files_analyzed }} Vue
+            </span>
+          </div>
+
+          <!-- Accordion Groups -->
+          <div class="accordion-groups">
+            <!-- DTO Mismatches -->
+            <div v-if="crossLanguageAnalysis.dto_mismatches?.length > 0" class="accordion-group">
+              <div class="accordion-header critical" @click="expandedCrossLanguageGroups.dtoMismatches = !expandedCrossLanguageGroups.dtoMismatches">
+                <div class="header-info">
+                  <i :class="expandedCrossLanguageGroups.dtoMismatches ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+                  <span class="header-name">DTO/Type Mismatches</span>
+                  <span class="header-count">({{ crossLanguageAnalysis.dto_mismatches.length }})</span>
+                </div>
+                <div class="header-badges">
+                  <span class="severity-badge critical">Type Safety</span>
+                </div>
+              </div>
+              <transition name="accordion">
+                <div v-if="expandedCrossLanguageGroups.dtoMismatches" class="accordion-items">
+                  <div v-for="(m, index) in crossLanguageAnalysis.dto_mismatches.slice(0, 20)" :key="'dto-' + index" class="list-item item-critical">
+                    <div class="item-header">
+                      <span class="type-badge">{{ m.mismatch_type }}</span>
+                      <span class="item-name">{{ m.backend_type }} → {{ m.frontend_type || 'Unknown' }}</span>
+                    </div>
+                    <div class="item-field">Field: <code>{{ m.field_name }}</code></div>
+                    <div v-if="m.recommendation" class="item-recommendation">💡 {{ m.recommendation }}</div>
+                  </div>
+                  <div v-if="crossLanguageAnalysis.dto_mismatches.length > 20" class="show-more">
+                    <span class="muted">Showing 20 of {{ crossLanguageAnalysis.dto_mismatches.length }} DTO mismatches</span>
+                  </div>
+                </div>
+              </transition>
+            </div>
+
+            <!-- API Contract Mismatches -->
+            <div v-if="crossLanguageAnalysis.api_contract_mismatches?.length > 0" class="accordion-group">
+              <div class="accordion-header warning" @click="expandedCrossLanguageGroups.apiMismatches = !expandedCrossLanguageGroups.apiMismatches">
+                <div class="header-info">
+                  <i :class="expandedCrossLanguageGroups.apiMismatches ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+                  <span class="header-name">API Contract Issues</span>
+                  <span class="header-count">({{ crossLanguageAnalysis.api_contract_mismatches.length }})</span>
+                </div>
+                <div class="header-badges">
+                  <span class="severity-badge warning">Contract</span>
+                </div>
+              </div>
+              <transition name="accordion">
+                <div v-if="expandedCrossLanguageGroups.apiMismatches" class="accordion-items">
+                  <div v-for="(m, index) in crossLanguageAnalysis.api_contract_mismatches.slice(0, 20)" :key="'api-' + index"
+                       :class="['list-item', m.mismatch_type === 'missing_endpoint' ? 'item-critical' : 'item-warning']">
+                    <div class="item-header">
+                      <span class="method-badge" :class="m.http_method?.toLowerCase()">{{ m.http_method }}</span>
+                      <span class="item-path">{{ m.endpoint_path }}</span>
+                      <span :class="['type-badge', m.mismatch_type === 'missing_endpoint' ? 'missing' : 'orphaned']">
+                        {{ m.mismatch_type === 'missing_endpoint' ? 'Missing' : 'Orphaned' }}
+                      </span>
+                    </div>
+                    <div v-if="m.details" class="item-details">{{ m.details }}</div>
+                  </div>
+                  <div v-if="crossLanguageAnalysis.api_contract_mismatches.length > 20" class="show-more">
+                    <span class="muted">Showing 20 of {{ crossLanguageAnalysis.api_contract_mismatches.length }} API issues</span>
+                  </div>
+                </div>
+              </transition>
+            </div>
+
+            <!-- Validation Duplications -->
+            <div v-if="crossLanguageAnalysis.validation_duplications?.length > 0" class="accordion-group">
+              <div class="accordion-header info" @click="expandedCrossLanguageGroups.validationDups = !expandedCrossLanguageGroups.validationDups">
+                <div class="header-info">
+                  <i :class="expandedCrossLanguageGroups.validationDups ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+                  <span class="header-name">Validation Duplications</span>
+                  <span class="header-count">({{ crossLanguageAnalysis.validation_duplications.length }})</span>
+                </div>
+                <div class="header-badges">
+                  <span class="severity-badge info">DRY Violation</span>
+                </div>
+              </div>
+              <transition name="accordion">
+                <div v-if="expandedCrossLanguageGroups.validationDups" class="accordion-items">
+                  <div v-for="(v, index) in crossLanguageAnalysis.validation_duplications.slice(0, 15)" :key="'val-' + index" class="list-item item-info">
+                    <div class="item-header">
+                      <span class="validation-type-badge">{{ v.validation_type }}</span>
+                      <span class="similarity-score">{{ (v.similarity_score * 100).toFixed(0) }}% similar</span>
+                    </div>
+                    <div class="item-locations">
+                      <span v-if="v.python_location" class="location python">
+                        🐍 {{ v.python_location.file_path }}:{{ v.python_location.line_start }}
+                      </span>
+                      <span v-if="v.typescript_location" class="location typescript">
+                        📜 {{ v.typescript_location.file_path }}:{{ v.typescript_location.line_start }}
+                      </span>
+                    </div>
+                    <div v-if="v.recommendation" class="item-recommendation">💡 {{ v.recommendation }}</div>
+                  </div>
+                  <div v-if="crossLanguageAnalysis.validation_duplications.length > 15" class="show-more">
+                    <span class="muted">Showing 15 of {{ crossLanguageAnalysis.validation_duplications.length }} duplications</span>
+                  </div>
+                </div>
+              </transition>
+            </div>
+
+            <!-- Semantic Pattern Matches -->
+            <div v-if="crossLanguageAnalysis.pattern_matches?.length > 0" class="accordion-group">
+              <div class="accordion-header success" @click="expandedCrossLanguageGroups.semanticMatches = !expandedCrossLanguageGroups.semanticMatches">
+                <div class="header-info">
+                  <i :class="expandedCrossLanguageGroups.semanticMatches ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+                  <span class="header-name">Semantic Pattern Matches</span>
+                  <span class="header-count">({{ crossLanguageAnalysis.pattern_matches.length }})</span>
+                </div>
+                <div class="header-badges">
+                  <span class="severity-badge success">AI Detected</span>
+                </div>
+              </div>
+              <transition name="accordion">
+                <div v-if="expandedCrossLanguageGroups.semanticMatches" class="accordion-items">
+                  <div v-for="(m, index) in crossLanguageAnalysis.pattern_matches.slice(0, 15)" :key="'match-' + index" class="list-item item-success">
+                    <div class="item-header">
+                      <span class="similarity-score highlight">{{ (m.similarity_score * 100).toFixed(0) }}% match</span>
+                      <span class="match-type">{{ m.match_type }}</span>
+                    </div>
+                    <div class="item-locations">
+                      <span v-if="m.source_location" class="location">
+                        📁 {{ m.source_location.file_path }}:{{ m.source_location.line_start }}
+                      </span>
+                      <span class="arrow">↔</span>
+                      <span v-if="m.target_location" class="location">
+                        📁 {{ m.target_location.file_path }}:{{ m.target_location.line_start }}
+                      </span>
+                    </div>
+                  </div>
+                  <div v-if="crossLanguageAnalysis.pattern_matches.length > 15" class="show-more">
+                    <span class="muted">Showing 15 of {{ crossLanguageAnalysis.pattern_matches.length }} matches</span>
+                  </div>
+                </div>
+              </transition>
+            </div>
+          </div>
+
+          <!-- Analysis Timestamp -->
+          <div v-if="crossLanguageAnalysis.scan_timestamp" class="scan-timestamp">
+            <i class="fas fa-clock"></i> Last scan: {{ formatTimestamp(crossLanguageAnalysis.scan_timestamp) }}
+            <span v-if="crossLanguageAnalysis.analysis_time_ms" class="analysis-time">
+              ({{ (crossLanguageAnalysis.analysis_time_ms / 1000).toFixed(1) }}s)
+            </span>
+          </div>
+        </div>
+
+        <!-- Empty State -->
+        <EmptyState
+          v-else
+          icon="fas fa-language"
+          message="No cross-language analysis available. Click 'Full Scan' to analyze patterns across Python and TypeScript/Vue."
+        />
+      </div>
+
       <!-- Issue #538: Config Duplicates Detection Section -->
       <div class="config-duplicates-section analytics-section">
         <h3>
@@ -1926,6 +2145,80 @@ interface EnvironmentAnalysisResult {
 const environmentAnalysis = ref<EnvironmentAnalysisResult | null>(null)
 const loadingEnvAnalysis = ref(false)
 const envAnalysisError = ref('')
+
+// Issue #244: Cross-Language Pattern Analysis data
+interface PatternLocation {
+  file_path: string
+  line_start: number
+  line_end: number
+  language: string
+}
+interface DTOMismatch {
+  mismatch_id: string
+  backend_type: string
+  frontend_type: string
+  field_name: string
+  mismatch_type: string
+  severity: string
+  recommendation: string
+  backend_location?: PatternLocation
+  frontend_location?: PatternLocation
+}
+interface ValidationDuplication {
+  duplication_id: string
+  validation_type: string
+  similarity_score: number
+  severity: string
+  recommendation: string
+  python_location?: PatternLocation
+  typescript_location?: PatternLocation
+}
+interface APIContractMismatch {
+  mismatch_id: string
+  endpoint_path: string
+  http_method: string
+  mismatch_type: string
+  severity: string
+  details: string
+  recommendation: string
+  backend_location?: PatternLocation
+  frontend_location?: PatternLocation
+}
+interface PatternMatch {
+  pattern_id: string
+  similarity_score: number
+  match_type: string
+  confidence: number
+  source_location?: PatternLocation
+  target_location?: PatternLocation
+  metadata?: Record<string, string>
+}
+interface CrossLanguageAnalysisResult {
+  analysis_id: string
+  scan_timestamp: string
+  python_files_analyzed: number
+  typescript_files_analyzed: number
+  vue_files_analyzed: number
+  total_patterns: number
+  critical_issues: number
+  high_issues: number
+  medium_issues: number
+  low_issues: number
+  dto_mismatches: DTOMismatch[]
+  validation_duplications: ValidationDuplication[]
+  api_contract_mismatches: APIContractMismatch[]
+  pattern_matches: PatternMatch[]
+  analysis_time_ms: number
+}
+const crossLanguageAnalysis = ref<CrossLanguageAnalysisResult | null>(null)
+const loadingCrossLanguage = ref(false)
+const crossLanguageError = ref('')
+const expandedCrossLanguageGroups = reactive({
+  dtoMismatches: false,
+  apiMismatches: false,
+  validationDups: false,
+  semanticMatches: false
+})
 
 // Loading states for individual data types
 const loadingProgress = reactive({
@@ -3094,6 +3387,178 @@ const getCoverageClass = (percentage) => {
   if (percentage < 75) return 'warning'
   if (percentage < 90) return 'info'
   return 'success'
+}
+
+// Issue #244: Get Cross-Language Pattern Analysis
+const getCrossLanguageAnalysis = async () => {
+  loadingCrossLanguage.value = true
+  crossLanguageError.value = ''
+  progressStatus.value = 'Running cross-language pattern analysis...'
+  const startTime = Date.now()
+
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/analytics/codebase/cross-language/summary`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Status ${response.status}: ${errorText}`)
+    }
+
+    const data = await response.json()
+    const responseTime = Date.now() - startTime
+
+    if (data.status === 'success' && data.summary) {
+      // Map the summary format to our expected interface
+      crossLanguageAnalysis.value = {
+        analysis_id: data.summary.analysis_id,
+        scan_timestamp: data.summary.scan_timestamp,
+        python_files_analyzed: data.summary.files_analyzed?.python || 0,
+        typescript_files_analyzed: data.summary.files_analyzed?.typescript || 0,
+        vue_files_analyzed: data.summary.files_analyzed?.vue || 0,
+        total_patterns: data.summary.issues?.total || 0,
+        critical_issues: data.summary.issues?.critical || 0,
+        high_issues: data.summary.issues?.high || 0,
+        medium_issues: data.summary.issues?.medium || 0,
+        low_issues: data.summary.issues?.low || 0,
+        dto_mismatches: [],
+        validation_duplications: [],
+        api_contract_mismatches: [],
+        pattern_matches: [],
+        analysis_time_ms: data.summary.performance?.analysis_time_ms || 0
+      }
+
+      const totalIssues = data.summary.issues?.total || 0
+      const critical = data.summary.issues?.critical || 0
+      const high = data.summary.issues?.high || 0
+      notify(`Cross-language analysis: ${totalIssues} patterns (${critical} critical, ${high} high) - ${responseTime}ms`, 'success')
+
+      // Load detailed data for the groups
+      await loadCrossLanguageDetails()
+    } else {
+      throw new Error('Invalid response format')
+    }
+  } catch (error) {
+    const responseTime = Date.now() - startTime
+    logger.error('Cross-language analysis failed:', error)
+    crossLanguageError.value = error.message
+    notify(`Cross-language analysis failed: ${error.message} (${responseTime}ms)`, 'error')
+  } finally {
+    loadingCrossLanguage.value = false
+    progressStatus.value = 'Ready'
+  }
+}
+
+// Issue #244: Load detailed cross-language analysis data
+const loadCrossLanguageDetails = async () => {
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+
+    // Load DTO mismatches
+    const dtoResponse = await fetch(`${backendUrl}/api/analytics/codebase/cross-language/dto-mismatches`)
+    if (dtoResponse.ok) {
+      const dtoData = await dtoResponse.json()
+      if (dtoData.status === 'success' && crossLanguageAnalysis.value) {
+        crossLanguageAnalysis.value.dto_mismatches = dtoData.mismatches || []
+      }
+    }
+
+    // Load API mismatches
+    const apiResponse = await fetch(`${backendUrl}/api/analytics/codebase/cross-language/api-mismatches`)
+    if (apiResponse.ok) {
+      const apiData = await apiResponse.json()
+      if (apiData.status === 'success' && crossLanguageAnalysis.value) {
+        // Map orphaned and missing to our format
+        const orphaned = (apiData.orphaned || []).map(m => ({ ...m, mismatch_type: 'orphaned_endpoint' }))
+        const missing = (apiData.missing || []).map(m => ({ ...m, mismatch_type: 'missing_endpoint' }))
+        crossLanguageAnalysis.value.api_contract_mismatches = [...missing, ...orphaned]
+      }
+    }
+
+    // Load validation duplications
+    const valResponse = await fetch(`${backendUrl}/api/analytics/codebase/cross-language/validation-duplications`)
+    if (valResponse.ok) {
+      const valData = await valResponse.json()
+      if (valData.status === 'success' && crossLanguageAnalysis.value) {
+        crossLanguageAnalysis.value.validation_duplications = valData.duplications || []
+      }
+    }
+
+    // Load semantic matches
+    const matchResponse = await fetch(`${backendUrl}/api/analytics/codebase/cross-language/semantic-matches?min_similarity=0.7&limit=20`)
+    if (matchResponse.ok) {
+      const matchData = await matchResponse.json()
+      if (matchData.status === 'success' && crossLanguageAnalysis.value) {
+        crossLanguageAnalysis.value.pattern_matches = matchData.matches || []
+      }
+    }
+  } catch (error) {
+    logger.warn('Failed to load some cross-language details:', error)
+  }
+}
+
+// Issue #244: Run full cross-language analysis (POST to trigger new scan)
+const runCrossLanguageAnalysis = async () => {
+  loadingCrossLanguage.value = true
+  crossLanguageError.value = ''
+  progressStatus.value = 'Running full cross-language pattern scan...'
+  const startTime = Date.now()
+
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/analytics/codebase/cross-language/analyze`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        use_llm: true,
+        use_cache: true
+      })
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Status ${response.status}: ${errorText}`)
+    }
+
+    const data = await response.json()
+    const responseTime = Date.now() - startTime
+
+    if (data.status === 'success') {
+      notify(`Cross-language scan complete - ${responseTime}ms`, 'success')
+      // Reload the summary with fresh data
+      await getCrossLanguageAnalysis()
+    } else {
+      throw new Error(data.message || 'Analysis failed')
+    }
+  } catch (error) {
+    const responseTime = Date.now() - startTime
+    logger.error('Cross-language analysis scan failed:', error)
+    crossLanguageError.value = error.message
+    notify(`Cross-language scan failed: ${error.message} (${responseTime}ms)`, 'error')
+  } finally {
+    loadingCrossLanguage.value = false
+    progressStatus.value = 'Ready'
+  }
+}
+
+// Issue #244: Get severity badge class for cross-language issues
+const getCrossLanguageSeverityClass = (severity: string): string => {
+  switch (severity?.toLowerCase()) {
+    case 'critical': return 'critical'
+    case 'high': return 'warning'
+    case 'medium': return 'info'
+    case 'low': return 'success'
+    default: return 'info'
+  }
 }
 
 // Issue #538: Truncate long config values for display
@@ -6476,6 +6941,250 @@ const getDeclarationTypeClass = (type) => {
 
 .scan-timestamp i {
   color: #94a3b8;
+}
+
+/* Issue #244: Cross-Language Pattern Analysis Section */
+.cross-language-section {
+  margin-top: 32px;
+  padding: 24px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 12px;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.cross-language-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 20px 0;
+  color: #e2e8f0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.cross-language-section h3 i {
+  color: #8b5cf6;
+}
+
+.cross-language-section .loading-state,
+.cross-language-section .error-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.cross-language-section .loading-state {
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  color: #c4b5fd;
+}
+
+.cross-language-section .error-state {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+/* Language Breakdown */
+.language-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 12px;
+  background: rgba(30, 41, 59, 0.8);
+  border-radius: 8px;
+}
+
+.language-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.language-badge.python {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.language-badge.typescript {
+  background: rgba(49, 120, 198, 0.2);
+  color: #7cc5ff;
+  border: 1px solid rgba(49, 120, 198, 0.3);
+}
+
+.language-badge.vue {
+  background: rgba(66, 184, 131, 0.2);
+  color: #42b883;
+  border: 1px solid rgba(66, 184, 131, 0.3);
+}
+
+/* Cross-language Type Badges */
+.type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  margin-right: 8px;
+  background: rgba(139, 92, 246, 0.2);
+  color: #c4b5fd;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.type-badge.missing {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.type-badge.orphaned {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+/* Validation Type Badge */
+.validation-type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-right: 8px;
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+/* Similarity Score */
+.similarity-score {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.similarity-score.highlight {
+  background: rgba(139, 92, 246, 0.2);
+  color: #c4b5fd;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+/* Match Type */
+.match-type {
+  display: inline-block;
+  padding: 2px 8px;
+  margin-left: 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: rgba(100, 116, 139, 0.2);
+  color: #94a3b8;
+  border: 1px solid rgba(100, 116, 139, 0.3);
+}
+
+/* Item Locations for cross-language */
+.item-locations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+  align-items: center;
+}
+
+.item-locations .location {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.item-locations .location.python {
+  color: #60a5fa;
+}
+
+.item-locations .location.typescript {
+  color: #7cc5ff;
+}
+
+.item-locations .arrow {
+  color: #64748b;
+  font-weight: bold;
+}
+
+/* Item Field */
+.item-field {
+  margin-top: 4px;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.item-field code {
+  padding: 2px 6px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  color: #e2e8f0;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Item Name */
+.item-name {
+  color: #e2e8f0;
+  font-weight: 500;
+}
+
+/* Item Recommendation */
+.item-recommendation {
+  margin-top: 6px;
+  padding: 8px 12px;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 6px;
+  color: #93c5fd;
+  font-size: 0.8rem;
+  border-left: 2px solid #3b82f6;
+}
+
+/* Analysis Time */
+.analysis-time {
+  color: #64748b;
+  font-size: 0.75rem;
+  margin-left: 4px;
+}
+
+/* Scan Button */
+.btn-scan {
+  padding: 4px 10px;
+  background: #8b5cf6;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.2s;
+}
+
+.btn-scan:hover:not(:disabled) {
+  background: #7c3aed;
+}
+
+.btn-scan:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Issue #538: Config Duplicates Section */
