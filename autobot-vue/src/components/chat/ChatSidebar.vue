@@ -378,7 +378,7 @@ const deleteKBFacts = ref<SessionFact[] | null>(null)
 const kbFactsLoading = ref(false)
 
 // Toast for notifications (Issue #547)
-const toast = useToast()
+const { showToast } = useToast()
 
 // Display settings configuration (UI labels)
 const displaySettingsConfig = [
@@ -505,14 +505,14 @@ const handleDeleteConfirm = async (fileAction: string, fileOptions: any, selecte
 
     if (totalFacts > 0) {
       if (preservedCount > 0 && deletedCount > 0) {
-        toast.success(`Conversation deleted. ${deletedCount} KB fact${deletedCount > 1 ? 's' : ''} removed, ${preservedCount} preserved.`)
+        showToast(`Conversation deleted. ${deletedCount} KB fact${deletedCount > 1 ? 's' : ''} removed, ${preservedCount} preserved.`, 'success')
       } else if (deletedCount > 0) {
-        toast.success(`Conversation deleted. ${deletedCount} KB fact${deletedCount > 1 ? 's' : ''} removed.`)
+        showToast(`Conversation deleted. ${deletedCount} KB fact${deletedCount > 1 ? 's' : ''} removed.`, 'success')
       } else {
-        toast.success(`Conversation deleted. All ${preservedCount} KB fact${preservedCount > 1 ? 's' : ''} preserved.`)
+        showToast(`Conversation deleted. All ${preservedCount} KB fact${preservedCount > 1 ? 's' : ''} preserved.`, 'success')
       }
     } else {
-      toast.success('Conversation deleted successfully.')
+      showToast('Conversation deleted successfully.', 'success')
     }
 
     showDeleteDialog.value = false
@@ -521,7 +521,7 @@ const handleDeleteConfirm = async (fileAction: string, fileOptions: any, selecte
     deleteKBFacts.value = null
   } catch (error) {
     logger.error('Failed to delete session:', error)
-    toast.error('Failed to delete conversation. Please try again.')
+    showToast('Failed to delete conversation. Please try again.', 'error')
   }
 }
 

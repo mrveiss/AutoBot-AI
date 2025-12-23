@@ -223,7 +223,7 @@ export default {
 
     // Use composable for async data fetching
     const { execute, loading: isLoading } = useAsyncOperation({
-      onError: (error: Error) => {
+      onError: (error) => {
         logger.error('Error refreshing data:', error)
         logPerformanceIssue('RumDashboard', 'Data refresh failed', { error: error.message })
       }
