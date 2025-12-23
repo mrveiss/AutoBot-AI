@@ -170,6 +170,39 @@ def detect_exit_intent(message: str) -> bool:
 
     # Check for exit keywords in message (with word boundaries)
     words = message_lower.split()
+
+    # Context phrases that indicate the user is asking ABOUT exit, not trying to exit
+    # These are compound terms where exit/quit/etc are part of technical concepts
+    non_exit_context_phrases = {
+        "exit code",
+        "exit status",
+        "exit signal",
+        "exit value",
+        "exit point",
+        "quit command",
+        "quit signal",
+        "stop signal",
+        "stop command",
+        "about exit",
+        "about the exit",
+        "the exit",
+        "what exit",
+        "which exit",
+        "bye command",
+        "the bye",
+        "how to quit",
+        "explain how",
+        "tell me about",
+    }
+
+    # If message contains any non-exit context phrase, don't trigger exit
+    for phrase in non_exit_context_phrases:
+        if phrase in message_lower:
+            logger.debug(
+                "Exit keyword found but in non-exit context: '%s'", phrase
+            )
+            return False
+
     for exit_word in EXIT_KEYWORDS:
         if exit_word in words:
             # Only consider it an exit if it's not part of a question
