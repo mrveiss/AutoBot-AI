@@ -17,7 +17,8 @@ This document contains development guidelines, project setup instructions, and a
 5. **Use specialized agents** for complex tasks
 6. **Code review is mandatory** for ALL code changes (use `code-reviewer` agent)
 7. **Update GitHub Issue** with progress comments throughout work
-8. **Store in Memory MCP** - At session end, store conversation/decisions/findings (MANDATORY)
+8. **Complete GitHub Issue properly** - Issue is ONLY done when: all code committed, acceptance criteria met, issue closed with summary (MANDATORY)
+9. **Store in Memory MCP** - At session end, store conversation/decisions/findings (MANDATORY)
 
 ### **Workflow Violation Self-Check**
 
@@ -36,6 +37,13 @@ This document contains development guidelines, project setup instructions, and a
 - ❓ **Did I store conversation in Memory MCP?** → If NO: Store it now before ending
 - ❓ **Did I document decisions with rationale?** → If NO: Create decision entities
 - ❓ **Did I link problems to solutions?** → If NO: Create relationships
+
+**Before marking issue complete, verify:**
+
+- ❓ **Is ALL code committed?** → If NO: Commit all changes with issue reference
+- ❓ **Are ALL acceptance criteria met?** → If NO: Complete remaining work or update issue
+- ❓ **Did I add closing summary to issue?** → If NO: Add summary of changes made
+- ❓ **Is the issue closed?** → If NO: Close it now with proper status
 
 **If ANY answer reveals violation → STOP and correct immediately**
 
@@ -311,10 +319,50 @@ Every task, change, feature, or fix MUST be linked to a GitHub issue or task for
 - Reference in PR description: "Closes #123"
 - Link in documentation updates
 
-# Step 3: Update issue
+# Step 3: Update issue throughout work
 - Mark as "In Progress" when starting
 - Add comments for decisions/blockers
-- Close when work is complete and merged
+- Update with progress regularly
+
+# Step 4: Close issue ONLY when complete
+- ALL code changes committed to repository
+- ALL acceptance criteria verified and met
+- Add closing comment with summary of what was done
+- Close the issue with final status
+```
+
+### **Issue Completion Criteria (MANDATORY):**
+
+**⚠️ An issue is ONLY complete when ALL of the following are true:**
+
+1. **All code committed** - Every change is committed to the repository with proper commit messages referencing the issue
+2. **Acceptance criteria met** - All requirements listed in the issue are verified as working
+3. **Tests passing** - All relevant tests pass (if applicable)
+4. **Code reviewed** - Changes have been reviewed via code-reviewer agent
+5. **Issue updated** - Final comment added summarizing what was done
+6. **Issue closed** - Issue status changed to closed
+
+**❌ An issue is NOT complete if:**
+- Code exists only locally (not committed)
+- Some acceptance criteria are unverified
+- Tests are failing or skipped
+- No closing summary provided
+- Issue left open
+
+**Closing Comment Format:**
+```markdown
+## Completed ✅
+
+### Changes Made:
+- [List of changes made]
+
+### Acceptance Criteria Verified:
+- [x] Criterion 1 - verified by [method]
+- [x] Criterion 2 - verified by [method]
+
+### Commits:
+- abc1234: feat(scope): description
+- def5678: fix(scope): description
 ```
 
 ### **Issue Requirements:**
@@ -940,6 +988,7 @@ gh issue comment <issue-number> --body "Task complete ✅"
 |--------|------|
 | **Code Ownership** | ✅ MANDATORY - mrveiss is SOLE OWNER and AUTHOR of ALL code (UNBREAKABLE) |
 | **GitHub Issue Tracking** | ✅ MANDATORY - ALL work must be tied to GitHub issue/task in https://github.com/mrveiss/AutoBot-AI |
+| **Issue Completion** | ✅ MANDATORY - Issue ONLY done when: code committed, acceptance criteria met, issue closed with summary |
 | **Temporary Fixes** | ❌ NEVER - Always fix root causes (NO EXCEPTIONS) |
 | **File Naming** | ❌ FORBIDDEN - No _fix, _v2, _optimized, _new, _temp suffixes |
 | **Consolidation** | ✅ MANDATORY - Preserve ALL features, choose BEST implementation |
@@ -970,6 +1019,12 @@ gh issue comment <issue-number> --body "Task complete ✅"
 - Did I use permanent file names (no _fix, _v2, _temp)? ✓
 - If consolidating: Did I preserve ALL features and choose BEST implementation? ✓
 - Did I update GitHub issue with progress? ✓
+
+**Before marking issue complete (MANDATORY):**
+- Is ALL code committed with issue references? ✓
+- Are ALL acceptance criteria verified and met? ✓
+- Did I add closing summary to GitHub issue? ✓
+- Is the GitHub issue closed? ✓
 
 **At session end:**
 - Did I update GitHub issue with final results? ✓ (MANDATORY)
