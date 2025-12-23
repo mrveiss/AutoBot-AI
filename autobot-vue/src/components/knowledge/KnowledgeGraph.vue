@@ -24,8 +24,24 @@
           <i class="fas fa-th"></i>
           {{ layoutMode === 'force' ? 'Grid' : 'Force' }}
         </button>
+        <button
+          @click="showCleanupPanel = !showCleanupPanel"
+          class="action-btn cleanup"
+          :class="{ active: showCleanupPanel }"
+          title="Cleanup orphaned entities"
+        >
+          <i class="fas fa-broom"></i>
+          Cleanup
+        </button>
       </div>
     </div>
+
+    <!-- Memory Orphan Cleanup Panel (Issue #547) -->
+    <transition name="slide-down">
+      <div v-if="showCleanupPanel" class="cleanup-panel-wrapper">
+        <MemoryOrphanManager @cleanup-complete="handleCleanupComplete" />
+      </div>
+    </transition>
 
     <!-- Error Notification -->
     <div v-if="errorMessage" class="error-notification" role="alert">
@@ -393,6 +409,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { createLogger } from '@/utils/debugUtils'
+import MemoryOrphanManager from '@/components/knowledge/MemoryOrphanManager.vue'
 
 const logger = createLogger('KnowledgeGraph')
 
@@ -444,6 +461,7 @@ const selectedType = ref('')
 const graphDepth = ref(2)
 const layoutMode = ref<'force' | 'grid'>('force')
 const showCreateModal = ref(false)
+const showCleanupPanel = ref(false)
 
 // New entity form
 const newEntity = ref<NewEntity>({
@@ -504,6 +522,12 @@ const relationCount = computed(() => graphEdges.value.length)
 // ============================================================================
 // Methods - Data Fetching
 // ============================================================================
+
+function handleCleanupComplete() {
+  // Refresh the graph after cleanup to show updated entities
+  showCleanupPanel.value = false
+  refreshGraph()
+}
 
 async function refreshGraph() {
   isLoading.value = true
@@ -980,6 +1004,46 @@ watch(layoutMode, () => {
 .action-btn.refresh {
   border-color: #667eea;
   color: #667eea;
+}
+
+.action-btn.cleanup {
+  border-color: #f59e0b;
+  color: #f59e0b;
+}
+
+.action-btn.cleanup:hover:not(:disabled) {
+  background: #fffbeb;
+}
+
+.action-btn.cleanup.active {
+  background: #f59e0b;
+  color: white;
+}
+
+/* Cleanup Panel */
+.cleanup-panel-wrapper {
+  margin-bottom: 1rem;
+}
+
+/* Slide down transition */
+.slide-down-enter-active,
+.slide-down-leave-active {
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.slide-down-enter-from,
+.slide-down-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+  max-height: 0;
+}
+
+.slide-down-enter-to,
+.slide-down-leave-from {
+  opacity: 1;
+  transform: translateY(0);
+  max-height: 1000px;
 }
 
 /* Error Notification */

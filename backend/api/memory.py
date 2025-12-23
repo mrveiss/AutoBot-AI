@@ -374,6 +374,271 @@ async def list_all_entities(
         )
 
 
+# ====================================================================
+# Orphan Cleanup Endpoints (Issue #547)
+# IMPORTANT: Must be defined BEFORE /entities/{entity_id} for proper routing
+# ====================================================================
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="find_orphaned_conversation_entities",
+    error_code_prefix="MEMORY",
+)
+@router.get("/entities/orphans")
+async def find_orphaned_conversation_entities(
+    request: Request,
+    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
+) -> JSONResponse:
+    """
+    Find conversation entities that reference deleted sessions.
+
+    Issue #547: Detects memory entities of type 'conversation' that have
+    session_id metadata pointing to sessions that no longer exist.
+
+    Returns:
+        List of orphaned conversation entities with their details
+    """
+    request_id = generate_request_id()
+
+    try:
+        logger.info("[%s] Scanning for orphaned conversation entities", request_id)
+
+        # Get all conversation entities
+        all_entities = await memory_graph.list_entities(
+            entity_type="conversation",
+            limit=1000,
+        )
+
+        if not all_entities:
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "data": {
+                        "total_conversation_entities": 0,
+                        "orphaned_count": 0,
+                        "orphaned_entities": [],
+                    },
+                    "message": "No conversation entities found",
+                    "request_id": request_id,
+                },
+            )
+
+        # Get existing session IDs
+        from backend.utils.chat_utils import get_chat_history_manager
+
+        chat_manager = get_chat_history_manager(request)
+        if chat_manager is None:
+            raise HTTPException(
+                status_code=500, detail="Chat history manager not available"
+            )
+
+        existing_sessions = await chat_manager.list_sessions_fast()
+        existing_session_ids = {s["id"] for s in existing_sessions}
+
+        logger.info(
+            "[%s] Found %d conversation entities, %d active sessions",
+            request_id, len(all_entities), len(existing_session_ids)
+        )
+
+        # Find orphaned entities
+        orphaned_entities = []
+        for entity in all_entities:
+            metadata = entity.get("metadata", {})
+            session_id = metadata.get("session_id")
+
+            if session_id and session_id not in existing_session_ids:
+                orphaned_entities.append({
+                    "id": entity.get("id"),
+                    "name": entity.get("name"),
+                    "session_id": session_id,
+                    "created_at": entity.get("created_at"),
+                    "observations": entity.get("observations", [])[:3],  # First 3
+                })
+
+        logger.info(
+            "[%s] Found %d orphaned conversation entities",
+            request_id, len(orphaned_entities)
+        )
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "data": {
+                    "total_conversation_entities": len(all_entities),
+                    "active_sessions": len(existing_session_ids),
+                    "orphaned_count": len(orphaned_entities),
+                    "orphaned_entities": orphaned_entities,
+                },
+                "request_id": request_id,
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("[%s] Error finding orphaned entities: %s", request_id, e)
+        raise HTTPException(
+            status_code=500, detail=f"Failed to find orphaned entities: {str(e)}"
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cleanup_orphaned_conversation_entities",
+    error_code_prefix="MEMORY",
+)
+@router.delete("/entities/orphans")
+async def cleanup_orphaned_conversation_entities(
+    request: Request,
+    dry_run: bool = Query(True, description="If True, only report without deleting"),
+    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
+) -> JSONResponse:
+    """
+    Delete conversation entities that reference deleted sessions.
+
+    Issue #547: Cleans up orphaned memory entities from deleted conversations.
+
+    Args:
+        dry_run: If True, only report orphans without deleting (default: True)
+
+    Returns:
+        Report of orphans found and removed
+    """
+    request_id = generate_request_id()
+
+    try:
+        # First find orphans using the scan endpoint logic
+        logger.info(
+            "[%s] Finding orphaned conversation entities (dry_run=%s)",
+            request_id, dry_run
+        )
+
+        # Get all conversation entities
+        all_entities = await memory_graph.list_entities(
+            entity_type="conversation",
+            limit=1000,
+        )
+
+        if not all_entities:
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "data": {
+                        "orphaned_count": 0,
+                        "deleted_count": 0,
+                    },
+                    "message": "No conversation entities found",
+                    "request_id": request_id,
+                },
+            )
+
+        # Get existing session IDs
+        from backend.utils.chat_utils import get_chat_history_manager
+
+        chat_manager = get_chat_history_manager(request)
+        if chat_manager is None:
+            raise HTTPException(
+                status_code=500, detail="Chat history manager not available"
+            )
+
+        existing_sessions = await chat_manager.list_sessions_fast()
+        existing_session_ids = {s["id"] for s in existing_sessions}
+
+        # Find orphaned entities
+        orphaned_entities = []
+        for entity in all_entities:
+            metadata = entity.get("metadata", {})
+            session_id = metadata.get("session_id")
+
+            if session_id and session_id not in existing_session_ids:
+                orphaned_entities.append(entity)
+
+        if not orphaned_entities:
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "data": {
+                        "orphaned_count": 0,
+                        "deleted_count": 0,
+                    },
+                    "message": "No orphaned conversation entities found",
+                    "request_id": request_id,
+                },
+            )
+
+        deleted_count = 0
+        failed_deletions = []
+
+        if not dry_run:
+            logger.info(
+                "[%s] Deleting %d orphaned conversation entities",
+                request_id, len(orphaned_entities)
+            )
+
+            for entity in orphaned_entities:
+                entity_name = entity.get("name")
+                try:
+                    deleted = await memory_graph.delete_entity(
+                        entity_name=entity_name, cascade_relations=True
+                    )
+                    if deleted:
+                        deleted_count += 1
+                    else:
+                        failed_deletions.append({
+                            "id": entity.get("id"),
+                            "name": entity_name,
+                            "reason": "delete returned False"
+                        })
+                except Exception as e:
+                    logger.warning(
+                        "[%s] Failed to delete entity %s: %s",
+                        request_id, entity_name, e
+                    )
+                    failed_deletions.append({
+                        "id": entity.get("id"),
+                        "name": entity_name,
+                        "reason": str(e)
+                    })
+
+            logger.info(
+                "[%s] Deleted %d/%d orphaned entities",
+                request_id, deleted_count, len(orphaned_entities)
+            )
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "data": {
+                    "dry_run": dry_run,
+                    "orphaned_count": len(orphaned_entities),
+                    "deleted_count": deleted_count,
+                    "failed_count": len(failed_deletions),
+                    "failed_deletions": failed_deletions[:10] if failed_deletions else None,
+                },
+                "message": (
+                    f"Would delete {len(orphaned_entities)} orphaned entities"
+                    if dry_run
+                    else f"Deleted {deleted_count} orphaned entities"
+                ),
+                "request_id": request_id,
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("[%s] Error cleaning up orphaned entities: %s", request_id, e)
+        raise HTTPException(
+            status_code=500, detail=f"Failed to cleanup orphaned entities: {str(e)}"
+        )
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_entity_by_id",
