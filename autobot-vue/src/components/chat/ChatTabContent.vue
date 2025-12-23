@@ -22,12 +22,12 @@
       <!-- Placeholder for terminal layout -->
     </div>
 
-    <!-- Browser Tab Content -->
+    <!-- Browser Tab Content (Issue #73: Browser sessions tied to chat like terminal) -->
     <div v-else-if="activeTab === 'browser'" class="flex-1 flex flex-col min-h-0">
-      <PopoutChromiumBrowser
+      <ChatBrowser
         :key="currentSessionId || 'default'"
-        :session-id="currentSessionId || 'chat-browser'"
-        :chat-context="true"
+        :chat-session-id="currentSessionId"
+        :auto-connect="true"
         class="flex-1"
       />
     </div>
@@ -87,7 +87,7 @@ const logger = createLogger('ChatTabContent')
 import ChatMessages from './ChatMessages.vue'
 import ChatInput from './ChatInput.vue'
 import FileBrowser from '@/components/FileBrowser.vue'
-import PopoutChromiumBrowser from '@/components/PopoutChromiumBrowser.vue'
+import ChatBrowser from '@/components/ChatBrowser.vue'  // Issue #73: Browser sessions tied to chat
 import ChatTerminal from '@/components/ChatTerminal.vue'
 
 interface Props {

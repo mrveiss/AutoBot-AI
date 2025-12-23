@@ -357,3 +357,168 @@ async def get_browser_info(session_id: str):
             ],
         },
     )
+
+
+# Chat Browser Session Management (Issue #73)
+# These endpoints tie browser sessions to chat conversations like terminal
+
+
+class CreateChatBrowserRequest(BaseModel):
+    """Request to create/get browser session for chat"""
+
+    conversation_id: str
+    headless: bool = False
+    initial_url: Optional[str] = None
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_or_create_chat_browser_session",
+    error_code_prefix="RESEARCH_BROWSER",
+)
+@router.post("/chat-session")
+async def get_or_create_chat_browser_session(request: CreateChatBrowserRequest):
+    """
+    Get existing or create new browser session for a chat conversation.
+
+    Similar to how terminal sessions are tied to chat via agent-terminal API,
+    this endpoint ties browser sessions to chat conversations.
+
+    Issue #73: Browser sessions tied to chat like terminal
+    """
+    # Check for existing session for this conversation
+    existing_session = research_browser_manager.get_session_by_conversation(
+        request.conversation_id
+    )
+
+    if existing_session and existing_session.status != "closed":
+        logger.info(
+            f"Found existing browser session {existing_session.session_id} "
+            f"for conversation {request.conversation_id}"
+        )
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "existing",
+                "session_id": existing_session.session_id,
+                "conversation_id": existing_session.conversation_id,
+                "browser_status": existing_session.status,
+                "current_url": existing_session.current_url,
+                "interaction_required": existing_session.interaction_required,
+            },
+        )
+
+    # Create new session
+    logger.info(f"Creating new browser session for conversation {request.conversation_id}")
+    session_id = await research_browser_manager.create_session(
+        request.conversation_id, headless=request.headless
+    )
+
+    if not session_id:
+        raise HTTPException(
+            status_code=500, detail="Failed to create browser session"
+        )
+
+    session = research_browser_manager.get_session(session_id)
+
+    # Navigate to initial URL if provided
+    if request.initial_url and session:
+        await session.navigate_to(request.initial_url)
+
+    return JSONResponse(
+        status_code=201,
+        content={
+            "status": "created",
+            "session_id": session_id,
+            "conversation_id": request.conversation_id,
+            "browser_status": session.status if session else "unknown",
+            "current_url": session.current_url if session else None,
+            "interaction_required": session.interaction_required if session else False,
+        },
+    )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_chat_browser_session",
+    error_code_prefix="RESEARCH_BROWSER",
+)
+@router.get("/chat-session/{conversation_id}")
+async def get_chat_browser_session(conversation_id: str):
+    """
+    Get browser session info for a chat conversation.
+
+    Issue #73: Browser sessions tied to chat like terminal
+    """
+    session = research_browser_manager.get_session_by_conversation(conversation_id)
+
+    if not session:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No browser session found for conversation {conversation_id}",
+        )
+
+    # Get VNC info for frontend integration
+    docker_browser_info = None
+    try:
+        from src.unified_config_manager import (
+            PLAYWRIGHT_VNC_URL,
+            get_vnc_direct_url,
+        )
+
+        docker_browser_info = {
+            "available": True,
+            "vnc_url": PLAYWRIGHT_VNC_URL.replace("vnc.html", ""),
+            "direct_url": get_vnc_direct_url(),
+            "session_active": session.status == "active",
+        }
+    except Exception:
+        docker_browser_info = {"available": False}
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "session_id": session.session_id,
+            "conversation_id": session.conversation_id,
+            "browser_status": session.status,
+            "current_url": session.current_url,
+            "interaction_required": session.interaction_required,
+            "interaction_message": session.interaction_message,
+            "created_at": session.created_at.isoformat(),
+            "last_activity": session.last_activity.isoformat(),
+            "docker_browser": docker_browser_info,
+        },
+    )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_chat_browser_session",
+    error_code_prefix="RESEARCH_BROWSER",
+)
+@router.delete("/chat-session/{conversation_id}")
+async def delete_chat_browser_session(conversation_id: str):
+    """
+    Close browser session for a chat conversation.
+
+    Issue #73: Browser sessions tied to chat like terminal
+    """
+    session = research_browser_manager.get_session_by_conversation(conversation_id)
+
+    if not session:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No browser session found for conversation {conversation_id}",
+        )
+
+    session_id = session.session_id
+    await research_browser_manager.cleanup_session(session_id)
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "deleted",
+            "session_id": session_id,
+            "conversation_id": conversation_id,
+        },
+    )
