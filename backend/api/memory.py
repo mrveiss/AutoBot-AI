@@ -404,8 +404,9 @@ async def find_orphaned_conversation_entities(
     try:
         logger.info("[%s] Scanning for orphaned conversation entities", request_id)
 
-        # Get all conversation entities
-        all_entities = await memory_graph.list_entities(
+        # Get all conversation entities using search_entities with type filter
+        all_entities = await memory_graph.search_entities(
+            query="*",
             entity_type="conversation",
             limit=1000,
         )
@@ -516,8 +517,9 @@ async def cleanup_orphaned_conversation_entities(
             request_id, dry_run
         )
 
-        # Get all conversation entities
-        all_entities = await memory_graph.list_entities(
+        # Get all conversation entities using search_entities with type filter
+        all_entities = await memory_graph.search_entities(
+            query="*",
             entity_type="conversation",
             limit=1000,
         )
