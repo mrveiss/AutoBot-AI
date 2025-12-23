@@ -23,6 +23,10 @@ import aiohttp
 import yaml
 
 from src.constants.security_constants import SecurityConstants
+from src.security.threat_intelligence import (
+    ThreatIntelligenceService,
+    get_threat_intelligence_service,
+)
 from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
@@ -119,6 +123,9 @@ class DomainSecurityManager:
         self.threat_intelligence = set()
         self.last_threat_update = 0
         self._http_client = get_http_client()  # Use singleton HTTP client
+
+        # Threat intelligence service (lazy initialized)
+        self._threat_intel_service: Optional[ThreatIntelligenceService] = None
 
         # Precompile regex patterns for performance
         self._compile_patterns()
@@ -469,24 +476,64 @@ class DomainSecurityManager:
 
         return domains
 
+    async def _get_threat_intel_service(self) -> ThreatIntelligenceService:
+        """Lazy initialization of threat intelligence service."""
+        if self._threat_intel_service is None:
+            self._threat_intel_service = await get_threat_intelligence_service()
+        return self._threat_intel_service
+
     async def _check_reputation_services(self, domain: str) -> float:
-        """Check domain reputation using configured services"""
+        """
+        Check domain reputation using configured external services.
+
+        Integrates with VirusTotal and URLVoid APIs when configured via environment
+        variables (VIRUSTOTAL_API_KEY, URLVOID_API_KEY). Falls back to heuristic-based
+        scoring when external services are unavailable.
+
+        Args:
+            domain: Domain name to check
+
+        Returns:
+            Reputation score from 0.0 (malicious) to 1.0 (safe)
+        """
         reputation_services = self.config.config.get("domain_security", {}).get(
             "reputation_services", {}
         )
 
-        # External reputation service integration
-        # Implementation requires:
-        # 1. API keys configured in secrets (VIRUSTOTAL_API_KEY, URLVOID_API_KEY)
-        # 2. Rate limiting to stay within API quotas
-        # 3. Async HTTP client for external API calls
-        # See: backend/api/secrets.py for secrets management
-        # See: Issue #164 for security implementation roadmap
-        for service_name, service_config in reputation_services.items():
-            if service_config.get("enabled", False) and service_config.get("api_key"):
-                logger.debug("Reputation service %s is configured - external API integration pending Issue #164 completion", service_name)
+        # Check if any external services are configured and enabled
+        external_services_enabled = any(
+            service_config.get("enabled", False)
+            for service_config in reputation_services.values()
+        )
 
-        # Default reputation based on basic heuristics
+        if external_services_enabled:
+            try:
+                # Use threat intelligence service for external API checks
+                threat_intel = await self._get_threat_intel_service()
+
+                if threat_intel.is_any_service_configured:
+                    # Construct URL from domain for API check
+                    url = f"https://{domain}"
+                    threat_score = await threat_intel.check_url_reputation(url)
+
+                    if threat_score.sources_checked > 0:
+                        logger.info(
+                            "External threat intelligence check for %s: score=%.2f, level=%s",
+                            domain, threat_score.overall_score, threat_score.threat_level.value
+                        )
+                        return threat_score.overall_score
+
+                    logger.debug(
+                        "No external threat intel results for %s, using heuristics",
+                        domain
+                    )
+            except Exception as e:
+                logger.warning(
+                    "External threat intelligence check failed for %s: %s",
+                    domain, e
+                )
+
+        # Fall back to heuristic-based reputation
         return self._calculate_basic_reputation(domain)
 
     def _calculate_basic_reputation(self, domain: str) -> float:
@@ -551,7 +598,7 @@ class DomainSecurityManager:
 
     def get_security_stats(self) -> Dict[str, Any]:
         """Get security statistics and metrics"""
-        return {
+        stats = {
             "cache_entries": len(self.domain_cache),
             "threat_domains": len(self.threat_intelligence),
             "last_threat_update": self.last_threat_update,
@@ -572,7 +619,25 @@ class DomainSecurityManager:
                     )
                 ),
             },
+            "threat_intelligence_services": {
+                "initialized": self._threat_intel_service is not None,
+            },
         }
+
+        return stats
+
+    async def get_threat_intel_status(self) -> Dict[str, Any]:
+        """Get threat intelligence service status (async)."""
+        try:
+            threat_intel = await self._get_threat_intel_service()
+            return await threat_intel.get_service_status()
+        except Exception as e:
+            logger.error("Failed to get threat intel status: %s", e)
+            return {
+                "error": str(e),
+                "virustotal": {"configured": False},
+                "urlvoid": {"configured": False},
+            }
 
 
 # Convenience function for easy access
