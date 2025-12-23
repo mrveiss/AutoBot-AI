@@ -920,32 +920,9 @@ def _generate_semantic_matches_section(analysis: CrossLanguageAnalysis) -> List[
     return lines
 
 
-def _generate_pattern_analysis_section(report: Optional[PatternAnalysisReport]) -> List[str]:
-    """
-    Generate the Code Pattern Analysis section for the report (Issue #208).
-
-    Args:
-        report: PatternAnalysisReport from CodePatternAnalyzer
-
-    Returns:
-        List of markdown lines for the pattern analysis section
-    """
-    if not report:
-        return []
-
-    # Skip if no patterns found
-    if report.total_patterns == 0:
-        return []
-
-    lines = [
-        "## 🔍 Code Pattern Analysis",
-        "",
-        "> **Analysis of code patterns, duplicates, complexity hotspots, and optimization opportunities.**",
-        "",
-    ]
-
-    # Overview table
-    lines.extend([
+def _generate_pattern_overview(report: PatternAnalysisReport) -> List[str]:
+    """Generate pattern analysis overview table (Issue #560: extracted)."""
+    return [
         "### Overview",
         "",
         "| Metric | Value |",
@@ -956,104 +933,168 @@ def _generate_pattern_analysis_section(report: Optional[PatternAnalysisReport]) 
         f"| Potential LOC Reduction | {report.potential_loc_reduction} |",
         f"| Analysis Duration | {report.analysis_duration_seconds:.1f}s |",
         "",
-    ])
+    ]
 
-    # Severity distribution
-    if report.severity_distribution:
+
+def _generate_severity_distribution(report: PatternAnalysisReport) -> List[str]:
+    """Generate severity distribution section (Issue #560: extracted)."""
+    if not report.severity_distribution:
+        return []
+
+    lines = [
+        "### Severity Distribution",
+        "",
+        "| Severity | Count |",
+        "|----------|-------|",
+    ]
+    severity_emojis = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢", "info": "🔵"}
+    for severity in ["critical", "high", "medium", "low", "info"]:
+        count = report.severity_distribution.get(severity, 0)
+        if count > 0:
+            emoji = severity_emojis.get(severity, "⚪")
+            lines.append(f"| {emoji} {severity.capitalize()} | {count} |")
+    lines.append("")
+    return lines
+
+
+def _generate_duplicate_patterns_section(report: PatternAnalysisReport) -> List[str]:
+    """Generate duplicate code patterns section (Issue #560: extracted)."""
+    if not report.duplicate_patterns:
+        return []
+
+    lines = [
+        "### 📋 Duplicate Code Patterns",
+        "",
+        f"> **{len(report.duplicate_patterns)} duplicate patterns detected**",
+        "",
+    ]
+    for i, dup in enumerate(report.duplicate_patterns[:10], 1):  # Limit to 10
+        severity_emoji = {"high": "🔴", "medium": "🟠", "low": "🟡"}.get(
+            dup.severity.value if hasattr(dup.severity, 'value') else str(dup.severity), "⚪"
+        )
         lines.extend([
-            "### Severity Distribution",
+            f"#### {i}. {severity_emoji} {dup.description}",
+            f"- **Similarity:** {dup.similarity_score:.1%}",
+            f"- **Code Reduction:** ~{dup.code_reduction_potential} lines",
+            f"- **Locations:** {len(dup.locations)} occurrences",
+            f"- **Suggestion:** {dup.suggestion}",
             "",
-            "| Severity | Count |",
-            "|----------|-------|",
         ])
-        severity_emojis = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢", "info": "🔵"}
-        for severity in ["critical", "high", "medium", "low", "info"]:
-            count = report.severity_distribution.get(severity, 0)
-            if count > 0:
-                emoji = severity_emojis.get(severity, "⚪")
-                lines.append(f"| {emoji} {severity.capitalize()} | {count} |")
+    if len(report.duplicate_patterns) > 10:
+        lines.append(f"*... and {len(report.duplicate_patterns) - 10} more duplicates*")
         lines.append("")
+    return lines
 
-    # Duplicate patterns
+
+def _generate_regex_opportunities_section(report: PatternAnalysisReport) -> List[str]:
+    """Generate regex optimization opportunities section (Issue #560: extracted)."""
+    if not report.regex_opportunities:
+        return []
+
+    lines = [
+        "### ⚡ Regex Optimization Opportunities",
+        "",
+        f"> **{len(report.regex_opportunities)} opportunities for regex optimization**",
+        "",
+    ]
+    for i, regex_opp in enumerate(report.regex_opportunities[:5], 1):  # Limit to 5
+        suggested = regex_opp.suggested_regex[:80]
+        if len(regex_opp.suggested_regex) > 80:
+            suggested += '...'
+        lines.extend([
+            f"#### {i}. {regex_opp.description}",
+            f"- **Performance Gain:** {regex_opp.performance_gain}",
+            f"- **Suggested Regex:** `{suggested}`",
+            f"- **File:** {regex_opp.locations[0].file_path if regex_opp.locations else 'N/A'}",
+            "",
+        ])
+    if len(report.regex_opportunities) > 5:
+        lines.append(f"*... and {len(report.regex_opportunities) - 5} more opportunities*")
+        lines.append("")
+    return lines
+
+
+def _generate_complexity_hotspots_section(report: PatternAnalysisReport) -> List[str]:
+    """Generate complexity hotspots section (Issue #560: extracted)."""
+    if not report.complexity_hotspots:
+        return []
+
+    lines = [
+        "### 🔥 Complexity Hotspots",
+        "",
+        f"> **{len(report.complexity_hotspots)} high-complexity areas identified**",
+        "",
+        "| Function | File | Cyclomatic | Cognitive | Nesting |",
+        "|----------|------|------------|-----------|---------|",
+    ]
+    sorted_hotspots = sorted(
+        report.complexity_hotspots,
+        key=lambda h: h.cyclomatic_complexity,
+        reverse=True
+    )[:15]  # Top 15
+
+    for hotspot in sorted_hotspots:
+        func_name = hotspot.locations[0].function_name if hotspot.locations else "unknown"
+        file_path = hotspot.locations[0].file_path if hotspot.locations else "N/A"
+        short_path = file_path.split("/")[-1] if "/" in file_path else file_path
+        lines.append(
+            f"| `{func_name[:30]}` | `{short_path[:25]}` | {hotspot.cyclomatic_complexity} | "
+            f"{hotspot.cognitive_complexity} | {hotspot.nesting_depth} |"
+        )
+    lines.append("")
+    return lines
+
+
+def _generate_pattern_recommendations(report: PatternAnalysisReport) -> List[str]:
+    """Generate recommendations section (Issue #560: extracted)."""
+    high_severity_count = 0
     if report.duplicate_patterns:
-        lines.extend([
-            "### 📋 Duplicate Code Patterns",
-            "",
-            f"> **{len(report.duplicate_patterns)} duplicate patterns detected**",
-            "",
+        high_severity_count = len([
+            d for d in report.duplicate_patterns
+            if hasattr(d.severity, 'value') and d.severity.value == 'high'
         ])
-        for i, dup in enumerate(report.duplicate_patterns[:10], 1):  # Limit to 10
-            severity_emoji = {"high": "🔴", "medium": "🟠", "low": "🟡"}.get(
-                dup.severity.value if hasattr(dup.severity, 'value') else str(dup.severity), "⚪"
-            )
-            lines.extend([
-                f"#### {i}. {severity_emoji} {dup.description}",
-                f"- **Similarity:** {dup.similarity_score:.1%}",
-                f"- **Code Reduction:** ~{dup.code_reduction_potential} lines",
-                f"- **Locations:** {len(dup.locations)} occurrences",
-                f"- **Suggestion:** {dup.suggestion}",
-                "",
-            ])
-        if len(report.duplicate_patterns) > 10:
-            lines.append(f"*... and {len(report.duplicate_patterns) - 10} more duplicates*")
-            lines.append("")
+    regex_count = len(report.regex_opportunities) if report.regex_opportunities else 0
 
-    # Regex opportunities
-    if report.regex_opportunities:
-        lines.extend([
-            "### ⚡ Regex Optimization Opportunities",
-            "",
-            f"> **{len(report.regex_opportunities)} opportunities for regex optimization**",
-            "",
-        ])
-        for i, regex_opp in enumerate(report.regex_opportunities[:5], 1):  # Limit to 5
-            lines.extend([
-                f"#### {i}. {regex_opp.description}",
-                f"- **Performance Gain:** {regex_opp.performance_gain}",
-                f"- **Suggested Regex:** `{regex_opp.suggested_regex[:80]}{'...' if len(regex_opp.suggested_regex) > 80 else ''}`",
-                f"- **File:** {regex_opp.locations[0].file_path if regex_opp.locations else 'N/A'}",
-                "",
-            ])
-        if len(report.regex_opportunities) > 5:
-            lines.append(f"*... and {len(report.regex_opportunities) - 5} more opportunities*")
-            lines.append("")
-
-    # Complexity hotspots
-    if report.complexity_hotspots:
-        lines.extend([
-            "### 🔥 Complexity Hotspots",
-            "",
-            f"> **{len(report.complexity_hotspots)} high-complexity areas identified**",
-            "",
-            "| Function | File | Cyclomatic | Cognitive | Nesting |",
-            "|----------|------|------------|-----------|---------|",
-        ])
-        for hotspot in sorted(
-            report.complexity_hotspots,
-            key=lambda h: h.cyclomatic_complexity,
-            reverse=True
-        )[:15]:  # Top 15
-            func_name = hotspot.locations[0].function_name if hotspot.locations else "unknown"
-            file_path = hotspot.locations[0].file_path if hotspot.locations else "N/A"
-            # Truncate paths for readability
-            short_path = file_path.split("/")[-1] if "/" in file_path else file_path
-            lines.append(
-                f"| `{func_name[:30]}` | `{short_path[:25]}` | {hotspot.cyclomatic_complexity} | "
-                f"{hotspot.cognitive_complexity} | {hotspot.nesting_depth} |"
-            )
-        lines.append("")
-
-    # Summary
-    lines.extend([
+    return [
         "### Recommendations",
         "",
-        f"- **Priority:** Address {len([d for d in report.duplicate_patterns if hasattr(d.severity, 'value') and d.severity.value == 'high'] if report.duplicate_patterns else [])} high-severity duplicates first",
-        f"- **Quick Wins:** Implement {len(report.regex_opportunities)} regex optimizations for better performance",
-        f"- **Refactoring:** Simplify top complexity hotspots to improve maintainability",
+        f"- **Priority:** Address {high_severity_count} high-severity duplicates first",
+        f"- **Quick Wins:** Implement {regex_count} regex optimizations for better performance",
+        "- **Refactoring:** Simplify top complexity hotspots to improve maintainability",
         "",
         "---",
         "",
-    ])
+    ]
+
+
+def _generate_pattern_analysis_section(report: Optional[PatternAnalysisReport]) -> List[str]:
+    """
+    Generate the Code Pattern Analysis section for the report (Issue #208).
+
+    Issue #560: Refactored to use helper functions for better maintainability.
+
+    Args:
+        report: PatternAnalysisReport from CodePatternAnalyzer
+
+    Returns:
+        List of markdown lines for the pattern analysis section
+    """
+    if not report or report.total_patterns == 0:
+        return []
+
+    lines = [
+        "## 🔍 Code Pattern Analysis",
+        "",
+        "> **Analysis of code patterns, duplicates, complexity hotspots, and optimization opportunities.**",
+        "",
+    ]
+
+    lines.extend(_generate_pattern_overview(report))
+    lines.extend(_generate_severity_distribution(report))
+    lines.extend(_generate_duplicate_patterns_section(report))
+    lines.extend(_generate_regex_opportunities_section(report))
+    lines.extend(_generate_complexity_hotspots_section(report))
+    lines.extend(_generate_pattern_recommendations(report))
 
     return lines
 

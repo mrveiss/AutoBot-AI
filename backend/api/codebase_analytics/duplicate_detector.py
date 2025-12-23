@@ -403,9 +403,125 @@ class DuplicateCodeDetector:
 
         return files
 
+    def _extract_all_blocks(self, files: List[Path]) -> List[CodeBlock]:
+        """Extract code blocks from all files (Issue #560: extracted)."""
+        all_blocks: List[CodeBlock] = []
+        for file_path in files:
+            try:
+                content = file_path.read_text(encoding='utf-8', errors='ignore')
+                blocks = _extract_code_blocks(str(file_path), content)
+                all_blocks.extend(blocks)
+            except Exception as e:
+                logger.debug("Failed to process %s: %s", file_path, e)
+        return all_blocks
+
+    def _find_exact_duplicates(
+        self,
+        hash_groups: Dict[str, List[CodeBlock]],
+        seen_pairs: Set[Tuple[str, str]],
+    ) -> List[DuplicatePair]:
+        """Find exact hash-based duplicates (Issue #560: extracted)."""
+        duplicates: List[DuplicatePair] = []
+
+        for blocks in hash_groups.values():
+            if len(blocks) <= 1:
+                continue
+
+            for i, block1 in enumerate(blocks):
+                for block2 in blocks[i + 1:]:
+                    if block1.file_path == block2.file_path:
+                        continue
+
+                    pair_key = tuple(sorted([
+                        f"{block1.file_path}:{block1.start_line}",
+                        f"{block2.file_path}:{block2.start_line}"
+                    ]))
+                    if pair_key in seen_pairs:
+                        continue
+                    seen_pairs.add(pair_key)
+
+                    duplicates.append(DuplicatePair(
+                        file1=block1.file_path,
+                        file2=block2.file_path,
+                        start_line1=block1.start_line,
+                        end_line1=block1.end_line,
+                        start_line2=block2.start_line,
+                        end_line2=block2.end_line,
+                        similarity=1.0,
+                        line_count=block1.line_count,
+                        code_snippet=block1.content[:200],
+                    ))
+
+        return duplicates
+
+    def _find_similar_duplicates(
+        self,
+        all_blocks: List[CodeBlock],
+        seen_pairs: Set[Tuple[str, str]],
+    ) -> List[DuplicatePair]:
+        """Find similarity-based duplicates (Issue #560: extracted)."""
+        duplicates: List[DuplicatePair] = []
+
+        # Skip O(n^2) comparison for large codebases
+        if len(all_blocks) > 1000:
+            return duplicates
+
+        for i, block1 in enumerate(all_blocks):
+            for block2 in all_blocks[i + 1:]:
+                if block1.file_path == block2.file_path:
+                    continue
+
+                if block1.content_hash == block2.content_hash:
+                    continue
+
+                pair_key = tuple(sorted([
+                    f"{block1.file_path}:{block1.start_line}",
+                    f"{block2.file_path}:{block2.start_line}"
+                ]))
+                if pair_key in seen_pairs:
+                    continue
+
+                similarity = _compute_similarity(block1, block2)
+                if similarity >= self.min_similarity:
+                    seen_pairs.add(pair_key)
+                    duplicates.append(DuplicatePair(
+                        file1=block1.file_path,
+                        file2=block2.file_path,
+                        start_line1=block1.start_line,
+                        end_line1=block1.end_line,
+                        start_line2=block2.start_line,
+                        end_line2=block2.end_line,
+                        similarity=similarity,
+                        line_count=(block1.line_count + block2.line_count) // 2,
+                        code_snippet=block1.content[:200],
+                    ))
+
+        return duplicates
+
+    def _calculate_statistics(
+        self,
+        duplicates: List[DuplicatePair],
+    ) -> Tuple[int, int, int, int]:
+        """Calculate duplicate statistics (Issue #560: extracted)."""
+        high_count = sum(
+            1 for d in duplicates if d.similarity >= HIGH_SIMILARITY_THRESHOLD
+        )
+        medium_count = sum(
+            1 for d in duplicates
+            if MEDIUM_SIMILARITY_THRESHOLD <= d.similarity < HIGH_SIMILARITY_THRESHOLD
+        )
+        low_count = sum(
+            1 for d in duplicates
+            if LOW_SIMILARITY_THRESHOLD <= d.similarity < MEDIUM_SIMILARITY_THRESHOLD
+        )
+        total_lines = sum(d.line_count for d in duplicates)
+        return high_count, medium_count, low_count, total_lines
+
     def run_analysis(self) -> DuplicateAnalysis:
         """
         Run duplicate code analysis on the codebase.
+
+        Issue #560: Refactored to use helper methods for better maintainability.
 
         Returns:
             DuplicateAnalysis with all detected duplicates
@@ -416,15 +532,7 @@ class DuplicateCodeDetector:
         logger.info("Found %d files to scan", len(files))
 
         # Extract all code blocks
-        all_blocks: List[CodeBlock] = []
-        for file_path in files:
-            try:
-                content = file_path.read_text(encoding='utf-8', errors='ignore')
-                blocks = _extract_code_blocks(str(file_path), content)
-                all_blocks.extend(blocks)
-            except Exception as e:
-                logger.debug("Failed to process %s: %s", file_path, e)
-
+        all_blocks = self._extract_all_blocks(files)
         logger.info("Extracted %d code blocks", len(all_blocks))
 
         # Group blocks by hash for exact matches
@@ -432,90 +540,19 @@ class DuplicateCodeDetector:
         for block in all_blocks:
             hash_groups[block.content_hash].append(block)
 
-        # Find duplicates
-        duplicates: List[DuplicatePair] = []
+        # Find duplicates using both methods
         seen_pairs: Set[Tuple[str, str]] = set()
+        duplicates = self._find_exact_duplicates(hash_groups, seen_pairs)
+        duplicates.extend(self._find_similar_duplicates(all_blocks, seen_pairs))
 
-        # First pass: exact hash matches
-        for hash_val, blocks in hash_groups.items():
-            if len(blocks) > 1:
-                for i, block1 in enumerate(blocks):
-                    for block2 in blocks[i + 1:]:
-                        # Skip same file
-                        if block1.file_path == block2.file_path:
-                            continue
-
-                        pair_key = tuple(sorted([
-                            f"{block1.file_path}:{block1.start_line}",
-                            f"{block2.file_path}:{block2.start_line}"
-                        ]))
-                        if pair_key in seen_pairs:
-                            continue
-                        seen_pairs.add(pair_key)
-
-                        duplicates.append(DuplicatePair(
-                            file1=block1.file_path,
-                            file2=block2.file_path,
-                            start_line1=block1.start_line,
-                            end_line1=block1.end_line,
-                            start_line2=block2.start_line,
-                            end_line2=block2.end_line,
-                            similarity=1.0,
-                            line_count=block1.line_count,
-                            code_snippet=block1.content[:200],
-                        ))
-
-        # Second pass: similarity-based detection (limit to avoid O(n^2) explosion)
-        if len(all_blocks) <= 1000:
-            for i, block1 in enumerate(all_blocks):
-                for block2 in all_blocks[i + 1:]:
-                    # Skip same file
-                    if block1.file_path == block2.file_path:
-                        continue
-
-                    # Skip if already found as exact match
-                    if block1.content_hash == block2.content_hash:
-                        continue
-
-                    pair_key = tuple(sorted([
-                        f"{block1.file_path}:{block1.start_line}",
-                        f"{block2.file_path}:{block2.start_line}"
-                    ]))
-                    if pair_key in seen_pairs:
-                        continue
-
-                    similarity = _compute_similarity(block1, block2)
-                    if similarity >= self.min_similarity:
-                        seen_pairs.add(pair_key)
-                        duplicates.append(DuplicatePair(
-                            file1=block1.file_path,
-                            file2=block2.file_path,
-                            start_line1=block1.start_line,
-                            end_line1=block1.end_line,
-                            start_line2=block2.start_line,
-                            end_line2=block2.end_line,
-                            similarity=similarity,
-                            line_count=(block1.line_count + block2.line_count) // 2,
-                            code_snippet=block1.content[:200],
-                        ))
-
-        # Sort by similarity (highest first)
+        # Sort and limit results
         duplicates.sort(key=lambda x: x.similarity, reverse=True)
-
-        # Limit results
         duplicates = duplicates[:MAX_DUPLICATES_RETURNED]
 
         # Calculate statistics
-        high_count = sum(1 for d in duplicates if d.similarity >= HIGH_SIMILARITY_THRESHOLD)
-        medium_count = sum(
-            1 for d in duplicates
-            if MEDIUM_SIMILARITY_THRESHOLD <= d.similarity < HIGH_SIMILARITY_THRESHOLD
+        high_count, medium_count, low_count, total_lines = self._calculate_statistics(
+            duplicates
         )
-        low_count = sum(
-            1 for d in duplicates
-            if LOW_SIMILARITY_THRESHOLD <= d.similarity < MEDIUM_SIMILARITY_THRESHOLD
-        )
-        total_lines = sum(d.line_count for d in duplicates)
 
         analysis = DuplicateAnalysis(
             total_duplicates=len(duplicates),
