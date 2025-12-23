@@ -368,6 +368,25 @@ watch(() => props.rootPath, async (newPath) => {
     await getSummary(newPath)
   }
 })
+
+// Expose methods for parent component access (Issue #208)
+defineExpose({
+  runAnalysis,
+  getSummary,
+  getDuplicates,
+  getRegexOpportunities,
+  getComplexityHotspots,
+  getRefactoringSuggestions,
+  getStorageStats,
+  clearStorage,
+  reset,
+  // State for external access
+  loading,
+  analyzing,
+  error,
+  hasResults,
+  analysisReport,
+})
 </script>
 
 <style scoped>

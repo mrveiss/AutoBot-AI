@@ -1438,6 +1438,7 @@
 
       <!-- Issue #208: Code Pattern Analysis Section -->
       <PatternAnalysis
+        ref="patternAnalysisRef"
         :root-path="rootPath"
         :auto-load="true"
         @analysis-complete="onPatternAnalysisComplete"
@@ -1945,6 +1946,9 @@ const progressPercent = ref(0)
 const progressStatus = ref('Ready')
 const realTimeEnabled = ref(false)
 const refreshInterval = ref(null)
+
+// Issue #208: Pattern Analysis component ref
+const patternAnalysisRef = ref(null)
 
 // Indexing job state tracking
 const currentJobId = ref(null)
@@ -3936,6 +3940,17 @@ const runFullAnalysis = async () => {
   // 1. Track progress during indexing
   // 2. Call loadCodebaseAnalyticsData() when complete (loads stats, problems, etc.)
   await indexCodebase()
+
+  // Issue #208: Also trigger pattern analysis after indexing starts
+  // The PatternAnalysis component handles its own async state
+  if (patternAnalysisRef.value?.runAnalysis) {
+    logger.info('Triggering pattern analysis as part of full analysis')
+    try {
+      await patternAnalysisRef.value.runAnalysis()
+    } catch (e) {
+      logger.error('Pattern analysis trigger failed:', e)
+    }
+  }
 }
 
 // Enhanced Analytics Methods - Connected to real backend endpoints

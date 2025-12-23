@@ -44,6 +44,12 @@ from src.code_intelligence.cross_language_patterns import (
     CrossLanguageAnalysis,
 )
 
+# Issue #208: Code Pattern Detection & Optimization
+from src.code_intelligence.pattern_analysis import (
+    CodePatternAnalyzer,
+    PatternAnalysisReport,
+)
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -914,6 +920,144 @@ def _generate_semantic_matches_section(analysis: CrossLanguageAnalysis) -> List[
     return lines
 
 
+def _generate_pattern_analysis_section(report: Optional[PatternAnalysisReport]) -> List[str]:
+    """
+    Generate the Code Pattern Analysis section for the report (Issue #208).
+
+    Args:
+        report: PatternAnalysisReport from CodePatternAnalyzer
+
+    Returns:
+        List of markdown lines for the pattern analysis section
+    """
+    if not report:
+        return []
+
+    # Skip if no patterns found
+    if report.total_patterns == 0:
+        return []
+
+    lines = [
+        "## 🔍 Code Pattern Analysis",
+        "",
+        "> **Analysis of code patterns, duplicates, complexity hotspots, and optimization opportunities.**",
+        "",
+    ]
+
+    # Overview table
+    lines.extend([
+        "### Overview",
+        "",
+        "| Metric | Value |",
+        "|--------|-------|",
+        f"| Total Patterns Found | {report.total_patterns} |",
+        f"| Files Analyzed | {report.files_analyzed} |",
+        f"| Lines Analyzed | {report.lines_analyzed} |",
+        f"| Potential LOC Reduction | {report.potential_loc_reduction} |",
+        f"| Analysis Duration | {report.analysis_duration_seconds:.1f}s |",
+        "",
+    ])
+
+    # Severity distribution
+    if report.severity_distribution:
+        lines.extend([
+            "### Severity Distribution",
+            "",
+            "| Severity | Count |",
+            "|----------|-------|",
+        ])
+        severity_emojis = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢", "info": "🔵"}
+        for severity in ["critical", "high", "medium", "low", "info"]:
+            count = report.severity_distribution.get(severity, 0)
+            if count > 0:
+                emoji = severity_emojis.get(severity, "⚪")
+                lines.append(f"| {emoji} {severity.capitalize()} | {count} |")
+        lines.append("")
+
+    # Duplicate patterns
+    if report.duplicate_patterns:
+        lines.extend([
+            "### 📋 Duplicate Code Patterns",
+            "",
+            f"> **{len(report.duplicate_patterns)} duplicate patterns detected**",
+            "",
+        ])
+        for i, dup in enumerate(report.duplicate_patterns[:10], 1):  # Limit to 10
+            severity_emoji = {"high": "🔴", "medium": "🟠", "low": "🟡"}.get(
+                dup.severity.value if hasattr(dup.severity, 'value') else str(dup.severity), "⚪"
+            )
+            lines.extend([
+                f"#### {i}. {severity_emoji} {dup.description}",
+                f"- **Similarity:** {dup.similarity_score:.1%}",
+                f"- **Code Reduction:** ~{dup.code_reduction_potential} lines",
+                f"- **Locations:** {len(dup.locations)} occurrences",
+                f"- **Suggestion:** {dup.suggestion}",
+                "",
+            ])
+        if len(report.duplicate_patterns) > 10:
+            lines.append(f"*... and {len(report.duplicate_patterns) - 10} more duplicates*")
+            lines.append("")
+
+    # Regex opportunities
+    if report.regex_opportunities:
+        lines.extend([
+            "### ⚡ Regex Optimization Opportunities",
+            "",
+            f"> **{len(report.regex_opportunities)} opportunities for regex optimization**",
+            "",
+        ])
+        for i, regex_opp in enumerate(report.regex_opportunities[:5], 1):  # Limit to 5
+            lines.extend([
+                f"#### {i}. {regex_opp.description}",
+                f"- **Performance Gain:** {regex_opp.performance_gain}",
+                f"- **Suggested Regex:** `{regex_opp.suggested_regex[:80]}{'...' if len(regex_opp.suggested_regex) > 80 else ''}`",
+                f"- **File:** {regex_opp.locations[0].file_path if regex_opp.locations else 'N/A'}",
+                "",
+            ])
+        if len(report.regex_opportunities) > 5:
+            lines.append(f"*... and {len(report.regex_opportunities) - 5} more opportunities*")
+            lines.append("")
+
+    # Complexity hotspots
+    if report.complexity_hotspots:
+        lines.extend([
+            "### 🔥 Complexity Hotspots",
+            "",
+            f"> **{len(report.complexity_hotspots)} high-complexity areas identified**",
+            "",
+            "| Function | File | Cyclomatic | Cognitive | Nesting |",
+            "|----------|------|------------|-----------|---------|",
+        ])
+        for hotspot in sorted(
+            report.complexity_hotspots,
+            key=lambda h: h.cyclomatic_complexity,
+            reverse=True
+        )[:15]:  # Top 15
+            func_name = hotspot.locations[0].function_name if hotspot.locations else "unknown"
+            file_path = hotspot.locations[0].file_path if hotspot.locations else "N/A"
+            # Truncate paths for readability
+            short_path = file_path.split("/")[-1] if "/" in file_path else file_path
+            lines.append(
+                f"| `{func_name[:30]}` | `{short_path[:25]}` | {hotspot.cyclomatic_complexity} | "
+                f"{hotspot.cognitive_complexity} | {hotspot.nesting_depth} |"
+            )
+        lines.append("")
+
+    # Summary
+    lines.extend([
+        "### Recommendations",
+        "",
+        f"- **Priority:** Address {len([d for d in report.duplicate_patterns if hasattr(d.severity, 'value') and d.severity.value == 'high'] if report.duplicate_patterns else [])} high-severity duplicates first",
+        f"- **Quick Wins:** Implement {len(report.regex_opportunities)} regex optimizations for better performance",
+        f"- **Refactoring:** Simplify top complexity hotspots to improve maintainability",
+        "",
+        "---",
+        "",
+    ])
+
+    return lines
+
+
 def _generate_cross_language_section(analysis: Optional[CrossLanguageAnalysis]) -> List[str]:
     """
     Generate the Cross-Language Pattern Analysis section for the report (Issue #244).
@@ -1001,6 +1145,44 @@ async def _get_cross_language_analysis() -> Optional[CrossLanguageAnalysis]:
         return None
     except Exception as e:
         logger.error("Cross-language analysis failed: %s", e, exc_info=True)
+        return None
+
+
+async def _get_pattern_analysis() -> Optional[PatternAnalysisReport]:
+    """
+    Get code pattern analysis for the project (Issue #208).
+
+    Returns:
+        PatternAnalysisReport or None if analysis fails
+    """
+    try:
+        project_root = str(Path(__file__).resolve().parents[4])
+
+        analyzer = CodePatternAnalyzer(
+            enable_clone_detection=True,
+            enable_anti_pattern_detection=True,
+            enable_regex_detection=True,
+            enable_complexity_analysis=True,
+            similarity_threshold=0.8,
+        )
+
+        report = await asyncio.wait_for(
+            analyzer.analyze_directory(project_root),
+            timeout=180.0,  # 3 minute timeout for comprehensive analysis
+        )
+
+        logger.info(
+            "Pattern analysis: %d patterns, %d duplicates, %d complexity hotspots",
+            report.total_patterns,
+            len(report.duplicate_patterns),
+            len(report.complexity_hotspots),
+        )
+        return report
+    except asyncio.TimeoutError:
+        logger.warning("Pattern analysis timed out")
+        return None
+    except Exception as e:
+        logger.error("Pattern analysis failed: %s", e, exc_info=True)
         return None
 
 
@@ -1251,6 +1433,7 @@ def _generate_markdown_report(
     api_endpoint_analysis: Optional[APIEndpointAnalysis] = None,
     duplicate_analysis: Optional[DuplicateAnalysis] = None,
     cross_language_analysis: Optional[CrossLanguageAnalysis] = None,
+    pattern_analysis: Optional[PatternAnalysisReport] = None,
 ) -> str:
     """
     Generate a Markdown report from problems list (Issue #398: refactored, Issue #505: bug prediction).
@@ -1280,6 +1463,12 @@ def _generate_markdown_report(
     - API contract mismatches
     - Validation duplications
     - Semantic pattern matches
+
+    Code pattern analysis added (Issue #208):
+    - Duplicate patterns
+    - Regex optimization opportunities
+    - Complexity hotspots
+    - Refactoring suggestions
     """
     path_info = analyzed_path or "Unknown"
     by_category = _separate_by_category(problems)
@@ -1303,6 +1492,10 @@ def _generate_markdown_report(
     # Add cross-language pattern analysis section (Issue #244)
     if cross_language_analysis:
         lines.extend(_generate_cross_language_section(cross_language_analysis))
+
+    # Add code pattern analysis section (Issue #208)
+    if pattern_analysis:
+        lines.extend(_generate_pattern_analysis_section(pattern_analysis))
 
     # Add bug risk section if prediction available (Issue #505)
     if bug_prediction:
@@ -1344,6 +1537,7 @@ async def generate_analysis_report(
     include_duplicate_analysis: bool = True,
     include_bug_prediction: bool = True,
     include_cross_language_analysis: bool = True,
+    include_pattern_analysis: bool = True,
     quick: bool = False,
 ):
     """
@@ -1355,6 +1549,7 @@ async def generate_analysis_report(
         include_duplicate_analysis: Whether to include duplicate code analysis (Issue #528)
         include_bug_prediction: Whether to include bug prediction analysis (Issue #505)
         include_cross_language_analysis: Whether to include cross-language pattern analysis (Issue #244)
+        include_pattern_analysis: Whether to include code pattern analysis (Issue #208)
         quick: If True, skip expensive analyses for faster export (just problems report)
 
     Returns:
@@ -1394,6 +1589,7 @@ async def generate_analysis_report(
         api_endpoint_analysis = None
         duplicate_analysis = None
         cross_language_analysis = None
+        pattern_analysis = None
     else:
         # Run analyses in parallel for better performance
         analysis_tasks = []
@@ -1406,12 +1602,15 @@ async def generate_analysis_report(
             analysis_tasks.append(("duplicate", _get_duplicate_analysis()))
         if include_cross_language_analysis:
             analysis_tasks.append(("cross_language", _get_cross_language_analysis()))
+        if include_pattern_analysis:
+            analysis_tasks.append(("pattern_analysis", _get_pattern_analysis()))
 
         # Initialize results
         bug_prediction = None
         api_endpoint_analysis = None
         duplicate_analysis = None
         cross_language_analysis = None
+        pattern_analysis = None
 
         if analysis_tasks:
             # Run all analyses in parallel with individual error handling
@@ -1435,6 +1634,8 @@ async def generate_analysis_report(
                     duplicate_analysis = result
                 elif task_name == "cross_language":
                     cross_language_analysis = result
+                elif task_name == "pattern_analysis":
+                    pattern_analysis = result
 
     if not problems:
         # Even with no issues, include other analyses if available
@@ -1463,6 +1664,10 @@ async def generate_analysis_report(
         if cross_language_analysis and cross_language_analysis.total_patterns > 0:
             lines.extend(_generate_cross_language_section(cross_language_analysis))
 
+        # Add code pattern analysis even with no code issues (Issue #208)
+        if pattern_analysis and pattern_analysis.total_patterns > 0:
+            lines.extend(_generate_pattern_analysis_section(pattern_analysis))
+
         # Add bug prediction if available (Issue #505)
         if bug_prediction and bug_prediction.analyzed_files > 0:
             lines.extend(_generate_bug_risk_section(bug_prediction))
@@ -1471,6 +1676,7 @@ async def generate_analysis_report(
             api_endpoint_analysis or
             (duplicate_analysis and duplicate_analysis.total_duplicates > 0) or
             (cross_language_analysis and cross_language_analysis.total_patterns > 0) or
+            (pattern_analysis and pattern_analysis.total_patterns > 0) or
             (bug_prediction and bug_prediction.analyzed_files > 0)
         )
         if not has_analyses:
@@ -1489,6 +1695,7 @@ async def generate_analysis_report(
             api_endpoint_analysis=api_endpoint_analysis,
             duplicate_analysis=duplicate_analysis,
             cross_language_analysis=cross_language_analysis,
+            pattern_analysis=pattern_analysis,
         )
 
     return PlainTextResponse(
