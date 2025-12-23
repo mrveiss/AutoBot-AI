@@ -142,7 +142,8 @@ export async function checkForUpdates(): Promise<boolean> {
 
 
     // Check if build hash has changed
-    const response = await fetch('/api/version', {
+    // Issue #552: Fixed path - backend has /api/services/version
+    const response = await fetch('/api/services/version', {
       cache: 'no-cache',
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate'

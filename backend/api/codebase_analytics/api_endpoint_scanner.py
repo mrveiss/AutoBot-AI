@@ -308,6 +308,7 @@ class BackendEndpointScanner:
         Issue #552: Handles multiple tuple formats:
         - 4-element (analytics): (module_path, prefix, tags, name)
         - 5-element (monitoring/feature): (module_path, router_attr, prefix, tags, name)
+        - Dynamic function-based (terminal_routers.py): (router_var, "/prefix", tags, name)
 
         Both formats have the module path first and prefix second or third.
         """
@@ -328,6 +329,14 @@ class BackendEndpointScanner:
                 re.MULTILINE
             )
 
+            # Issue #552: Pattern for dynamic router loading in terminal_routers.py:
+            # (terminal_router, "/terminal", ["terminal"], "terminal")
+            # Matches: (var_name, "/prefix", [...], "name")
+            dynamic_router_pattern = re.compile(
+                r'\(\s*(\w+_router)\s*,\s*["\']([^"\']*)["\'],\s*\[[^\]]*\]\s*,\s*["\'](\w+)["\']',
+                re.MULTILINE
+            )
+
             # Try 5-element pattern first (more specific)
             matched = False
             for match in five_element_pattern.finditer(content):
@@ -344,6 +353,20 @@ class BackendEndpointScanner:
                     prefix = match.group(2)       # e.g., "/analytics"
 
                     self._register_module_prefix(module_path, prefix)
+
+            # Issue #552: Also check for dynamic router patterns (terminal_routers.py)
+            # These have router variable names instead of module paths
+            for match in dynamic_router_pattern.finditer(content):
+                router_var = match.group(1)   # e.g., "terminal_router"
+                prefix = match.group(2)       # e.g., "/terminal"
+                name = match.group(3)         # e.g., "terminal"
+
+                # Derive module name from router variable or name
+                # terminal_router -> terminal, agent_terminal_router -> agent_terminal
+                module_name = router_var.replace("_router", "")
+                module_path = f"backend.api.{module_name}"
+                self._register_module_prefix(module_path, prefix)
+                logger.debug("Dynamic router: %s -> %s%s", module_name, self.API_PREFIX, prefix)
 
         except Exception as e:
             logger.debug("Error parsing config tuple registry %s: %s", file_path, e)

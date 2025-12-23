@@ -247,8 +247,8 @@ export class SystemRepository extends ApiRepository {
   }
 
   async getVersionInfo(): Promise<any> {
-    // Issue #552: Backend has /api/version at root level
-    const response = await this.get('/api/version')
+    // Issue #552: Fixed path - backend has /api/services/version
+    const response = await this.get('/api/services/version')
     return response.data
   }
 

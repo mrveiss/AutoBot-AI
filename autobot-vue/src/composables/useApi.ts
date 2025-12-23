@@ -487,9 +487,9 @@ export function useFileApi() {
      */
     async downloadFile(path: string) {
       return withErrorHandling(
-        // Issue #156 Fix: ApiClient doesn't have downloadFile(), use direct HTTP call
+        // Issue #552: Fixed path - backend uses path param /download/{path}, not query param
         async () => {
-          const response = await api.get(`/api/files/download?path=${encodeURIComponent(path)}`)
+          const response = await api.get(`/api/files/download/${encodeURIComponent(path)}`)
           return await response.blob()
         },
         { errorMessage: 'Failed to download file' }
