@@ -166,7 +166,8 @@ export default {
       }
 
       // Send elevation request to backend
-      const response = await apiService.post('/system/elevation/authorize', {
+      // Issue #552: Fixed missing /api prefix
+      const response = await apiService.post('/api/system/elevation/authorize', {
         request_id: props.requestId,
         password: password.value,
         remember_session: rememberForSession.value

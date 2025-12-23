@@ -500,6 +500,78 @@ async def _cleanup_terminal_sessions(request: Request, session_id: str) -> dict:
     return terminal_cleanup_result
 
 
+async def _cleanup_knowledge_base_facts(request: Request, session_id: str) -> dict:
+    """
+    Clean up knowledge base facts created during this session.
+
+    Issue #547: Fixes orphaned KB data when conversations are deleted.
+
+    This function:
+    1. Finds all facts created during this session (via session:facts:{session_id})
+    2. Deletes them from Redis and ChromaDB
+    3. Preserves facts marked as 'important' or 'preserve' in metadata
+    4. Cleans up session-fact relationship tracking keys
+
+    Args:
+        request: FastAPI request object with app.state
+        session_id: Chat session ID being deleted
+
+    Returns:
+        Dict with cleanup statistics:
+        - facts_deleted: Number of facts removed
+        - facts_preserved: Number of important facts kept
+        - cleanup_error: Error message if any
+    """
+    kb_cleanup_result = {
+        "facts_deleted": 0,
+        "facts_preserved": 0,
+        "cleanup_error": None,
+    }
+
+    # Get knowledge base from app state
+    knowledge_base = getattr(request.app.state, "knowledge_base", None)
+    if not knowledge_base:
+        logger.warning(
+            f"Knowledge base not available, "
+            f"skipping KB cleanup for session {session_id}"
+        )
+        return kb_cleanup_result
+
+    try:
+        # Delete facts associated with this session
+        # Uses the new delete_facts_by_session method from Issue #547
+        result = await knowledge_base.delete_facts_by_session(
+            session_id=session_id,
+            preserve_important=True  # Keep user-marked important facts
+        )
+
+        kb_cleanup_result["facts_deleted"] = result.get("deleted_count", 0)
+        kb_cleanup_result["facts_preserved"] = result.get("preserved_count", 0)
+
+        if result.get("errors"):
+            kb_cleanup_result["cleanup_error"] = f"{len(result['errors'])} errors during cleanup"
+            logger.warning(
+                f"KB cleanup completed with errors for session {session_id}: "
+                f"{result['errors']}"
+            )
+
+        if kb_cleanup_result["facts_deleted"] > 0 or kb_cleanup_result["facts_preserved"] > 0:
+            logger.info(
+                f"KB cleanup for session {session_id}: "
+                f"deleted={kb_cleanup_result['facts_deleted']}, "
+                f"preserved={kb_cleanup_result['facts_preserved']}"
+            )
+
+    except Exception as kb_cleanup_error:
+        logger.error(
+            f"Failed to cleanup KB facts for session {session_id}: {kb_cleanup_error}",
+            exc_info=True,
+        )
+        kb_cleanup_result["cleanup_error"] = str(kb_cleanup_error)
+
+    return kb_cleanup_result
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_session",
@@ -519,6 +591,7 @@ async def delete_session(
     Delete a chat session with optional file handling.
 
     Issue #281: Refactored from 176 lines to use extracted helper methods.
+    Issue #547: Added knowledge base facts cleanup to prevent orphaned data.
 
     Args:
         session_id: Chat session ID to delete
@@ -526,7 +599,7 @@ async def delete_session(
         file_options: JSON string with transfer options
 
     Returns:
-        Success response with deletion details
+        Success response with deletion details including KB cleanup stats
     """
     request_id = generate_request_id()
     log_request_context(request, "delete_session", request_id)
@@ -546,6 +619,9 @@ async def delete_session(
 
     # Clean up terminal sessions (Issue #281: uses helper)
     terminal_cleanup_result = await _cleanup_terminal_sessions(request, session_id)
+
+    # Issue #547: Clean up knowledge base facts created during this session
+    kb_cleanup_result = await _cleanup_knowledge_base_facts(request, session_id)
 
     # Delete session from chat history
     deleted = chat_history_manager.delete_session(session_id)
@@ -568,6 +644,7 @@ async def delete_session(
             "file_action": file_action,
             "file_deletion_result": file_deletion_result,
             "terminal_cleanup_result": terminal_cleanup_result,
+            "kb_cleanup_result": kb_cleanup_result,
         },
     )
 
@@ -577,6 +654,7 @@ async def delete_session(
             "deleted": True,
             "file_handling": file_deletion_result,
             "terminal_cleanup": terminal_cleanup_result,
+            "kb_cleanup": kb_cleanup_result,
         },
         message="Session deleted successfully",
         request_id=request_id,

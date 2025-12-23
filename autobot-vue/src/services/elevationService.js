@@ -33,7 +33,8 @@ class ElevationService {
    */
   async requestElevation(operation, command, reason, riskLevel = 'MEDIUM') {
     try {
-      const response = await apiService.post('/system/elevation/request', {
+      // Issue #552: Fixed missing /api prefix
+      const response = await apiService.post('/api/system/elevation/request', {
         operation,
         command,
         reason,
@@ -122,7 +123,8 @@ class ElevationService {
     }
 
     try {
-      const response = await apiService.post(`/system/elevation/execute/${token}`, {
+      // Issue #552: Fixed missing /api prefix
+      const response = await apiService.post(`/api/system/elevation/execute/${token}`, {
         command
       });
 
@@ -160,7 +162,8 @@ class ElevationService {
   async clearSession() {
     if (this.activeSession.value) {
       try {
-        await apiService.delete(`/system/elevation/session/${this.activeSession.value}`);
+        // Issue #552: Fixed missing /api prefix
+        await apiService.delete(`/api/system/elevation/session/${this.activeSession.value}`);
       } catch (error) {
         logger.error('Failed to revoke session:', error);
       }
@@ -193,7 +196,8 @@ class ElevationService {
    */
   async getPendingRequests() {
     try {
-      const response = await apiService.get('/system/elevation/pending');
+      // Issue #552: Fixed missing /api prefix
+      const response = await apiService.get('/api/system/elevation/pending');
       if (response.data.success) {
         return response.data.pending_requests;
       }

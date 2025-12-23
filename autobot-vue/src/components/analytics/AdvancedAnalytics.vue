@@ -400,10 +400,11 @@ const getSeverityIcon = (severity: string): string => {
 
 const fetchCostData = async () => {
   try {
+    // Issue #552: Fixed missing /api prefix in analytics endpoints
     const [summaryRes, trendsRes, modelsRes] = await Promise.all([
-      api.get('/analytics/cost/summary'),
-      api.get('/analytics/cost/trends'),
-      api.get('/analytics/cost/by-model')
+      api.get('/api/analytics/cost/summary'),
+      api.get('/api/analytics/cost/trends'),
+      api.get('/api/analytics/cost/by-model')
     ])
     costSummary.value = summaryRes.data
     costTrends.value = trendsRes.data
@@ -415,9 +416,10 @@ const fetchCostData = async () => {
 
 const fetchAgentData = async () => {
   try {
+    // Issue #552: Fixed missing /api prefix in analytics endpoints
     const [metricsRes, recsRes] = await Promise.all([
-      api.get('/analytics/agents/performance'),
-      api.get('/analytics/agents/recommendations')
+      api.get('/api/analytics/agents/performance'),
+      api.get('/api/analytics/agents/recommendations')
     ])
     agentMetrics.value = metricsRes.data
     recommendations.value = recsRes.data
@@ -428,7 +430,8 @@ const fetchAgentData = async () => {
 
 const fetchExportFormats = async () => {
   try {
-    const res = await api.get('/analytics/export/formats')
+    // Issue #552: Fixed missing /api prefix in analytics endpoints
+    const res = await api.get('/api/analytics/export/formats')
     exportFormats.value = res.data?.formats || []
     // Add icons
     exportFormats.value.forEach((f: any) => {
@@ -445,10 +448,11 @@ const fetchExportFormats = async () => {
 
 const fetchBehaviorData = async () => {
   try {
+    // Issue #552: Fixed missing /api prefix in analytics endpoints
     const [engagementRes, featuresRes, heatmapRes] = await Promise.all([
-      api.get('/analytics/behavior/engagement'),
-      api.get('/analytics/behavior/features'),
-      api.get('/analytics/behavior/stats/heatmap')
+      api.get('/api/analytics/behavior/engagement'),
+      api.get('/api/analytics/behavior/features'),
+      api.get('/api/analytics/behavior/stats/heatmap')
     ])
     engagementMetrics.value = engagementRes.data
     behaviorMetrics.value = featuresRes.data

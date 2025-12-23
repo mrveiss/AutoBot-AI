@@ -298,11 +298,13 @@ class ChatKnowledgeManager:
         if decision == KnowledgeDecision.ADD_TO_KB:
             # Add to permanent knowledge base
             try:
+                # Issue #547: Include source_session_id for orphan cleanup
                 kb_id = await self.knowledge_base.add_content(
                     content=item["content"],
                     metadata={
                         **item.get("metadata", {}),
                         "source": f"chat_{chat_id}",
+                        "source_session_id": chat_id,  # Issue #547: Track source session
                         "original_id": knowledge_id,
                     },
                 )
@@ -389,8 +391,13 @@ class ChatKnowledgeManager:
         }
 
         # Add to knowledge base
+        # Issue #547: Include source_session_id for orphan cleanup
+        kb_metadata = {
+            **compiled_knowledge["metadata"],
+            "source_session_id": chat_id,  # Issue #547: Track source session
+        }
         kb_id = await self.knowledge_base.add_content(
-            content=summary, metadata=compiled_knowledge["metadata"]
+            content=summary, metadata=kb_metadata
         )
 
         compiled_knowledge["kb_id"] = kb_id

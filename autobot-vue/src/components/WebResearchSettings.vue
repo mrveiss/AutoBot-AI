@@ -279,14 +279,15 @@ export default {
     const { execute: loadSettings, loading: isLoadingSettings } = useAsyncHandler(
       async () => {
         // ApiClient.get() returns parsed JSON directly
+        // Issue #552: Fixed missing /api prefix
         // Load status
-        const statusData = await apiClient.get('/web-research/status')
+        const statusData = await apiClient.get('/api/web-research/status')
         if (statusData.status === 'success') {
           webResearchStore.updateStatus(statusData)
         }
 
         // Load settings
-        const settingsData = await apiClient.get('/web-research/settings')
+        const settingsData = await apiClient.get('/api/web-research/settings')
         if (settingsData.status === 'success') {
           webResearchStore.updateSettings(settingsData.settings)
         }
@@ -301,7 +302,8 @@ export default {
     const { execute: toggleWebResearch, loading: isTogglingResearch } = useAsyncHandler(
       async () => {
         // ApiClient.post() returns parsed JSON directly
-        const endpoint = researchSettings.enabled ? '/web-research/enable' : '/web-research/disable'
+        // Issue #552: Fixed missing /api prefix
+        const endpoint = researchSettings.enabled ? '/api/web-research/enable' : '/api/web-research/disable'
         return await apiClient.post(endpoint)
       },
       {
@@ -324,7 +326,8 @@ export default {
     const { execute: updateSettings, loading: isUpdatingSettings } = useAsyncHandler(
       async () => {
         // ApiClient.put() returns parsed JSON directly
-        return await apiClient.put('/web-research/settings', researchSettings)
+        // Issue #552: Fixed missing /api prefix
+        return await apiClient.put('/api/web-research/settings', researchSettings)
       },
       {
         debounce: 1000, // Built-in debounce
@@ -345,7 +348,8 @@ export default {
         testResult.value = null
 
         // ApiClient.post() returns parsed JSON directly
-        const data = await apiClient.post('/web-research/test', { query: 'test web research functionality' })
+        // Issue #552: Fixed missing /api prefix
+        const data = await apiClient.post('/api/web-research/test', { query: 'test web research functionality' })
         testResult.value = data
 
         showMessage('Test completed', data.status === 'success' ? 'success' : 'error')
@@ -367,7 +371,8 @@ export default {
     const { execute: clearCache, loading: isClearingCache } = useAsyncHandler(
       async () => {
         // ApiClient.post() returns parsed JSON directly
-        return await apiClient.post('/web-research/clear-cache')
+        // Issue #552: Fixed missing /api prefix
+        return await apiClient.post('/api/web-research/clear-cache')
       },
       {
         onSuccess: async (data) => {
@@ -385,7 +390,8 @@ export default {
     const { execute: resetCircuitBreakers, loading: isResettingCircuitBreakers } = useAsyncHandler(
       async () => {
         // ApiClient.post() returns parsed JSON directly
-        return await apiClient.post('/web-research/reset-circuit-breakers')
+        // Issue #552: Fixed missing /api prefix
+        return await apiClient.post('/api/web-research/reset-circuit-breakers')
       },
       {
         onSuccess: async (data) => {

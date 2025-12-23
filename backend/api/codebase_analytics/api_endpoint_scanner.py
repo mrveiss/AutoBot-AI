@@ -137,29 +137,102 @@ class BackendEndpointScanner:
         """
         Collect router prefixes from router registry files.
 
-        Parses:
-        - backend/initialization/router_registry/core_routers.py
-        - backend/initialization/router_registry/analytics_routers.py
-        - backend/initialization/router_registry/optional_routers.py
+        Issue #552: Extended to parse ALL router registry files including:
+        - backend/initialization/router_registry/core_routers.py (tuple format)
+        - backend/initialization/router_registry/analytics_routers.py (config tuples)
+        - backend/initialization/router_registry/monitoring_routers.py (config tuples)
+        - backend/initialization/router_registry/feature_routers.py (config tuples)
+        - backend/initialization/router_registry/terminal_routers.py (config tuples)
+        - backend/initialization/router_registry/mcp_routers.py (config tuples)
         """
         router_registry_path = self.project_root / "backend" / "initialization" / "router_registry"
 
-        # Parse core_routers.py for module -> prefix mapping
+        # Parse core_routers.py for module -> prefix mapping (uses tuple format)
         core_routers_file = router_registry_path / "core_routers.py"
         if core_routers_file.exists():
             self._parse_router_registry(core_routers_file)
 
-        # Parse optional_routers.py
-        optional_routers_file = router_registry_path / "optional_routers.py"
-        if optional_routers_file.exists():
-            self._parse_router_registry(optional_routers_file)
+        # Issue #552: Parse all *_routers.py files that use config tuple format
+        # These files use ROUTER_CONFIGS pattern: ("module_path", "router", "/prefix", [...], "name")
+        config_tuple_files = [
+            "analytics_routers.py",
+            "monitoring_routers.py",
+            "feature_routers.py",
+            "terminal_routers.py",
+            "mcp_routers.py",
+        ]
 
-        # Parse analytics_routers.py (uses config tuples)
-        analytics_routers_file = router_registry_path / "analytics_routers.py"
-        if analytics_routers_file.exists():
-            self._parse_analytics_registry(analytics_routers_file)
+        for config_file in config_tuple_files:
+            file_path = router_registry_path / config_file
+            if file_path.exists():
+                self._parse_config_tuple_registry(file_path)
+
+        # Issue #552: Scan API files for include_router patterns to handle nested routers
+        # e.g., knowledge.py includes knowledge_vectorization and knowledge_maintenance
+        self._scan_include_router_patterns()
 
         logger.debug("Collected %d module prefix mappings", len(self._module_prefix_map))
+
+    def _scan_include_router_patterns(self) -> None:
+        """
+        Scan API files for include_router patterns to map nested routers.
+
+        Issue #552: Handles cases like:
+        - knowledge.py includes knowledge_vectorization.py and knowledge_maintenance.py
+        - chat.py includes chat_sessions.py
+
+        These nested routers inherit the parent router's prefix.
+        """
+        if not self.backend_path.exists():
+            return
+
+        # Pattern to detect: from backend.api.module import router as X_router
+        import_pattern = re.compile(
+            r'from\s+backend\.api\.(\w+)\s+import\s+router\s+as\s+(\w+_router)',
+            re.MULTILINE
+        )
+
+        # Pattern to detect: router.include_router(X_router)
+        include_pattern = re.compile(
+            r'router\.include_router\s*\(\s*(\w+_router)\s*\)',
+            re.MULTILINE
+        )
+
+        for py_file in self.backend_path.glob("*.py"):
+            if py_file.name.startswith("__"):
+                continue
+
+            try:
+                content = py_file.read_text(encoding="utf-8")
+
+                # Get parent module's prefix
+                parent_module = py_file.stem
+                parent_prefix = self._module_prefix_map.get(
+                    parent_module, self.API_PREFIX
+                )
+
+                # Find all imported routers
+                imported_routers: dict[str, str] = {}
+                for match in import_pattern.finditer(content):
+                    module_name = match.group(1)  # e.g., "knowledge_vectorization"
+                    router_var = match.group(2)   # e.g., "vectorization_router"
+                    imported_routers[router_var] = module_name
+
+                # Check which are included (without prefix = inherits parent)
+                for match in include_pattern.finditer(content):
+                    router_var = match.group(1)  # e.g., "vectorization_router"
+                    if router_var in imported_routers:
+                        child_module = imported_routers[router_var]
+                        # Child inherits parent's prefix
+                        self._module_prefix_map[child_module] = parent_prefix
+                        self._module_prefix_map[f"backend/api/{child_module}.py"] = parent_prefix
+                        logger.debug(
+                            "Nested router: %s -> %s (from %s)",
+                            child_module, parent_prefix, parent_module
+                        )
+
+            except Exception as e:
+                logger.debug("Error scanning include_router in %s: %s", py_file, e)
 
     def _parse_router_registry(self, file_path: Path) -> None:
         """Parse a router registry file to extract module -> prefix mappings."""
@@ -190,32 +263,77 @@ class BackendEndpointScanner:
         except Exception as e:
             logger.debug("Error parsing router registry %s: %s", file_path, e)
 
-    def _parse_analytics_registry(self, file_path: Path) -> None:
-        """Parse analytics router registry which uses config tuples."""
+    def _parse_config_tuple_registry(self, file_path: Path) -> None:
+        """
+        Parse router registry files that use config tuple format.
+
+        Issue #552: Handles multiple tuple formats:
+        - 4-element (analytics): (module_path, prefix, tags, name)
+        - 5-element (monitoring/feature): (module_path, router_attr, prefix, tags, name)
+
+        Both formats have the module path first and prefix second or third.
+        """
         try:
             content = file_path.read_text(encoding="utf-8")
 
-            # Pattern for ANALYTICS_ROUTER_CONFIGS tuples:
-            # ("module_path", "/prefix", ["tags"], "name")
-            config_pattern = re.compile(
-                r'\(\s*["\']([^"\']+)["\'],\s*["\']([^"\']*)["\']',
+            # Pattern for 5-element config tuples (monitoring, feature, terminal, mcp):
+            # ("backend.api.infrastructure", "router", "/iac", ["Infrastructure as Code"], "infrastructure")
+            five_element_pattern = re.compile(
+                r'\(\s*["\']([^"\']+)["\'],\s*["\']router["\'],\s*["\']([^"\']*)["\']',
                 re.MULTILINE
             )
 
-            for match in config_pattern.finditer(content):
-                module_path = match.group(1)  # e.g., "backend.api.codebase_analytics"
-                prefix = match.group(2)       # e.g., "/analytics"
+            # Pattern for 4-element config tuples (analytics):
+            # ("backend.api.analytics", "/analytics", ["analytics"], "analytics")
+            four_element_pattern = re.compile(
+                r'\(\s*["\']([^"\']+)["\'],\s*["\']([^"\']*)["\'],\s*\[',
+                re.MULTILINE
+            )
 
-                # Map the module path to full prefix
-                full_prefix = f"{self.API_PREFIX}{prefix}"
-                self._module_prefix_map[module_path] = full_prefix
+            # Try 5-element pattern first (more specific)
+            matched = False
+            for match in five_element_pattern.finditer(content):
+                matched = True
+                module_path = match.group(1)  # e.g., "backend.api.infrastructure"
+                prefix = match.group(2)       # e.g., "/iac"
 
-                # Also derive file path mapping
-                file_path_str = module_path.replace(".", "/")
-                self._module_prefix_map[file_path_str] = full_prefix
+                self._register_module_prefix(module_path, prefix)
+
+            # If no 5-element matches, try 4-element pattern
+            if not matched:
+                for match in four_element_pattern.finditer(content):
+                    module_path = match.group(1)  # e.g., "backend.api.analytics"
+                    prefix = match.group(2)       # e.g., "/analytics"
+
+                    self._register_module_prefix(module_path, prefix)
 
         except Exception as e:
-            logger.debug("Error parsing analytics registry %s: %s", file_path, e)
+            logger.debug("Error parsing config tuple registry %s: %s", file_path, e)
+
+    def _register_module_prefix(self, module_path: str, prefix: str) -> None:
+        """
+        Register a module path to API prefix mapping.
+
+        Issue #552: Extracted helper for consistent prefix registration.
+
+        Args:
+            module_path: Python module path (e.g., "backend.api.infrastructure")
+            prefix: Router URL prefix (e.g., "/iac")
+        """
+        # Build full API prefix
+        full_prefix = f"{self.API_PREFIX}{prefix}"
+        self._module_prefix_map[module_path] = full_prefix
+
+        # Also derive file path mapping (backend.api.foo -> backend/api/foo)
+        file_path_str = module_path.replace(".", "/")
+        self._module_prefix_map[file_path_str] = full_prefix
+
+        # Extract module name from path (backend.api.infrastructure -> infrastructure)
+        module_name = module_path.split(".")[-1]
+        self._module_prefix_map[module_name] = full_prefix
+        self._module_prefix_map[f"backend/api/{module_name}.py"] = full_prefix
+
+        logger.debug("Registered prefix: %s -> %s", module_name, full_prefix)
 
     def _get_module_prefix(self, file_path: Path) -> str:
         """Get the API prefix for a given file based on router registry."""

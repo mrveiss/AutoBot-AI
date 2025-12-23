@@ -205,6 +205,7 @@ class FactsMixin:
         Store fact data in Redis with hash mappings.
 
         Issue #281: Extracted helper for Redis storage operations.
+        Issue #547: Added session-fact relationship tracking for orphan cleanup.
 
         Args:
             fact_id: Fact identifier
@@ -235,6 +236,11 @@ class FactsMixin:
             await asyncio.to_thread(
                 self.redis_client.set, unique_key_name, fact_id
             )
+
+        # Issue #547: Track session-fact relationship for orphan cleanup
+        source_session_id = metadata.get("source_session_id")
+        if source_session_id:
+            await self._track_session_fact_relationship(source_session_id, fact_id)
 
     async def _vectorize_fact_in_chromadb(
         self, fact_id: str, content: str, metadata: Dict[str, Any]
@@ -563,6 +569,9 @@ class FactsMixin:
         """
         Delete a fact from Redis and ChromaDB.
 
+        Issue #547 code review: Also cleans up content_hash, unique_key,
+        and session tracking mappings to prevent memory leaks.
+
         Args:
             fact_id: ID of the fact to delete
 
@@ -574,13 +583,37 @@ class FactsMixin:
         try:
             fact_key = "fact:%s" % fact_id
 
-            # Check if fact exists
-            exists = await asyncio.to_thread(self.redis_client.exists, fact_key)
-            if not exists:
+            # Check if fact exists and get its data for cleanup
+            fact_data = await asyncio.to_thread(self.redis_client.hgetall, fact_key)
+            if not fact_data:
                 return {"status": "error", "message": "Fact not found"}
 
-            # Delete from Redis
+            # Issue #547 code review: Get content and metadata for cleanup
+            decoded = _decode_redis_hash(fact_data)
+            content = decoded.get("content", "")
+            metadata = decoded.get("_parsed_metadata", {})
+
+            # Delete from Redis - main fact key
             await asyncio.to_thread(self.redis_client.delete, fact_key)
+
+            # Issue #547 code review: Clean up content hash mapping
+            if content:
+                content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+                await asyncio.to_thread(
+                    self.redis_client.delete, "content_hash:%s" % content_hash
+                )
+
+            # Issue #547 code review: Clean up unique_key mapping if exists
+            unique_key = metadata.get("unique_key")
+            if unique_key:
+                await asyncio.to_thread(
+                    self.redis_client.delete, "unique_key:man_page:%s" % unique_key
+                )
+
+            # Issue #547 code review: Clean up session tracking key
+            await asyncio.to_thread(
+                self.redis_client.delete, "fact:origin:session:%s" % fact_id
+            )
 
             # Delete from ChromaDB
             if self.vector_store:
@@ -618,3 +651,268 @@ class FactsMixin:
     def ensure_initialized(self):
         """Ensure initialized - implemented in base class"""
         raise NotImplementedError("Should be implemented in composed class")
+
+    # =========================================================================
+    # SESSION-FACT RELATIONSHIP TRACKING (Issue #547)
+    # =========================================================================
+
+    async def _track_session_fact_relationship(
+        self, session_id: str, fact_id: str
+    ) -> None:
+        """
+        Track bidirectional relationship between session and fact for orphan cleanup.
+
+        Issue #547: Creates Redis indexes to enable cleanup when session is deleted.
+
+        Redis Keys Created:
+        - session:facts:{session_id} -> Set of fact IDs created in this session
+        - fact:origin:session:{fact_id} -> String of session ID that created this fact
+
+        Args:
+            session_id: Chat session ID
+            fact_id: Fact ID
+        """
+        try:
+            # Add fact to session's fact set
+            await asyncio.to_thread(
+                self.redis_client.sadd,
+                "session:facts:%s" % session_id,
+                fact_id
+            )
+
+            # Store reverse lookup (fact -> session)
+            await asyncio.to_thread(
+                self.redis_client.set,
+                "fact:origin:session:%s" % fact_id,
+                session_id
+            )
+
+            logger.debug(
+                "Tracked session-fact relationship: session=%s, fact=%s",
+                session_id, fact_id
+            )
+
+        except Exception as e:
+            logger.warning(
+                "Failed to track session-fact relationship: session=%s, fact=%s, error=%s",
+                session_id, fact_id, e
+            )
+
+    async def get_facts_by_session(self, session_id: str) -> List[str]:
+        """
+        Get all fact IDs created during a specific session.
+
+        Issue #547: Used for orphan cleanup when session is deleted.
+
+        Args:
+            session_id: Chat session ID
+
+        Returns:
+            List of fact IDs created in this session
+        """
+        try:
+            fact_ids = await asyncio.to_thread(
+                self.redis_client.smembers,
+                "session:facts:%s" % session_id
+            )
+
+            # Decode bytes to strings
+            return [
+                fid.decode("utf-8") if isinstance(fid, bytes) else fid
+                for fid in (fact_ids or [])
+            ]
+
+        except Exception as e:
+            logger.error("Failed to get facts by session %s: %s", session_id, e)
+            return []
+
+    async def get_session_for_fact(self, fact_id: str) -> Optional[str]:
+        """
+        Get the session ID that created a specific fact.
+
+        Issue #547: Reverse lookup for fact -> session relationship.
+
+        Args:
+            fact_id: Fact ID
+
+        Returns:
+            Session ID or None if not tracked
+        """
+        try:
+            session_id = await asyncio.to_thread(
+                self.redis_client.get,
+                "fact:origin:session:%s" % fact_id
+            )
+
+            if session_id:
+                return session_id.decode("utf-8") if isinstance(session_id, bytes) else session_id
+            return None
+
+        except Exception as e:
+            logger.error("Failed to get session for fact %s: %s", fact_id, e)
+            return None
+
+    async def _batch_check_important_facts(
+        self, fact_ids: List[str]
+    ) -> set:
+        """
+        Batch check which facts are marked as important/preserve.
+
+        Issue #547 code review: Optimizes performance by using Redis pipeline
+        instead of individual blocking get_fact() calls.
+
+        Args:
+            fact_ids: List of fact IDs to check
+
+        Returns:
+            Set of fact IDs that should be preserved
+        """
+        if not fact_ids:
+            return set()
+
+        try:
+            # Use pipeline for batch fetch
+            pipeline = self.aioredis_client.pipeline()
+            for fact_id in fact_ids:
+                pipeline.hgetall("fact:%s" % fact_id)
+
+            facts_data = await pipeline.execute()
+
+            important_fact_ids = set()
+            for fact_id, fact_data in zip(fact_ids, facts_data):
+                if not fact_data:
+                    continue
+                decoded = _decode_redis_hash(fact_data)
+                metadata = decoded.get("_parsed_metadata", {})
+                if metadata.get("important") or metadata.get("preserve"):
+                    important_fact_ids.add(fact_id)
+
+            return important_fact_ids
+
+        except Exception as e:
+            logger.warning("Failed to batch check important facts: %s", e)
+            return set()
+
+    async def delete_facts_by_session(
+        self, session_id: str, preserve_important: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Delete all facts created during a specific session.
+
+        Issue #547: Called during session deletion for orphan cleanup.
+        Issue #547 code review: Optimized with batch operations.
+
+        Args:
+            session_id: Chat session ID to cleanup
+            preserve_important: If True, preserve facts marked as 'important' in metadata
+
+        Returns:
+            Dict with deletion statistics:
+            - deleted_count: Number of facts deleted
+            - preserved_count: Number of facts preserved (if preserve_important=True)
+            - errors: List of any errors encountered
+        """
+        self.ensure_initialized()
+
+        result = {
+            "deleted_count": 0,
+            "preserved_count": 0,
+            "errors": [],
+        }
+
+        try:
+            fact_ids = await self.get_facts_by_session(session_id)
+
+            if not fact_ids:
+                logger.info("No facts found for session %s", session_id)
+                return result
+
+            logger.info(
+                "Cleaning up %d facts for session %s (preserve_important=%s)",
+                len(fact_ids), session_id, preserve_important
+            )
+
+            # Issue #547 code review: Batch check important facts
+            important_ids = set()
+            if preserve_important:
+                important_ids = await self._batch_check_important_facts(fact_ids)
+
+            for fact_id in fact_ids:
+                try:
+                    # Check if fact should be preserved (using pre-fetched set)
+                    if preserve_important and fact_id in important_ids:
+                        logger.debug(
+                            "Preserving important fact %s from session %s",
+                            fact_id, session_id
+                        )
+                        result["preserved_count"] += 1
+                        continue
+
+                    # Delete the fact
+                    delete_result = await self.delete_fact(fact_id)
+
+                    if delete_result.get("status") == "success":
+                        result["deleted_count"] += 1
+                    else:
+                        result["errors"].append({
+                            "fact_id": fact_id,
+                            "error": delete_result.get("message", "Unknown error")
+                        })
+
+                except Exception as e:
+                    result["errors"].append({
+                        "fact_id": fact_id,
+                        "error": str(e)
+                    })
+
+            # Clean up the session tracking keys
+            await self._cleanup_session_tracking(session_id, fact_ids)
+
+            logger.info(
+                "Session %s cleanup complete: deleted=%d, preserved=%d, errors=%d",
+                session_id,
+                result["deleted_count"],
+                result["preserved_count"],
+                len(result["errors"])
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error("Failed to delete facts for session %s: %s", session_id, e)
+            result["errors"].append({"session_id": session_id, "error": str(e)})
+            return result
+
+    async def _cleanup_session_tracking(
+        self, session_id: str, fact_ids: List[str]
+    ) -> None:
+        """
+        Clean up session tracking keys after facts deletion.
+
+        Issue #547: Remove session-fact relationship tracking data.
+
+        Args:
+            session_id: Session ID being cleaned up
+            fact_ids: List of fact IDs to clean up
+        """
+        try:
+            # Delete the session's fact set
+            await asyncio.to_thread(
+                self.redis_client.delete,
+                "session:facts:%s" % session_id
+            )
+
+            # Delete reverse lookup keys for each fact
+            for fact_id in fact_ids:
+                await asyncio.to_thread(
+                    self.redis_client.delete,
+                    "fact:origin:session:%s" % fact_id
+                )
+
+            logger.debug("Cleaned up tracking for session %s", session_id)
+
+        except Exception as e:
+            logger.warning(
+                "Failed to cleanup session tracking for %s: %s",
+                session_id, e
+            )

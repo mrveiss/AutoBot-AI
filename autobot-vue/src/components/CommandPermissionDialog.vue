@@ -322,7 +322,8 @@ export default {
       }
 
       // Send comment to backend
-      const response = await apiService.post('/chat/direct', {
+      // Issue #552: Fixed missing /api prefix
+      const response = await apiService.post('/api/chat/direct', {
         message: `Command feedback: ${commentText.value}`,
         chat_id: props.chatId
       });
