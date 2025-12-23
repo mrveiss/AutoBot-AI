@@ -480,7 +480,8 @@ export default {
             props.sessionId !== 'unified-browser') {
           try {
             // ApiClient.get() returns parsed JSON directly, throws on error
-            sessionData = await apiClient.get(`/api/research/browser/${props.sessionId}`)
+            // Issue #552: Fixed path to match backend /api/research-browser/
+            sessionData = await apiClient.get(`/api/research-browser/browser/${props.sessionId}`)
           } catch (sessionError) {
             logger.warn('Could not get session info, using manual mode')
           }

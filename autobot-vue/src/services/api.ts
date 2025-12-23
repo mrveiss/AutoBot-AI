@@ -95,8 +95,9 @@ class ApiService {
   }
 
   // Research Agent API methods - Updated to match backend specs
+  // Issue #552: Fixed paths to match backend /api/research/comprehensive and /api/ai-stack/research/
   async performResearch(query: string, focus = 'general', maxResults = 5): Promise<ApiResponse> {
-    return this.post('/api/research/research', {
+    return this.post('/api/research/comprehensive', {
       query,
       focus,
       max_results: maxResults
@@ -104,14 +105,19 @@ class ApiService {
   }
 
   async researchTools(query: string): Promise<ApiResponse> {
-    return this.post('/api/research/research/tools', {
+    // Use AI stack research endpoint for tool research
+    return this.post('/api/ai-stack/research/web', {
       query,
       focus: 'installation_usage'
     })
   }
 
   async getInstallationGuide(toolName: string): Promise<ApiResponse> {
-    return this.get(`/api/research/installation/${toolName}`)
+    // Use AI stack for installation guides
+    return this.post('/api/ai-stack/research/comprehensive', {
+      query: `installation guide for ${toolName}`,
+      focus: 'installation'
+    })
   }
 
   // Settings API - Updated to match backend specs

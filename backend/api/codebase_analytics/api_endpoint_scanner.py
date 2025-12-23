@@ -180,8 +180,9 @@ class BackendEndpointScanner:
         Issue #552: Handles cases like:
         - knowledge.py includes knowledge_vectorization.py and knowledge_maintenance.py
         - chat.py includes chat_sessions.py
+        - analytics.py includes analytics_cost.py (which has its own prefix="/cost")
 
-        These nested routers inherit the parent router's prefix.
+        These nested routers inherit the parent router's prefix, and may add their own.
         """
         if not self.backend_path.exists():
             return
@@ -192,9 +193,15 @@ class BackendEndpointScanner:
             re.MULTILINE
         )
 
-        # Pattern to detect: router.include_router(X_router)
+        # Pattern to detect: from backend.api import module1, module2
+        import_modules_pattern = re.compile(
+            r'from\s+backend\.api\s+import\s+([^;\n]+)',
+            re.MULTILINE
+        )
+
+        # Pattern to detect: router.include_router(X_router) or router.include_router(module.router)
         include_pattern = re.compile(
-            r'router\.include_router\s*\(\s*(\w+_router)\s*\)',
+            r'router\.include_router\s*\(\s*(\w+(?:\.\w+)?)\s*\)',
             re.MULTILINE
         )
 
@@ -211,21 +218,42 @@ class BackendEndpointScanner:
                     parent_module, self.API_PREFIX
                 )
 
-                # Find all imported routers
+                # Find all imported routers from specific module imports
                 imported_routers: dict[str, str] = {}
                 for match in import_pattern.finditer(content):
                     module_name = match.group(1)  # e.g., "knowledge_vectorization"
                     router_var = match.group(2)   # e.g., "vectorization_router"
                     imported_routers[router_var] = module_name
 
-                # Check which are included (without prefix = inherits parent)
+                # Find all module imports (e.g., from backend.api import analytics_cost)
+                imported_modules: dict[str, str] = {}
+                for match in import_modules_pattern.finditer(content):
+                    modules_str = match.group(1)
+                    # Parse comma-separated module names
+                    for mod in modules_str.split(","):
+                        mod = mod.strip()
+                        if mod:
+                            # module.router reference: analytics_cost.router -> analytics_cost
+                            imported_modules[f"{mod}.router"] = mod
+                            imported_modules[mod] = mod
+
+                # Check which are included
                 for match in include_pattern.finditer(content):
-                    router_var = match.group(1)  # e.g., "vectorization_router"
-                    if router_var in imported_routers:
-                        child_module = imported_routers[router_var]
+                    router_ref = match.group(1)  # e.g., "vectorization_router" or "analytics_cost.router"
+
+                    child_module = None
+                    if router_ref in imported_routers:
+                        child_module = imported_routers[router_ref]
+                    elif router_ref in imported_modules:
+                        child_module = imported_modules[router_ref]
+
+                    if child_module:
                         # Child inherits parent's prefix
+                        # Note: The child's own APIRouter(prefix=...) is handled separately
+                        # in _get_file_router_prefix during scanning
                         self._module_prefix_map[child_module] = parent_prefix
                         self._module_prefix_map[f"backend/api/{child_module}.py"] = parent_prefix
+                        self._module_prefix_map[f"backend.api.{child_module}"] = parent_prefix
                         logger.debug(
                             "Nested router: %s -> %s (from %s)",
                             child_module, parent_prefix, parent_module

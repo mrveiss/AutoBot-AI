@@ -340,8 +340,9 @@ export default {
 
         // ApiClient.get() returns parsed JSON directly, throws on error
         // Two sequential API calls
-        const statusData = await apiClient.get(`/api/research/session/${props.sessionId}/status`)
-        const browserData = await apiClient.get(`/api/research/browser/${props.sessionId}`)
+        // Issue #552: Fixed path to match backend /api/research-browser/
+        const statusData = await apiClient.get(`/api/research-browser/session/${props.sessionId}/status`)
+        const browserData = await apiClient.get(`/api/research-browser/browser/${props.sessionId}`)
 
         return { statusData, browserData }
       },
@@ -366,7 +367,8 @@ export default {
     const { execute: handleWaitForUser, loading: isWaitingForUser } = useAsyncHandler(
       async () => {
         // ApiClient.post() returns parsed JSON directly, throws on error
-        return await apiClient.post('/api/research/session/action', {
+        // Issue #552: Fixed path to match backend /api/research-browser/
+        return await apiClient.post('/api/research-browser/session/action', {
           session_id: props.sessionId,
           action: 'wait',
           timeout_seconds: 300
@@ -387,7 +389,8 @@ export default {
     const { execute: performSessionAction, loading: isPerformingAction } = useAsyncHandler(
       async (action) => {
         // ApiClient.post() returns parsed JSON directly, throws on error
-        return await apiClient.post('/api/research/session/action', {
+        // Issue #552: Fixed path to match backend /api/research-browser/
+        return await apiClient.post('/api/research-browser/session/action', {
           session_id: props.sessionId,
           action: action
         })
@@ -414,7 +417,8 @@ export default {
         if (!navigationUrl.value) return null
 
         // ApiClient.post() returns parsed JSON directly, throws on error
-        return await apiClient.post(`/api/research/session/${props.sessionId}/navigate`, {
+        // Issue #552: Fixed path to match backend /api/research-browser/
+        return await apiClient.post(`/api/research-browser/session/${props.sessionId}/navigate`, {
           url: navigationUrl.value
         })
       },
@@ -436,7 +440,8 @@ export default {
     // 5. Migrate closeSession - With confirmation dialog
     const { execute: closeSession, loading: isClosingSession } = useAsyncHandler(
       async () => {
-        return await apiClient.delete(`/api/research/session/${props.sessionId}`)
+        // Issue #552: Fixed path to match backend /api/research-browser/
+        return await apiClient.delete(`/api/research-browser/session/${props.sessionId}`)
       },
       {
         onSuccess: () => {
@@ -462,7 +467,8 @@ export default {
         // If there's no research session, create one for this navigation
         if (!props.sessionId) {
           // ApiClient.post() returns parsed JSON directly, throws on error
-          return await apiClient.post('/api/research/url', {
+          // Issue #552: Fixed path to match backend /api/research-browser/
+          return await apiClient.post('/api/research-browser/url', {
             conversation_id: 'unified-browser-session',
             url: browserUrl.value,
             extract_content: false
@@ -498,7 +504,8 @@ export default {
         if (!props.sessionId) return null
 
         // ApiClient.post() returns parsed JSON directly, throws on error
-        return await apiClient.post('/api/research/session/action', {
+        // Issue #552: Fixed path to match backend /api/research-browser/
+        return await apiClient.post('/api/research-browser/session/action', {
           session_id: props.sessionId,
           action: 'manual_intervention'
         })
@@ -525,7 +532,8 @@ export default {
         if (!props.sessionId) return null
 
         // ApiClient.post() returns parsed JSON directly, throws on error
-        return await apiClient.post('/api/research/session/action', {
+        // Issue #552: Fixed path to match backend /api/research-browser/
+        return await apiClient.post('/api/research-browser/session/action', {
           session_id: props.sessionId,
           action: 'wait',
           timeout_seconds: 300
