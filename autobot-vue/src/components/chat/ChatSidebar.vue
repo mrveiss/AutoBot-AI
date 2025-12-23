@@ -221,12 +221,14 @@
     </div>
   </div>
 
-  <!-- Delete Conversation Dialog -->
+  <!-- Delete Conversation Dialog (Issue #547: Added KB facts preview) -->
   <DeleteConversationDialog
     :visible="showDeleteDialog"
     :session-id="deleteTargetSessionId || ''"
     :session-name="store.sessions.find(s => s.id === deleteTargetSessionId)?.title"
     :file-stats="deleteFileStats"
+    :kb-facts="deleteKBFacts"
+    :kb-facts-loading="kbFactsLoading"
     @confirm="handleDeleteConfirm"
     @cancel="handleDeleteCancel"
   />
@@ -272,12 +274,14 @@ import { useDisplaySettings, type DisplaySettings } from '@/composables/useDispl
 import type { ChatSession } from '@/stores/useChatStore'
 import DeleteConversationDialog from './DeleteConversationDialog.vue'
 import type { FileStats } from '@/composables/useConversationFiles'
+import type { SessionFact } from '@/models/repositories/ChatRepository'
 import ApiClient from '@/utils/ApiClient.js'
 import { formatDate } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import { createLogger } from '@/utils/debugUtils'
+import { useToast } from '@/composables/useToast'
 
 const logger = createLogger('ChatSidebar')
 
@@ -370,6 +374,11 @@ const handleSessionKeydown = (event: KeyboardEvent, session: ChatSession, index:
 const showDeleteDialog = ref(false)
 const deleteTargetSessionId = ref<string | null>(null)
 const deleteFileStats = ref<FileStats | null>(null)
+const deleteKBFacts = ref<SessionFact[] | null>(null)
+const kbFactsLoading = ref(false)
+
+// Toast for notifications (Issue #547)
+const toast = useToast()
 
 // Display settings configuration (UI labels)
 const displaySettingsConfig = [
@@ -421,15 +430,39 @@ const cancelEdit = () => {
 const deleteSession = async (sessionId: string) => {
   // Fetch file stats for the session
   deleteTargetSessionId.value = sessionId
+  kbFactsLoading.value = true
+  deleteKBFacts.value = null
 
-  try {
-    const response = await ApiClient.get(`/api/conversation-files/conversation/${sessionId}/list`)
-    const data = await response.json()
-    deleteFileStats.value = data?.stats || null
-  } catch (error) {
-    logger.warn('Failed to fetch file stats, proceeding without file info:', error)
+  // Fetch file stats and KB facts in parallel (Issue #547)
+  const [fileStatsResult, kbFactsResult] = await Promise.allSettled([
+    // Fetch file stats
+    (async () => {
+      const response = await ApiClient.get(`/api/conversation-files/conversation/${sessionId}/list`)
+      const data = await response.json()
+      return data?.stats || null
+    })(),
+    // Fetch KB facts (Issue #547)
+    controller.getSessionFacts(sessionId)
+  ])
+
+  // Handle file stats result
+  if (fileStatsResult.status === 'fulfilled') {
+    deleteFileStats.value = fileStatsResult.value
+  } else {
+    logger.warn('Failed to fetch file stats, proceeding without file info:', fileStatsResult.reason)
     deleteFileStats.value = null
   }
+
+  // Handle KB facts result (Issue #547)
+  if (kbFactsResult.status === 'fulfilled') {
+    deleteKBFacts.value = kbFactsResult.value?.facts || null
+    logger.debug(`Found ${deleteKBFacts.value?.length || 0} KB facts for session ${sessionId}`)
+  } else {
+    logger.warn('Failed to fetch KB facts:', kbFactsResult.reason)
+    deleteKBFacts.value = null
+  }
+
+  kbFactsLoading.value = false
 
   // Show delete dialog
   showDeleteDialog.value = true
@@ -441,16 +474,54 @@ const deleteCurrentSession = () => {
   }
 }
 
-const handleDeleteConfirm = async (fileAction: string, fileOptions: any) => {
+const handleDeleteConfirm = async (fileAction: string, fileOptions: any, selectedFactIds: string[] = []) => {
   if (!deleteTargetSessionId.value) return
-  
+  const sessionId = deleteTargetSessionId.value
+
   try {
-    await controller.deleteChatSession(deleteTargetSessionId.value, fileAction as any, fileOptions)
+    // Issue #547: Preserve selected facts before deletion
+    if (selectedFactIds.length > 0) {
+      try {
+        const preserveResult = await controller.preserveSessionFacts(sessionId, selectedFactIds, true)
+        if (preserveResult.updated_count > 0) {
+          logger.debug(`Preserved ${preserveResult.updated_count} facts before deletion`)
+        }
+        if (preserveResult.errors) {
+          logger.warn('Some facts could not be preserved:', preserveResult.errors)
+        }
+      } catch (preserveError) {
+        logger.error('Failed to preserve facts, but continuing with deletion:', preserveError)
+        // Continue with deletion even if preservation fails
+      }
+    }
+
+    // Delete the session
+    await controller.deleteChatSession(sessionId, fileAction as any, fileOptions)
+
+    // Issue #547: Show toast with KB cleanup results
+    const totalFacts = deleteKBFacts.value?.length || 0
+    const preservedCount = selectedFactIds.length
+    const deletedCount = totalFacts - preservedCount
+
+    if (totalFacts > 0) {
+      if (preservedCount > 0 && deletedCount > 0) {
+        toast.success(`Conversation deleted. ${deletedCount} KB fact${deletedCount > 1 ? 's' : ''} removed, ${preservedCount} preserved.`)
+      } else if (deletedCount > 0) {
+        toast.success(`Conversation deleted. ${deletedCount} KB fact${deletedCount > 1 ? 's' : ''} removed.`)
+      } else {
+        toast.success(`Conversation deleted. All ${preservedCount} KB fact${preservedCount > 1 ? 's' : ''} preserved.`)
+      }
+    } else {
+      toast.success('Conversation deleted successfully.')
+    }
+
     showDeleteDialog.value = false
     deleteTargetSessionId.value = null
     deleteFileStats.value = null
+    deleteKBFacts.value = null
   } catch (error) {
     logger.error('Failed to delete session:', error)
+    toast.error('Failed to delete conversation. Please try again.')
   }
 }
 
@@ -458,6 +529,7 @@ const handleDeleteCancel = () => {
   showDeleteDialog.value = false
   deleteTargetSessionId.value = null
   deleteFileStats.value = null
+  deleteKBFacts.value = null  // Issue #547
 }
 
 

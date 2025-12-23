@@ -59,6 +59,50 @@ export interface SendMessageResponse {
 }
 
 /**
+ * Issue #547: Session fact for pre-deletion preview
+ */
+export interface SessionFact {
+  id: string
+  content: string
+  full_content: string
+  category: string
+  tags: string[]
+  important: boolean
+  preserve: boolean
+  created_at?: string
+}
+
+/**
+ * Issue #547: Response from getSessionFacts endpoint
+ */
+export interface SessionFactsResponse {
+  status: string
+  session_id: string
+  fact_count: number
+  facts: SessionFact[]
+}
+
+/**
+ * Issue #547: Response from preserveSessionFacts endpoint
+ */
+export interface PreserveFactsResponse {
+  status: 'success' | 'partial'
+  session_id: string
+  updated_count: number
+  failed_count: number
+  errors?: string[]
+}
+
+/**
+ * Issue #547: KB cleanup result from session deletion
+ */
+export interface KBCleanupResult {
+  facts_deleted: number
+  facts_preserved: number
+  cleanup_error?: string | null
+}
+
+/**
  * Repository for chat-related API operations
  * Handles communication with backend chat endpoints
  */
@@ -383,6 +427,45 @@ export class ChatRepository {
       return response.data || response
     } catch (error: any) {
       logger.error('Failed to save chat messages:', error)
+      throw error
+    }
+  }
+
+  // ============================================================================
+  // Session Facts API (Issue #547)
+  // ============================================================================
+
+  /**
+   * Get all knowledge base facts created during a session.
+   * Issue #547: Used for pre-deletion preview to let users select facts to preserve.
+   */
+  async getSessionFacts(sessionId: string): Promise<SessionFactsResponse> {
+    try {
+      const response = await this.get(`/api/chat/sessions/${sessionId}/facts`)
+      return response.data || response
+    } catch (error: any) {
+      logger.error('Failed to get session facts:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Mark selected facts as preserved/important before session deletion.
+   * Issue #547: Facts marked as preserved will not be deleted with the session.
+   */
+  async preserveSessionFacts(
+    sessionId: string,
+    factIds: string[],
+    preserve: boolean = true
+  ): Promise<PreserveFactsResponse> {
+    try {
+      const response = await this.post(`/api/chat/sessions/${sessionId}/facts/preserve`, {
+        fact_ids: factIds,
+        preserve
+      })
+      return response.data || response
+    } catch (error: any) {
+      logger.error('Failed to preserve session facts:', error)
       throw error
     }
   }

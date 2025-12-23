@@ -2,12 +2,12 @@
   <BaseModal
     :model-value="visible"
     title="Delete Conversation"
-    size="small"
+    size="medium"
     @update:model-value="$emit('update:visible', $event)"
     @close="handleCancel"
   >
     <template #default>
-        <div class="p-4 space-y-4">
+        <div class="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
           <!-- Warning Message -->
           <div class="flex items-start gap-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
             <i class="fas fa-exclamation-triangle text-yellow-600 mt-0.5"></i>
@@ -19,6 +19,76 @@
                 The conversation and all messages will be permanently deleted.
               </p>
             </div>
+          </div>
+
+          <!-- Knowledge Base Facts Section (Issue #547) -->
+          <div v-if="kbFacts && kbFacts.length > 0" class="space-y-3">
+            <div class="flex items-center gap-2 p-3 bg-purple-50 rounded-lg">
+              <i class="fas fa-brain text-purple-600"></i>
+              <div class="flex-1">
+                <p class="text-sm font-medium text-purple-700">
+                  {{ kbFacts.length }} knowledge fact{{ kbFacts.length > 1 ? 's' : '' }} created during this conversation
+                </p>
+                <p class="text-xs text-purple-600">
+                  Select facts to preserve before deletion
+                </p>
+              </div>
+            </div>
+
+            <!-- Facts List with Selection -->
+            <div class="space-y-2 max-h-48 overflow-y-auto border border-purple-200 rounded-lg p-2 bg-white">
+              <div
+                v-for="fact in kbFacts"
+                :key="fact.id"
+                class="flex items-start gap-2 p-2 rounded hover:bg-purple-50 transition-colors cursor-pointer"
+                @click="toggleFactSelection(fact.id)"
+              >
+                <input
+                  type="checkbox"
+                  :checked="selectedFactIds.has(fact.id)"
+                  class="mt-1 rounded border-purple-300 text-purple-600 focus:ring-purple-500"
+                  @click.stop="toggleFactSelection(fact.id)"
+                />
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm text-gray-800 line-clamp-2">{{ fact.content }}</p>
+                  <div class="flex items-center gap-2 mt-1">
+                    <span class="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded">{{ fact.category }}</span>
+                    <span v-if="fact.important" class="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded">
+                      <i class="fas fa-star text-xs"></i> Important
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="flex items-center gap-2 text-xs">
+              <button
+                @click="selectAllFacts"
+                class="px-2 py-1 text-purple-700 hover:bg-purple-100 rounded transition-colors"
+              >
+                Select All
+              </button>
+              <span class="text-gray-300">|</span>
+              <button
+                @click="deselectAllFacts"
+                class="px-2 py-1 text-gray-600 hover:bg-gray-100 rounded transition-colors"
+              >
+                Deselect All
+              </button>
+              <span class="flex-1"></span>
+              <span class="text-gray-500">
+                {{ selectedFactIds.size }} selected for preservation
+              </span>
+            </div>
+          </div>
+
+          <!-- No KB Facts Message -->
+          <div v-else-if="kbFactsLoading" class="p-3 bg-purple-50 rounded-lg">
+            <p class="text-sm text-purple-600">
+              <i class="fas fa-spinner fa-spin mr-2"></i>
+              Loading knowledge base facts...
+            </p>
           </div>
 
           <!-- File Information -->
@@ -154,6 +224,10 @@
             <p class="text-sm font-medium text-gray-900 mb-2">Action Summary:</p>
             <ul class="text-xs text-gray-700 space-y-1">
               <li><i class="fas fa-check text-green-600 mr-2"></i>Delete conversation and all messages</li>
+              <li v-if="kbFacts && kbFacts.length > 0">
+                <i class="fas fa-check text-green-600 mr-2"></i>
+                {{ getKBFactsSummary() }}
+              </li>
               <li v-if="fileStats && fileStats.total_files > 0">
                 <i class="fas fa-check text-green-600 mr-2"></i>
                 {{ getFileActionSummary() }}
@@ -185,8 +259,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { FileStats } from '@/composables/useConversationFiles'
+import type { SessionFact } from '@/models/repositories/ChatRepository'
 import { formatFileSize } from '@/utils/formatHelpers'
 import BaseModal from '@/components/ui/BaseModal.vue'
 
@@ -195,11 +270,13 @@ const props = defineProps<{
   sessionId: string
   sessionName?: string
   fileStats?: FileStats | null
+  kbFacts?: SessionFact[] | null
+  kbFactsLoading?: boolean
 }>()
 
 const emit = defineEmits<{
   'update:visible': [value: boolean]
-  confirm: [fileAction: string, fileOptions: any]
+  confirm: [fileAction: string, fileOptions: any, selectedFactIds: string[]]
   cancel: []
 }>()
 
@@ -209,11 +286,60 @@ const kbCategories = ref('')
 const extractText = ref(true)
 const sharedPath = ref('')
 const isDeleting = ref(false)
+const selectedFactIds = ref<Set<string>>(new Set())
 
 // Computed
 const hasFiles = computed(() => props.fileStats && props.fileStats.total_files > 0)
 
+// Watch for facts changes to reset selection
+watch(() => props.kbFacts, (newFacts) => {
+  selectedFactIds.value = new Set()
+  // Auto-select facts already marked as important
+  if (newFacts) {
+    newFacts.forEach(fact => {
+      if (fact.important || fact.preserve) {
+        selectedFactIds.value.add(fact.id)
+      }
+    })
+  }
+}, { immediate: true })
+
+// KB Facts selection methods
+const toggleFactSelection = (factId: string) => {
+  const newSet = new Set(selectedFactIds.value)
+  if (newSet.has(factId)) {
+    newSet.delete(factId)
+  } else {
+    newSet.add(factId)
+  }
+  selectedFactIds.value = newSet
+}
+
+const selectAllFacts = () => {
+  if (props.kbFacts) {
+    selectedFactIds.value = new Set(props.kbFacts.map(f => f.id))
+  }
+}
+
+const deselectAllFacts = () => {
+  selectedFactIds.value = new Set()
+}
+
 // NOTE: formatFileSize removed - now using shared utility from @/utils/formatHelpers
+
+const getKBFactsSummary = (): string => {
+  const totalFacts = props.kbFacts?.length || 0
+  const preserveCount = selectedFactIds.value.size
+  const deleteCount = totalFacts - preserveCount
+
+  if (preserveCount === 0) {
+    return `Delete all ${totalFacts} knowledge fact${totalFacts > 1 ? 's' : ''}`
+  } else if (deleteCount === 0) {
+    return `Preserve all ${totalFacts} knowledge fact${totalFacts > 1 ? 's' : ''}`
+  } else {
+    return `Delete ${deleteCount} fact${deleteCount > 1 ? 's' : ''}, preserve ${preserveCount} fact${preserveCount > 1 ? 's' : ''}`
+  }
+}
 
 const getFileActionSummary = (): string => {
   const fileCount = props.fileStats?.total_files || 0
@@ -248,7 +374,8 @@ const handleConfirm = () => {
   isDeleting.value = true
 
   const fileOptions = buildFileOptions()
-  emit('confirm', fileAction.value, fileOptions)
+  // Issue #547: Pass selected fact IDs for preservation
+  emit('confirm', fileAction.value, fileOptions, Array.from(selectedFactIds.value))
 
   // Reset state
   setTimeout(() => {
@@ -257,6 +384,7 @@ const handleConfirm = () => {
     kbCategories.value = ''
     extractText.value = true
     sharedPath.value = ''
+    selectedFactIds.value = new Set()
   }, 500)
 }
 
@@ -268,6 +396,7 @@ const handleCancel = () => {
   kbCategories.value = ''
   extractText.value = true
   sharedPath.value = ''
+  selectedFactIds.value = new Set()
 
   emit('cancel')
 }

@@ -576,6 +576,36 @@ export class ChatController {
     }
   }
 
+// ============================================================================
+  // Session Facts Methods (Issue #547)
+  // ============================================================================
+
+  /**
+   * Get facts created during a session for pre-deletion preview.
+   * Issue #547: Allows users to see and select facts to preserve before deletion.
+   */
+  async getSessionFacts(sessionId: string) {
+    try {
+      return await chatRepository.getSessionFacts(sessionId)
+    } catch (error: any) {
+      logger.error('Failed to get session facts:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Mark selected facts as preserved before session deletion.
+   * Issue #547: Preserved facts will not be deleted with the session.
+   */
+  async preserveSessionFacts(sessionId: string, factIds: string[], preserve: boolean = true) {
+    try {
+      return await chatRepository.preserveSessionFacts(sessionId, factIds, preserve)
+    } catch (error: any) {
+      logger.error('Failed to preserve session facts:', error)
+      throw error
+    }
+  }
+
   async deleteChatSession(
     sessionId: string,
     fileAction?: 'delete' | 'transfer_kb' | 'transfer_shared',

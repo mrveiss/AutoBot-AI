@@ -785,6 +785,197 @@ async def health_check():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============================================================================
+# Session Facts Endpoints (Issue #547)
+# ============================================================================
+
+
+class MarkFactsPreservedRequest(BaseModel):
+    """Request model for marking facts as preserved/important."""
+
+    fact_ids: List[str]
+    preserve: bool = True
+
+
+@router.get("/chat/sessions/{session_id}/facts")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_session_facts",
+    error_code_prefix="CHAT_KB",
+)
+async def get_session_facts(session_id: str, request: Request):
+    """
+    Get all knowledge base facts created during a specific session.
+
+    Issue #547: This endpoint allows the frontend to preview facts
+    that will be deleted when a conversation is deleted.
+
+    Args:
+        session_id: Chat session ID to get facts for
+
+    Returns:
+        List of facts with their metadata
+    """
+    # Get knowledge base from app state
+    knowledge_base = getattr(request.app.state, "knowledge_base", None)
+    if not knowledge_base:
+        raise HTTPException(
+            status_code=503, detail="Knowledge base not available"
+        )
+
+    try:
+        # Get facts for this session
+        facts = await knowledge_base.get_facts_by_session(session_id)
+
+        # Format response with relevant fields for frontend
+        formatted_facts = []
+        for fact in facts:
+            formatted_facts.append({
+                "id": fact.get("id"),
+                "content": fact.get("content", "")[:200] + (
+                    "..." if len(fact.get("content", "")) > 200 else ""
+                ),
+                "full_content": fact.get("content", ""),
+                "category": fact.get("category", "general"),
+                "tags": fact.get("tags", []),
+                "important": fact.get("important", False),
+                "preserve": fact.get("preserve", False),
+                "created_at": fact.get("created_at"),
+            })
+
+        return {
+            "status": "success",
+            "session_id": session_id,
+            "fact_count": len(formatted_facts),
+            "facts": formatted_facts,
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get facts for session {session_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/chat/sessions/{session_id}/facts/preserve")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="preserve_session_facts",
+    error_code_prefix="CHAT_KB",
+)
+async def preserve_session_facts(
+    session_id: str, request: Request, body: MarkFactsPreservedRequest
+):
+    """
+    Mark specific facts as preserved/important before session deletion.
+
+    Issue #547: This allows users to select which facts to keep
+    when deleting a conversation.
+
+    Uses parallel processing with semaphore for optimal performance.
+
+    Args:
+        session_id: Chat session ID
+        body: Request body with fact_ids and preserve flag
+
+    Returns:
+        Update result with counts
+    """
+    # Validate input size (prevent abuse)
+    if len(body.fact_ids) > 100:
+        raise HTTPException(
+            status_code=400,
+            detail="Maximum 100 facts can be preserved at once"
+        )
+
+    # Get knowledge base from app state
+    knowledge_base = getattr(request.app.state, "knowledge_base", None)
+    if not knowledge_base:
+        raise HTTPException(
+            status_code=503, detail="Knowledge base not available"
+        )
+
+    try:
+        errors = []
+        preserve_time = datetime.now().isoformat()
+
+        # Use semaphore to limit concurrent operations (prevent overload)
+        semaphore = asyncio.Semaphore(20)
+
+        async def preserve_single_fact(fact_id: str) -> dict:
+            """Preserve a single fact with bounded concurrency."""
+            async with semaphore:
+                try:
+                    # Get current fact
+                    fact = await knowledge_base.get_fact(fact_id)
+                    if not fact:
+                        return {"status": "error", "fact_id": fact_id, "error": "not_found"}
+
+                    # Verify fact belongs to this session
+                    fact_session = await knowledge_base.get_session_for_fact(fact_id)
+                    if fact_session != session_id:
+                        return {"status": "error", "fact_id": fact_id, "error": "wrong_session"}
+
+                    # Update fact metadata to mark as preserved/important
+                    metadata = fact.get("metadata", {})
+                    metadata["important"] = body.preserve
+                    metadata["preserve"] = body.preserve
+                    metadata["preserved_at"] = preserve_time
+                    metadata["preserved_from_deletion"] = True
+
+                    # Update the fact
+                    success = await knowledge_base.update_fact(
+                        fact_id=fact_id,
+                        metadata=metadata,
+                    )
+
+                    if success:
+                        return {"status": "success", "fact_id": fact_id}
+                    else:
+                        return {"status": "error", "fact_id": fact_id, "error": "update_failed"}
+
+                except Exception as e:
+                    logger.error(f"Error preserving fact {fact_id}: {e}")
+                    return {"status": "error", "fact_id": fact_id, "error": str(e)}
+
+        # Execute all preservations in parallel with bounded concurrency
+        results = await asyncio.gather(
+            *[preserve_single_fact(fid) for fid in body.fact_ids],
+            return_exceptions=True
+        )
+
+        # Count results
+        updated_count = 0
+        failed_count = 0
+
+        for result in results:
+            if isinstance(result, Exception):
+                errors.append(f"Unexpected error: {str(result)}")
+                failed_count += 1
+            elif result.get("status") == "success":
+                updated_count += 1
+            else:
+                error_msg = result.get("error", "unknown")
+                fact_id = result.get("fact_id", "unknown")
+                if error_msg == "not_found":
+                    errors.append(f"Fact {fact_id} not found")
+                elif error_msg == "wrong_session":
+                    errors.append(f"Fact {fact_id} does not belong to session {session_id}")
+                else:
+                    errors.append(f"Error with fact {fact_id}: {error_msg}")
+                failed_count += 1
+
+        return {
+            "status": "success" if failed_count == 0 else "partial",
+            "session_id": session_id,
+            "updated_count": updated_count,
+            "failed_count": failed_count,
+            "errors": errors if errors else None,
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to preserve facts for session {session_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     # Example usage
     async def demo():
