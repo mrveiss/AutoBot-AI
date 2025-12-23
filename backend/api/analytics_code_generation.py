@@ -42,7 +42,8 @@ except ImportError:
     LLMInterface = None
     logging.warning("LLMInterface not available - code generation will fail")
 
-router = APIRouter()
+# Issue #552: Added prefix to match frontend calls at /api/code-generation/*
+router = APIRouter(prefix="/code-generation", tags=["code-generation", "analytics"])
 logger = logging.getLogger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for code analysis and extraction

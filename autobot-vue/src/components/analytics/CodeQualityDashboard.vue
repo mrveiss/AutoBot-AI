@@ -613,7 +613,8 @@ async function refreshData(): Promise<void> {
 
 async function loadHealthScore(): Promise<void> {
   try {
-    const response = await fetch('/api/analytics/quality/health-score');
+    // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
+    const response = await fetch('/api/quality/health-score');
     if (response.ok) {
       healthScore.value = await response.json();
     } else {
@@ -627,7 +628,8 @@ async function loadHealthScore(): Promise<void> {
 
 async function loadMetrics(): Promise<void> {
   try {
-    const response = await fetch('/api/analytics/quality/metrics');
+    // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
+    const response = await fetch('/api/quality/metrics');
     if (response.ok) {
       metrics.value = await response.json();
     } else {
@@ -642,7 +644,8 @@ async function loadMetrics(): Promise<void> {
 
 async function loadPatterns(): Promise<void> {
   try {
-    const response = await fetch('/api/analytics/quality/patterns');
+    // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
+    const response = await fetch('/api/quality/patterns');
     if (response.ok) {
       patterns.value = await response.json();
     } else {
@@ -657,7 +660,8 @@ async function loadPatterns(): Promise<void> {
 
 async function loadComplexity(): Promise<void> {
   try {
-    const response = await fetch('/api/analytics/quality/complexity?top_n=5');
+    // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
+    const response = await fetch('/api/quality/complexity?top_n=5');
     if (response.ok) {
       complexity.value = await response.json();
     } else {
@@ -671,7 +675,8 @@ async function loadComplexity(): Promise<void> {
 
 async function loadTrends(): Promise<void> {
   try {
-    const response = await fetch(`/api/analytics/quality/trends?period=${selectedPeriod.value}`);
+    // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
+    const response = await fetch(`/api/quality/trends?period=${selectedPeriod.value}`);
     if (response.ok) {
       const data = await response.json();
       trendData.value = data.data_points || [];
@@ -687,7 +692,8 @@ async function loadTrends(): Promise<void> {
 
 async function loadSnapshot(): Promise<void> {
   try {
-    const response = await fetch('/api/analytics/quality/snapshot');
+    // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
+    const response = await fetch('/api/quality/snapshot');
     if (response.ok) {
       const data = await response.json();
       codebaseStats.value = data.codebase_stats || { files: 0, lines: 0, issues: 0 };
@@ -703,7 +709,8 @@ async function loadSnapshot(): Promise<void> {
 async function drillDown(category: string): Promise<void> {
   drillDownCategory.value = category;
   try {
-    const response = await fetch(`/api/analytics/quality/drill-down/${category}`);
+    // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
+    const response = await fetch(`/api/quality/drill-down/${category}`);
     if (response.ok) {
       drillDownData.value = await response.json();
     } else {
@@ -719,7 +726,8 @@ async function drillDown(category: string): Promise<void> {
 async function exportReport(format: string): Promise<void> {
   exportMenuOpen.value = false;
   try {
-    const response = await fetch(`/api/analytics/quality/export?format=${format}`);
+    // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
+    const response = await fetch(`/api/quality/export?format=${format}`);
     if (response.ok) {
       const data = await response.json();
       if (format === 'json') {
@@ -750,7 +758,8 @@ function closeExportMenu(): void {
 }
 
 function connectWebSocket(): void {
-  const wsUrl = `ws://${window.location.host}/api/analytics/quality/ws`;
+  // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
+  const wsUrl = `ws://${window.location.host}/api/quality/ws`;
   ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {
