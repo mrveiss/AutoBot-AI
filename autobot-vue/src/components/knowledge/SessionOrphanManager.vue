@@ -181,8 +181,8 @@ const scanSessionOrphans = async () => {
     orphanScanResult.value = null
     statusMessage.value = null
 
-    // Issue #552: Fixed path to match backend /api/knowledge_base/session-orphans
-    const response = await ApiClient.get('/api/knowledge_base/session-orphans')
+    // Issue #552: Fixed path to match backend /api/knowledge-maintenance/session-orphans
+    const response = await ApiClient.get('/api/knowledge-maintenance/session-orphans')
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -228,8 +228,8 @@ const cleanupSessionOrphans = async () => {
   try {
     isCleaningOrphans.value = true
 
-    // Issue #552: Fixed path to match backend /api/knowledge_base/session-orphans
-    const response = await ApiClient.delete('/api/knowledge_base/session-orphans?dry_run=false&preserve_important=true')
+    // Issue #552: Fixed path to match backend /api/knowledge-maintenance/session-orphans
+    const response = await ApiClient.delete('/api/knowledge-maintenance/session-orphans?dry_run=false&preserve_important=true')
 
     if (!response.ok) {
       const errorText = await response.text()

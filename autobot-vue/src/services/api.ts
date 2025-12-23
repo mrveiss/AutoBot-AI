@@ -138,7 +138,8 @@ class ApiService {
 
   // System API - Updated to match backend specs
   async getSystemStatus(): Promise<ApiResponse> {
-    return this.get('/api/system/status')
+    // Issue #552: /api/system/status doesn't exist, use /api/system/info instead
+    return this.get('/api/system/info')
   }
 
   async getSystemHealth(): Promise<ApiResponse> {
@@ -181,7 +182,8 @@ class ApiService {
   }
 
   async addKnowledge(content: string, metadata: Record<string, any> = {}): Promise<ApiResponse> {
-    return this.post('/api/chat-knowledge/add', {
+    // Issue #552: Fixed path - backend uses /api/chat-knowledge/knowledge/add_temporary
+    return this.post('/api/chat-knowledge/knowledge/add_temporary', {
       content,
       metadata
     })
@@ -236,7 +238,8 @@ class ApiService {
   }
 
   async getSystemMetrics(): Promise<ApiResponse> {
-    return this.get('/api/resources')
+    // Issue #552: Fixed path - backend uses /api/service-monitor/resources
+    return this.get('/api/service-monitor/resources')
   }
 }
 
