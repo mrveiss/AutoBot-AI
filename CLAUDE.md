@@ -31,6 +31,7 @@ This document contains development guidelines, project setup instructions, and a
 - ❓ **Will I modify code without review?** → If YES: Plan code-reviewer agent
 - ❓ **Did I search Memory MCP?** → If NO: Search now
 - ❓ **Am I considering a "quick fix"?** → If YES: STOP - Fix root cause instead
+- ❓ **Does this feature need frontend/backend integration?** → If YES: Plan BOTH sides before implementing
 
 **At session end, verify:**
 
@@ -712,6 +713,83 @@ Each subtask should be:
 
 ---
 
+## 🔗 FRONTEND/BACKEND INTEGRATION CHECK (MANDATORY)
+
+**⚠️ MANDATORY RULE: NEVER FORGET THE OTHER SIDE OF INTEGRATIONS**
+
+### **The Integration Principle:**
+
+When building features that involve **both frontend and backend**, you MUST:
+
+1. **Identify integration requirements BEFORE implementing**
+2. **Plan BOTH sides** (API endpoints + frontend consumption)
+3. **Implement BOTH sides** in the same task/issue
+4. **Test the FULL flow** end-to-end
+
+### **Integration Checklist:**
+
+**Before starting a feature, ask:**
+- ❓ **Does this feature need a backend API?** → Plan the endpoint
+- ❓ **Does this feature need frontend UI?** → Plan the component
+- ❓ **Does this connect frontend to backend?** → Plan BOTH together
+- ❓ **Are there existing APIs to consume?** → Check backend first
+- ❓ **Are there existing components to update?** → Check frontend first
+
+### **Common Integration Patterns:**
+
+| Feature Type | Backend Needed | Frontend Needed |
+|-------------|----------------|-----------------|
+| New data display | ✅ API endpoint | ✅ Component + API call |
+| Form submission | ✅ POST endpoint | ✅ Form + submit handler |
+| Settings/Config | ✅ GET/PUT endpoints | ✅ Settings UI |
+| Real-time updates | ✅ WebSocket/SSE | ✅ Event listeners |
+| File upload | ✅ Upload endpoint | ✅ File input + progress |
+
+### **❌ FORBIDDEN:**
+
+- **Building backend API without frontend consumption** (orphaned endpoints)
+- **Building frontend UI without backend support** (broken features)
+- **Assuming "someone else" will do the other side** (you must do both)
+- **Closing issues with only half the integration** (incomplete work)
+
+### **✅ CORRECT Workflow:**
+
+```bash
+# Example: Adding a new "Export Report" feature
+
+# Step 1: Plan BOTH sides
+- Backend: POST /api/reports/export endpoint
+- Frontend: Export button + download handler
+
+# Step 2: Implement backend first
+- Create endpoint in backend/api/reports.py
+- Add proper response format (JSON/file download)
+- Test with curl/Postman
+
+# Step 3: Implement frontend
+- Add export button to ReportsView.vue
+- Add API call in useApi.ts
+- Handle loading/error states
+
+# Step 4: Test full integration
+- Click button → API call → File downloads
+- Verify error handling works
+- Test edge cases
+```
+
+### **Integration Verification:**
+
+Before marking a feature complete:
+- [ ] Backend endpoint exists and works (test with curl)
+- [ ] Frontend calls the endpoint correctly
+- [ ] Error states are handled on both sides
+- [ ] Loading states show appropriate feedback
+- [ ] Success flow works end-to-end
+
+**THIS POLICY PREVENTS ORPHANED CODE AND BROKEN FEATURES - NO EXCEPTIONS**
+
+---
+
 ## ⚠️ CRITICAL: Single Frontend Server Architecture
 
 ### **Frontend Server Rules**
@@ -859,6 +937,7 @@ When you see these system reminders, they indicate **workflow violations**:
 - [ ] Have I searched Memory MCP? → Search before proceeding
 - [ ] Am I considering a "quick fix"? → STOP - Fix root cause
 - [ ] Did I skip analysis for complex problems? → Use code-skeptic or systems-architect with R→P→I
+- [ ] Does this feature need frontend/backend integration? → Plan BOTH sides before implementing
 
 ---
 
@@ -1002,6 +1081,7 @@ gh issue comment <issue-number> --body "Task complete ✅"
 | **Remote VM Edits** | ❌ FORBIDDEN - Edit locally, sync immediately |
 | **Blockers** | 🔧 Fix blockers first, never work around them |
 | **R→P→I Workflow** | ⚠️ ONLY for code-skeptic and systems-architect agents |
+| **Frontend/Backend Integration** | ✅ MANDATORY - Plan and implement BOTH sides of integrations |
 
 ### **Workflow Violations - Self Check**
 
@@ -1019,6 +1099,7 @@ gh issue comment <issue-number> --body "Task complete ✅"
 - Did I use permanent file names (no _fix, _v2, _temp)? ✓
 - If consolidating: Did I preserve ALL features and choose BEST implementation? ✓
 - Did I update GitHub issue with progress? ✓
+- If feature needs integration: Did I implement BOTH frontend AND backend? ✓
 
 **Before marking issue complete (MANDATORY):**
 - Is ALL code committed with issue references? ✓
