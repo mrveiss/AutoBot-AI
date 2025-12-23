@@ -256,7 +256,8 @@ const scanForIssues = async () => {
 
   try {
     // Scan for duplicates (dry run)
-    const dupResponse = await apiClient.post('/api/knowledge_base/deduplicate?dry_run=true')
+    // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
+    const dupResponse = await apiClient.post('/api/knowledge-maintenance/deduplicate?dry_run=true')
     const dupData = await parseApiResponse(dupResponse)
 
     if (dupData.status === 'success') {
@@ -266,7 +267,8 @@ const scanForIssues = async () => {
     }
 
     // Scan for orphans
-    const orphanResponse = await apiClient.get('/api/knowledge_base/orphans')
+    // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
+    const orphanResponse = await apiClient.get('/api/knowledge-maintenance/orphans')
     const orphanData = await parseApiResponse(orphanResponse)
 
     if (orphanData.status === 'success') {
@@ -294,7 +296,8 @@ const cleanupDuplicates = async () => {
   error.value = null
 
   try {
-    const response = await apiClient.post('/api/knowledge_base/deduplicate?dry_run=false')
+    // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
+    const response = await apiClient.post('/api/knowledge-maintenance/deduplicate?dry_run=false')
     const data = await parseApiResponse(response)
 
     if (data.status === 'success') {
@@ -322,7 +325,8 @@ const cleanupOrphans = async () => {
   error.value = null
 
   try {
-    const response = await apiClient.delete('/api/knowledge_base/orphans?dry_run=false')
+    // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
+    const response = await apiClient.delete('/api/knowledge-maintenance/orphans?dry_run=false')
     const data = await parseApiResponse(response)
 
     if (data.status === 'success') {

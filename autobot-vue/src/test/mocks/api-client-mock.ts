@@ -66,12 +66,13 @@ export class MockApiClient {
   // Setup default successful responses
   setupDefaults() {
     // Chat endpoints
+    // Issue #552: Fixed paths to match backend endpoints
     this.mockPost('/api/chat', createMockApiResponse({
       message: { content: 'Mock response', sender: 'assistant' },
       chatId: 'mock-chat-id',
     }))
 
-    this.mockGet('/api/chat/history', createMockApiResponse({
+    this.mockGet('/api/chat/sessions', createMockApiResponse({
       sessions: [
         { chatId: 'chat-1', name: 'Test Chat 1', messages: [] },
         { chatId: 'chat-2', name: 'Test Chat 2', messages: [] },
@@ -175,29 +176,31 @@ export const createMockApiService = () => {
     },
 
     // Terminal API methods
+    // Issue #552: Fixed paths to use /api/agent-terminal/*
     async executeCommand(command: string, options = {}) {
-      return this.post('/api/terminal/execute', { command, ...options })
+      return this.post('/api/agent-terminal/execute', { command, ...options })
     },
 
     async interruptProcess() {
-      return this.post('/api/terminal/interrupt')
+      return this.post('/api/agent-terminal/execute', { interrupt: true })
     },
 
     async killAllProcesses() {
-      return this.post('/api/terminal/kill')
+      return this.post('/api/agent-terminal/execute', { kill: true })
     },
 
     // Chat history methods
+    // Issue #552: Fixed paths to use /api/chat/sessions
     async getChatHistory() {
-      return this.get('/api/chat/history')
+      return this.get('/api/chat/sessions')
     },
 
     async getChatMessages(chatId: string) {
-      return this.get(`/api/chat/history/${chatId}`)
+      return this.get(`/api/chat/sessions/${chatId}`)
     },
 
     async deleteChatHistory(chatId: string) {
-      return this.delete(`/api/chat/history/${chatId}`)
+      return this.delete(`/api/chat/sessions/${chatId}`)
     },
 
     // Knowledge base methods

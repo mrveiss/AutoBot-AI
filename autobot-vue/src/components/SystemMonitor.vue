@@ -406,12 +406,13 @@ const fetchSystemMetrics = async () => {
 // Fetch real API endpoint health
 const fetchApiHealth = async () => {
   try {
+    // Issue #552: Fixed paths to match backend endpoints
     const endpoints = [
       { path: '/api/health', group: 'Core APIs' },
       { path: '/api/chat/health', group: 'Core APIs' },
       { path: '/api/knowledge_base/health', group: 'Core APIs' },
       { path: '/api/monitoring/status', group: 'System APIs' },
-      { path: '/api/terminal/health', group: 'System APIs' },
+      { path: '/api/agent-terminal/health', group: 'System APIs' },
       { path: '/api/redis/health', group: 'System APIs' }
     ]
 

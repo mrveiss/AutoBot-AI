@@ -139,9 +139,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
       metrics.value.loading = true
       metrics.value.error = null
       
-      logger.debug('Fetching dashboard metrics from /api/metrics/dashboard/comprehensive')
-      
-      const response = await ApiClient.get('/api/metrics/dashboard/comprehensive')
+      // Issue #552: Fixed path - backend uses /api/metrics/dashboard (not /comprehensive)
+      logger.debug('Fetching dashboard metrics from /api/metrics/dashboard')
+
+      const response = await ApiClient.get('/api/metrics/dashboard')
       
       if (response.success !== false) {
         // Update all metrics
@@ -172,7 +173,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
   
   async function fetchRealtimeMetrics() {
     try {
-      const response = await ApiClient.get('/api/metrics/dashboard/realtime')
+      // Issue #552: Fixed path - backend uses /api/metrics/system/current for realtime
+      const response = await ApiClient.get('/api/metrics/system/current')
       
       if (!response.error) {
         Object.assign(realTimeMetrics.value, response)

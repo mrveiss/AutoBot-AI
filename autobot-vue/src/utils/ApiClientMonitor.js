@@ -79,12 +79,13 @@ function getUrlFromArgs(method, args) {
   }
   
   // Method-specific patterns
+  // Issue #552: Fixed paths to match backend endpoints
   const methodUrlMap = {
-    getChatList: '/api/chat/list',
-    createNewChat: '/api/chat/create',
+    getChatList: '/api/chat/sessions',
+    createNewChat: '/api/chat/sessions',
     sendMessage: '/api/chat/message',
     getSystemHealth: '/api/system/health',
-    getSettings: '/api/settings',
+    getSettings: '/api/settings/',
     executeWorkflow: '/api/workflow/execute'
   }
   
