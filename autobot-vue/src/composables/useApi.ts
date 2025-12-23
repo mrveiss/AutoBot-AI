@@ -313,9 +313,9 @@ export function useKnowledgeApi() {
      */
     async addText(text: string, title?: string, source?: string) {
       return withErrorHandling(
-        // Issue #156 Fix: ApiClient doesn't have addTextToKnowledge(), use direct HTTP call
+        // Issue #549 Fix: Use correct path /api/knowledge_base/facts
         async () => {
-          const response = await api.post('/api/knowledge/text', { text, title, source })
+          const response = await api.post('/api/knowledge_base/facts', { content: text, title, source })
           return await response.json()
         },
         { errorMessage: 'Failed to add text to knowledge base' }
@@ -327,9 +327,9 @@ export function useKnowledgeApi() {
      */
     async addUrl(url: string, method = 'fetch') {
       return withErrorHandling(
-        // Issue #156 Fix: ApiClient doesn't have addUrlToKnowledge(), use direct HTTP call
+        // Issue #549 Fix: Use correct path /api/knowledge_base/url
         async () => {
-          const response = await api.post('/api/knowledge/url', { url, method })
+          const response = await api.post('/api/knowledge_base/url', { url, method })
           return await response.json()
         },
         { errorMessage: 'Failed to add URL to knowledge base' }
@@ -341,11 +341,11 @@ export function useKnowledgeApi() {
      */
     async addFile(file: File) {
       return withErrorHandling(
-        // Issue #156 Fix: ApiClient doesn't have addFileToKnowledge(), use direct HTTP call
+        // Issue #549 Fix: Use correct path /api/knowledge_base/upload
         async () => {
           const formData = new FormData()
           formData.append('file', file)
-          const response = await api.post('/api/knowledge/file', formData)
+          const response = await api.post('/api/knowledge_base/upload', formData)
           return await response.json()
         },
         { errorMessage: 'Failed to add file to knowledge base' }
@@ -501,9 +501,12 @@ export function useFileApi() {
      */
     async createDirectory(path = '', name: string) {
       return withErrorHandling(
-        // Issue #156 Fix: ApiClient doesn't have createDirectory(), use direct HTTP call
+        // Issue #549 Fix: Use correct path /api/files/create_directory with FormData
         async () => {
-          const response = await api.post('/api/files/directory', { path, name })
+          const formData = new FormData()
+          formData.append('path', path)
+          formData.append('name', name)
+          const response = await api.post('/api/files/create_directory', formData)
           return await response.json()
         },
         { errorMessage: 'Failed to create directory' }

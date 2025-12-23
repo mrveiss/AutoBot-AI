@@ -652,3 +652,114 @@ async def export_session(session_id: str, request: Request, format: str = "json"
             )
         },
     )
+
+
+# =============================================================================
+# Issue #549: Chat Reset Endpoint
+# =============================================================================
+
+
+class ChatResetRequest(BaseModel):
+    """Request model for chat reset"""
+
+    session_id: Optional[str] = Field(None, description="Session ID to reset (optional)")
+    clear_context: bool = Field(True, description="Clear conversation context")
+    keep_system_prompt: bool = Field(True, description="Keep system prompt after reset")
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reset_chat",
+    error_code_prefix="CHAT",
+)
+@router.post("/chat/reset")
+async def reset_chat(request: Request, reset_request: Optional[ChatResetRequest] = None):
+    """
+    Reset the current chat session.
+
+    Issue #549: Created to match frontend POST /api/chat/reset
+
+    This endpoint clears the conversation history while optionally keeping
+    the system prompt and session context.
+
+    Args:
+        request: FastAPI request object
+        reset_request: Optional reset parameters
+
+    Returns:
+        Success response with new session details
+    """
+    request_id = generate_request_id()
+
+    # Get chat history manager
+    chat_history_manager = get_chat_history_manager(request)
+
+    # Parse reset options
+    if reset_request is None:
+        reset_request = ChatResetRequest()
+
+    session_id = reset_request.session_id
+    clear_context = reset_request.clear_context
+    keep_system_prompt = reset_request.keep_system_prompt
+
+    # If no session_id provided, create a new session
+    if not session_id:
+        session_id = generate_chat_session_id()
+        logger.info(f"Creating new session for reset: {session_id}")
+    else:
+        # Validate existing session ID
+        if not validate_chat_session_id(session_id):
+            (
+                AutoBotError,
+                InternalError,
+                ResourceNotFoundError,
+                ValidationError,
+                get_error_code,
+            ) = get_exceptions_lazy()
+            raise ValidationError("Invalid session ID format")
+
+        # Clear the session's conversation history
+        if clear_context:
+            # Get existing session to preserve system prompt if needed
+            existing_messages = []
+            if keep_system_prompt:
+                try:
+                    existing_data = chat_history_manager.get_session(session_id)
+                    if existing_data and "messages" in existing_data:
+                        # Keep only system messages
+                        existing_messages = [
+                            m for m in existing_data["messages"]
+                            if m.get("role") == "system"
+                        ]
+                except Exception as e:
+                    logger.warning(f"Could not preserve system prompt: {e}")
+
+            # Clear session and optionally restore system prompts
+            chat_history_manager.clear_session(session_id)
+
+            if existing_messages:
+                for msg in existing_messages:
+                    chat_history_manager.add_message(session_id, msg)
+
+            logger.info(f"Reset chat session: {session_id}, kept {len(existing_messages)} system messages")
+
+    log_chat_event(
+        "session_reset",
+        session_id,
+        {
+            "request_id": request_id,
+            "clear_context": clear_context,
+            "keep_system_prompt": keep_system_prompt,
+        },
+    )
+
+    return create_success_response(
+        data={
+            "session_id": session_id,
+            "reset": True,
+            "clear_context": clear_context,
+            "keep_system_prompt": keep_system_prompt,
+        },
+        message="Chat session reset successfully",
+        request_id=request_id,
+    )

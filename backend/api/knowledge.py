@@ -6,8 +6,9 @@
 import asyncio
 import json
 import logging
-from typing import Optional
+from typing import List, Optional
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Path, Query, Request
+from pydantic import BaseModel, Field, field_validator
 
 # NOTE: Pydantic models moved to knowledge_maintenance.py (Issue #185 - split oversized files)
 # NOTE: Tag-related models moved to knowledge_tags.py
@@ -16,6 +17,51 @@ from backend.knowledge_factory import get_or_create_knowledge_base
 from src.exceptions import InternalError
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.path_validation import contains_path_traversal
+
+
+# =============================================================================
+# Issue #549: Pydantic Models for Knowledge Ingestion Endpoints
+# =============================================================================
+
+
+class AddFactsRequest(BaseModel):
+    """Request model for adding text content to knowledge base."""
+
+    content: str = Field(..., min_length=1, max_length=100000, description="Text content")
+    title: str = Field(default="", max_length=500, description="Document title")
+    source: str = Field(default="Manual Entry", max_length=500, description="Content source")
+    category: str = Field(default="general", max_length=100, description="Category")
+    tags: List[str] = Field(default_factory=list, description="Tags for the content")
+
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, v):
+        if len(v) > 20:
+            raise ValueError("Maximum 20 tags allowed")
+        return [tag[:50] for tag in v]  # Limit tag length
+
+
+class AddUrlRequest(BaseModel):
+    """Request model for adding URL content to knowledge base."""
+
+    url: str = Field(..., min_length=1, max_length=2000, description="URL to fetch")
+    title: str = Field(default="", max_length=500, description="Document title")
+    method: str = Field(default="fetch", pattern="^(fetch|raw)$", description="Fetch method")
+    category: str = Field(default="web", max_length=100, description="Category")
+    tags: List[str] = Field(default_factory=list, description="Tags")
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, v):
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("URL must start with http:// or https://")
+        return v
+
+
+# File upload constants (Issue #549 Code Review)
+MAX_FILE_SIZE_MB = 10
+MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+ALLOWED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".json", ".csv", ".html"}
 
 # Import RAG Agent for enhanced search capabilities
 try:
@@ -393,6 +439,342 @@ async def add_text_to_knowledge(request: dict, req: Request):
         "text_length": len(text),
         "title": title,
         "source": source,
+    }
+
+
+# =============================================================================
+# Issue #549: Frontend-compatible knowledge ingestion endpoints
+# These endpoints match what KnowledgeRepository.ts expects
+# =============================================================================
+
+
+async def _store_fact_in_kb(kb, content: str, metadata: dict) -> str:
+    """
+    Helper to store a fact in the knowledge base (Issue #549 Code Review: Extract duplication).
+
+    Args:
+        kb: Knowledge base instance
+        content: Text content to store
+        metadata: Metadata dict with title, source, category, tags, etc.
+
+    Returns:
+        Fact ID of stored content
+    """
+    if hasattr(kb, "store_fact"):
+        result = await kb.store_fact(content=content, metadata=metadata)
+    else:
+        result = await kb.store_fact(text=content, metadata=metadata)
+    return result.get("fact_id")
+
+
+def _sanitize_html_content(html_content: str) -> tuple:
+    """
+    Safely extract text and title from HTML content (Issue #549 Code Review: Security fix).
+
+    Uses html.parser for safe HTML processing instead of regex.
+
+    Args:
+        html_content: Raw HTML content
+
+    Returns:
+        Tuple of (plain_text, extracted_title)
+    """
+    from html.parser import HTMLParser
+    from html import unescape
+
+    class TextExtractor(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.text_parts = []
+            self.title = ""
+            self._in_script = False
+            self._in_style = False
+            self._in_title = False
+
+        def handle_starttag(self, tag, attrs):
+            tag_lower = tag.lower()
+            if tag_lower == "script":
+                self._in_script = True
+            elif tag_lower == "style":
+                self._in_style = True
+            elif tag_lower == "title":
+                self._in_title = True
+
+        def handle_endtag(self, tag):
+            tag_lower = tag.lower()
+            if tag_lower == "script":
+                self._in_script = False
+            elif tag_lower == "style":
+                self._in_style = False
+            elif tag_lower == "title":
+                self._in_title = False
+
+        def handle_data(self, data):
+            if self._in_title:
+                self.title = data.strip()
+            elif not self._in_script and not self._in_style:
+                text = data.strip()
+                if text:
+                    self.text_parts.append(text)
+
+    parser = TextExtractor()
+    try:
+        parser.feed(html_content)
+    except Exception:
+        # Fallback: just unescape and strip tags with regex
+        import re
+        text = re.sub(r"<[^>]+>", " ", html_content)
+        text = unescape(text)
+        return re.sub(r"\s+", " ", text).strip(), ""
+
+    plain_text = " ".join(parser.text_parts)
+    return plain_text, parser.title
+
+
+def _validate_file_upload(filename: str, file_size: int) -> None:
+    """
+    Validate file upload for security (Issue #549 Code Review: Security fix).
+
+    Args:
+        filename: Original filename
+        file_size: Size in bytes
+
+    Raises:
+        HTTPException: If validation fails
+    """
+    import os
+
+    # Check file size
+    if file_size > MAX_FILE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File too large. Maximum size is {MAX_FILE_SIZE_MB}MB"
+        )
+
+    # Check extension
+    ext = os.path.splitext(filename.lower())[1]
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File type not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+        )
+
+    # Check for path traversal
+    if contains_path_traversal(filename):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="add_facts_to_knowledge",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.post("/facts")
+async def add_facts_to_knowledge(request: AddFactsRequest, req: Request):
+    """
+    Add text content to knowledge base (frontend-compatible endpoint).
+
+    Issue #549: Created to match KnowledgeRepository.ts POST /api/knowledge_base/facts
+    """
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+    if kb_to_use is None:
+        raise InternalError("Knowledge base not initialized - please check logs for errors")
+
+    logger.info(f"Adding fact: title='{request.title}', source='{request.source}', len={len(request.content)}")
+
+    fact_id = await _store_fact_in_kb(
+        kb_to_use,
+        request.content,
+        {
+            "title": request.title,
+            "source": request.source,
+            "category": request.category,
+            "tags": request.tags,
+        },
+    )
+
+    return {
+        "success": True,
+        "document_id": fact_id,
+        "title": request.title,
+        "content": request.content[:100] + "..." if len(request.content) > 100 else request.content,
+        "message": "Document added successfully",
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="add_url_to_knowledge",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.post("/url")
+async def add_url_to_knowledge(request: AddUrlRequest, req: Request):
+    """
+    Add content from URL to knowledge base.
+
+    Issue #549: Created to match KnowledgeRepository.ts POST /api/knowledge_base/url
+    """
+    import aiohttp
+
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+    if kb_to_use is None:
+        raise InternalError("Knowledge base not initialized")
+
+    logger.info(f"Fetching content from URL: {request.url}")
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(request.url, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status != 200:
+                    raise HTTPException(status_code=400, detail=f"HTTP {response.status}")
+                html_content = await response.text()
+
+                # Use safe HTML parser instead of regex (Issue #549 Code Review)
+                content, extracted_title = _sanitize_html_content(html_content)
+                title = request.title or extracted_title or request.url
+
+    except aiohttp.ClientError as e:
+        raise HTTPException(status_code=400, detail=f"Failed to fetch URL: {str(e)}")
+
+    fact_id = await _store_fact_in_kb(
+        kb_to_use,
+        content,
+        {
+            "title": title,
+            "source": request.url,
+            "category": request.category,
+            "tags": request.tags,
+            "type": "url",
+        },
+    )
+
+    return {
+        "success": True,
+        "document_id": fact_id,
+        "title": title,
+        "content": content[:100] + "..." if len(content) > 100 else content,
+        "message": f"URL content added ({len(content)} chars)",
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="upload_file_to_knowledge",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.post("/upload")
+async def upload_file_to_knowledge(req: Request):
+    """
+    Upload file to knowledge base.
+
+    Issue #549: Created to match KnowledgeRepository.ts POST /api/knowledge_base/upload
+    Supports: .txt, .md, .pdf, .docx, .json, .csv, .html files
+    """
+    import io
+    import os
+
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+    if kb_to_use is None:
+        raise InternalError("Knowledge base not initialized")
+
+    form = await req.form()
+    file = form.get("file")
+    title = form.get("title", "")
+    category = form.get("category", "uploads")
+    tags_str = form.get("tags", "[]")
+
+    if not file or not hasattr(file, "read"):
+        raise HTTPException(status_code=400, detail="File is required")
+
+    # Get filename and sanitize (Issue #549 Code Review: Security)
+    filename = getattr(file, "filename", "unknown")
+    filename = os.path.basename(filename)  # Strip any path components
+
+    # Read file content
+    file_content = await file.read()
+
+    # Validate file upload BEFORE processing (Issue #549 Code Review: Security)
+    _validate_file_upload(filename, len(file_content))
+
+    try:
+        tags = json.loads(tags_str) if isinstance(tags_str, str) else tags_str
+        if not isinstance(tags, list):
+            tags = []
+        tags = [str(t)[:50] for t in tags[:20]]  # Limit tags
+    except (json.JSONDecodeError, TypeError):
+        tags = []
+
+    if not title:
+        title = filename
+
+    # Extract text based on file type
+    content = ""
+    ext = os.path.splitext(filename.lower())[1]
+
+    if ext in {".txt", ".md", ".csv"}:
+        content = file_content.decode("utf-8", errors="replace")
+    elif ext == ".html":
+        html_text = file_content.decode("utf-8", errors="replace")
+        content, _ = _sanitize_html_content(html_text)
+    elif ext == ".json":
+        try:
+            data = json.loads(file_content.decode("utf-8"))
+            content = json.dumps(data, indent=2)
+        except json.JSONDecodeError:
+            content = file_content.decode("utf-8", errors="replace")
+    elif ext == ".pdf":
+        try:
+            import pypdf
+            pdf_reader = pypdf.PdfReader(io.BytesIO(file_content))
+            content = "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
+        except ImportError:
+            raise HTTPException(status_code=400, detail="PDF support requires pypdf library")
+        except Exception as e:
+            logger.error(f"PDF parse error for {filename}: {e}")
+            raise HTTPException(status_code=400, detail="Failed to parse PDF file")
+    elif ext == ".docx":
+        try:
+            import docx
+            doc = docx.Document(io.BytesIO(file_content))
+            content = "\n".join(para.text for para in doc.paragraphs)
+        except ImportError:
+            raise HTTPException(status_code=400, detail="DOCX support requires python-docx library")
+        except Exception as e:
+            logger.error(f"DOCX parse error for {filename}: {e}")
+            raise HTTPException(status_code=400, detail="Failed to parse DOCX file")
+    else:
+        content = file_content.decode("utf-8", errors="replace")
+
+    if not content.strip():
+        raise HTTPException(status_code=400, detail="No text content could be extracted from file")
+
+    logger.info(f"Uploading file: filename='{filename}', size={len(file_content)}")
+
+    fact_id = await _store_fact_in_kb(
+        kb_to_use,
+        content,
+        {
+            "title": title,
+            "source": filename,
+            "category": category,
+            "tags": tags,
+            "type": "file",
+            "filename": filename,
+        },
+    )
+
+    word_count = len(content.split())
+
+    return {
+        "success": True,
+        "document_id": fact_id,
+        "title": title,
+        "content": content[:100] + "..." if len(content) > 100 else content,
+        "word_count": word_count,
+        "message": f"File uploaded ({word_count} words)",
     }
 
 
