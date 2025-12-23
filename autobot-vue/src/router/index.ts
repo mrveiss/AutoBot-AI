@@ -357,6 +357,24 @@ const routes: RouteRecordRaw[] = [
           title: 'Business Intelligence',
           parent: 'analytics'
         }
+      },
+      {
+        path: 'security',
+        name: 'analytics-security',
+        component: () => import('@/components/security/ThreatIntelligenceDashboard.vue'),
+        meta: {
+          title: 'Security Analytics',
+          parent: 'analytics'
+        }
+      },
+      {
+        path: 'security/settings',
+        name: 'analytics-security-settings',
+        component: () => import('@/components/security/ThreatIntelligenceSettings.vue'),
+        meta: {
+          title: 'Threat Intelligence Settings',
+          parent: 'analytics'
+        }
       }
     ]
   },

@@ -2,19 +2,30 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Security API endpoints for command approval and audit
+Security API endpoints for command approval, audit, and threat intelligence
+
+Includes:
+- Command approval and execution security
+- Audit logging
+- Threat intelligence service status and URL checking (Issue #67)
+- Domain security statistics
 """
 
 import logging
-from typing import List
+from typing import Any, Dict, List, Optional
 
 import aiofiles
 from backend.type_defs.common import Metadata
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.enhanced_security_layer import EnhancedSecurityLayer
+from src.security.domain_security import get_domain_security_manager
+from src.security.threat_intelligence import (
+    ThreatLevel,
+    get_threat_intelligence_service,
+)
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -211,4 +222,164 @@ async def get_audit_log(request: Request, limit: int = 100):
         }
     except Exception as e:
         logger.error("Error getting audit log: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# THREAT INTELLIGENCE ENDPOINTS (Issue #67)
+# ============================================================================
+
+
+class URLCheckRequest(BaseModel):
+    """Request model for URL reputation check."""
+
+    url: str = Field(..., description="URL to check for threats")
+
+
+class URLCheckResponse(BaseModel):
+    """Response model for URL reputation check."""
+
+    success: bool
+    url: str
+    overall_score: float
+    threat_level: str
+    virustotal_score: Optional[float] = None
+    urlvoid_score: Optional[float] = None
+    sources_checked: int
+    cached: bool
+    message: Optional[str] = None
+
+
+class ThreatIntelStatusResponse(BaseModel):
+    """Response model for threat intelligence service status."""
+
+    any_service_configured: bool
+    virustotal: Dict[str, Any]
+    urlvoid: Dict[str, Any]
+    cache_stats: Dict[str, Any]
+
+
+class DomainSecurityStatsResponse(BaseModel):
+    """Response model for domain security statistics."""
+
+    success: bool
+    stats: Dict[str, Any]
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_threat_intel_status",
+    error_code_prefix="SECURITY",
+)
+@router.get("/threat-intel/status", response_model=ThreatIntelStatusResponse)
+async def get_threat_intel_status(request: Request):
+    """
+    Get threat intelligence service configuration and status.
+
+    Returns information about configured services (VirusTotal, URLVoid),
+    their rate limit status, and cache statistics.
+    """
+    try:
+        threat_service = get_threat_intelligence_service()
+        status = await threat_service.get_service_status()
+
+        return ThreatIntelStatusResponse(
+            any_service_configured=threat_service.is_any_service_configured,
+            virustotal=status.get("virustotal", {}),
+            urlvoid=status.get("urlvoid", {}),
+            cache_stats=status.get("cache", {}),
+        )
+    except Exception as e:
+        logger.error("Error getting threat intel status: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_url_reputation",
+    error_code_prefix="SECURITY",
+)
+@router.post("/threat-intel/check-url", response_model=URLCheckResponse)
+async def check_url_reputation(request: Request, url_request: URLCheckRequest):
+    """
+    Check URL reputation against threat intelligence services.
+
+    Queries configured services (VirusTotal, URLVoid) and returns
+    aggregated threat score. Results are cached for 2 hours.
+    """
+    try:
+        threat_service = get_threat_intelligence_service()
+
+        if not threat_service.is_any_service_configured:
+            return URLCheckResponse(
+                success=False,
+                url=url_request.url,
+                overall_score=0.5,
+                threat_level=ThreatLevel.UNKNOWN.value,
+                sources_checked=0,
+                cached=False,
+                message="No threat intelligence services configured. "
+                "Set VIRUSTOTAL_API_KEY or URLVOID_API_KEY environment variables.",
+            )
+
+        result = await threat_service.check_url_reputation(url_request.url)
+
+        return URLCheckResponse(
+            success=True,
+            url=url_request.url,
+            overall_score=result.overall_score,
+            threat_level=result.threat_level.value,
+            virustotal_score=result.virustotal_score,
+            urlvoid_score=result.urlvoid_score,
+            sources_checked=result.sources_checked,
+            cached=result.cached,
+            message=None,
+        )
+    except Exception as e:
+        logger.error("Error checking URL reputation: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_domain_security_stats",
+    error_code_prefix="SECURITY",
+)
+@router.get("/domain-security/stats", response_model=DomainSecurityStatsResponse)
+async def get_domain_security_stats(request: Request):
+    """
+    Get domain security statistics including whitelist/blacklist counts,
+    threat intelligence integration status, and recent activity.
+    """
+    try:
+        domain_manager = get_domain_security_manager()
+        threat_service = get_threat_intelligence_service()
+
+        # Get threat intel status
+        threat_status = await threat_service.get_service_status()
+
+        stats = {
+            "whitelist_count": len(domain_manager._whitelist),
+            "blacklist_count": len(domain_manager._blacklist),
+            "suspicious_tlds_count": len(domain_manager._suspicious_tlds),
+            "threat_intelligence": {
+                "enabled": threat_service.is_any_service_configured,
+                "virustotal_configured": threat_status.get("virustotal", {}).get(
+                    "configured", False
+                ),
+                "urlvoid_configured": threat_status.get("urlvoid", {}).get(
+                    "configured", False
+                ),
+                "cache_size": threat_status.get("cache", {}).get("size", 0),
+            },
+            "settings": {
+                "require_https": domain_manager._require_https,
+                "max_redirects": domain_manager._max_redirects,
+                "check_dns": domain_manager._check_dns,
+            },
+        }
+
+        return DomainSecurityStatsResponse(success=True, stats=stats)
+    except Exception as e:
+        logger.error("Error getting domain security stats: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
