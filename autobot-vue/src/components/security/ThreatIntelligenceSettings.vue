@@ -211,7 +211,7 @@ URLVOID_API_KEY=your_api_key_here</pre>
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
-import { apiClient } from '@/services/api'
+import apiClient from '@/utils/ApiClient'
 
 const logger = createLogger('ThreatIntelligenceSettings')
 

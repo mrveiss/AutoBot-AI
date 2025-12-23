@@ -46,7 +46,7 @@
             <button @click="getCodeHealthScore" :disabled="analyzingCodeSmells" class="btn-debug" style="padding: 5px 10px; background: #673AB7; color: white; border: none; border-radius: 4px;">
               <i class="fas fa-heartbeat"></i> Health Score
             </button>
-            <button @click="exportReport" :disabled="exportingReport" class="btn-debug" style="padding: 5px 10px; background: #607D8B; color: white; border: none; border-radius: 4px;">
+            <button @click="exportReport()" :disabled="exportingReport" class="btn-debug" style="padding: 5px 10px; background: #607D8B; color: white; border: none; border-radius: 4px;">
               <i :class="exportingReport ? 'fas fa-spinner fa-spin' : 'fas fa-file-export'"></i>
               {{ exportingReport ? 'Exporting...' : 'Export Report' }}
             </button>

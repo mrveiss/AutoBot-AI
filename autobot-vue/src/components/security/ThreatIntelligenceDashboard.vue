@@ -210,7 +210,7 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
-import { apiClient } from '@/services/api'
+import apiClient from '@/utils/ApiClient'
 
 const logger = createLogger('ThreatIntelligenceDashboard')
 
