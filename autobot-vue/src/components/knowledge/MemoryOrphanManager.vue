@@ -114,7 +114,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import ApiClient from '@/utils/ApiClient'
+import apiClient from '@/utils/ApiClient'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -181,7 +181,7 @@ const scanOrphans = async () => {
     orphanScanResult.value = null
     statusMessage.value = null
 
-    const response = await ApiClient.get('/api/memory/entities/orphans')
+    const response = await apiClient.get('/api/memory/entities/orphans')
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -228,7 +228,7 @@ const cleanupOrphans = async () => {
   try {
     isCleaning.value = true
 
-    const response = await ApiClient.delete('/api/memory/entities/orphans?dry_run=false')
+    const response = await apiClient.delete('/api/memory/entities/orphans?dry_run=false')
 
     if (!response.ok) {
       const errorText = await response.text()
