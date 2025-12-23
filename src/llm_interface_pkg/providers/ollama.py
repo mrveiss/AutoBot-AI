@@ -5,8 +5,10 @@
 Ollama Provider - Handler for Ollama LLM requests with streaming support.
 
 Extracted from llm_interface.py as part of Issue #381 god class refactoring.
+Issue #551: Added proper async cancellation handling and timeout fixes.
 """
 
+import asyncio
 import logging
 import os
 import time
@@ -189,6 +191,10 @@ class OllamaProvider:
         """
         Stream Ollama response with comprehensive timeout protection.
 
+        Issue #551: Fixed from archived llm_interface_fixed.py
+        - Removed aggressive sock_read timeout that caused premature cancellation
+        - Added proper buffer size protection via process_llm_stream
+
         Args:
             url: Ollama API URL
             headers: Request headers
@@ -206,7 +212,15 @@ class OllamaProvider:
             from src.utils.async_stream_processor import process_llm_stream
 
             async with self._get_session() as session:
-                timeout = aiohttp.ClientTimeout(connect=5.0)
+                # Issue #551: Fixed timeout configuration from llm_interface_fixed.py
+                # CRITICAL: sock_read=None allows streaming to complete naturally
+                # without artificial timeout cutoffs
+                timeout = aiohttp.ClientTimeout(
+                    total=None,  # No total timeout for streaming
+                    connect=5.0,  # Quick connection timeout
+                    sock_read=None,  # CRITICAL: Let streaming complete naturally
+                    sock_connect=5.0,
+                )
 
                 async with session.post(
                     url, headers=headers, json=data, timeout=timeout
@@ -216,11 +230,13 @@ class OllamaProvider:
                             f"HTTP {response.status}: {await response.text()}"
                         )
 
+                    # Issue #551: process_llm_stream now includes buffer protection
                     accumulated_content, completed_successfully = (
                         await process_llm_stream(
                             response,
                             provider="ollama",
                             max_chunks=self.settings.max_chunks,
+                            max_buffer_size=10 * 1024 * 1024,  # 10MB protection
                         )
                     )
 
@@ -242,6 +258,13 @@ class OllamaProvider:
                         "done": True,
                         "completed_successfully": completed_successfully,
                     }
+        except asyncio.CancelledError:
+            # Issue #551: Proper cancellation handling from llm_interface_fixed.py
+            duration = time.time() - start_time
+            logger.info(
+                "[%s] Stream cancelled by user after %.2fs", request_id, duration
+            )
+            raise  # Re-raise to preserve cancellation
         except Exception as e:
             duration = time.time() - start_time
             logger.error("[%s] Stream error after %.2fs: %s", request_id, duration, e)

@@ -200,6 +200,7 @@ async def _process_stream_loop(
     response,
     processor: StreamProcessor,
     max_chunks: int,
+    max_buffer_size: int = 10 * 1024 * 1024,  # 10MB default limit
 ) -> Tuple[List[str], int, Optional[StreamCompletionSignal]]:
     """
     Process stream chunks in a loop until completion or limit.
@@ -207,10 +208,14 @@ async def _process_stream_loop(
     Issue #281: Extracted from process_llm_stream to reduce function length
     and improve testability of the core streaming logic.
 
+    Issue #551: Added buffer size protection to prevent memory exhaustion
+    during streaming responses.
+
     Args:
         response: HTTP response object with streaming content
         processor: Provider-specific stream processor
         max_chunks: Maximum chunks to process (safety limit)
+        max_buffer_size: Maximum buffer size in bytes (default 10MB)
 
     Returns:
         Tuple of (content_parts, chunk_count, completion_signal)
@@ -218,6 +223,7 @@ async def _process_stream_loop(
     content_parts = []
     chunk_count = 0
     completion_signal = None
+    current_buffer_size = 0
 
     async for chunk_bytes in response.content:
         chunk_count += 1
@@ -225,6 +231,16 @@ async def _process_stream_loop(
         # Safety limit to prevent infinite loops
         if chunk_count > max_chunks:
             logger.warning("⚠️ Reached maximum chunk limit (%s)", max_chunks)
+            completion_signal = StreamCompletionSignal.MAX_CHUNKS_REACHED
+            break
+
+        # Issue #551: Buffer size protection to prevent memory exhaustion
+        current_buffer_size += len(chunk_bytes)
+        if current_buffer_size > max_buffer_size:
+            logger.warning(
+                "⚠️ Response exceeds buffer limit (%d bytes), truncating stream",
+                max_buffer_size,
+            )
             completion_signal = StreamCompletionSignal.MAX_CHUNKS_REACHED
             break
 
@@ -292,15 +308,21 @@ class StreamProcessorFactory:
 
 
 async def process_llm_stream(
-    response, provider: str = "ollama", max_chunks: int = 1000
+    response,
+    provider: str = "ollama",
+    max_chunks: int = 1000,
+    max_buffer_size: int = 10 * 1024 * 1024,  # 10MB default
 ) -> Tuple[str, bool]:
     """
     Process LLM streaming response using completion signals instead of timeouts.
+
+    Issue #551: Added max_buffer_size parameter to prevent memory exhaustion.
 
     Args:
         response: HTTP response object with streaming content
         provider: LLM provider name
         max_chunks: Maximum chunks to process (safety limit)
+        max_buffer_size: Maximum buffer size in bytes (default 10MB)
 
     Returns:
         Tuple of (accumulated_content, completed_successfully)
@@ -309,12 +331,18 @@ async def process_llm_stream(
     processor = StreamProcessorFactory.create_processor(provider, max_chunks)
     processor.start_time = asyncio.get_event_loop().time()
 
-    logger.info("🔄 Starting %s stream processing (max_chunks: %s)", provider, max_chunks)
+    logger.info(
+        "🔄 Starting %s stream processing (max_chunks: %s, max_buffer: %d MB)",
+        provider,
+        max_chunks,
+        max_buffer_size // (1024 * 1024),
+    )
 
     # Issue #281: Use extracted helper for stream processing loop
+    # Issue #551: Pass max_buffer_size for memory protection
     try:
         content_parts, chunk_count, completion_signal = await _process_stream_loop(
-            response, processor, max_chunks
+            response, processor, max_chunks, max_buffer_size
         )
     except Exception as e:
         completion_signal = StreamCompletionSignal.ERROR_CONDITION

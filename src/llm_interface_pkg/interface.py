@@ -28,6 +28,7 @@ from .models import LLMSettings, LLMResponse, LLMRequest, ChatMessage
 from .types import ProviderType, LLMType
 from .hardware import HardwareDetector, TORCH_AVAILABLE
 from .streaming import StreamingManager
+from .cache import LLMResponseCache, CachedResponse, get_llm_cache
 from .mock_providers import local_llm, palm
 from .providers.ollama import OllamaProvider
 from .providers.openai_provider import OpenAIProvider
@@ -120,10 +121,9 @@ class LLMInterface:
         self._models_cache_time: float = 0
         self._lock = asyncio.Lock()
 
-        # Performance optimization - L1 in-memory cache
-        self._memory_cache = {}
-        self._memory_cache_access = []
-        self._memory_cache_max_size = 100
+        # Issue #551: L1/L2 dual-tier caching system
+        # Restored from archived async_llm_interface.py
+        self._response_cache = get_llm_cache()
 
         # Performance metrics tracking
         self._metrics = {
@@ -135,7 +135,14 @@ class LLMInterface:
             "total_response_time": 0.0,
             "provider_usage": {},
             "streaming_failures": {},
+            "fallback_count": 0,
         }
+
+        # Issue #551: Provider fallback chain configuration
+        # Restored from archived llm_interface_unified.py
+        # Lower numbers = higher priority
+        self._provider_priority = ["ollama", "openai", "vllm", "transformers", "mock"]
+        self._fallback_enabled = config.get("llm.fallback.enabled", True)
 
         # Initialize streaming manager
         self._streaming_manager = StreamingManager()
@@ -351,6 +358,8 @@ class LLMInterface:
         """
         Enhanced chat completion with multi-provider support and intelligent routing.
 
+        Issue #551: Added L1/L2 caching and provider fallback chain.
+
         Args:
             messages: List of message dicts
             llm_type: Type of LLM ("orchestrator", "task", "chat", etc.)
@@ -361,6 +370,7 @@ class LLMInterface:
         """
         start_time = time.time()
         request_id = kwargs.get("request_id", str(uuid.uuid4()))
+        skip_cache = kwargs.pop("skip_cache", False)
 
         try:
             # Update metrics
@@ -374,6 +384,33 @@ class LLMInterface:
             # Setup system prompt
             messages = self._setup_system_prompt(messages, llm_type)
 
+            # Issue #551: Check L1/L2 cache first (unless skip_cache=True)
+            if not skip_cache and not kwargs.get("stream", False):
+                cache_key = self._response_cache.generate_cache_key(
+                    messages=messages,
+                    model=model_name,
+                    temperature=kwargs.get("temperature", self.settings.temperature),
+                    top_k=kwargs.get("top_k", self.settings.top_k),
+                    top_p=kwargs.get("top_p", self.settings.top_p),
+                )
+                cached = await self._response_cache.get(cache_key)
+                if cached:
+                    self._metrics["cache_hits"] += 1
+                    processing_time = time.time() - start_time
+                    logger.debug(f"Cache hit for request {request_id[:8]}...")
+                    return LLMResponse(
+                        content=cached.content,
+                        model=cached.model,
+                        provider=provider,
+                        processing_time=processing_time,
+                        request_id=request_id,
+                        cached=True,
+                        metadata=cached.metadata or {},
+                    )
+                self._metrics["cache_misses"] += 1
+            else:
+                cache_key = None
+
             # Create standardized request
             request = LLMRequest(
                 messages=messages,
@@ -384,16 +421,30 @@ class LLMInterface:
                 **kwargs,
             )
 
-            # Route to appropriate provider
-            if provider in self.provider_routing:
-                response = await self.provider_routing[provider](request)
-            else:
-                logger.warning("Unknown provider %s, falling back to Ollama", provider)
-                response = await self._handle_ollama_request(request)
+            # Issue #551: Provider fallback chain
+            # Try primary provider first, then fallback to others if enabled
+            response = await self._execute_with_fallback(request, provider)
 
             # Update metrics
             processing_time = time.time() - start_time
-            self._update_metrics(provider, processing_time, success=True)
+            self._update_metrics(
+                response.provider if response.provider else provider,
+                processing_time,
+                success=not response.error,
+            )
+
+            # Issue #551: Cache successful responses
+            if cache_key and not response.error and response.content:
+                await self._response_cache.set(
+                    cache_key,
+                    CachedResponse(
+                        content=response.content,
+                        model=response.model,
+                        tokens_used=response.tokens_used,
+                        processing_time=response.processing_time,
+                        metadata={"request_id": request_id},
+                    ),
+                )
 
             # Track usage for cost optimization (Issue #229)
             await self._track_llm_usage(
@@ -419,6 +470,75 @@ class LLMInterface:
                 request_id=request_id,
                 error=str(e),
             )
+
+    async def _execute_with_fallback(
+        self, request: LLMRequest, primary_provider: str
+    ) -> LLMResponse:
+        """
+        Execute request with provider fallback chain.
+
+        Issue #551: Restored from archived llm_interface_unified.py
+        Automatically fails over to backup providers on error.
+
+        Args:
+            request: LLM request object
+            primary_provider: Preferred provider
+
+        Returns:
+            LLMResponse from first successful provider
+        """
+        # Build provider order: primary first, then fallbacks
+        if primary_provider in self.provider_routing:
+            provider_order = [primary_provider]
+        else:
+            provider_order = []
+
+        # Add fallback providers if enabled
+        if self._fallback_enabled:
+            for p in self._provider_priority:
+                if p not in provider_order and p in self.provider_routing:
+                    provider_order.append(p)
+
+        last_error = None
+        for provider_name in provider_order:
+            try:
+                handler = self.provider_routing[provider_name]
+                response = await handler(request)
+
+                # Check for error in response
+                if response.error:
+                    last_error = response.error
+                    logger.warning(
+                        f"Provider {provider_name} returned error: {response.error}"
+                    )
+                    continue
+
+                # Success!
+                if provider_name != primary_provider:
+                    response.fallback_used = True
+                    self._metrics["fallback_count"] += 1
+                    logger.info(
+                        f"Fallback to {provider_name} succeeded "
+                        f"(primary: {primary_provider})"
+                    )
+
+                return response
+
+            except Exception as e:
+                last_error = str(e)
+                logger.warning(f"Provider {provider_name} failed: {e}")
+                continue
+
+        # All providers failed
+        logger.error(f"All providers failed. Last error: {last_error}")
+        return LLMResponse(
+            content="",
+            model="failed",
+            provider="none",
+            processing_time=0.0,
+            request_id=request.request_id,
+            error=f"All providers failed. Last error: {last_error}",
+        )
 
     def _determine_provider_and_model(
         self, llm_type: str, **kwargs
@@ -593,8 +713,42 @@ class LLMInterface:
         return []
 
     def get_metrics(self) -> Dict[str, Any]:
-        """Get performance metrics."""
-        return self._metrics.copy()
+        """Get performance metrics including cache statistics."""
+        metrics = self._metrics.copy()
+        # Issue #551: Include L1/L2 cache metrics
+        metrics["cache"] = self._response_cache.get_metrics()
+        return metrics
+
+    def get_cache_metrics(self) -> Dict[str, Any]:
+        """
+        Get detailed cache performance metrics.
+
+        Issue #551: New method for cache performance monitoring.
+
+        Returns:
+            Dictionary with L1/L2 cache statistics and hit rates
+        """
+        return self._response_cache.get_metrics()
+
+    async def clear_cache(self, l1: bool = True, l2: bool = True) -> Dict[str, int]:
+        """
+        Clear LLM response cache.
+
+        Issue #551: New method for cache management.
+
+        Args:
+            l1: Clear L1 memory cache
+            l2: Clear L2 Redis cache
+
+        Returns:
+            Dictionary with counts of cleared entries
+        """
+        result = {}
+        if l1:
+            result["l1_cleared"] = self._response_cache.clear_l1()
+        if l2:
+            result["l2_cleared"] = await self._response_cache.clear_l2()
+        return result
 
     async def chat_completion_optimized(
         self,
