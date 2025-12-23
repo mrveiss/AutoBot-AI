@@ -148,15 +148,6 @@ const routes: RouteRecordRaw[] = [
         redirect: '/knowledge/categories'
       },
       {
-        path: 'review',
-        name: 'knowledge-review',
-        component: () => import('@/views/KnowledgeComponentReview.vue'),
-        meta: {
-          title: 'Component Review',
-          parent: 'knowledge'
-        }
-      },
-      {
         path: 'graph',
         name: 'knowledge-graph',
         component: () => import('@/components/knowledge/KnowledgeGraph.vue'),

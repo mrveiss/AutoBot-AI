@@ -38,13 +38,6 @@
             <i class="fas fa-chart-bar mr-2"></i>Statistics
           </router-link>
           <router-link
-            to="/knowledge/review"
-            class="px-3 py-2 text-sm font-medium border-b-2 transition-colors"
-            :class="$route.name === 'knowledge-review' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-blueGray-500 hover:text-blueGray-700 hover:border-blueGray-300'"
-          >
-            <i class="fas fa-clipboard-check mr-2"></i>Review
-          </router-link>
-          <router-link
             to="/knowledge/graph"
             class="px-3 py-2 text-sm font-medium border-b-2 transition-colors"
             :class="$route.name === 'knowledge-graph' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-blueGray-500 hover:text-blueGray-700 hover:border-blueGray-300'"
