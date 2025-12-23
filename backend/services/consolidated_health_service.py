@@ -329,6 +329,52 @@ async def check_monitoring_health():
         }
 
 
+async def check_vm_infrastructure_health():
+    """
+    Check VM infrastructure health status.
+
+    Issue #432: Integrates VM service registry for comprehensive VM health monitoring.
+    """
+    try:
+        from backend.services.vm_service_registry import get_vm_service_registry
+
+        registry = await get_vm_service_registry()
+        status_summary = registry.get_status_summary()
+
+        summary = status_summary["summary"]
+
+        # Determine overall VM infrastructure health
+        if summary["critical_offline"] > 0:
+            vm_status = "unhealthy"
+        elif summary["offline"] > 0:
+            vm_status = "degraded"
+        else:
+            vm_status = "healthy"
+
+        return {
+            "status": vm_status,
+            "component": "vm_infrastructure",
+            "details": {
+                "total_vms": summary["total"],
+                "online": summary["online"],
+                "offline": summary["offline"],
+                "critical_offline": summary["critical_offline"],
+            },
+            "services": {
+                name: svc["status"]
+                for name, svc in status_summary["services"].items()
+            },
+            "timestamp": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "component": "vm_infrastructure",
+            "timestamp": datetime.now().isoformat(),
+        }
+
+
 # Auto-register core components
 consolidated_health.register_component("system", check_system_health)
 consolidated_health.register_component("chat", check_chat_health)
@@ -337,3 +383,4 @@ consolidated_health.register_component("knowledge_base", check_knowledge_base_he
 consolidated_health.register_component("terminal", check_terminal_health)
 consolidated_health.register_component("state_tracking", check_state_tracking_health)
 consolidated_health.register_component("monitoring", check_monitoring_health)
+consolidated_health.register_component("vm_infrastructure", check_vm_infrastructure_health)

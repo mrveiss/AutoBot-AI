@@ -57,6 +57,14 @@ MONITORING_ROUTER_CONFIGS = [
         ["Infrastructure as Code"],
         "infrastructure",
     ),
+    # Issue #432: VM services monitoring router
+    (
+        "backend.api.vm_services",
+        "router",
+        "",  # Router already has /api/vm-services prefix
+        ["vm-services"],
+        "vm_services",
+    ),
 ]
 
 
