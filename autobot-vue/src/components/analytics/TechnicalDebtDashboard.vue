@@ -695,8 +695,8 @@ async function loadSummary(): Promise<void> {
 
 async function loadCategoryBreakdown(): Promise<void> {
   try {
-    // Issue #552: Fixed path - backend uses /api/debt/* not /api/analytics/debt/*
-    const response = await fetch('/api/debt/calculate');
+    // Issue #552: Fixed - backend uses POST for calculate, GET for summary
+    const response = await fetch('/api/debt/summary');
     if (response.ok) {
       const data = await response.json();
       categoryBreakdown.value = data.by_category || [];
@@ -728,8 +728,8 @@ async function loadRoiPriorities(): Promise<void> {
 
 async function loadDebtItems(): Promise<void> {
   try {
-    // Issue #552: Fixed path - backend uses /api/debt/* not /api/analytics/debt/*
-    const response = await fetch('/api/debt/calculate');
+    // Issue #552: Fixed - backend uses POST for /api/debt/calculate
+    const response = await fetch('/api/debt/calculate', { method: 'POST' });
     if (response.ok) {
       const data = await response.json();
       allDebtItems.value = data.items || [];

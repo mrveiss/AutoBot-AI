@@ -179,9 +179,9 @@ export default {
     };
 
     const loadDetailedPhases = async () => {
-      // Issue #463: Fetch real capability data from /api/project/phases
+      // Issue #552: Fixed path - backend uses /api/project-state/project/phases
       try {
-        const response = await apiService.get('/api/project/phases');
+        const response = await apiService.get('/api/project-state/project/phases');
         if (response && response.phases) {
           // Store detailed phase info with capabilities
           detailedPhases.value = response.phases;
@@ -197,7 +197,8 @@ export default {
     const refreshStatus = async () => {
       isLoading.value = true;
       try {
-        const response = await apiService.get('/api/project/status');
+        // Issue #552: Fixed path - backend uses /api/project-state/project/status
+        const response = await apiService.get('/api/project-state/project/status');
         // API response doesn't have a 'data' wrapper, it's the direct response
         if (response && response.current_phase) {
           projectStatus.value = response;
@@ -220,7 +221,8 @@ export default {
     const runValidation = async () => {
       isValidating.value = true;
       try {
-        await apiService.post('/api/project/validate');
+        // Issue #552: Fixed path - backend uses /api/project-state/project/validate
+        await apiService.post('/api/project-state/project/validate');
         await refreshStatus(); // Refresh after validation
       } catch (error) {
         logger.error('Failed to run validation:', error);
@@ -231,7 +233,8 @@ export default {
 
     const showReport = async () => {
       try {
-        const response = await apiService.get('/api/project/report');
+        // Issue #552: Fixed path - backend uses /api/project-state/project/report
+        const response = await apiService.get('/api/project-state/project/report');
         if (response.data.success) {
           validationReport.value = response.data.report;
           showReportModal.value = true;

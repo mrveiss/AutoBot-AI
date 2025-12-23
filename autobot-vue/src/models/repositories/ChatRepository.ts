@@ -393,9 +393,10 @@ export class ChatRepository {
   }
 
   // Reset chat (clear current session)
+  // Issue #552: Fixed path - backend uses /api/chat/reset
   async resetChat(): Promise<any> {
     try {
-      const response = await this.post('/api/reset')
+      const response = await this.post('/api/chat/reset')
       return response.data || response
     } catch (error: any) {
       logger.error('Failed to reset chat:', error)
@@ -404,9 +405,10 @@ export class ChatRepository {
   }
 
   // Get chat history (legacy endpoint)
+  // Issue #552: Fixed path - backend uses /api/chat/sessions
   async getChatHistory(): Promise<any> {
     try {
-      const response = await this.get('/api/history')
+      const response = await this.get('/api/chat/sessions')
       return response.data || response
     } catch (error: any) {
       logger.warn('Failed to get chat history (legacy):', error)

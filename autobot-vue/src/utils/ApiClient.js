@@ -516,7 +516,8 @@ class ApiClient {
       initial_directory: config.initial_directory || null
     };
 
-    return await this.post('/api/terminal/sessions', payload);
+    // Issue #552: Fixed path - backend uses /api/agent-terminal/*
+    return await this.post('/api/agent-terminal/sessions', payload);
   }
 
   /**
@@ -525,7 +526,8 @@ class ApiClient {
    * @returns {Promise<Object>} Deletion result
    */
   async deleteTerminalSession(sessionId) {
-    return await this.delete(`/api/terminal/sessions/${sessionId}`);
+    // Issue #552: Fixed path - backend uses /api/agent-terminal/*
+    return await this.delete(`/api/agent-terminal/sessions/${sessionId}`);
   }
 
   /**
@@ -533,7 +535,8 @@ class ApiClient {
    * @returns {Promise<Array>} List of sessions
    */
   async getTerminalSessions() {
-    const response = await this.get('/api/terminal/sessions');
+    // Issue #552: Fixed path - backend uses /api/agent-terminal/*
+    const response = await this.get('/api/agent-terminal/sessions');
     return response.sessions || [];
   }
 
@@ -551,7 +554,8 @@ class ApiClient {
       env: options.env || {}
     };
 
-    return await this.post('/api/terminal/execute', payload);
+    // Issue #552: Fixed path - backend uses /api/agent-terminal/*
+    return await this.post('/api/agent-terminal/execute', payload);
   }
 
   /**
@@ -560,7 +564,8 @@ class ApiClient {
    * @returns {Promise<Object>} Session info
    */
   async getTerminalSessionInfo(sessionId) {
-    return await this.get(`/api/terminal/sessions/${sessionId}`);
+    // Issue #552: Fixed path - backend uses /api/agent-terminal/*
+    return await this.get(`/api/agent-terminal/sessions/${sessionId}`);
   }
 
   // Update base URL (useful for settings changes)

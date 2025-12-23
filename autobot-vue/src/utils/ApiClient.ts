@@ -323,9 +323,10 @@ export class ApiClient {
   /**
    * Create a new terminal session
    * Backend endpoint: POST /api/agent-terminal/sessions
+   * Issue #552: Fixed path to match backend
    */
   async createTerminalSession(options: any): Promise<any> {
-    const response = await this.post('/api/terminal/sessions', options);
+    const response = await this.post('/api/agent-terminal/sessions', options);
     return response.json();
   }
 

@@ -161,8 +161,9 @@ export const ENDPOINTS = {
   KNOWLEDGE_STATS: '/api/knowledge_base/stats',
   KNOWLEDGE_ENTRIES: '/api/knowledge_base/entries',
   KNOWLEDGE_ADD_TEXT: '/api/knowledge_base/add_text',
-  KNOWLEDGE_ADD_URL: '/api/knowledge_base/add_url',
-  KNOWLEDGE_ADD_FILE: '/api/knowledge_base/add_file',
+  // Issue #552: Fixed paths - backend uses add_document for URL/file
+  KNOWLEDGE_ADD_URL: '/api/knowledge_base/url',
+  KNOWLEDGE_ADD_FILE: '/api/knowledge_base/upload',
   KNOWLEDGE_EXPORT: '/api/knowledge_base/export',
   KNOWLEDGE_CLEANUP: '/api/knowledge_base/cleanup',
 
@@ -177,8 +178,9 @@ export const ENDPOINTS = {
   FILES_DELETE: '/api/files/delete',
 
   // Terminal
-  TERMINAL_EXECUTE: '/api/terminal/execute',
-  TERMINAL_SESSIONS: '/api/terminal/sessions',
+  // Issue #552: Fixed paths - backend uses /api/agent-terminal/*
+  TERMINAL_EXECUTE: '/api/agent-terminal/execute',
+  TERMINAL_SESSIONS: '/api/agent-terminal/sessions',
 
   // WebSocket endpoints
   WS_CHAT: '/ws/chat',
