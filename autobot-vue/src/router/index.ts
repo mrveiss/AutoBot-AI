@@ -536,6 +536,19 @@ router.beforeEach(async (to, from, next) => {
     // Check authentication requirements
     const requiresAuth = to.matched.some(record => record.meta.requiresAuth === true)
 
+    // If route requires auth and user not authenticated, try backend check first
+    // This handles single_user mode where backend auto-authenticates
+    if (requiresAuth && !userStore.isAuthenticated) {
+      logger.debug('Route requires auth, checking backend for auto-auth (single_user mode)')
+      const backendAuthenticated = await userStore.checkAuthFromBackend()
+      if (backendAuthenticated) {
+        logger.debug('Backend auto-authenticated user (single_user mode)')
+        // Continue to route - user is now authenticated
+        next()
+        return
+      }
+    }
+
     if (requiresAuth && !userStore.isAuthenticated) {
       logger.debug('Authentication required, redirecting to login')
 
