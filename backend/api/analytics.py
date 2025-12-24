@@ -981,13 +981,17 @@ async def _send_health_update_if_due(
 ) -> float:
     """Send system health update if due (every 10 seconds). (Issue #315 - extracted)
 
+    Issue #69: Legacy analytics_monitoring removed. Real-time alerts now delivered
+    via Prometheus AlertManager webhook (alertmanager_webhook.py -> WebSocket broadcast).
+
     Returns:
         Updated last_update timestamp
     """
     if current_time - last_update > 10:
         try:
-            alerts = await analytics_monitoring.get_monitoring_alerts()
-            critical = [a for a in alerts if a.get("severity") == "critical"]
+            # Issue #69: Alerts now delivered via AlertManager webhook, not polled here
+            alerts: list = []
+            critical: list = []
             await websocket.send_json(_build_health_message(alerts, critical))
             return current_time
         except Exception as e:

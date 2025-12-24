@@ -35,13 +35,8 @@ MONITORING_ROUTER_CONFIGS = [
         "service_monitor",
     ),
     ("backend.api.metrics", "router", "/metrics", ["metrics"], "metrics"),
-    (
-        "backend.api.monitoring_alerts",
-        "router",
-        "/alerts",
-        ["alerts"],
-        "monitoring_alerts",
-    ),
+    # Issue #69: monitoring_alerts removed - replaced by Prometheus AlertManager
+    # Alerts now handled via alertmanager_webhook router (Issue #346)
     (
         "backend.api.error_monitoring",
         "router",

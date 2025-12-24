@@ -301,14 +301,8 @@ def _get_monitoring_routers() -> Dict[str, RouterConfig]:
             status=RouterStatus.ENABLED,
             description="Multi-machine infrastructure monitoring with service hierarchies",
         ),
-        "monitoring_alerts": RouterConfig(
-            name="monitoring_alerts",
-            module_path="backend.api.monitoring_alerts",
-            prefix="/api/alerts",
-            tags=["alerts", "notifications", "monitoring"],
-            status=RouterStatus.ENABLED,
-            description="Advanced monitoring alerts and notifications system",
-        ),
+        # Issue #69: monitoring_alerts removed - replaced by Prometheus AlertManager
+        # Alerts now handled via alertmanager_webhook (Issue #346)
         "monitoring": RouterConfig(
             name="monitoring",
             module_path="backend.api.monitoring",
@@ -346,6 +340,39 @@ def _get_monitoring_routers() -> Dict[str, RouterConfig]:
     }
 
 
+def _get_user_management_routers() -> Dict[str, RouterConfig]:
+    """
+    Get user management router configurations.
+
+    Issue #576: User management system with multi-tenancy support.
+
+    Returns:
+        Dict of user management router configurations
+    """
+    return {
+        "user_management": RouterConfig(
+            name="user_management",
+            module_path="backend.api.user_management",
+            prefix="/api",
+            tags=["users", "teams", "organizations", "auth"],
+            status=RouterStatus.ENABLED,
+            requires_auth=True,
+            description=(
+                "User management system with multi-tenancy, teams, RBAC, "
+                "SSO integration, and MFA support (Issue #576)"
+            ),
+        ),
+        "auth": RouterConfig(
+            name="auth",
+            module_path="backend.api.auth",
+            prefix="/api/auth",
+            tags=["auth", "security"],
+            status=RouterStatus.ENABLED,
+            description="Authentication endpoints for login/logout/session management",
+        ),
+    }
+
+
 class APIRegistry:
     """Central registry for all API endpoints and routers"""
 
@@ -362,6 +389,7 @@ class APIRegistry:
         routers.update(_get_file_and_security_routers())
         routers.update(_get_development_automation_routers())
         routers.update(_get_monitoring_routers())
+        routers.update(_get_user_management_routers())  # Issue #576
         return routers
 
     def get_enabled_routers(self) -> Dict[str, RouterConfig]:

@@ -19,33 +19,8 @@ from src.utils.error_boundaries import ErrorCategory
 
 logger = logging.getLogger(__name__)
 
-# Lazy import to avoid circular dependencies (thread-safe)
+# Thread-safe imports
 import threading
-
-_alerts_manager = None
-_alerts_manager_lock = threading.Lock()
-
-
-def _try_import_alerts_manager():
-    """Try to import alerts manager. (Issue #315 - extracted)"""
-    try:
-        from src.utils.monitoring_alerts import get_alerts_manager
-        return get_alerts_manager()
-    except ImportError:
-        logger.warning("monitoring_alerts not available for alert notifications")
-        return None
-
-
-def _get_alerts_manager():
-    """Lazy load alerts manager to avoid circular imports (thread-safe)."""
-    global _alerts_manager
-    if _alerts_manager is not None:
-        return _alerts_manager
-    with _alerts_manager_lock:
-        # Double-check after acquiring lock
-        if _alerts_manager is None:
-            _alerts_manager = _try_import_alerts_manager()
-    return _alerts_manager
 
 
 @dataclass
@@ -219,60 +194,31 @@ class ErrorMetricsCollector:
         threshold: int,
     ) -> None:
         """
-        Send alert notification through the monitoring alerts system.
+        Log alert threshold exceeded.
 
-        Phase 5 (Issue #348): Uses current_count instead of ErrorStats object.
+        Issue #69: Alerting is now handled by Prometheus AlertManager.
+        Errors recorded to Prometheus will trigger AlertManager rules defined in
+        config/prometheus/alertmanager_rules.yml which send notifications via
+        the webhook at backend/api/alertmanager_webhook.py.
+
+        This method now only logs the threshold breach for debugging purposes.
         """
-        alerts_manager = _get_alerts_manager()
-        if alerts_manager is None:
-            return
+        # Determine severity for logging
+        ratio = current_count / threshold if threshold > 0 else 1
+        if ratio >= 3:
+            severity = "critical"
+        elif ratio >= 2:
+            severity = "high"
+        elif ratio >= 1.5:
+            severity = "medium"
+        else:
+            severity = "low"
 
-        try:
-            from src.utils.monitoring_alerts import (
-                Alert,
-                AlertSeverity,
-                AlertStatus,
-            )
-
-            # Determine severity based on error count vs threshold
-            ratio = current_count / threshold if threshold > 0 else 1
-            if ratio >= 3:
-                severity = AlertSeverity.CRITICAL
-            elif ratio >= 2:
-                severity = AlertSeverity.HIGH
-            elif ratio >= 1.5:
-                severity = AlertSeverity.MEDIUM
-            else:
-                severity = AlertSeverity.LOW
-
-            # Create alert
-            alert = Alert(
-                rule_id=f"error_metrics:{component}:{error_code or 'any'}",
-                rule_name=f"Error Threshold: {component}",
-                metric_path=f"error_metrics.{component}.{error_code or 'total'}",
-                current_value=float(current_count),
-                threshold=float(threshold),
-                severity=severity,
-                status=AlertStatus.ACTIVE,
-                message=(
-                    f"Error threshold exceeded for {component}: "
-                    f"{current_count} errors (threshold: {threshold})"
-                ),
-                created_at=datetime.now(),
-                updated_at=datetime.now(),
-                tags=["error_metrics", component, error_code or "any"],
-            )
-
-            # Send through all enabled notification channels
-            await alerts_manager._send_alert_notifications(alert)
-
-            logger.info(
-                f"Alert notification sent for {component}: "
-                f"{current_count} errors (severity: {severity.value})"
-            )
-
-        except Exception as e:
-            logger.error("Failed to send alert notification: %s", e)
+        logger.warning(
+            f"Error threshold exceeded [{severity.upper()}] {component}/{error_code or 'any'}: "
+            f"{current_count} errors (threshold: {threshold}). "
+            f"AlertManager will handle notifications based on Prometheus metrics."
+        )
 
     async def mark_resolved(self, trace_id: str) -> bool:
         """
