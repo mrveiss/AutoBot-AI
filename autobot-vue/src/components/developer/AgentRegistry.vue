@@ -156,7 +156,7 @@
           </div>
 
           <!-- MCP Tools List -->
-          <div v-if="agent.mcp_tools && agent.mcp_tools.length > 0">
+          <div v-if="agent.mcp_tools && agent.mcp_tools.length > 0" class="mb-4">
             <p class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">MCP TOOLS:</p>
             <div class="flex flex-wrap gap-1">
               <span
@@ -168,6 +168,24 @@
                 {{ formatMcpName(mcp) }}
               </span>
             </div>
+          </div>
+
+          <!-- Invocation Info -->
+          <div v-if="agent.invoked_by" class="mb-4">
+            <p class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">INVOKED BY:</p>
+            <p class="text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700 p-2 rounded">
+              <i class="fas fa-arrow-right text-green-500 mr-1"></i>
+              {{ agent.invoked_by }}
+            </p>
+          </div>
+
+          <!-- Source File -->
+          <div v-if="agent.source_file">
+            <p class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">SOURCE:</p>
+            <p class="text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700 p-2 rounded font-mono">
+              <i class="fas fa-file-code text-orange-500 mr-1"></i>
+              {{ agent.source_file }}
+            </p>
           </div>
         </div>
       </div>
