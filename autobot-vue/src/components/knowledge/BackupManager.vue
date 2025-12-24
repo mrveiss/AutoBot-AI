@@ -82,7 +82,7 @@
             <div class="backup-info">
               <span class="backup-name">{{ backup.name }}</span>
               <span class="backup-meta">
-                {{ formatFileSize(backup.size) }} | {{ formatDate(backup.created_at) }}
+                {{ formatFileSize(backup.size) }} | {{ formatDateTime(backup.created_at) }}
               </span>
               <span v-if="backup.description" class="backup-desc">{{ backup.description }}</span>
             </div>
@@ -124,7 +124,7 @@
 import { ref, onMounted } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
-import { formatFileSize } from '@/utils/formatHelpers'
+import { formatFileSize, formatDateTime } from '@/utils/formatHelpers'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -185,19 +185,7 @@ const showStatus = (type: StatusMessage['type'], text: string) => {
   }
 }
 
-const formatDate = (dateStr: string): string => {
-  try {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  } catch {
-    return dateStr
-  }
-}
+// Use shared formatDateTime from formatHelpers (code review fix)
 
 const loadBackups = async () => {
   try {

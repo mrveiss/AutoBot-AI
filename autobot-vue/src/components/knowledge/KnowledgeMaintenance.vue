@@ -274,13 +274,16 @@ const refreshAll = async () => {
 }
 
 const handleCleanupComplete = (result: { action: string; details: string }) => {
-  // Add to maintenance history
+  // Add to maintenance history (limit to 50 entries to prevent memory leak)
   maintenanceHistory.value.unshift({
     type: 'cleanup',
     action: result.action,
     details: result.details,
     timestamp: new Date()
   })
+  if (maintenanceHistory.value.length > 50) {
+    maintenanceHistory.value = maintenanceHistory.value.slice(0, 50)
+  }
 
   // Refresh health dashboard after cleanup
   loadHealthDashboard()
