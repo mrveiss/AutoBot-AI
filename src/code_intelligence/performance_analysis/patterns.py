@@ -76,12 +76,46 @@ BLOCKING_IO_PATTERNS_MEDIUM_CONFIDENCE = {
     ".execute(": ("Consider async execute if this is database", 0.60, False),
 }
 
-# Issue #363-366 + #385: Patterns that look like blocking but are safe
+# Issue #363-366 + #385 + #569: Patterns that look like blocking but are safe
 # These reduce confidence or mark as potential_false_positive
 SAFE_PATTERNS = {
-    # Dict/object attribute access - NOT I/O
+    # Dict/object attribute access - NOT I/O (Issue #569: expanded list)
     ".get(": "dict/object attribute access (O(1), not I/O)",
     "dict.get": "dictionary get method",
+    "data.get": "dict data access",
+    "item.get": "dict item access",
+    "result.get": "dict result access",
+    "results.get": "dict results access",
+    "metadata.get": "dict metadata access",
+    "params.get": "dict params access",
+    "kwargs.get": "kwargs dict access",
+    "args.get": "args dict access",
+    "options.get": "options dict access",
+    "response.get": "response dict access",
+    "msg.get": "message dict access",
+    "message.get": "message dict access",
+    "info.get": "info dict access",
+    "context.get": "context dict access",
+    "headers.get": "headers dict access",
+    "body.get": "body dict access",
+    "json_data.get": "JSON data dict access",
+    "payload.get": "payload dict access",
+    "event.get": "event dict access",
+    "record.get": "record dict access",
+    "row.get": "row dict access",
+    "entry.get": "entry dict access",
+    "obj.get": "object dict access",
+    "d.get": "dict access",
+    "by_severity.get": "dict access by key",
+    "severity_order.get": "severity ordering dict access",
+    "severity_emoji.get": "severity emoji dict access",
+    "fact.get": "fact dict access",
+    "vector.get": "vector dict access",
+    "issue.get": "issue dict access",
+    "finding.get": "finding dict access",
+    "error.get": "error dict access",
+    "state.get": "state dict access",
+    "cache.get": "cache dict access (in-memory)",
     "getattr(": "Python builtin for attribute access",
     "getattr": "Python builtin for attribute access",
     # Logging - initialization, not I/O during call

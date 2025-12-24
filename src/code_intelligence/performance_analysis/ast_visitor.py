@@ -462,8 +462,13 @@ class PerformanceASTVisitor(ast.NodeVisitor):
                 return
 
         # Step 4: Legacy fallback - low confidence generic match
+        # Issue #569: Be smarter about .get pattern - it's usually dict access
         for blocking_op, recommendation in BLOCKING_IO_OPERATIONS.items():
             if blocking_op in call_name_lower:
+                # Issue #569: Skip generic "get" pattern for attribute access (dict.get)
+                # These are almost always false positives - dict access is O(1)
+                if blocking_op == "get" and ".get" in call_name_lower:
+                    continue  # Skip dict.get() false positives
                 self._create_blocking_issue(
                     call_name,
                     node,
