@@ -154,6 +154,21 @@
               </span>
             </div>
           </div>
+
+          <!-- MCP Tools List -->
+          <div v-if="agent.mcp_tools && agent.mcp_tools.length > 0">
+            <p class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">MCP TOOLS:</p>
+            <div class="flex flex-wrap gap-1">
+              <span
+                v-for="mcp in agent.mcp_tools"
+                :key="mcp"
+                class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded flex items-center gap-1"
+              >
+                <i class="fas fa-plug text-[10px]"></i>
+                {{ formatMcpName(mcp) }}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -220,6 +235,13 @@ export default {
       return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
     };
 
+    const formatMcpName = (mcp) => {
+      // Convert mcp_name to readable format: "knowledge_mcp" -> "Knowledge"
+      return mcp.replace('_mcp', '').split('_').map(word =>
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(' ');
+    };
+
     const fetchAllAgents = async () => {
       try {
         const url = await AppConfig.getServiceUrl('backend');
@@ -266,6 +288,7 @@ export default {
       lastUpdatedTime,
       agentBorderClass,
       statusBadgeClass,
+      formatMcpName,
       refreshData,
     };
   },
