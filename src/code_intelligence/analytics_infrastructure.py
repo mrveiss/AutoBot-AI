@@ -183,6 +183,7 @@ class AnalyticsInfrastructureMixin:
                         )
                     except Exception as e:
                         logger.warning("Redis not available for caching: %s", e)
+                        self._metrics.errors.append(f"Redis init failed: {e}")
                         self._redis_client = None
         return self._redis_client
 
@@ -215,6 +216,12 @@ class AnalyticsInfrastructureMixin:
         """
         if not self._use_llm or not text.strip():
             return None
+
+        # Issue #554: Truncate text to prevent Ollama token limit errors
+        # nomic-embed-text has ~8192 token limit, roughly 4 chars per token
+        max_chars = 30000  # Conservative limit
+        if len(text) > max_chars:
+            text = text[:max_chars]
 
         cache = await self._get_embedding_cache()
         if cache:

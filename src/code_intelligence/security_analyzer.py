@@ -13,16 +13,29 @@ Detects security vulnerabilities through pattern analysis including:
 - OWASP Top 10 vulnerability mapping
 
 Part of Issue #219 - Security Pattern Analyzer
+Issue #554 - Added Vector/Redis/LLM infrastructure for semantic analysis
 Parent Epic: #217 - Advanced Code Intelligence
 """
 
 import ast
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, FrozenSet, List, Optional, Set
+
+# Issue #554: Import analytics infrastructure for semantic analysis
+try:
+    from src.code_intelligence.analytics_infrastructure import (
+        SemanticAnalysisMixin,
+        SIMILARITY_MEDIUM,
+    )
+    HAS_ANALYTICS_INFRASTRUCTURE = True
+except ImportError:
+    HAS_ANALYTICS_INFRASTRUCTURE = False
+    SemanticAnalysisMixin = object  # Fallback to object if not available
 
 logger = logging.getLogger(__name__)
 
@@ -695,15 +708,30 @@ class SecurityASTVisitor(ast.NodeVisitor):
         return ""
 
 
-class SecurityAnalyzer:
-    """Main security pattern analyzer."""
+class SecurityAnalyzer(SemanticAnalysisMixin):
+    """
+    Main security pattern analyzer.
+
+    Issue #554: Now includes optional semantic analysis via ChromaDB/Redis/LLM
+    infrastructure for detecting semantically similar security vulnerabilities.
+    """
 
     def __init__(
         self,
         project_root: Optional[str] = None,
         exclude_patterns: Optional[List[str]] = None,
+        use_semantic_analysis: bool = False,
+        use_cache: bool = True,
     ):
-        """Initialize security analyzer with project root and exclusion patterns."""
+        """
+        Initialize security analyzer with project root and exclusion patterns.
+
+        Args:
+            project_root: Root directory for analysis
+            exclude_patterns: Patterns to exclude from analysis
+            use_semantic_analysis: Whether to use LLM-based semantic analysis (Issue #554)
+            use_cache: Whether to use Redis caching for results (Issue #554)
+        """
         self.project_root = Path(project_root) if project_root else Path.cwd()
         self.exclude_patterns = exclude_patterns or [
             "venv",
@@ -717,6 +745,16 @@ class SecurityAnalyzer:
             "migrations",
         ]
         self.results: List[SecurityFinding] = []
+        self.use_semantic_analysis = use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
+
+        # Issue #554: Initialize analytics infrastructure if semantic analysis enabled
+        if self.use_semantic_analysis:
+            self._init_infrastructure(
+                collection_name="security_analysis_vectors",
+                use_llm=True,
+                use_cache=use_cache,
+                redis_database="analytics",
+            )
 
     def analyze_file(self, file_path: str) -> List[SecurityFinding]:
         """Analyze a single file for security vulnerabilities."""
@@ -994,6 +1032,151 @@ class SecurityAnalyzer:
 
         return "".join(md)
 
+    # Issue #554: Async semantic analysis methods
+
+    async def analyze_directory_async(
+        self,
+        directory: Optional[str] = None,
+        find_semantic_duplicates: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Analyze a directory with optional semantic analysis.
+
+        Issue #554: Async version that supports ChromaDB/Redis/LLM infrastructure.
+
+        Args:
+            directory: Path to directory to analyze
+            find_semantic_duplicates: Whether to find semantically similar vulnerabilities
+
+        Returns:
+            Dictionary with analysis results including semantic matches
+        """
+        start_time = time.time()
+
+        # Run standard analysis first
+        results = self.analyze_directory(directory)
+
+        result = {
+            "results": [r.to_dict() for r in results],
+            "summary": self.get_summary(),
+            "semantic_duplicates": [],
+            "infrastructure_metrics": {},
+        }
+
+        # Run semantic analysis if enabled
+        if self.use_semantic_analysis and find_semantic_duplicates:
+            semantic_dups = await self._find_semantic_security_duplicates(results)
+            result["semantic_duplicates"] = semantic_dups
+
+            # Add infrastructure metrics
+            result["infrastructure_metrics"] = self._get_infrastructure_metrics()
+
+        result["analysis_time_ms"] = (time.time() - start_time) * 1000
+        return result
+
+    async def _find_semantic_security_duplicates(
+        self,
+        findings: List[SecurityFinding],
+    ) -> List[Dict[str, Any]]:
+        """
+        Find semantically similar security vulnerabilities using LLM embeddings.
+
+        Issue #554: Uses ChromaDB for vector storage and similarity search.
+
+        Args:
+            findings: List of detected security findings
+
+        Returns:
+            List of duplicate pairs with similarity scores
+        """
+        if not self.use_semantic_analysis or not findings:
+            return []
+
+        # Extract code snippets from findings that have them
+        items_with_code = []
+        for finding in findings:
+            code = getattr(finding, "current_code", "") or ""
+            if code and len(code) > 20:  # Skip very short snippets
+                items_with_code.append({
+                    "vulnerability_type": finding.vulnerability_type.value,
+                    "file_path": finding.file_path,
+                    "line_start": finding.line_start,
+                    "code": code,
+                    "description": finding.description,
+                    "owasp_category": finding.owasp_category,
+                })
+
+        if len(items_with_code) < 2:
+            return []
+
+        # Use the mixin's semantic duplicate finder
+        try:
+            duplicates = await self._find_semantic_duplicates(
+                items_with_code,
+                code_key="code",
+                min_similarity=SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7,
+            )
+            return duplicates
+        except Exception as e:
+            logger.warning("Semantic duplicate detection failed: %s", e)
+            return []
+
+    async def cache_analysis_results(
+        self,
+        directory: str,
+        results: List[SecurityFinding],
+    ) -> bool:
+        """
+        Cache analysis results in Redis for faster retrieval.
+
+        Issue #554: Uses Redis caching from analytics infrastructure.
+
+        Args:
+            directory: Analyzed directory path
+            results: Analysis results to cache
+
+        Returns:
+            True if cached successfully
+        """
+        if not self.use_semantic_analysis:
+            return False
+
+        cache_key = self._generate_content_hash(directory)
+        results_dict = {
+            "results": [r.to_dict() for r in results],
+            "summary": self.get_summary(),
+        }
+
+        return await self._cache_result(
+            key=cache_key,
+            result=results_dict,
+            prefix="security_analysis",
+        )
+
+    async def get_cached_analysis(
+        self,
+        directory: str,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get cached analysis results from Redis.
+
+        Issue #554: Retrieves cached results for faster repeat analysis.
+
+        Args:
+            directory: Directory path to look up
+
+        Returns:
+            Cached analysis results or None if not found
+        """
+        if not self.use_semantic_analysis:
+            return None
+
+        cache_key = self._generate_content_hash(directory)
+        return await self._get_cached_result(
+            key=cache_key,
+            prefix="security_analysis",
+        )
+
 
 def analyze_security(
     directory: Optional[str] = None, exclude_patterns: Optional[List[str]] = None
@@ -1030,3 +1213,33 @@ def get_vulnerability_types() -> List[Dict[str, str]]:
         }
         for vt in VulnerabilityType
     ]
+
+
+async def analyze_security_async(
+    directory: Optional[str] = None,
+    exclude_patterns: Optional[List[str]] = None,
+    use_semantic_analysis: bool = True,
+    find_semantic_duplicates: bool = True,
+) -> Dict[str, Any]:
+    """
+    Async convenience function to analyze security with semantic analysis.
+
+    Issue #554: Async version with ChromaDB/Redis/LLM infrastructure support.
+
+    Args:
+        directory: Directory to analyze (defaults to current directory)
+        exclude_patterns: Patterns to exclude from analysis
+        use_semantic_analysis: Whether to use LLM-based semantic analysis
+        find_semantic_duplicates: Whether to find semantically similar vulnerabilities
+
+    Returns:
+        Dictionary with results and summary including semantic matches
+    """
+    analyzer = SecurityAnalyzer(
+        project_root=directory,
+        exclude_patterns=exclude_patterns,
+        use_semantic_analysis=use_semantic_analysis,
+    )
+    return await analyzer.analyze_directory_async(
+        find_semantic_duplicates=find_semantic_duplicates,
+    )

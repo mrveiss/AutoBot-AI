@@ -45,8 +45,15 @@ from .ast_visitor import PerformanceASTVisitor
 from .analyzer import (
     PerformanceAnalyzer,
     analyze_performance,
+    analyze_performance_async,
     get_performance_issue_types,
 )
+
+# Issue #554: Infrastructure availability flag
+try:
+    from .analyzer import HAS_ANALYTICS_INFRASTRUCTURE
+except ImportError:
+    HAS_ANALYTICS_INFRASTRUCTURE = False
 
 __all__ = [
     # Types
@@ -72,5 +79,8 @@ __all__ = [
     # Analyzer
     "PerformanceAnalyzer",
     "analyze_performance",
+    "analyze_performance_async",
     "get_performance_issue_types",
+    # Issue #554: Infrastructure
+    "HAS_ANALYTICS_INFRASTRUCTURE",
 ]

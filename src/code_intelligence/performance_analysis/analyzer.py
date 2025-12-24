@@ -551,3 +551,33 @@ def _get_category(issue_type: PerformanceIssueType) -> str:
             return category
 
     return "General"
+
+
+async def analyze_performance_async(
+    directory: Optional[str] = None,
+    exclude_patterns: Optional[List[str]] = None,
+    use_semantic_analysis: bool = True,
+    find_semantic_duplicates: bool = True,
+) -> Dict[str, Any]:
+    """
+    Async convenience function to analyze performance with semantic analysis.
+
+    Issue #554: Async version with ChromaDB/Redis/LLM infrastructure support.
+
+    Args:
+        directory: Directory to analyze (defaults to current directory)
+        exclude_patterns: Patterns to exclude from analysis
+        use_semantic_analysis: Whether to use LLM-based semantic analysis
+        find_semantic_duplicates: Whether to find semantically similar issues
+
+    Returns:
+        Dictionary with results and summary including semantic matches
+    """
+    analyzer = PerformanceAnalyzer(
+        project_root=directory,
+        exclude_patterns=exclude_patterns,
+        use_semantic_analysis=use_semantic_analysis,
+    )
+    return await analyzer.analyze_directory_async(
+        find_semantic_duplicates=find_semantic_duplicates,
+    )
