@@ -1081,7 +1081,8 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         """
         Find semantically similar security vulnerabilities using LLM embeddings.
 
-        Issue #554: Uses ChromaDB for vector storage and similarity search.
+        Issue #554: Uses the generic _find_semantic_duplicates_with_extraction
+        helper from SemanticAnalysisMixin to reduce code duplication.
 
         Args:
             findings: List of detected security findings
@@ -1089,34 +1090,19 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         Returns:
             List of duplicate pairs with similarity scores
         """
-        if not self.use_semantic_analysis or not findings:
-            return []
-
-        # Extract code snippets from findings that have them
-        items_with_code = []
-        for finding in findings:
-            code = getattr(finding, "current_code", "") or ""
-            if code and len(code) > 20:  # Skip very short snippets
-                items_with_code.append({
-                    "vulnerability_type": finding.vulnerability_type.value,
-                    "file_path": finding.file_path,
-                    "line_start": finding.line_start,
-                    "code": code,
-                    "description": finding.description,
-                    "owasp_category": finding.owasp_category,
-                })
-
-        if len(items_with_code) < 2:
-            return []
-
-        # Use the mixin's semantic duplicate finder
         try:
-            duplicates = await self._find_semantic_duplicates(
-                items_with_code,
-                code_key="code",
+            return await self._find_semantic_duplicates_with_extraction(
+                items=findings,
+                code_extractors=["current_code"],
+                metadata_keys={
+                    "vulnerability_type": "vulnerability_type",
+                    "file_path": "file_path",
+                    "line_start": "line_start",
+                    "description": "description",
+                    "owasp_category": "owasp_category",
+                },
                 min_similarity=SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7,
             )
-            return duplicates
         except Exception as e:
             logger.warning("Semantic duplicate detection failed: %s", e)
             return []

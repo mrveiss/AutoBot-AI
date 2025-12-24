@@ -103,6 +103,7 @@ class AnalyticsInfrastructureMixin:
         embedding_model: str = DEFAULT_EMBEDDING_MODEL,
         cache_ttl: int = DEFAULT_CACHE_TTL,
         redis_database: str = DEFAULT_REDIS_DATABASE,
+        embedding_cache_size: int = DEFAULT_EMBEDDING_CACHE_SIZE,
     ) -> None:
         """
         Initialize infrastructure configuration.
@@ -114,6 +115,7 @@ class AnalyticsInfrastructureMixin:
             embedding_model: Ollama model for embeddings
             cache_ttl: TTL for cached results in seconds
             redis_database: Redis database name
+            embedding_cache_size: Max entries in embedding cache (default 500)
         """
         self._collection_name = collection_name
         self._use_llm = use_llm
@@ -121,6 +123,7 @@ class AnalyticsInfrastructureMixin:
         self._embedding_model = embedding_model
         self._cache_ttl = cache_ttl
         self._redis_database = redis_database
+        self._embedding_cache_size = embedding_cache_size
 
         # Lazy-loaded resources
         self._chromadb_client = None
@@ -196,7 +199,7 @@ class AnalyticsInfrastructureMixin:
                         from src.knowledge.embedding_cache import EmbeddingCache
 
                         self._embedding_cache = EmbeddingCache(
-                            maxsize=DEFAULT_EMBEDDING_CACHE_SIZE,
+                            maxsize=self._embedding_cache_size,
                             ttl_seconds=self._cache_ttl,
                         )
                     except ImportError:
@@ -258,6 +261,42 @@ class AnalyticsInfrastructureMixin:
             self._metrics.errors.append(f"Embedding generation failed: {e}")
 
         return None
+
+    async def _get_embeddings_batch(
+        self, texts: List[str], max_concurrent: int = 5
+    ) -> List[Optional[List[float]]]:
+        """
+        Generate embeddings for multiple texts in parallel.
+
+        Issue #554: Uses asyncio.gather for 3-5x faster batch embedding generation.
+        Limits concurrency to prevent overwhelming Ollama server.
+
+        Args:
+            texts: List of texts to generate embeddings for
+            max_concurrent: Maximum concurrent embedding requests (default 5)
+
+        Returns:
+            List of embeddings (or None for failed/empty texts)
+        """
+        if not self._use_llm or not texts:
+            return [None] * len(texts)
+
+        # Create semaphore to limit concurrent requests
+        semaphore = asyncio.Semaphore(max_concurrent)
+
+        async def get_with_limit(text: str) -> Optional[List[float]]:
+            async with semaphore:
+                return await self._get_embedding(text) if text.strip() else None
+
+        # Execute all embeddings in parallel with rate limiting
+        tasks = [get_with_limit(text) for text in texts]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Convert exceptions to None
+        return [
+            r if isinstance(r, list) else None
+            for r in results
+        ]
 
     async def _cache_result(
         self,
@@ -478,13 +517,11 @@ class SemanticAnalysisMixin(AnalyticsInfrastructureMixin):
         if not self._use_llm or len(items) < 2:
             return []
 
-        duplicates = []
-        embeddings = []
+        # Issue #554: Use parallel embedding generation for 3-5x speedup
+        codes = [item.get(code_key, "") for item in items]
+        embeddings = await self._get_embeddings_batch(codes)
 
-        for item in items:
-            code = item.get(code_key, "")
-            emb = await self._get_embedding(code) if code else None
-            embeddings.append(emb)
+        duplicates = []
 
         for i in range(len(items)):
             if embeddings[i] is None:
@@ -493,17 +530,90 @@ class SemanticAnalysisMixin(AnalyticsInfrastructureMixin):
                 if embeddings[j] is None:
                     continue
 
-                similarity = await self._compute_semantic_similarity(
-                    items[i].get(code_key, ""),
-                    items[j].get(code_key, ""),
-                )
-                if similarity >= min_similarity:
-                    duplicates.append(
-                        {
-                            "item1": items[i],
-                            "item2": items[j],
-                            "similarity": similarity,
-                        }
-                    )
+                # Compute cosine similarity directly from embeddings
+                emb1, emb2 = embeddings[i], embeddings[j]
+                dot_product = sum(a * b for a, b in zip(emb1, emb2))
+                norm1 = sum(a * a for a in emb1) ** 0.5
+                norm2 = sum(b * b for b in emb2) ** 0.5
+
+                if norm1 > 0 and norm2 > 0:
+                    similarity = dot_product / (norm1 * norm2)
+                    if similarity >= min_similarity:
+                        duplicates.append(
+                            {
+                                "item1": items[i],
+                                "item2": items[j],
+                                "similarity": similarity,
+                            }
+                        )
 
         return duplicates
+
+    async def _find_semantic_duplicates_with_extraction(
+        self,
+        items: List[Any],
+        code_extractors: List[str],
+        metadata_keys: Dict[str, str],
+        min_code_length: int = 20,
+        min_similarity: float = SIMILARITY_MEDIUM,
+    ) -> List[Dict[str, Any]]:
+        """
+        Generic semantic duplicate finder with custom extraction logic.
+
+        Issue #554: Extracts common pattern from all analyzer-specific duplicate
+        finders (~120 lines reduced to single reusable method).
+
+        Args:
+            items: List of objects with code content (e.g., AntiPatternResult)
+            code_extractors: Attribute names to try for code extraction
+                            (e.g., ["current_code", "code_snippet"])
+            metadata_keys: Dict mapping output keys to object attributes
+                          (e.g., {"type": "pattern_type", "path": "file_path"})
+            min_code_length: Minimum code length to consider (default 20)
+            min_similarity: Minimum similarity threshold (default SIMILARITY_MEDIUM)
+
+        Returns:
+            List of duplicate pairs with similarity scores
+
+        Example:
+            # In AntiPatternDetector
+            duplicates = await self._find_semantic_duplicates_with_extraction(
+                items=patterns,
+                code_extractors=["current_code", "code_snippet"],
+                metadata_keys={"pattern_type": "pattern_type", "file_path": "file_path"},
+            )
+        """
+        if not hasattr(self, "use_semantic_analysis") or not self.use_semantic_analysis:
+            return []
+
+        if not items or len(items) < 2:
+            return []
+
+        items_with_code = []
+        for item in items:
+            # Try each extractor until we find code
+            code = None
+            for extractor in code_extractors:
+                code = getattr(item, extractor, "") or ""
+                if code and len(code) >= min_code_length:
+                    break
+
+            if code and len(code) >= min_code_length:
+                # Build metadata from object attributes
+                item_data = {"code": code, "_original": item}
+                for out_key, attr_name in metadata_keys.items():
+                    value = getattr(item, attr_name, None)
+                    # Handle enums
+                    if hasattr(value, "value"):
+                        value = value.value
+                    item_data[out_key] = value
+                items_with_code.append(item_data)
+
+        if len(items_with_code) < 2:
+            return []
+
+        return await self._find_semantic_duplicates(
+            items_with_code,
+            code_key="code",
+            min_similarity=min_similarity,
+        )

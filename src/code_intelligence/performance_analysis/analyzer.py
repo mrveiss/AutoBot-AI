@@ -381,7 +381,8 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
         """
         Find semantically similar performance issues using LLM embeddings.
 
-        Issue #554: Uses ChromaDB for vector storage and similarity search.
+        Issue #554: Uses the generic _find_semantic_duplicates_with_extraction
+        helper from SemanticAnalysisMixin to reduce code duplication.
 
         Args:
             issues: List of detected performance issues
@@ -389,33 +390,18 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
         Returns:
             List of duplicate pairs with similarity scores
         """
-        if not self.use_semantic_analysis or not issues:
-            return []
-
-        # Extract code snippets from issues that have them
-        items_with_code = []
-        for issue in issues:
-            code = getattr(issue, "current_code", "") or ""
-            if code and len(code) > 20:  # Skip very short snippets
-                items_with_code.append({
-                    "issue_type": issue.issue_type.value,
-                    "file_path": issue.file_path,
-                    "line_start": issue.line_start,
-                    "code": code,
-                    "description": issue.description,
-                })
-
-        if len(items_with_code) < 2:
-            return []
-
-        # Use the mixin's semantic duplicate finder
         try:
-            duplicates = await self._find_semantic_duplicates(
-                items_with_code,
-                code_key="code",
+            return await self._find_semantic_duplicates_with_extraction(
+                items=issues,
+                code_extractors=["current_code"],
+                metadata_keys={
+                    "issue_type": "issue_type",
+                    "file_path": "file_path",
+                    "line_start": "line_start",
+                    "description": "description",
+                },
                 min_similarity=SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7,
             )
-            return duplicates
         except Exception as e:
             logger.warning("Semantic duplicate detection failed: %s", e)
             return []

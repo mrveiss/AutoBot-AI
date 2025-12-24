@@ -441,7 +441,8 @@ class AntiPatternDetector(SemanticAnalysisMixin):
         """
         Find semantically similar anti-patterns using LLM embeddings.
 
-        Issue #554: Uses ChromaDB for vector storage and similarity search.
+        Issue #554: Uses the generic _find_semantic_duplicates_with_extraction
+        helper from SemanticAnalysisMixin to reduce code duplication.
 
         Args:
             patterns: List of detected anti-patterns
@@ -449,33 +450,18 @@ class AntiPatternDetector(SemanticAnalysisMixin):
         Returns:
             List of duplicate pairs with similarity scores
         """
-        if not self.use_semantic_analysis or not patterns:
-            return []
-
-        # Extract code snippets from patterns that have them
-        items_with_code = []
-        for p in patterns:
-            code = getattr(p, "current_code", "") or getattr(p, "code_snippet", "")
-            if code and len(code) > 20:  # Skip very short snippets
-                items_with_code.append({
-                    "pattern_type": p.pattern_type.value,
-                    "file_path": p.file_path,
-                    "line_start": p.line_start,
-                    "code": code,
-                    "description": p.description,
-                })
-
-        if len(items_with_code) < 2:
-            return []
-
-        # Use the mixin's semantic duplicate finder
         try:
-            duplicates = await self._find_semantic_duplicates(
-                items_with_code,
-                code_key="code",
+            return await self._find_semantic_duplicates_with_extraction(
+                items=patterns,
+                code_extractors=["current_code", "code_snippet"],
+                metadata_keys={
+                    "pattern_type": "pattern_type",
+                    "file_path": "file_path",
+                    "line_start": "line_start",
+                    "description": "description",
+                },
                 min_similarity=SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7,
             )
-            return duplicates
         except Exception as e:
             logger.warning("Semantic duplicate detection failed: %s", e)
             return []
