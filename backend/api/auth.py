@@ -154,9 +154,25 @@ async def logout(request: Request, logout_data: LogoutRequest):
 @router.get("/me")
 async def get_current_user_info(request: Request):
     """
-    Get current authenticated user information
+    Get current authenticated user information.
+
+    In single_user deployment mode, returns default admin user without requiring auth.
     """
     try:
+        # Check deployment mode - in single_user mode, return synthetic admin
+        from src.user_management.config import DeploymentMode, get_deployment_config
+
+        config = get_deployment_config()
+        if config.mode == DeploymentMode.SINGLE_USER:
+            return {
+                "username": "admin",
+                "role": "admin",
+                "email": "admin@autobot.local",
+                "auth_method": "single_user",
+                "authenticated": True,
+                "deployment_mode": "single_user",
+            }
+
         user_data = auth_middleware.get_user_from_request(request)
 
         if not user_data:
@@ -169,6 +185,7 @@ async def get_current_user_info(request: Request):
             "email": user_data.get("email", ""),
             "auth_method": user_data.get("auth_method", "unknown"),
             "authenticated": True,
+            "deployment_mode": config.mode.value,
         }
 
     except HTTPException:
@@ -186,15 +203,30 @@ async def get_current_user_info(request: Request):
 @router.get("/check")
 async def check_authentication(request: Request):
     """
-    Quick authentication check endpoint
+    Quick authentication check endpoint.
+
+    In single_user mode, always returns authenticated=True.
     """
     try:
+        # Check deployment mode
+        from src.user_management.config import DeploymentMode, get_deployment_config
+
+        config = get_deployment_config()
+        if config.mode == DeploymentMode.SINGLE_USER:
+            return {
+                "authenticated": True,
+                "role": "admin",
+                "auth_enabled": False,
+                "deployment_mode": "single_user",
+            }
+
         user_data = auth_middleware.get_user_from_request(request)
 
         return {
             "authenticated": user_data is not None,
             "role": user_data["role"] if user_data else None,
             "auth_enabled": auth_middleware.enable_auth,
+            "deployment_mode": config.mode.value,
         }
 
     except Exception as e:

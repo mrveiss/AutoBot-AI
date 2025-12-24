@@ -67,7 +67,8 @@ backend:
     KERAS_BACKEND: "tensorflow"
     
     # Deployment settings
-    AUTOBOT_DEPLOYMENT_MODE: "production"
+    AUTOBOT_DEPLOYMENT_MODE: "production"  # Infrastructure mode: local/hybrid/distributed/production
+    AUTOBOT_USER_MODE: "single_user"       # User management: single_user/single_company/multi_company/provider
     AUTOBOT_BACKEND_HOST: "0.0.0.0"
     AUTOBOT_BACKEND_PORT: 8001
 

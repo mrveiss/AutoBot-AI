@@ -299,6 +299,40 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
+  // Check auth status from backend (handles single_user mode auto-auth)
+  async function checkAuthFromBackend(): Promise<boolean> {
+    try {
+      const response = await fetch('/api/auth/me')
+      if (response.ok) {
+        const data = await response.json()
+        if (data.authenticated) {
+          // Auto-login with data from backend
+          const user: UserProfile = {
+            id: data.username,  // Use username as ID for single_user mode
+            username: data.username,
+            email: data.email || '',
+            displayName: data.username.charAt(0).toUpperCase() + data.username.slice(1),
+            role: data.role as 'admin' | 'user' | 'viewer',
+            preferences: defaultPreferences,
+            createdAt: new Date(),
+            lastLoginAt: new Date()
+          }
+          currentUser.value = user
+          authState.value = {
+            isAuthenticated: true,
+            token: data.deployment_mode === 'single_user' ? 'single_user_mode' : undefined
+          }
+          logger.info('Auto-authenticated from backend:', data.deployment_mode)
+          return true
+        }
+      }
+      return false
+    } catch (error) {
+      logger.warn('Failed to check auth from backend:', error)
+      return false
+    }
+  }
+
   return {
     // State
     authState,
@@ -327,6 +361,7 @@ export const useUserStore = defineStore('user', () => {
     applyTheme,
     applyAccessibilitySettings,
     initializeFromStorage,
-    persistToStorage
+    persistToStorage,
+    checkAuthFromBackend
   }
 })

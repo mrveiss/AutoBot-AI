@@ -415,7 +415,11 @@ const loadUserData = () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // Check auth from backend first (handles single_user mode auto-auth)
+  if (!userStore.isAuthenticated) {
+    await userStore.checkAuthFromBackend()
+  }
   loadUserData()
 })
 </script>

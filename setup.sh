@@ -255,6 +255,14 @@ SECRET_KEY=your-secret-key-here
 
 # Voice Interface
 VOICE_ENABLED=true
+
+# User Management Mode (Issue #576)
+# Available: single_user (default), single_company, multi_company, provider
+# - single_user: No auth, personal use
+# - single_company: Auth enabled, teams, PostgreSQL required
+# - multi_company: Multi-tenant, PostgreSQL required
+# - provider: SaaS with billing, PostgreSQL required
+AUTOBOT_USER_MODE=single_user
 EOF
         success ".env file created"
     else
