@@ -248,6 +248,15 @@ const routes: RouteRecordRaw[] = [
           title: 'MCP Registry',
           parent: 'tools'
         }
+      },
+      {
+        path: 'agents',
+        name: 'tools-agents',
+        component: () => import('@/components/developer/AgentRegistry.vue'),
+        meta: {
+          title: 'Agent Registry',
+          parent: 'tools'
+        }
       }
     ]
   },

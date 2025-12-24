@@ -11,8 +11,10 @@ Each agent can have its own LLM model configuration and status monitoring.
 
 import logging
 import os
+import re
 from datetime import datetime
-from typing import Optional
+from pathlib import Path
+from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
@@ -492,3 +494,337 @@ async def get_agents_overview():
     }
 
     return JSONResponse(status_code=200, content=overview)
+
+
+def _parse_agent_frontmatter(content: str) -> dict[str, Any]:
+    """
+    Parse YAML frontmatter from Claude agent markdown files.
+
+    Args:
+        content: Raw markdown file content
+
+    Returns:
+        dict: Parsed frontmatter fields (name, description, tools, color, model)
+    """
+    result = {
+        "name": "",
+        "description": "",
+        "tools": [],
+        "color": "gray",
+        "model": None,
+    }
+
+    # Match YAML frontmatter between --- markers
+    frontmatter_match = re.match(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
+    if not frontmatter_match:
+        return result
+
+    frontmatter = frontmatter_match.group(1)
+
+    # Parse simple YAML fields
+    for line in frontmatter.split("\n"):
+        if ":" in line:
+            key, value = line.split(":", 1)
+            key = key.strip()
+            value = value.strip()
+
+            if key == "name":
+                result["name"] = value
+            elif key == "description":
+                result["description"] = value
+            elif key == "tools":
+                # Tools can be comma-separated list
+                result["tools"] = [t.strip() for t in value.split(",") if t.strip()]
+            elif key == "color":
+                result["color"] = value
+            elif key == "model":
+                result["model"] = value
+
+    return result
+
+
+def _categorize_agent(name: str, description: str) -> str:
+    """
+    Categorize agent based on name and description.
+
+    Args:
+        name: Agent name
+        description: Agent description
+
+    Returns:
+        str: Category (implementation, analysis, planning, specialized)
+    """
+    name_lower = name.lower()
+    desc_lower = description.lower()
+
+    # Implementation agents
+    if any(
+        kw in name_lower
+        for kw in [
+            "engineer",
+            "developer",
+            "backend",
+            "frontend",
+            "database",
+            "devops",
+            "testing",
+        ]
+    ):
+        if "review" in name_lower or "analysis" in desc_lower:
+            return "analysis"
+        return "implementation"
+
+    # Analysis agents
+    if any(
+        kw in name_lower
+        for kw in ["skeptic", "architect", "performance", "security", "auditor", "review"]
+    ):
+        return "analysis"
+
+    # Planning agents
+    if any(kw in name_lower for kw in ["project", "manager", "planner", "prd", "task"]):
+        return "planning"
+
+    # Content/specialized agents
+    if any(
+        kw in name_lower
+        for kw in ["content", "writer", "designer", "compacter", "memory", "refactor"]
+    ):
+        return "specialized"
+
+    return "general"
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_claude_agents",
+    error_code_prefix="AGENT_CONFIG",
+)
+@router.get("/agents/claude")
+async def list_claude_agents():
+    """
+    Get list of all Claude specialized agents from .claude/agents/ directory.
+
+    Returns agent definitions parsed from markdown files including:
+    - name, description, tools, color, model
+    - category (implementation, analysis, planning, specialized)
+    """
+    agents_dir = Path(__file__).parent.parent.parent / ".claude" / "agents"
+
+    if not agents_dir.exists():
+        logger.warning("Claude agents directory not found: %s", agents_dir)
+        return JSONResponse(
+            status_code=200,
+            content={
+                "agents": [],
+                "total_count": 0,
+                "categories": {},
+                "timestamp": datetime.now().isoformat(),
+                "error": "Claude agents directory not found",
+            },
+        )
+
+    agents = []
+    categories: dict[str, int] = {
+        "implementation": 0,
+        "analysis": 0,
+        "planning": 0,
+        "specialized": 0,
+        "general": 0,
+    }
+
+    # Read all .md files in the agents directory
+    for md_file in sorted(agents_dir.glob("*.md")):
+        try:
+            content = md_file.read_text(encoding="utf-8")
+            parsed = _parse_agent_frontmatter(content)
+
+            # Use filename as fallback name
+            agent_name = parsed["name"] or md_file.stem
+
+            # Categorize the agent
+            category = _categorize_agent(agent_name, parsed["description"])
+            categories[category] += 1
+
+            agent_info = {
+                "id": md_file.stem,
+                "name": agent_name,
+                "description": parsed["description"],
+                "tools": parsed["tools"][:10],  # Limit tools for display
+                "tool_count": len(parsed["tools"]),
+                "color": parsed["color"],
+                "model": parsed["model"],
+                "category": category,
+                "file": md_file.name,
+                "status": "available",
+            }
+            agents.append(agent_info)
+
+        except Exception as e:
+            logger.warning("Failed to parse agent file %s: %s", md_file.name, e)
+            continue
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "agents": agents,
+            "total_count": len(agents),
+            "categories": categories,
+            "timestamp": datetime.now().isoformat(),
+        },
+    )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_claude_agent",
+    error_code_prefix="AGENT_CONFIG",
+)
+@router.get("/agents/claude/{agent_id}")
+async def get_claude_agent(agent_id: str):
+    """
+    Get detailed information for a specific Claude agent.
+
+    Args:
+        agent_id: Agent identifier (filename without .md extension)
+
+    Returns:
+        Detailed agent information including full tool list and description
+    """
+    agents_dir = Path(__file__).parent.parent.parent / ".claude" / "agents"
+    agent_file = agents_dir / f"{agent_id}.md"
+
+    if not agent_file.exists():
+        raise HTTPException(
+            status_code=404, detail=f"Claude agent '{agent_id}' not found"
+        )
+
+    try:
+        content = agent_file.read_text(encoding="utf-8")
+        parsed = _parse_agent_frontmatter(content)
+
+        # Extract the body content (after frontmatter)
+        body_match = re.search(r"^---\s*\n.*?\n---\s*\n(.*)$", content, re.DOTALL)
+        body = body_match.group(1).strip() if body_match else ""
+
+        # Get first section as summary (up to first ## heading)
+        summary_match = re.match(r"^(.*?)(?=\n##|\Z)", body, re.DOTALL)
+        summary = summary_match.group(1).strip() if summary_match else body[:500]
+
+        agent_name = parsed["name"] or agent_id
+        category = _categorize_agent(agent_name, parsed["description"])
+
+        agent_detail = {
+            "id": agent_id,
+            "name": agent_name,
+            "description": parsed["description"],
+            "summary": summary,
+            "tools": parsed["tools"],
+            "tool_count": len(parsed["tools"]),
+            "color": parsed["color"],
+            "model": parsed["model"],
+            "category": category,
+            "file": agent_file.name,
+            "file_size": agent_file.stat().st_size,
+            "last_modified": datetime.fromtimestamp(
+                agent_file.stat().st_mtime
+            ).isoformat(),
+            "status": "available",
+        }
+
+        return JSONResponse(status_code=200, content=agent_detail)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to read agent file %s: %s", agent_file.name, e)
+        raise HTTPException(
+            status_code=500, detail=f"Failed to read agent: {str(e)}"
+        ) from e
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_all_agents_combined",
+    error_code_prefix="AGENT_CONFIG",
+)
+@router.get("/agents/all")
+async def get_all_agents_combined():
+    """
+    Get combined view of all agents (backend + Claude agents).
+
+    Returns unified list for the Agent Registry dashboard.
+    """
+    from src.unified_config_manager import unified_config_manager
+
+    # Get backend agents
+    backend_agents = []
+    for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
+        current_model = unified_config_manager.get_nested(
+            f"agents.{agent_id}.model", config["default_model"]
+        )
+        enabled = unified_config_manager.get_nested(
+            f"agents.{agent_id}.enabled", config["enabled"]
+        )
+
+        backend_agents.append(
+            {
+                "id": agent_id,
+                "name": config["name"],
+                "description": config["description"],
+                "type": "backend",
+                "model": current_model,
+                "enabled": enabled,
+                "status": "connected" if enabled and current_model else "disconnected",
+                "priority": config["priority"],
+                "tasks": config["tasks"],
+            }
+        )
+
+    # Get Claude agents
+    claude_agents = []
+    agents_dir = Path(__file__).parent.parent.parent / ".claude" / "agents"
+
+    if agents_dir.exists():
+        for md_file in sorted(agents_dir.glob("*.md")):
+            try:
+                content = md_file.read_text(encoding="utf-8")
+                parsed = _parse_agent_frontmatter(content)
+                agent_name = parsed["name"] or md_file.stem
+
+                claude_agents.append(
+                    {
+                        "id": md_file.stem,
+                        "name": agent_name,
+                        "description": parsed["description"],
+                        "type": "claude",
+                        "model": parsed["model"] or "claude",
+                        "enabled": True,
+                        "status": "available",
+                        "priority": 1,
+                        "tools": parsed["tools"][:5],
+                        "tool_count": len(parsed["tools"]),
+                        "color": parsed["color"],
+                        "category": _categorize_agent(agent_name, parsed["description"]),
+                    }
+                )
+            except Exception as e:
+                logger.warning("Failed to parse agent %s: %s", md_file.name, e)
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "backend_agents": backend_agents,
+            "claude_agents": claude_agents,
+            "summary": {
+                "total_backend": len(backend_agents),
+                "total_claude": len(claude_agents),
+                "total": len(backend_agents) + len(claude_agents),
+                "healthy_backend": sum(
+                    1 for a in backend_agents if a["status"] == "connected"
+                ),
+                "available_claude": len(claude_agents),
+            },
+            "timestamp": datetime.now().isoformat(),
+        },
+    )
