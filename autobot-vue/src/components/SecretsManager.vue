@@ -338,17 +338,31 @@
             <div class="form-group">
               <label>{{ getValueLabel(secretForm.type) }} <span class="required">*</span></label>
               <div class="secret-input-wrapper">
+                <!-- Multi-line secrets (SSH keys, certificates) use textarea with CSS masking -->
                 <textarea
+                  v-if="isMultilineSecret(secretForm.type)"
                   v-model="secretForm.value"
                   required
                   :placeholder="getValuePlaceholder(secretForm.type)"
                   class="form-input secret-input"
+                  :class="{ 'secret-masked': !showValue }"
                   :rows="getValueRows(secretForm.type)"
                 ></textarea>
+                <!-- Single-line secrets use password input for proper masking -->
+                <input
+                  v-else
+                  v-model="secretForm.value"
+                  :type="showValue ? 'text' : 'password'"
+                  required
+                  :placeholder="getValuePlaceholder(secretForm.type)"
+                  class="form-input secret-input"
+                  autocomplete="off"
+                />
                 <button
                   type="button"
                   @click="toggleValueVisibility"
                   class="toggle-visibility"
+                  :title="showValue ? 'Hide value' : 'Show value'"
                 >
                   <i :class="showValue ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
                 </button>
@@ -791,9 +805,12 @@ const getValuePlaceholder = (type: string) => {
   return placeholders[type] || 'Enter value';
 };
 
+const isMultilineSecret = (type: string) => {
+  return ['ssh_key', 'certificate'].includes(type);
+};
+
 const getValueRows = (type: string) => {
-  const multiline = ['ssh_key', 'certificate'];
-  return multiline.includes(type) ? 6 : 3;
+  return isMultilineSecret(type) ? 6 : 3;
 };
 
 const getValueHint = (type: string) => {
@@ -1744,6 +1761,12 @@ watch(selectedScope, () => {
   padding-right: 44px;
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 13px;
+}
+
+.secret-masked {
+  -webkit-text-security: disc;
+  text-security: disc;
+  color: #666;
 }
 
 .toggle-visibility {
