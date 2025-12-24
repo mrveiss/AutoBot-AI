@@ -190,6 +190,179 @@ class EnhancedSearchRequest(BaseModel):
         return self.mode if self.mode in valid_modes else "auto"
 
 
+class ConsolidatedSearchRequest(BaseModel):
+    """
+    Consolidated search request model combining all search features (Issue #555).
+
+    This is the primary search endpoint that supports all search capabilities:
+    - Basic search (query, limit)
+    - Enhanced search (tags, hybrid mode, reranking)
+    - RAG search (query reformulation, synthesis)
+    - Advanced filtering (date filters, term filters)
+    - Analytics tracking
+
+    Deprecates: /enhanced_search, /rag_search, /similarity_search, /enhanced_search_v2
+    """
+
+    # Core search parameters
+    query: str = Field(..., min_length=1, max_length=1000, description="Search query")
+    top_k: int = Field(default=10, ge=1, le=100, description="Maximum results to return")
+    category: Optional[str] = Field(
+        default=None, max_length=100, description="Filter by category"
+    )
+
+    # Search mode
+    mode: str = Field(
+        default="hybrid",
+        description="Search mode: 'semantic' (vector only), 'keyword' (text only), "
+        "'hybrid' (both, default), 'auto' (intelligent selection)",
+    )
+
+    # RAG enhancement options
+    enable_rag: bool = Field(
+        default=False,
+        description="Enable RAG enhancement for synthesized responses",
+    )
+    enable_reranking: bool = Field(
+        default=False,
+        description="Enable cross-encoder reranking for improved relevance",
+    )
+    reformulate_query: bool = Field(
+        default=False,
+        description="Use RAG agent to expand/reformulate query for better coverage",
+    )
+    return_context: bool = Field(
+        default=False,
+        description="Return optimized context for RAG (useful for chat integration)",
+    )
+
+    # Filtering options
+    tags: Optional[List[str]] = Field(
+        default=None,
+        max_items=10,
+        description="Filter results by tags",
+    )
+    tags_match_any: bool = Field(
+        default=False,
+        description="If True, match facts with ANY tag. If False (default), match ALL tags.",
+    )
+    min_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Minimum similarity score threshold (0.0-1.0)",
+    )
+
+    # Pagination
+    offset: int = Field(default=0, ge=0, description="Pagination offset")
+
+    # Advanced filtering (Issue #78 v2 features)
+    created_after: Optional[str] = Field(
+        default=None,
+        description="Filter facts created after this date (ISO format: YYYY-MM-DD)",
+    )
+    created_before: Optional[str] = Field(
+        default=None,
+        description="Filter facts created before this date (ISO format: YYYY-MM-DD)",
+    )
+    exclude_terms: Optional[List[str]] = Field(
+        default=None,
+        max_items=20,
+        description="Exclude results containing these terms",
+    )
+    require_terms: Optional[List[str]] = Field(
+        default=None,
+        max_items=20,
+        description="Only include results containing ALL of these terms",
+    )
+
+    # Advanced features
+    include_documentation: bool = Field(
+        default=False,
+        description="Also search project documentation",
+    )
+    include_relations: bool = Field(
+        default=False,
+        description="Include related facts in results",
+    )
+
+    # Analytics
+    track_analytics: bool = Field(
+        default=True,
+        description="Track this search for analytics (default: true)",
+    )
+    session_id: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        description="Session ID for analytics correlation",
+    )
+
+    @validator("category")
+    def validate_category(cls, v):
+        """Validate category format."""
+        if v and not _ALNUM_ID_RE.match(v):
+            raise ValueError("Invalid category format")
+        return v
+
+    @validator("tags", each_item=True)
+    def validate_tag_item(cls, v):
+        """Validate each tag."""
+        if v:
+            v = v.lower().strip()
+            if not _LOWERCASE_TAG_RE.match(v):
+                raise ValueError(f"Invalid tag format: {v}")
+        return v
+
+    @validator("mode")
+    def validate_mode(cls, v):
+        """Validate search mode."""
+        if v not in _VALID_SEARCH_MODES:
+            raise ValueError(f"Invalid mode: {v}. Must be one of {_VALID_SEARCH_MODES}")
+        return v
+
+    @validator("created_after", "created_before")
+    def validate_date(cls, v):
+        """Validate date format."""
+        if v:
+            try:
+                datetime.strptime(v, "%Y-%m-%d")
+            except ValueError:
+                raise ValueError(f"Invalid date format: {v}. Use YYYY-MM-DD")
+        return v
+
+    def to_legacy_params(self) -> dict:
+        """Convert to parameters compatible with existing KB search methods."""
+        return {
+            "query": self.query,
+            "limit": self.top_k,
+            "offset": self.offset,
+            "category": self.category,
+            "tags": self.tags,
+            "tags_match_any": self.tags_match_any,
+            "mode": self.mode,
+            "enable_reranking": self.enable_reranking,
+            "min_score": self.min_score,
+        }
+
+    def get_log_summary(self) -> str:
+        """Get formatted log summary string."""
+        features = []
+        if self.enable_rag:
+            features.append("RAG")
+        if self.enable_reranking:
+            features.append("rerank")
+        if self.reformulate_query:
+            features.append("reformulate")
+        if self.tags:
+            features.append(f"tags={len(self.tags)}")
+
+        feature_str = f" [{', '.join(features)}]" if features else ""
+        return (
+            f"'{self.query}' (top_k={self.top_k}, mode={self.mode}"
+            f"{feature_str})"
+        )
+
+
 class PaginationRequest(BaseModel):
     """Request model for pagination"""
 
@@ -1552,6 +1725,7 @@ __all__ = [
     "FactIdValidator",
     "SearchRequest",
     "EnhancedSearchRequest",
+    "ConsolidatedSearchRequest",  # Issue #555: Consolidated search endpoint
     "PaginationRequest",
     "AddTextRequest",
     "ScanHostChangesRequest",

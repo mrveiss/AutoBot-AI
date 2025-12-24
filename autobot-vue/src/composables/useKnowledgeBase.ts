@@ -229,7 +229,7 @@ export function useKnowledgeBase() {
   }
 
   /**
-   * Search knowledge base
+   * Search knowledge base (basic)
    */
   const searchKnowledge = async (query: string): Promise<SearchResponse> => {
     try {
@@ -244,6 +244,47 @@ export function useKnowledgeBase() {
       return data
     } catch (error) {
       logger.error('Error searching knowledge:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Advanced search with full options (Issue #555)
+   *
+   * Uses the consolidated search endpoint with all available features:
+   * - mode: 'semantic' | 'keyword' | 'hybrid' | 'auto'
+   * - enable_rag: Enable RAG synthesis for responses
+   * - enable_reranking: Enable cross-encoder reranking
+   * - tags: Filter by tags
+   * - min_score: Minimum similarity threshold
+   * - category: Filter by category
+   */
+  interface AdvancedSearchOptions {
+    query: string
+    top_k?: number
+    mode?: 'semantic' | 'keyword' | 'hybrid' | 'auto'
+    enable_rag?: boolean
+    enable_reranking?: boolean
+    reformulate_query?: boolean
+    tags?: string[]
+    tags_match_any?: boolean
+    min_score?: number
+    category?: string
+    offset?: number
+  }
+
+  const advancedSearch = async (options: AdvancedSearchOptions): Promise<SearchResponse> => {
+    try {
+      const response = await apiClient.post('/api/knowledge_base/search', options)
+
+      if (!response) {
+        throw new Error('Advanced search failed: No response from server')
+      }
+
+      const data = await parseApiResponse(response)
+      return data
+    } catch (error) {
+      logger.error('Error in advanced search:', error)
       throw error
     }
   }
@@ -776,6 +817,7 @@ export function useKnowledgeBase() {
     fetchCategories,
     fetchCategory,
     searchKnowledge,
+    advancedSearch,  // Issue #555: Consolidated search with all options
     addFact,
     uploadKnowledgeFile,
     fetchMachineProfiles,
