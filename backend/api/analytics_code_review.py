@@ -24,7 +24,7 @@ from src.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/code-review", tags=["code-review", "analytics"])
+router = APIRouter(tags=["code-review", "analytics"])  # Prefix set in router_registry
 
 # Performance optimization: O(1) lookup for reviewable file extensions (Issue #326)
 REVIEWABLE_EXTENSIONS = {".py", ".vue", ".ts", ".js"}

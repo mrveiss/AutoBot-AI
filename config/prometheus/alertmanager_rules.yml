@@ -255,3 +255,200 @@ groups:
           summary: "High Network Traffic"
           description: "Network traffic is {{ $value | humanize }}B/s (threshold: 100MB/s)"
           recommendation: "Check for unusual network activity"
+
+  # Circuit Breaker Alerts (Issue #69)
+  - name: autobot_circuit_breaker
+    rules:
+      # Circuit breaker opened - critical for any service
+      - alert: CircuitBreakerOpen
+        expr: autobot_circuit_breaker_state == 1
+        for: 30s
+        labels:
+          severity: critical
+          component: circuit_breaker
+        annotations:
+          summary: "Circuit Breaker OPEN: {{ $labels.database }}"
+          description: "Circuit breaker for {{ $labels.database }} has opened with {{ $value }} failures"
+          recommendation: "Check {{ $labels.database }} service health, logs, and connectivity"
+
+      # Circuit breaker in half-open state - service recovering
+      - alert: CircuitBreakerHalfOpen
+        expr: autobot_circuit_breaker_state == 2
+        for: 2m
+        labels:
+          severity: warning
+          component: circuit_breaker
+        annotations:
+          summary: "Circuit Breaker HALF-OPEN: {{ $labels.database }}"
+          description: "Circuit breaker for {{ $labels.database }} is testing recovery"
+          recommendation: "Monitor service stability during recovery period"
+
+      # High failure count approaching threshold
+      - alert: CircuitBreakerHighFailures
+        expr: autobot_circuit_breaker_failure_count >= 3
+        for: 1m
+        labels:
+          severity: warning
+          component: circuit_breaker
+        annotations:
+          summary: "Circuit Breaker High Failures: {{ $labels.database }}"
+          description: "{{ $labels.database }} has {{ $value }} failures (threshold: 5)"
+          recommendation: "Investigate service issues before circuit opens"
+
+      # Circuit breaker event spike (multiple opens in short time)
+      - alert: CircuitBreakerEventSpike
+        expr: rate(autobot_circuit_breaker_events_total{event="opened"}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: high
+          component: circuit_breaker
+        annotations:
+          summary: "Circuit Breaker Event Spike: {{ $labels.database }}"
+          description: "Multiple circuit breaker openings detected for {{ $labels.database }}"
+          recommendation: "Service is unstable - investigate root cause"
+
+  # Redis-Specific Alerts (Issue #69)
+  - name: autobot_redis_alerts
+    rules:
+      # Redis server unavailable
+      - alert: RedisServerDown
+        expr: autobot_redis_server_available == 0
+        for: 30s
+        labels:
+          severity: critical
+          component: redis
+          service: redis
+        annotations:
+          summary: "Redis Server Down: {{ $labels.database }}"
+          description: "Redis server {{ $labels.database }} is unavailable"
+          recommendation: "Check Redis service on VM3 (172.16.168.23:6379)"
+
+      # Redis connection errors
+      - alert: RedisConnectionErrors
+        expr: rate(autobot_redis_connection_errors_total[5m]) > 1
+        for: 2m
+        labels:
+          severity: high
+          component: redis
+        annotations:
+          summary: "Redis Connection Errors: {{ $labels.database }}"
+          description: "{{ $value }} connection errors/min for {{ $labels.database }} ({{ $labels.error_type }})"
+          recommendation: "Check network connectivity and Redis configuration"
+
+      # Redis high memory usage
+      - alert: RedisHighMemory
+        expr: autobot_redis_memory_used_bytes / autobot_redis_memory_peak_bytes > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          component: redis
+        annotations:
+          summary: "Redis High Memory: {{ $labels.database }}"
+          description: "Redis {{ $labels.database }} memory usage at {{ $value | humanizePercentage }}"
+          recommendation: "Consider memory cleanup or increase maxmemory"
+
+      # Redis connection pool exhaustion
+      - alert: RedisPoolExhausted
+        expr: autobot_redis_connections_available / autobot_redis_connections_max < 0.1
+        for: 1m
+        labels:
+          severity: high
+          component: redis
+        annotations:
+          summary: "Redis Pool Exhausted: {{ $labels.database }}"
+          description: "Only {{ $value | humanizePercentage }} connections available in {{ $labels.database }} pool"
+          recommendation: "Increase pool size or check for connection leaks"
+
+      # Redis operation latency
+      - alert: RedisHighLatency
+        expr: histogram_quantile(0.95, rate(autobot_redis_operation_latency_seconds_bucket[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: medium
+          component: redis
+        annotations:
+          summary: "Redis High Latency: {{ $labels.database }}"
+          description: "95th percentile latency for {{ $labels.database }} is {{ $value }}s"
+          recommendation: "Check Redis server load and network latency"
+
+  # NPU Worker Alerts (Issue #69)
+  - name: autobot_npu_alerts
+    rules:
+      # NPU worker circuit breaker open
+      - alert: NPUCircuitBreakerOpen
+        expr: autobot_circuit_breaker_state{database=~"npu.*"} == 1
+        for: 30s
+        labels:
+          severity: critical
+          component: npu
+          service: npu_worker
+        annotations:
+          summary: "NPU Circuit Breaker OPEN"
+          description: "NPU worker circuit breaker opened - hardware acceleration unavailable"
+          recommendation: "Check NPU Worker VM2 (172.16.168.22:8081) and OpenVINO status"
+
+      # NPU worker high failure rate
+      - alert: NPUHighFailureRate
+        expr: rate(autobot_circuit_breaker_events_total{database=~"npu.*",event="failure"}[5m]) > 0.5
+        for: 3m
+        labels:
+          severity: high
+          component: npu
+        annotations:
+          summary: "NPU Worker High Failure Rate"
+          description: "NPU worker experiencing {{ $value }} failures/min"
+          recommendation: "Check NPU worker logs and hardware status"
+
+  # Resource Exhaustion Alerts (Issue #69)
+  - name: autobot_resource_exhaustion
+    rules:
+      # Connection exhaustion across services
+      - alert: ConnectionExhaustion
+        expr: autobot_redis_connections_active / autobot_redis_connections_max > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          component: connections
+        annotations:
+          summary: "Connection Pool Near Exhaustion: {{ $labels.database }}"
+          description: "{{ $value | humanizePercentage }} of connections in use for {{ $labels.database }}"
+          recommendation: "Scale connection pool or optimize connection usage"
+
+      # Timeout rate too high
+      - alert: HighTimeoutRate
+        expr: rate(autobot_timeout_total{status="timeout"}[5m]) / rate(autobot_timeout_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: high
+          component: timeouts
+        annotations:
+          summary: "High Timeout Rate: {{ $labels.operation_type }}"
+          description: "{{ $value | humanizePercentage }} of {{ $labels.operation_type }} operations timing out"
+          recommendation: "Check service performance and increase timeouts if needed"
+
+  # Security Alerts (Issue #69)
+  - name: autobot_security_alerts
+    rules:
+      # Security violation detected
+      - alert: SecurityViolation
+        expr: rate(autobot_errors_total{category="security"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          component: security
+        annotations:
+          summary: "Security Violation Detected"
+          description: "Security errors detected in {{ $labels.component }}: {{ $value }} events"
+          recommendation: "Investigate security logs immediately"
+
+      # Unusual error pattern (potential attack)
+      - alert: UnusualErrorPattern
+        expr: rate(autobot_errors_total[1m]) > 3 * avg_over_time(rate(autobot_errors_total[1m])[1h:5m])
+        for: 2m
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "Unusual Error Pattern Detected"
+          description: "Error rate is {{ $value }}x higher than normal"
+          recommendation: "Review error logs for potential security issues"

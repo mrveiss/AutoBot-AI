@@ -29,7 +29,7 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/debt", tags=["technical-debt", "analytics"])
+router = APIRouter(tags=["technical-debt", "analytics"])  # Prefix set in router_registry
 
 # Redis key prefix
 DEBT_PREFIX = "debt:"

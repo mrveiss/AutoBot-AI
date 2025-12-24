@@ -25,7 +25,7 @@ from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/precommit", tags=["precommit", "analytics"])
+router = APIRouter(tags=["precommit", "analytics"])  # Prefix set in router_registry
 
 # Issue #380: Module-level frozenset for expensive checks to skip in fast mode
 _EXPENSIVE_CHECKS = frozenset({"QUA002", "DOC001"})

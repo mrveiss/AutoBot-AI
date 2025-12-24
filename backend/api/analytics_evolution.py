@@ -27,7 +27,7 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/evolution", tags=["code-evolution", "analytics"])
+router = APIRouter(tags=["code-evolution", "analytics"])  # Prefix set in router_registry
 
 # Performance optimization: O(1) lookup for aggregation granularities (Issue #326)
 AGGREGATION_GRANULARITIES = {"weekly", "monthly"}

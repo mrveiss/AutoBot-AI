@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/quality", tags=["code-quality", "analytics"])
+router = APIRouter(tags=["code-quality", "analytics"])  # Prefix set in router_registry
 
 
 # ============================================================================

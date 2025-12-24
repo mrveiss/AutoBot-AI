@@ -65,6 +65,14 @@ MONITORING_ROUTER_CONFIGS = [
         ["vm-services"],
         "vm_services",
     ),
+    # AlertManager webhook integration (Issue #346)
+    (
+        "backend.api.alertmanager_webhook",
+        "router",
+        "",  # Router already has /webhook prefix
+        ["webhooks", "alertmanager"],
+        "alertmanager_webhook",
+    ),
 ]
 
 
