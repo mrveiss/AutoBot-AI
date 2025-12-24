@@ -5,30 +5,58 @@
 Performance Analyzer
 
 Issue #381: Extracted from performance_analyzer.py god class refactoring.
+Issue #554: Added Vector/Redis/LLM infrastructure for semantic analysis.
 Contains the main PerformanceAnalyzer class and convenience functions.
 """
 
 import ast
 import logging
 import re
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .ast_visitor import PerformanceASTVisitor
 from .types import PerformanceIssue, PerformanceIssueType, PerformanceSeverity
 
+# Issue #554: Import analytics infrastructure for semantic analysis
+try:
+    from src.code_intelligence.analytics_infrastructure import (
+        SemanticAnalysisMixin,
+        SIMILARITY_MEDIUM,
+    )
+    HAS_ANALYTICS_INFRASTRUCTURE = True
+except ImportError:
+    HAS_ANALYTICS_INFRASTRUCTURE = False
+    SemanticAnalysisMixin = object  # Fallback to object if not available
+
 logger = logging.getLogger(__name__)
 
 
-class PerformanceAnalyzer:
-    """Main performance pattern analyzer."""
+class PerformanceAnalyzer(SemanticAnalysisMixin):
+    """
+    Main performance pattern analyzer.
+
+    Issue #554: Now includes optional semantic analysis via ChromaDB/Redis/LLM
+    infrastructure for detecting semantically similar performance issues.
+    """
 
     def __init__(
         self,
         project_root: Optional[str] = None,
         exclude_patterns: Optional[List[str]] = None,
+        use_semantic_analysis: bool = False,
+        use_cache: bool = True,
     ):
-        """Initialize performance analyzer with project root and exclusion patterns."""
+        """
+        Initialize performance analyzer with project root and exclusion patterns.
+
+        Args:
+            project_root: Root directory for analysis
+            exclude_patterns: Patterns to exclude from analysis
+            use_semantic_analysis: Whether to use LLM-based semantic analysis (Issue #554)
+            use_cache: Whether to use Redis caching for results (Issue #554)
+        """
         self.project_root = Path(project_root) if project_root else Path.cwd()
         self.exclude_patterns = exclude_patterns or [
             "venv",
@@ -42,6 +70,16 @@ class PerformanceAnalyzer:
             "migrations",
         ]
         self.results: List[PerformanceIssue] = []
+        self.use_semantic_analysis = use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
+
+        # Issue #554: Initialize analytics infrastructure if semantic analysis enabled
+        if self.use_semantic_analysis:
+            self._init_infrastructure(
+                collection_name="performance_analysis_vectors",
+                use_llm=True,
+                use_cache=use_cache,
+                redis_database="analytics",
+            )
 
     def analyze_file(self, file_path: str) -> List[PerformanceIssue]:
         """Analyze a single file for performance issues."""
@@ -293,6 +331,150 @@ class PerformanceAnalyzer:
                 md.append(f"- **Fix**: {finding['recommendation']}\n\n")
 
         return "".join(md)
+
+    # Issue #554: Async semantic analysis methods
+
+    async def analyze_directory_async(
+        self,
+        directory: Optional[str] = None,
+        find_semantic_duplicates: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Analyze a directory with optional semantic analysis.
+
+        Issue #554: Async version that supports ChromaDB/Redis/LLM infrastructure.
+
+        Args:
+            directory: Path to directory to analyze
+            find_semantic_duplicates: Whether to find semantically similar issues
+
+        Returns:
+            Dictionary with analysis results including semantic matches
+        """
+        start_time = time.time()
+
+        # Run standard analysis first
+        results = self.analyze_directory(directory)
+
+        result = {
+            "results": [r.to_dict() for r in results],
+            "summary": self.get_summary(),
+            "semantic_duplicates": [],
+            "infrastructure_metrics": {},
+        }
+
+        # Run semantic analysis if enabled
+        if self.use_semantic_analysis and find_semantic_duplicates:
+            semantic_dups = await self._find_semantic_performance_duplicates(results)
+            result["semantic_duplicates"] = semantic_dups
+
+            # Add infrastructure metrics
+            result["infrastructure_metrics"] = self._get_infrastructure_metrics()
+
+        result["analysis_time_ms"] = (time.time() - start_time) * 1000
+        return result
+
+    async def _find_semantic_performance_duplicates(
+        self,
+        issues: List[PerformanceIssue],
+    ) -> List[Dict[str, Any]]:
+        """
+        Find semantically similar performance issues using LLM embeddings.
+
+        Issue #554: Uses ChromaDB for vector storage and similarity search.
+
+        Args:
+            issues: List of detected performance issues
+
+        Returns:
+            List of duplicate pairs with similarity scores
+        """
+        if not self.use_semantic_analysis or not issues:
+            return []
+
+        # Extract code snippets from issues that have them
+        items_with_code = []
+        for issue in issues:
+            code = getattr(issue, "current_code", "") or ""
+            if code and len(code) > 20:  # Skip very short snippets
+                items_with_code.append({
+                    "issue_type": issue.issue_type.value,
+                    "file_path": issue.file_path,
+                    "line_start": issue.line_start,
+                    "code": code,
+                    "description": issue.description,
+                })
+
+        if len(items_with_code) < 2:
+            return []
+
+        # Use the mixin's semantic duplicate finder
+        try:
+            duplicates = await self._find_semantic_duplicates(
+                items_with_code,
+                code_key="code",
+                min_similarity=SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7,
+            )
+            return duplicates
+        except Exception as e:
+            logger.warning("Semantic duplicate detection failed: %s", e)
+            return []
+
+    async def cache_analysis_results(
+        self,
+        directory: str,
+        results: List[PerformanceIssue],
+    ) -> bool:
+        """
+        Cache analysis results in Redis for faster retrieval.
+
+        Issue #554: Uses Redis caching from analytics infrastructure.
+
+        Args:
+            directory: Analyzed directory path
+            results: Analysis results to cache
+
+        Returns:
+            True if cached successfully
+        """
+        if not self.use_semantic_analysis:
+            return False
+
+        cache_key = self._generate_content_hash(directory)
+        results_dict = {
+            "results": [r.to_dict() for r in results],
+            "summary": self.get_summary(),
+        }
+
+        return await self._cache_result(
+            key=cache_key,
+            result=results_dict,
+            prefix="performance_analysis",
+        )
+
+    async def get_cached_analysis(
+        self,
+        directory: str,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get cached analysis results from Redis.
+
+        Issue #554: Retrieves cached results for faster repeat analysis.
+
+        Args:
+            directory: Directory path to look up
+
+        Returns:
+            Cached analysis results or None if not found
+        """
+        if not self.use_semantic_analysis:
+            return None
+
+        cache_key = self._generate_content_hash(directory)
+        return await self._get_cached_result(
+            key=cache_key,
+            prefix="performance_analysis",
+        )
 
 
 def analyze_performance(
