@@ -6,12 +6,14 @@ Codebase scanning and indexing functions
 """
 
 import asyncio
+import hashlib
 import json
 import logging
+import os
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from fastapi import HTTPException
 
@@ -51,9 +53,129 @@ from src.utils.file_categorization import (
 )
 
 from .analyzers import analyze_python_file, analyze_javascript_vue_file, analyze_documentation_file
-from .storage import get_code_collection_async
+from .storage import get_code_collection_async, get_redis_connection
 
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# Configuration Constants (Issue #539: Configurable via environment variables)
+# =============================================================================
+
+# Batch size for ChromaDB storage operations
+# Higher values = fewer batches but more memory usage
+# Default: 5000 (current behavior), Range: 100-50000
+try:
+    _batch_size = int(os.getenv("CODEBASE_INDEX_BATCH_SIZE", "5000"))
+    CHROMADB_BATCH_SIZE = max(100, min(_batch_size, 50000))
+except ValueError:
+    logger.warning("Invalid CODEBASE_INDEX_BATCH_SIZE, using default 5000")
+    CHROMADB_BATCH_SIZE = 5000
+
+# Number of parallel batches to process concurrently
+# Higher values = faster indexing but more CPU/memory usage
+# Default: 1 (sequential processing), Range: 1-8
+try:
+    _parallel = int(os.getenv("CODEBASE_INDEX_PARALLEL_BATCHES", "1"))
+    PARALLEL_BATCH_COUNT = max(1, min(_parallel, 8))
+except ValueError:
+    logger.warning("Invalid CODEBASE_INDEX_PARALLEL_BATCHES, using default 1")
+    PARALLEL_BATCH_COUNT = 1
+
+# Enable incremental indexing (only re-index changed files)
+# Default: False (full re-index - current behavior)
+INCREMENTAL_INDEXING_ENABLED = os.getenv("CODEBASE_INDEX_INCREMENTAL", "false").lower() == "true"
+
+# Redis key prefix for file hashes (used for incremental indexing)
+FILE_HASH_REDIS_PREFIX = "codebase:file_hash:"
+
+# File hash chunk size (64KB for memory efficiency)
+_FILE_HASH_CHUNK_SIZE = 65536
+
+
+# =============================================================================
+# File Hashing Functions (Issue #539: Incremental Indexing Support)
+# =============================================================================
+
+
+def _compute_file_hash(file_path: Path) -> str:
+    """
+    Compute SHA-256 hash of a file for change detection.
+
+    Issue #539: Used for incremental indexing to detect file changes.
+
+    Args:
+        file_path: Path to the file to hash
+
+    Returns:
+        SHA-256 hash string or empty string on error
+    """
+    try:
+        hasher = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            # Read in chunks for memory efficiency
+            while chunk := f.read(_FILE_HASH_CHUNK_SIZE):
+                hasher.update(chunk)
+        return hasher.hexdigest()
+    except Exception as e:
+        logger.debug("Failed to compute hash for %s: %s", file_path, e)
+        return ""
+
+
+async def _get_stored_file_hash(redis_client, relative_path: str) -> Optional[str]:
+    """
+    Get stored file hash from Redis.
+
+    Issue #539: Retrieves previously stored hash for incremental indexing.
+    """
+    if not redis_client:
+        return None
+    try:
+        key = f"{FILE_HASH_REDIS_PREFIX}{relative_path}"
+        stored = redis_client.get(key)
+        return stored.decode("utf-8") if isinstance(stored, bytes) else stored
+    except Exception as e:
+        logger.debug("Failed to get stored hash for %s: %s", relative_path, e)
+        return None
+
+
+async def _store_file_hash(redis_client, relative_path: str, file_hash: str) -> None:
+    """
+    Store file hash in Redis.
+
+    Issue #539: Stores hash for future incremental indexing comparisons.
+    """
+    if not redis_client or not file_hash:
+        return
+    try:
+        key = f"{FILE_HASH_REDIS_PREFIX}{relative_path}"
+        redis_client.set(key, file_hash)
+    except Exception as e:
+        logger.debug("Failed to store hash for %s: %s", relative_path, e)
+
+
+async def _file_needs_reindex(
+    file_path: Path, relative_path: str, redis_client
+) -> Tuple[bool, str]:
+    """
+    Check if a file needs to be re-indexed based on hash comparison.
+
+    Issue #539: Core incremental indexing logic.
+
+    Returns:
+        Tuple of (needs_reindex: bool, current_hash: str)
+    """
+    if not INCREMENTAL_INDEXING_ENABLED or not redis_client:
+        return True, ""
+
+    current_hash = await asyncio.to_thread(_compute_file_hash, file_path)
+    if not current_hash:
+        return True, ""
+
+    stored_hash = await _get_stored_file_hash(redis_client, relative_path)
+    if stored_hash and stored_hash == current_hash:
+        return False, current_hash
+
+    return True, current_hash
 
 
 def _should_count_file(file_path: Path) -> bool:
@@ -339,7 +461,12 @@ async def _process_file_problems(
 
 
 def _create_initial_task_state() -> Dict:
-    """Create initial task state structure (Issue #281: extracted)."""
+    """
+    Create initial task state structure.
+
+    Issue #281: extracted
+    Issue #539: Added configurable batch_size and incremental indexing config
+    """
     return {
         "status": "running",
         "progress": {
@@ -364,15 +491,22 @@ def _create_initial_task_state() -> Dict:
             "total_batches": 0,
             "completed_batches": 0,
             "current_batch": 0,
-            "batch_size": 5000,
+            "batch_size": CHROMADB_BATCH_SIZE,  # Issue #539: configurable
+            "parallel_batches": PARALLEL_BATCH_COUNT,  # Issue #539: parallel processing
             "items_per_batch": [],
         },
         "stats": {
             "files_scanned": 0,
+            "files_skipped": 0,  # Issue #539: incremental indexing stat
             "problems_found": 0,
             "functions_found": 0,
             "classes_found": 0,
             "items_stored": 0,
+        },
+        "config": {  # Issue #539: expose indexing configuration
+            "batch_size": CHROMADB_BATCH_SIZE,
+            "parallel_batches": PARALLEL_BATCH_COUNT,
+            "incremental_enabled": INCREMENTAL_INDEXING_ENABLED,
         },
         "result": None,
         "error": None,
@@ -662,7 +796,9 @@ async def _store_single_batch(
     await code_collection.add(ids=batch_slice_ids, documents=batch_slice_docs, metadatas=batch_slice_metas)
     items_in_batch = len(batch_slice_ids)
 
-    indexing_tasks[task_id]["batches"]["completed_batches"] = batch_num
+    # Issue #539: Thread-safe update for parallel batch processing
+    async with _tasks_lock:
+        indexing_tasks[task_id]["batches"]["completed_batches"] = batch_num
 
     await update_progress(
         operation="Writing to ChromaDB", current=end_idx, total=total_items,
@@ -682,27 +818,73 @@ async def _store_batches_to_chromadb(
     code_collection, batch_ids: list, batch_documents: list, batch_metadatas: list,
     task_id: str, update_progress, update_phase, update_batch_info, update_stats,
 ) -> int:
-    """Store prepared data to ChromaDB in batches (Issue #281, #398: refactored)."""
+    """
+    Store prepared data to ChromaDB in batches.
+
+    Issue #281, #398: refactored
+    Issue #539: Added configurable batch size and parallel processing
+
+    Configuration via environment variables:
+        CODEBASE_INDEX_BATCH_SIZE: Items per batch (default: 5000)
+        CODEBASE_INDEX_PARALLEL_BATCHES: Concurrent batches (default: 1)
+    """
     update_phase("store", "running")
 
-    BATCH_SIZE = 5000
+    # Issue #539: Use configurable batch size
+    batch_size = CHROMADB_BATCH_SIZE
+    parallel_count = PARALLEL_BATCH_COUNT
+
     total_items = len(batch_ids)
-    total_batches = (total_items + BATCH_SIZE - 1) // BATCH_SIZE
+    total_batches = (total_items + batch_size - 1) // batch_size
+
+    logger.info(
+        "[Task %s] ChromaDB storage config: batch_size=%d, parallel_batches=%d, total_batches=%d",
+        task_id, batch_size, parallel_count, total_batches
+    )
 
     update_batch_info(0, total_batches, 0)
     await update_progress(
         operation="Writing to ChromaDB", current=0, total=total_items,
-        current_file="Batch storage in progress...", phase="store",
+        current_file=f"Batch storage ({parallel_count} parallel)...", phase="store",
         batch_info={"current": 0, "total": total_batches, "items": 0}
     )
 
     items_stored = 0
-    for i in range(0, total_items, BATCH_SIZE):
-        batch_num = i // BATCH_SIZE + 1
-        items_stored += await _store_single_batch(
-            code_collection, batch_ids, batch_documents, batch_metadatas,
-            i, BATCH_SIZE, batch_num, total_batches, total_items, task_id, update_progress, update_stats
-        )
+    batch_indices = list(range(0, total_items, batch_size))
+
+    if parallel_count > 1:
+        # Issue #539: Parallel batch processing
+        for group_start in range(0, len(batch_indices), parallel_count):
+            group_end = min(group_start + parallel_count, len(batch_indices))
+            parallel_tasks = []
+
+            for idx in range(group_start, group_end):
+                i = batch_indices[idx]
+                batch_num = idx + 1
+                task = _store_single_batch(
+                    code_collection, batch_ids, batch_documents, batch_metadatas,
+                    i, batch_size, batch_num, total_batches, total_items,
+                    task_id, update_progress, update_stats
+                )
+                parallel_tasks.append(task)
+
+            # Execute parallel batches
+            results = await asyncio.gather(*parallel_tasks, return_exceptions=True)
+
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.error("[Task %s] Batch storage error: %s", task_id, result)
+                else:
+                    items_stored += result
+    else:
+        # Sequential processing (default behavior)
+        for i in range(0, total_items, batch_size):
+            batch_num = i // batch_size + 1
+            items_stored += await _store_single_batch(
+                code_collection, batch_ids, batch_documents, batch_metadatas,
+                i, batch_size, batch_num, total_batches, total_items,
+                task_id, update_progress, update_stats
+            )
 
     update_phase("store", "completed")
     logger.info("[Task %s] ✅ Stored total of %s items in ChromaDB", task_id, items_stored)
@@ -890,52 +1072,75 @@ async def _process_single_file(
     root_path_obj: Path,
     analysis_results: Dict,
     immediate_store_collection,
-) -> bool:
+    redis_client=None,
+) -> Tuple[bool, bool]:
     """
     Process a single file during codebase scan.
 
     Issue #398: Extracted from scan_codebase to reduce method length.
+    Issue #539: Added incremental indexing support.
 
     Returns:
-        True if file was processed, False if skipped.
+        Tuple of (was_processed: bool, was_skipped_unchanged: bool)
     """
     is_file = await asyncio.to_thread(file_path.is_file)
     if not is_file:
-        return False
+        return False, False
     if any(skip_dir in file_path.parts for skip_dir in SKIP_DIRS):
-        return False
+        return False, False
 
     extension = file_path.suffix.lower()
     relative_path = str(file_path.relative_to(root_path_obj))
     file_category = _get_file_category(file_path)
 
+    # Issue #539: Check if file needs reindexing (incremental mode)
+    needs_reindex, current_hash = await _file_needs_reindex(
+        file_path, relative_path, redis_client
+    )
+    if not needs_reindex:
+        return False, True  # Skipped - file unchanged
+
     analysis_results["stats"]["total_files"] += 1
 
     file_analysis = await _get_file_analysis(file_path, extension, analysis_results["stats"])
     if not file_analysis:
-        return True
+        if current_hash and redis_client:
+            await _store_file_hash(redis_client, relative_path, current_hash)
+        return True, False
 
     _aggregate_file_analysis(analysis_results, file_analysis, relative_path, file_category)
     await _process_file_problems(
         file_analysis, relative_path, analysis_results, immediate_store_collection, file_category
     )
-    return True
+
+    # Issue #539: Store file hash after successful processing
+    if current_hash and redis_client:
+        await _store_file_hash(redis_client, relative_path, current_hash)
+
+    return True, False
 
 
 async def _iterate_and_process_files(
     all_files: list, root_path_obj: Path, analysis_results: Dict,
-    immediate_store_collection, progress_callback, total_files: int
-) -> None:
+    immediate_store_collection, progress_callback, total_files: int,
+    redis_client=None,
+) -> Tuple[int, int]:
     """
     Iterate through files and process each one.
 
     Issue #398: Extracted from scan_codebase to reduce method length.
+    Issue #539: Added incremental indexing - returns (processed, skipped) counts.
     """
     files_processed = 0
+    files_skipped = 0
+
     for file_path in all_files:
-        processed = await _process_single_file(
-            file_path, root_path_obj, analysis_results, immediate_store_collection
+        processed, skipped = await _process_single_file(
+            file_path, root_path_obj, analysis_results, immediate_store_collection,
+            redis_client
         )
+        if skipped:
+            files_skipped += 1
         if processed:
             files_processed += 1
             if progress_callback and files_processed % 10 == 0:
@@ -947,21 +1152,29 @@ async def _iterate_and_process_files(
             elif files_processed % 5 == 0:
                 await asyncio.sleep(0)
 
+    return files_processed, files_skipped
+
 
 async def scan_codebase(
     root_path: Optional[str] = None,
     progress_callback: Optional[callable] = None,
     immediate_store_collection=None,
+    redis_client=None,
 ) -> Metadata:
     """
     Scan the entire codebase using MCP-like file operations.
 
     Issue #315, #281, #398: Uses extracted helpers for modular processing.
+    Issue #539: Added redis_client param for incremental indexing support.
     """
     if root_path is None:
         root_path = str(PATH.PROJECT_ROOT)
 
     analysis_results = _create_empty_analysis_results()
+
+    # Issue #539: Get Redis client for incremental indexing if enabled
+    if redis_client is None and INCREMENTAL_INDEXING_ENABLED:
+        redis_client = await get_redis_connection()
 
     try:
         root_path_obj = Path(root_path)
@@ -974,10 +1187,19 @@ async def scan_codebase(
             )
 
         all_files = await asyncio.to_thread(lambda: list(root_path_obj.rglob("*")))
-        await _iterate_and_process_files(
+        files_processed, files_skipped = await _iterate_and_process_files(
             all_files, root_path_obj, analysis_results,
-            immediate_store_collection, progress_callback, total_files
+            immediate_store_collection, progress_callback, total_files,
+            redis_client
         )
+
+        # Issue #539: Log incremental indexing stats
+        if INCREMENTAL_INDEXING_ENABLED:
+            logger.info(
+                "Incremental indexing: %d files processed, %d files skipped (unchanged)",
+                files_processed, files_skipped
+            )
+
         _calculate_analysis_statistics(analysis_results)
         return analysis_results
 
