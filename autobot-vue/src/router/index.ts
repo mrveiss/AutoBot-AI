@@ -155,6 +155,15 @@ const routes: RouteRecordRaw[] = [
           title: 'Knowledge Graph',
           parent: 'knowledge'
         }
+      },
+      {
+        path: 'maintenance',
+        name: 'knowledge-maintenance',
+        component: () => import('@/components/knowledge/KnowledgeMaintenance.vue'),
+        meta: {
+          title: 'Knowledge Maintenance',
+          parent: 'knowledge'
+        }
       }
     ]
   },

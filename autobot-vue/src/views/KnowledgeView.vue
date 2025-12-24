@@ -44,6 +44,13 @@
           >
             <i class="fas fa-project-diagram mr-2"></i>Graph
           </router-link>
+          <router-link
+            to="/knowledge/maintenance"
+            class="px-3 py-2 text-sm font-medium border-b-2 transition-colors"
+            :class="$route.name === 'knowledge-maintenance' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-blueGray-500 hover:text-blueGray-700 hover:border-blueGray-300'"
+          >
+            <i class="fas fa-tools mr-2"></i>Maintenance
+          </router-link>
         </nav>
       </div>
 
