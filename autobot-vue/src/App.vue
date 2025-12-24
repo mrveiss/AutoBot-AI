@@ -454,6 +454,9 @@
     <!-- CAPTCHA Human-in-the-Loop Notification (Issue #206) -->
     <CaptchaNotification />
 
+    <!-- Toast Notifications Container (Issue #502) -->
+    <ToastContainer />
+
     <!-- Main Content Area with Router -->
     <main id="main-content" class="flex-1 overflow-hidden" role="main">
       <!-- Unified Loading System -->
@@ -486,8 +489,10 @@ import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useSystemStatus } from '@/composables/useSystemStatus'
 import SystemStatusNotification from '@/components/SystemStatusNotification.vue';
 import CaptchaNotification from '@/components/research/CaptchaNotification.vue';
+import ToastContainer from '@/components/ui/ToastContainer.vue';
 import { cacheBuster } from '@/utils/CacheBuster.js';
 import { optimizedHealthMonitor } from '@/utils/OptimizedHealthMonitor.js';
+import { initializeNotificationBridge } from '@/utils/notificationBridge';
 import { smartMonitoringController, getAdaptiveInterval } from '@/config/OptimizedPerformance.js';
 import { clearAllSystemNotifications, resetHealthMonitor } from '@/utils/ClearNotifications.js';
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue';
@@ -498,6 +503,7 @@ export default {
   components: {
     SystemStatusNotification,
     CaptchaNotification,
+    ToastContainer,
     UnifiedLoadingView,
   },
 
@@ -707,6 +713,10 @@ export default {
       logger.debug('Clearing stuck system notifications on startup...');
       clearAllSystemNotifications();
       resetHealthMonitor();
+
+      // Initialize notification bridge for ErrorHandler integration (Issue #502)
+      initializeNotificationBridge();
+      logger.debug('NotificationBridge initialized for ErrorHandler integration');
 
       // OPTIMIZED: Initialize new performance-aware systems
       try {

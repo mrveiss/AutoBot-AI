@@ -1,9 +1,13 @@
 /**
  * Centralized Error Handling Utility for AutoBot Frontend
  * Provides consistent error handling, logging, and user feedback
+ *
+ * @author mrveiss
+ * @copyright 2025 mrveiss
  */
 
 import { createLogger } from '@/utils/debugUtils';
+import { notificationBridge } from '@/utils/notificationBridge';
 
 // Create scoped logger for ErrorHandler
 const logger = createLogger('ErrorHandler');
@@ -30,6 +34,7 @@ class ErrorHandler {
       userMessage: this.generateUserMessage(error),
       technicalMessage: error.message || 'Unknown error',
       stack: error.stack,
+      isCritical: this.isCriticalError(error),
     };
 
     // Log error internally
@@ -40,7 +45,7 @@ class ErrorHandler {
 
     // Show user notification if requested
     if (showToUser) {
-      this.showUserNotification(errorInfo.userMessage, 'error');
+      this.showUserNotification(errorInfo.userMessage, 'error', errorInfo.isCritical);
     }
 
     return {
@@ -48,7 +53,37 @@ class ErrorHandler {
       error: errorInfo.userMessage,
       technical: this.isProduction ? undefined : errorInfo.technicalMessage,
       timestamp: errorInfo.timestamp,
+      isCritical: errorInfo.isCritical,
     };
+  }
+
+  /**
+   * Determine if an error is critical (requires user acknowledgment)
+   * Critical errors include server errors, authentication failures, etc.
+   * @param {Error} error - The error object
+   * @returns {boolean} True if error is critical
+   */
+  isCriticalError(error) {
+    const message = error.message || '';
+
+    // Server errors (5xx) are critical
+    if (message.includes('HTTP 500') || message.includes('HTTP 502') ||
+        message.includes('HTTP 503') || message.includes('HTTP 504')) {
+      return true;
+    }
+
+    // Authentication errors are critical
+    if (message.includes('HTTP 401') || message.includes('HTTP 403')) {
+      return true;
+    }
+
+    // Network connection failures are critical
+    if (message.includes('Cannot connect to backend') ||
+        message.includes('Failed to fetch') && !message.includes('timeout')) {
+      return true;
+    }
+
+    return false;
   }
 
   /**
@@ -224,22 +259,61 @@ class ErrorHandler {
   }
 
   /**
-   * Show user notification (placeholder for toast/notification system)
+   * Show user notification via toast system
+   * Integrates with notificationBridge for rate-limited, deduplicated notifications.
+   *
    * @param {string} message - Message to show
    * @param {string} type - Type: 'error', 'warning', 'info', 'success'
+   * @param {boolean} isCritical - If true, error notifications won't auto-dismiss
    */
-  showUserNotification(message, type = 'info') {
-    // This would integrate with a toast notification system
-    // For now, we'll use a simple approach
-
-    if (type === 'error' && this.isProduction) {
-      // In production, could show a modal or toast
-      // For now, just ensure the error is accessible
-      logger.error('User Error:', message);
+  showUserNotification(message, type = 'info', isCritical = false) {
+    // Use notification bridge if available (Issue #502)
+    if (notificationBridge.isReady()) {
+      notificationBridge.notify(message, type, isCritical);
+    } else {
+      // Fallback: log to console if bridge not yet initialized
+      // This can happen during early app startup
+      if (type === 'error') {
+        logger.error('User Error:', message);
+      } else if (type === 'warning') {
+        logger.warn('User Warning:', message);
+      } else {
+        logger.info('User Notification:', message);
+      }
     }
+  }
 
-    // TODO: Integrate with actual notification system
-    // Example: this.$toast.show(message, { type });
+  /**
+   * Show a success notification to the user
+   * @param {string} message - Success message to show
+   */
+  showSuccess(message) {
+    this.showUserNotification(message, 'success', false);
+  }
+
+  /**
+   * Show an info notification to the user
+   * @param {string} message - Info message to show
+   */
+  showInfo(message) {
+    this.showUserNotification(message, 'info', false);
+  }
+
+  /**
+   * Show a warning notification to the user
+   * @param {string} message - Warning message to show
+   */
+  showWarning(message) {
+    this.showUserNotification(message, 'warning', false);
+  }
+
+  /**
+   * Show an error notification to the user
+   * @param {string} message - Error message to show
+   * @param {boolean} isCritical - If true, error won't auto-dismiss
+   */
+  showError(message, isCritical = false) {
+    this.showUserNotification(message, 'error', isCritical);
   }
 
   /**
