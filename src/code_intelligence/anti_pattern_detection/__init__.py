@@ -74,7 +74,13 @@ from .detectors import (
 )
 
 # Main analyzer
-from .analyzer import AntiPatternDetector, analyze_codebase
+from .analyzer import AntiPatternDetector, analyze_codebase, analyze_codebase_async
+
+# Issue #554: Infrastructure availability flag
+try:
+    from .analyzer import HAS_ANALYTICS_INFRASTRUCTURE
+except ImportError:
+    HAS_ANALYTICS_INFRASTRUCTURE = False
 
 __all__ = [
     # Types and enums
@@ -112,4 +118,7 @@ __all__ = [
     # Main analyzer
     "AntiPatternDetector",
     "analyze_codebase",
+    "analyze_codebase_async",
+    # Issue #554: Infrastructure
+    "HAS_ANALYTICS_INFRASTRUCTURE",
 ]
