@@ -1,0 +1,502 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+Analytics Infrastructure Mixin
+
+Issue #554: Provides shared infrastructure for code analysis modules including:
+- ChromaDB: Vector embeddings for semantic similarity search
+- Redis: Caching analysis results for performance
+- LLM: Semantic analysis and intelligent pattern detection
+- Embedding Cache: Performance optimization for repeated embeddings
+
+This mixin can be added to any analyzer class to provide standardized
+infrastructure access following the pattern established in cross_language_patterns.
+
+Part of EPIC #217 - Advanced Code Intelligence Methods
+"""
+
+import asyncio
+import hashlib
+import json
+import logging
+import os
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
+
+# Default configuration
+DEFAULT_EMBEDDING_MODEL = "nomic-embed-text"
+DEFAULT_CACHE_TTL = 3600  # 1 hour
+DEFAULT_EMBEDDING_CACHE_SIZE = 500
+DEFAULT_REDIS_DATABASE = "analytics"
+
+# Similarity thresholds for semantic matching
+SIMILARITY_HIGH = 0.85
+SIMILARITY_MEDIUM = 0.70
+SIMILARITY_LOW = 0.50
+
+
+@dataclass
+class InfrastructureMetrics:
+    """Metrics for infrastructure usage."""
+
+    cache_hits: int = 0
+    cache_misses: int = 0
+    embeddings_generated: int = 0
+    redis_operations: int = 0
+    chromadb_operations: int = 0
+    llm_requests: int = 0
+    analysis_time_ms: float = 0
+    errors: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert metrics to dictionary."""
+        total_cache = self.cache_hits + self.cache_misses
+        hit_rate = (self.cache_hits / total_cache * 100) if total_cache > 0 else 0
+
+        return {
+            "cache_hits": self.cache_hits,
+            "cache_misses": self.cache_misses,
+            "cache_hit_rate": round(hit_rate, 2),
+            "embeddings_generated": self.embeddings_generated,
+            "redis_operations": self.redis_operations,
+            "chromadb_operations": self.chromadb_operations,
+            "llm_requests": self.llm_requests,
+            "analysis_time_ms": round(self.analysis_time_ms, 2),
+            "errors": self.errors,
+        }
+
+
+class AnalyticsInfrastructureMixin:
+    """
+    Mixin class providing shared analytics infrastructure.
+
+    Usage:
+        class MyAnalyzer(AnalyticsInfrastructureMixin):
+            def __init__(self):
+                super().__init__()
+                self._init_infrastructure(
+                    collection_name="my_analyzer_vectors",
+                    use_llm=True,
+                    use_cache=True,
+                )
+
+            async def analyze(self, code: str):
+                # Get embedding for code
+                embedding = await self._get_embedding(code)
+
+                # Store in ChromaDB
+                collection = await self._get_chromadb_collection()
+                await collection.add(...)
+
+                # Cache results in Redis
+                await self._cache_result("key", result)
+    """
+
+    def _init_infrastructure(
+        self,
+        collection_name: str = "code_analysis_vectors",
+        use_llm: bool = True,
+        use_cache: bool = True,
+        embedding_model: str = DEFAULT_EMBEDDING_MODEL,
+        cache_ttl: int = DEFAULT_CACHE_TTL,
+        redis_database: str = DEFAULT_REDIS_DATABASE,
+    ) -> None:
+        """
+        Initialize infrastructure configuration.
+
+        Args:
+            collection_name: Name for ChromaDB collection
+            use_llm: Whether to use LLM for embeddings/analysis
+            use_cache: Whether to use Redis caching
+            embedding_model: Ollama model for embeddings
+            cache_ttl: TTL for cached results in seconds
+            redis_database: Redis database name
+        """
+        self._collection_name = collection_name
+        self._use_llm = use_llm
+        self._use_cache = use_cache
+        self._embedding_model = embedding_model
+        self._cache_ttl = cache_ttl
+        self._redis_database = redis_database
+
+        # Lazy-loaded resources
+        self._chromadb_client = None
+        self._chromadb_collection = None
+        self._redis_client = None
+        self._embedding_cache = None
+
+        # Thread-safe initialization lock
+        self._infra_lock = asyncio.Lock()
+
+        # Metrics tracking
+        self._metrics = InfrastructureMetrics()
+
+    async def _get_chromadb_collection(self):
+        """Get or create ChromaDB collection for vector storage."""
+        if self._chromadb_collection is None:
+            async with self._infra_lock:
+                if self._chromadb_collection is None:
+                    try:
+                        from src.utils.async_chromadb_client import (
+                            get_async_chromadb_client,
+                        )
+
+                        self._chromadb_client = await get_async_chromadb_client()
+                        self._chromadb_collection = (
+                            await self._chromadb_client.get_or_create_collection(
+                                name=self._collection_name,
+                                metadata={
+                                    "description": f"Vectors for {self._collection_name}",
+                                    "hnsw:space": "cosine",
+                                    "hnsw:construction_ef": 200,
+                                    "hnsw:search_ef": 100,
+                                    "hnsw:M": 24,
+                                },
+                            )
+                        )
+                        logger.info(
+                            "ChromaDB collection '%s' initialized",
+                            self._collection_name,
+                        )
+                    except Exception as e:
+                        logger.error("Failed to initialize ChromaDB: %s", e)
+                        self._metrics.errors.append(f"ChromaDB init failed: {e}")
+                        self._chromadb_collection = None
+        return self._chromadb_collection
+
+    async def _get_redis_client(self):
+        """Get Redis client for caching."""
+        if self._redis_client is None and self._use_cache:
+            async with self._infra_lock:
+                if self._redis_client is None:
+                    try:
+                        from src.utils.redis_client import get_redis_client
+
+                        self._redis_client = await get_redis_client(
+                            async_client=True, database=self._redis_database
+                        )
+                        logger.info(
+                            "Redis client initialized for '%s'", self._redis_database
+                        )
+                    except Exception as e:
+                        logger.warning("Redis not available for caching: %s", e)
+                        self._redis_client = None
+        return self._redis_client
+
+    async def _get_embedding_cache(self):
+        """Get embedding cache with thread-safe lazy initialization."""
+        if self._embedding_cache is None:
+            async with self._infra_lock:
+                if self._embedding_cache is None:
+                    try:
+                        from src.knowledge.embedding_cache import EmbeddingCache
+
+                        self._embedding_cache = EmbeddingCache(
+                            maxsize=DEFAULT_EMBEDDING_CACHE_SIZE,
+                            ttl_seconds=self._cache_ttl,
+                        )
+                    except ImportError:
+                        logger.warning("EmbeddingCache not available")
+                        self._embedding_cache = None
+        return self._embedding_cache
+
+    async def _get_embedding(self, text: str) -> Optional[List[float]]:
+        """
+        Get embedding for text using LLM.
+
+        Args:
+            text: Text to generate embedding for
+
+        Returns:
+            Embedding vector or None if generation failed
+        """
+        if not self._use_llm or not text.strip():
+            return None
+
+        cache = await self._get_embedding_cache()
+        if cache:
+            cached = await cache.get(text)
+            if cached:
+                self._metrics.cache_hits += 1
+                return cached
+            self._metrics.cache_misses += 1
+
+        try:
+            import aiohttp
+
+            ollama_host = os.getenv("AUTOBOT_OLLAMA_HOST", "172.16.168.24")
+            ollama_port = os.getenv("AUTOBOT_OLLAMA_PORT", "11434")
+            url = f"http://{ollama_host}:{ollama_port}/api/embeddings"
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url,
+                    json={"model": self._embedding_model, "prompt": text},
+                    timeout=aiohttp.ClientTimeout(total=30),
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        embedding = data.get("embedding")
+                        if embedding:
+                            self._metrics.embeddings_generated += 1
+                            self._metrics.llm_requests += 1
+                            if cache:
+                                await cache.put(text, embedding)
+                            return embedding
+        except Exception as e:
+            logger.warning("Failed to generate embedding: %s", e)
+            self._metrics.errors.append(f"Embedding generation failed: {e}")
+
+        return None
+
+    async def _cache_result(
+        self,
+        key: str,
+        result: Any,
+        ttl: Optional[int] = None,
+        prefix: str = "",
+    ) -> bool:
+        """Cache result in Redis."""
+        redis = await self._get_redis_client()
+        if not redis:
+            return False
+
+        try:
+            full_key = f"{prefix}:{key}" if prefix else key
+            cache_data = json.dumps(result, default=str)
+            await redis.setex(full_key, ttl or self._cache_ttl, cache_data)
+            self._metrics.redis_operations += 1
+            return True
+        except Exception as e:
+            logger.warning("Failed to cache result: %s", e)
+            self._metrics.errors.append(f"Redis cache failed: {e}")
+            return False
+
+    async def _get_cached_result(self, key: str, prefix: str = "") -> Optional[Any]:
+        """Get cached result from Redis."""
+        redis = await self._get_redis_client()
+        if not redis:
+            return None
+
+        try:
+            full_key = f"{prefix}:{key}" if prefix else key
+            cached = await redis.get(full_key)
+            self._metrics.redis_operations += 1
+
+            if cached:
+                self._metrics.cache_hits += 1
+                return json.loads(cached)
+            else:
+                self._metrics.cache_misses += 1
+                return None
+        except Exception as e:
+            logger.warning("Failed to get cached result: %s", e)
+            return None
+
+    async def _store_vectors(
+        self,
+        ids: List[str],
+        embeddings: List[List[float]],
+        documents: List[str],
+        metadatas: Optional[List[Dict[str, Any]]] = None,
+    ) -> int:
+        """Store vectors in ChromaDB with error recovery."""
+        collection = await self._get_chromadb_collection()
+        if not collection:
+            return 0
+
+        stored_count = 0
+
+        try:
+            await collection.add(
+                ids=ids,
+                embeddings=embeddings,
+                documents=documents,
+                metadatas=metadatas or [{} for _ in ids],
+            )
+            stored_count = len(ids)
+            self._metrics.chromadb_operations += 1
+        except Exception as batch_error:
+            logger.warning("Batch insertion failed: %s, using individual", batch_error)
+            for i, (vid, emb, doc) in enumerate(zip(ids, embeddings, documents)):
+                try:
+                    meta = metadatas[i] if metadatas else {}
+                    await collection.add(
+                        ids=[vid],
+                        embeddings=[emb],
+                        documents=[doc],
+                        metadatas=[meta],
+                    )
+                    stored_count += 1
+                    self._metrics.chromadb_operations += 1
+                except Exception as e:
+                    logger.debug("Failed to store vector %s: %s", vid, e)
+
+        return stored_count
+
+    async def _query_similar(
+        self,
+        embedding: List[float],
+        n_results: int = 5,
+        where: Optional[Dict[str, Any]] = None,
+        min_similarity: float = SIMILARITY_LOW,
+    ) -> List[Dict[str, Any]]:
+        """Query for similar vectors in ChromaDB."""
+        collection = await self._get_chromadb_collection()
+        if not collection:
+            return []
+
+        results = []
+
+        try:
+            query_result = await collection.query(
+                query_embeddings=[embedding],
+                n_results=n_results,
+                where=where,
+            )
+            self._metrics.chromadb_operations += 1
+
+            if query_result and query_result.get("distances"):
+                for i, (distance, doc_id) in enumerate(
+                    zip(query_result["distances"][0], query_result["ids"][0])
+                ):
+                    similarity = 1 - distance
+                    if similarity >= min_similarity:
+                        result = {"id": doc_id, "similarity": similarity}
+                        if query_result.get("documents"):
+                            result["document"] = query_result["documents"][0][i]
+                        if query_result.get("metadatas"):
+                            result["metadata"] = query_result["metadatas"][0][i]
+                        results.append(result)
+        except Exception as e:
+            logger.warning("Query failed: %s", e)
+            self._metrics.errors.append(f"ChromaDB query failed: {e}")
+
+        return results
+
+    def _generate_content_hash(self, content: str) -> str:
+        """Generate hash for content-based deduplication."""
+        return hashlib.sha256(content.encode()).hexdigest()[:16]
+
+    def _get_infrastructure_metrics(self) -> Dict[str, Any]:
+        """Get current infrastructure metrics."""
+        return self._metrics.to_dict()
+
+    def _reset_infrastructure_metrics(self) -> None:
+        """Reset infrastructure metrics."""
+        self._metrics = InfrastructureMetrics()
+
+    async def _cleanup_infrastructure(self) -> None:
+        """Cleanup infrastructure resources."""
+        if self._redis_client:
+            try:
+                await self._redis_client.close()
+            except Exception:
+                pass
+            self._redis_client = None
+        logger.info("Infrastructure resources cleaned up")
+
+
+class SemanticAnalysisMixin(AnalyticsInfrastructureMixin):
+    """Extended mixin with semantic analysis capabilities."""
+
+    async def _normalize_code_for_embedding(
+        self, code: str, language: str = "python"
+    ) -> str:
+        """Normalize code to language-independent representation."""
+        lines = []
+        in_multiline_comment = False
+
+        for line in code.split("\n"):
+            stripped = line.strip()
+            if not stripped:
+                continue
+
+            if language == "python":
+                if stripped.startswith('"""') or stripped.startswith("'''"):
+                    in_multiline_comment = not in_multiline_comment
+                    continue
+                if in_multiline_comment or stripped.startswith("#"):
+                    continue
+            elif language in ("typescript", "javascript"):
+                if stripped.startswith("//"):
+                    continue
+                if "/*" in stripped:
+                    in_multiline_comment = True
+                if "*/" in stripped:
+                    in_multiline_comment = False
+                    continue
+                if in_multiline_comment:
+                    continue
+
+            lines.append(stripped)
+
+        return " ".join(lines)
+
+    async def _compute_semantic_similarity(
+        self, code1: str, code2: str, language: str = "python"
+    ) -> float:
+        """Compute semantic similarity between two code snippets."""
+        if not self._use_llm:
+            return 0.0
+
+        norm1 = await self._normalize_code_for_embedding(code1, language)
+        norm2 = await self._normalize_code_for_embedding(code2, language)
+
+        emb1 = await self._get_embedding(norm1)
+        emb2 = await self._get_embedding(norm2)
+
+        if not emb1 or not emb2:
+            return 0.0
+
+        dot_product = sum(a * b for a, b in zip(emb1, emb2))
+        norm1_val = sum(a * a for a in emb1) ** 0.5
+        norm2_val = sum(b * b for b in emb2) ** 0.5
+
+        if norm1_val == 0 or norm2_val == 0:
+            return 0.0
+
+        return dot_product / (norm1_val * norm2_val)
+
+    async def _find_semantic_duplicates(
+        self,
+        items: List[Dict[str, Any]],
+        code_key: str = "code",
+        min_similarity: float = SIMILARITY_MEDIUM,
+    ) -> List[Dict[str, Any]]:
+        """Find semantically similar items in a list."""
+        if not self._use_llm or len(items) < 2:
+            return []
+
+        duplicates = []
+        embeddings = []
+
+        for item in items:
+            code = item.get(code_key, "")
+            emb = await self._get_embedding(code) if code else None
+            embeddings.append(emb)
+
+        for i in range(len(items)):
+            if embeddings[i] is None:
+                continue
+            for j in range(i + 1, len(items)):
+                if embeddings[j] is None:
+                    continue
+
+                similarity = await self._compute_semantic_similarity(
+                    items[i].get(code_key, ""),
+                    items[j].get(code_key, ""),
+                )
+                if similarity >= min_similarity:
+                    duplicates.append(
+                        {
+                            "item1": items[i],
+                            "item2": items[j],
+                            "similarity": similarity,
+                        }
+                    )
+
+        return duplicates

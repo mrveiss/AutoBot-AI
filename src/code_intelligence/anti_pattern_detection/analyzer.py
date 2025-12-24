@@ -8,10 +8,12 @@ Main entry point for anti-pattern detection. Coordinates all detector
 modules and provides a unified analysis interface.
 
 Part of Issue #381 - God Class Refactoring
+Issue #554 - Added Vector/Redis/LLM infrastructure for semantic analysis
 """
 
 import ast
 import logging
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
@@ -29,15 +31,29 @@ from .types import (
     Thresholds,
 )
 
+# Issue #554: Import analytics infrastructure for semantic analysis
+try:
+    from src.code_intelligence.analytics_infrastructure import (
+        SemanticAnalysisMixin,
+        SIMILARITY_MEDIUM,
+    )
+    HAS_ANALYTICS_INFRASTRUCTURE = True
+except ImportError:
+    HAS_ANALYTICS_INFRASTRUCTURE = False
+    SemanticAnalysisMixin = object  # Fallback to object if not available
+
 logger = logging.getLogger(__name__)
 
 
-class AntiPatternDetector:
+class AntiPatternDetector(SemanticAnalysisMixin):
     """
     Detects code anti-patterns and smells in Python code.
 
     Uses AST parsing to analyze code structure and identify common
     anti-patterns that indicate potential code quality issues.
+
+    Issue #554: Now includes optional semantic analysis via ChromaDB/Redis/LLM
+    infrastructure for detecting semantically similar anti-patterns.
 
     This class coordinates multiple specialized detectors:
     - BloaterDetector: God class, long method, deep nesting, etc.
@@ -63,6 +79,8 @@ class AntiPatternDetector:
         exclude_dirs: Optional[List[str]] = None,
         detect_circular: bool = True,
         detect_naming: bool = True,
+        use_semantic_analysis: bool = False,
+        use_cache: bool = True,
     ):
         """
         Initialize anti-pattern detector.
@@ -71,10 +89,13 @@ class AntiPatternDetector:
             exclude_dirs: Directories to exclude from analysis
             detect_circular: Whether to detect circular dependencies
             detect_naming: Whether to detect naming issues
+            use_semantic_analysis: Whether to use LLM-based semantic analysis (Issue #554)
+            use_cache: Whether to use Redis caching for results (Issue #554)
         """
         self.exclude_dirs = exclude_dirs or DEFAULT_IGNORE_PATTERNS
         self.detect_circular = detect_circular
         self.detect_naming = detect_naming
+        self.use_semantic_analysis = use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
 
         # Initialize specialized detectors
         self._bloater = BloaterDetector()
@@ -85,6 +106,15 @@ class AntiPatternDetector:
         # State tracking
         self._total_classes = 0
         self._total_functions = 0
+
+        # Issue #554: Initialize analytics infrastructure if semantic analysis enabled
+        if self.use_semantic_analysis:
+            self._init_infrastructure(
+                collection_name="anti_pattern_vectors",
+                use_llm=True,
+                use_cache=use_cache,
+                redis_database="analytics",
+            )
 
     def analyze_directory(self, directory: str) -> AnalysisReport:
         """
@@ -353,6 +383,161 @@ class AntiPatternDetector:
             dist[key] = dist.get(key, 0) + 1
         return dist
 
+    # Issue #554: Async semantic analysis methods
+
+    async def analyze_directory_async(
+        self,
+        directory: str,
+        find_semantic_duplicates: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Analyze a directory with optional semantic analysis.
+
+        Issue #554: Async version that supports ChromaDB/Redis/LLM infrastructure.
+
+        Args:
+            directory: Path to directory to analyze
+            find_semantic_duplicates: Whether to find semantically similar patterns
+
+        Returns:
+            Dictionary with analysis results including semantic matches
+        """
+        start_time = time.time()
+
+        # Run standard analysis first
+        report = self.analyze_directory(directory)
+
+        result = {
+            "report": report.to_dict() if hasattr(report, "to_dict") else {
+                "scan_path": report.scan_path,
+                "total_files": report.total_files,
+                "total_classes": report.total_classes,
+                "total_functions": report.total_functions,
+                "anti_patterns": [p.to_dict() for p in report.anti_patterns],
+                "summary": report.summary,
+                "severity_distribution": report.severity_distribution,
+            },
+            "semantic_duplicates": [],
+            "infrastructure_metrics": {},
+        }
+
+        # Run semantic analysis if enabled
+        if self.use_semantic_analysis and find_semantic_duplicates:
+            semantic_dups = await self._find_semantic_anti_pattern_duplicates(
+                report.anti_patterns
+            )
+            result["semantic_duplicates"] = semantic_dups
+
+            # Add infrastructure metrics
+            result["infrastructure_metrics"] = self._get_infrastructure_metrics()
+
+        result["analysis_time_ms"] = (time.time() - start_time) * 1000
+        return result
+
+    async def _find_semantic_anti_pattern_duplicates(
+        self,
+        patterns: List[AntiPatternResult],
+    ) -> List[Dict[str, Any]]:
+        """
+        Find semantically similar anti-patterns using LLM embeddings.
+
+        Issue #554: Uses ChromaDB for vector storage and similarity search.
+
+        Args:
+            patterns: List of detected anti-patterns
+
+        Returns:
+            List of duplicate pairs with similarity scores
+        """
+        if not self.use_semantic_analysis or not patterns:
+            return []
+
+        # Extract code snippets from patterns that have them
+        items_with_code = []
+        for p in patterns:
+            code = getattr(p, "current_code", "") or getattr(p, "code_snippet", "")
+            if code and len(code) > 20:  # Skip very short snippets
+                items_with_code.append({
+                    "pattern_type": p.pattern_type.value,
+                    "file_path": p.file_path,
+                    "line_start": p.line_start,
+                    "code": code,
+                    "description": p.description,
+                })
+
+        if len(items_with_code) < 2:
+            return []
+
+        # Use the mixin's semantic duplicate finder
+        try:
+            duplicates = await self._find_semantic_duplicates(
+                items_with_code,
+                code_key="code",
+                min_similarity=SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7,
+            )
+            return duplicates
+        except Exception as e:
+            logger.warning("Semantic duplicate detection failed: %s", e)
+            return []
+
+    async def cache_analysis_results(
+        self,
+        directory: str,
+        report: AnalysisReport,
+    ) -> bool:
+        """
+        Cache analysis results in Redis for faster retrieval.
+
+        Issue #554: Uses Redis caching from analytics infrastructure.
+
+        Args:
+            directory: Analyzed directory path
+            report: Analysis report to cache
+
+        Returns:
+            True if cached successfully
+        """
+        if not self.use_semantic_analysis:
+            return False
+
+        cache_key = self._generate_content_hash(directory)
+        report_dict = report.to_dict() if hasattr(report, "to_dict") else {
+            "scan_path": report.scan_path,
+            "total_files": report.total_files,
+            "anti_patterns": [p.to_dict() for p in report.anti_patterns],
+            "summary": report.summary,
+        }
+
+        return await self._cache_result(
+            key=cache_key,
+            result=report_dict,
+            prefix="anti_pattern_analysis",
+        )
+
+    async def get_cached_analysis(
+        self,
+        directory: str,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get cached analysis results from Redis.
+
+        Issue #554: Retrieves cached results for faster repeat analysis.
+
+        Args:
+            directory: Directory path to look up
+
+        Returns:
+            Cached analysis results or None if not found
+        """
+        if not self.use_semantic_analysis:
+            return None
+
+        cache_key = self._generate_content_hash(directory)
+        return await self._get_cached_result(
+            key=cache_key,
+            prefix="anti_pattern_analysis",
+        )
+
 
 def analyze_codebase(
     directory: str,
@@ -378,3 +563,39 @@ def analyze_codebase(
         detect_naming=detect_naming,
     )
     return detector.analyze_directory(directory)
+
+
+async def analyze_codebase_async(
+    directory: str,
+    exclude_dirs: Optional[List[str]] = None,
+    detect_circular: bool = True,
+    detect_naming: bool = True,
+    use_semantic_analysis: bool = True,
+    find_semantic_duplicates: bool = True,
+) -> Dict[str, Any]:
+    """
+    Async convenience function to analyze a codebase with semantic analysis.
+
+    Issue #554: Async version with ChromaDB/Redis/LLM infrastructure support.
+
+    Args:
+        directory: Path to directory to analyze
+        exclude_dirs: Directories to exclude from analysis
+        detect_circular: Whether to detect circular dependencies
+        detect_naming: Whether to detect naming issues
+        use_semantic_analysis: Whether to use LLM-based semantic analysis
+        find_semantic_duplicates: Whether to find semantically similar patterns
+
+    Returns:
+        Dictionary with analysis results including semantic matches
+    """
+    detector = AntiPatternDetector(
+        exclude_dirs=exclude_dirs,
+        detect_circular=detect_circular,
+        detect_naming=detect_naming,
+        use_semantic_analysis=use_semantic_analysis,
+    )
+    return await detector.analyze_directory_async(
+        directory,
+        find_semantic_duplicates=find_semantic_duplicates,
+    )
