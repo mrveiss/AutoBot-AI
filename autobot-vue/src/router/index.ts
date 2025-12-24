@@ -256,9 +256,9 @@ const routes: RouteRecordRaw[] = [
     name: 'monitoring',
     component: MonitoringView,
     meta: {
-      title: 'System Monitoring',
+      title: 'Monitoring',
       icon: 'fas fa-chart-line',
-      description: 'System health and performance monitoring',
+      description: 'Prometheus, Grafana, logs and alerts',
       requiresAuth: false
     },
     children: [
@@ -282,15 +282,6 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/components/RumDashboard.vue'),
         meta: {
           title: 'RUM Dashboard',
-          parent: 'monitoring'
-        }
-      },
-      {
-        path: 'validation',
-        name: 'monitoring-validation',
-        component: () => import('@/components/ValidationDashboard.vue'),
-        meta: {
-          title: 'Validation',
           parent: 'monitoring'
         }
       },
