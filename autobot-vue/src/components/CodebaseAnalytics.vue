@@ -560,7 +560,7 @@
                 class="circular-dep-item"
               >
                 <i class="fas fa-sync-alt"></i>
-                <span>{{ cycle.join(' ↔ ') }}</span>
+                <span>{{ Array.isArray(cycle) ? cycle.join(' ↔ ') : (cycle.modules || []).join(' ↔ ') }}</span>
               </div>
             </div>
             <div v-if="dependencyData.circular_dependencies.length > 10" class="show-more">
@@ -1678,6 +1678,14 @@
                   <i class="fas fa-file-code"></i> {{ securityScore.files_analyzed }} files
                 </span>
               </div>
+              <button
+                class="view-details-btn"
+                @click="toggleSecurityDetails"
+                :disabled="loadingSecurityFindings"
+              >
+                <i :class="loadingSecurityFindings ? 'fas fa-spinner fa-spin' : (showSecurityDetails ? 'fas fa-chevron-up' : 'fas fa-chevron-down')"></i>
+                {{ showSecurityDetails ? 'Hide Details' : 'View Details' }}
+              </button>
             </div>
             <div v-else class="score-empty">
               <span>No data</span>
@@ -1721,6 +1729,14 @@
                   <i class="fas fa-file-code"></i> {{ performanceScore.files_analyzed }} files
                 </span>
               </div>
+              <button
+                class="view-details-btn"
+                @click="togglePerformanceDetails"
+                :disabled="loadingPerformanceFindings"
+              >
+                <i :class="loadingPerformanceFindings ? 'fas fa-spinner fa-spin' : (showPerformanceDetails ? 'fas fa-chevron-up' : 'fas fa-chevron-down')"></i>
+                {{ showPerformanceDetails ? 'Hide Details' : 'View Details' }}
+              </button>
             </div>
             <div v-else class="score-empty">
               <span>No data</span>
@@ -1764,9 +1780,138 @@
                   <i class="fas fa-file-code"></i> {{ redisHealth.total_files }} files
                 </span>
               </div>
+              <button
+                class="view-details-btn"
+                @click="toggleRedisDetails"
+                :disabled="loadingRedisOptimizations"
+              >
+                <i :class="loadingRedisOptimizations ? 'fas fa-spinner fa-spin' : (showRedisDetails ? 'fas fa-chevron-up' : 'fas fa-chevron-down')"></i>
+                {{ showRedisDetails ? 'Hide Details' : 'View Details' }}
+              </button>
             </div>
             <div v-else class="score-empty">
               <span>No data</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Issue #566: Expandable Security Findings Panel -->
+        <div v-if="showSecurityDetails" class="findings-panel security-findings-panel">
+          <div class="findings-header">
+            <h4><i class="fas fa-shield-alt"></i> Security Findings</h4>
+            <span class="findings-count">{{ securityFindings.length }} findings</span>
+          </div>
+          <div v-if="loadingSecurityFindings" class="findings-loading">
+            <i class="fas fa-spinner fa-spin"></i> Loading security findings...
+          </div>
+          <div v-else-if="securityFindings.length === 0" class="findings-empty">
+            <i class="fas fa-check-circle"></i> No security vulnerabilities found
+          </div>
+          <div v-else class="findings-list">
+            <div
+              v-for="(finding, index) in securityFindings"
+              :key="'sec-' + index"
+              class="finding-item"
+              :class="getSeverityClass(finding.severity)"
+            >
+              <div class="finding-header">
+                <span class="finding-severity" :class="getSeverityClass(finding.severity)">
+                  {{ finding.severity }}
+                </span>
+                <span class="finding-type">{{ finding.vulnerability_type }}</span>
+              </div>
+              <div class="finding-description">{{ finding.description }}</div>
+              <div class="finding-location">
+                <i class="fas fa-file-code"></i>
+                {{ finding.file_path }}
+                <span v-if="finding.line">:{{ finding.line }}</span>
+              </div>
+              <div v-if="finding.recommendation" class="finding-recommendation">
+                <i class="fas fa-lightbulb"></i> {{ finding.recommendation }}
+              </div>
+              <div v-if="finding.owasp_category" class="finding-owasp">
+                <i class="fas fa-tag"></i> OWASP: {{ finding.owasp_category }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Issue #566: Expandable Performance Findings Panel -->
+        <div v-if="showPerformanceDetails" class="findings-panel performance-findings-panel">
+          <div class="findings-header">
+            <h4><i class="fas fa-tachometer-alt"></i> Performance Issues</h4>
+            <span class="findings-count">{{ performanceFindings.length }} issues</span>
+          </div>
+          <div v-if="loadingPerformanceFindings" class="findings-loading">
+            <i class="fas fa-spinner fa-spin"></i> Loading performance issues...
+          </div>
+          <div v-else-if="performanceFindings.length === 0" class="findings-empty">
+            <i class="fas fa-check-circle"></i> No performance issues found
+          </div>
+          <div v-else class="findings-list">
+            <div
+              v-for="(finding, index) in performanceFindings"
+              :key="'perf-' + index"
+              class="finding-item"
+              :class="getSeverityClass(finding.severity)"
+            >
+              <div class="finding-header">
+                <span class="finding-severity" :class="getSeverityClass(finding.severity)">
+                  {{ finding.severity }}
+                </span>
+                <span class="finding-type">{{ finding.issue_type }}</span>
+              </div>
+              <div class="finding-description">{{ finding.description }}</div>
+              <div class="finding-location">
+                <i class="fas fa-file-code"></i>
+                {{ finding.file_path }}
+                <span v-if="finding.line">:{{ finding.line }}</span>
+                <span v-if="finding.function_name" class="function-name">
+                  in {{ finding.function_name }}()
+                </span>
+              </div>
+              <div v-if="finding.recommendation" class="finding-recommendation">
+                <i class="fas fa-lightbulb"></i> {{ finding.recommendation }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Issue #566: Expandable Redis Optimizations Panel -->
+        <div v-if="showRedisDetails" class="findings-panel redis-findings-panel">
+          <div class="findings-header">
+            <h4><i class="fas fa-database"></i> Redis Optimizations</h4>
+            <span class="findings-count">{{ redisOptimizations.length }} suggestions</span>
+          </div>
+          <div v-if="loadingRedisOptimizations" class="findings-loading">
+            <i class="fas fa-spinner fa-spin"></i> Loading Redis optimizations...
+          </div>
+          <div v-else-if="redisOptimizations.length === 0" class="findings-empty">
+            <i class="fas fa-check-circle"></i> No Redis optimization suggestions
+          </div>
+          <div v-else class="findings-list">
+            <div
+              v-for="(opt, index) in redisOptimizations"
+              :key="'redis-' + index"
+              class="finding-item"
+              :class="getSeverityClass(opt.severity)"
+            >
+              <div class="finding-header">
+                <span class="finding-severity" :class="getSeverityClass(opt.severity)">
+                  {{ opt.severity }}
+                </span>
+                <span class="finding-type">{{ opt.optimization_type }}</span>
+                <span v-if="opt.category" class="finding-category">{{ opt.category }}</span>
+              </div>
+              <div class="finding-description">{{ opt.description }}</div>
+              <div class="finding-location">
+                <i class="fas fa-file-code"></i>
+                {{ opt.file_path }}
+                <span v-if="opt.line">:{{ opt.line }}</span>
+              </div>
+              <div v-if="opt.recommendation" class="finding-recommendation">
+                <i class="fas fa-lightbulb"></i> {{ opt.recommendation }}
+              </div>
             </div>
           </div>
         </div>
@@ -1932,7 +2077,7 @@ import {
 const { showToast } = useToast()
 
 // Notification helper for error handling
-const notify = (message, type = 'info') => {
+const notify = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
   showToast(message, type, type === 'error' ? 5000 : 3000)
 }
 
@@ -1945,23 +2090,50 @@ const analyzing = ref(false)
 const progressPercent = ref(0)
 const progressStatus = ref('Ready')
 const realTimeEnabled = ref(false)
-const refreshInterval = ref(null)
+const refreshInterval = ref<ReturnType<typeof setInterval> | null>(null)
 
 // Issue #208: Pattern Analysis component ref
-const patternAnalysisRef = ref(null)
+interface PatternAnalysisComponent {
+  runAnalysis: () => Promise<void>
+}
+const patternAnalysisRef = ref<PatternAnalysisComponent | null>(null)
 
 // Indexing job state tracking
-const currentJobId = ref(null)
-const currentJobStatus = ref(null)
-const jobPollingInterval = ref(null)
+const currentJobId = ref<string | null>(null)
+const currentJobStatus = ref<string | null>(null)
+const jobPollingInterval = ref<ReturnType<typeof setInterval> | null>(null)
+
+// Interfaces for job tracking
+interface JobPhase {
+  id: string
+  name: string
+  status: 'pending' | 'running' | 'completed'
+}
+
+interface JobPhasesData {
+  phase_list: JobPhase[]
+}
+
+interface JobBatchesData {
+  total_batches: number
+  completed_batches: number
+}
+
+interface JobStatsData {
+  files_scanned: number
+  problems_found: number
+  functions_found: number
+  classes_found: number
+  items_stored: number
+}
 
 // Enhanced progress tracking with phases and batches
-const jobPhases = ref(null)
-const jobBatches = ref(null)
-const jobStats = ref(null)
+const jobPhases = ref<JobPhasesData | null>(null)
+const jobBatches = ref<JobBatchesData | null>(null)
+const jobStats = ref<JobStatsData | null>(null)
 
 // Helper to get phase icon based on status
-const getPhaseIcon = (status) => {
+const getPhaseIcon = (status: string): string => {
   switch (status) {
     case 'completed':
       return 'fas fa-check-circle'
@@ -1993,17 +2165,85 @@ const getCategoryIcon = (categoryId: string): string => {
   return iconMap[categoryId] || iconMap.default
 }
 
+// Analytics data interfaces
+interface Problem {
+  severity: string
+  type: string
+  message: string
+  description?: string
+  file_path: string
+  line?: number
+  line_number?: number
+  category?: string
+  suggestion?: string
+}
+
+interface DuplicateCode {
+  similarity: number
+  lines: number
+  file1: string
+  file2: string
+  start1?: number
+  start2?: number
+}
+
+interface Declaration {
+  type: string
+  name: string
+  file_path: string
+  line?: number
+  line_number?: number
+  is_exported?: boolean
+}
+
+interface HardcodedValue {
+  file_path: string
+  line_number: number
+  variable_name?: string
+  value: string
+  value_type: string
+  severity: string
+  suggestion: string
+}
+
+interface RefactoringSuggestion {
+  type: string
+  severity: string
+  description: string
+  file_path: string
+  line?: number
+  suggestion: string
+}
+
 // Analytics data
-const codebaseStats = ref(null)
-const problemsReport = ref([])
-const duplicateAnalysis = ref([])
-const declarationAnalysis = ref([])
-const hardcodeAnalysis = ref([])
-const refactoringSuggestions = ref([])
+const codebaseStats = ref<Record<string, unknown> | null>(null)
+const problemsReport = ref<Problem[]>([])
+const duplicateAnalysis = ref<DuplicateCode[]>([])
+const declarationAnalysis = ref<Declaration[]>([])
+const hardcodeAnalysis = ref<HardcodedValue[]>([])
+const refactoringSuggestions = ref<RefactoringSuggestion[]>([])
 
 // Code Intelligence / Anti-Pattern Detection data
-const codeSmellsReport = ref(null)
-const codeHealthScore = ref(null)
+interface CodeSmellsReportData {
+  smells: Array<{
+    type: string
+    severity: string
+    message: string
+    file_path: string
+    line?: number
+  }>
+  summary?: Record<string, unknown>
+}
+
+interface CodeHealthScoreData {
+  grade: string
+  health_score: number
+  breakdown?: Record<string, unknown>
+  [key: string]: unknown
+}
+
+const codeSmellsReport = ref<CodeSmellsReportData | null>(null)
+const codeHealthScore = ref<CodeHealthScoreData | null>(null)
 const analyzingCodeSmells = ref(false)
 const codeSmellsAnalysisType = ref('') // 'smells' or 'health'
 const exportingReport = ref(false)
@@ -2016,41 +2256,186 @@ const codeSmellsProgressTitle = computed(() => {
     : 'Analyzing Code Smells...'
 })
 
+// Enhanced analytics data interfaces
+interface SystemOverviewData {
+  api_requests_per_minute: number
+  average_response_time: number
+  active_connections: number
+  system_health: string
+}
+
+interface CommunicationPatternsData {
+  websocket_connections: number
+  api_call_frequency: number
+  data_transfer_rate: number
+}
+
+interface CodeQualityData {
+  overall_score: number
+  test_coverage: number
+  code_duplicates: number
+  technical_debt: number
+}
+
+interface PerformanceMetricsData {
+  efficiency_score: number
+  memory_usage: number
+  cpu_usage: number
+  load_time: number
+}
+
+interface ChartDataItem {
+  name: string
+  value: number
+  type?: string
+  [key: string]: unknown
+}
+
+interface ChartDataSummary {
+  total_problems?: number
+  unique_problem_types?: number
+  files_with_problems?: number
+  race_condition_count?: number
+}
+
+interface ChartData {
+  summary?: ChartDataSummary
+  problem_types?: ChartDataItem[]
+  severity_counts?: ChartDataItem[]
+  race_conditions?: ChartDataItem[]
+  top_files?: ChartDataItem[]
+  [key: string]: unknown
+}
+
+interface DependencyNode {
+  id: string
+  name: string
+  type?: string
+}
+
+interface DependencyEdge {
+  source: string
+  target: string
+  type?: string
+}
+
+interface ModuleData {
+  name: string
+  path?: string
+  import_count: number
+  [key: string]: unknown
+}
+
+interface ExternalDependency {
+  name: string
+  usage_count?: number
+  [key: string]: unknown
+}
+
+// CircularDependency can be either an array of module names (string[])
+// or an object with a modules property
+type CircularDependency = string[] | { modules: string[]; [key: string]: unknown }
+
+interface DependencySummary {
+  total_modules?: number
+  total_import_relationships?: number
+  external_dependency_count?: number
+  circular_dependency_count?: number
+}
+
+interface DependencyGraph {
+  nodes: DependencyNode[]
+  edges: DependencyEdge[]
+  summary?: DependencySummary
+  modules?: ModuleData[]
+  external_dependencies?: ExternalDependency[]
+  circular_dependencies?: CircularDependency[]
+  import_relationships?: DependencyEdge[]
+}
+
+interface ImportTreeNode {
+  name: string
+  path: string
+  children?: ImportTreeNode[]
+  imports?: string[]
+}
+
+interface UnifiedReportData {
+  categories: Record<string, Problem[]>
+  summary: {
+    total: number
+    by_severity: Record<string, number>
+    by_category: Record<string, number>
+  }
+  timestamp: string
+}
+
 // Enhanced analytics data
-const systemOverview = ref(null)
-const communicationPatterns = ref(null)
-const codeQuality = ref(null)
-const performanceMetrics = ref(null)
+const systemOverview = ref<SystemOverviewData | null>(null)
+const communicationPatterns = ref<CommunicationPatternsData | null>(null)
+const codeQuality = ref<CodeQualityData | null>(null)
+const performanceMetrics = ref<PerformanceMetricsData | null>(null)
 
 // Chart data for visualizations
-const chartData = ref(null)
+const chartData = ref<ChartData | null>(null)
 const chartDataLoading = ref(false)
 const chartDataError = ref('')
 
 // Unified analytics report data
-const unifiedReport = ref(null)
+const unifiedReport = ref<UnifiedReportData | null>(null)
 const unifiedReportLoading = ref(false)
 const unifiedReportError = ref('')
 const selectedCategory = ref('all') // Filter: all, race_conditions, debug_code, complexity, etc.
 
 // Dependency analysis data
-const dependencyData = ref(null)
+const dependencyData = ref<DependencyGraph | null>(null)
 const dependencyLoading = ref(false)
 const dependencyError = ref('')
 
 // Import tree data
-const importTreeData = ref([])
+const importTreeData = ref<ImportTreeNode[]>([])
 const importTreeLoading = ref(false)
 const importTreeError = ref('')
 
 // Function call graph data
-const callGraphData = ref({ nodes: [], edges: [] })
-const callGraphSummary = ref(null)
+const callGraphData = ref<DependencyGraph>({ nodes: [], edges: [] })
+const callGraphSummary = ref<Record<string, unknown> | null>(null)
 const callGraphLoading = ref(false)
 const callGraphError = ref('')
 
 // Issue #527: API Endpoint Checker data
-const apiEndpointAnalysis = ref(null)
+interface ApiEndpointInfo {
+  path: string
+  method?: string
+  function_name?: string
+  expected_path?: string
+  actual_path?: string
+  file_path?: string
+  line_number?: number
+  [key: string]: unknown
+}
+
+interface ApiUsageInfo {
+  endpoint?: ApiEndpointInfo
+  call_count?: number
+  [key: string]: unknown
+}
+
+interface ApiEndpointAnalysisResult {
+  coverage_percentage: number
+  backend_endpoints: number
+  frontend_calls: number
+  used_endpoints: number
+  orphaned_endpoints: number
+  missing_endpoints: number
+  orphaned: ApiEndpointInfo[]
+  missing: ApiEndpointInfo[]
+  used?: ApiUsageInfo[]
+  scan_timestamp?: string | number | Date
+  [key: string]: unknown
+}
+
+const apiEndpointAnalysis = ref<ApiEndpointAnalysisResult | null>(null)
 const loadingApiEndpoints = ref(false)
 const apiEndpointsError = ref('')
 const expandedApiEndpointGroups = reactive({
@@ -2128,6 +2513,50 @@ const performanceScoreError = ref('')
 const redisHealth = ref<RedisHealthResult | null>(null)
 const loadingRedisHealth = ref(false)
 const redisHealthError = ref('')
+
+// Issue #566: Detailed findings interfaces and state
+interface SecurityFinding {
+  severity: string
+  vulnerability_type: string
+  description: string
+  file_path: string
+  line?: number
+  code_snippet?: string
+  recommendation?: string
+  owasp_category?: string
+}
+interface PerformanceFinding {
+  severity: string
+  issue_type: string
+  description: string
+  file_path: string
+  line?: number
+  function_name?: string
+  recommendation?: string
+}
+interface RedisOptimization {
+  severity: string
+  optimization_type: string
+  category?: string
+  description: string
+  file_path: string
+  line?: number
+  code_snippet?: string
+  recommendation?: string
+}
+
+// Issue #566: Detailed findings state
+const securityFindings = ref<SecurityFinding[]>([])
+const loadingSecurityFindings = ref(false)
+const showSecurityDetails = ref(false)
+
+const performanceFindings = ref<PerformanceFinding[]>([])
+const loadingPerformanceFindings = ref(false)
+const showPerformanceDetails = ref(false)
+
+const redisOptimizations = ref<RedisOptimization[]>([])
+const loadingRedisOptimizations = ref(false)
+const showRedisDetails = ref(false)
 
 // Issue #538: Environment Analysis data
 interface HardcodedValue {
@@ -2290,8 +2719,9 @@ const checkCurrentIndexingJob = async () => {
         progressStatus.value = `Last job: ${data.status}`
       }
     }
-  } catch (error) {
-    logger.warn('Could not check for running job:', error.message)
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    logger.warn('Could not check for running job:', errorMessage)
   }
 }
 
@@ -2382,8 +2812,9 @@ const pollJobStatus = async () => {
         currentJobId.value = null
       }
     }
-  } catch (error) {
-    logger.warn('Job polling error:', error.message)
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    logger.warn('Job polling error:', errorMessage)
   }
 }
 
@@ -2411,7 +2842,7 @@ const pollIntermediateResults = async () => {
         progressStatus.value = `Indexed ${filesIndexed} files, ${problemsFound} problems found...`
       }
     }
-  } catch (error) {
+  } catch (error: unknown) {
     // Silent - don't interrupt polling
   }
 }
@@ -2446,8 +2877,9 @@ const cancelIndexingJob = async () => {
     } else {
       notify('Failed to cancel job', 'error')
     }
-  } catch (error) {
-    notify(`Error cancelling job: ${error.message}`, 'error')
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    notify(`Error cancelling job: ${errorMessage}`, 'error')
   }
 }
 
@@ -2473,7 +2905,7 @@ const loadProjectRoot = async () => {
     } else {
       logger.warn('Project root not found in config, using default')
     }
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Failed to load project root:', error)
     progressStatus.value = 'Please enter project path to analyze'
   }
@@ -2503,7 +2935,7 @@ const loadCodebaseAnalyticsData = async () => {
       loadEnvironmentAnalysis() // Issue #538: Environment analysis
     ])
 
-  } catch (error) {
+  } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Failed to load codebase analytics data:', error)
     // Provide user feedback for critical failures
@@ -2545,9 +2977,9 @@ const loadChartData = async () => {
       logger.debug('No chart data available - run indexing first')
     }
 
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Failed to load chart data:', error)
-    chartDataError.value = error.message
+    chartDataError.value = error instanceof Error ? error.message : String(error)
   } finally {
     chartDataLoading.value = false
   }
@@ -2587,9 +3019,9 @@ const loadUnifiedReport = async () => {
       unifiedReport.value = null
       logger.debug('No unified report data - run indexing first')
     }
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Failed to load unified report:', error)
-    unifiedReportError.value = error.message
+    unifiedReportError.value = error instanceof Error ? error.message : String(error)
   } finally {
     unifiedReportLoading.value = false
   }
@@ -2598,23 +3030,24 @@ const loadUnifiedReport = async () => {
 // Get available categories from unified report
 const availableCategories = computed(() => {
   if (!unifiedReport.value?.categories) return []
-  return Object.keys(unifiedReport.value.categories).map(key => ({
+  const categories = unifiedReport.value.categories
+  return Object.keys(categories).map(key => ({
     id: key,
-    name: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-    count: unifiedReport.value.categories[key]?.count || 0
+    name: key.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
+    count: Array.isArray(categories[key]) ? categories[key].length : 0
   }))
 })
 
 // Get filtered chart data based on selected category
-const filteredChartData = computed(() => {
+const filteredChartData = computed((): ChartData | null => {
   if (!chartData.value) return null
   if (selectedCategory.value === 'all') return chartData.value
 
-  const filtered = { ...chartData.value }
+  const filtered: ChartData = { ...chartData.value }
 
   // Filter problem types by selected category
   if (filtered.problem_types) {
-    filtered.problem_types = filtered.problem_types.filter(pt => {
+    filtered.problem_types = filtered.problem_types.filter((pt: ChartDataItem) => {
       const type = pt.type?.toLowerCase() || ''
       const category = selectedCategory.value.toLowerCase()
       return type.includes(category) || category.includes(type)
@@ -2659,9 +3092,9 @@ const loadDependencyData = async () => {
       logger.debug('No dependency data - run indexing first')
     }
 
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Failed to load dependency data:', error)
-    dependencyError.value = error.message
+    dependencyError.value = error instanceof Error ? error.message : String(error)
   } finally {
     dependencyLoading.value = false
   }
@@ -2696,13 +3129,13 @@ const loadImportTreeData = async () => {
       })
     } else if (data.status === 'no_data') {
       // Issue #543: Handle no_data status from backend
-      importTreeData.value = null
+      importTreeData.value = []
       logger.debug('No import tree data - run indexing first')
     }
 
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Failed to load import tree:', error)
-    importTreeError.value = error.message
+    importTreeError.value = error instanceof Error ? error.message : String(error)
   } finally {
     importTreeLoading.value = false
   }
@@ -2747,14 +3180,14 @@ const loadCallGraphData = async () => {
       })
     } else if (data.status === 'no_data') {
       // Issue #543: Handle no_data status from backend
-      callGraphData.value = null
+      callGraphData.value = { nodes: [], edges: [] }
       callGraphSummary.value = null
       logger.debug('No call graph data - run indexing first')
     }
 
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Failed to load call graph:', error)
-    callGraphError.value = error.message
+    callGraphError.value = error instanceof Error ? error.message : String(error)
   } finally {
     callGraphLoading.value = false
   }
@@ -2784,7 +3217,7 @@ const loadDeclarations = async () => {
     }
     const data = await response.json()
     declarationAnalysis.value = data.declarations || []
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Failed to load declarations:', error)
   } finally {
     loadingProgress.declarations = false
@@ -2809,7 +3242,7 @@ const loadDuplicates = async () => {
     }
     const data = await response.json()
     duplicateAnalysis.value = data.duplicates || []
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Failed to load duplicates:', error)
   } finally {
     loadingProgress.duplicates = false
@@ -2834,7 +3267,7 @@ const loadHardcodes = async () => {
     }
     const data = await response.json()
     hardcodeAnalysis.value = data.hardcodes || []
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Failed to load hardcodes:', error)
   } finally {
     loadingProgress.hardcodes = false
@@ -2867,7 +3300,7 @@ const loadConfigDuplicates = async () => {
     } else {
       throw new Error('Invalid response format')
     }
-  } catch (error) {
+  } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Failed to load config duplicates:', error)
     configDuplicatesError.value = errorMessage
@@ -2906,7 +3339,7 @@ const loadBugPrediction = async () => {
         files: data.files || []
       }
     }
-  } catch (error) {
+  } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Failed to load bug prediction:', error)
     bugPredictionError.value = errorMessage
@@ -2941,7 +3374,7 @@ const loadApiEndpointAnalysis = async () => {
     } else {
       throw new Error('Invalid response format')
     }
-  } catch (error) {
+  } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Failed to load API endpoint analysis:', error)
     apiEndpointsError.value = errorMessage
@@ -2986,7 +3419,7 @@ const loadSecurityScore = async () => {
       securityScore.value = null
       logger.debug('No security score data - run indexing first')
     }
-  } catch (error) {
+  } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Failed to load security score:', error)
     securityScoreError.value = errorMessage
@@ -3028,7 +3461,7 @@ const loadPerformanceScore = async () => {
       performanceScore.value = null
       logger.debug('No performance score data - run indexing first')
     }
-  } catch (error) {
+  } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Failed to load performance score:', error)
     performanceScoreError.value = errorMessage
@@ -3069,12 +3502,138 @@ const loadRedisHealth = async () => {
       redisHealth.value = null
       logger.debug('No Redis health data - run indexing first')
     }
-  } catch (error) {
+  } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Failed to load Redis health:', error)
     redisHealthError.value = errorMessage
   } finally {
     loadingRedisHealth.value = false
+  }
+}
+
+// Issue #566: Load detailed security findings
+const loadSecurityFindings = async () => {
+  if (!rootPath.value) return
+  loadingSecurityFindings.value = true
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/code-intelligence/security/analyze`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ path: rootPath.value })
+    })
+    if (!response.ok) {
+      throw new Error(`Security analyze endpoint returned ${response.status}`)
+    }
+    const data = await response.json()
+    if (data.status === 'success' && data.findings) {
+      securityFindings.value = data.findings
+    } else {
+      securityFindings.value = []
+    }
+  } catch (error: unknown) {
+    logger.error('Failed to load security findings:', error)
+    securityFindings.value = []
+  } finally {
+    loadingSecurityFindings.value = false
+  }
+}
+
+// Issue #566: Load detailed performance findings
+const loadPerformanceFindings = async () => {
+  if (!rootPath.value) return
+  loadingPerformanceFindings.value = true
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/code-intelligence/performance/analyze`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ path: rootPath.value })
+    })
+    if (!response.ok) {
+      throw new Error(`Performance analyze endpoint returned ${response.status}`)
+    }
+    const data = await response.json()
+    if (data.status === 'success' && data.findings) {
+      performanceFindings.value = data.findings
+    } else {
+      performanceFindings.value = []
+    }
+  } catch (error: unknown) {
+    logger.error('Failed to load performance findings:', error)
+    performanceFindings.value = []
+  } finally {
+    loadingPerformanceFindings.value = false
+  }
+}
+
+// Issue #566: Load detailed Redis optimization findings
+const loadRedisOptimizations = async () => {
+  if (!rootPath.value) return
+  loadingRedisOptimizations.value = true
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/code-intelligence/redis/analyze`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ path: rootPath.value })
+    })
+    if (!response.ok) {
+      throw new Error(`Redis analyze endpoint returned ${response.status}`)
+    }
+    const data = await response.json()
+    if (data.status === 'success' && data.findings) {
+      redisOptimizations.value = data.findings
+    } else {
+      redisOptimizations.value = []
+    }
+  } catch (error: unknown) {
+    logger.error('Failed to load Redis optimizations:', error)
+    redisOptimizations.value = []
+  } finally {
+    loadingRedisOptimizations.value = false
+  }
+}
+
+// Issue #566: Toggle functions for detail panels
+const toggleSecurityDetails = async () => {
+  showSecurityDetails.value = !showSecurityDetails.value
+  if (showSecurityDetails.value && securityFindings.value.length === 0) {
+    await loadSecurityFindings()
+  }
+}
+
+const togglePerformanceDetails = async () => {
+  showPerformanceDetails.value = !showPerformanceDetails.value
+  if (showPerformanceDetails.value && performanceFindings.value.length === 0) {
+    await loadPerformanceFindings()
+  }
+}
+
+const toggleRedisDetails = async () => {
+  showRedisDetails.value = !showRedisDetails.value
+  if (showRedisDetails.value && redisOptimizations.value.length === 0) {
+    await loadRedisOptimizations()
+  }
+}
+
+// Issue #566: Get severity color class
+const getSeverityClass = (severity: string): string => {
+  switch (severity?.toLowerCase()) {
+    case 'critical': return 'severity-critical'
+    case 'high': return 'severity-high'
+    case 'medium': return 'severity-medium'
+    case 'low': return 'severity-low'
+    default: return 'severity-info'
   }
 }
 
@@ -3111,7 +3670,7 @@ const loadEnvironmentAnalysis = async () => {
       environmentAnalysis.value = null
       logger.debug('No environment analysis data - run indexing first')
     }
-  } catch (error) {
+  } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Failed to load environment analysis:', error)
     envAnalysisError.value = errorMessage
@@ -3184,10 +3743,11 @@ const indexCodebase = async () => {
     // Start polling for job status updates
     progressPercent.value = 20
     startJobPolling()
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Indexing failed:', error)
-    progressStatus.value = `Indexing failed to start: ${error.message}`
-    notify(`Indexing failed: ${error.message}`, 'error')
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    progressStatus.value = `Indexing failed to start: ${errorMessage}`
+    notify(`Indexing failed: ${errorMessage}`, 'error')
     analyzing.value = false
   }
 }
@@ -3210,7 +3770,7 @@ const getCodebaseStats = async () => {
       codebaseStats.value = null
       logger.debug('No codebase stats - run indexing first')
     }
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Failed to get stats:', error)
   }
 }
@@ -3235,7 +3795,7 @@ const getProblemsReport = async () => {
     } else {
       problemsReport.value = data.problems || []
     }
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Failed to get problems:', error)
   } finally {
     loadingProgress.problems = false
@@ -3266,10 +3826,11 @@ const getDeclarationsData = async () => {
     const responseTime = Date.now() - startTime
     declarationAnalysis.value = data.declarations || []
     notify(`Found ${declarationAnalysis.value.length} declarations (${responseTime}ms)`, 'success')
-  } catch (error) {
+  } catch (error: unknown) {
     const responseTime = Date.now() - startTime
+    const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Declarations failed:', error)
-    notify(`Declarations failed: ${error.message} (${responseTime}ms)`, 'error')
+    notify(`Declarations failed: ${errorMessage} (${responseTime}ms)`, 'error')
   } finally {
     loadingProgress.declarations = false
     progressStatus.value = 'Ready'
@@ -3300,10 +3861,11 @@ const getDuplicatesData = async () => {
     const responseTime = Date.now() - startTime
     duplicateAnalysis.value = data.duplicates || []
     notify(`Found ${duplicateAnalysis.value.length} duplicates (${responseTime}ms)`, 'success')
-  } catch (error) {
+  } catch (error: unknown) {
     const responseTime = Date.now() - startTime
+    const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Duplicates failed:', error)
-    notify(`Duplicates failed: ${error.message} (${responseTime}ms)`, 'error')
+    notify(`Duplicates failed: ${errorMessage} (${responseTime}ms)`, 'error')
   } finally {
     loadingProgress.duplicates = false
     progressStatus.value = 'Ready'
@@ -3337,12 +3899,13 @@ const getHardcodesData = async () => {
     hardcodeAnalysis.value = data.hardcodes || []
 
     const hardcodeCount = hardcodeAnalysis.value.length
-    const hardcodeTypes = hardcodeCount > 0 ? [...new Set(hardcodeAnalysis.value.map(h => h.type))].join(', ') : 'none'
+    const hardcodeTypes = hardcodeCount > 0 ? [...new Set(hardcodeAnalysis.value.map(h => h.value_type))].join(', ') : 'none'
     notify(`Found ${hardcodeCount} hardcodes (${hardcodeTypes}) - ${responseTime}ms`, 'success')
-  } catch (error) {
+  } catch (error: unknown) {
     const responseTime = Date.now() - startTime
+    const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Hardcodes failed:', error)
-    notify(`Hardcodes failed: ${error.message} (${responseTime}ms)`, 'error')
+    notify(`Hardcodes failed: ${errorMessage} (${responseTime}ms)`, 'error')
   } finally {
     loadingProgress.hardcodes = false
     progressStatus.value = 'Ready'
@@ -3383,11 +3946,12 @@ const getApiEndpointCoverage = async () => {
     } else {
       throw new Error('Invalid response format')
     }
-  } catch (error) {
+  } catch (error: unknown) {
     const responseTime = Date.now() - startTime
+    const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('API Endpoint analysis failed:', error)
-    apiEndpointsError.value = error.message
-    notify(`API Endpoint analysis failed: ${error.message} (${responseTime}ms)`, 'error')
+    apiEndpointsError.value = errorMessage
+    notify(`API Endpoint analysis failed: ${errorMessage} (${responseTime}ms)`, 'error')
   } finally {
     loadingApiEndpoints.value = false
     progressStatus.value = 'Ready'
@@ -3395,7 +3959,7 @@ const getApiEndpointCoverage = async () => {
 }
 
 // Issue #527: Get coverage color class based on percentage
-const getCoverageClass = (percentage) => {
+const getCoverageClass = (percentage: number): string => {
   if (!percentage || percentage < 50) return 'critical'
   if (percentage < 75) return 'warning'
   if (percentage < 90) return 'info'
@@ -3457,11 +4021,12 @@ const getCrossLanguageAnalysis = async () => {
     } else {
       throw new Error('Invalid response format')
     }
-  } catch (error) {
+  } catch (error: unknown) {
     const responseTime = Date.now() - startTime
+    const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Cross-language analysis failed:', error)
-    crossLanguageError.value = error.message
-    notify(`Cross-language analysis failed: ${error.message} (${responseTime}ms)`, 'error')
+    crossLanguageError.value = errorMessage
+    notify(`Cross-language analysis failed: ${errorMessage} (${responseTime}ms)`, 'error')
   } finally {
     loadingCrossLanguage.value = false
     progressStatus.value = 'Ready'
@@ -3488,8 +4053,8 @@ const loadCrossLanguageDetails = async () => {
       const apiData = await apiResponse.json()
       if (apiData.status === 'success' && crossLanguageAnalysis.value) {
         // Map orphaned and missing to our format
-        const orphaned = (apiData.orphaned || []).map(m => ({ ...m, mismatch_type: 'orphaned_endpoint' }))
-        const missing = (apiData.missing || []).map(m => ({ ...m, mismatch_type: 'missing_endpoint' }))
+        const orphaned = (apiData.orphaned || []).map((m: Record<string, unknown>) => ({ ...m, mismatch_type: 'orphaned_endpoint' }))
+        const missing = (apiData.missing || []).map((m: Record<string, unknown>) => ({ ...m, mismatch_type: 'missing_endpoint' }))
         crossLanguageAnalysis.value.api_contract_mismatches = [...missing, ...orphaned]
       }
     }
@@ -3511,7 +4076,7 @@ const loadCrossLanguageDetails = async () => {
         crossLanguageAnalysis.value.pattern_matches = matchData.matches || []
       }
     }
-  } catch (error) {
+  } catch (error: unknown) {
     logger.warn('Failed to load some cross-language details:', error)
   }
 }
@@ -3552,11 +4117,12 @@ const runCrossLanguageAnalysis = async () => {
     } else {
       throw new Error(data.message || 'Analysis failed')
     }
-  } catch (error) {
+  } catch (error: unknown) {
     const responseTime = Date.now() - startTime
+    const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Cross-language analysis scan failed:', error)
-    crossLanguageError.value = error.message
-    notify(`Cross-language scan failed: ${error.message} (${responseTime}ms)`, 'error')
+    crossLanguageError.value = errorMessage
+    notify(`Cross-language scan failed: ${errorMessage} (${responseTime}ms)`, 'error')
   } finally {
     loadingCrossLanguage.value = false
     progressStatus.value = 'Ready'
@@ -3619,13 +4185,13 @@ const getGradeClass = (grade: string): string => {
 }
 
 // Issue #527: Format timestamp for display
-const formatTimestamp = (timestamp) => {
+const formatTimestamp = (timestamp: string | number | Date | undefined): string => {
   if (!timestamp) return 'Unknown'
   try {
     const date = new Date(timestamp)
     return date.toLocaleString()
   } catch {
-    return timestamp
+    return String(timestamp)
   }
 }
 
@@ -3678,7 +4244,7 @@ const testNpuConnection = async () => {
     const responseTime = Date.now() - startTime
     const npuStatus = data.available ? 'Available' : 'Not Available'
     notify(`NPU: ${npuStatus} (${responseTime}ms)`, data.available ? 'success' : 'warning')
-  } catch (error) {
+  } catch (error: unknown) {
     const responseTime = Date.now() - startTime
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('NPU connection failed:', error)
@@ -3750,7 +4316,7 @@ const testAllEndpoints = async () => {
     notify(summary, failed === 0 ? 'success' : 'warning')
     // Log full results to console for detailed review
     logger.debug('API Test Results:', results.join('\n'))
-  } catch (error) {
+  } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('API tests failed:', error)
     notify(`API tests failed: ${errorMessage}`, 'error')
@@ -3792,7 +4358,7 @@ const runCodeSmellAnalysis = async () => {
     const filesAnalyzed = data.report?.total_files || 0
     notify(`Found ${totalIssues} code smells in ${filesAnalyzed} files (${responseTime}ms)`, totalIssues > 0 ? 'warning' : 'success')
     progressStatus.value = `Code smell scan complete: ${totalIssues} issues found`
-  } catch (error) {
+  } catch (error: unknown) {
     const responseTime = Date.now() - startTime
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Code smell analysis failed:', error)
@@ -3831,7 +4397,7 @@ const getCodeHealthScore = async () => {
     const issues = data.total_issues || 0
     notify(`Health Score: ${score}/100 (Grade: ${grade}) - ${issues} issues (${responseTime}ms)`, score >= 70 ? 'success' : 'warning')
     progressStatus.value = `Health Score: ${score}/100 (${grade})`
-  } catch (error) {
+  } catch (error: unknown) {
     const responseTime = Date.now() - startTime
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Health score failed:', error)
@@ -3883,7 +4449,7 @@ const exportReport = async (quick: boolean = true) => {
 
     notify('Report exported successfully', 'success')
     progressStatus.value = 'Report exported'
-  } catch (error) {
+  } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Report export failed:', error)
     notify(`Report export failed: ${errorMessage}`, 'error')
@@ -3924,7 +4490,7 @@ const clearCache = async () => {
 
     notify(`Cache cleared: ${result.deleted_keys || 0} entries removed`, 'success')
     progressStatus.value = 'Cache cleared - Re-index to refresh data'
-  } catch (error) {
+  } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Cache clear failed:', error)
     notify(`Cache clear failed: ${errorMessage}`, 'error')
@@ -3992,7 +4558,7 @@ const loadSystemOverview = async () => {
       active_connections: activeConnections,
       system_health: healthStatus
     }
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('loadSystemOverview failed:', error)
     // Set empty state on error
     systemOverview.value = null
@@ -4034,7 +4600,7 @@ const loadCommunicationPatterns = async () => {
       api_call_frequency: apiFrequency,
       data_transfer_rate: estimatedDataRate
     }
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('loadCommunicationPatterns failed:', error)
     // Set empty state on error
     communicationPatterns.value = null
@@ -4075,7 +4641,7 @@ const loadCodeQuality = async () => {
       technical_debt: debtData?.summary?.total_hours || 0
     }
     codeQuality.value = data
-  } catch (error) {
+  } catch (error: unknown) {
     // Silent failure for dashboard cards
     logger.error('loadCodeQuality failed:', error)
   }
@@ -4120,7 +4686,7 @@ const loadPerformanceMetrics = async () => {
         : 0
     }
     performanceMetrics.value = data
-  } catch (error) {
+  } catch (error: unknown) {
     // Silent failure for dashboard cards
     logger.error('loadPerformanceMetrics failed:', error)
   }
@@ -4156,13 +4722,13 @@ const toggleRealTime = () => {
 }
 
 // Utility functions
-const getScoreClass = (score) => {
+const getScoreClass = (score: number): string => {
   if (score >= 80) return 'score-high'
   if (score >= 60) return 'score-medium'
   return 'score-low'
 }
 
-const getPriorityClass = (severity) => {
+const getPriorityClass = (severity: string | undefined): string => {
   switch (severity?.toLowerCase()) {
     case 'critical': return 'priority-critical'
     case 'high': return 'priority-high'
@@ -4171,7 +4737,7 @@ const getPriorityClass = (severity) => {
   }
 }
 
-const getSeverityColor = (severity) => {
+const getSeverityColor = (severity: string | undefined): string => {
   switch (severity?.toLowerCase()) {
     case 'critical': return '#dc2626'
     case 'high': return '#ea580c'
@@ -4180,14 +4746,14 @@ const getSeverityColor = (severity) => {
   }
 }
 
-const formatProblemType = (type) => {
-  return type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Unknown'
+const formatProblemType = (type: string | undefined): string => {
+  return type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) || 'Unknown'
 }
 
 // Group problems by severity for summary view
-const problemsBySeverity = computed(() => {
+const problemsBySeverity = computed((): Record<string, Problem[]> => {
   if (!problemsReport.value || problemsReport.value.length === 0) return {}
-  const grouped = {}
+  const grouped: Record<string, Problem[]> = {}
   const severityOrder = ['critical', 'high', 'medium', 'low']
 
   for (const problem of problemsReport.value) {
@@ -4199,7 +4765,7 @@ const problemsBySeverity = computed(() => {
   }
 
   // Return in severity order
-  const ordered = {}
+  const ordered: Record<string, Problem[]> = {}
   for (const sev of severityOrder) {
     if (grouped[sev]) {
       ordered[sev] = grouped[sev]
@@ -4208,10 +4774,16 @@ const problemsBySeverity = computed(() => {
   return ordered
 })
 
+// Problem group with severity counts
+interface ProblemGroup {
+  problems: Problem[]
+  severityCounts: { critical: number; high: number; medium: number; low: number }
+}
+
 // Group problems by type, then by severity within each type
-const problemsByType = computed(() => {
+const problemsByType = computed((): Record<string, ProblemGroup> => {
   if (!problemsReport.value || problemsReport.value.length === 0) return {}
-  const grouped = {}
+  const grouped: Record<string, ProblemGroup> = {}
 
   for (const problem of problemsReport.value) {
     const type = problem.type || 'unknown'
@@ -4223,8 +4795,8 @@ const problemsByType = computed(() => {
     }
     grouped[type].problems.push(problem)
     const sev = problem.severity?.toLowerCase() || 'low'
-    if (grouped[type].severityCounts[sev] !== undefined) {
-      grouped[type].severityCounts[sev]++
+    if (sev in grouped[type].severityCounts) {
+      grouped[type].severityCounts[sev as keyof typeof grouped[typeof type]['severityCounts']]++
     }
   }
 
@@ -4235,16 +4807,22 @@ const problemsByType = computed(() => {
 })
 
 // Track which problem groups are expanded
-const expandedProblemTypes = ref({})
+const expandedProblemTypes = ref<Record<string, boolean>>({})
 
-const toggleProblemType = (type) => {
+const toggleProblemType = (type: string): void => {
   expandedProblemTypes.value[type] = !expandedProblemTypes.value[type]
 }
 
+// Declaration group interface
+interface DeclarationGroup {
+  declarations: Declaration[]
+  exportedCount: number
+}
+
 // Group declarations by type for summary view
-const declarationsByType = computed(() => {
+const declarationsByType = computed((): Record<string, DeclarationGroup> => {
   if (!declarationAnalysis.value || declarationAnalysis.value.length === 0) return {}
-  const grouped = {}
+  const grouped: Record<string, DeclarationGroup> = {}
 
   for (const decl of declarationAnalysis.value) {
     const type = decl.type || 'unknown'
@@ -4267,20 +4845,29 @@ const declarationsByType = computed(() => {
 })
 
 // Track which declaration groups are expanded
-const expandedDeclarationTypes = ref({})
+const expandedDeclarationTypes = ref<Record<string, boolean>>({})
 
-const toggleDeclarationType = (type) => {
+const toggleDeclarationType = (type: string): void => {
   expandedDeclarationTypes.value[type] = !expandedDeclarationTypes.value[type]
 }
 
-const formatDeclarationType = (type) => {
-  return type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Unknown'
+const formatDeclarationType = (type: string | undefined): string => {
+  return type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) || 'Unknown'
+}
+
+// Duplicates by similarity type
+interface DuplicatesByGroup {
+  high: DuplicateCode[]
+  medium: DuplicateCode[]
+  low: DuplicateCode[]
 }
 
 // Group duplicates by similarity level
-const duplicatesBySimilarity = computed(() => {
-  if (!duplicateAnalysis.value || duplicateAnalysis.value.length === 0) return {}
-  const grouped = {
+const duplicatesBySimilarity = computed((): DuplicatesByGroup => {
+  if (!duplicateAnalysis.value || duplicateAnalysis.value.length === 0) {
+    return { high: [], medium: [], low: [] }
+  }
+  const grouped: DuplicatesByGroup = {
     high: [],    // 90%+
     medium: [],  // 70-89%
     low: []      // <70%
@@ -4298,7 +4885,7 @@ const duplicatesBySimilarity = computed(() => {
   }
 
   // Sort each group by similarity (highest first)
-  for (const key of Object.keys(grouped)) {
+  for (const key of Object.keys(grouped) as (keyof DuplicatesByGroup)[]) {
     grouped[key].sort((a, b) => (b.similarity || 0) - (a.similarity || 0))
   }
 
@@ -4306,20 +4893,20 @@ const duplicatesBySimilarity = computed(() => {
 })
 
 // Calculate total duplicate lines
-const totalDuplicateLines = computed(() => {
+const totalDuplicateLines = computed((): number => {
   if (!duplicateAnalysis.value || duplicateAnalysis.value.length === 0) return 0
   return duplicateAnalysis.value.reduce((sum, dup) => sum + (dup.lines || 0), 0)
 })
 
 // Track which duplicate groups are expanded
-const expandedDuplicateGroups = ref({})
+const expandedDuplicateGroups = ref<Record<string, boolean>>({})
 
-const toggleDuplicateGroup = (similarity) => {
+const toggleDuplicateGroup = (similarity: string): void => {
   expandedDuplicateGroups.value[similarity] = !expandedDuplicateGroups.value[similarity]
 }
 
-const formatSimilarityGroup = (similarity) => {
-  const labels = {
+const formatSimilarityGroup = (similarity: string): string => {
+  const labels: Record<string, string> = {
     high: 'High Similarity',
     medium: 'Medium Similarity',
     low: 'Low Similarity'
@@ -4335,10 +4922,16 @@ const codeSmellsFromProblems = computed(() => {
   )
 })
 
+// Code smell group interface
+interface CodeSmellGroup {
+  smells: Problem[]
+  severityCounts: { critical: number; high: number; medium: number; low: number }
+}
+
 // Group code smells by type
-const codeSmellsByType = computed(() => {
+const codeSmellsByType = computed((): Record<string, CodeSmellGroup> => {
   if (codeSmellsFromProblems.value.length === 0) return {}
-  const grouped = {}
+  const grouped: Record<string, CodeSmellGroup> = {}
 
   for (const smell of codeSmellsFromProblems.value) {
     const type = smell.type || 'unknown'
@@ -4349,7 +4942,7 @@ const codeSmellsByType = computed(() => {
       }
     }
     grouped[type].smells.push(smell)
-    const sev = smell.severity?.toLowerCase() || 'low'
+    const sev = (smell.severity?.toLowerCase() || 'low') as keyof CodeSmellGroup['severityCounts']
     if (grouped[type].severityCounts[sev] !== undefined) {
       grouped[type].severityCounts[sev]++
     }
@@ -4357,15 +4950,15 @@ const codeSmellsByType = computed(() => {
 
   // Sort by count (highest first)
   return Object.fromEntries(
-    Object.entries(grouped).sort((a, b) => b[1].smells.length - a[1].smells.length)
-  )
+    Object.entries(grouped).sort((a, b) => (b[1] as CodeSmellGroup).smells.length - (a[1] as CodeSmellGroup).smells.length)
+  ) as Record<string, CodeSmellGroup>
 })
 
 // Code smells severity summary
-const codeSmellsSeveritySummary = computed(() => {
+const codeSmellsSeveritySummary = computed((): { critical: number; high: number; medium: number; low: number } => {
   const summary = { critical: 0, high: 0, medium: 0, low: 0 }
   for (const smell of codeSmellsFromProblems.value) {
-    const sev = smell.severity?.toLowerCase() || 'low'
+    const sev = (smell.severity?.toLowerCase() || 'low') as keyof typeof summary
     if (summary[sev] !== undefined) {
       summary[sev]++
     }
@@ -4374,18 +4967,19 @@ const codeSmellsSeveritySummary = computed(() => {
 })
 
 // Track which code smell groups are expanded
-const expandedCodeSmellTypes = ref({})
+const expandedCodeSmellTypes = ref<Record<string, boolean>>({})
 
-const toggleCodeSmellType = (type) => {
+const toggleCodeSmellType = (type: string): void => {
   expandedCodeSmellTypes.value[type] = !expandedCodeSmellTypes.value[type]
 }
 
-const formatCodeSmellType = (type) => {
+const formatCodeSmellType = (type: string | number): string => {
   // Remove 'code_smell_' prefix and format
-  return type?.replace('code_smell_', '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Unknown'
+  const typeStr = String(type)
+  return typeStr?.replace('code_smell_', '').replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) || 'Unknown'
 }
 
-const getHealthClass = (health) => {
+const getHealthClass = (health: string | undefined): string => {
   switch (health?.toLowerCase()) {
     case 'healthy': return 'health-good'
     case 'warning': return 'health-warning'
@@ -4394,20 +4988,20 @@ const getHealthClass = (health) => {
   }
 }
 
-const getEfficiencyClass = (score) => {
+const getEfficiencyClass = (score: number): string => {
   if (score >= 80) return 'efficiency-high'
   if (score >= 60) return 'efficiency-medium'
   return 'efficiency-low'
 }
 
-const getQualityClass = (score) => {
+const getQualityClass = (score: number): string => {
   if (score >= 80) return 'quality-high'
   if (score >= 60) return 'quality-medium'
   return 'quality-low'
 }
 
 // Code Intelligence helper methods
-const getHealthGradeClass = (grade) => {
+const getHealthGradeClass = (grade: string | undefined): string => {
   switch (grade?.toUpperCase()) {
     case 'A': return 'grade-a'
     case 'B': return 'grade-b'
@@ -4418,7 +5012,7 @@ const getHealthGradeClass = (grade) => {
   }
 }
 
-const getSmellSeverityClass = (severity) => {
+const getSmellSeverityClass = (severity: string | undefined): string => {
   switch (severity?.toLowerCase()) {
     case 'critical': return 'smell-critical'
     case 'high': return 'smell-high'
@@ -4429,12 +5023,12 @@ const getSmellSeverityClass = (severity) => {
   }
 }
 
-const formatSmellType = (type) => {
-  return type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Unknown'
+const formatSmellType = (type: string | undefined): string => {
+  return type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) || 'Unknown'
 }
 
 // Unified item severity class for consistent styling
-const getItemSeverityClass = (severity) => {
+const getItemSeverityClass = (severity: string | undefined): string => {
   switch (severity?.toLowerCase()) {
     case 'critical': return 'item-critical'
     case 'high': return 'item-high'
@@ -4446,7 +5040,7 @@ const getItemSeverityClass = (severity) => {
 }
 
 // Declaration type class for summary cards
-const getDeclarationTypeClass = (type) => {
+const getDeclarationTypeClass = (type: string | undefined): string => {
   switch (type?.toLowerCase()) {
     case 'function': return 'type-function'
     case 'class': return 'type-class'
@@ -7773,6 +8367,263 @@ const getDeclarationTypeClass = (type) => {
   padding: 30px;
   color: #64748b;
   font-style: italic;
+}
+
+/* Issue #566: View Details Button */
+.view-details-btn {
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: rgba(99, 102, 241, 0.2);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  border-radius: 6px;
+  color: #a5b4fc;
+  font-size: 0.85em;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.view-details-btn:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.3);
+  border-color: rgba(99, 102, 241, 0.6);
+  color: #c7d2fe;
+}
+
+.view-details-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Issue #566: Findings Panel Styles */
+.findings-panel {
+  margin-top: 16px;
+  background: rgba(30, 41, 59, 0.6);
+  border-radius: 12px;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  overflow: hidden;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    max-height: 2000px;
+    transform: translateY(0);
+  }
+}
+
+.findings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: rgba(30, 41, 59, 0.8);
+  border-bottom: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.findings-header h4 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #f1f5f9;
+  font-size: 1.1em;
+  font-weight: 600;
+}
+
+.security-findings-panel .findings-header h4 i { color: #f87171; }
+.performance-findings-panel .findings-header h4 i { color: #fbbf24; }
+.redis-findings-panel .findings-header h4 i { color: #60a5fa; }
+
+.findings-count {
+  padding: 4px 12px;
+  background: rgba(71, 85, 105, 0.5);
+  border-radius: 20px;
+  color: #94a3b8;
+  font-size: 0.85em;
+  font-weight: 500;
+}
+
+.findings-loading,
+.findings-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px 20px;
+  color: #94a3b8;
+  font-size: 0.95em;
+}
+
+.findings-empty i {
+  color: #22c55e;
+  font-size: 1.2em;
+}
+
+.findings-list {
+  padding: 12px;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.finding-item {
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  border-left: 4px solid #64748b;
+  transition: all 0.2s ease;
+}
+
+.finding-item:last-child {
+  margin-bottom: 0;
+}
+
+.finding-item:hover {
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.finding-item.severity-critical {
+  border-left-color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.finding-item.severity-high {
+  border-left-color: #f97316;
+  background: rgba(249, 115, 22, 0.08);
+}
+
+.finding-item.severity-medium {
+  border-left-color: #eab308;
+  background: rgba(234, 179, 8, 0.08);
+}
+
+.finding-item.severity-low {
+  border-left-color: #22c55e;
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.finding-item.severity-info {
+  border-left-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.finding-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.finding-severity {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.finding-severity.severity-critical {
+  background: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+.finding-severity.severity-high {
+  background: rgba(249, 115, 22, 0.3);
+  color: #fdba74;
+}
+
+.finding-severity.severity-medium {
+  background: rgba(234, 179, 8, 0.3);
+  color: #fde047;
+}
+
+.finding-severity.severity-low {
+  background: rgba(34, 197, 94, 0.3);
+  color: #86efac;
+}
+
+.finding-severity.severity-info {
+  background: rgba(59, 130, 246, 0.3);
+  color: #93c5fd;
+}
+
+.finding-type {
+  color: #e2e8f0;
+  font-weight: 500;
+  font-size: 0.9em;
+}
+
+.finding-category {
+  padding: 2px 8px;
+  background: rgba(71, 85, 105, 0.5);
+  border-radius: 4px;
+  font-size: 0.75em;
+  color: #94a3b8;
+}
+
+.finding-description {
+  color: #cbd5e1;
+  font-size: 0.9em;
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.finding-location {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+  font-size: 0.85em;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.finding-location i {
+  color: #6366f1;
+}
+
+.finding-location .function-name {
+  color: #a5b4fc;
+  font-style: italic;
+}
+
+.finding-recommendation {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(34, 197, 94, 0.1);
+  border-radius: 6px;
+  border-left: 3px solid #22c55e;
+  color: #86efac;
+  font-size: 0.85em;
+  line-height: 1.4;
+}
+
+.finding-recommendation i {
+  color: #22c55e;
+  margin-right: 6px;
+}
+
+.finding-owasp {
+  margin-top: 8px;
+  color: #94a3b8;
+  font-size: 0.8em;
+}
+
+.finding-owasp i {
+  color: #f97316;
+  margin-right: 4px;
 }
 
 /* Issue #538: Environment Analysis Section */

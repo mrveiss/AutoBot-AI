@@ -24,8 +24,10 @@ import BaseChart from './BaseChart.vue'
 import type { ApexOptions } from 'apexcharts'
 
 interface ProblemTypeData {
-  type: string
-  count: number
+  type?: string
+  name?: string
+  count?: number
+  value?: number
 }
 
 interface Props {
@@ -45,14 +47,14 @@ const props = withDefaults(defineProps<Props>(), {
   error: ''
 })
 
-// Transform data for pie chart
+// Transform data for pie chart - support both count/value and type/name formats
 const chartSeries = computed(() => {
-  return props.data.map((item) => item.count)
+  return props.data.map((item) => item.count ?? item.value ?? 0)
 })
 
 const chartOptions = computed<ApexOptions>(() => ({
-  labels: props.data.map((item) => item.type),
-  colors: getColorForTypes(props.data.map((item) => item.type)),
+  labels: props.data.map((item) => item.type ?? item.name ?? 'Unknown'),
+  colors: getColorForTypes(props.data.map((item) => item.type ?? item.name ?? 'unknown')),
   legend: {
     position: 'right',
     offsetY: 0,

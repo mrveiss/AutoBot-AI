@@ -24,8 +24,10 @@ import BaseChart from './BaseChart.vue'
 import type { ApexOptions } from 'apexcharts'
 
 interface FileData {
-  file: string
-  count: number
+  file?: string
+  name?: string
+  count?: number
+  value?: number
   severity?: string
 }
 
@@ -48,16 +50,18 @@ const props = withDefaults(defineProps<Props>(), {
   error: ''
 })
 
-// Sort and limit data
+// Sort and limit data - support both count/value and file/name formats
 const sortedData = computed(() => {
-  return [...props.data].sort((a, b) => b.count - a.count).slice(0, props.maxFiles)
+  return [...props.data]
+    .sort((a, b) => (b.count ?? b.value ?? 0) - (a.count ?? a.value ?? 0))
+    .slice(0, props.maxFiles)
 })
 
 // Transform data for bar chart
 const chartSeries = computed(() => [
   {
     name: 'Problems',
-    data: sortedData.value.map((item) => item.count)
+    data: sortedData.value.map((item) => item.count ?? item.value ?? 0)
   }
 ])
 
@@ -78,7 +82,7 @@ const chartOptions = computed<ApexOptions>(() => ({
   },
   colors: ['#3b82f6'],
   xaxis: {
-    categories: sortedData.value.map((item) => truncateFilePath(item.file)),
+    categories: sortedData.value.map((item) => truncateFilePath(item.file ?? item.name ?? '')),
     labels: {
       formatter: (value: string) => {
         const num = parseInt(value)
@@ -117,14 +121,16 @@ const chartOptions = computed<ApexOptions>(() => ({
     custom: ({ dataPointIndex }: { dataPointIndex: number }) => {
       const item = sortedData.value[dataPointIndex]
       if (!item) return ''
+      const filePath = item.file ?? item.name ?? 'Unknown'
+      const problemCount = item.count ?? item.value ?? 0
 
       return `
         <div style="background: #1e293b; border: 1px solid #475569; border-radius: 6px; padding: 12px; max-width: 400px;">
           <div style="font-weight: 600; color: #e2e8f0; margin-bottom: 8px; word-break: break-all;">
-            ${item.file}
+            ${filePath}
           </div>
           <div style="color: #94a3b8;">
-            <span style="color: #3b82f6; font-weight: 600;">${item.count.toLocaleString()}</span> problems
+            <span style="color: #3b82f6; font-weight: 600;">${problemCount.toLocaleString()}</span> problems
           </div>
         </div>
       `

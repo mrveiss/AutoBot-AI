@@ -24,8 +24,10 @@ import BaseChart from './BaseChart.vue'
 import type { ApexOptions } from 'apexcharts'
 
 interface SeverityData {
-  severity: string
-  count: number
+  severity?: string
+  name?: string
+  count?: number
+  value?: number
 }
 
 interface Props {
@@ -45,11 +47,11 @@ const props = withDefaults(defineProps<Props>(), {
   error: ''
 })
 
-// Transform data for bar chart
+// Transform data for bar chart - support both count/value and severity/name formats
 const chartSeries = computed(() => [
   {
     name: 'Problems',
-    data: props.data.map((item) => item.count)
+    data: props.data.map((item) => item.count ?? item.value ?? 0)
   }
 ])
 
@@ -68,9 +70,9 @@ const chartOptions = computed<ApexOptions>(() => ({
       }
     }
   },
-  colors: getSeverityColors(props.data.map((item) => item.severity)),
+  colors: getSeverityColors(props.data.map((item) => item.severity ?? item.name ?? 'unknown')),
   xaxis: {
-    categories: props.data.map((item) => formatSeverityLabel(item.severity)),
+    categories: props.data.map((item) => formatSeverityLabel(item.severity ?? item.name ?? 'unknown')),
     labels: {
       formatter: (value: string) => {
         const num = parseInt(value)

@@ -24,8 +24,10 @@ import BaseChart from './BaseChart.vue'
 import type { ApexOptions } from 'apexcharts'
 
 interface RaceConditionData {
-  category: string
-  count: number
+  category?: string
+  name?: string
+  count?: number
+  value?: number
 }
 
 interface Props {
@@ -45,18 +47,18 @@ const props = withDefaults(defineProps<Props>(), {
   error: ''
 })
 
-// Transform data for donut chart
+// Transform data for donut chart - support both count/value and category/name formats
 const chartSeries = computed(() => {
-  return props.data.map((item) => item.count)
+  return props.data.map((item) => item.count ?? item.value ?? 0)
 })
 
 const totalCount = computed(() => {
-  return props.data.reduce((sum, item) => sum + item.count, 0)
+  return props.data.reduce((sum, item) => sum + (item.count ?? item.value ?? 0), 0)
 })
 
 const chartOptions = computed<ApexOptions>(() => ({
-  labels: props.data.map((item) => formatCategoryLabel(item.category)),
-  colors: getCategoryColors(props.data.map((item) => item.category)),
+  labels: props.data.map((item) => formatCategoryLabel(item.category ?? item.name ?? 'unknown')),
+  colors: getCategoryColors(props.data.map((item) => item.category ?? item.name ?? 'unknown')),
   legend: {
     position: 'right',
     offsetY: 0,
@@ -70,7 +72,8 @@ const chartOptions = computed<ApexOptions>(() => ({
   dataLabels: {
     enabled: true,
     formatter: (val: number, opts: { seriesIndex: number }) => {
-      const count = props.data[opts.seriesIndex]?.count || 0
+      const item = props.data[opts.seriesIndex]
+      const count = item?.count ?? item?.value ?? 0
       if (count === 0) return ''
       return count.toString()
     }

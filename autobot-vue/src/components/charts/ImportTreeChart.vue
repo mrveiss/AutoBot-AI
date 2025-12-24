@@ -82,8 +82,8 @@
               </div>
               <div class="import-list">
                 <div
-                  v-for="imp in file.imports"
-                  :key="imp.module"
+                  v-for="(imp, idx) in normalizeImports(file.imports)"
+                  :key="imp.module || idx"
                   class="import-item"
                   :class="{ external: imp.is_external, internal: !imp.is_external }"
                   @click="navigateToFile(imp.file)"
@@ -135,10 +135,13 @@ interface ImportedByInfo {
   module: string
 }
 
+// Support flexible data format - can be either FileImportData or ImportTreeNode
 interface FileImportData {
   path: string
-  imports: ImportInfo[]
-  imported_by: ImportedByInfo[]
+  name?: string
+  imports?: ImportInfo[] | string[]
+  imported_by?: ImportedByInfo[]
+  children?: FileImportData[]
 }
 
 interface Props {
@@ -187,7 +190,10 @@ const filteredData = computed(() => {
   const query = searchQuery.value.toLowerCase()
   return props.data.filter(file =>
     file.path.toLowerCase().includes(query) ||
-    file.imports?.some(imp => imp.module.toLowerCase().includes(query)) ||
+    file.imports?.some((imp: ImportInfo | string) => {
+      const module = typeof imp === 'string' ? imp : imp.module
+      return module.toLowerCase().includes(query)
+    }) ||
     file.imported_by?.some(imp => imp.file.toLowerCase().includes(query))
   )
 })
@@ -197,6 +203,22 @@ const totalImports = computed(() => {
 })
 
 // Methods
+
+// Normalize imports array to handle both string[] and ImportInfo[] formats
+function normalizeImports(imports: ImportInfo[] | string[] | undefined): ImportInfo[] {
+  if (!imports) return []
+  return imports.map((imp: ImportInfo | string) => {
+    if (typeof imp === 'string') {
+      return {
+        module: imp,
+        is_external: imp.startsWith('@') || !imp.startsWith('.'),
+        file: undefined
+      }
+    }
+    return imp
+  })
+}
+
 function toggleNode(path: string) {
   if (expandedNodes.value.has(path)) {
     expandedNodes.value.delete(path)

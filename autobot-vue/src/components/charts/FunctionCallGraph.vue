@@ -124,14 +124,14 @@
                 </div>
                 <div class="call-list">
                   <div
-                    v-for="edge in getOutgoingCalls(node.id).slice(0, 10)"
-                    :key="`out-${edge.to}`"
+                    v-for="(edge, idx) in getOutgoingCalls(node.id).slice(0, 10)"
+                    :key="`out-${edge.to || edge.target || idx}`"
                     class="call-item"
-                    :class="{ resolved: edge.resolved, unresolved: !edge.resolved }"
+                    :class="{ resolved: edge.resolved !== false, unresolved: edge.resolved === false }"
                   >
-                    <span class="call-name">{{ edge.to_name }}</span>
-                    <span v-if="edge.count > 1" class="call-count">×{{ edge.count }}</span>
-                    <span v-if="!edge.resolved" class="unresolved-badge">external</span>
+                    <span class="call-name">{{ edge.to_name || getNodeName(edge.to || edge.target || '') }}</span>
+                    <span v-if="(edge.count ?? 0) > 1" class="call-count">×{{ edge.count }}</span>
+                    <span v-if="edge.resolved === false" class="unresolved-badge">external</span>
                   </div>
                   <div v-if="getOutgoingCalls(node.id).length > 10" class="more-calls">
                     +{{ getOutgoingCalls(node.id).length - 10 }} more
@@ -146,12 +146,12 @@
                 </div>
                 <div class="call-list">
                   <div
-                    v-for="edge in getIncomingCalls(node.id).slice(0, 10)"
-                    :key="`in-${edge.from}`"
+                    v-for="(edge, idx) in getIncomingCalls(node.id).slice(0, 10)"
+                    :key="`in-${edge.from || edge.source || idx}`"
                     class="call-item resolved"
                   >
-                    <span class="call-name">{{ getNodeName(edge.from) }}</span>
-                    <span v-if="edge.count > 1" class="call-count">×{{ edge.count }}</span>
+                    <span class="call-name">{{ getNodeName(edge.from || edge.source || '') }}</span>
+                    <span v-if="(edge.count ?? 0) > 1" class="call-count">×{{ edge.count }}</span>
                   </div>
                   <div v-if="getIncomingCalls(node.id).length > 10" class="more-calls">
                     +{{ getIncomingCalls(node.id).length - 10 }} more
@@ -223,23 +223,28 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 
+// Flexible interface to support multiple data formats
 interface GraphNode {
   id: string
   name: string
-  full_name: string
-  module: string
-  class: string | null
-  file: string
-  line: number
-  is_async: boolean
+  full_name?: string
+  module?: string
+  class?: string | null
+  file?: string
+  line?: number
+  is_async?: boolean
+  type?: string
 }
 
 interface GraphEdge {
-  from: string
-  to: string
-  to_name: string
-  resolved: boolean
-  count: number
+  from?: string
+  source?: string
+  to?: string
+  target?: string
+  to_name?: string
+  resolved?: boolean
+  count?: number
+  type?: string
 }
 
 interface CallGraphData {
@@ -297,7 +302,7 @@ const containerHeight = computed(() => {
 
 const uniqueModules = computed(() => {
   if (!props.data?.nodes) return []
-  const modules = new Set(props.data.nodes.map(n => n.module))
+  const modules = new Set(props.data.nodes.map(n => n.module).filter(Boolean))
   return Array.from(modules).sort()
 })
 
@@ -326,8 +331,8 @@ const filteredNodes = computed(() => {
     const query = searchQuery.value.toLowerCase()
     nodes = nodes.filter(n =>
       n.name.toLowerCase().includes(query) ||
-      n.full_name.toLowerCase().includes(query) ||
-      n.module.toLowerCase().includes(query)
+      (n.full_name?.toLowerCase().includes(query) ?? false) ||
+      (n.module?.toLowerCase().includes(query) ?? false)
     )
   }
 
@@ -365,14 +370,25 @@ const maxIncoming = computed(() => {
 })
 
 // Methods
+
+// Helper to get edge source - supports both 'from' and 'source' formats
+function getEdgeSource(edge: GraphEdge): string | undefined {
+  return edge.from ?? edge.source
+}
+
+// Helper to get edge target - supports both 'to' and 'target' formats
+function getEdgeTarget(edge: GraphEdge): string | undefined {
+  return edge.to ?? edge.target
+}
+
 function getOutgoingCalls(funcId: string): GraphEdge[] {
   if (!props.data?.edges) return []
-  return props.data.edges.filter(e => e.from === funcId)
+  return props.data.edges.filter(e => getEdgeSource(e) === funcId)
 }
 
 function getIncomingCalls(funcId: string): GraphEdge[] {
   if (!props.data?.edges) return []
-  return props.data.edges.filter(e => e.to === funcId && e.resolved)
+  return props.data.edges.filter(e => getEdgeTarget(e) === funcId && (e.resolved !== false))
 }
 
 function getNodeName(nodeId: string): string {
