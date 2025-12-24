@@ -288,8 +288,34 @@ class PerformanceASTVisitor(ast.NodeVisitor):
         if not call_name:
             return
 
-        # Check for HTTP requests in loop
-        if any(http_op in call_name.lower() for http_op in HTTP_OPERATIONS):
+        call_name_lower = call_name.lower()
+
+        # Issue #569: Check SAFE_PATTERNS first to avoid false positives
+        # dict.get(), getattr(), router.get() etc. are NOT HTTP requests
+        for safe_pattern in SAFE_PATTERNS:
+            if safe_pattern.lower() in call_name_lower:
+                return  # Skip - this is a safe pattern, not an HTTP call
+
+        # Issue #569: Only flag as HTTP if from known HTTP libraries
+        # Generic "get", "post" etc. match too many non-HTTP operations
+        http_library_prefixes = (
+            "requests.",
+            "urllib.",
+            "httpx.",
+            "aiohttp.",
+            "http.client.",
+            "urllib3.",
+        )
+
+        is_http_call = False
+        if call_name_lower.startswith(http_library_prefixes):
+            # High confidence: explicit HTTP library prefix
+            is_http_call = True
+        elif "fetch(" in call_name_lower and "." not in call_name:
+            # JavaScript-style fetch() as standalone function
+            is_http_call = True
+
+        if is_http_call:
             code = self._get_source_segment(node.lineno, node.lineno)
             self.findings.append(
                 PerformanceIssue(
@@ -304,7 +330,7 @@ class PerformanceASTVisitor(ast.NodeVisitor):
                     estimated_impact="Major latency bottleneck",
                     current_code=code,
                     optimized_code="Use asyncio.gather() for parallel requests",
-                    confidence=0.85,
+                    confidence=0.90,
                 )
             )
 
