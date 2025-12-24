@@ -277,11 +277,6 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
-        path: 'analytics',
-        name: 'monitoring-analytics',
-        redirect: '/analytics/codebase'
-      },
-      {
         path: 'rum',
         name: 'monitoring-rum',
         component: () => import('@/components/RumDashboard.vue'),
@@ -307,11 +302,6 @@ const routes: RouteRecordRaw[] = [
           title: 'Log Viewer',
           parent: 'monitoring'
         }
-      },
-      {
-        path: 'bi',
-        name: 'monitoring-bi',
-        redirect: '/analytics/bi'
       },
       {
         path: 'dashboards',
