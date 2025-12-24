@@ -287,6 +287,7 @@ async def clear_prompts_cache():
     error_code_prefix="PROMPTS",
 )
 @router.post("/{prompt_id}")
+@router.put("/{prompt_id}")  # Issue #570: Support PUT for frontend compatibility
 async def save_prompt(prompt_id: str, request: dict):
     """Save or update a prompt file by ID."""
     try:

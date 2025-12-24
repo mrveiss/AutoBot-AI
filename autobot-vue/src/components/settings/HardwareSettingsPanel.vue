@@ -224,8 +224,9 @@ const testGPU = async () => {
   hardwareStatus.gpu.message = 'Testing GPU...'
 
   try {
+    // Issue #570: Use correct /api/monitoring/hardware path after refactor
     const response = await fetch(
-      `${NetworkConstants.API_BASE_URL}/api/hardware/gpu/test`,
+      `${NetworkConstants.API_BASE_URL}/api/monitoring/hardware/gpu/test`,
       { method: 'POST' }
     )
     const data = await response.json()
@@ -253,8 +254,9 @@ const testNPU = async () => {
   hardwareStatus.npu.message = 'Testing NPU...'
 
   try {
+    // Issue #570: Use correct /api/monitoring/hardware path after refactor
     const response = await fetch(
-      `${NetworkConstants.API_BASE_URL}/api/hardware/npu/test`,
+      `${NetworkConstants.API_BASE_URL}/api/monitoring/hardware/npu/test`,
       { method: 'POST' }
     )
     const data = await response.json()
@@ -282,8 +284,9 @@ const refreshMemoryStatus = async () => {
   hardwareStatus.memory.message = 'Checking memory...'
 
   try {
+    // Issue #570: Use correct /api/monitoring/hardware path after refactor
     const response = await fetch(
-      `${NetworkConstants.API_BASE_URL}/api/hardware/memory`
+      `${NetworkConstants.API_BASE_URL}/api/monitoring/hardware/memory`
     )
     const data = await response.json()
 

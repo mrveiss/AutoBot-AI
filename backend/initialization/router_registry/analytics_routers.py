@@ -26,15 +26,15 @@ ANALYTICS_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("backend.api.codebase_analytics", "/analytics", ["codebase-analytics"], "codebase_analytics"),
     ("backend.api.analytics_unified", "", ["unified-analytics", "analytics"], "analytics_unified"),
     # Code analysis
-    ("backend.api.analytics_evolution", "", ["code-evolution", "analytics"], "analytics_evolution"),
-    ("backend.api.analytics_debt", "", ["technical-debt", "analytics"], "analytics_debt"),
-    ("backend.api.analytics_quality", "", ["code-quality", "analytics"], "analytics_quality"),
-    ("backend.api.analytics_code_review", "", ["code-review", "analytics"], "analytics_code_review"),
-    ("backend.api.analytics_precommit", "", ["precommit", "analytics"], "analytics_precommit"),
+    ("backend.api.analytics_evolution", "/evolution", ["code-evolution", "analytics"], "analytics_evolution"),  # Issue #570: Fix prefix
+    ("backend.api.analytics_debt", "/debt", ["technical-debt", "analytics"], "analytics_debt"),  # Issue #570: Fix prefix
+    ("backend.api.analytics_quality", "/quality", ["code-quality", "analytics"], "analytics_quality"),  # Issue #570: Fix prefix
+    ("backend.api.analytics_code_review", "/code-review", ["code-review", "analytics"], "analytics_code_review"),  # Issue #570: Fix prefix
+    ("backend.api.analytics_precommit", "/precommit", ["precommit", "analytics"], "analytics_precommit"),  # Issue #570: Fix prefix
     # AI/ML analytics
     ("backend.api.analytics_bug_prediction", "/analytics", ["bug-prediction", "analytics"], "analytics_bug_prediction"),
     ("backend.api.analytics_llm_patterns", "", ["llm-patterns", "analytics"], "analytics_llm_patterns"),
-    ("backend.api.analytics_code_generation", "", ["code-generation", "analytics"], "analytics_code_generation"),
+    ("backend.api.analytics_code_generation", "/code-generation", ["code-generation", "analytics"], "analytics_code_generation"),  # Issue #570: Fix prefix
     ("backend.api.analytics_embedding_patterns", "/embedding-analytics", ["embedding-analytics", "analytics"], "analytics_embedding_patterns"),
     # Performance and logging
     ("backend.api.analytics_performance", "", ["performance", "analytics"], "analytics_performance"),

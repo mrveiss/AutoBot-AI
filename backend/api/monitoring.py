@@ -753,6 +753,128 @@ async def get_npu_details():
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
+    operation="test_gpu",
+    error_code_prefix="MONITORING",
+)
+@router.post("/hardware/gpu/test")
+async def test_gpu():
+    """Test GPU availability and performance (Issue #570)"""
+    try:
+        gpu_metrics = await performance_monitor.collect_gpu_metrics()
+
+        if not gpu_metrics:
+            return {
+                "success": False,
+                "message": "GPU not available or accessible",
+                "details": None,
+            }
+
+        return {
+            "success": True,
+            "message": "GPU is available and operational",
+            "details": {
+                "utilization": gpu_metrics.utilization_percent,
+                "memory": f"{gpu_metrics.memory_utilization_percent}%",
+                "temperature": f"{gpu_metrics.temperature_celsius}°C",
+                "throttling": gpu_metrics.thermal_throttling or gpu_metrics.power_throttling,
+            },
+        }
+    except Exception as e:
+        logger.error("GPU test failed: %s", e)
+        return {
+            "success": False,
+            "message": f"GPU test failed: {str(e)}",
+            "details": None,
+        }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_npu",
+    error_code_prefix="MONITORING",
+)
+@router.post("/hardware/npu/test")
+async def test_npu():
+    """Test NPU availability and performance (Issue #570)"""
+    try:
+        npu_metrics = await performance_monitor.collect_npu_metrics()
+
+        if not npu_metrics:
+            return {
+                "success": False,
+                "message": "NPU not available or not supported",
+                "details": {
+                    "available": False,
+                    "wsl_limitation": True,
+                },
+            }
+
+        wsl_msg = " (limited in WSL)" if npu_metrics.wsl_limitation else ""
+        return {
+            "success": True,
+            "message": f"NPU is available{wsl_msg}",
+            "details": {
+                "available": True,
+                "utilization": npu_metrics.utilization_percent,
+                "acceleration_ratio": npu_metrics.acceleration_ratio,
+                "wsl_limitation": npu_metrics.wsl_limitation,
+            },
+        }
+    except Exception as e:
+        logger.error("NPU test failed: %s", e)
+        return {
+            "success": False,
+            "message": f"NPU test failed: {str(e)}",
+            "details": {"available": False, "wsl_limitation": True},
+        }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_memory_status",
+    error_code_prefix="MONITORING",
+)
+@router.get("/hardware/memory")
+async def get_memory_status():
+    """Get system memory status (Issue #570)"""
+    try:
+        import psutil
+
+        memory = psutil.virtual_memory()
+        swap = psutil.swap_memory()
+
+        def format_bytes(bytes_val: int) -> str:
+            """Format bytes to human readable string."""
+            for unit in ["B", "KB", "MB", "GB", "TB"]:
+                if bytes_val < 1024:
+                    return f"{bytes_val:.1f} {unit}"
+                bytes_val /= 1024
+            return f"{bytes_val:.1f} PB"
+
+        return {
+            "success": True,
+            "message": "Memory status OK",
+            "details": {
+                "total": format_bytes(memory.total),
+                "available": format_bytes(memory.available),
+                "used": format_bytes(memory.used),
+                "percent_used": memory.percent,
+                "swap_total": format_bytes(swap.total),
+                "swap_used": format_bytes(swap.used),
+                "swap_percent": swap.percent,
+            },
+        }
+    except Exception as e:
+        logger.error("Memory status check failed: %s", e)
+        return {
+            "success": False,
+            "message": f"Memory check failed: {str(e)}",
+            "details": None,
+        }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
     operation="get_services_health",
     error_code_prefix="MONITORING",
 )
