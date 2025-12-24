@@ -97,19 +97,25 @@ async def get_cross_language_summary() -> JSONResponse:
     """
     Get summary of latest cross-language analysis.
 
-    Returns cached results if available, otherwise runs new analysis.
+    Returns cached results if available, otherwise returns empty status.
+    Use POST /cross-language/analyze to trigger a new analysis.
     """
     # Check cache first (thread-safe, Issue #559)
     async with _analysis_cache_lock:
         if "latest" not in _analysis_cache:
-            detector = _get_detector()
-            analysis = await detector.run_analysis()
-            _analysis_cache["latest"] = analysis
-        else:
-            analysis = _analysis_cache["latest"]
+            # Return empty status instead of auto-running full analysis
+            # Full analysis can take minutes and should only be triggered
+            # via POST /analyze endpoint explicitly
+            return JSONResponse({
+                "status": "empty",
+                "message": "No analysis available. Click 'Full Scan' to run analysis.",
+                "has_cached_data": False,
+            })
+        analysis = _analysis_cache["latest"]
 
     return JSONResponse({
         "status": "success",
+        "has_cached_data": True,
         "summary": {
             "analysis_id": analysis.analysis_id,
             "scan_timestamp": analysis.scan_timestamp.isoformat(),

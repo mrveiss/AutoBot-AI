@@ -4018,6 +4018,10 @@ const getCrossLanguageAnalysis = async () => {
 
       // Load detailed data for the groups
       await loadCrossLanguageDetails()
+    } else if (data.status === 'empty') {
+      // No cached analysis - show empty state (user needs to click Full Scan)
+      crossLanguageAnalysis.value = null
+      logger.info('Cross-language analysis: No cached data available')
     } else {
       throw new Error('Invalid response format')
     }
