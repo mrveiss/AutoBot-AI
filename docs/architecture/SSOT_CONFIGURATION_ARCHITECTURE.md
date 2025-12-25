@@ -1,7 +1,14 @@
 # Single Source of Truth Configuration Architecture
 
+<!--
+AutoBot - AI-Powered Automation Platform
+Copyright (c) 2025 mrveiss
+Author: mrveiss
+-->
+
 **Issue**: #599
 **Author**: mrveiss
+**Copyright**: © 2025 mrveiss
 **Date**: 2025-12-25
 **Status**: Architecture Design
 
@@ -688,6 +695,66 @@ done < "$MASTER_ENV"
 
 echo "Frontend .env synchronized from master .env"
 ```
+
+### 3.6 Shell Script Usage Pattern
+
+Shell scripts in `scripts/` must also consume configuration from the SSOT `.env` file:
+
+```bash
+#!/bin/bash
+# scripts/example-script.sh
+# Example of SSOT-compliant shell script
+
+# Load configuration from master .env
+set -a  # Automatically export all variables
+source "$(dirname "$0")/../.env"
+set +a
+
+# Now use AUTOBOT_ prefixed variables
+echo "Backend URL: http://${AUTOBOT_VM_MAIN_IP}:${AUTOBOT_PORT_BACKEND}"
+echo "Redis URL: redis://${AUTOBOT_VM_REDIS_IP}:${AUTOBOT_PORT_REDIS}"
+echo "Default LLM: ${AUTOBOT_LLM_DEFAULT_MODEL}"
+
+# Example: Health check using SSOT config
+curl -s "http://${AUTOBOT_VM_MAIN_IP}:${AUTOBOT_PORT_BACKEND}/api/health"
+```
+
+**Shell Script Standards**:
+
+1. **Always source `.env`** at script start
+2. **Never hardcode** IPs, ports, or model names
+3. **Use AUTOBOT_ prefix** for all configuration variables
+4. **Provide fallbacks** only for non-critical scripts (testing/development)
+
+**Scripts Requiring Migration**:
+
+| Script | Current Status | Required Changes |
+| ------ | -------------- | ---------------- |
+| `run_autobot.sh` | Partial SSOT | Source .env, remove hardcoded IPs |
+| `setup.sh` | Hardcoded | Source .env for all network config |
+| `scripts/utilities/sync-to-vm.sh` | Hardcoded IPs | Use AUTOBOT_VM_* variables |
+| `scripts/utilities/sync-frontend.sh` | Hardcoded | Use AUTOBOT_VM_FRONTEND_IP |
+
+### 3.7 Documentation Requirements
+
+All configuration-related documentation must be updated during SSOT migration:
+
+**Documents to Update**:
+
+| Document | Update Required |
+| -------- | --------------- |
+| `CLAUDE.md` | Update Redis/Network sections to reference SSOT |
+| `docs/developer/HARDCODING_PREVENTION.md` | Add SSOT config pattern as canonical |
+| `docs/developer/REDIS_CLIENT_USAGE.md` | Reference SSOT for connection strings |
+| `docs/developer/INFRASTRUCTURE_DEPLOYMENT.md` | Update VM IP references |
+| `.env.example` | Complete rewrite with SSOT structure |
+| `autobot-vue/.env.example` | Auto-generated from master |
+| `docs/api/COMPREHENSIVE_API_DOCUMENTATION.md` | Add /api/config endpoints |
+
+**New Documentation Required**:
+
+1. **`docs/developer/SSOT_CONFIG_GUIDE.md`** - Developer guide for using SSOT config
+2. **`docs/developer/CONFIG_MIGRATION_CHECKLIST.md`** - Checklist for migrating existing code
 
 ---
 
