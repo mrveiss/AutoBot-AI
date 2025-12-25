@@ -1,11 +1,6 @@
 <template>
   <div class="settings-view view-container">
-    <div class="container mx-auto px-4 py-6">
-      <div class="mb-6">
-        <h1 class="text-3xl font-bold text-blueGray-700">Settings</h1>
-        <p class="text-blueGray-600 mt-2">Application preferences and configuration</p>
-      </div>
-
+    <div class="container mx-auto px-4 pt-4 pb-6">
       <!-- Settings Panel Component -->
       <SettingsPanel />
     </div>

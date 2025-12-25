@@ -1,11 +1,6 @@
 <template>
   <div class="analytics-view view-container">
-    <div class="container mx-auto px-4 py-6">
-      <div class="mb-6">
-        <h1 class="text-3xl font-bold text-blueGray-700">Analytics</h1>
-        <p class="text-blueGray-600 mt-2">Codebase metrics and business intelligence</p>
-      </div>
-
+    <div class="container mx-auto px-4 pt-4 pb-6">
       <!-- Sub-navigation for analytics sections -->
       <div class="mb-6">
         <nav class="flex space-x-4 border-b border-blueGray-200">

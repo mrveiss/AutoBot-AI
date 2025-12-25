@@ -1,11 +1,6 @@
 <template>
   <div class="tools-view view-container">
-    <div class="container mx-auto px-4 py-6">
-      <div class="mb-6">
-        <h1 class="text-3xl font-bold text-blueGray-700">Developer Tools</h1>
-        <p class="text-blueGray-600 mt-2">Terminal, file browser, and development utilities</p>
-      </div>
-
+    <div class="container mx-auto px-4 pt-4 pb-6">
       <!-- Sub-navigation for tools sections -->
       <div class="mb-6">
         <nav class="flex space-x-4 border-b border-blueGray-200">

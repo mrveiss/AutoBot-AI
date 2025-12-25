@@ -1,11 +1,6 @@
 <template>
   <div class="secrets-view view-container">
-    <div class="container mx-auto px-4 py-6">
-      <div class="mb-6">
-        <h1 class="text-3xl font-bold text-blueGray-700">Secrets Manager</h1>
-        <p class="text-blueGray-600 mt-2">Manage API keys, tokens, and sensitive configuration</p>
-      </div>
-
+    <div class="container mx-auto px-4 pt-4 pb-6">
       <!-- Security notice -->
       <div class="mb-6 bg-amber-50 border border-amber-200 rounded-lg p-4">
         <div class="flex items-start">
