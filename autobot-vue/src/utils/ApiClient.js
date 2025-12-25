@@ -1,6 +1,7 @@
 // ApiClient.js - Unified API client for all backend operations
 // RumAgent is accessed via window.rum global
 // MIGRATED: Now uses AppConfig.js for better configuration management
+// Issue #598: All timeouts now sourced from AppConfig (SINGLE SOURCE OF TRUTH)
 
 // MIGRATED: Using AppConfig.js for centralized configuration
 import appConfig from '@/config/AppConfig.js';
@@ -15,7 +16,8 @@ class ApiClient {
   constructor() {
     // Initialize with defaults first, async config loads separately
     this.baseUrl = '';
-    this.timeout = 10000;
+    // Issue #598: Use AppConfig as single source of truth for timeout
+    this.timeout = appConfig.getTimeout('default');
     this.isDevMode = false;
     this.enableDebug = false;
 
@@ -69,7 +71,8 @@ class ApiClient {
 
       // Fallback to environment variables
       this.baseUrl = this.detectBaseUrl();
-      this.timeout = parseInt(import.meta.env.VITE_API_TIMEOUT || '60000');
+      // Issue #598: Use AppConfig timeout as fallback (consistent with SSOT)
+      this.timeout = appConfig.getTimeout('default');
       this.isDevMode = import.meta.env.DEV;
       this.enableDebug = import.meta.env.VITE_ENABLE_DEBUG === 'true';
     }
@@ -401,8 +404,8 @@ class ApiClient {
 
         xhr.open('POST', url);
 
-        // Set timeout (default 5 minutes for file uploads)
-        xhr.timeout = options.timeout || 300000;
+        // Issue #598: Use upload-specific timeout from AppConfig
+        xhr.timeout = options.timeout || appConfig.getTimeout('upload');
 
         xhr.send(formData);
       });
@@ -437,7 +440,8 @@ class ApiClient {
   // Health check method
   async checkHealth() {
     try {
-      const health = await this.get('/api/health', { timeout: 5000 });
+      // Issue #598: Use health-specific timeout from AppConfig
+      const health = await this.get('/api/health', { timeout: appConfig.getTimeout('health') });
       return health?.status === 'healthy';
     } catch (error) {
       logger.warn('Health check failed:', error.message);

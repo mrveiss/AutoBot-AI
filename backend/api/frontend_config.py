@@ -79,6 +79,39 @@ def _build_performance_config(source: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _build_timeouts_config(source: Dict[str, Any]) -> Dict[str, int]:
+    """
+    Build operation-specific timeout configuration.
+
+    Issue #598: Centralized timeout management - SINGLE SOURCE OF TRUTH.
+    All timeout values are in milliseconds.
+
+    Args:
+        source: Config dict (typically full_config.get("api", {}).get("timeouts", {}))
+
+    Returns:
+        Dict with operation-specific timeout values
+    """
+    return {
+        # Standard API operations (30 seconds)
+        "default": source.get("default", 30000),
+        # Knowledge base / vectorization operations (5 minutes)
+        "knowledge": source.get("knowledge", 300000),
+        # File upload operations (5 minutes)
+        "upload": source.get("upload", 300000),
+        # Health check operations (5 seconds)
+        "health": source.get("health", 5000),
+        # Quick operations (5 seconds)
+        "short": source.get("short", 5000),
+        # Long-running operations (2 minutes)
+        "long": source.get("long", 120000),
+        # Analytics/reporting operations (3 minutes)
+        "analytics": source.get("analytics", 180000),
+        # Search operations (30 seconds)
+        "search": source.get("search", 30000),
+    }
+
+
 def _build_fallback_config() -> Dict[str, Any]:
     """
     Build fallback frontend config when primary config fails.
@@ -104,8 +137,10 @@ def _build_fallback_config() -> Dict[str, Any]:
         "api": {
             "base_url": backend_config.get("host"),
             "port": backend_config.get("port"),
-            "timeout": api_config.get("timeout", 30),
+            "timeout": api_config.get("timeout", 30000),  # milliseconds
             "retry_attempts": api_config.get("retry_attempts", 3),
+            # Issue #598: Include operation-specific timeouts
+            "timeouts": _build_timeouts_config(api_config.get("timeouts", {})),
         },
         "websocket": {
             "url": f"ws://{backend_config.get('host')}:{backend_config.get('port')}/ws",
@@ -143,8 +178,12 @@ async def get_frontend_config():
             "project": _build_project_config(),
             "api": {
                 **api_config,
-                "timeout": full_config.get("api", {}).get("timeout", 30),
+                "timeout": full_config.get("api", {}).get("timeout", 30000),  # milliseconds
                 "retry_attempts": full_config.get("api", {}).get("retry_attempts", 3),
+                # Issue #598: Include operation-specific timeouts
+                "timeouts": _build_timeouts_config(
+                    full_config.get("api", {}).get("timeouts", {})
+                ),
             },
             "websocket": {
                 "url": NetworkConstants.get_websocket_url(),

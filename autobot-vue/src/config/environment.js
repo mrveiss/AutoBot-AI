@@ -132,11 +132,16 @@ export const API_CONFIG = {
   CHROME_DEBUG_URL: import.meta.env.VITE_CHROME_DEBUG_URL || '',
   LMSTUDIO_URL: import.meta.env.VITE_LMSTUDIO_URL || '',
 
-  // Static configuration - improved timeouts based on MCP analysis
-  TIMEOUT: parseInt(import.meta.env.VITE_API_TIMEOUT || '60000'),  // Increased from 30s to 60s
-  KNOWLEDGE_BASE_TIMEOUT: parseInt(import.meta.env.VITE_KNOWLEDGE_TIMEOUT || '300000'),
-  RETRY_ATTEMPTS: parseInt(import.meta.env.VITE_API_RETRY_ATTEMPTS || '5'),  // Increased retries
-  RETRY_DELAY: parseInt(import.meta.env.VITE_API_RETRY_DELAY || '2000'),     // 2s delay between retries
+  // Issue #598: Use AppConfig as SINGLE SOURCE OF TRUTH for timeouts
+  // Legacy getters maintained for backward compatibility
+  get TIMEOUT() {
+    return appConfig.getTimeout('default');
+  },
+  get KNOWLEDGE_BASE_TIMEOUT() {
+    return appConfig.getTimeout('knowledge');
+  },
+  RETRY_ATTEMPTS: parseInt(import.meta.env.VITE_API_RETRY_ATTEMPTS || '3'),
+  RETRY_DELAY: parseInt(import.meta.env.VITE_API_RETRY_DELAY || '1000'),
   ENABLE_DEBUG: import.meta.env.VITE_ENABLE_DEBUG === 'true',
   ENABLE_RUM: import.meta.env.VITE_ENABLE_RUM !== 'false',
   DEV_MODE: import.meta.env.DEV,

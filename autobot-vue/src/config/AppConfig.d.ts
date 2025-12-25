@@ -36,13 +36,42 @@ export interface InfrastructureConfig {
   };
 }
 
+/**
+ * Operation-specific timeout configuration (Issue #598: SINGLE SOURCE OF TRUTH)
+ */
+export interface TimeoutsConfig {
+  /** Standard API operations (30s) */
+  default: number;
+  /** Knowledge base / vectorization operations (5min) */
+  knowledge: number;
+  /** File upload operations (5min) */
+  upload: number;
+  /** Health check operations (5s) */
+  health: number;
+  /** Quick operations (5s) */
+  short: number;
+  /** Long-running operations (2min) */
+  long: number;
+  /** Analytics/reporting operations (3min) */
+  analytics: number;
+  /** Search operations (30s) */
+  search: number;
+}
+
+/**
+ * API configuration with centralized timeout management
+ */
 export interface ApiConfig {
+  /** Default timeout for standard API calls */
   timeout: number;
   retryAttempts: number;
   retryDelay: number;
+  /** @deprecated Use timeouts.knowledge instead (backward compatibility) */
   knowledgeTimeout: number;
   cacheBustVersion: string;
   disableCache: boolean;
+  /** Operation-specific timeouts (Issue #598) */
+  timeouts: TimeoutsConfig;
 }
 
 export interface FeaturesConfig {
@@ -119,7 +148,11 @@ export declare class AppConfigService {
 
   isFeatureEnabled(featureName: string): boolean;
 
-  getTimeout(operation?: string): number;
+  /**
+   * Get timeout for specific operation (Issue #598: SINGLE SOURCE OF TRUTH)
+   * @param operation - Operation type: 'default' | 'knowledge' | 'upload' | 'health' | 'short' | 'long' | 'analytics' | 'search'
+   */
+  getTimeout(operation?: keyof TimeoutsConfig): number;
 
   validateConnection(): Promise<boolean>;
 

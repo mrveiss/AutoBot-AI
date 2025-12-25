@@ -125,14 +125,38 @@ export class AppConfigService {
         }
       },
 
-      // API Configuration
+      // API Configuration - SINGLE SOURCE OF TRUTH for all timeouts (Issue #598)
+      // All timeout values in milliseconds
       api: {
+        // Default timeout for standard API calls (30 seconds)
         timeout: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000'),
         retryAttempts: parseInt(import.meta.env.VITE_API_RETRY_ATTEMPTS || '3'),
         retryDelay: parseInt(import.meta.env.VITE_API_RETRY_DELAY || '1000'),
-        knowledgeTimeout: parseInt(import.meta.env.VITE_KNOWLEDGE_TIMEOUT || '300000'),
         cacheBustVersion: import.meta.env.VITE_APP_VERSION || Date.now().toString(),
-        disableCache: import.meta.env.VITE_DISABLE_CACHE === 'true'
+        disableCache: import.meta.env.VITE_DISABLE_CACHE === 'true',
+        // Backward compatibility alias (Issue #598: prefer using timeouts.knowledge)
+        knowledgeTimeout: parseInt(import.meta.env.VITE_KNOWLEDGE_TIMEOUT || '300000'),
+
+        // Operation-specific timeouts (Issue #598: centralized timeout management)
+        // These are THE source of truth - all ApiClient implementations MUST use these
+        timeouts: {
+          // Standard API operations (30s)
+          default: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000'),
+          // Knowledge base / vectorization operations (5 minutes)
+          knowledge: parseInt(import.meta.env.VITE_KNOWLEDGE_TIMEOUT || '300000'),
+          // File upload operations (5 minutes)
+          upload: parseInt(import.meta.env.VITE_UPLOAD_TIMEOUT || '300000'),
+          // Health check operations (5 seconds)
+          health: 5000,
+          // Quick operations (5 seconds)
+          short: 5000,
+          // Long-running operations (2 minutes)
+          long: 120000,
+          // Analytics/reporting operations (3 minutes)
+          analytics: 180000,
+          // Search operations (30 seconds)
+          search: 30000
+        }
       },
 
       // Feature Flags
@@ -394,15 +418,24 @@ export class AppConfigService {
   }
 
   /**
-   * Get timeout for specific operation
+   * Get timeout for specific operation (Issue #598: SINGLE SOURCE OF TRUTH)
+   *
+   * Available operations:
+   * - 'default': Standard API calls (30s)
+   * - 'knowledge': Vectorization/knowledge base operations (5min)
+   * - 'upload': File uploads (5min)
+   * - 'health': Health checks (5s)
+   * - 'short': Quick operations (5s)
+   * - 'long': Long-running operations (2min)
+   * - 'analytics': Analytics/reporting (3min)
+   * - 'search': Search operations (30s)
+   *
+   * @param {string} operation - The operation type
+   * @returns {number} Timeout in milliseconds
    */
   getTimeout(operation = 'default') {
-    const timeouts = {
-      default: this.config.api.timeout,
-      knowledge: this.config.api.knowledgeTimeout,
-      short: 5000,
-      long: 60000
-    };
+    // Use the centralized timeouts object (Issue #598)
+    const timeouts = this.config.api.timeouts;
     return timeouts[operation] || timeouts.default;
   }
 

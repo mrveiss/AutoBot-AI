@@ -24,6 +24,7 @@ export interface ApiResponse {
 }
 
 // Enhanced ApiClient with TypeScript support
+// Issue #598: All timeouts now sourced from AppConfig (SINGLE SOURCE OF TRUTH)
 export class ApiClient {
   private baseUrl: string;
   private defaultHeaders: Record<string, string>;
@@ -36,7 +37,8 @@ export class ApiClient {
       'Content-Type': 'application/json',
     };
     this.baseUrlPromise = null;
-    this.defaultTimeout = 30000; // Default 30s timeout
+    // Issue #598: Use AppConfig as single source of truth for timeout
+    this.defaultTimeout = appConfig.getTimeout('default');
     this.initializeBaseUrl();
   }
 
@@ -296,23 +298,27 @@ export class ApiClient {
   }
 
   async getSystemHealth(): Promise<any> {
-    const response = await this.get('/api/system/health');
+    // Issue #598: Use health-specific timeout from AppConfig
+    const response = await this.get('/api/system/health', { timeout: appConfig.getTimeout('health') });
     return response.json();
   }
 
   async getServiceHealth(): Promise<any> {
     // Use monitoring services health endpoint
-    const response = await this.get('/api/monitoring/services/health');
+    // Issue #598: Use health-specific timeout from AppConfig
+    const response = await this.get('/api/monitoring/services/health', { timeout: appConfig.getTimeout('health') });
     return response.json();
   }
 
   async checkHealth(): Promise<any> {
-    const response = await this.get('/api/health');
+    // Issue #598: Use health-specific timeout from AppConfig
+    const response = await this.get('/api/health', { timeout: appConfig.getTimeout('health') });
     return response.json();
   }
 
   async checkChatHealth(): Promise<any> {
-    const response = await this.get('/api/chat/health');
+    // Issue #598: Use health-specific timeout from AppConfig
+    const response = await this.get('/api/chat/health', { timeout: appConfig.getTimeout('health') });
     return response.json();
   }
 
