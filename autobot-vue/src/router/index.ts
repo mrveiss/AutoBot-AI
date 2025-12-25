@@ -397,7 +397,18 @@ const routes: RouteRecordRaw[] = [
       icon: 'fas fa-key',
       description: 'Manage API keys and secrets',
       requiresAuth: true
-    }
+    },
+    children: [
+      {
+        path: '',
+        name: 'secrets-manager',
+        component: () => import('@/components/SecretsManager.vue'),
+        meta: {
+          title: 'Secrets Manager',
+          hideInNav: true
+        }
+      }
+    ]
   },
   {
     path: '/settings',
