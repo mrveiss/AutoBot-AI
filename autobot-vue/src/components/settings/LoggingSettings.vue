@@ -6,7 +6,7 @@
       <select
         id="log-level"
         :value="loggingSettings.level"
-        @change="handleSelectChange('level')"
+        @change="handleSelectChange('level', $event)"
       >
         <option
           v-for="level in loggingSettings.log_levels || []"
@@ -23,7 +23,7 @@
         id="console-logging"
         type="checkbox"
         :checked="loggingSettings.console"
-        @change="handleCheckboxChange('console')"
+        @change="handleCheckboxChange('console', $event)"
       />
     </div>
     <div class="setting-item">
@@ -32,7 +32,7 @@
         id="file-logging"
         type="checkbox"
         :checked="loggingSettings.file"
-        @change="handleCheckboxChange('file')"
+        @change="handleCheckboxChange('file', $event)"
       />
     </div>
     <div class="setting-item">
@@ -43,7 +43,7 @@
         :value="loggingSettings.max_file_size"
         min="1"
         max="100"
-        @input="handleNumberInputChange('max_file_size')"
+        @input="handleNumberInputChange('max_file_size', $event)"
       />
     </div>
     <div class="setting-item">
@@ -52,7 +52,7 @@
         id="log-requests"
         type="checkbox"
         :checked="loggingSettings.log_requests"
-        @change="handleCheckboxChange('log_requests')"
+        @change="handleCheckboxChange('log_requests', $event)"
       />
     </div>
     <div class="setting-item">
@@ -61,7 +61,7 @@
         id="log-sql"
         type="checkbox"
         :checked="loggingSettings.log_sql"
-        @change="handleCheckboxChange('log_sql')"
+        @change="handleCheckboxChange('log_sql', $event)"
       />
     </div>
   </div>
@@ -94,18 +94,18 @@ const updateSetting = (key: string, value: any) => {
   emit('setting-changed', key, value)
 }
 
-// Issue #156 Fix: Typed event handlers to replace inline $event.target usage
-const handleSelectChange = (key: string) => (event: Event) => {
+// Issue #594 Fix: Event handlers that work correctly with Vue template syntax
+const handleSelectChange = (key: string, event: Event) => {
   const target = event.target as HTMLSelectElement
   updateSetting(key, target.value)
 }
 
-const handleCheckboxChange = (key: string) => (event: Event) => {
+const handleCheckboxChange = (key: string, event: Event) => {
   const target = event.target as HTMLInputElement
   updateSetting(key, target.checked)
 }
 
-const handleNumberInputChange = (key: string) => (event: Event) => {
+const handleNumberInputChange = (key: string, event: Event) => {
   const target = event.target as HTMLInputElement
   updateSetting(key, parseInt(target.value))
 }
