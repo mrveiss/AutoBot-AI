@@ -245,7 +245,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { useUserStore } from '../../stores/useUserStore'
 import LoginForm from '../auth/LoginForm.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
@@ -415,12 +415,31 @@ const loadUserData = () => {
   }
 }
 
+// Watch for currentUser changes to reactively update profile form
+// This fixes issue #595 where profile fields were empty because
+// loadUserData() ran before currentUser was populated
+watch(
+  () => userStore.currentUser,
+  (newUser) => {
+    if (newUser && !isEditingProfile.value) {
+      profileForm.username = newUser.username
+      profileForm.email = newUser.email || ''
+      profileForm.role = newUser.role
+
+      if (newUser.preferences) {
+        Object.assign(preferences, newUser.preferences)
+      }
+    }
+  },
+  { immediate: true }
+)
+
 onMounted(async () => {
   // Check auth from backend first (handles single_user mode auto-auth)
   if (!userStore.isAuthenticated) {
     await userStore.checkAuthFromBackend()
   }
-  loadUserData()
+  // Note: loadUserData() is now handled by the watcher above
 })
 </script>
 
