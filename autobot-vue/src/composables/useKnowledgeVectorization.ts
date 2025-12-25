@@ -8,6 +8,7 @@
 import { ref, computed } from 'vue'
 import { useKnowledgeBase } from './useKnowledgeBase'
 import apiClient from '@/utils/ApiClient'
+import appConfig from '@/config/AppConfig.js'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -221,17 +222,25 @@ export function useKnowledgeVectorization() {
 
   /**
    * Vectorize a single document
-   * TODO: Replace with actual backend call when individual vectorization endpoint is available
+   * Uses knowledge-specific timeout from AppConfig (VITE_KNOWLEDGE_TIMEOUT, default 300s)
    *
-   * Expected endpoint: POST /api/knowledge_base/vectorize_document/{document_id}
+   * Expected endpoint: POST /api/knowledge_base/vectorize_fact/{document_id}
    */
   const vectorizeDocument = async (documentId: string): Promise<boolean> => {
     try {
       setDocumentStatus(documentId, 'pending', 0)
 
-      // Call backend API to vectorize the fact
-      // Note: ApiClient.post() already parses JSON and returns the data object directly
-      const data = await apiClient.post(`/api/knowledge_base/vectorize_fact/${documentId}`)
+      // Get knowledge-specific timeout (300s for vectorization operations)
+      const knowledgeTimeout = appConfig.getTimeout('knowledge')
+
+      // Call backend API to vectorize the fact with proper timeout
+      // ApiClient.ts returns Response object, need to parse JSON
+      const response = await apiClient.post(`/api/knowledge_base/vectorize_fact/${documentId}`, undefined, {
+        timeout: knowledgeTimeout
+      })
+
+      // Parse JSON response
+      const data = await response.json()
 
       // Check if backend returned success status
       if (data.status !== 'success') {
@@ -249,8 +258,12 @@ export function useKnowledgeVectorization() {
       while (!completed && attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second
 
-        // Note: ApiClient.get() already parses JSON and returns the data object directly
-        const jobData = await apiClient.get(`/api/knowledge_base/vectorize_job/${jobId}`)
+        // Use knowledge timeout for job status polling as well
+        // ApiClient.ts returns Response object, need to parse JSON
+        const jobResponse = await apiClient.get(`/api/knowledge_base/vectorize_job/${jobId}`, {
+          timeout: knowledgeTimeout
+        })
+        const jobData = await jobResponse.json()
 
         // Backend returns: { status: "success", job: { status: "completed", error: null, ... } }
         const job = jobData.job

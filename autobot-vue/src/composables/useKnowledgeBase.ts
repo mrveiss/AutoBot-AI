@@ -432,12 +432,14 @@ export function useKnowledgeBase() {
     skipExisting: boolean = true
   ): Promise<VectorizationResponse> => {
     try {
+      // Get knowledge-specific timeout (300s for vectorization operations)
+      const knowledgeTimeout = appConfig.getTimeout('knowledge')
 
       const response = await apiClient.post('/api/knowledge_base/vectorize_facts', {
         batch_size: batchSize,
         batch_delay: batchDelay,
         skip_existing: skipExisting
-      })
+      }, { timeout: knowledgeTimeout })
 
       logger.debug('[vectorizeFacts] Response received:', {
         ok: response.ok,
