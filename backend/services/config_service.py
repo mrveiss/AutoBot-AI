@@ -218,9 +218,15 @@ class ConfigService:
                         "security.session_timeout_minutes", 30
                     ),
                 },
+                # Issue #594: Match frontend LoggingSettings interface field names
                 "logging": {
-                    "log_level": get("logging.log_level", "info"),
-                    "log_to_file": get("logging.log_to_file", True),
+                    "level": get("logging.log_level", "info"),
+                    "log_levels": ["debug", "info", "warning", "error", "critical"],
+                    "console": get("logging.console", True),
+                    "file": get("logging.log_to_file", True),
+                    "max_file_size": get("logging.max_file_size", 10),
+                    "log_requests": get("logging.log_requests", False),
+                    "log_sql": get("logging.log_sql", False),
                     "log_file_path": get("logging.log_file_path", "logs/autobot.log"),
                 },
                 "knowledge_base": {
@@ -405,6 +411,22 @@ class ConfigService:
                     "prompts are managed in prompts/ directory"
                 )
                 del filtered_config["prompts"]
+
+            # Issue #594: Normalize logging field names from frontend to config format
+            if "logging" in filtered_config:
+                logging_cfg = filtered_config["logging"]
+                normalized_logging = {}
+                # Map frontend field names to config.yaml field names
+                field_mapping = {"level": "log_level", "file": "log_to_file"}
+                passthrough = {"console", "max_file_size", "log_requests", "log_sql", "log_file_path"}
+                for key, value in logging_cfg.items():
+                    if key == "log_levels":
+                        continue  # Drop - generated at runtime
+                    elif key in field_mapping:
+                        normalized_logging[field_mapping[key]] = value
+                    elif key in passthrough or key not in field_mapping:
+                        normalized_logging[key] = value
+                filtered_config["logging"] = normalized_logging
 
             # Save filtered configuration to config.yaml
             ConfigService._save_config_to_file(filtered_config)
