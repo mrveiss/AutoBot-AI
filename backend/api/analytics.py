@@ -140,20 +140,30 @@ async def _check_service(
 
 
 def _check_resource_alerts(system_resources: Dict) -> List[Dict[str, Any]]:
-    """Generate resource alerts based on thresholds (Issue #398: extracted)."""
+    """Generate resource alerts based on thresholds (Issue #398: extracted).
+
+    Issue #596: Fixed key names to match hardware_monitor.get_system_resources() output.
+    - CPU key: usage_percent (not percent_overall)
+    - Memory key: usage_percent (not percent)
+    """
     alerts = []
 
-    if "cpu" in system_resources and system_resources["cpu"]["percent_overall"] > 90:
+    # Issue #596: Use .get() with defaults to prevent KeyError
+    cpu_data = system_resources.get("cpu", {})
+    cpu_usage = cpu_data.get("usage_percent", 0)
+    if cpu_usage > 90:
         alerts.append({
             "type": "cpu_high",
-            "message": f"CPU usage at {system_resources['cpu']['percent_overall']:.1f}%",
+            "message": f"CPU usage at {cpu_usage:.1f}%",
             "severity": "warning",
         })
 
-    if "memory" in system_resources and system_resources["memory"]["percent"] > 90:
+    memory_data = system_resources.get("memory", {})
+    memory_usage = memory_data.get("usage_percent", 0)
+    if memory_usage > 90:
         alerts.append({
             "type": "memory_high",
-            "message": f"Memory usage at {system_resources['memory']['percent']:.1f}%",
+            "message": f"Memory usage at {memory_usage:.1f}%",
             "severity": "warning",
         })
 
@@ -415,10 +425,11 @@ async def get_realtime_metrics():
                 > datetime.now() - timedelta(minutes=1)
             ]
         ),
+        # Issue #596: Fixed key names to match hardware_monitor.get_system_resources() output
         "performance_snapshot": {
-            "cpu_percent": system_resources.get("cpu", {}).get("percent_overall", 0),
-            "memory_percent": system_resources.get("memory", {}).get("percent", 0),
-            "disk_percent": system_resources.get("disk", {}).get("percent", 0),
+            "cpu_percent": system_resources.get("cpu", {}).get("usage_percent", 0),
+            "memory_percent": system_resources.get("memory", {}).get("usage_percent", 0),
+            "disk_percent": system_resources.get("disk", {}).get("usage_percent", 0),
         },
     }
 
