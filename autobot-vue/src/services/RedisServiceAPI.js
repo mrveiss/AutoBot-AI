@@ -25,16 +25,16 @@ class RedisServiceAPI {
   }
 
   /**
-   * Core HTTP methods with JSON parsing
+   * Core HTTP methods - ApiClient already handles JSON parsing
    */
   async get(endpoint) {
-    const response = await this.client.get(endpoint)
-    return await response.json()
+    // ApiClient.get() returns parsed JSON directly, not a Response object
+    return await this.client.get(endpoint)
   }
 
   async post(endpoint, data = null) {
-    const response = await this.client.post(endpoint, data)
-    return await response.json()
+    // ApiClient.post() returns parsed JSON directly, not a Response object
+    return await this.client.post(endpoint, data)
   }
 
   /**

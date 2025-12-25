@@ -448,6 +448,26 @@ class GlobalWebSocketService {
   }
 
   /**
+   * Subscribe to a topic/event - alias for on() method
+   * Provides compatibility with code expecting subscribe/unsubscribe API pattern
+   * @param {string} topic - The topic/event to subscribe to
+   * @param {Function} callback - Callback function for messages
+   * @returns {Function} Unsubscribe function
+   */
+  subscribe(topic, callback) {
+    return this.on(topic, callback)
+  }
+
+  /**
+   * Unsubscribe from a topic - alias for off() method
+   * @param {string} topic - The topic/event to unsubscribe from
+   * @param {Function} callback - The callback to remove
+   */
+  unsubscribe(topic, callback) {
+    this.off(topic, callback)
+  }
+
+  /**
    * Remove event listener
    */
   off(event, callback) {
