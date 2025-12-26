@@ -34,6 +34,13 @@ from src.code_intelligence.fingerprinting.ast_hasher import ASTHasher
 from src.code_intelligence.fingerprinting.semantic_hasher import SemanticHasher
 from src.code_intelligence.fingerprinting.similarity import SimilarityCalculator
 
+# Issue #607: Import shared caches for performance optimization
+try:
+    from src.code_intelligence.shared.ast_cache import get_ast_with_content
+    HAS_SHARED_CACHE = True
+except ImportError:
+    HAS_SHARED_CACHE = False
+
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level tuple for function definition types
@@ -62,6 +69,7 @@ class CloneDetector:
         self,
         min_fragment_lines: int = 5,
         exclude_dirs: Optional[List[str]] = None,
+        use_shared_cache: bool = True,
     ):
         """
         Initialize the clone detector.
@@ -69,6 +77,7 @@ class CloneDetector:
         Args:
             min_fragment_lines: Minimum lines for a fragment to be considered
             exclude_dirs: Directories to exclude from analysis
+            use_shared_cache: Whether to use shared ASTCache (Issue #607)
         """
         self.min_fragment_lines = min_fragment_lines
         self.exclude_dirs = exclude_dirs or [
@@ -81,6 +90,7 @@ class CloneDetector:
             "archive",
             ".mypy_cache",
         ]
+        self.use_shared_cache = use_shared_cache and HAS_SHARED_CACHE
 
         self.ast_hasher = ASTHasher()
         self.semantic_hasher = SemanticHasher()
@@ -302,16 +312,25 @@ class CloneDetector:
         """
         Parse file and extract code fragments.
 
+        Issue #607: Uses shared ASTCache when available for performance.
+
         Args:
             file_path: Path to Python source file
 
         Returns:
             List of CodeFragment objects
         """
-        with open(file_path, "r", encoding="utf-8") as f:
-            source = f.read()
-        lines = source.split("\n")
-        tree = ast.parse(source, filename=file_path)
+        # Issue #607: Use shared AST cache if available
+        if self.use_shared_cache:
+            tree, source = get_ast_with_content(file_path)
+            if tree is None or not source:
+                return []
+            lines = source.split("\n")
+        else:
+            with open(file_path, "r", encoding="utf-8") as f:
+                source = f.read()
+            lines = source.split("\n")
+            tree = ast.parse(source, filename=file_path)
 
         fragments: List[CodeFragment] = []
         for node in ast.walk(tree):

@@ -21,6 +21,13 @@ from .types import (
     RegexOpportunity,
 )
 
+# Issue #607: Import shared caches for performance optimization
+try:
+    from src.code_intelligence.shared.ast_cache import get_ast_with_content
+    HAS_SHARED_CACHE = True
+except ImportError:
+    HAS_SHARED_CACHE = False
+
 logger = logging.getLogger(__name__)
 
 # Issue #380: Pre-compiled patterns for detection
@@ -214,18 +221,23 @@ class RegexPatternDetector:
         self,
         min_chain_length: int = 2,
         exclude_dirs: Optional[Set[str]] = None,
+        use_shared_cache: bool = True,
     ):
         """Initialize the regex pattern detector.
 
         Args:
             min_chain_length: Minimum operations to report as optimization opportunity
             exclude_dirs: Directories to exclude from analysis
+            use_shared_cache: Whether to use shared ASTCache (Issue #607)
         """
         self.min_chain_length = min_chain_length
         self.exclude_dirs = exclude_dirs or self.EXCLUDE_DIRS
+        self.use_shared_cache = use_shared_cache and HAS_SHARED_CACHE
 
     def detect_in_file(self, file_path: str) -> List[RegexOpportunity]:
         """Detect regex optimization opportunities in a single file.
+
+        Issue #607: Uses shared ASTCache when available for performance.
 
         Args:
             file_path: Path to Python file to analyze
@@ -236,12 +248,18 @@ class RegexPatternDetector:
         opportunities = []
 
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                source = f.read()
-
-            # Parse AST
-            tree = ast.parse(source, filename=file_path)
-            lines = source.split("\n")
+            # Issue #607: Use shared AST cache if available
+            if self.use_shared_cache:
+                tree, source = get_ast_with_content(file_path)
+                if tree is None or not source:
+                    return opportunities
+                lines = source.split("\n")
+            else:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    source = f.read()
+                # Parse AST
+                tree = ast.parse(source, filename=file_path)
+                lines = source.split("\n")
 
             # Visit AST for operation chains
             visitor = StringOperationVisitor(lines, file_path)

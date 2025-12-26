@@ -30,6 +30,13 @@ except ImportError:
     HAS_ANALYTICS_INFRASTRUCTURE = False
     SemanticAnalysisMixin = object  # Fallback to object if not available
 
+# Issue #607: Import shared caches for performance optimization
+try:
+    from src.code_intelligence.shared.ast_cache import get_ast_with_content
+    HAS_SHARED_CACHE = True
+except ImportError:
+    HAS_SHARED_CACHE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,6 +54,7 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
         exclude_patterns: Optional[List[str]] = None,
         use_semantic_analysis: bool = False,
         use_cache: bool = True,
+        use_shared_cache: bool = True,
     ):
         """
         Initialize performance analyzer with project root and exclusion patterns.
@@ -56,6 +64,7 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
             exclude_patterns: Patterns to exclude from analysis
             use_semantic_analysis: Whether to use LLM-based semantic analysis (Issue #554)
             use_cache: Whether to use Redis caching for results (Issue #554)
+            use_shared_cache: Whether to use shared FileListCache/ASTCache (Issue #607)
         """
         self.project_root = Path(project_root) if project_root else Path.cwd()
         self.exclude_patterns = exclude_patterns or [
@@ -71,6 +80,7 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
         ]
         self.results: List[PerformanceIssue] = []
         self.use_semantic_analysis = use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
+        self.use_shared_cache = use_shared_cache and HAS_SHARED_CACHE
 
         # Issue #554: Initialize analytics infrastructure if semantic analysis enabled
         if self.use_semantic_analysis:
@@ -82,7 +92,11 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
             )
 
     def analyze_file(self, file_path: str) -> List[PerformanceIssue]:
-        """Analyze a single file for performance issues."""
+        """
+        Analyze a single file for performance issues.
+
+        Issue #607: Uses shared ASTCache when available for performance.
+        """
         findings: List[PerformanceIssue] = []
         path = Path(file_path)
 
@@ -90,20 +104,29 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
             return findings
 
         try:
-            content = path.read_text(encoding="utf-8")
-            lines = content.split("\n")
+            # Issue #607: Use shared AST cache if available
+            if self.use_shared_cache:
+                tree, content = get_ast_with_content(file_path)
+                lines = content.split("\n") if content else []
+            else:
+                content = path.read_text(encoding="utf-8")
+                lines = content.split("\n")
+                try:
+                    tree = ast.parse(content)
+                except SyntaxError:
+                    tree = None
 
             # AST-based analysis
-            try:
-                tree = ast.parse(content)
+            if tree is not None:
                 visitor = PerformanceASTVisitor(str(path), lines)
                 visitor.visit(tree)
                 findings.extend(visitor.findings)
-            except SyntaxError as e:
-                logger.warning("Syntax error in %s: %s", file_path, e)
+            else:
+                logger.warning("Syntax error in %s, skipping AST analysis", file_path)
 
             # Regex-based analysis for patterns AST can't catch
-            findings.extend(self._regex_analysis(str(path), content, lines))
+            if content:
+                findings.extend(self._regex_analysis(str(path), content, lines))
 
         except Exception as e:
             logger.error("Error analyzing %s: %s", file_path, e)

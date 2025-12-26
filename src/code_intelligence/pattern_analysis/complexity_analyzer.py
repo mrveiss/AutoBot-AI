@@ -20,6 +20,13 @@ from .types import (
     PatternSeverity,
 )
 
+# Issue #607: Import shared caches for performance optimization
+try:
+    from src.code_intelligence.shared.ast_cache import get_ast_with_content
+    HAS_SHARED_CACHE = True
+except ImportError:
+    HAS_SHARED_CACHE = False
+
 logger = logging.getLogger(__name__)
 
 # Try to import radon - it's optional but recommended
@@ -266,6 +273,7 @@ class ComplexityAnalyzer:
         mi_threshold: float = 50,
         nesting_threshold: int = 4,
         exclude_dirs: Optional[Set[str]] = None,
+        use_shared_cache: bool = True,
     ):
         """Initialize complexity analyzer.
 
@@ -274,14 +282,18 @@ class ComplexityAnalyzer:
             mi_threshold: Maintainability index threshold
             nesting_threshold: Maximum acceptable nesting depth
             exclude_dirs: Directories to exclude from analysis
+            use_shared_cache: Whether to use shared ASTCache (Issue #607)
         """
         self.cc_threshold = cc_threshold
         self.mi_threshold = mi_threshold
         self.nesting_threshold = nesting_threshold
         self.exclude_dirs = exclude_dirs or self.EXCLUDE_DIRS
+        self.use_shared_cache = use_shared_cache and HAS_SHARED_CACHE
 
     def analyze_file(self, file_path: str) -> ModuleComplexity:
         """Analyze complexity of a single Python file.
+
+        Issue #607: Uses shared ASTCache when available for performance.
 
         Args:
             file_path: Path to Python file
@@ -292,11 +304,16 @@ class ComplexityAnalyzer:
         module = ModuleComplexity(file_path=file_path)
 
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                source = f.read()
-
-            # Parse AST for custom analysis
-            tree = ast.parse(source, filename=file_path)
+            # Issue #607: Use shared AST cache if available
+            if self.use_shared_cache:
+                tree, source = get_ast_with_content(file_path)
+                if tree is None or not source:
+                    return module
+            else:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    source = f.read()
+                # Parse AST for custom analysis
+                tree = ast.parse(source, filename=file_path)
 
             # Use radon if available
             if RADON_AVAILABLE:
