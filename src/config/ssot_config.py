@@ -60,6 +60,11 @@ def _find_project_root() -> Path:
 
 PROJECT_ROOT = _find_project_root()
 
+# Default model constants - single source of truth for fallback values
+# These are used when .env doesn't specify a value
+DEFAULT_LLM_MODEL = "mistral:7b-instruct"
+DEFAULT_EMBEDDING_MODEL = "nomic-embed-text:latest"
+
 
 class VMConfig(BaseSettings):
     """
@@ -119,39 +124,39 @@ class LLMConfig(BaseSettings):
         extra="ignore",
     )
 
-    # Primary models
+    # Primary models - all use DEFAULT_LLM_MODEL constant for consistency
     default_model: str = Field(
-        default="mistral:7b-instruct", alias="AUTOBOT_DEFAULT_LLM_MODEL"
+        default=DEFAULT_LLM_MODEL, alias="AUTOBOT_DEFAULT_LLM_MODEL"
     )
     embedding_model: str = Field(
-        default="nomic-embed-text:latest", alias="AUTOBOT_EMBEDDING_MODEL"
+        default=DEFAULT_EMBEDDING_MODEL, alias="AUTOBOT_EMBEDDING_MODEL"
     )
     classification_model: str = Field(
-        default="mistral:7b-instruct", alias="AUTOBOT_CLASSIFICATION_MODEL"
+        default=DEFAULT_LLM_MODEL, alias="AUTOBOT_CLASSIFICATION_MODEL"
     )
     reasoning_model: str = Field(
-        default="mistral:7b-instruct", alias="AUTOBOT_REASONING_MODEL"
+        default=DEFAULT_LLM_MODEL, alias="AUTOBOT_REASONING_MODEL"
     )
-    rag_model: str = Field(default="mistral:7b-instruct", alias="AUTOBOT_RAG_MODEL")
+    rag_model: str = Field(default=DEFAULT_LLM_MODEL, alias="AUTOBOT_RAG_MODEL")
     coding_model: str = Field(
-        default="mistral:7b-instruct", alias="AUTOBOT_CODING_MODEL"
+        default=DEFAULT_LLM_MODEL, alias="AUTOBOT_CODING_MODEL"
     )
 
-    # Agent/workflow models
+    # Agent/workflow models - all use DEFAULT_LLM_MODEL constant
     orchestrator_model: str = Field(
-        default="mistral:7b-instruct", alias="AUTOBOT_ORCHESTRATOR_MODEL"
+        default=DEFAULT_LLM_MODEL, alias="AUTOBOT_ORCHESTRATOR_MODEL"
     )
     agent_model: str = Field(
-        default="mistral:7b-instruct", alias="AUTOBOT_AGENT_MODEL"
+        default=DEFAULT_LLM_MODEL, alias="AUTOBOT_AGENT_MODEL"
     )
     research_model: str = Field(
-        default="mistral:7b-instruct", alias="AUTOBOT_RESEARCH_MODEL"
+        default=DEFAULT_LLM_MODEL, alias="AUTOBOT_RESEARCH_MODEL"
     )
     analysis_model: str = Field(
-        default="mistral:7b-instruct", alias="AUTOBOT_ANALYSIS_MODEL"
+        default=DEFAULT_LLM_MODEL, alias="AUTOBOT_ANALYSIS_MODEL"
     )
     planning_model: str = Field(
-        default="mistral:7b-instruct", alias="AUTOBOT_PLANNING_MODEL"
+        default=DEFAULT_LLM_MODEL, alias="AUTOBOT_PLANNING_MODEL"
     )
 
     # Timeout (seconds)
