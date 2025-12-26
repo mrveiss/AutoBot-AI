@@ -429,7 +429,12 @@ class DuplicateCodeDetector:
         hash_groups: Dict[str, List[CodeBlock]],
         seen_pairs: Set[Tuple[str, str]],
     ) -> List[DuplicatePair]:
-        """Find exact hash-based duplicates (Issue #560: extracted)."""
+        """Find exact hash-based duplicates (Issue #560: extracted).
+
+        Issue #616: O(n²) pairwise comparison is NECESSARY for duplicate detection.
+        Already optimized with: (1) hash-based grouping, (2) early continue for
+        same-file pairs, (3) seen_pairs set for O(1) deduplication.
+        """
         duplicates: List[DuplicatePair] = []
 
         for blocks in hash_groups.values():

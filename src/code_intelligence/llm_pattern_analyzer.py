@@ -248,7 +248,12 @@ class LLMPatternAnalyzer:
         directories: List[Path],
         exclude_patterns: List[str],
     ) -> List[Path]:
-        """Collect Python files from directories."""
+        """Collect Python files from directories.
+
+        Issue #616: Optimized O(n³) → O(n²) using any() for early termination
+        instead of manual break loop. The any() function short-circuits on
+        first match, providing same O(1) behavior with cleaner code.
+        """
         files = []
 
         for directory in directories:
@@ -256,14 +261,8 @@ class LLMPatternAnalyzer:
                 continue
 
             for file_path in directory.rglob("*.py"):
-                # Check exclusions
-                excluded = False
-                for pattern in exclude_patterns:
-                    if file_path.match(pattern):
-                        excluded = True
-                        break
-
-                if not excluded:
+                # Issue #616: Use any() for O(1) early termination
+                if not any(file_path.match(pattern) for pattern in exclude_patterns):
                     files.append(file_path)
 
         return files

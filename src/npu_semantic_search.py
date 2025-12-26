@@ -716,7 +716,7 @@ class NPUSemanticSearch:
 
         devices_to_test = [HardwareDevice.NPU, HardwareDevice.GPU, HardwareDevice.CPU]
 
-        # Issue #509: O(n³) nested loops here are INTENTIONAL for benchmarking.
+        # Issue #509, #616: O(n³) nested loops here are INTENTIONAL for benchmarking.
         # devices (3) × queries (n) × iterations (m) = complete benchmark matrix.
         # This is not optimizable - we need all combinations for valid benchmarks.
         for device in devices_to_test:

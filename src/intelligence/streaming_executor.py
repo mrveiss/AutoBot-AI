@@ -331,6 +331,9 @@ class StreamingCommandExecutor:
 
         Issue #509: Optimized O(n²) list.remove() to O(1) set operations.
         asyncio.wait() already returns sets, so we work directly with them.
+
+        Issue #616: The nested loop (while → for done → for chunks) is O(tasks × chunks)
+        which is optimal - we must yield each chunk from each completed task.
         """
         # Issue #509: Use set for O(1) removal instead of O(n) list.remove()
         remaining_tasks = set(tasks)

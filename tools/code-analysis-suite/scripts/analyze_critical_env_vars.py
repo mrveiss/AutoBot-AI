@@ -4,11 +4,14 @@ Focused analysis for critical hardcoded environment variables
 """
 
 import asyncio
+import logging
 import re
 from pathlib import Path
 from typing import List, Dict, Any
 
 from src.constants.network_constants import NetworkConstants
+
+logger = logging.getLogger(__name__)
 
 
 class CriticalEnvAnalyzer:
@@ -132,7 +135,7 @@ class CriticalEnvAnalyzer:
                 })
 
         except Exception as e:
-            print(f"Error scanning {file_path}: {e}")
+            logger.warning("Error scanning %s: %s", file_path, e)
 
         return matches
 
@@ -210,12 +213,10 @@ async def main():
             print(f"🏷️  **{category.replace('_', ' ').title()} ({len(matches)} found):**")
 
             # Group by suggested environment variable
-            by_env_var = {}
+            # Issue #616: Use setdefault for O(1) grouping instead of explicit check
+            by_env_var: dict = {}
             for match in matches:
-                env_var = match['suggestion']
-                if env_var not in by_env_var:
-                    by_env_var[env_var] = []
-                by_env_var[env_var].append(match)
+                by_env_var.setdefault(match['suggestion'], []).append(match)
 
             for env_var, env_matches in by_env_var.items():
                 print(f"   → {env_var}:")

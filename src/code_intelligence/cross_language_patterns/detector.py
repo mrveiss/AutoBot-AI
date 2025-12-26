@@ -445,8 +445,9 @@ class CrossLanguagePatternDetector:
             py_validators = py_by_type[vtype]
             ts_validators = ts_by_type[vtype]
 
-            # Simple: report all pairs as potential duplications
-            for py_v in py_validators[:3]:  # Limit to avoid explosion
+            # Issue #616: O(n²) pairwise comparison is BOUNDED to max 9 pairs per type
+            # (3 py × 3 ts) to prevent combinatorial explosion while still finding matches
+            for py_v in py_validators[:3]:
                 for ts_v in ts_validators[:3]:
                     duplications.append(ValidationDuplication(
                         duplication_id=f"val_{vtype}_{uuid.uuid4().hex[:8]}",
