@@ -343,8 +343,38 @@ class ElasticsearchDestination(LogDestination):
 class LokiDestination(LogDestination):
     """Grafana Loki log destination."""
 
+    def _batch_entries_to_loki_payload(self, entries: List[LogEntry]) -> Dict[str, Any]:
+        """Batch multiple log entries into a single Loki push payload.
+
+        Groups entries by (source, level) to create efficient streams.
+        """
+        from collections import defaultdict
+        from datetime import datetime
+
+        # Group entries by stream labels (source + level)
+        streams_dict = defaultdict(list)
+
+        for entry in entries:
+            # Create stream key from labels
+            stream_key = (entry.source, entry.level)
+            # Convert timestamp to nanoseconds
+            ts_ns = str(int(datetime.fromisoformat(
+                entry.timestamp.replace('Z', '+00:00')
+            ).timestamp() * 1e9))
+            streams_dict[stream_key].append([ts_ns, entry.message])
+
+        # Build Loki payload with all streams
+        streams = []
+        for (source, level), values in streams_dict.items():
+            streams.append({
+                "stream": {"source": source, "level": level},
+                "values": values
+            })
+
+        return {"streams": streams}
+
     def send(self, entries: List[LogEntry]) -> bool:
-        if not self.config.url:
+        if not self.config.url or not entries:
             return False
 
         try:
@@ -354,22 +384,22 @@ class LokiDestination(LogDestination):
                 credentials = base64.b64encode(f"{self.config.username}:{self.config.password}".encode()).decode()
                 headers["Authorization"] = f"Basic {credentials}"
 
-            # Group entries by source for Loki streams
-            for entry in entries:
-                payload = entry.to_loki_format()
-                response = requests.post(
-                    f"{self.config.url.rstrip('/')}/loki/api/v1/push",
-                    headers=headers,
-                    json=payload,
-                    timeout=10
-                )
+            # Batch all entries into a single Loki push request
+            payload = self._batch_entries_to_loki_payload(entries)
 
-                if response.status_code not in [200, 204]:
-                    self._last_error = f"HTTP {response.status_code}"
-                    self._failed_count += 1
-                else:
-                    self._sent_count += 1
+            response = requests.post(
+                f"{self.config.url.rstrip('/')}/loki/api/v1/push",
+                headers=headers,
+                json=payload,
+                timeout=10
+            )
 
+            if response.status_code not in [200, 204]:
+                self._last_error = f"HTTP {response.status_code}"
+                self._failed_count += len(entries)
+                return False
+
+            self._sent_count += len(entries)
             self._healthy = True
             return True
 

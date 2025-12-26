@@ -143,31 +143,33 @@ class BackendDiagnostic:
             logger.error("❌ Sync request error after %.3fs: %s", elapsed, e)
             return False
 
-    def test_specific_endpoints(self) -> Dict[str, bool]:
-        """Test specific endpoints to narrow down the issue"""
+    async def test_specific_endpoints(self) -> Dict[str, bool]:
+        """Test specific endpoints concurrently to narrow down the issue"""
         endpoints = ["/", "/docs", "/openapi.json", "/api/system/health"]
 
-        results = {}
-
-        for endpoint in endpoints:
+        async def check_endpoint(endpoint: str) -> tuple:
+            """Check a single endpoint asynchronously."""
+            start_time = time.time()
             try:
-                logger.info("🎯 Testing endpoint: %s", endpoint)
-                start_time = time.time()
-
-                response = requests.get(f"{self.base_url}{endpoint}", timeout=5)
-
-                elapsed = time.time() - start_time
-                results[endpoint] = True
-                logger.info(
-                    f"✅ {endpoint}: Status {response.status_code} in {elapsed:.3f}s"
-                )
-
+                timeout = aiohttp.ClientTimeout(total=5)
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.get(f"{self.base_url}{endpoint}") as response:
+                        elapsed = time.time() - start_time
+                        logger.info(
+                            f"✅ {endpoint}: Status {response.status} in {elapsed:.3f}s"
+                        )
+                        return endpoint, True
             except Exception as e:
                 elapsed = time.time() - start_time
-                results[endpoint] = False
                 logger.error(f"❌ {endpoint}: Failed in {elapsed:.3f}s - {e}")
+                return endpoint, False
 
-        return results
+        # Check all endpoints concurrently
+        logger.info("🎯 Testing %d endpoints concurrently...", len(endpoints))
+        tasks = [check_endpoint(ep) for ep in endpoints]
+        endpoint_results = await asyncio.gather(*tasks)
+
+        return dict(endpoint_results)
 
     async def run_diagnostics(self) -> Dict[str, Any]:
         """Run complete diagnostic suite"""
@@ -179,7 +181,7 @@ class BackendDiagnostic:
             "tcp_connection": self.test_tcp_connection(),
             "async_request": await self.test_async_request(),
             "sync_request": self.test_sync_request(),
-            "endpoint_tests": self.test_specific_endpoints(),
+            "endpoint_tests": await self.test_specific_endpoints(),
         }
 
         return results
