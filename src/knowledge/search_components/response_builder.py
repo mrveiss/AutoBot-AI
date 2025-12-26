@@ -9,6 +9,7 @@ Contains response building and clustering functionality.
 """
 
 import logging
+import threading
 from typing import Any, Dict, List, Optional, Tuple
 
 from backend.models.task_context import SearchResponseContext
@@ -157,13 +158,21 @@ class ResponseBuilder:
         return response
 
 
-# Module-level instance for convenience
+# Module-level instance for convenience (thread-safe, Issue #613)
 _response_builder = None
+_response_builder_lock = threading.Lock()
 
 
 def get_response_builder() -> ResponseBuilder:
-    """Get the shared ResponseBuilder instance."""
+    """Get the shared ResponseBuilder instance (thread-safe).
+
+    Uses double-check locking pattern to ensure thread safety while
+    minimizing lock contention after initialization (Issue #613).
+    """
     global _response_builder
     if _response_builder is None:
-        _response_builder = ResponseBuilder()
+        with _response_builder_lock:
+            # Double-check after acquiring lock
+            if _response_builder is None:
+                _response_builder = ResponseBuilder()
     return _response_builder

@@ -606,13 +606,14 @@ class AdvancedAPMSystem:
         try:
             for channel in channels:
                 if channel == "console":
-                    print(f"🚨 {alert.severity.upper()}: {alert.message}")
+                    # Use warning level for console alerts to maintain visibility
+                    self.logger.warning("ALERT %s: %s", alert.severity.upper(), alert.message)
                 elif channel == "log":
-                    self.logger.warning(f"ALERT: {alert.message}")
+                    self.logger.warning("ALERT: %s", alert.message)
                 # Additional notification channels (email, webhook, etc.) would be implemented here
 
         except Exception as e:
-            self.logger.error(f"Error sending alert notifications: {e}")
+            self.logger.error("Error sending alert notifications: %s", e)
 
     async def get_performance_summary(self) -> Dict[str, Any]:
         """Get comprehensive performance summary."""
@@ -729,14 +730,23 @@ class AdvancedAPMSystem:
             self.logger.error(f"Error storing APM report: {e}")
 
 
-# Global APM instance for easy access
+# Global APM instance for easy access (thread-safe, Issue #613)
 _apm_instance = None
+_apm_instance_lock = threading.Lock()
+
 
 def get_apm_instance() -> AdvancedAPMSystem:
-    """Get global APM instance."""
+    """Get global APM instance (thread-safe).
+
+    Uses double-check locking pattern to ensure thread safety while
+    minimizing lock contention after initialization (Issue #613).
+    """
     global _apm_instance
     if _apm_instance is None:
-        _apm_instance = AdvancedAPMSystem()
+        with _apm_instance_lock:
+            # Double-check after acquiring lock
+            if _apm_instance is None:
+                _apm_instance = AdvancedAPMSystem()
     return _apm_instance
 
 # Convenience decorators

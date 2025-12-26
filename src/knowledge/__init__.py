@@ -37,6 +37,7 @@ Usage:
 
 import asyncio
 import logging
+import threading
 from typing import Optional
 
 from src.knowledge.base import KnowledgeBaseCore
@@ -151,6 +152,7 @@ class KnowledgeBase(
 
 _knowledge_base_instance: Optional[KnowledgeBase] = None
 _initialization_lock = asyncio.Lock()
+_reset_lock = threading.Lock()  # Thread-safe reset (Issue #613)
 
 
 async def get_knowledge_base(force_new: bool = False) -> KnowledgeBase:
@@ -198,13 +200,15 @@ async def get_knowledge_base(force_new: bool = False) -> KnowledgeBase:
 
 def reset_knowledge_base() -> None:
     """
-    Reset the singleton knowledge base instance.
+    Reset the singleton knowledge base instance (thread-safe).
 
     This is primarily useful for testing or when you need to force
     reinitialization of the knowledge base.
 
     Note: This does not close existing connections. Call kb.close() first
     if you need to properly cleanup resources.
+
+    Issue #613: Uses thread-safe locking to prevent race conditions.
 
     Example:
         kb = await get_knowledge_base()
@@ -213,8 +217,9 @@ def reset_knowledge_base() -> None:
         kb = await get_knowledge_base()  # Get fresh instance
     """
     global _knowledge_base_instance
-    _knowledge_base_instance = None
-    logger.info("KnowledgeBase singleton instance reset")
+    with _reset_lock:
+        _knowledge_base_instance = None
+        logger.info("KnowledgeBase singleton instance reset")
 
 
 # ============================================================================

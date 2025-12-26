@@ -18,6 +18,7 @@ SSOT Migration (Issue #602):
 
 import asyncio
 import logging
+import threading
 import time
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
@@ -127,13 +128,21 @@ class UnifiedConfigManager(
         self._ssot = _get_ssot_config()
 
 
-# Create singleton instance
+# Create singleton instance with thread-safe locking (Issue #613)
 _unified_config_manager_instance: Optional[UnifiedConfigManager] = None
+_unified_config_manager_lock = threading.Lock()
 
 
 def get_unified_config_manager() -> UnifiedConfigManager:
-    """Get or create the singleton UnifiedConfigManager instance"""
+    """Get or create the singleton UnifiedConfigManager instance (thread-safe).
+
+    Uses double-check locking pattern to ensure thread safety while
+    minimizing lock contention after initialization (Issue #613).
+    """
     global _unified_config_manager_instance
     if _unified_config_manager_instance is None:
-        _unified_config_manager_instance = UnifiedConfigManager()
+        with _unified_config_manager_lock:
+            # Double-check after acquiring lock
+            if _unified_config_manager_instance is None:
+                _unified_config_manager_instance = UnifiedConfigManager()
     return _unified_config_manager_instance

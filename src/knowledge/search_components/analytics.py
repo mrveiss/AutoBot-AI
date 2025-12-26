@@ -9,6 +9,7 @@ Contains search analytics tracking functionality.
 """
 
 import logging
+import threading
 from typing import List, Optional
 
 from backend.models.task_context import SearchAnalyticsContext
@@ -101,13 +102,21 @@ class SearchAnalytics:
         )
 
 
-# Module-level instance for convenience
+# Module-level instance for convenience (thread-safe, Issue #613)
 _analytics = None
+_analytics_lock = threading.Lock()
 
 
 def get_analytics() -> SearchAnalytics:
-    """Get the shared SearchAnalytics instance."""
+    """Get the shared SearchAnalytics instance (thread-safe).
+
+    Uses double-check locking pattern to ensure thread safety while
+    minimizing lock contention after initialization (Issue #613).
+    """
     global _analytics
     if _analytics is None:
-        _analytics = SearchAnalytics()
+        with _analytics_lock:
+            # Double-check after acquiring lock
+            if _analytics is None:
+                _analytics = SearchAnalytics()
     return _analytics

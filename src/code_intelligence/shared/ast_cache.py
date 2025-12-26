@@ -383,13 +383,21 @@ class ASTCache:
 # =============================================================================
 
 _cache_instance: Optional[ASTCache] = None
+_cache_instance_lock = threading.Lock()
 
 
 def _get_cache() -> ASTCache:
-    """Get or create the global cache instance."""
+    """Get or create the global cache instance (thread-safe).
+
+    Uses double-check locking pattern to ensure thread safety while
+    minimizing lock contention after initialization (Issue #613).
+    """
     global _cache_instance
     if _cache_instance is None:
-        _cache_instance = ASTCache()
+        with _cache_instance_lock:
+            # Double-check after acquiring lock
+            if _cache_instance is None:
+                _cache_instance = ASTCache()
     return _cache_instance
 
 

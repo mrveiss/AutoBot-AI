@@ -10,6 +10,7 @@ Contains cross-encoder reranking functionality.
 
 import asyncio
 import logging
+import threading
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -87,13 +88,21 @@ class ResultReranker:
             return results
 
 
-# Module-level instance for convenience
+# Module-level instance for convenience (thread-safe, Issue #613)
 _reranker = None
+_reranker_lock = threading.Lock()
 
 
 def get_reranker() -> ResultReranker:
-    """Get the shared ResultReranker instance."""
+    """Get the shared ResultReranker instance (thread-safe).
+
+    Uses double-check locking pattern to ensure thread safety while
+    minimizing lock contention after initialization (Issue #613).
+    """
     global _reranker
     if _reranker is None:
-        _reranker = ResultReranker()
+        with _reranker_lock:
+            # Double-check after acquiring lock
+            if _reranker is None:
+                _reranker = ResultReranker()
     return _reranker
