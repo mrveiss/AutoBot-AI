@@ -702,8 +702,8 @@ async def list_chats(request: Request):
         )
 
     # Get sessions directly - decorator handles all errors
-    # CRITICAL FIX: Remove await - list_sessions_fast is synchronous
-    sessions = chat_history_manager.list_sessions_fast()
+    # list_sessions_fast is async (uses asyncio.to_thread internally)
+    sessions = await chat_history_manager.list_sessions_fast()
     return create_success_response(
         data=sessions,
         message="Chat sessions retrieved successfully",

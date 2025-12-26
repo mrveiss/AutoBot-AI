@@ -286,7 +286,8 @@ export class ChatRepository {
   async getChatList(): Promise<any[]> {
     try {
       const response = await this.get('/api/chat/sessions')
-      const sessions = response.data?.sessions || []
+      // Fix: axios wraps response in .data, and API response has { data: { sessions: [...] } }
+      const sessions = response.data?.data?.sessions || response.data?.sessions || []
 
       // Transform backend session format to frontend store format
       return sessions.map((session: any) => ({

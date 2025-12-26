@@ -251,7 +251,8 @@ async def list_sessions(request: Request):
         )
 
     # Use fast mode for listing (no decryption)
-    sessions = chat_history_manager.list_sessions_fast()
+    # list_sessions_fast is async (uses asyncio.to_thread internally)
+    sessions = await chat_history_manager.list_sessions_fast()
 
     return create_success_response(
         data={"sessions": sessions, "count": len(sessions)},

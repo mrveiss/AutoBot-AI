@@ -114,7 +114,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import apiClient from '@/utils/ApiClient'
+import apiClient from '@/utils/ApiClient.ts'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -183,8 +183,16 @@ const scanOrphans = async () => {
 
     const response = await apiClient.get('/api/memory/entities/orphans')
 
+    // Check if we got a valid Response object
+    if (!response || typeof response.ok === 'undefined') {
+      throw new Error('Invalid response from server - request may have timed out')
+    }
+
     if (!response.ok) {
-      const errorText = await response.text()
+      // Safely get error text - response.text may not exist if request failed
+      const errorText = typeof response.text === 'function'
+        ? await response.text().catch(() => '')
+        : ''
       throw new Error(errorText || `Server error: ${response.status}`)
     }
 
@@ -230,8 +238,16 @@ const cleanupOrphans = async () => {
 
     const response = await apiClient.delete('/api/memory/entities/orphans?dry_run=false')
 
+    // Check if we got a valid Response object
+    if (!response || typeof response.ok === 'undefined') {
+      throw new Error('Invalid response from server - request may have timed out')
+    }
+
     if (!response.ok) {
-      const errorText = await response.text()
+      // Safely get error text - response.text may not exist if request failed
+      const errorText = typeof response.text === 'function'
+        ? await response.text().catch(() => '')
+        : ''
       throw new Error(errorText || `Server error: ${response.status}`)
     }
 
