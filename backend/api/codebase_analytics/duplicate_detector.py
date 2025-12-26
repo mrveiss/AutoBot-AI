@@ -35,17 +35,20 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 # Minimum lines for a code block to be considered for duplicate detection
-MIN_DUPLICATE_LINES = 5
+# Issue #609: Reduced from 5 to 4 to catch more smaller duplicates
+MIN_DUPLICATE_LINES = 4
 # Minimum characters for a code block
-MIN_DUPLICATE_CHARS = 100
+MIN_DUPLICATE_CHARS = 80
 # Similarity thresholds
 HIGH_SIMILARITY_THRESHOLD = 0.90
 MEDIUM_SIMILARITY_THRESHOLD = 0.70
 LOW_SIMILARITY_THRESHOLD = 0.50
 # Maximum files to scan (performance limit)
-MAX_FILES_TO_SCAN = 500
+MAX_FILES_TO_SCAN = 1000
 # Maximum duplicates to return
-MAX_DUPLICATES_RETURNED = 100
+MAX_DUPLICATES_RETURNED = 200
+# Maximum blocks for O(n^2) similarity comparison (Issue #609)
+MAX_BLOCKS_FOR_SIMILARITY = 2000
 
 
 # =============================================================================
@@ -459,15 +462,22 @@ class DuplicateCodeDetector:
         all_blocks: List[CodeBlock],
         seen_pairs: Set[Tuple[str, str]],
     ) -> List[DuplicatePair]:
-        """Find similarity-based duplicates (Issue #560: extracted)."""
+        """Find similarity-based duplicates (Issue #560: extracted, #609: improved)."""
         duplicates: List[DuplicatePair] = []
 
-        # Skip O(n^2) comparison for large codebases
-        if len(all_blocks) > 1000:
-            return duplicates
+        # Issue #609: Use configurable limit and sample blocks if too many
+        blocks_to_compare = all_blocks
+        if len(all_blocks) > MAX_BLOCKS_FOR_SIMILARITY:
+            # Sample blocks prioritizing longer ones (more likely to be meaningful duplicates)
+            sorted_blocks = sorted(all_blocks, key=lambda b: b.line_count, reverse=True)
+            blocks_to_compare = sorted_blocks[:MAX_BLOCKS_FOR_SIMILARITY]
+            logger.info(
+                "Sampling %d of %d blocks for similarity comparison",
+                len(blocks_to_compare), len(all_blocks)
+            )
 
-        for i, block1 in enumerate(all_blocks):
-            for block2 in all_blocks[i + 1:]:
+        for i, block1 in enumerate(blocks_to_compare):
+            for block2 in blocks_to_compare[i + 1:]:
                 if block1.file_path == block2.file_path:
                     continue
 

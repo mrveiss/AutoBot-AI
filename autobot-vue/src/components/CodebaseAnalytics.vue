@@ -1601,12 +1601,12 @@
         />
       </div>
 
-      <!-- Issue #538: Bug Prediction Section -->
+      <!-- Issue #538: Bug Prediction Section - Enhanced with detailed findings -->
       <div class="bug-prediction-section analytics-section">
         <h3>
           <i class="fas fa-bug"></i> Bug Risk Prediction
           <span v-if="bugPredictionAnalysis" class="total-count">
-            ({{ bugPredictionAnalysis.high_risk_count }} high-risk files)
+            ({{ getAtRiskFilesCount() }} files need attention)
           </span>
           <button @click="loadBugPrediction" :disabled="loadingBugPrediction" class="refresh-btn" style="margin-left: 10px;">
             <i :class="loadingBugPrediction ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
@@ -1641,48 +1641,169 @@
               <div class="summary-value">{{ bugPredictionAnalysis.analyzed_files }}</div>
               <div class="summary-label">Files Analyzed</div>
             </div>
-            <div class="summary-card critical">
+            <div class="summary-card critical" :class="{ clickable: bugPredictionAnalysis.high_risk_count > 0 }" @click="bugPredictionAnalysis.high_risk_count > 0 && toggleBugRiskFilter('high')">
               <div class="summary-value">{{ bugPredictionAnalysis.high_risk_count }}</div>
-              <div class="summary-label">High Risk</div>
+              <div class="summary-label">High Risk (60+)</div>
             </div>
-            <div class="summary-card warning">
+            <div class="summary-card warning clickable" @click="toggleBugRiskFilter('medium')">
               <div class="summary-value">{{ bugPredictionAnalysis.files.filter(f => f.risk_score >= 40 && f.risk_score < 60).length }}</div>
-              <div class="summary-label">Medium Risk</div>
+              <div class="summary-label">Medium Risk (40-59)</div>
             </div>
-            <div class="summary-card success">
+            <div class="summary-card success clickable" @click="toggleBugRiskFilter('low')">
               <div class="summary-value">{{ bugPredictionAnalysis.files.filter(f => f.risk_score < 40).length }}</div>
-              <div class="summary-label">Low Risk</div>
+              <div class="summary-label">Low Risk (&lt;40)</div>
             </div>
           </div>
 
-          <!-- High Risk Files List -->
-          <div class="risk-files-list">
-            <h4>High Risk Files</h4>
-            <div
-              v-for="(file, index) in bugPredictionAnalysis.files.filter(f => f.risk_score >= 60).slice(0, 15)"
-              :key="'risk-file-' + index"
-              class="list-item"
-              :class="getRiskClass(file.risk_score)"
-            >
-              <div class="item-header">
-                <span class="risk-badge" :class="getRiskClass(file.risk_score)">
-                  {{ file.risk_score.toFixed(0) }}%
-                </span>
-                <span class="item-path">{{ file.file_path }}</span>
-                <span class="risk-level-badge" :class="file.risk_level">{{ file.risk_level }}</span>
-              </div>
-              <div class="risk-factors" v-if="file.factors">
-                <span v-for="(value, factor) in (file.factors || {})" :key="factor" class="factor-badge">
-                  {{ formatFactorName(String(factor)) }}: {{ value }}
-                </span>
-              </div>
-              <div v-if="file.prevention_tips && file.prevention_tips.length > 0" class="prevention-tips">
-                <i class="fas fa-lightbulb"></i>
-                <span>{{ file.prevention_tips[0] }}</span>
+          <!-- Top Risk Factors Summary -->
+          <div v-if="getTopRiskFactors().length > 0" class="top-risk-factors-summary">
+            <h4><i class="fas fa-exclamation-circle"></i> Top Issues Found Across Codebase</h4>
+            <div class="risk-factors-grid">
+              <div v-for="factor in getTopRiskFactors()" :key="factor.name" class="risk-factor-card" :class="factor.severity">
+                <div class="factor-icon">
+                  <i :class="getRiskFactorIcon(factor.name)"></i>
+                </div>
+                <div class="factor-details">
+                  <div class="factor-name">{{ formatFactorName(factor.name) }}</div>
+                  <div class="factor-count">{{ factor.count }} files affected</div>
+                  <div class="factor-description">{{ getRiskFactorDescription(factor.name) }}</div>
+                </div>
               </div>
             </div>
-            <div v-if="bugPredictionAnalysis.files.filter(f => f.risk_score >= 60).length > 15" class="show-more">
-              <span class="muted">Showing 15 of {{ bugPredictionAnalysis.files.filter(f => f.risk_score >= 60).length }} high-risk files</span>
+          </div>
+
+          <!-- Risk Filter Tabs -->
+          <div class="risk-filter-tabs">
+            <button
+              :class="{ active: bugRiskFilter === 'all' }"
+              @click="bugRiskFilter = 'all'"
+            >
+              All At-Risk ({{ getAtRiskFilesCount() }})
+            </button>
+            <button
+              :class="{ active: bugRiskFilter === 'high' }"
+              @click="bugRiskFilter = 'high'"
+              :disabled="bugPredictionAnalysis.high_risk_count === 0"
+            >
+              High ({{ bugPredictionAnalysis.high_risk_count }})
+            </button>
+            <button
+              :class="{ active: bugRiskFilter === 'medium' }"
+              @click="bugRiskFilter = 'medium'"
+            >
+              Medium ({{ bugPredictionAnalysis.files.filter(f => f.risk_score >= 40 && f.risk_score < 60).length }})
+            </button>
+            <button
+              :class="{ active: bugRiskFilter === 'low' }"
+              @click="bugRiskFilter = 'low'"
+            >
+              Low ({{ bugPredictionAnalysis.files.filter(f => f.risk_score < 40).length }})
+            </button>
+          </div>
+
+          <!-- Files List with Detailed Info -->
+          <div class="risk-files-list detailed">
+            <h4>
+              <i class="fas fa-file-code"></i>
+              {{ bugRiskFilter === 'all' ? 'Files Requiring Attention' : `${bugRiskFilter.charAt(0).toUpperCase() + bugRiskFilter.slice(1)} Risk Files` }}
+              <span class="file-count">({{ getFilteredBugRiskFiles().length }} files)</span>
+            </h4>
+
+            <div v-if="getFilteredBugRiskFiles().length === 0" class="no-files-message">
+              <i class="fas fa-check-circle"></i> No files in this category
+            </div>
+
+            <div
+              v-for="(file, index) in getFilteredBugRiskFiles().slice(0, bugRiskShowAll ? 100 : 20)"
+              :key="'risk-file-' + index"
+              class="risk-file-item"
+              :class="[getRiskClass(file.risk_score), { expanded: expandedBugRiskFiles.has(file.file_path) }]"
+            >
+              <!-- File Header (Always Visible) -->
+              <div class="file-header" @click="toggleBugRiskFileExpand(file.file_path)">
+                <div class="file-info">
+                  <span class="risk-score-badge" :class="getRiskClass(file.risk_score)">
+                    {{ file.risk_score.toFixed(0) }}
+                  </span>
+                  <span class="file-path">{{ file.file_path }}</span>
+                  <span class="risk-level-tag" :class="file.risk_level">{{ file.risk_level }}</span>
+                </div>
+                <div class="expand-icon">
+                  <i :class="expandedBugRiskFiles.has(file.file_path) ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
+                </div>
+              </div>
+
+              <!-- Quick Risk Indicators (Always Visible) -->
+              <div class="quick-risk-indicators">
+                <span v-if="file.factors?.complexity >= 80" class="indicator high" title="High Complexity">
+                  <i class="fas fa-project-diagram"></i> Complex
+                </span>
+                <span v-if="file.factors?.change_frequency >= 80" class="indicator warning" title="Frequently Changed">
+                  <i class="fas fa-history"></i> Unstable
+                </span>
+                <span v-if="file.factors?.file_size >= 70" class="indicator info" title="Large File">
+                  <i class="fas fa-file-alt"></i> Large
+                </span>
+                <span v-if="file.factors?.bug_history > 0" class="indicator critical" title="Has Bug History">
+                  <i class="fas fa-bug"></i> Bug History
+                </span>
+                <span v-if="file.factors?.test_coverage === 50" class="indicator muted" title="No Tests Detected">
+                  <i class="fas fa-vial"></i> No Tests
+                </span>
+              </div>
+
+              <!-- Expanded Details -->
+              <div v-if="expandedBugRiskFiles.has(file.file_path)" class="file-details">
+                <!-- Risk Factors Breakdown -->
+                <div class="detail-section">
+                  <h5><i class="fas fa-chart-bar"></i> Risk Factor Breakdown</h5>
+                  <div class="factors-breakdown">
+                    <div
+                      v-for="(value, factor) in file.factors"
+                      :key="factor"
+                      class="factor-row"
+                      :class="{ 'high-value': value >= 80, 'medium-value': value >= 50 && value < 80 }"
+                    >
+                      <div class="factor-label">
+                        <i :class="getRiskFactorIcon(String(factor))"></i>
+                        {{ formatFactorName(String(factor)) }}
+                      </div>
+                      <div class="factor-bar-container">
+                        <div class="factor-bar" :style="{ width: value + '%' }" :class="getFactorBarClass(value)"></div>
+                      </div>
+                      <div class="factor-value">{{ typeof value === 'number' ? value.toFixed(0) : value }}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Prevention Tips -->
+                <div v-if="file.prevention_tips && file.prevention_tips.length > 0" class="detail-section">
+                  <h5><i class="fas fa-lightbulb"></i> Recommended Fixes</h5>
+                  <ul class="tips-list">
+                    <li v-for="(tip, tipIndex) in file.prevention_tips" :key="tipIndex">
+                      <i class="fas fa-wrench"></i> {{ tip }}
+                    </li>
+                  </ul>
+                </div>
+
+                <!-- Suggested Tests -->
+                <div v-if="file.suggested_tests && file.suggested_tests.length > 0" class="detail-section">
+                  <h5><i class="fas fa-vial"></i> Suggested Tests</h5>
+                  <ul class="tests-list">
+                    <li v-for="(test, testIndex) in file.suggested_tests" :key="testIndex">
+                      <i class="fas fa-flask"></i> {{ test }}
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <!-- Show More Button -->
+            <div v-if="getFilteredBugRiskFiles().length > 20" class="show-more-container">
+              <button @click="bugRiskShowAll = !bugRiskShowAll" class="show-more-btn">
+                <i :class="bugRiskShowAll ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
+                {{ bugRiskShowAll ? 'Show Less' : `Show All ${getFilteredBugRiskFiles().length} Files` }}
+              </button>
             </div>
           </div>
 
@@ -1692,9 +1813,9 @@
           </div>
         </div>
 
-        <!-- No High Risk Files -->
-        <div v-else-if="bugPredictionAnalysis && bugPredictionAnalysis.high_risk_count === 0" class="success-state">
-          <i class="fas fa-check-circle"></i> No high-risk files detected. Codebase appears healthy.
+        <!-- No Files to Analyze -->
+        <div v-else-if="bugPredictionAnalysis && bugPredictionAnalysis.files.length === 0" class="success-state">
+          <i class="fas fa-check-circle"></i> No files analyzed yet. Run 'Analyze All' to scan.
         </div>
 
         <!-- Empty State -->
@@ -2565,6 +2686,135 @@ interface BugPredictionResult {
 const bugPredictionAnalysis = ref<BugPredictionResult | null>(null)
 const loadingBugPrediction = ref(false)
 const bugPredictionError = ref('')
+
+// Enhanced Bug Prediction UI state
+const bugRiskFilter = ref<'all' | 'high' | 'medium' | 'low'>('all')
+const bugRiskShowAll = ref(false)
+const expandedBugRiskFiles = ref<Set<string>>(new Set())
+
+// Bug Risk helper functions
+function getAtRiskFilesCount(): number {
+  if (!bugPredictionAnalysis.value) return 0
+  // Count files with risk score >= 40 (medium and high risk)
+  return bugPredictionAnalysis.value.files.filter(f => f.risk_score >= 40).length
+}
+
+function toggleBugRiskFilter(filter: 'high' | 'medium' | 'low'): void {
+  bugRiskFilter.value = bugRiskFilter.value === filter ? 'all' : filter
+}
+
+function toggleBugRiskFileExpand(filePath: string): void {
+  if (expandedBugRiskFiles.value.has(filePath)) {
+    expandedBugRiskFiles.value.delete(filePath)
+  } else {
+    expandedBugRiskFiles.value.add(filePath)
+  }
+  // Force reactivity update
+  expandedBugRiskFiles.value = new Set(expandedBugRiskFiles.value)
+}
+
+function getFilteredBugRiskFiles(): BugPredictionFile[] {
+  if (!bugPredictionAnalysis.value) return []
+  const files = bugPredictionAnalysis.value.files
+  let filtered: BugPredictionFile[]
+
+  switch (bugRiskFilter.value) {
+    case 'high':
+      filtered = files.filter(f => f.risk_score >= 60)
+      break
+    case 'medium':
+      filtered = files.filter(f => f.risk_score >= 40 && f.risk_score < 60)
+      break
+    case 'low':
+      filtered = files.filter(f => f.risk_score < 40)
+      break
+    case 'all':
+    default:
+      // Show all files with risk >= 40 (medium and high) by default
+      filtered = files.filter(f => f.risk_score >= 40)
+      break
+  }
+
+  // Sort by risk score descending
+  return filtered.sort((a, b) => b.risk_score - a.risk_score)
+}
+
+interface TopRiskFactor {
+  name: string
+  count: number
+  severity: 'critical' | 'high' | 'medium' | 'low'
+}
+
+function getTopRiskFactors(): TopRiskFactor[] {
+  if (!bugPredictionAnalysis.value) return []
+
+  const factorCounts: Record<string, number> = {
+    complexity: 0,
+    change_frequency: 0,
+    file_size: 0,
+    bug_history: 0,
+    test_coverage: 0
+  }
+
+  // Count files with high values for each factor
+  for (const file of bugPredictionAnalysis.value.files) {
+    if (!file.factors) continue
+    if (file.factors.complexity >= 80) factorCounts.complexity++
+    if (file.factors.change_frequency >= 80) factorCounts.change_frequency++
+    if (file.factors.file_size >= 70) factorCounts.file_size++
+    if (file.factors.bug_history > 0) factorCounts.bug_history++
+    if (file.factors.test_coverage === 50) factorCounts.test_coverage++
+  }
+
+  // Convert to array and sort by count
+  const factors: TopRiskFactor[] = Object.entries(factorCounts)
+    .filter(([, count]) => count > 0)
+    .map(([name, count]) => ({
+      name,
+      count,
+      severity: getSeverityForFactor(name, count)
+    }))
+    .sort((a, b) => b.count - a.count)
+
+  return factors.slice(0, 4) // Top 4 factors
+}
+
+function getSeverityForFactor(factor: string, count: number): 'critical' | 'high' | 'medium' | 'low' {
+  if (factor === 'bug_history' && count > 0) return 'critical'
+  if (count > 50) return 'high'
+  if (count > 20) return 'medium'
+  return 'low'
+}
+
+function getRiskFactorIcon(factor: string): string {
+  const icons: Record<string, string> = {
+    complexity: 'fas fa-project-diagram',
+    change_frequency: 'fas fa-history',
+    file_size: 'fas fa-file-alt',
+    bug_history: 'fas fa-bug',
+    test_coverage: 'fas fa-vial',
+    dependency_count: 'fas fa-sitemap'
+  }
+  return icons[factor] || 'fas fa-exclamation-circle'
+}
+
+function getRiskFactorDescription(factor: string): string {
+  const descriptions: Record<string, string> = {
+    complexity: 'High cyclomatic complexity - break down into smaller functions',
+    change_frequency: 'Frequently modified - stabilize before adding features',
+    file_size: 'Large files - consider splitting into modules',
+    bug_history: 'Previous bugs found - add regression tests',
+    test_coverage: 'No tests detected - add unit tests',
+    dependency_count: 'Many dependencies - review and reduce'
+  }
+  return descriptions[factor] || 'Review and address this factor'
+}
+
+function getFactorBarClass(value: number): string {
+  if (value >= 80) return 'bar-critical'
+  if (value >= 50) return 'bar-warning'
+  return 'bar-ok'
+}
 
 // Issue #538: Code Intelligence Scores (Security, Performance, Redis)
 interface SecurityScoreResult {
