@@ -11,6 +11,7 @@ Categories enable hierarchical organization like "tech/python/async" with
 parent-child relationships and path-based lookups.
 """
 
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -587,19 +588,69 @@ class CategoriesMixin:
         self, redis_pattern: str, limit: int
     ) -> List[Dict[str, Any]]:
         """Scan Redis for categories matching pattern (Issue #398: extracted)."""
-        matching = []
+        # Issue #614: Fix N+1 pattern - collect keys first, then batch fetch
+        keys = []
         async for key in self.aioredis_client.scan_iter(match=redis_pattern, count=100):
-            if len(matching) >= limit:
-                break
             key = key.decode("utf-8") if isinstance(key, bytes) else key
-            category_id = await self.aioredis_client.get(key)
-            if category_id:
-                category_id = category_id.decode("utf-8") if isinstance(category_id, bytes) else category_id
-                cat_data = await self._get_category_data(category_id)
+            keys.append(key)
+            if len(keys) >= limit * 2:  # Over-fetch to account for nulls
+                break
+
+        if not keys:
+            return []
+
+        # Batch fetch all category IDs using pipeline
+        pipe = self.aioredis_client.pipeline()
+        for key in keys:
+            pipe.get(key)
+        category_ids = await pipe.execute()
+
+        # Collect valid category IDs
+        valid_ids = []
+        for cat_id in category_ids:
+            if cat_id:
+                cat_id = cat_id.decode("utf-8") if isinstance(cat_id, bytes) else cat_id
+                valid_ids.append(cat_id)
+            if len(valid_ids) >= limit:
+                break
+
+        if not valid_ids:
+            return []
+
+        # Batch fetch all category data using pipeline
+        pipe = self.aioredis_client.pipeline()
+        for cat_id in valid_ids:
+            pipe.hgetall(f"category:{cat_id}")
+        results = await pipe.execute()
+
+        # Process results
+        matching = []
+        for result in results:
+            if result:
+                cat_data = self._decode_category_data(result)
                 if cat_data:
                     matching.append(cat_data)
+            if len(matching) >= limit:
+                break
+
         matching.sort(key=lambda x: x.get("path", ""))
         return matching
+
+    def _decode_category_data(self, data: dict) -> Optional[Dict[str, Any]]:
+        """Decode category data from Redis hash (helper for batched operations)."""
+        if not data:
+            return None
+        result = {}
+        for k, v in data.items():
+            key = k.decode("utf-8") if isinstance(k, bytes) else k
+            val = v.decode("utf-8") if isinstance(v, bytes) else v
+            if key in ("fact_count",):
+                try:
+                    val = int(val)
+                except ValueError:
+                    pass
+            result[key] = val
+        return result
 
     async def search_categories_by_path(
         self, path_pattern: str, limit: int = 50
@@ -674,16 +725,29 @@ class CategoriesMixin:
 
         # Get children
         child_ids = await self.aioredis_client.smembers(f"category:children:{category_id}")
-        children = []
 
-        for cid in child_ids:
-            if isinstance(cid, bytes):
-                cid = cid.decode("utf-8")
-            child_node = await self._build_tree_node(
-                cid, current_depth + 1, max_depth, include_fact_counts
-            )
-            if child_node:
-                children.append(child_node)
+        if not child_ids:
+            node["children"] = []
+            return node
+
+        # Issue #614: Fix N+1 pattern - fetch all children in parallel
+        decoded_ids = [
+            cid.decode("utf-8") if isinstance(cid, bytes) else cid
+            for cid in child_ids
+        ]
+
+        # Build all child nodes in parallel
+        child_tasks = [
+            self._build_tree_node(cid, current_depth + 1, max_depth, include_fact_counts)
+            for cid in decoded_ids
+        ]
+        child_results = await asyncio.gather(*child_tasks, return_exceptions=True)
+
+        # Filter out None results and exceptions
+        children = [
+            result for result in child_results
+            if result is not None and not isinstance(result, Exception)
+        ]
 
         # Sort children by name
         children.sort(key=lambda x: x.get("name", ""))
@@ -700,15 +764,26 @@ class CategoriesMixin:
 
     async def _get_all_descendants(self, category_id: str) -> List[str]:
         """Get all descendant category IDs recursively."""
-        descendants = []
         child_ids = await self.aioredis_client.smembers(f"category:children:{category_id}")
 
-        for cid in child_ids:
-            if isinstance(cid, bytes):
-                cid = cid.decode("utf-8")
-            descendants.append(cid)
-            sub_descendants = await self._get_all_descendants(cid)
-            descendants.extend(sub_descendants)
+        if not child_ids:
+            return []
+
+        # Decode child IDs
+        decoded_ids = [
+            cid.decode("utf-8") if isinstance(cid, bytes) else cid
+            for cid in child_ids
+        ]
+
+        # Issue #614: Fix N+1 pattern - fetch all sub-descendants in parallel
+        sub_tasks = [self._get_all_descendants(cid) for cid in decoded_ids]
+        sub_results = await asyncio.gather(*sub_tasks, return_exceptions=True)
+
+        # Combine results
+        descendants = list(decoded_ids)
+        for result in sub_results:
+            if isinstance(result, list):
+                descendants.extend(result)
 
         return descendants
 

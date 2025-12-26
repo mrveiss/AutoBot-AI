@@ -103,18 +103,21 @@ async def get_cache_stats(data_type: Optional[str] = Query(None)):
 async def warm_cache(request: CacheWarmingRequest):
     """Warm up cache with commonly accessed data"""
     try:
+        # Issue #614: Fix N+1 pattern - warm all data types in parallel
+        results = await asyncio.gather(
+            *[_warm_data_type(dt, request.force_refresh) for dt in request.data_types],
+            return_exceptions=True,
+        )
+
         warmed_types = []
         failed_types = []
-
-        for data_type in request.data_types:
-            try:
-                success = await _warm_data_type(data_type, request.force_refresh)
-                if success:
-                    warmed_types.append(data_type)
-                else:
-                    failed_types.append(data_type)
-            except Exception as e:
-                logger.error("Error warming cache for %s: %s", data_type, e)
+        for data_type, result in zip(request.data_types, results):
+            if isinstance(result, Exception):
+                logger.error("Error warming cache for %s: %s", data_type, result)
+                failed_types.append(data_type)
+            elif result:
+                warmed_types.append(data_type)
+            else:
                 failed_types.append(data_type)
 
         return {
@@ -168,14 +171,26 @@ async def invalidate_cache(
 async def clear_all_cache():
     """Clear all cache data (use with caution)"""
     try:
-        total_deleted = 0
-
         # Get all configured data types
         stats = await advanced_cache.get_stats()
-        if "configured_data_types" in stats:
-            for data_type in stats["configured_data_types"]:
-                deleted = await advanced_cache.invalidate(data_type, "*")
-                total_deleted += deleted
+        data_types = stats.get("configured_data_types", [])
+
+        if not data_types:
+            return {
+                "success": True,
+                "message": "No cache data types configured",
+                "total_deleted": 0,
+            }
+
+        # Issue #614: Fix N+1 pattern - invalidate all data types in parallel
+        results = await asyncio.gather(
+            *[advanced_cache.invalidate(dt, "*") for dt in data_types],
+            return_exceptions=True,
+        )
+
+        total_deleted = sum(
+            r for r in results if isinstance(r, int)
+        )
 
         return {
             "success": True,
@@ -203,17 +218,24 @@ async def _warm_templates_cache() -> bool:
         {"success": True, "templates": template_data, "total": len(template_data)},
     )
 
-    # Cache individual template details
+    # Issue #614: Fix N+1 pattern - batch cache individual template details
+    # First, collect all template details synchronously (CPU-bound)
+    cache_tasks = []
     for template in templates:
         template_detail = workflow_template_manager.get_template(template.id)
-        if not template_detail:
-            continue
-        # Issue #372: Use model method to reduce feature envy
-        await advanced_cache.set(
-            "templates",
-            f"detail:{template.id}",
-            {"success": True, "template": template_detail.to_detail_dict()},
-        )
+        if template_detail:
+            # Issue #372: Use model method to reduce feature envy
+            cache_tasks.append(
+                advanced_cache.set(
+                    "templates",
+                    f"detail:{template.id}",
+                    {"success": True, "template": template_detail.to_detail_dict()},
+                )
+            )
+
+    # Execute all cache writes in parallel
+    if cache_tasks:
+        await asyncio.gather(*cache_tasks, return_exceptions=True)
 
     logger.info("Warmed cache for %s templates", len(templates))
     return True
@@ -315,18 +337,21 @@ async def warm_startup_cache():
     try:
         logger.info("Starting cache warming during application startup")
 
-        warmed_count = 0
+        # Issue #614: Fix N+1 pattern - warm all essential data types in parallel
+        results = await asyncio.gather(
+            *[_warm_data_type(dt) for dt in _ESSENTIAL_CACHE_DATA_TYPES],
+            return_exceptions=True,
+        )
 
-        for data_type in _ESSENTIAL_CACHE_DATA_TYPES:
-            try:
-                success = await _warm_data_type(data_type)
-                if success:
-                    warmed_count += 1
-                    logger.info("Successfully warmed cache for %s", data_type)
-                else:
-                    logger.warning("Failed to warm cache for %s", data_type)
-            except Exception as e:
-                logger.error("Error warming %s during startup: %s", data_type, e)
+        warmed_count = 0
+        for data_type, result in zip(_ESSENTIAL_CACHE_DATA_TYPES, results):
+            if isinstance(result, Exception):
+                logger.error("Error warming %s during startup: %s", data_type, result)
+            elif result:
+                warmed_count += 1
+                logger.info("Successfully warmed cache for %s", data_type)
+            else:
+                logger.warning("Failed to warm cache for %s", data_type)
 
         logger.info(
             f"Startup cache warming completed: "

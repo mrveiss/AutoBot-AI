@@ -61,9 +61,23 @@ class AutoBotInventory:
         hosts = {}
 
         try:
+            # Issue #614: Fix N+1 pattern - collect all keys first, then batch fetch
             # Scan for all host keys in Redis
-            for key in redis_client.scan_iter(match="autobot:host:*"):
-                host_data = redis_client.hgetall(key)
+            host_keys = list(redis_client.scan_iter(match="autobot:host:*"))
+
+            if not host_keys:
+                return hosts
+
+            # Use pipeline to batch all hgetall operations
+            pipe = redis_client.pipeline()
+            for key in host_keys:
+                pipe.hgetall(key)
+
+            # Execute all commands in single round-trip
+            results = pipe.execute()
+
+            # Process results
+            for key, host_data in zip(host_keys, results):
                 if host_data:
                     hostname = key.split(":")[-1]
                     hosts[hostname] = {

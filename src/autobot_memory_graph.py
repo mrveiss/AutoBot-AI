@@ -1009,19 +1009,41 @@ class AutoBotMemoryGraph:
     ) -> List[Dict[str, Any]]:
         """Fallback search when RediSearch is unavailable (Issue #315 - refactored depth 5 to 3)."""
         try:
-            entities = []
             query_lower = query.lower() if query else ""
 
-            # Scan all entity keys
+            # Issue #614: Fix N+1 pattern - collect keys first, then batch fetch
+            # Collect all entity keys first
+            keys = []
             async for key in self.redis_client.scan_iter(match="memory:entity:*"):
-                entity = await self.redis_client.json().get(key)
-                if not entity:
-                    continue
+                keys.append(key)
+                # Limit scanning to avoid memory issues (fetch more than needed)
+                if len(keys) >= limit * 10:
+                    break
 
-                if self._entity_matches_query(entity, query_lower, entity_type):
-                    entities.append(entity)
-                    if len(entities) >= limit:
-                        break
+            if not keys:
+                return []
+
+            # Batch fetch all entities using pipeline
+            # Note: RedisJSON's json().get() requires individual calls, but we can
+            # use mget for the keys if they're simple values, or process in batches
+            batch_size = 50
+            entities = []
+
+            for i in range(0, len(keys), batch_size):
+                batch_keys = keys[i:i + batch_size]
+
+                # Use pipeline for batch fetching
+                pipe = self.redis_client.pipeline()
+                for key in batch_keys:
+                    pipe.json().get(key)
+                batch_results = await pipe.execute()
+
+                # Process batch results
+                for entity in batch_results:
+                    if entity and self._entity_matches_query(entity, query_lower, entity_type):
+                        entities.append(entity)
+                        if len(entities) >= limit:
+                            return entities
 
             return entities
 
