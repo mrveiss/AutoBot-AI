@@ -20,6 +20,7 @@ from typing import Any, Dict, Optional
 import yaml
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.redis_constants import REDIS_CONFIG
 from src.constants.threshold_constants import RetryConfig
 
 logger = logging.getLogger(__name__)
@@ -40,13 +41,13 @@ class RedisConfig:
     port: int = NetworkConstants.REDIS_PORT
     password: Optional[str] = None
     decode_responses: bool = True
-    max_connections: int = 100
-    socket_timeout: float = 5.0
-    socket_connect_timeout: float = 5.0
+    max_connections: int = REDIS_CONFIG.MAX_CONNECTIONS_POOL
+    socket_timeout: float = float(REDIS_CONFIG.SOCKET_TIMEOUT)
+    socket_connect_timeout: float = float(REDIS_CONFIG.SOCKET_TIMEOUT)
     socket_keepalive: bool = True
     socket_keepalive_options: Optional[Dict[int, int]] = None
-    health_check_interval: int = 30
-    retry_on_timeout: bool = True
+    health_check_interval: int = REDIS_CONFIG.HEALTH_CHECK_INTERVAL
+    retry_on_timeout: bool = REDIS_CONFIG.RETRY_ON_TIMEOUT
     max_retries: int = RetryConfig.DEFAULT_RETRIES
     description: str = ""
 
@@ -202,15 +203,17 @@ class PoolConfig:
 
     Controls connection pool behavior including sizing,
     timeouts, retry logic, and circuit breaker settings.
+
+    Issue #611: Values now reference REDIS_CONFIG constants.
     """
 
-    max_connections: int = 100  # Increased from 20 for concurrent operations
-    min_connections: int = 2
-    socket_timeout: float = 5.0
-    socket_connect_timeout: float = 5.0
-    retry_on_timeout: bool = True
+    max_connections: int = REDIS_CONFIG.MAX_CONNECTIONS_POOL
+    min_connections: int = REDIS_CONFIG.MIN_CONNECTIONS_POOL
+    socket_timeout: float = float(REDIS_CONFIG.SOCKET_TIMEOUT)
+    socket_connect_timeout: float = float(REDIS_CONFIG.SOCKET_TIMEOUT)
+    retry_on_timeout: bool = REDIS_CONFIG.RETRY_ON_TIMEOUT
     max_retries: int = RetryConfig.DEFAULT_RETRIES
     backoff_factor: float = RetryConfig.BACKOFF_BASE
-    health_check_interval: float = 30.0
-    circuit_breaker_threshold: int = 5
-    circuit_breaker_timeout: int = 60  # seconds
+    health_check_interval: float = float(REDIS_CONFIG.HEALTH_CHECK_INTERVAL)
+    circuit_breaker_threshold: int = REDIS_CONFIG.CIRCUIT_BREAKER_THRESHOLD
+    circuit_breaker_timeout: int = REDIS_CONFIG.CIRCUIT_BREAKER_TIMEOUT

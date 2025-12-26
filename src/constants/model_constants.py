@@ -220,6 +220,15 @@ class ModelConfig:
     DEFAULT_CACHE_TTL: int = 300  # 5 minutes
     DEFAULT_MAX_CHUNKS: int = 1000  # Streaming response chunks
 
+    # RAG search settings (Issue #611)
+    RAG_DEFAULT_MAX_RESULTS: int = 5
+    RAG_MAX_RESULTS_PER_STAGE: int = 20
+    RAG_HYBRID_WEIGHT_SEMANTIC: float = 0.7
+    RAG_HYBRID_WEIGHT_KEYWORD: float = 0.3
+    RAG_DIVERSITY_THRESHOLD: float = 0.85
+    RAG_DEFAULT_CONTEXT_LENGTH: int = 2000
+    RAG_MAX_CONTEXT_LENGTH: int = 5000
+
 
 # Singleton instances for easy access
 model_constants = ModelConstants()

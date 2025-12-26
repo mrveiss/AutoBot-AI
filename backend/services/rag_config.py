@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from backend.type_defs.common import Metadata
+from src.constants.model_constants import model_config
 from src.utils.logging_manager import get_llm_logger
 
 logger = get_llm_logger("rag_config")
@@ -20,28 +21,32 @@ logger = get_llm_logger("rag_config")
 
 @dataclass
 class RAGConfig:
-    """Configuration for Advanced RAG Optimizer."""
+    """
+    Configuration for Advanced RAG Optimizer.
 
-    # Hybrid search weights
-    hybrid_weight_semantic: float = 0.7
-    hybrid_weight_keyword: float = 0.3
+    Issue #611: Values now reference model_config constants.
+    """
 
-    # Search parameters
-    max_results_per_stage: int = 20
-    diversity_threshold: float = 0.85
-    default_max_results: int = 5
+    # Hybrid search weights (from model_config)
+    hybrid_weight_semantic: float = model_config.RAG_HYBRID_WEIGHT_SEMANTIC
+    hybrid_weight_keyword: float = model_config.RAG_HYBRID_WEIGHT_KEYWORD
 
-    # Context optimization
-    default_context_length: int = 2000
-    max_context_length: int = 5000
+    # Search parameters (from model_config)
+    max_results_per_stage: int = model_config.RAG_MAX_RESULTS_PER_STAGE
+    diversity_threshold: float = model_config.RAG_DIVERSITY_THRESHOLD
+    default_max_results: int = model_config.RAG_DEFAULT_MAX_RESULTS
+
+    # Context optimization (from model_config)
+    default_context_length: int = model_config.RAG_DEFAULT_CONTEXT_LENGTH
+    max_context_length: int = model_config.RAG_MAX_CONTEXT_LENGTH
 
     # Reranking
     enable_reranking: bool = True
     reranking_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
-    # Performance
-    cache_ttl_seconds: int = 300
-    timeout_seconds: float = 30.0
+    # Performance (from model_config)
+    cache_ttl_seconds: int = model_config.DEFAULT_CACHE_TTL
+    timeout_seconds: float = float(model_config.DEFAULT_TIMEOUT)
 
     # Feature flags
     enable_advanced_rag: bool = True

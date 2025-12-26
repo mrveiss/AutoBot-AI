@@ -61,8 +61,14 @@ class RedisConnectionConfig:
     SOCKET_CONNECT_TIMEOUT: int = 3
 
     # Connection pool settings
-    MAX_CONNECTIONS: int = 10
+    MAX_CONNECTIONS: int = 10  # Default for simple connections
+    MAX_CONNECTIONS_POOL: int = 100  # For high-concurrency connection pools
+    MIN_CONNECTIONS_POOL: int = 2  # Minimum connections in pool
     HEALTH_CHECK_INTERVAL: int = 30
+
+    # Circuit breaker settings (Issue #611)
+    CIRCUIT_BREAKER_THRESHOLD: int = 5  # failures before tripping
+    CIRCUIT_BREAKER_TIMEOUT: int = 60  # seconds to wait before retry
 
     # Retry settings
     RETRY_ON_TIMEOUT: bool = True
