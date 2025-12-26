@@ -40,21 +40,36 @@ def _get_environment_analyzer():
 
     Issue #542: Fixed import path resolution by adding project root to sys.path
     before the tools path, allowing env_analyzer.py to import from src.utils.
+
+    Issue #611: Fixed namespace conflict - the 'src' package from project root
+    is cached in sys.modules, preventing import of src.env_analyzer from
+    tools/code-analysis-suite. Use importlib to load directly from file path.
     """
     try:
-        # Issue #542: Add project root FIRST so env_analyzer.py can import from src.utils
+        import importlib.util
+
+        # Issue #542: Add project root so env_analyzer.py can import from src.utils
         project_root = str(Path(__file__).resolve().parents[4])
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
 
-        # Add tools path second for importing the analyzer module itself
-        tools_path = str(Path(__file__).resolve().parents[4] / "tools" / "code-analysis-suite")
-        if tools_path not in sys.path:
-            sys.path.insert(0, tools_path)
+        # Issue #611: Load env_analyzer directly from file to avoid namespace conflict
+        env_analyzer_path = Path(__file__).resolve().parents[4] / "tools" / "code-analysis-suite" / "src" / "env_analyzer.py"
 
-        from src.env_analyzer import EnvironmentAnalyzer
-        return EnvironmentAnalyzer()
-    except ImportError as e:
+        if not env_analyzer_path.exists():
+            logger.warning("EnvironmentAnalyzer not available: %s does not exist", env_analyzer_path)
+            return None
+
+        spec = importlib.util.spec_from_file_location("env_analyzer", env_analyzer_path)
+        if spec is None or spec.loader is None:
+            logger.warning("EnvironmentAnalyzer not available: Could not load spec")
+            return None
+
+        env_analyzer_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(env_analyzer_module)
+
+        return env_analyzer_module.EnvironmentAnalyzer()
+    except Exception as e:
         logger.warning("EnvironmentAnalyzer not available: %s", e)
         return None
 
