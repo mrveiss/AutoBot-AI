@@ -8826,6 +8826,90 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   font-size: 0.85em;
 }
 
+/* Enhanced Bug Prediction Styles */
+.summary-card.clickable { cursor: pointer; transition: transform 0.2s; }
+.summary-card.clickable:hover { transform: translateY(-2px); }
+.top-risk-factors-summary { margin: 20px 0; padding: 16px; background: rgba(17, 24, 39, 0.6); border-radius: 10px; border: 1px solid rgba(239, 68, 68, 0.2); }
+.top-risk-factors-summary h4 { color: #fca5a5; font-size: 1em; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.top-risk-factors-summary h4 i { color: #ef4444; }
+.risk-factors-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.risk-factor-card { display: flex; align-items: flex-start; gap: 12px; padding: 14px; background: rgba(30, 41, 59, 0.5); border-radius: 8px; border-left: 3px solid #6b7280; }
+.risk-factor-card.critical { border-left-color: #ef4444; background: rgba(239, 68, 68, 0.1); }
+.risk-factor-card.high { border-left-color: #f97316; background: rgba(249, 115, 22, 0.1); }
+.risk-factor-card.medium { border-left-color: #eab308; background: rgba(234, 179, 8, 0.1); }
+.risk-factor-card .factor-icon { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: rgba(71, 85, 105, 0.4); border-radius: 8px; }
+.risk-factor-card .factor-icon i { font-size: 1.1em; color: #94a3b8; }
+.risk-factor-card.critical .factor-icon i { color: #fca5a5; }
+.risk-factor-card.high .factor-icon i { color: #fdba74; }
+.risk-factor-card .factor-details { flex: 1; }
+.risk-factor-card .factor-name { color: #f3f4f6; font-weight: 600; font-size: 0.95em; margin-bottom: 4px; }
+.risk-factor-card .factor-count { color: #fbbf24; font-size: 0.85em; font-weight: 500; margin-bottom: 4px; }
+.risk-factor-card .factor-description { color: #9ca3af; font-size: 0.8em; line-height: 1.4; }
+.risk-filter-tabs { display: flex; gap: 8px; margin: 20px 0 16px; flex-wrap: wrap; }
+.risk-filter-tabs button { padding: 8px 16px; border: 1px solid rgba(71, 85, 105, 0.5); background: rgba(30, 41, 59, 0.5); color: #9ca3af; border-radius: 6px; font-size: 0.85em; cursor: pointer; transition: all 0.2s; }
+.risk-filter-tabs button:hover:not(:disabled) { background: rgba(71, 85, 105, 0.5); color: #e5e7eb; }
+.risk-filter-tabs button.active { background: rgba(59, 130, 246, 0.2); border-color: rgba(59, 130, 246, 0.5); color: #93c5fd; }
+.risk-filter-tabs button:disabled { opacity: 0.5; cursor: not-allowed; }
+.risk-files-list.detailed h4 { display: flex; align-items: center; gap: 8px; color: #e5e7eb; margin-bottom: 12px; }
+.risk-files-list.detailed h4 .file-count { color: #6b7280; font-weight: normal; font-size: 0.9em; }
+.risk-files-list .no-files-message { padding: 20px; text-align: center; color: #86efac; background: rgba(34, 197, 94, 0.1); border-radius: 8px; }
+.risk-file-item { background: rgba(17, 24, 39, 0.5); border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #6b7280; overflow: hidden; transition: all 0.2s; }
+.risk-file-item.item-critical { border-left-color: #ef4444; }
+.risk-file-item.item-warning { border-left-color: #f59e0b; }
+.risk-file-item.item-info { border-left-color: #3b82f6; }
+.risk-file-item.item-success { border-left-color: #22c55e; }
+.risk-file-item.expanded { background: rgba(17, 24, 39, 0.8); }
+.risk-file-item .file-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; cursor: pointer; transition: background 0.2s; }
+.risk-file-item .file-header:hover { background: rgba(71, 85, 105, 0.2); }
+.risk-file-item .file-info { display: flex; align-items: center; gap: 10px; flex: 1; flex-wrap: wrap; }
+.risk-file-item .risk-score-badge { padding: 4px 10px; border-radius: 4px; font-weight: 700; font-size: 0.85em; min-width: 40px; text-align: center; }
+.risk-file-item .risk-score-badge.item-critical { background: rgba(239, 68, 68, 0.3); color: #fca5a5; }
+.risk-file-item .risk-score-badge.item-warning { background: rgba(245, 158, 11, 0.3); color: #fcd34d; }
+.risk-file-item .risk-score-badge.item-info { background: rgba(59, 130, 246, 0.3); color: #93c5fd; }
+.risk-file-item .risk-score-badge.item-success { background: rgba(34, 197, 94, 0.3); color: #86efac; }
+.risk-file-item .file-path { color: #d1d5db; font-family: monospace; font-size: 0.85em; flex: 1; word-break: break-all; }
+.risk-file-item .risk-level-tag { padding: 2px 8px; border-radius: 4px; font-size: 0.7em; text-transform: uppercase; font-weight: 600; }
+.risk-file-item .risk-level-tag.high, .risk-file-item .risk-level-tag.critical { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+.risk-file-item .risk-level-tag.medium { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
+.risk-file-item .risk-level-tag.low, .risk-file-item .risk-level-tag.minimal { background: rgba(34, 197, 94, 0.2); color: #86efac; }
+.risk-file-item .expand-icon { color: #6b7280; padding: 4px 8px; }
+.quick-risk-indicators { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 12px; }
+.quick-risk-indicators .indicator { display: flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 4px; font-size: 0.75em; font-weight: 500; }
+.quick-risk-indicators .indicator.critical { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+.quick-risk-indicators .indicator.high { background: rgba(249, 115, 22, 0.2); color: #fdba74; }
+.quick-risk-indicators .indicator.warning { background: rgba(234, 179, 8, 0.2); color: #fde047; }
+.quick-risk-indicators .indicator.info { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+.quick-risk-indicators .indicator.muted { background: rgba(100, 116, 139, 0.2); color: #94a3b8; }
+.file-details { padding: 16px; background: rgba(15, 23, 42, 0.5); border-top: 1px solid rgba(71, 85, 105, 0.3); }
+.file-details .detail-section { margin-bottom: 16px; }
+.file-details .detail-section:last-child { margin-bottom: 0; }
+.file-details h5 { color: #d1d5db; font-size: 0.9em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+.file-details h5 i { color: #6b7280; }
+.factors-breakdown { display: flex; flex-direction: column; gap: 8px; }
+.factor-row { display: flex; align-items: center; gap: 12px; }
+.factor-row .factor-label { width: 140px; color: #9ca3af; font-size: 0.85em; display: flex; align-items: center; gap: 6px; }
+.factor-row .factor-label i { width: 16px; text-align: center; color: #6b7280; }
+.factor-row.high-value .factor-label { color: #fca5a5; }
+.factor-row.high-value .factor-label i { color: #ef4444; }
+.factor-row.medium-value .factor-label { color: #fcd34d; }
+.factor-row .factor-bar-container { flex: 1; height: 8px; background: rgba(71, 85, 105, 0.3); border-radius: 4px; overflow: hidden; }
+.factor-row .factor-bar { height: 100%; border-radius: 4px; transition: width 0.3s; }
+.factor-row .factor-bar.bar-critical { background: linear-gradient(90deg, #ef4444, #f87171); }
+.factor-row .factor-bar.bar-warning { background: linear-gradient(90deg, #eab308, #fcd34d); }
+.factor-row .factor-bar.bar-ok { background: linear-gradient(90deg, #22c55e, #4ade80); }
+.factor-row .factor-value { width: 40px; text-align: right; font-weight: 600; font-size: 0.85em; color: #d1d5db; }
+.factor-row.high-value .factor-value { color: #fca5a5; }
+.factor-row.medium-value .factor-value { color: #fcd34d; }
+.tips-list, .tests-list { list-style: none; padding: 0; margin: 0; }
+.tips-list li, .tests-list li { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: rgba(30, 41, 59, 0.5); border-radius: 6px; margin-bottom: 6px; font-size: 0.85em; line-height: 1.4; }
+.tips-list li i { color: #fbbf24; margin-top: 2px; }
+.tips-list li { color: #d1d5db; border-left: 3px solid #fbbf24; }
+.tests-list li i { color: #a78bfa; margin-top: 2px; }
+.tests-list li { color: #c4b5fd; border-left: 3px solid #a78bfa; }
+.show-more-container { text-align: center; margin-top: 16px; }
+.show-more-btn { padding: 10px 24px; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: #93c5fd; border-radius: 6px; cursor: pointer; font-size: 0.9em; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; }
+.show-more-btn:hover { background: rgba(59, 130, 246, 0.3); }
+
 /* Issue #538: Code Intelligence Scores Section */
 .code-intelligence-scores-section {
   margin-top: 32px;
