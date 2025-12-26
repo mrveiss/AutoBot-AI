@@ -5272,10 +5272,34 @@ const formatSimilarityGroup = (similarity: string): string => {
 }
 
 // Filter code smells from indexed problems
+// Issue #609: Code smell types that should appear in the Code Smells section
+const CODE_SMELL_TYPES = new Set([
+  // Anti-patterns and code smells
+  'long_function',
+  'debug_code',
+  'race_condition',
+  // Technical debt
+  'technical_debt_bug',
+  'technical_debt_todo',
+  'technical_debt_fixme',
+  'technical_debt_deprecated',
+  // Performance issues (code smells)
+  'performance_nested_loop_complexity',
+  'performance_quadratic_complexity',
+  'performance_n_plus_one_query',
+  'performance_blocking_io_in_async',
+  'performance_excessive_string_concat',
+  'performance_list_for_lookup',
+  'performance_repeated_computation',
+  'performance_repeated_file_open',
+  'performance_sequential_awaits',
+  'performance_unbatched_api_calls',
+])
+
 const codeSmellsFromProblems = computed(() => {
   if (!problemsReport.value || problemsReport.value.length === 0) return []
   return problemsReport.value.filter(p =>
-    p.type?.startsWith('code_smell_') || p.type?.includes('anti_pattern')
+    p.type && CODE_SMELL_TYPES.has(p.type)
   )
 })
 
