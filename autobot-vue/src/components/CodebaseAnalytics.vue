@@ -3315,7 +3315,8 @@ const loadBugPrediction = async () => {
   bugPredictionError.value = ''
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/analytics/bug-prediction/analyze?limit=50`, {
+    // Issue #608: Remove artificial limit to analyze all Python files
+    const response = await fetch(`${backendUrl}/api/analytics/bug-prediction/analyze?limit=1000`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',

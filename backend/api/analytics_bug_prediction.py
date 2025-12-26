@@ -458,7 +458,7 @@ async def _analyze_single_file(
 async def analyze_codebase(
     path: str = Query(".", description="Path to analyze"),
     include_pattern: str = Query("*.py", description="File pattern to include"),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(1000, ge=1, le=5000, description="Maximum files to analyze"),
 ) -> dict[str, Any]:
     """
     Analyze codebase for bug risk (Issue #543: no demo data).
@@ -698,7 +698,7 @@ async def get_prediction_trends(
 async def get_prediction_summary(
     path: str = Query(".", description="Path to analyze"),
     include_pattern: str = Query("*.py", description="File pattern to include"),
-    limit: int = Query(100, ge=1, le=300),
+    limit: int = Query(1000, ge=1, le=5000, description="Maximum files to analyze"),
 ) -> dict[str, Any]:
     """
     Get summary of bug predictions and risk assessment (Issue #543: no demo data).
