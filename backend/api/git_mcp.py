@@ -36,9 +36,13 @@ from backend.type_defs.common import JSONObject, Metadata
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
+from src.config.ssot_config import PROJECT_ROOT
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
+
+# Default repository path from SSOT (Issue #610 - config consolidation)
+DEFAULT_REPO_PATH = str(PROJECT_ROOT)
 router = APIRouter(tags=["git_mcp", "mcp"])
 
 # Issue #380: Pre-compiled regex patterns for validators
@@ -52,7 +56,7 @@ _FULL_REF_RE = re.compile(r"^[a-zA-Z0-9_\-./^~:]+$")  # Git refs with colon
 
 # Repository whitelist - only these paths can be accessed
 ALLOWED_REPOSITORIES = [
-    "/home/kali/Desktop/AutoBot",  # Main AutoBot repository
+    DEFAULT_REPO_PATH,  # Main AutoBot repository (from SSOT)
 ]
 
 # Git commands that are SAFE (read-only operations)
@@ -347,7 +351,7 @@ class GitStatusRequest(BaseModel):
     """Git status request model"""
 
     repo_path: str = Field(
-        default="/home/kali/Desktop/AutoBot",
+        default=DEFAULT_REPO_PATH,
         description="Repository path (must be whitelisted)",
     )
     short: Optional[bool] = Field(default=False, description="Use short format output")
@@ -357,7 +361,7 @@ class GitLogRequest(BaseModel):
     """Git log request model"""
 
     repo_path: str = Field(
-        default="/home/kali/Desktop/AutoBot",
+        default=DEFAULT_REPO_PATH,
         description="Repository path",
     )
     max_count: Optional[int] = Field(
@@ -399,7 +403,7 @@ class GitDiffRequest(BaseModel):
     """Git diff request model"""
 
     repo_path: str = Field(
-        default="/home/kali/Desktop/AutoBot",
+        default=DEFAULT_REPO_PATH,
         description="Repository path",
     )
     staged: Optional[bool] = Field(
@@ -446,7 +450,7 @@ class GitBranchRequest(BaseModel):
     """Git branch request model"""
 
     repo_path: str = Field(
-        default="/home/kali/Desktop/AutoBot",
+        default=DEFAULT_REPO_PATH,
         description="Repository path",
     )
     all_branches: Optional[bool] = Field(
@@ -458,7 +462,7 @@ class GitBlameRequest(BaseModel):
     """Git blame request model"""
 
     repo_path: str = Field(
-        default="/home/kali/Desktop/AutoBot",
+        default=DEFAULT_REPO_PATH,
         description="Repository path",
     )
     file_path: str = Field(..., description="File to blame")
@@ -496,7 +500,7 @@ class GitShowRequest(BaseModel):
     """Git show request model"""
 
     repo_path: str = Field(
-        default="/home/kali/Desktop/AutoBot",
+        default=DEFAULT_REPO_PATH,
         description="Repository path",
     )
     ref: str = Field(
@@ -538,9 +542,9 @@ def _get_git_status_tools() -> List[MCPTool]:
                     "repo_path": {
                         "type": "string",
                         "description": (
-                            "Repository path (default: /home/kali/Desktop/AutoBot)"
+                            f"Repository path (default: {DEFAULT_REPO_PATH})"
                         ),
-                        "default": "/home/kali/Desktop/AutoBot",
+                        "default": DEFAULT_REPO_PATH,
                     },
                     "short": {
                         "type": "boolean",
@@ -560,7 +564,7 @@ def _get_git_status_tools() -> List[MCPTool]:
                     "repo_path": {
                         "type": "string",
                         "description": "Repository path",
-                        "default": "/home/kali/Desktop/AutoBot",
+                        "default": DEFAULT_REPO_PATH,
                     },
                     "all_branches": {
                         "type": "boolean",
@@ -597,7 +601,7 @@ def _get_git_history_tools() -> List[MCPTool]:
                     "repo_path": {
                         "type": "string",
                         "description": "Repository path",
-                        "default": "/home/kali/Desktop/AutoBot",
+                        "default": DEFAULT_REPO_PATH,
                     },
                     "max_count": {
                         "type": "integer",
@@ -628,7 +632,7 @@ def _get_git_history_tools() -> List[MCPTool]:
                     "repo_path": {
                         "type": "string",
                         "description": "Repository path",
-                        "default": "/home/kali/Desktop/AutoBot",
+                        "default": DEFAULT_REPO_PATH,
                     },
                     "ref": {
                         "type": "string",
@@ -665,7 +669,7 @@ def _get_git_change_tools() -> List[MCPTool]:
                     "repo_path": {
                         "type": "string",
                         "description": "Repository path",
-                        "default": "/home/kali/Desktop/AutoBot",
+                        "default": DEFAULT_REPO_PATH,
                     },
                     "staged": {
                         "type": "boolean",
@@ -698,7 +702,7 @@ def _get_git_change_tools() -> List[MCPTool]:
                     "repo_path": {
                         "type": "string",
                         "description": "Repository path",
-                        "default": "/home/kali/Desktop/AutoBot",
+                        "default": DEFAULT_REPO_PATH,
                     },
                     "file_path": {
                         "type": "string",

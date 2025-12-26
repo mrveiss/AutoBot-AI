@@ -19,6 +19,17 @@ from typing import Optional
 from src.unified_config_manager import UnifiedConfigManager
 
 
+def _get_default_postgres_host() -> str:
+    """Get default PostgreSQL host from SSOT config or fallback."""
+    try:
+        from src.config.ssot_config import get_config
+        config = get_config()
+        # PostgreSQL typically runs on Redis VM in AutoBot architecture
+        return config.vm.redis if config else "172.16.168.23"
+    except Exception:
+        return "172.16.168.23"
+
+
 class DeploymentMode(str, Enum):
     """Deployment mode enumeration."""
 
@@ -51,7 +62,7 @@ class DeploymentConfig:
     mode: DeploymentMode
     features: FeatureFlags
     postgres_enabled: bool = False
-    postgres_host: str = "172.16.168.23"
+    postgres_host: str = field(default_factory=_get_default_postgres_host)
     postgres_port: int = 5432
     postgres_db: str = "autobot"
     postgres_user: str = "autobot"
@@ -161,8 +172,8 @@ def get_deployment_config() -> DeploymentConfig:
     # Check if PostgreSQL is enabled (required for non-single_user modes)
     postgres_enabled = mode != DeploymentMode.SINGLE_USER
 
-    # Load PostgreSQL configuration from environment
-    postgres_host = os.getenv("AUTOBOT_POSTGRES_HOST", "172.16.168.23")
+    # Load PostgreSQL configuration from environment (uses SSOT fallback)
+    postgres_host = os.getenv("AUTOBOT_POSTGRES_HOST", _get_default_postgres_host())
     postgres_port = int(os.getenv("AUTOBOT_POSTGRES_PORT", "5432"))
     postgres_db = os.getenv("AUTOBOT_POSTGRES_DB", "autobot")
     postgres_user = os.getenv("AUTOBOT_POSTGRES_USER", "autobot")
