@@ -4932,13 +4932,24 @@ const generateSectionMarkdown = (section: SectionType, data: unknown): string =>
       break
     }
     case 'problems': {
-      const probs = data as Array<{ file: string; severity: string; message: string; line?: number }>
+      // Fix #612: Use correct property names from Problem interface
+      const probs = data as Array<{
+        file_path: string
+        severity: string
+        message?: string
+        description?: string
+        line?: number
+        line_number?: number
+        problem_type?: string
+      }>
       md += `## Total Problems: ${probs.length}\n\n`
       if (probs.length > 0) {
         md += `| File | Severity | Line | Message |\n`
         md += `|------|----------|------|----------|\n`
         probs.forEach(p => {
-          md += `| ${p.file} | ${p.severity} | ${p.line || '-'} | ${p.message} |\n`
+          const lineNum = p.line || p.line_number || '-'
+          const msg = p.message || p.description || ''
+          md += `| ${p.file_path || 'unknown'} | ${p.severity || 'unknown'} | ${lineNum} | ${msg} |\n`
         })
       }
       break
