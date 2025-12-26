@@ -123,6 +123,7 @@ export function useSystemStatus() {
           'backend': 'Backend API',
           'redis': 'Redis',
           'ollama': 'Ollama',
+          'frontend': 'Frontend',
           'npu_worker': 'NPU Worker',
           'browser': 'Browser Service'
         }

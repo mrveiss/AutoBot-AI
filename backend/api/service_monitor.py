@@ -974,6 +974,23 @@ async def _check_ollama_quick() -> tuple:
         return "offline", "❌"
 
 
+async def _check_frontend_quick() -> tuple:
+    """Quick Frontend VM check. Returns (status, health)."""
+    import aiohttp
+
+    try:
+        http_client = get_http_client()
+        timeout = aiohttp.ClientTimeout(total=2)
+        async with await http_client.get(
+            ServiceURLs.FRONTEND_VM, timeout=timeout
+        ) as response:
+            if response.status == 200:
+                return "online", "✅"
+            return "error", "⚠️"
+    except Exception:
+        return "offline", "❌"
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_all_services",
@@ -1001,6 +1018,12 @@ async def get_all_services():
 
         ollama_status, ollama_health = await _check_ollama_quick()
         services["ollama"]["status"], services["ollama"]["health"] = ollama_status, ollama_health
+
+        frontend_status, frontend_health = await _check_frontend_quick()
+        services["frontend"]["status"], services["frontend"]["health"] = (
+            frontend_status,
+            frontend_health,
+        )
 
         return {
             "timestamp": datetime.utcnow().isoformat(),
