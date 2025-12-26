@@ -9,9 +9,11 @@ modules and provides a unified analysis interface.
 
 Part of Issue #381 - God Class Refactoring
 Issue #554 - Added Vector/Redis/LLM infrastructure for semantic analysis
+Issue #607 - Uses shared FileListCache and ASTCache for performance
 """
 
 import ast
+import asyncio
 import logging
 import time
 from pathlib import Path
@@ -41,6 +43,17 @@ try:
 except ImportError:
     HAS_ANALYTICS_INFRASTRUCTURE = False
     SemanticAnalysisMixin = object  # Fallback to object if not available
+
+# Issue #607: Import shared caches for performance optimization
+try:
+    from src.code_intelligence.shared.ast_cache import get_ast_safe, get_ast_with_content
+    from src.code_intelligence.shared.file_cache import (
+        get_python_files as get_cached_python_files,
+        PYTHON_EXTENSIONS,
+    )
+    HAS_SHARED_CACHE = True
+except ImportError:
+    HAS_SHARED_CACHE = False
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +94,7 @@ class AntiPatternDetector(SemanticAnalysisMixin):
         detect_naming: bool = True,
         use_semantic_analysis: bool = False,
         use_cache: bool = True,
+        use_shared_cache: bool = True,
     ):
         """
         Initialize anti-pattern detector.
@@ -91,11 +105,13 @@ class AntiPatternDetector(SemanticAnalysisMixin):
             detect_naming: Whether to detect naming issues
             use_semantic_analysis: Whether to use LLM-based semantic analysis (Issue #554)
             use_cache: Whether to use Redis caching for results (Issue #554)
+            use_shared_cache: Whether to use shared FileListCache/ASTCache (Issue #607)
         """
         self.exclude_dirs = exclude_dirs or DEFAULT_IGNORE_PATTERNS
         self.detect_circular = detect_circular
         self.detect_naming = detect_naming
         self.use_semantic_analysis = use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
+        self.use_shared_cache = use_shared_cache and HAS_SHARED_CACHE
 
         # Initialize specialized detectors
         self._bloater = BloaterDetector()
@@ -186,22 +202,39 @@ class AntiPatternDetector(SemanticAnalysisMixin):
 
         Returns:
             Dictionary with analysis results
+
+        Issue #607: Uses shared ASTCache when available for performance.
         """
         patterns: List[AntiPatternResult] = []
         classes = 0
         functions = 0
 
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                source = f.read()
-                lines = source.split("\n")
+            # Issue #607: Use shared AST cache if available
+            if self.use_shared_cache:
+                tree, source = get_ast_with_content(file_path)
+                lines = source.split("\n") if source else []
+                if tree is None:
+                    # Parse failed, but we may still have content for line count
+                    return {
+                        "file_path": file_path,
+                        "lines": len(lines),
+                        "classes": 0,
+                        "functions": 0,
+                        "anti_patterns": [],
+                        "summary": {},
+                        "error": "Failed to parse AST",
+                    }
+            else:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    source = f.read()
+                    lines = source.split("\n")
+                tree = ast.parse(source, filename=file_path)
 
             # Check for large file
             result = self._bloater.check_large_file(file_path, len(lines))
             if result:
                 patterns.append(result)
-
-            tree = ast.parse(source, filename=file_path)
 
             # Count and analyze classes/functions
             for node in ast.walk(tree):
@@ -345,7 +378,12 @@ class AntiPatternDetector(SemanticAnalysisMixin):
         return patterns
 
     def _get_python_files(self, directory: str) -> List[str]:
-        """Get all Python files in directory, excluding specified patterns."""
+        """
+        Get all Python files in directory, excluding specified patterns.
+
+        Issue #607: Uses shared FileListCache when available for performance.
+        Falls back to direct rglob if cache is not available or for custom directories.
+        """
         python_files = []
         dir_path = Path(directory)
 
@@ -360,6 +398,33 @@ class AntiPatternDetector(SemanticAnalysisMixin):
                 python_files.append(str(py_file))
 
         return sorted(python_files)
+
+    async def _get_python_files_async(self, directory: str) -> List[str]:
+        """
+        Get all Python files in directory using async cache.
+
+        Issue #607: Uses shared FileListCache for performance optimization.
+        Filters results by exclude_dirs after cache lookup.
+        """
+        dir_path = Path(directory)
+
+        # Use shared cache if available
+        if self.use_shared_cache:
+            all_files = await get_cached_python_files(dir_path)
+            # Filter by exclude_dirs
+            python_files = []
+            for py_file in all_files:
+                should_exclude = False
+                for exclude_dir in self.exclude_dirs:
+                    if exclude_dir in py_file.parts:
+                        should_exclude = True
+                        break
+                if not should_exclude:
+                    python_files.append(str(py_file))
+            return sorted(python_files)
+
+        # Fallback to sync method in thread pool
+        return await asyncio.to_thread(self._get_python_files, directory)
 
     def _calculate_summary(
         self,
@@ -383,7 +448,73 @@ class AntiPatternDetector(SemanticAnalysisMixin):
             dist[key] = dist.get(key, 0) + 1
         return dist
 
+    async def _analyze_directory_with_cache(self, directory: str) -> AnalysisReport:
+        """
+        Analyze directory using shared caches for performance.
+
+        Issue #607: Uses FileListCache and ASTCache to eliminate redundant
+        file traversals and AST parsing.
+
+        Args:
+            directory: Path to directory to analyze
+
+        Returns:
+            AnalysisReport with all detected anti-patterns
+        """
+        patterns: List[AntiPatternResult] = []
+        self._total_classes = 0
+        self._total_functions = 0
+
+        # Use async file list cache
+        python_files = await self._get_python_files_async(directory)
+
+        # Reset coupler detector's import graph
+        self._coupler.reset_import_graph()
+
+        for file_path in python_files:
+            try:
+                # Use shared AST cache
+                tree, source = get_ast_with_content(file_path)
+                if tree is None:
+                    logger.debug("Skipping %s: failed to parse AST", file_path)
+                    continue
+
+                lines = source.split("\n") if source else []
+
+                # Check for large file
+                result = self._bloater.check_large_file(file_path, len(lines))
+                if result:
+                    patterns.append(result)
+
+                # Collect imports for circular dependency detection
+                if self.detect_circular:
+                    self._coupler.collect_imports(file_path)
+
+                # Analyze all nodes
+                patterns.extend(self._analyze_ast_nodes(tree, file_path, lines))
+
+                # File-level detections
+                patterns.extend(self._run_file_level_detections(tree, file_path))
+
+            except Exception as e:
+                logger.debug("Error analyzing %s: %s", file_path, e)
+
+        # Detect circular dependencies across all files
+        if self.detect_circular:
+            patterns.extend(self._coupler.detect_circular_dependencies())
+
+        return AnalysisReport(
+            scan_path=directory,
+            total_files=len(python_files),
+            total_classes=self._total_classes,
+            total_functions=self._total_functions,
+            anti_patterns=patterns,
+            summary=self._calculate_summary(patterns),
+            severity_distribution=self._calculate_severity_distribution(patterns),
+        )
+
     # Issue #554: Async semantic analysis methods
+    # Issue #607: Enhanced with shared cache support
 
     async def analyze_directory_async(
         self,
@@ -394,6 +525,7 @@ class AntiPatternDetector(SemanticAnalysisMixin):
         Analyze a directory with optional semantic analysis.
 
         Issue #554: Async version that supports ChromaDB/Redis/LLM infrastructure.
+        Issue #607: Uses shared FileListCache and ASTCache for performance.
 
         Args:
             directory: Path to directory to analyze
@@ -404,8 +536,12 @@ class AntiPatternDetector(SemanticAnalysisMixin):
         """
         start_time = time.time()
 
-        # Run standard analysis first
-        report = self.analyze_directory(directory)
+        # Issue #607: Use optimized async analysis when shared cache is available
+        if self.use_shared_cache:
+            report = await self._analyze_directory_with_cache(directory)
+        else:
+            # Run standard analysis in thread pool
+            report = await asyncio.to_thread(self.analyze_directory, directory)
 
         result = {
             "report": report.to_dict() if hasattr(report, "to_dict") else {
