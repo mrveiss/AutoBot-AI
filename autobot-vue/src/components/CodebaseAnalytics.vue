@@ -314,11 +314,11 @@
         <h3>
           <i class="fas fa-chart-pie"></i> Codebase Statistics
           <!-- Issue #609: Section Export Buttons -->
-          <div class="section-export-buttons" v-if="codebaseStats">
-            <button @click="exportSection('statistics', 'md')" class="export-btn" title="Export as Markdown">
+          <div class="section-export-buttons">
+            <button @click="exportSection('statistics', 'md')" class="export-btn" :disabled="!codebaseStats" title="Export as Markdown">
               <i class="fas fa-file-alt"></i> MD
             </button>
-            <button @click="exportSection('statistics', 'json')" class="export-btn" title="Export as JSON">
+            <button @click="exportSection('statistics', 'json')" class="export-btn" :disabled="!codebaseStats" title="Export as JSON">
               <i class="fas fa-file-code"></i> JSON
             </button>
           </div>
@@ -707,11 +707,11 @@
             ({{ problemsReport.length.toLocaleString() }} total)
           </span>
           <!-- Issue #609: Section Export Buttons -->
-          <div class="section-export-buttons" v-if="problemsReport && problemsReport.length > 0">
-            <button @click="exportSection('problems', 'md')" class="export-btn" title="Export as Markdown">
+          <div class="section-export-buttons">
+            <button @click="exportSection('problems', 'md')" class="export-btn" :disabled="!problemsReport || problemsReport.length === 0" title="Export as Markdown">
               <i class="fas fa-file-alt"></i> MD
             </button>
-            <button @click="exportSection('problems', 'json')" class="export-btn" title="Export as JSON">
+            <button @click="exportSection('problems', 'json')" class="export-btn" :disabled="!problemsReport || problemsReport.length === 0" title="Export as JSON">
               <i class="fas fa-file-code"></i> JSON
             </button>
           </div>
@@ -809,11 +809,11 @@
             ({{ codeSmellsFromProblems.length.toLocaleString() }} found)
           </span>
           <!-- Issue #609: Section Export Buttons -->
-          <div class="section-export-buttons" v-if="codeSmellsFromProblems.length > 0">
-            <button @click="exportSection('code-smells', 'md')" class="export-btn" title="Export as Markdown">
+          <div class="section-export-buttons">
+            <button @click="exportSection('code-smells', 'md')" class="export-btn" title="Export as Markdown" :disabled="codeSmellsFromProblems.length === 0">
               <i class="fas fa-file-alt"></i> MD
             </button>
-            <button @click="exportSection('code-smells', 'json')" class="export-btn" title="Export as JSON">
+            <button @click="exportSection('code-smells', 'json')" class="export-btn" title="Export as JSON" :disabled="codeSmellsFromProblems.length === 0">
               <i class="fas fa-file-code"></i> JSON
             </button>
           </div>
@@ -919,11 +919,11 @@
             ({{ duplicateAnalysis.length.toLocaleString() }} pairs)
           </span>
           <!-- Issue #609: Section Export Buttons -->
-          <div class="section-export-buttons" v-if="duplicateAnalysis && duplicateAnalysis.length > 0">
-            <button @click="exportSection('duplicates', 'md')" class="export-btn" title="Export as Markdown">
+          <div class="section-export-buttons">
+            <button @click="exportSection('duplicates', 'md')" class="export-btn" title="Export as Markdown" :disabled="!duplicateAnalysis || duplicateAnalysis.length === 0">
               <i class="fas fa-file-alt"></i> MD
             </button>
-            <button @click="exportSection('duplicates', 'json')" class="export-btn" title="Export as JSON">
+            <button @click="exportSection('duplicates', 'json')" class="export-btn" title="Export as JSON" :disabled="!duplicateAnalysis || duplicateAnalysis.length === 0">
               <i class="fas fa-file-code"></i> JSON
             </button>
           </div>
@@ -1017,11 +1017,11 @@
             ({{ declarationAnalysis.length.toLocaleString() }} total)
           </span>
           <!-- Issue #609: Section Export Buttons -->
-          <div class="section-export-buttons" v-if="declarationAnalysis && declarationAnalysis.length > 0">
-            <button @click="exportSection('declarations', 'md')" class="export-btn" title="Export as Markdown">
+          <div class="section-export-buttons">
+            <button @click="exportSection('declarations', 'md')" class="export-btn" title="Export as Markdown" :disabled="!declarationAnalysis || declarationAnalysis.length === 0">
               <i class="fas fa-file-alt"></i> MD
             </button>
-            <button @click="exportSection('declarations', 'json')" class="export-btn" title="Export as JSON">
+            <button @click="exportSection('declarations', 'json')" class="export-btn" title="Export as JSON" :disabled="!declarationAnalysis || declarationAnalysis.length === 0">
               <i class="fas fa-file-code"></i> JSON
             </button>
           </div>
@@ -1106,11 +1106,11 @@
             <i :class="loadingApiEndpoints ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
           </button>
           <!-- Issue #609: Section Export Buttons -->
-          <div class="section-export-buttons" v-if="apiEndpointAnalysis">
-            <button @click="exportSection('api-endpoints', 'md')" class="export-btn" title="Export as Markdown">
+          <div class="section-export-buttons">
+            <button @click="exportSection('api-endpoints', 'md')" class="export-btn" title="Export as Markdown" :disabled="!apiEndpointAnalysis">
               <i class="fas fa-file-alt"></i> MD
             </button>
-            <button @click="exportSection('api-endpoints', 'json')" class="export-btn" title="Export as JSON">
+            <button @click="exportSection('api-endpoints', 'json')" class="export-btn" title="Export as JSON" :disabled="!apiEndpointAnalysis">
               <i class="fas fa-file-code"></i> JSON
             </button>
           </div>
@@ -1288,11 +1288,11 @@
             {{ loadingCrossLanguage ? 'Scanning...' : 'Full Scan' }}
           </button>
           <!-- Issue #609: Section Export Buttons -->
-          <div class="section-export-buttons" v-if="crossLanguageAnalysis">
-            <button @click="exportSection('cross-language', 'md')" class="export-btn" title="Export as Markdown">
+          <div class="section-export-buttons">
+            <button @click="exportSection('cross-language', 'md')" class="export-btn" :disabled="!crossLanguageAnalysis" title="Export as Markdown">
               <i class="fas fa-file-alt"></i> MD
             </button>
-            <button @click="exportSection('cross-language', 'json')" class="export-btn" title="Export as JSON">
+            <button @click="exportSection('cross-language', 'json')" class="export-btn" :disabled="!crossLanguageAnalysis" title="Export as JSON">
               <i class="fas fa-file-code"></i> JSON
             </button>
           </div>
@@ -1521,11 +1521,11 @@
             <i :class="loadingConfigDuplicates ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
           </button>
           <!-- Issue #609: Section Export Buttons -->
-          <div class="section-export-buttons" v-if="configDuplicatesAnalysis">
-            <button @click="exportSection('config-duplicates', 'md')" class="export-btn" title="Export as Markdown">
+          <div class="section-export-buttons">
+            <button @click="exportSection('config-duplicates', 'md')" class="export-btn" title="Export as Markdown" :disabled="!configDuplicatesAnalysis">
               <i class="fas fa-file-alt"></i> MD
             </button>
-            <button @click="exportSection('config-duplicates', 'json')" class="export-btn" title="Export as JSON">
+            <button @click="exportSection('config-duplicates', 'json')" class="export-btn" title="Export as JSON" :disabled="!configDuplicatesAnalysis">
               <i class="fas fa-file-code"></i> JSON
             </button>
           </div>
@@ -4696,11 +4696,120 @@ const generateSectionMarkdown = (section: SectionType, data: unknown): string =>
     case 'statistics': {
       const stats = data as Record<string, unknown>
       md += `## Codebase Statistics\n\n`
-      md += '```json\n' + JSON.stringify(stats, null, 2) + '\n```\n'
+      const statsObj = stats as { stats?: Record<string, unknown> }
+      const s = statsObj.stats || stats
+      md += `| Metric | Value |\n`
+      md += `|--------|-------|\n`
+      md += `| Total Files | ${(s as Record<string, number>).total_files?.toLocaleString() || 0} |\n`
+      md += `| Python Files | ${(s as Record<string, number>).python_files?.toLocaleString() || 0} |\n`
+      md += `| TypeScript Files | ${(s as Record<string, number>).typescript_files?.toLocaleString() || 0} |\n`
+      md += `| Vue Files | ${(s as Record<string, number>).vue_files?.toLocaleString() || 0} |\n`
+      md += `| Total Lines | ${(s as Record<string, number>).total_lines?.toLocaleString() || 0} |\n`
+      md += `| Total Functions | ${(s as Record<string, number>).total_functions?.toLocaleString() || 0} |\n`
+      md += `| Total Classes | ${(s as Record<string, number>).total_classes?.toLocaleString() || 0} |\n`
+      break
+    }
+    case 'duplicates': {
+      const dups = data as Array<{ file1: string; file2: string; similarity: number; lines: number }>
+      md += `## Duplicate Code Analysis\n\n`
+      md += `**Total Duplicate Pairs Found:** ${dups.length}\n\n`
+      if (dups.length > 0) {
+        md += `| File 1 | File 2 | Similarity | Lines |\n`
+        md += `|--------|--------|------------|-------|\n`
+        dups.forEach(d => {
+          md += `| ${d.file1} | ${d.file2} | ${(d.similarity * 100).toFixed(1)}% | ${d.lines} |\n`
+        })
+      }
+      break
+    }
+    case 'declarations': {
+      const decls = data as Array<{ file: string; name: string; type: string; line: number }>
+      md += `## Code Declarations\n\n`
+      md += `**Total Declarations:** ${decls.length}\n\n`
+      if (decls.length > 0) {
+        md += `| File | Name | Type | Line |\n`
+        md += `|------|------|------|------|\n`
+        decls.forEach(d => {
+          md += `| ${d.file} | ${d.name} | ${d.type} | ${d.line} |\n`
+        })
+      }
+      break
+    }
+    case 'api-endpoints': {
+      const api = data as { total_endpoints?: number; endpoints?: Array<{ path: string; method: string; file: string }> }
+      md += `## API Endpoint Analysis\n\n`
+      md += `**Total Endpoints:** ${api.total_endpoints || api.endpoints?.length || 0}\n\n`
+      if (api.endpoints && api.endpoints.length > 0) {
+        md += `| Method | Path | File |\n`
+        md += `|--------|------|------|\n`
+        api.endpoints.forEach(e => {
+          md += `| ${e.method} | ${e.path} | ${e.file} |\n`
+        })
+      }
+      break
+    }
+    case 'cross-language': {
+      const cl = data as { dto_mismatches?: unknown[]; api_mismatches?: unknown[]; validation_duplications?: unknown[] }
+      md += `## Cross-Language Pattern Analysis\n\n`
+      md += `| Category | Count |\n`
+      md += `|----------|-------|\n`
+      md += `| DTO Mismatches | ${cl.dto_mismatches?.length || 0} |\n`
+      md += `| API Mismatches | ${cl.api_mismatches?.length || 0} |\n`
+      md += `| Validation Duplications | ${cl.validation_duplications?.length || 0} |\n\n`
+      md += `### Details\n\n`
+      md += '```json\n' + JSON.stringify(data, null, 2) + '\n```\n'
+      break
+    }
+    case 'config-duplicates': {
+      const cfg = data as { duplicates?: Array<{ key: string; files: string[]; count: number }> }
+      md += `## Configuration Duplicates\n\n`
+      md += `**Total Duplicates:** ${cfg.duplicates?.length || 0}\n\n`
+      if (cfg.duplicates && cfg.duplicates.length > 0) {
+        md += `| Config Key | Files | Occurrences |\n`
+        md += `|------------|-------|-------------|\n`
+        cfg.duplicates.forEach(d => {
+          md += `| ${d.key} | ${d.files.join(', ')} | ${d.count} |\n`
+        })
+      }
+      break
+    }
+    case 'environment': {
+      const env = data as { system?: Record<string, unknown>; python?: Record<string, unknown>; node?: Record<string, unknown> }
+      md += `## Environment Analysis\n\n`
+      if (env.system) {
+        md += `### System\n\n`
+        Object.entries(env.system).forEach(([k, v]) => {
+          md += `- **${k}:** ${v}\n`
+        })
+        md += `\n`
+      }
+      if (env.python) {
+        md += `### Python\n\n`
+        Object.entries(env.python).forEach(([k, v]) => {
+          md += `- **${k}:** ${v}\n`
+        })
+        md += `\n`
+      }
+      if (env.node) {
+        md += `### Node.js\n\n`
+        Object.entries(env.node).forEach(([k, v]) => {
+          md += `- **${k}:** ${v}\n`
+        })
+      }
+      break
+    }
+    case 'code-intelligence': {
+      const ci = data as { security_score?: number; performance_score?: number; maintainability_score?: number }
+      md += `## Code Intelligence Scores\n\n`
+      md += `| Metric | Score |\n`
+      md += `|--------|-------|\n`
+      md += `| Security | ${ci.security_score || 'N/A'} |\n`
+      md += `| Performance | ${ci.performance_score || 'N/A'} |\n`
+      md += `| Maintainability | ${ci.maintainability_score || 'N/A'} |\n`
       break
     }
     default:
-      // Generic JSON dump for other sections
+      // Generic JSON dump for unknown sections
       md += '```json\n' + JSON.stringify(data, null, 2) + '\n```\n'
   }
 

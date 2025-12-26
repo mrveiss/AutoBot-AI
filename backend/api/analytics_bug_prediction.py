@@ -423,6 +423,32 @@ def _find_files_sync(path: str, include_pattern: str, limit: int) -> List[Path]:
     return result
 
 
+# Issue #609: Parallel analysis concurrency limit
+_ANALYSIS_SEMAPHORE_LIMIT = 50
+
+
+async def _analyze_files_parallel(
+    files: List[Path],
+    change_freq: Dict[str, int],
+    bug_history: Dict[str, int],
+) -> List[Dict[str, Any]]:
+    """
+    Analyze multiple files in parallel with bounded concurrency.
+
+    Issue #609: Extracted helper to parallelize file analysis across all endpoints.
+    Uses semaphore to limit concurrent file I/O operations.
+    """
+    semaphore = asyncio.Semaphore(_ANALYSIS_SEMAPHORE_LIMIT)
+
+    async def analyze_with_semaphore(fp: Path) -> Dict[str, Any]:
+        async with semaphore:
+            return await _analyze_single_file(fp, change_freq, bug_history)
+
+    return list(await asyncio.gather(
+        *[analyze_with_semaphore(fp) for fp in files]
+    ))
+
+
 async def _analyze_single_file(
     file_path: Path,
     change_freq: Dict[str, int],
@@ -476,12 +502,8 @@ async def analyze_codebase(
         if not files_to_analyze:
             return _no_data_response(f"No files matching '{include_pattern}' found in '{path}'")
 
-        # Analyze each file using extracted helper
-        analyzed_files = [
-            await _analyze_single_file(fp, change_freq, bug_history)
-            for fp in files_to_analyze
-        ]
-
+        # Issue #609: Analyze files in parallel
+        analyzed_files = await _analyze_files_parallel(files_to_analyze, change_freq, bug_history)
         analyzed_files.sort(key=lambda x: x["risk_score"], reverse=True)
         high_risk = sum(1 for f in analyzed_files if f["risk_score"] >= 60)
 
@@ -522,11 +544,8 @@ async def get_high_risk_files(
         if not files_to_analyze:
             return _no_data_response(f"No files matching '{include_pattern}' found in '{path}'")
 
-        # Analyze each file
-        analyzed_files = [
-            await _analyze_single_file(fp, change_freq, bug_history)
-            for fp in files_to_analyze
-        ]
+        # Issue #609: Analyze files in parallel
+        analyzed_files = await _analyze_files_parallel(files_to_analyze, change_freq, bug_history)
 
         # Filter high-risk files
         high_risk_files = [f for f in analyzed_files if f["risk_score"] >= threshold]
@@ -652,11 +671,8 @@ async def get_risk_heatmap(
         if not files_to_analyze:
             return _no_data_response(f"No files matching '{include_pattern}' found in '{path}'")
 
-        # Analyze each file
-        analyzed_files = [
-            await _analyze_single_file(fp, change_freq, bug_history)
-            for fp in files_to_analyze
-        ]
+        # Issue #609: Analyze files in parallel
+        analyzed_files = await _analyze_files_parallel(files_to_analyze, change_freq, bug_history)
 
         # Generate heatmap data
         data = _group_files_by_directory(analyzed_files) if grouping == "directory" else _get_flat_heatmap_data(analyzed_files)
@@ -716,11 +732,8 @@ async def get_prediction_summary(
         if not files_to_analyze:
             return _no_data_response(f"No files matching '{include_pattern}' found in '{path}'")
 
-        # Analyze each file
-        analyzed_files = [
-            await _analyze_single_file(fp, change_freq, bug_history)
-            for fp in files_to_analyze
-        ]
+        # Issue #609: Analyze files in parallel
+        analyzed_files = await _analyze_files_parallel(files_to_analyze, change_freq, bug_history)
 
         # Risk distribution
         risk_dist = {level.value: 0 for level in RiskLevel}
