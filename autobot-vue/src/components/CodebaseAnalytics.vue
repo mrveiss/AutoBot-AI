@@ -788,6 +788,15 @@
           <span v-if="codeSmellsFromProblems.length > 0" class="total-count">
             ({{ codeSmellsFromProblems.length.toLocaleString() }} found)
           </span>
+          <!-- Issue #609: Section Export Buttons -->
+          <div class="section-export-buttons" v-if="codeSmellsFromProblems.length > 0">
+            <button @click="exportSection('code-smells', 'md')" class="export-btn" title="Export as Markdown">
+              <i class="fas fa-file-alt"></i> MD
+            </button>
+            <button @click="exportSection('code-smells', 'json')" class="export-btn" title="Export as JSON">
+              <i class="fas fa-file-code"></i> JSON
+            </button>
+          </div>
         </h3>
         <div v-if="codeSmellsFromProblems.length > 0" class="section-content">
           <!-- Summary Cards by Severity -->
@@ -889,6 +898,15 @@
           <span v-if="duplicateAnalysis && duplicateAnalysis.length > 0" class="total-count">
             ({{ duplicateAnalysis.length.toLocaleString() }} pairs)
           </span>
+          <!-- Issue #609: Section Export Buttons -->
+          <div class="section-export-buttons" v-if="duplicateAnalysis && duplicateAnalysis.length > 0">
+            <button @click="exportSection('duplicates', 'md')" class="export-btn" title="Export as Markdown">
+              <i class="fas fa-file-alt"></i> MD
+            </button>
+            <button @click="exportSection('duplicates', 'json')" class="export-btn" title="Export as JSON">
+              <i class="fas fa-file-code"></i> JSON
+            </button>
+          </div>
         </h3>
         <div v-if="duplicateAnalysis && duplicateAnalysis.length > 0" class="section-content">
           <!-- Similarity Summary Cards -->
@@ -978,6 +996,15 @@
           <span v-if="declarationAnalysis && declarationAnalysis.length > 0" class="total-count">
             ({{ declarationAnalysis.length.toLocaleString() }} total)
           </span>
+          <!-- Issue #609: Section Export Buttons -->
+          <div class="section-export-buttons" v-if="declarationAnalysis && declarationAnalysis.length > 0">
+            <button @click="exportSection('declarations', 'md')" class="export-btn" title="Export as Markdown">
+              <i class="fas fa-file-alt"></i> MD
+            </button>
+            <button @click="exportSection('declarations', 'json')" class="export-btn" title="Export as JSON">
+              <i class="fas fa-file-code"></i> JSON
+            </button>
+          </div>
         </h3>
         <div v-if="declarationAnalysis && declarationAnalysis.length > 0" class="section-content">
           <!-- Type Summary Cards -->
@@ -1058,6 +1085,15 @@
           <button @click="getApiEndpointCoverage" :disabled="loadingApiEndpoints" class="refresh-btn" style="margin-left: 10px;">
             <i :class="loadingApiEndpoints ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
           </button>
+          <!-- Issue #609: Section Export Buttons -->
+          <div class="section-export-buttons" v-if="apiEndpointAnalysis">
+            <button @click="exportSection('api-endpoints', 'md')" class="export-btn" title="Export as Markdown">
+              <i class="fas fa-file-alt"></i> MD
+            </button>
+            <button @click="exportSection('api-endpoints', 'json')" class="export-btn" title="Export as JSON">
+              <i class="fas fa-file-code"></i> JSON
+            </button>
+          </div>
         </h3>
 
         <!-- Loading State -->
@@ -1231,6 +1267,15 @@
             <i :class="loadingCrossLanguage ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
             {{ loadingCrossLanguage ? 'Scanning...' : 'Full Scan' }}
           </button>
+          <!-- Issue #609: Section Export Buttons -->
+          <div class="section-export-buttons" v-if="crossLanguageAnalysis">
+            <button @click="exportSection('cross-language', 'md')" class="export-btn" title="Export as Markdown">
+              <i class="fas fa-file-alt"></i> MD
+            </button>
+            <button @click="exportSection('cross-language', 'json')" class="export-btn" title="Export as JSON">
+              <i class="fas fa-file-code"></i> JSON
+            </button>
+          </div>
         </h3>
 
         <!-- Loading State -->
@@ -1455,6 +1500,15 @@
           <button @click="loadConfigDuplicates" :disabled="loadingConfigDuplicates" class="refresh-btn" style="margin-left: 10px;">
             <i :class="loadingConfigDuplicates ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
           </button>
+          <!-- Issue #609: Section Export Buttons -->
+          <div class="section-export-buttons" v-if="configDuplicatesAnalysis">
+            <button @click="exportSection('config-duplicates', 'md')" class="export-btn" title="Export as Markdown">
+              <i class="fas fa-file-alt"></i> MD
+            </button>
+            <button @click="exportSection('config-duplicates', 'json')" class="export-btn" title="Export as JSON">
+              <i class="fas fa-file-code"></i> JSON
+            </button>
+          </div>
         </h3>
 
         <!-- Loading State -->
@@ -1537,6 +1591,15 @@
           <button @click="loadBugPrediction" :disabled="loadingBugPrediction" class="refresh-btn" style="margin-left: 10px;">
             <i :class="loadingBugPrediction ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
           </button>
+          <!-- Issue #609: Section Export Buttons -->
+          <div class="section-export-buttons" v-if="bugPredictionAnalysis">
+            <button @click="exportSection('bug-prediction', 'md')" class="export-btn" title="Export as Markdown">
+              <i class="fas fa-file-alt"></i> MD
+            </button>
+            <button @click="exportSection('bug-prediction', 'json')" class="export-btn" title="Export as JSON">
+              <i class="fas fa-file-code"></i> JSON
+            </button>
+          </div>
         </h3>
 
         <!-- Loading State -->
@@ -1934,6 +1997,15 @@
           <button @click="loadEnvironmentAnalysis" :disabled="loadingEnvAnalysis" class="refresh-btn" style="margin-left: 10px;">
             <i :class="loadingEnvAnalysis ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
           </button>
+          <!-- Issue #609: Section Export Buttons -->
+          <div class="section-export-buttons" v-if="environmentAnalysis">
+            <button @click="exportSection('environment', 'md')" class="export-btn" title="Export as Markdown">
+              <i class="fas fa-file-alt"></i> MD
+            </button>
+            <button @click="exportSection('environment', 'json')" class="export-btn" title="Export as JSON">
+              <i class="fas fa-file-code"></i> JSON
+            </button>
+          </div>
         </h3>
 
         <!-- Loading State -->
@@ -4464,6 +4536,157 @@ const exportReport = async (quick: boolean = true) => {
   }
 }
 
+// Issue #609: Export individual section data as MD or JSON
+type SectionType = 'bug-prediction' | 'code-smells' | 'problems' | 'duplicates' |
+                   'declarations' | 'api-endpoints' | 'cross-language' | 'config-duplicates' |
+                   'code-intelligence' | 'environment' | 'statistics'
+
+const exportSection = async (section: SectionType, format: 'md' | 'json' = 'md') => {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  let data: unknown = null
+  let filename = ''
+  let content = ''
+
+  // Get section data
+  switch (section) {
+    case 'bug-prediction':
+      data = bugPredictionAnalysis.value
+      filename = `bug-prediction-${timestamp}`
+      break
+    case 'code-smells':
+      data = codeSmellsReport.value
+      filename = `code-smells-${timestamp}`
+      break
+    case 'problems':
+      data = problemsReport.value
+      filename = `problems-report-${timestamp}`
+      break
+    case 'duplicates':
+      data = duplicateAnalysis.value
+      filename = `duplicate-analysis-${timestamp}`
+      break
+    case 'declarations':
+      data = declarationAnalysis.value
+      filename = `declarations-${timestamp}`
+      break
+    case 'api-endpoints':
+      data = apiEndpointAnalysis.value
+      filename = `api-endpoints-${timestamp}`
+      break
+    case 'cross-language':
+      data = crossLanguageAnalysis.value
+      filename = `cross-language-${timestamp}`
+      break
+    case 'config-duplicates':
+      data = configDuplicatesAnalysis.value
+      filename = `config-duplicates-${timestamp}`
+      break
+    case 'code-intelligence':
+      data = codeHealthScore.value
+      filename = `code-intelligence-scores-${timestamp}`
+      break
+    case 'environment':
+      data = environmentAnalysis.value
+      filename = `environment-analysis-${timestamp}`
+      break
+    case 'statistics':
+      data = codebaseStats.value
+      filename = `codebase-statistics-${timestamp}`
+      break
+    default:
+      notify('Unknown section type', 'error')
+      return
+  }
+
+  if (!data) {
+    notify(`No data available for ${section}. Load the section first.`, 'warning')
+    return
+  }
+
+  // Format content based on requested format
+  if (format === 'json') {
+    content = JSON.stringify(data, null, 2)
+    filename += '.json'
+  } else {
+    // Generate Markdown
+    content = generateSectionMarkdown(section, data)
+    filename += '.md'
+  }
+
+  // Download file
+  const blob = new Blob([content], { type: format === 'json' ? 'application/json' : 'text/markdown' })
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  window.URL.revokeObjectURL(url)
+
+  notify(`${section} exported as ${format.toUpperCase()}`, 'success')
+}
+
+// Generate markdown for a section
+const generateSectionMarkdown = (section: SectionType, data: unknown): string => {
+  const now = new Date().toISOString()
+  let md = `# ${section.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')} Report\n\n`
+  md += `**Generated:** ${now}\n\n`
+
+  switch (section) {
+    case 'bug-prediction': {
+      const bp = data as { total_files?: number; high_risk_count?: number; files?: Array<{ file_path: string; risk_score: number; risk_level: string }> }
+      md += `## Summary\n\n`
+      md += `- **Total Files Analyzed:** ${bp.total_files || 0}\n`
+      md += `- **High Risk Files:** ${bp.high_risk_count || 0}\n\n`
+      if (bp.files && bp.files.length > 0) {
+        md += `## Files by Risk\n\n`
+        md += `| File | Risk Score | Risk Level |\n`
+        md += `|------|------------|------------|\n`
+        bp.files.forEach(f => {
+          md += `| ${f.file_path} | ${f.risk_score} | ${f.risk_level} |\n`
+        })
+      }
+      break
+    }
+    case 'code-smells': {
+      const cs = data as { summary?: { total_smells: number }; smells_by_severity?: Record<string, number> }
+      md += `## Summary\n\n`
+      md += `- **Total Code Smells:** ${cs.summary?.total_smells || 0}\n\n`
+      if (cs.smells_by_severity) {
+        md += `## By Severity\n\n`
+        Object.entries(cs.smells_by_severity).forEach(([severity, count]) => {
+          md += `- **${severity}:** ${count}\n`
+        })
+      }
+      break
+    }
+    case 'problems': {
+      const probs = data as Array<{ file: string; severity: string; message: string; line?: number }>
+      md += `## Total Problems: ${probs.length}\n\n`
+      if (probs.length > 0) {
+        md += `| File | Severity | Line | Message |\n`
+        md += `|------|----------|------|----------|\n`
+        probs.forEach(p => {
+          md += `| ${p.file} | ${p.severity} | ${p.line || '-'} | ${p.message} |\n`
+        })
+      }
+      break
+    }
+    case 'statistics': {
+      const stats = data as Record<string, unknown>
+      md += `## Codebase Statistics\n\n`
+      md += '```json\n' + JSON.stringify(stats, null, 2) + '\n```\n'
+      break
+    }
+    default:
+      // Generic JSON dump for other sections
+      md += '```json\n' + JSON.stringify(data, null, 2) + '\n```\n'
+  }
+
+  return md
+}
+
 // Clear analysis cache (both Redis and ChromaDB)
 const clearCache = async () => {
   clearingCache.value = true
@@ -5419,6 +5642,37 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .refresh-btn:hover {
   background: #4b5563;
   color: #ffffff;
+}
+
+/* Issue #609: Section Export Buttons */
+.section-export-buttons {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 10px;
+}
+
+.export-btn {
+  background: #1f2937;
+  border: 1px solid #374151;
+  color: #9ca3af;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.export-btn:hover {
+  background: #374151;
+  color: #60a5fa;
+  border-color: #60a5fa;
+}
+
+.export-btn i {
+  font-size: 0.7rem;
 }
 
 .metrics-grid {
