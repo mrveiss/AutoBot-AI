@@ -311,7 +311,18 @@
 
       <!-- Codebase Statistics -->
       <div class="stats-section">
-        <h3><i class="fas fa-chart-pie"></i> Codebase Statistics</h3>
+        <h3>
+          <i class="fas fa-chart-pie"></i> Codebase Statistics
+          <!-- Issue #609: Section Export Buttons -->
+          <div class="section-export-buttons" v-if="codebaseStats">
+            <button @click="exportSection('statistics', 'md')" class="export-btn" title="Export as Markdown">
+              <i class="fas fa-file-alt"></i> MD
+            </button>
+            <button @click="exportSection('statistics', 'json')" class="export-btn" title="Export as JSON">
+              <i class="fas fa-file-code"></i> JSON
+            </button>
+          </div>
+        </h3>
         <div v-if="codebaseStats" class="stats-grid">
           <BasePanel variant="elevated" size="small">
             <div class="stat-value">{{ codebaseStats.total_files || 0 }}</div>
@@ -695,6 +706,15 @@
           <span v-if="problemsReport && problemsReport.length > 0" class="total-count">
             ({{ problemsReport.length.toLocaleString() }} total)
           </span>
+          <!-- Issue #609: Section Export Buttons -->
+          <div class="section-export-buttons" v-if="problemsReport && problemsReport.length > 0">
+            <button @click="exportSection('problems', 'md')" class="export-btn" title="Export as Markdown">
+              <i class="fas fa-file-alt"></i> MD
+            </button>
+            <button @click="exportSection('problems', 'json')" class="export-btn" title="Export as JSON">
+              <i class="fas fa-file-code"></i> JSON
+            </button>
+          </div>
         </h3>
         <div v-if="problemsReport && problemsReport.length > 0" class="section-content">
           <!-- Severity Summary Cards -->
