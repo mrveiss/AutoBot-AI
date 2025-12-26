@@ -43,11 +43,16 @@ MIN_DUPLICATE_CHARS = 80
 HIGH_SIMILARITY_THRESHOLD = 0.90
 MEDIUM_SIMILARITY_THRESHOLD = 0.70
 LOW_SIMILARITY_THRESHOLD = 0.50
-# Maximum files to scan (performance limit)
-MAX_FILES_TO_SCAN = 1000
-# Maximum duplicates to return
-MAX_DUPLICATES_RETURNED = 200
-# Maximum blocks for O(n^2) similarity comparison (Issue #609)
+# Maximum files to scan (0 = no limit, scan all files)
+# Issue #609: No limit on files - scan entire codebase
+MAX_FILES_TO_SCAN = 0
+# Maximum duplicates to return (0 = no limit)
+# Issue #609: Return all duplicates found (no artificial limit)
+MAX_DUPLICATES_RETURNED = 0
+# Maximum blocks for O(n^2) similarity comparison
+# Issue #609: Exact hash matches have no limit (O(n) via hash grouping)
+# Similarity comparison is O(n^2), so we sample larger blocks for performance
+# 2000 blocks = ~2M comparisons, targets <20s runtime for similarity phase
 MAX_BLOCKS_FOR_SIMILARITY = 2000
 
 
@@ -397,7 +402,8 @@ class DuplicateCodeDetector:
                     continue
                 if file_path.is_file():
                     files.append(file_path)
-                    if len(files) >= MAX_FILES_TO_SCAN:
+                    # Issue #609: MAX_FILES_TO_SCAN=0 means no limit
+                    if MAX_FILES_TO_SCAN > 0 and len(files) >= MAX_FILES_TO_SCAN:
                         logger.warning(
                             "Reached max files limit (%d), stopping scan",
                             MAX_FILES_TO_SCAN
@@ -465,9 +471,9 @@ class DuplicateCodeDetector:
         """Find similarity-based duplicates (Issue #560: extracted, #609: improved)."""
         duplicates: List[DuplicatePair] = []
 
-        # Issue #609: Use configurable limit and sample blocks if too many
+        # Issue #609: Use configurable limit (0 = no limit) and sample blocks if too many
         blocks_to_compare = all_blocks
-        if len(all_blocks) > MAX_BLOCKS_FOR_SIMILARITY:
+        if MAX_BLOCKS_FOR_SIMILARITY > 0 and len(all_blocks) > MAX_BLOCKS_FOR_SIMILARITY:
             # Sample blocks prioritizing longer ones (more likely to be meaningful duplicates)
             sorted_blocks = sorted(all_blocks, key=lambda b: b.line_count, reverse=True)
             blocks_to_compare = sorted_blocks[:MAX_BLOCKS_FOR_SIMILARITY]
@@ -555,9 +561,10 @@ class DuplicateCodeDetector:
         duplicates = self._find_exact_duplicates(hash_groups, seen_pairs)
         duplicates.extend(self._find_similar_duplicates(all_blocks, seen_pairs))
 
-        # Sort and limit results
+        # Sort and optionally limit results (0 = no limit)
         duplicates.sort(key=lambda x: x.similarity, reverse=True)
-        duplicates = duplicates[:MAX_DUPLICATES_RETURNED]
+        if MAX_DUPLICATES_RETURNED > 0:
+            duplicates = duplicates[:MAX_DUPLICATES_RETURNED]
 
         # Calculate statistics
         high_count, medium_count, low_count, total_lines = self._calculate_statistics(
