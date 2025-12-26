@@ -3,15 +3,58 @@
 # Author: mrveiss
 """
 Centralized Redis Key Constants for AutoBot
-Single source of truth for all Redis key patterns
+============================================
+
+Single source of truth for all Redis key patterns and connection configuration.
+
+SSOT Migration (Issue #602):
+    Connection parameters (host, port, database numbers) are now read from
+    the SSOT config system. This module retains key pattern definitions
+    and connection pool settings.
+
+    For Redis connection parameters, prefer:
+        from src.config.ssot_config import config
+        host = config.vm.redis
+        port = config.port.redis
+        db_main = config.redis.db_main
+
+Usage:
+    from src.constants.redis_constants import REDIS_KEY, REDIS_CONFIG
+
+    # Get Redis keys
+    key = REDIS_KEY.PROMPTS_FILE_STATES
+
+    # Get connection config
+    timeout = REDIS_CONFIG.SOCKET_TIMEOUT
 """
 
 from dataclasses import dataclass
 
 
+def _get_ssot_config():
+    """Get SSOT config with graceful fallback."""
+    try:
+        from src.config.ssot_config import get_config
+
+        return get_config()
+    except Exception:
+        return None
+
+
+_ssot = _get_ssot_config()
+
+
 @dataclass(frozen=True)
 class RedisConnectionConfig:
-    """Centralized Redis connection configuration - NO HARDCODED VALUES"""
+    """
+    Centralized Redis connection configuration.
+
+    SSOT Migration (Issue #602):
+        For host/port/database numbers, use SSOT config directly:
+            from src.config.ssot_config import config
+            host = config.vm.redis
+            port = config.port.redis
+    """
 
     # Socket timeouts (seconds)
     SOCKET_TIMEOUT: int = 5
@@ -23,6 +66,28 @@ class RedisConnectionConfig:
 
     # Retry settings
     RETRY_ON_TIMEOUT: bool = True
+
+    # Database assignments (from SSOT)
+    # These are convenience accessors - prefer using ssot_config directly
+    @property
+    def db_main(self) -> int:
+        """Main database number from SSOT."""
+        return _ssot.redis.db_main if _ssot else 0
+
+    @property
+    def db_knowledge(self) -> int:
+        """Knowledge database number from SSOT."""
+        return _ssot.redis.db_knowledge if _ssot else 1
+
+    @property
+    def db_cache(self) -> int:
+        """Cache database number from SSOT."""
+        return _ssot.redis.db_cache if _ssot else 5
+
+    @property
+    def db_sessions(self) -> int:
+        """Sessions database number from SSOT."""
+        return _ssot.redis.db_sessions if _ssot else 6
 
 
 @dataclass(frozen=True)

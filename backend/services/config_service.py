@@ -5,6 +5,10 @@
 Centralized configuration service for backend API.
 Eliminates duplication across settings.py, llm.py, and redis.py
 
+SSOT Migration (Issue #602):
+    This service now integrates with the SSOT configuration system.
+    Network constants and other values are sourced from ssot_config.py.
+
 UPDATED: Now uses unified_config_manager for consistent model selection
 """
 
@@ -17,13 +21,20 @@ import yaml
 
 from backend.type_defs.common import Metadata
 
+# SSOT Migration (Issue #602): Import SSOT config as primary source
+from src.config.ssot_config import get_config as get_ssot_config
+
+# Legacy import for backward compatibility - these now read from SSOT
 from src.constants.network_constants import NetworkConstants
 
-# Extract constants for easier use
-BACKEND_HOST_IP = NetworkConstants.MAIN_MACHINE_IP
-BACKEND_PORT = NetworkConstants.BACKEND_PORT
+# Get SSOT config
+_ssot = get_ssot_config()
+
+# Extract constants from SSOT (with fallback to NetworkConstants for safety)
+BACKEND_HOST_IP = _ssot.vm.main if _ssot else NetworkConstants.MAIN_MACHINE_IP
+BACKEND_PORT = _ssot.port.backend if _ssot else NetworkConstants.BACKEND_PORT
 HTTP_PROTOCOL = "http"
-REDIS_HOST_IP = NetworkConstants.REDIS_VM_IP
+REDIS_HOST_IP = _ssot.vm.redis if _ssot else NetworkConstants.REDIS_VM_IP
 from src.unified_config_manager import unified_config_manager
 
 logger = logging.getLogger(__name__)
@@ -80,6 +91,9 @@ class ConfigService:
         """
         Build backend configuration section.
 
+        SSOT Migration (Issue #602):
+            Now uses SSOT config for default values.
+
         Issue #281: Extracted helper for backend config building.
 
         Args:
@@ -89,15 +103,18 @@ class ConfigService:
         Returns:
             Backend configuration dict
         """
+        # Use SSOT for default backend URL
+        default_api_endpoint = (
+            _ssot.backend_url if _ssot else f"{HTTP_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}"
+        )
+        default_port = _ssot.port.backend if _ssot else BACKEND_PORT
+
         return {
-            "api_endpoint": get(
-                "backend.api_endpoint",
-                f"{HTTP_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}",
-            ),
+            "api_endpoint": get("backend.api_endpoint", default_api_endpoint),
             "server_host": get(
                 "backend.server_host", NetworkConstants.BIND_ALL_INTERFACES
             ),
-            "server_port": get("backend.server_port", BACKEND_PORT),
+            "server_port": get("backend.server_port", default_port),
             "chat_data_dir": get("backend.chat_data_dir", "data/chats"),
             "chat_history_file": get(
                 "backend.chat_history_file", "data/chat_history.json"
@@ -121,6 +138,9 @@ class ConfigService:
         """
         Build memory configuration section.
 
+        SSOT Migration (Issue #602):
+            Redis host/port now sourced from SSOT config.
+
         Issue #281: Extracted helper for memory config building.
 
         Args:
@@ -129,6 +149,10 @@ class ConfigService:
         Returns:
             Memory configuration dict
         """
+        # Use SSOT for Redis defaults
+        default_redis_host = _ssot.vm.redis if _ssot else REDIS_HOST_IP
+        default_redis_port = _ssot.port.redis if _ssot else NetworkConstants.REDIS_PORT
+
         return {
             "long_term": {
                 "enabled": get("memory.long_term.enabled", True),
@@ -155,8 +179,8 @@ class ConfigService:
             },
             "redis": {
                 "enabled": get("memory.redis.enabled", False),
-                "host": get("memory.redis.host", REDIS_HOST_IP),
-                "port": get("memory.redis.port", NetworkConstants.REDIS_PORT),
+                "host": get("memory.redis.host", default_redis_host),
+                "port": get("memory.redis.port", default_redis_port),
             },
         }
 
@@ -277,15 +301,24 @@ class ConfigService:
 
     @staticmethod
     def get_redis_config() -> Metadata:
-        """Get current Redis configuration"""
+        """
+        Get current Redis configuration.
+
+        SSOT Migration (Issue #602):
+            Host and port now default to SSOT config values.
+        """
         try:
             task_transport_config = unified_config_manager.get("task_transport", {})
             redis_config = task_transport_config.get("redis", {})
 
+            # Use SSOT for defaults
+            default_host = _ssot.vm.redis if _ssot else REDIS_HOST_IP
+            default_port = _ssot.port.redis if _ssot else NetworkConstants.REDIS_PORT
+
             return {
                 "type": task_transport_config.get("type", "local"),
-                "host": redis_config.get("host", REDIS_HOST_IP),
-                "port": redis_config.get("port", NetworkConstants.REDIS_PORT),
+                "host": redis_config.get("host", default_host),
+                "port": redis_config.get("port", default_port),
                 "channels": redis_config.get("channels", {}),
                 "priority": redis_config.get("priority", 10),
             }

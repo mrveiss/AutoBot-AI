@@ -6,87 +6,153 @@
 Network Constants for AutoBot
 =============================
 
-Centralized network configuration constants to eliminate hardcoded URLs and IP addresses
-throughout the codebase. This addresses the 73+ duplicate IP/URL pattern identified
-in the code duplication analysis.
+Centralized network configuration constants. This module now reads from
+the SSOT (Single Source of Truth) configuration system while maintaining
+full backward compatibility with existing code.
+
+MIGRATION (Issue #602):
+    All values are now sourced from src/config/ssot_config.py which reads
+    from the .env file. Hardcoded fallbacks are only used if .env is missing.
 
 Usage:
     from src.constants.network_constants import NetworkConstants, ServiceURLs
 
-    # Use VM IP addresses
+    # Use VM IP addresses (now reads from SSOT)
     redis_url = f"redis://{NetworkConstants.REDIS_VM_IP}:6379"
 
-    # Use service URLs
+    # Use service URLs (now reads from SSOT)
     backend_url = ServiceURLs.BACKEND_API
+
+    # Preferred: Use SSOT directly
+    from src.config.ssot_config import config
+    redis_url = config.redis_url
 """
 
 import os
-from dataclasses import dataclass
+import warnings
 from functools import cached_property
 from typing import Optional
 
 
-@dataclass(frozen=True)
+def _get_ssot_config():
+    """
+    Get SSOT config with graceful fallback.
+
+    Returns the SSOT config instance. If SSOT fails to load (e.g., during
+    early imports or missing dependencies), returns None and callers should
+    use hardcoded fallbacks.
+
+    Issue #602: Import is inside function to prevent circular imports.
+    The chain src.config.__init__ -> manager -> loader -> defaults -> network_constants
+    would cause a circular import if we imported at module level.
+    """
+    try:
+        # Import inside function to avoid circular import
+        from src.config.ssot_config import get_config
+
+        return get_config()
+    except Exception:
+        # During early initialization or if .env is missing, SSOT may fail
+        # In that case, we use hardcoded fallbacks below
+        return None
+
+
+# Get config once at module load time for efficiency
+_ssot = _get_ssot_config()
+
+# Deprecation flag - set to True to enable deprecation warnings
+# This helps during migration to identify code still using old patterns
+_SHOW_DEPRECATION_WARNINGS = os.getenv("AUTOBOT_SHOW_DEPRECATION_WARNINGS", "").lower() == "true"
+
+
+def _emit_deprecation_warning(old_pattern: str, new_pattern: str) -> None:
+    """
+    Emit a deprecation warning if enabled.
+
+    Issue #602: Helps identify code that should migrate to SSOT.
+    Enable with: AUTOBOT_SHOW_DEPRECATION_WARNINGS=true
+    """
+    if _SHOW_DEPRECATION_WARNINGS:
+        warnings.warn(
+            f"SSOT Migration: '{old_pattern}' is deprecated. "
+            f"Use '{new_pattern}' instead. (Issue #602)",
+            DeprecationWarning,
+            stacklevel=3
+        )
+
+
 class NetworkConstants:
-    """Core network constants for AutoBot distributed infrastructure"""
+    """
+    Core network constants for AutoBot distributed infrastructure.
+
+    SSOT Migration (Issue #602):
+        All values now read from SSOT config (.env file) with hardcoded
+        fallbacks only used if .env is missing or malformed.
+
+    Usage remains unchanged for backward compatibility:
+        from src.constants.network_constants import NetworkConstants
+        host = NetworkConstants.MAIN_MACHINE_IP
+    """
+
+    # === VM Infrastructure IPs (from SSOT) ===
 
     # Main machine (WSL)
-    MAIN_MACHINE_IP: str = "172.16.168.20"
+    MAIN_MACHINE_IP: str = _ssot.vm.main if _ssot else "172.16.168.20"
 
     # VM Infrastructure IPs
-    FRONTEND_VM_IP: str = "172.16.168.21"
-    NPU_WORKER_VM_IP: str = "172.16.168.22"
-    REDIS_VM_IP: str = "172.16.168.23"
-    AI_STACK_VM_IP: str = "172.16.168.24"
-    BROWSER_VM_IP: str = "172.16.168.25"
+    FRONTEND_VM_IP: str = _ssot.vm.frontend if _ssot else "172.16.168.21"
+    NPU_WORKER_VM_IP: str = _ssot.vm.npu if _ssot else "172.16.168.22"
+    REDIS_VM_IP: str = _ssot.vm.redis if _ssot else "172.16.168.23"
+    AI_STACK_VM_IP: str = _ssot.vm.aistack if _ssot else "172.16.168.24"
+    BROWSER_VM_IP: str = _ssot.vm.browser if _ssot else "172.16.168.25"
 
     # Backward compatibility aliases
-    AI_STACK_HOST: str = "172.16.168.24"  # Alias for AI_STACK_VM_IP
+    AI_STACK_HOST: str = _ssot.vm.aistack if _ssot else "172.16.168.24"
 
-    # Local/Localhost addresses
+    # === Local/Localhost addresses (static - not from SSOT) ===
     LOCALHOST_IP: str = "127.0.0.1"
     LOCALHOST_IPV6: str = "::1"  # IPv6 loopback address
     LOCALHOST_NAME: str = "localhost"
     BIND_ALL_INTERFACES: str = "0.0.0.0"  # Bind server to all network interfaces
 
-    # Network prefixes for IP validation
+    # === Network prefixes for IP validation (static) ===
     VM_IP_PREFIX: str = "172.16.168."  # AutoBot VM network prefix
     DEFAULT_SCAN_NETWORK: str = (
         "192.168.1.0/24"  # Default network range for scanning tools
     )
     PUBLIC_DNS_IP: str = "8.8.8.8"  # Google Public DNS for connectivity testing
 
-    # Special purpose IPs
+    # === Special purpose IPs (static) ===
     DUMMY_ROUTE_IP: str = (
         "10.255.255.255"  # Dummy IP for local IP detection via socket routing
     )
     TEST_HOST_IP: str = "172.16.168.99"  # Test host IP for unit tests (not a real VM)
 
-    # Standard ports
-    BACKEND_PORT: int = 8001
-    FRONTEND_PORT: int = 5173
-    REDIS_PORT: int = 6379
-    OLLAMA_PORT: int = 11434
-    VNC_PORT: int = 6080
-    BROWSER_SERVICE_PORT: int = 3000
-    AI_STACK_PORT: int = 8080
-    NPU_WORKER_PORT: int = 8081  # Linux NPU worker (VM2)
-    NPU_WORKER_WINDOWS_PORT: int = 8082  # Windows NPU worker (primary on main machine)
-    CHROME_DEBUGGER_PORT: int = 9222  # Chrome DevTools Protocol port
+    # === Standard ports (from SSOT) ===
+    BACKEND_PORT: int = _ssot.port.backend if _ssot else 8001
+    FRONTEND_PORT: int = _ssot.port.frontend if _ssot else 5173
+    REDIS_PORT: int = _ssot.port.redis if _ssot else 6379
+    OLLAMA_PORT: int = _ssot.port.ollama if _ssot else 11434
+    VNC_PORT: int = _ssot.port.vnc if _ssot else 6080
+    BROWSER_SERVICE_PORT: int = _ssot.port.browser if _ssot else 3000
+    AI_STACK_PORT: int = _ssot.port.aistack if _ssot else 8080
+    NPU_WORKER_PORT: int = _ssot.port.npu if _ssot else 8081
+    NPU_WORKER_WINDOWS_PORT: int = 8082  # Windows NPU worker (static)
+    CHROME_DEBUGGER_PORT: int = 9222  # Chrome DevTools Protocol port (static)
 
-    # Issue #474: Monitoring stack ports (Prometheus/Grafana on Redis VM)
-    PROMETHEUS_PORT: int = 9090
-    ALERTMANAGER_PORT: int = 9093
-    GRAFANA_PORT: int = 3000  # Note: Same as BROWSER_SERVICE_PORT but on different VM
+    # Issue #474: Monitoring stack ports (from SSOT)
+    PROMETHEUS_PORT: int = _ssot.port.prometheus if _ssot else 9090
+    ALERTMANAGER_PORT: int = 9093  # Not in SSOT currently
+    GRAFANA_PORT: int = _ssot.port.grafana if _ssot else 3000
 
-    # Development ports
-    DEV_FRONTEND_PORT: int = 5173
-    DEV_BACKEND_PORT: int = 8001
+    # Development ports (aliases)
+    DEV_FRONTEND_PORT: int = _ssot.port.frontend if _ssot else 5173
+    DEV_BACKEND_PORT: int = _ssot.port.backend if _ssot else 8001
 
-    # External service URLs
+    # === External service URLs (static) ===
     GOOGLE_SEARCH_BASE_URL: str = "https://www.google.com/search"
 
-    # Docker user/group IDs (for non-root container execution)
+    # === Docker user/group IDs (static) ===
     DEFAULT_UID: str = "1000"
     DEFAULT_GID: str = "1000"
     DEFAULT_USER_GROUP: str = "1000:1000"
@@ -155,48 +221,56 @@ class NetworkConstants:
         return f"ws://{cls.MAIN_MACHINE_IP}:{cls.BACKEND_PORT}/ws"
 
 
-@dataclass(frozen=True)
 class ServiceURLs:
-    """Pre-built service URLs for common AutoBot services"""
+    """
+    Pre-built service URLs for common AutoBot services.
 
-    # Backend API URLs
-    BACKEND_API: str = (
+    SSOT Migration (Issue #602):
+        URLs are now computed from SSOT config values. For direct SSOT access,
+        use the computed properties in AutoBotConfig:
+            from src.config.ssot_config import config
+            backend = config.backend_url
+            redis = config.redis_url
+    """
+
+    # Backend API URLs (from SSOT)
+    BACKEND_API: str = _ssot.backend_url if _ssot else (
         f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
     )
     BACKEND_LOCAL: str = (
         f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}"
     )
 
-    # Frontend URLs
-    FRONTEND_VM: str = (
+    # Frontend URLs (from SSOT)
+    FRONTEND_VM: str = _ssot.frontend_url if _ssot else (
         f"http://{NetworkConstants.FRONTEND_VM_IP}:{NetworkConstants.FRONTEND_PORT}"
     )
     FRONTEND_LOCAL: str = (
         f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.FRONTEND_PORT}"
     )
 
-    # Redis URLs
-    REDIS_VM: str = (
+    # Redis URLs (from SSOT)
+    REDIS_VM: str = _ssot.redis_url if _ssot else (
         f"redis://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT}"
     )
     REDIS_LOCAL: str = (
         f"redis://{NetworkConstants.LOCALHOST_IP}:{NetworkConstants.REDIS_PORT}"
     )
 
-    # Ollama LLM URLs
+    # Ollama LLM URLs (from SSOT)
     OLLAMA_LOCAL: str = (
         f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}"
     )
-    OLLAMA_MAIN: str = (
+    OLLAMA_MAIN: str = _ssot.ollama_url if _ssot else (
         f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.OLLAMA_PORT}"
     )
 
-    # VNC Desktop URLs
-    VNC_DESKTOP: str = (
+    # VNC Desktop URLs (from SSOT)
+    VNC_DESKTOP: str = _ssot.vnc_url if _ssot else (
         f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.VNC_PORT}/vnc.html"
     )
 
-    # Chrome DevTools Protocol URLs
+    # Chrome DevTools Protocol URLs (static)
     CHROME_DEBUGGER_LOCAL: str = (
         f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.CHROME_DEBUGGER_PORT}"
     )
@@ -204,18 +278,18 @@ class ServiceURLs:
         f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.VNC_PORT}/vnc.html"
     )
 
-    # Browser automation service
-    BROWSER_SERVICE: str = (
+    # Browser automation service (from SSOT)
+    BROWSER_SERVICE: str = _ssot.browser_service_url if _ssot else (
         f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
     )
 
-    # AI Stack service
-    AI_STACK_SERVICE: str = (
+    # AI Stack service (from SSOT)
+    AI_STACK_SERVICE: str = _ssot.aistack_url if _ssot else (
         f"http://{NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.AI_STACK_PORT}"
     )
 
-    # NPU Worker services
-    NPU_WORKER_SERVICE: str = (
+    # NPU Worker services (from SSOT)
+    NPU_WORKER_SERVICE: str = _ssot.npu_worker_url if _ssot else (
         f"http://{NetworkConstants.NPU_WORKER_VM_IP}:{NetworkConstants.NPU_WORKER_PORT}"
     )
     NPU_WORKER_WINDOWS_SERVICE: str = (
@@ -238,16 +312,32 @@ class NetworkConfig:
     """
     Dynamic network configuration based on environment.
     Provides context-aware URL generation.
+
+    SSOT Migration (Issue #602):
+        This class now delegates to SSOT config for most values.
+        For direct access, prefer using SSOT directly:
+            from src.config.ssot_config import config
+            url = config.get_service_url("backend")
     """
 
     def __init__(self):
-        """Initialize network config with deployment mode from environment."""
-        self._deployment_mode = os.getenv("AUTOBOT_DEPLOYMENT_MODE", "distributed")
-        self._is_development = os.getenv("AUTOBOT_ENV", "production") == "development"
+        """Initialize network config using SSOT values."""
+        self._ssot = _ssot
+        # Read from SSOT if available, otherwise from environment
+        if self._ssot:
+            self._deployment_mode = self._ssot.deployment_mode
+            self._is_development = self._ssot.environment == "development"
+        else:
+            self._deployment_mode = os.getenv("AUTOBOT_DEPLOYMENT_MODE", "distributed")
+            self._is_development = os.getenv("AUTOBOT_ENV", "production") == "development"
 
     @property
     def backend_url(self) -> str:
         """Get backend URL based on deployment context"""
+        if self._ssot:
+            if self._deployment_mode == "local":
+                return ServiceURLs.BACKEND_LOCAL
+            return self._ssot.backend_url
         if self._deployment_mode == "local":
             return ServiceURLs.BACKEND_LOCAL
         return ServiceURLs.BACKEND_API
@@ -255,6 +345,10 @@ class NetworkConfig:
     @property
     def frontend_url(self) -> str:
         """Get frontend URL based on deployment context"""
+        if self._ssot:
+            if self._deployment_mode == "local":
+                return ServiceURLs.FRONTEND_LOCAL
+            return self._ssot.frontend_url
         if self._deployment_mode == "local":
             return ServiceURLs.FRONTEND_LOCAL
         return ServiceURLs.FRONTEND_VM
@@ -262,6 +356,10 @@ class NetworkConfig:
     @property
     def redis_url(self) -> str:
         """Get Redis URL based on deployment context"""
+        if self._ssot:
+            if self._deployment_mode == "local":
+                return ServiceURLs.REDIS_LOCAL
+            return self._ssot.redis_url
         if self._deployment_mode == "local":
             return ServiceURLs.REDIS_LOCAL
         return ServiceURLs.REDIS_VM
@@ -269,11 +367,24 @@ class NetworkConfig:
     @property
     def ollama_url(self) -> str:
         """Get Ollama URL based on deployment context"""
+        if self._ssot:
+            return self._ssot.ollama_url
         return ServiceURLs.OLLAMA_LOCAL  # Always local for now
 
     @cached_property
     def _service_map(self) -> dict:
         """Issue #380: Cache service map to avoid repeated dict creation."""
+        if self._ssot:
+            return {
+                "backend": self.backend_url,
+                "frontend": self.frontend_url,
+                "redis": self.redis_url,
+                "ollama": self.ollama_url,
+                "browser": self._ssot.browser_service_url,
+                "ai_stack": self._ssot.aistack_url,
+                "npu_worker": self._ssot.npu_worker_url,
+                "vnc": self._ssot.vnc_url,
+            }
         return {
             "backend": self.backend_url,
             "frontend": self.frontend_url,
@@ -289,17 +400,36 @@ class NetworkConfig:
         """
         Get service URL by name.
 
+        SSOT Migration (Issue #602):
+            Prefer using SSOT directly:
+                from src.config.ssot_config import config
+                url = config.get_service_url("backend")
+
         Args:
             service_name: Name of the service (backend, frontend, redis, etc.)
 
         Returns:
             Service URL or None if not found
         """
+        # Delegate to SSOT if available
+        if self._ssot:
+            url = self._ssot.get_service_url(service_name)
+            if url:
+                return url
         return self._service_map.get(service_name)
 
     @cached_property
     def _vm_map(self) -> dict:
         """Issue #380: Cache VM map to avoid repeated dict creation."""
+        if self._ssot:
+            return {
+                "main": self._ssot.vm.main,
+                "frontend": self._ssot.vm.frontend,
+                "npu_worker": self._ssot.vm.npu,
+                "redis": self._ssot.vm.redis,
+                "ai_stack": self._ssot.vm.aistack,
+                "browser": self._ssot.vm.browser,
+            }
         return {
             "main": NetworkConstants.MAIN_MACHINE_IP,
             "frontend": NetworkConstants.FRONTEND_VM_IP,
@@ -313,12 +443,22 @@ class NetworkConfig:
         """
         Get VM IP address by name.
 
+        SSOT Migration (Issue #602):
+            Prefer using SSOT directly:
+                from src.config.ssot_config import config
+                ip = config.get_vm_ip("redis")
+
         Args:
             vm_name: Name of the VM (frontend, redis, ai_stack, etc.)
 
         Returns:
             IP address or None if not found
         """
+        # Delegate to SSOT if available
+        if self._ssot:
+            ip = self._ssot.get_vm_ip(vm_name)
+            if ip:
+                return ip
         return self._vm_map.get(vm_name)
 
 

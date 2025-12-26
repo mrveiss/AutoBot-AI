@@ -6,17 +6,26 @@
 Model Constants for AutoBot - SINGLE SOURCE OF TRUTH
 =====================================================
 
-All LLM model configuration is centralized here.
-Fallback values are defined ONCE and referenced throughout.
+All LLM model configuration is centralized here. This module now reads
+from the SSOT (Single Source of Truth) configuration system.
+
+MIGRATION (Issue #602):
+    All values are now sourced from src/config/ssot_config.py which reads
+    from the .env file. Hardcoded fallbacks are only used if SSOT fails.
 
 Usage:
     from src.constants.model_constants import ModelConstants
 
-    # Use default model (reads from .env, falls back to FALLBACK_MODEL)
+    # Use default model (reads from SSOT/.env)
     model_name = ModelConstants.DEFAULT_OLLAMA_MODEL
 
-    # Use model endpoints
+    # Use model endpoints (reads from SSOT/.env)
     ollama_url = ModelConstants.get_ollama_url()
+
+    # Preferred: Use SSOT directly
+    from src.config.ssot_config import config
+    model_name = config.llm.default_model
+    ollama_url = config.ollama_url
 """
 
 import os
@@ -25,10 +34,31 @@ from functools import lru_cache
 from typing import Optional
 
 
+def _get_ssot_config():
+    """
+    Get SSOT config with graceful fallback.
+
+    Returns the SSOT config instance. If SSOT fails to load (e.g., during
+    early imports or missing dependencies), returns None and callers should
+    use hardcoded fallbacks.
+    """
+    try:
+        from src.config.ssot_config import get_config
+
+        return get_config()
+    except Exception:
+        # During early initialization or if .env is missing, SSOT may fail
+        return None
+
+
+# Get config once at module load time for efficiency
+_ssot = _get_ssot_config()
+
+
 # =============================================================================
 # FALLBACK DEFAULTS - DEFINED ONCE, USED EVERYWHERE
 # =============================================================================
-# These are the ultimate fallbacks if .env is not configured.
+# These are the ultimate fallbacks if SSOT/.env is not configured.
 # Change these values to change the default for the entire system.
 
 FALLBACK_MODEL = "mistral:7b-instruct"  # Default LLM model
@@ -37,22 +67,65 @@ FALLBACK_ANTHROPIC_MODEL = "claude-3-5-sonnet-20241022"
 FALLBACK_GOOGLE_MODEL = "gemini-pro"
 
 
-@dataclass(frozen=True)
 class ModelConstants:
     """
     LLM Model configuration constants for AutoBot.
 
-    All models read from environment variables with centralized fallbacks.
+    SSOT Migration (Issue #602):
+        All models now read from SSOT config (.env file) with hardcoded
+        fallbacks only used if .env is missing or malformed.
+
+    Usage remains unchanged for backward compatibility:
+        from src.constants.model_constants import ModelConstants
+        model = ModelConstants.DEFAULT_OLLAMA_MODEL
     """
 
     # =========================================================================
-    # DEFAULT MODELS - Read from .env, fallback to constants above
+    # DEFAULT MODELS - Read from SSOT/.env, fallback to constants above
     # =========================================================================
 
-    DEFAULT_OLLAMA_MODEL: str = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", FALLBACK_MODEL)
+    DEFAULT_OLLAMA_MODEL: str = (
+        _ssot.llm.default_model
+        if _ssot
+        else os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", FALLBACK_MODEL)
+    )
     DEFAULT_OPENAI_MODEL: str = os.getenv("AUTOBOT_OPENAI_MODEL", FALLBACK_OPENAI_MODEL)
-    DEFAULT_ANTHROPIC_MODEL: str = os.getenv("AUTOBOT_ANTHROPIC_MODEL", FALLBACK_ANTHROPIC_MODEL)
+    DEFAULT_ANTHROPIC_MODEL: str = os.getenv(
+        "AUTOBOT_ANTHROPIC_MODEL", FALLBACK_ANTHROPIC_MODEL
+    )
     DEFAULT_GOOGLE_MODEL: str = os.getenv("AUTOBOT_GOOGLE_MODEL", FALLBACK_GOOGLE_MODEL)
+
+    # Additional model types from SSOT
+    EMBEDDING_MODEL: str = (
+        _ssot.llm.embedding_model
+        if _ssot
+        else os.getenv("AUTOBOT_EMBEDDING_MODEL", "nomic-embed-text:latest")
+    )
+    CLASSIFICATION_MODEL: str = (
+        _ssot.llm.classification_model
+        if _ssot
+        else os.getenv("AUTOBOT_CLASSIFICATION_MODEL", FALLBACK_MODEL)
+    )
+    REASONING_MODEL: str = (
+        _ssot.llm.reasoning_model
+        if _ssot
+        else os.getenv("AUTOBOT_REASONING_MODEL", FALLBACK_MODEL)
+    )
+    RAG_MODEL: str = (
+        _ssot.llm.rag_model
+        if _ssot
+        else os.getenv("AUTOBOT_RAG_MODEL", FALLBACK_MODEL)
+    )
+    CODING_MODEL: str = (
+        _ssot.llm.coding_model
+        if _ssot
+        else os.getenv("AUTOBOT_CODING_MODEL", FALLBACK_MODEL)
+    )
+    ORCHESTRATOR_MODEL: str = (
+        _ssot.llm.orchestrator_model
+        if _ssot
+        else os.getenv("AUTOBOT_ORCHESTRATOR_MODEL", FALLBACK_MODEL)
+    )
 
     # =========================================================================
     # MODEL PROVIDERS
@@ -64,13 +137,28 @@ class ModelConstants:
     PROVIDER_GOOGLE: str = "google"
     PROVIDER_LM_STUDIO: str = "lm_studio"
 
+    # Current provider from SSOT
+    CURRENT_PROVIDER: str = (
+        _ssot.llm.provider if _ssot else os.getenv("AUTOBOT_LLM_PROVIDER", "ollama")
+    )
+
     # =========================================================================
     # MODEL ENDPOINTS
     # =========================================================================
 
     @staticmethod
     def get_ollama_url() -> str:
-        """Get Ollama service URL from environment or default to AI Stack VM"""
+        """
+        Get Ollama service URL.
+
+        SSOT Migration (Issue #602):
+            Prefer using SSOT directly:
+                from src.config.ssot_config import config
+                url = config.ollama_url
+        """
+        if _ssot:
+            return _ssot.ollama_url
+        # Fallback to environment/network constants
         from src.constants.network_constants import NetworkConstants
 
         host = os.getenv("AUTOBOT_OLLAMA_HOST", NetworkConstants.AI_STACK_VM_IP)
@@ -118,8 +206,8 @@ class ModelConfig:
     DEFAULT_MAX_TOKENS: int = 2048
     DEFAULT_NUM_CTX: int = 4096  # Ollama context window
 
-    # Timeouts (in seconds)
-    DEFAULT_TIMEOUT: int = 30
+    # Timeouts (in seconds) - prefer SSOT for these
+    DEFAULT_TIMEOUT: int = _ssot.timeout.llm if _ssot else 30
     LONG_GENERATION_TIMEOUT: int = 120
 
     # Retry settings
@@ -142,10 +230,16 @@ model_config = ModelConfig()
 # CONVENIENCE FUNCTIONS
 # =============================================================================
 
+
 @lru_cache(maxsize=8)
 def get_default_model(provider: Optional[str] = None) -> str:
     """
     Get the default model for a specific provider or the system default.
+
+    SSOT Migration (Issue #602):
+        Prefer using SSOT directly:
+            from src.config.ssot_config import config
+            model = config.llm.default_model
 
     Issue #380: Added @lru_cache since models don't change at runtime.
 
@@ -171,6 +265,11 @@ def get_default_model(provider: Optional[str] = None) -> str:
 def get_model_endpoint(provider: str) -> str:
     """
     Get the endpoint URL for a specific provider.
+
+    SSOT Migration (Issue #602):
+        Prefer using SSOT directly:
+            from src.config.ssot_config import config
+            url = config.ollama_url
 
     Issue #380: Added @lru_cache since endpoints don't change at runtime.
 
