@@ -127,7 +127,8 @@ PATTERN_RULES = [
     {
         "id": "todo_comment",
         "name": "TODO Comment",
-        "pattern": r"#\s*TODO[:\s]",
+        # Require colon to avoid false positives (Issue #617)
+        "pattern": r"#\s*TODO:\s*",
         "category": PatternCategory.CODE_QUALITY,
         "severity": DiagnosticSeverity.HINT,
         "message": "TODO comment found. Consider tracking in issue tracker.",
@@ -136,7 +137,8 @@ PATTERN_RULES = [
     {
         "id": "fixme_comment",
         "name": "FIXME Comment",
-        "pattern": r"#\s*FIXME[:\s]",
+        # Require colon to avoid false positives (Issue #617)
+        "pattern": r"#\s*FIXME:\s*",
         "category": PatternCategory.CODE_QUALITY,
         "severity": DiagnosticSeverity.WARNING,
         "message": "FIXME comment indicates code that needs attention.",

@@ -729,12 +729,14 @@ def _detect_technical_debt_in_line(
 ) -> Tuple[List[Dict], List[Dict]]:
     """Detect technical debt markers in a line. Returns (debt_items, problem_items)."""
     debt_patterns = [
-        (r"#\s*TODO[:\s](.+)$", "todo", "low"),
-        (r"#\s*FIXME[:\s](.+)$", "fixme", "medium"),
-        (r"#\s*HACK[:\s](.+)$", "hack", "high"),
-        (r"#\s*XXX[:\s](.+)$", "xxx", "medium"),
-        (r"#\s*BUG[:\s](.+)$", "bug", "high"),
-        (r"#\s*DEPRECATED[:\s](.+)$", "deprecated", "medium"),
+        # Require colon after keyword to avoid false positives (Issue #617)
+        # e.g., "# TODO: fix this" matches, but "# Todo list" does not
+        (r"#\s*TODO:\s*(.+)$", "todo", "low"),
+        (r"#\s*FIXME:\s*(.+)$", "fixme", "medium"),
+        (r"#\s*HACK:\s*(.+)$", "hack", "high"),
+        (r"#\s*XXX:\s*(.+)$", "xxx", "medium"),
+        (r"#\s*BUG:\s*(.+)$", "bug", "high"),
+        (r"#\s*DEPRECATED:\s*(.+)$", "deprecated", "medium"),
     ]
 
     debt_items = []
