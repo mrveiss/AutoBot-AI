@@ -27,6 +27,7 @@ import sqlite3
 import tempfile
 import uuid
 from pathlib import Path
+from typing import Any, List, Tuple
 
 from src.conversation_file_manager import ConversationFileManager
 
@@ -34,6 +35,54 @@ from src.conversation_file_manager import ConversationFileManager
 # Configure logging for tests
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+# Issue #618: Helper to run blocking sqlite3 queries in async context
+async def async_sqlite_query(
+    db_path: str, query: str, params: tuple = ()
+) -> List[Tuple[Any, ...]]:
+    """Execute sqlite3 query without blocking the event loop.
+
+    Args:
+        db_path: Path to SQLite database
+        query: SQL query to execute
+        params: Query parameters
+
+    Returns:
+        List of result tuples from fetchall()
+    """
+    def _execute():
+        connection = sqlite3.connect(db_path)
+        cursor = connection.cursor()
+        try:
+            cursor.execute(query, params)
+            return cursor.fetchall()
+        finally:
+            cursor.close()
+            connection.close()
+
+    return await asyncio.to_thread(_execute)
+
+
+async def async_sqlite_execute(db_path: str, query: str, params: tuple = ()) -> None:
+    """Execute sqlite3 statement without blocking the event loop.
+
+    Args:
+        db_path: Path to SQLite database
+        query: SQL statement to execute
+        params: Query parameters
+    """
+    def _execute():
+        connection = sqlite3.connect(db_path)
+        cursor = connection.cursor()
+        try:
+            cursor.execute(query, params)
+            connection.commit()
+        finally:
+            cursor.close()
+            connection.close()
+
+    await asyncio.to_thread(_execute)
 
 
 # Integration test marker
@@ -107,39 +156,37 @@ class TestFreshVMDeployment:
         assert shared_db_path['db_path'].exists(), \
             "Database should be created after initialization"
 
-        # Verify schema is complete
-        connection = sqlite3.connect(str(shared_db_path['db_path']))
-        cursor = connection.cursor()
+        # Verify schema is complete (Issue #618: use async sqlite helper)
+        db_path_str = str(shared_db_path['db_path'])
 
-        try:
-            # Check all required tables exist
-            expected_tables = {
-                'conversation_files',
-                'file_metadata',
-                'session_file_associations',
-                'file_access_log',
-                'file_cleanup_queue',
-                'schema_migrations'
-            }
+        # Check all required tables exist
+        expected_tables = {
+            'conversation_files',
+            'file_metadata',
+            'session_file_associations',
+            'file_access_log',
+            'file_cleanup_queue',
+            'schema_migrations'
+        }
 
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            actual_tables = {row[0] for row in cursor.fetchall()}
+        rows = await async_sqlite_query(
+            db_path_str,
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )
+        actual_tables = {row[0] for row in rows}
 
-            missing_tables = expected_tables - actual_tables
-            assert not missing_tables, f"Missing tables: {missing_tables}"
-            logger.info(f"✓ All {len(expected_tables)} tables created")
+        missing_tables = expected_tables - actual_tables
+        assert not missing_tables, f"Missing tables: {missing_tables}"
+        logger.info(f"✓ All {len(expected_tables)} tables created")
 
-            # Verify schema version
-            cursor.execute(
-                "SELECT version FROM schema_migrations ORDER BY migration_id DESC LIMIT 1"
-            )
-            version = cursor.fetchone()[0]
-            assert version == "001", f"Schema version should be '001', got '{version}'"
-            logger.info(f"✓ Schema version: {version}")
-
-        finally:
-            cursor.close()
-            connection.close()
+        # Verify schema version
+        rows = await async_sqlite_query(
+            db_path_str,
+            "SELECT version FROM schema_migrations ORDER BY migration_id DESC LIMIT 1"
+        )
+        version = rows[0][0]
+        assert version == "001", f"Schema version should be '001', got '{version}'"
+        logger.info(f"✓ Schema version: {version}")
 
         # Test that backend can handle file operations immediately
         test_session_id = f"test_session_{uuid.uuid4()}"
@@ -240,25 +287,21 @@ class TestNPUWorkerIntegration:
         assert files[0]['file_size'] == len(processed_result)
         logger.info("✓ File accessible from VM0 backend")
 
-        # Verify metadata was recorded
-        connection = sqlite3.connect(str(shared_db_path['db_path']))
-        cursor = connection.cursor()
+        # Verify metadata was recorded (Issue #618: use async sqlite helper)
+        rows = await async_sqlite_query(
+            str(shared_db_path['db_path']),
+            """
+            SELECT metadata_key, metadata_value
+            FROM file_metadata
+            WHERE file_id = ?
+            """,
+            (result['file_id'],)
+        )
 
-        try:
-            cursor.execute("""
-                SELECT metadata_key, metadata_value
-                FROM file_metadata
-                WHERE file_id = ?
-            """, (result['file_id'],))
-
-            metadata = {row[0]: row[1] for row in cursor.fetchall()}
-            assert metadata['source'] == 'npu_worker'
-            assert metadata['vm_id'] == '172.16.168.22'
-            logger.info("✓ Metadata correctly recorded")
-
-        finally:
-            cursor.close()
-            connection.close()
+        metadata = {row[0]: row[1] for row in rows}
+        assert metadata['source'] == 'npu_worker'
+        assert metadata['vm_id'] == '172.16.168.22'
+        logger.info("✓ Metadata correctly recorded")
 
         # Cleanup
         await npu_manager.delete_session_files(session_id, hard_delete=True)
@@ -416,26 +459,22 @@ class TestFrontendFileUpload:
         assert result['file_id'] is not None
         logger.info(f"✓ Frontend uploaded file: {result['file_id']}")
 
-        # Verify session association
-        connection = sqlite3.connect(str(shared_db_path['db_path']))
-        cursor = connection.cursor()
+        # Verify session association (Issue #618: use async sqlite helper)
+        rows = await async_sqlite_query(
+            str(shared_db_path['db_path']),
+            """
+            SELECT association_type, message_id
+            FROM session_file_associations
+            WHERE file_id = ? AND session_id = ?
+            """,
+            (result['file_id'], session_id)
+        )
 
-        try:
-            cursor.execute("""
-                SELECT association_type, message_id
-                FROM session_file_associations
-                WHERE file_id = ? AND session_id = ?
-            """, (result['file_id'], session_id))
-
-            association = cursor.fetchone()
-            assert association is not None, "Association should exist"
-            assert association[0] == 'upload', "Association type should be 'upload'"
-            assert association[1] == message_id, "Message ID should match"
-            logger.info("✓ Session association correct")
-
-        finally:
-            cursor.close()
-            connection.close()
+        assert len(rows) > 0, "Association should exist"
+        association = rows[0]
+        assert association[0] == 'upload', "Association type should be 'upload'"
+        assert association[1] == message_id, "Message ID should match"
+        logger.info("✓ Session association correct")
 
         # Verify file is immediately accessible in chat session
         session_files = await backend_manager.get_session_files(session_id)
@@ -520,33 +559,33 @@ class TestConcurrentVMInitialization:
 
         logger.info("✓ All 6 VMs initialized successfully without errors")
 
-        # Verify database integrity
-        connection = sqlite3.connect(str(shared_db_path['db_path']))
-        cursor = connection.cursor()
+        # Verify database integrity (Issue #618: use async sqlite helper)
+        db_path_str = str(shared_db_path['db_path'])
 
-        try:
-            # Critical check: Schema version should be recorded ONLY ONCE
-            cursor.execute("SELECT COUNT(*) FROM schema_migrations WHERE version = '001'")
-            migration_count = cursor.fetchone()[0]
-            assert migration_count == 1, \
-                f"Schema version should be recorded once, found {migration_count} records"
-            logger.info("✓ Schema version recorded exactly once (no race condition)")
+        # Critical check: Schema version should be recorded ONLY ONCE
+        rows = await async_sqlite_query(
+            db_path_str,
+            "SELECT COUNT(*) FROM schema_migrations WHERE version = '001'"
+        )
+        migration_count = rows[0][0]
+        assert migration_count == 1, \
+            f"Schema version should be recorded once, found {migration_count} records"
+        logger.info("✓ Schema version recorded exactly once (no race condition)")
 
-            # Verify all tables exist (no corruption)
-            cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
-            table_count = cursor.fetchone()[0]
-            assert table_count == 6, f"Should have 6 tables, found {table_count}"
-            logger.info("✓ All tables exist (no corruption during concurrent init)")
+        # Verify all tables exist (no corruption)
+        rows = await async_sqlite_query(
+            db_path_str,
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table'"
+        )
+        table_count = rows[0][0]
+        assert table_count == 6, f"Should have 6 tables, found {table_count}"
+        logger.info("✓ All tables exist (no corruption during concurrent init)")
 
-            # Verify foreign keys are enabled
-            cursor.execute("PRAGMA foreign_keys")
-            fk_enabled = cursor.fetchone()[0]
-            assert fk_enabled == 1, "Foreign keys should be enabled"
-            logger.info("✓ Foreign keys enabled correctly")
-
-        finally:
-            cursor.close()
-            connection.close()
+        # Verify foreign keys are enabled
+        rows = await async_sqlite_query(db_path_str, "PRAGMA foreign_keys")
+        fk_enabled = rows[0][0]
+        assert fk_enabled == 1, "Foreign keys should be enabled"
+        logger.info("✓ Foreign keys enabled correctly")
 
         # Verify all VM managers can query schema version correctly
         for vm_name, manager in managers.items():
@@ -626,12 +665,11 @@ class TestDatabaseRecovery:
         await manager.initialize()
         logger.info("✓ Database initialized normally")
 
-        # Simulate corruption: Drop a critical table
-        connection = sqlite3.connect(str(shared_db_path['db_path']))
-        cursor = connection.cursor()
-        cursor.execute("DROP TABLE conversation_files")
-        connection.commit()
-        connection.close()
+        # Simulate corruption: Drop a critical table (Issue #618: use async sqlite helper)
+        await async_sqlite_execute(
+            str(shared_db_path['db_path']),
+            "DROP TABLE conversation_files"
+        )
         logger.info("✓ Simulated corruption (dropped conversation_files table)")
 
         # Create new manager instance and attempt recovery
@@ -646,34 +684,29 @@ class TestDatabaseRecovery:
         await recovery_manager.initialize()
         logger.info("✓ Recovery attempted via re-initialization")
 
-        # Verify table was recreated
-        connection = sqlite3.connect(str(shared_db_path['db_path']))
-        cursor = connection.cursor()
+        # Verify table was recreated (Issue #618: use async sqlite helper)
+        db_path_str = str(shared_db_path['db_path'])
 
-        try:
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='conversation_files'"
-            )
-            assert cursor.fetchone() is not None, "Table should be recreated"
-            logger.info("✓ Corrupted table recreated")
+        rows = await async_sqlite_query(
+            db_path_str,
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='conversation_files'"
+        )
+        assert len(rows) > 0, "Table should be recreated"
+        logger.info("✓ Corrupted table recreated")
 
-            # Verify table structure is correct
-            cursor.execute("PRAGMA table_info(conversation_files)")
-            columns = {row[1] for row in cursor.fetchall()}
+        # Verify table structure is correct
+        rows = await async_sqlite_query(db_path_str, "PRAGMA table_info(conversation_files)")
+        columns = {row[1] for row in rows}
 
-            expected_columns = {
-                'file_id', 'session_id', 'original_filename', 'stored_filename',
-                'file_path', 'file_size', 'file_hash', 'mime_type',
-                'uploaded_at', 'uploaded_by', 'is_deleted', 'deleted_at'
-            }
+        expected_columns = {
+            'file_id', 'session_id', 'original_filename', 'stored_filename',
+            'file_path', 'file_size', 'file_hash', 'mime_type',
+            'uploaded_at', 'uploaded_by', 'is_deleted', 'deleted_at'
+        }
 
-            assert expected_columns.issubset(columns), \
-                f"Missing columns: {expected_columns - columns}"
-            logger.info("✓ Table structure correct after recovery")
-
-        finally:
-            cursor.close()
-            connection.close()
+        assert expected_columns.issubset(columns), \
+            f"Missing columns: {expected_columns - columns}"
+        logger.info("✓ Table structure correct after recovery")
 
         # Verify system can operate normally after recovery
         test_session = f"recovery_test_{uuid.uuid4()}"

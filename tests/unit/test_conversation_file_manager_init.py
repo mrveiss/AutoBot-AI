@@ -18,6 +18,7 @@ import pytest
 import sqlite3
 import tempfile
 from pathlib import Path
+from typing import Any, List, Tuple
 
 from src.conversation_file_manager import ConversationFileManager
 
@@ -25,6 +26,81 @@ from src.conversation_file_manager import ConversationFileManager
 # Configure logging for tests
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+# Issue #618: Helper to run blocking sqlite3 queries in async context
+async def async_sqlite_query(
+    db_path: str, query: str, params: tuple = ()
+) -> List[Tuple[Any, ...]]:
+    """Execute sqlite3 query without blocking the event loop.
+
+    Args:
+        db_path: Path to SQLite database
+        query: SQL query to execute
+        params: Query parameters
+
+    Returns:
+        List of result tuples from fetchall()
+    """
+    def _execute():
+        connection = sqlite3.connect(db_path)
+        cursor = connection.cursor()
+        try:
+            cursor.execute(query, params)
+            return cursor.fetchall()
+        finally:
+            cursor.close()
+            connection.close()
+
+    return await asyncio.to_thread(_execute)
+
+
+async def async_sqlite_execute(db_path: str, query: str, params: tuple = ()) -> None:
+    """Execute sqlite3 statement without blocking the event loop.
+
+    Args:
+        db_path: Path to SQLite database
+        query: SQL statement to execute
+        params: Query parameters
+    """
+    def _execute():
+        connection = sqlite3.connect(db_path)
+        cursor = connection.cursor()
+        try:
+            cursor.execute(query, params)
+            connection.commit()
+        finally:
+            cursor.close()
+            connection.close()
+
+    await asyncio.to_thread(_execute)
+
+
+async def async_sqlite_multi_query(db_path: str, queries: List[str]) -> List[List[Tuple[Any, ...]]]:
+    """Execute multiple sqlite3 queries without blocking the event loop.
+
+    Args:
+        db_path: Path to SQLite database
+        queries: List of SQL queries to execute
+
+    Returns:
+        List of result lists from each query's fetchall()
+    """
+    def _execute():
+        connection = sqlite3.connect(db_path)
+        cursor = connection.cursor()
+        cursor.execute("PRAGMA foreign_keys = ON")
+        results = []
+        try:
+            for query in queries:
+                cursor.execute(query)
+                results.append(cursor.fetchall())
+            return results
+        finally:
+            cursor.close()
+            connection.close()
+
+    return await asyncio.to_thread(_execute)
 
 
 @pytest.fixture
@@ -82,98 +158,81 @@ class TestFirstTimeInitialization:
         # Verify database was created
         assert temp_db_path['db_path'].exists(), "Database file should be created"
 
-        # Connect to database and verify schema
-        connection = sqlite3.connect(str(temp_db_path['db_path']))
-        cursor = connection.cursor()
-        # Enable foreign keys for this connection (required per-connection in SQLite)
-        cursor.execute("PRAGMA foreign_keys = ON")
+        # Connect to database and verify schema (Issue #618: use async sqlite helper)
+        db_path_str = str(temp_db_path['db_path'])
 
-        try:
-            # Verify all required tables exist
-            expected_tables = {
-                'conversation_files',
-                'file_metadata',
-                'session_file_associations',
-                'file_access_log',
-                'file_cleanup_queue',
-                'schema_migrations'  # Migration tracking table
-            }
+        # Run all schema verification queries in a single thread call
+        results = await async_sqlite_multi_query(db_path_str, [
+            "SELECT name FROM sqlite_master WHERE type='table'",
+            "SELECT name FROM sqlite_master WHERE type='view'",
+            "SELECT name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_autoindex_%'",
+            "SELECT name FROM sqlite_master WHERE type='trigger'",
+            "PRAGMA foreign_keys",
+            "SELECT version FROM schema_migrations ORDER BY migration_id DESC LIMIT 1"
+        ])
 
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            actual_tables = {row[0] for row in cursor.fetchall()}
+        # Verify all required tables exist
+        expected_tables = {
+            'conversation_files',
+            'file_metadata',
+            'session_file_associations',
+            'file_access_log',
+            'file_cleanup_queue',
+            'schema_migrations'  # Migration tracking table
+        }
+        actual_tables = {row[0] for row in results[0]}
+        assert expected_tables.issubset(actual_tables), \
+            f"Missing tables: {expected_tables - actual_tables}"
+        logger.info(f"✓ All {len(expected_tables)} tables created")
 
-            assert expected_tables.issubset(actual_tables), \
-                f"Missing tables: {expected_tables - actual_tables}"
-            logger.info(f"✓ All {len(expected_tables)} tables created")
+        # Verify all required views exist
+        expected_views = {
+            'v_active_files',
+            'v_session_file_summary',
+            'v_pending_cleanups'
+        }
+        actual_views = {row[0] for row in results[1]}
+        assert expected_views.issubset(actual_views), \
+            f"Missing views: {expected_views - actual_views}"
+        logger.info(f"✓ All {len(expected_views)} views created")
 
-            # Verify all required views exist
-            expected_views = {
-                'v_active_files',
-                'v_session_file_summary',
-                'v_pending_cleanups'
-            }
+        # Verify all required indexes exist
+        expected_indexes = {
+            'idx_conversation_files_session',
+            'idx_conversation_files_hash',
+            'idx_conversation_files_uploaded_at',
+            'idx_file_metadata_file_id',
+            'idx_session_associations_session',
+            'idx_session_associations_file',
+            'idx_file_access_log_file',
+            'idx_cleanup_queue_processed'
+        }
+        actual_indexes = {row[0] for row in results[2]}
+        assert expected_indexes.issubset(actual_indexes), \
+            f"Missing indexes: {expected_indexes - actual_indexes}"
+        logger.info(f"✓ All {len(expected_indexes)} indexes created")
 
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='view'")
-            actual_views = {row[0] for row in cursor.fetchall()}
+        # Verify all required triggers exist
+        expected_triggers = {
+            'trg_conversation_files_soft_delete',
+            'trg_conversation_files_upload_log',
+            'trg_session_association_cleanup_schedule'
+        }
+        actual_triggers = {row[0] for row in results[3]}
+        assert expected_triggers.issubset(actual_triggers), \
+            f"Missing triggers: {expected_triggers - actual_triggers}"
+        logger.info(f"✓ All {len(expected_triggers)} triggers created")
 
-            assert expected_views.issubset(actual_views), \
-                f"Missing views: {expected_views - actual_views}"
-            logger.info(f"✓ All {len(expected_views)} views created")
+        # Verify foreign keys are enabled
+        fk_enabled = results[4][0][0]
+        assert fk_enabled == 1, "Foreign keys should be enabled"
+        logger.info("✓ Foreign keys enabled")
 
-            # Verify all required indexes exist
-            expected_indexes = {
-                'idx_conversation_files_session',
-                'idx_conversation_files_hash',
-                'idx_conversation_files_uploaded_at',
-                'idx_file_metadata_file_id',
-                'idx_session_associations_session',
-                'idx_session_associations_file',
-                'idx_file_access_log_file',
-                'idx_cleanup_queue_processed'
-            }
-
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='index' "
-                "AND name NOT LIKE 'sqlite_autoindex_%'"
-            )
-            actual_indexes = {row[0] for row in cursor.fetchall()}
-
-            assert expected_indexes.issubset(actual_indexes), \
-                f"Missing indexes: {expected_indexes - actual_indexes}"
-            logger.info(f"✓ All {len(expected_indexes)} indexes created")
-
-            # Verify all required triggers exist
-            expected_triggers = {
-                'trg_conversation_files_soft_delete',
-                'trg_conversation_files_upload_log',
-                'trg_session_association_cleanup_schedule'
-            }
-
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='trigger'")
-            actual_triggers = {row[0] for row in cursor.fetchall()}
-
-            assert expected_triggers.issubset(actual_triggers), \
-                f"Missing triggers: {expected_triggers - actual_triggers}"
-            logger.info(f"✓ All {len(expected_triggers)} triggers created")
-
-            # Verify foreign keys are enabled
-            cursor.execute("PRAGMA foreign_keys")
-            fk_enabled = cursor.fetchone()[0]
-            assert fk_enabled == 1, "Foreign keys should be enabled"
-            logger.info("✓ Foreign keys enabled")
-
-            # Verify schema version was recorded
-            cursor.execute(
-                "SELECT version FROM schema_migrations ORDER BY migration_id DESC LIMIT 1"
-            )
-            result = cursor.fetchone()
-            assert result is not None, "Schema version should be recorded"
-            assert result[0] == "001", f"Schema version should be '001', got '{result[0]}'"
-            logger.info(f"✓ Schema version recorded: {result[0]}")
-
-        finally:
-            cursor.close()
-            connection.close()
+        # Verify schema version was recorded
+        result = results[5][0] if results[5] else None
+        assert result is not None, "Schema version should be recorded"
+        assert result[0] == "001", f"Schema version should be '001', got '{result[0]}'"
+        logger.info(f"✓ Schema version recorded: {result[0]}")
 
         logger.info("=== Test 1.1: PASSED ===\n")
 
@@ -224,32 +283,30 @@ class TestIdempotentInitialization:
         version_3 = await conversation_file_manager.get_schema_version()
         assert version_3 == version_1, "Schema version should remain unchanged"
 
-        # Verify no duplicate schema elements created
-        connection = sqlite3.connect(str(temp_db_path['db_path']))
-        cursor = connection.cursor()
+        # Verify no duplicate schema elements created (Issue #618: use async sqlite helper)
+        db_path_str = str(temp_db_path['db_path'])
 
-        try:
-            # Count migration records (should be exactly 1)
-            cursor.execute("SELECT COUNT(*) FROM schema_migrations WHERE version = '001'")
-            migration_count = cursor.fetchone()[0]
-            assert migration_count == 1, \
-                f"Should have exactly 1 migration record, found {migration_count}"
-            logger.info("✓ No duplicate migration records")
+        # Count migration records (should be exactly 1)
+        rows = await async_sqlite_query(
+            db_path_str,
+            "SELECT COUNT(*) FROM schema_migrations WHERE version = '001'"
+        )
+        migration_count = rows[0][0]
+        assert migration_count == 1, \
+            f"Should have exactly 1 migration record, found {migration_count}"
+        logger.info("✓ No duplicate migration records")
 
-            # Verify table structure unchanged
-            cursor.execute(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-            )
-            table_count = cursor.fetchone()[0]
+        # Verify table structure unchanged
+        rows = await async_sqlite_query(
+            db_path_str,
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        )
+        table_count = rows[0][0]
 
-            # Expected: 5 schema tables + 1 schema_migrations table
-            assert table_count == 6, \
-                f"Should have exactly 6 tables, found {table_count}"
-            logger.info(f"✓ Table count correct: {table_count}")
-
-        finally:
-            cursor.close()
-            connection.close()
+        # Expected: 5 schema tables + 1 schema_migrations table
+        assert table_count == 6, \
+            f"Should have exactly 6 tables, found {table_count}"
+        logger.info(f"✓ Table count correct: {table_count}")
 
         logger.info("=== Test 1.2: PASSED ===\n")
 
@@ -285,50 +342,48 @@ class TestSchemaVersionTracking:
             f"Version after initialization should be '001', got '{version_after}'"
         logger.info(f"✓ Version set to '{version_after}' after initialization")
 
-        # Verify schema_migrations table structure
-        connection = sqlite3.connect(str(temp_db_path['db_path']))
-        cursor = connection.cursor()
+        # Verify schema_migrations table structure (Issue #618: use async sqlite helper)
+        db_path_str = str(temp_db_path['db_path'])
 
-        try:
-            # Check table exists
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'"
-            )
-            assert cursor.fetchone() is not None, "schema_migrations table should exist"
+        # Check table exists
+        rows = await async_sqlite_query(
+            db_path_str,
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'"
+        )
+        assert len(rows) > 0, "schema_migrations table should exist"
 
-            # Check table structure
-            cursor.execute("PRAGMA table_info(schema_migrations)")
-            columns = {row[1]: row[2] for row in cursor.fetchall()}  # {column_name: type}
+        # Check table structure
+        rows = await async_sqlite_query(db_path_str, "PRAGMA table_info(schema_migrations)")
+        columns = {row[1]: row[2] for row in rows}  # {column_name: type}
 
-            expected_columns = {
-                'migration_id': 'INTEGER',
-                'version': 'TEXT',
-                'description': 'TEXT',
-                'applied_at': 'TIMESTAMP',
-                'status': 'TEXT',
-                'execution_time_ms': 'INTEGER'
-            }
+        expected_columns = {
+            'migration_id': 'INTEGER',
+            'version': 'TEXT',
+            'description': 'TEXT',
+            'applied_at': 'TIMESTAMP',
+            'status': 'TEXT',
+            'execution_time_ms': 'INTEGER'
+        }
 
-            for col_name, col_type in expected_columns.items():
-                assert col_name in columns, f"Column '{col_name}' should exist"
-                assert columns[col_name] == col_type, \
-                    f"Column '{col_name}' should be type '{col_type}', got '{columns[col_name]}'"
+        for col_name, col_type in expected_columns.items():
+            assert col_name in columns, f"Column '{col_name}' should exist"
+            assert columns[col_name] == col_type, \
+                f"Column '{col_name}' should be type '{col_type}', got '{columns[col_name]}'"
 
-            logger.info("✓ schema_migrations table structure correct")
+        logger.info("✓ schema_migrations table structure correct")
 
-            # Verify migration record details
-            cursor.execute("SELECT * FROM schema_migrations WHERE version = '001'")
-            migration = cursor.fetchone()
-            assert migration is not None, "Migration record should exist"
-            assert migration[1] == '001', "Version should be '001'"
-            assert migration[2] == 'Create conversation_files database and schema', \
-                "Description should be correct"
-            assert migration[4] == 'completed', "Status should be 'completed'"
-            logger.info("✓ Migration record details correct")
-
-        finally:
-            cursor.close()
-            connection.close()
+        # Verify migration record details
+        rows = await async_sqlite_query(
+            db_path_str,
+            "SELECT * FROM schema_migrations WHERE version = '001'"
+        )
+        assert len(rows) > 0, "Migration record should exist"
+        migration = rows[0]
+        assert migration[1] == '001', "Version should be '001'"
+        assert migration[2] == 'Create conversation_files database and schema', \
+            "Description should be correct"
+        assert migration[4] == 'completed', "Status should be 'completed'"
+        logger.info("✓ Migration record details correct")
 
         logger.info("=== Test 1.3: PASSED ===\n")
 
@@ -357,40 +412,34 @@ class TestSchemaIntegrityVerification:
         # exceptions, verification passed
         logger.info("✓ Initialization completed (includes integrity verification)")
 
-        # Manually verify we can query all expected elements
-        connection = sqlite3.connect(str(temp_db_path['db_path']))
-        cursor = connection.cursor()
+        # Manually verify we can query all expected elements (Issue #618: use async sqlite helper)
+        db_path_str = str(temp_db_path['db_path'])
 
-        try:
-            # Test querying each table
-            expected_tables = [
-                'conversation_files',
-                'file_metadata',
-                'session_file_associations',
-                'file_access_log',
-                'file_cleanup_queue'
-            ]
+        # Test querying each table
+        expected_tables = [
+            'conversation_files',
+            'file_metadata',
+            'session_file_associations',
+            'file_access_log',
+            'file_cleanup_queue'
+        ]
 
-            for table in expected_tables:
-                cursor.execute(f"SELECT COUNT(*) FROM {table}")
-                count = cursor.fetchone()[0]
-                logger.info(f"✓ Table '{table}' queryable (count: {count})")
+        for table in expected_tables:
+            rows = await async_sqlite_query(db_path_str, f"SELECT COUNT(*) FROM {table}")
+            count = rows[0][0]
+            logger.info(f"✓ Table '{table}' queryable (count: {count})")
 
-            # Test querying each view
-            expected_views = [
-                'v_active_files',
-                'v_session_file_summary',
-                'v_pending_cleanups'
-            ]
+        # Test querying each view
+        expected_views = [
+            'v_active_files',
+            'v_session_file_summary',
+            'v_pending_cleanups'
+        ]
 
-            for view in expected_views:
-                cursor.execute(f"SELECT COUNT(*) FROM {view}")
-                count = cursor.fetchone()[0]
-                logger.info(f"✓ View '{view}' queryable (count: {count})")
-
-        finally:
-            cursor.close()
-            connection.close()
+        for view in expected_views:
+            rows = await async_sqlite_query(db_path_str, f"SELECT COUNT(*) FROM {view}")
+            count = rows[0][0]
+            logger.info(f"✓ View '{view}' queryable (count: {count})")
 
         logger.info("=== Test 1.4: PASSED ===\n")
 
@@ -409,17 +458,12 @@ class TestSchemaIntegrityVerification:
         # Initialize database normally first
         await conversation_file_manager.initialize()
 
-        # Manually remove one required table to simulate corruption
-        connection = sqlite3.connect(str(temp_db_path['db_path']))
-        cursor = connection.cursor()
-
-        try:
-            cursor.execute("DROP TABLE file_metadata")
-            connection.commit()
-            logger.info("✓ Dropped file_metadata table to simulate corruption")
-        finally:
-            cursor.close()
-            connection.close()
+        # Manually remove one required table to simulate corruption (Issue #618: use async sqlite helper)
+        await async_sqlite_execute(
+            str(temp_db_path['db_path']),
+            "DROP TABLE file_metadata"
+        )
+        logger.info("✓ Dropped file_metadata table to simulate corruption")
 
         # Now create a new manager instance and try to initialize
         # The migration is idempotent but verification should catch missing table
@@ -497,32 +541,27 @@ class TestSchemaMigrationFramework:
         assert rollback_success, "Rollback should succeed"
         logger.info("✓ Migration rollback successful")
 
-        # Verify database is clean after rollback
-        connection = sqlite3.connect(str(temp_db_path['db_path']))
-        cursor = connection.cursor()
+        # Verify database is clean after rollback (Issue #618: use async sqlite helper)
+        rows = await async_sqlite_query(
+            str(temp_db_path['db_path']),
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )
+        remaining_tables = [row[0] for row in rows]
 
-        try:
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            remaining_tables = [row[0] for row in cursor.fetchall()]
+        # Should have no schema tables remaining
+        schema_tables = [
+            'conversation_files',
+            'file_metadata',
+            'session_file_associations',
+            'file_access_log',
+            'file_cleanup_queue'
+        ]
 
-            # Should have no schema tables remaining
-            schema_tables = [
-                'conversation_files',
-                'file_metadata',
-                'session_file_associations',
-                'file_access_log',
-                'file_cleanup_queue'
-            ]
+        for table in schema_tables:
+            assert table not in remaining_tables, \
+                f"Table '{table}' should be removed after rollback"
 
-            for table in schema_tables:
-                assert table not in remaining_tables, \
-                    f"Table '{table}' should be removed after rollback"
-
-            logger.info("✓ All schema tables removed after rollback")
-
-        finally:
-            cursor.close()
-            connection.close()
+        logger.info("✓ All schema tables removed after rollback")
 
         # Re-apply migration
         reapply_success = await migration.up()
@@ -585,27 +624,27 @@ class TestConcurrentInitialization:
 
         logger.info("✓ All 5 instances initialized successfully")
 
-        # Verify database integrity
-        connection = sqlite3.connect(str(temp_db_path['db_path']))
-        cursor = connection.cursor()
+        # Verify database integrity (Issue #618: use async sqlite helper)
+        db_path_str = str(temp_db_path['db_path'])
 
-        try:
-            # Verify schema version recorded only once
-            cursor.execute("SELECT COUNT(*) FROM schema_migrations WHERE version = '001'")
-            migration_count = cursor.fetchone()[0]
-            assert migration_count == 1, \
-                f"Should have exactly 1 migration record, found {migration_count}"
-            logger.info(f"✓ Migration recorded once (not {len(managers)} times)")
+        # Verify schema version recorded only once
+        rows = await async_sqlite_query(
+            db_path_str,
+            "SELECT COUNT(*) FROM schema_migrations WHERE version = '001'"
+        )
+        migration_count = rows[0][0]
+        assert migration_count == 1, \
+            f"Should have exactly 1 migration record, found {migration_count}"
+        logger.info(f"✓ Migration recorded once (not {len(managers)} times)")
 
-            # Verify all tables exist (exclude internal SQLite tables)
-            cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-            table_count = cursor.fetchone()[0]
-            assert table_count == 6, f"Should have 6 tables, found {table_count}"
-            logger.info("✓ All tables exist after concurrent initialization")
-
-        finally:
-            cursor.close()
-            connection.close()
+        # Verify all tables exist (exclude internal SQLite tables)
+        rows = await async_sqlite_query(
+            db_path_str,
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        )
+        table_count = rows[0][0]
+        assert table_count == 6, f"Should have 6 tables, found {table_count}"
+        logger.info("✓ All tables exist after concurrent initialization")
 
         # Verify all manager instances can query schema version
         for i, manager in enumerate(managers):
@@ -661,20 +700,17 @@ class TestErrorHandling:
 
             logger.info(f"✓ Appropriate error raised: {exc_info.value}")
 
-            # Verify no partial database was created
+            # Verify no partial database was created (Issue #618: use async sqlite helper)
             if temp_db_path['db_path'].exists():
                 # If database exists, verify it's empty or only has schema_migrations
-                connection = sqlite3.connect(str(temp_db_path['db_path']))
-                cursor = connection.cursor()
-                try:
-                    cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
-                    table_count = cursor.fetchone()[0]
-                    assert table_count <= 1, \
-                        "Should have at most schema_migrations table, no schema tables"
-                    logger.info("✓ No partial schema created")
-                finally:
-                    cursor.close()
-                    connection.close()
+                rows = await async_sqlite_query(
+                    str(temp_db_path['db_path']),
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table'"
+                )
+                table_count = rows[0][0]
+                assert table_count <= 1, \
+                    "Should have at most schema_migrations table, no schema tables"
+                logger.info("✓ No partial schema created")
             else:
                 logger.info("✓ No database file created")
 
