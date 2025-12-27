@@ -327,18 +327,15 @@ class AnalyticsService:
         Returns:
             List of maintenance recommendations sorted by priority
         """
+        # Issue #619: Parallelize independent maintenance analyses
+        agent_recs, cost_recs, resource_recs = await asyncio.gather(
+            self._analyze_agent_maintenance(),
+            self._analyze_cost_maintenance(),
+            self._analyze_resource_maintenance(),
+        )
         recommendations = []
-
-        # Analyze agent performance patterns
-        agent_recs = await self._analyze_agent_maintenance()
         recommendations.extend(agent_recs)
-
-        # Analyze cost patterns
-        cost_recs = await self._analyze_cost_maintenance()
         recommendations.extend(cost_recs)
-
-        # Analyze system resources
-        resource_recs = await self._analyze_resource_maintenance()
         recommendations.extend(resource_recs)
 
         # Sort by priority
@@ -488,18 +485,15 @@ class AnalyticsService:
         Returns:
             List of optimization recommendations sorted by impact
         """
+        # Issue #619: Parallelize independent optimization analyses
+        token_opts, agent_opts, cache_opts = await asyncio.gather(
+            self._analyze_token_optimization(),
+            self._analyze_agent_optimization(),
+            self._analyze_cache_optimization(),
+        )
         recommendations = []
-
-        # LLM token optimization
-        token_opts = await self._analyze_token_optimization()
         recommendations.extend(token_opts)
-
-        # Agent task optimization
-        agent_opts = await self._analyze_agent_optimization()
         recommendations.extend(agent_opts)
-
-        # Cache optimization
-        cache_opts = await self._analyze_cache_optimization()
         recommendations.extend(cache_opts)
 
         # Sort by priority then expected savings
