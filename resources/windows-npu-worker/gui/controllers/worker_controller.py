@@ -117,7 +117,7 @@ class WorkerController(QObject):
 
     @Slot()
     def start_worker(self):
-        """Start NPU worker process"""
+        """Start NPU worker process or Windows service"""
         from PySide6.QtCore import QTimer
 
         try:
@@ -126,6 +126,14 @@ class WorkerController(QObject):
                 self.error_occurred.emit("Worker is already running")
                 return
 
+            # Try to start the Windows service first (preferred method)
+            if self._start_windows_service():
+                logger.info("Started AutoBotNPUWorker Windows service")
+                self.worker_status = "starting"
+                QTimer.singleShot(3000, self._verify_worker_started)
+                return
+
+            # Fall back to starting as subprocess if service doesn't exist
             # Check if worker script exists
             if not self.worker_script.exists():
                 self.error_occurred.emit(f"Worker script not found: {self.worker_script}")
@@ -165,18 +173,118 @@ class WorkerController(QObject):
 
     @Slot()
     def stop_worker(self):
-        """Stop NPU worker process"""
+        """Stop NPU worker process or Windows service"""
         try:
+            # First, try to stop the Windows service (if running as service)
+            service_stopped = self._stop_windows_service()
+
+            # Also terminate any subprocess we started directly
             if self.worker_process and self.worker_process.poll() is None:
                 self.worker_process.terminate()
-                self.worker_process.wait(timeout=5)
+                try:
+                    self.worker_process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self.worker_process.kill()
                 self.worker_process = None
 
             self.worker_status = "stopped"
             self.status_changed.emit("stopped")
 
+            if service_stopped:
+                logger.info("Windows service stopped successfully")
+
         except Exception as e:
+            logger.error("Failed to stop worker: %s", e, exc_info=True)
             self.error_occurred.emit(f"Failed to stop worker: {e}")
+
+    def _stop_windows_service(self) -> bool:
+        """Stop the Windows service if it exists and is running.
+
+        Returns:
+            True if service was stopped, False if not running or doesn't exist
+        """
+        try:
+            # Check if service exists
+            result = subprocess.run(
+                ["sc", "query", "AutoBotNPUWorker"],
+                capture_output=True,
+                text=True,
+                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+            )
+
+            if result.returncode != 0:
+                logger.debug("AutoBotNPUWorker service not found")
+                return False
+
+            # Check if running
+            if "RUNNING" not in result.stdout:
+                logger.debug("AutoBotNPUWorker service not running")
+                return False
+
+            # Stop the service
+            logger.info("Stopping AutoBotNPUWorker service...")
+            stop_result = subprocess.run(
+                ["sc", "stop", "AutoBotNPUWorker"],
+                capture_output=True,
+                text=True,
+                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+            )
+
+            if stop_result.returncode == 0:
+                # Wait a moment for service to stop
+                import time
+                time.sleep(2)
+                return True
+            else:
+                logger.warning("Failed to stop service: %s", stop_result.stderr)
+                return False
+
+        except Exception as e:
+            logger.warning("Error stopping Windows service: %s", e)
+            return False
+
+    def _start_windows_service(self) -> bool:
+        """Start the Windows service if it exists.
+
+        Returns:
+            True if service was started, False otherwise
+        """
+        try:
+            # Check if service exists
+            result = subprocess.run(
+                ["sc", "query", "AutoBotNPUWorker"],
+                capture_output=True,
+                text=True,
+                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+            )
+
+            if result.returncode != 0:
+                logger.debug("AutoBotNPUWorker service not found")
+                return False
+
+            # Check if already running
+            if "RUNNING" in result.stdout:
+                logger.debug("AutoBotNPUWorker service already running")
+                return True
+
+            # Start the service
+            logger.info("Starting AutoBotNPUWorker service...")
+            start_result = subprocess.run(
+                ["sc", "start", "AutoBotNPUWorker"],
+                capture_output=True,
+                text=True,
+                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+            )
+
+            if start_result.returncode == 0:
+                return True
+            else:
+                logger.warning("Failed to start service: %s", start_result.stderr)
+                return False
+
+        except Exception as e:
+            logger.warning("Error starting Windows service: %s", e)
+            return False
 
     @Slot()
     def restart_worker(self):

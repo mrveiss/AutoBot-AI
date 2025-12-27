@@ -174,17 +174,56 @@ def get_platform_info() -> Dict[str, str]:
         'processor': platform.processor(),
     }
 
-    # Check for NPU availability
+    # Check for NPU availability using ONNX Runtime + OpenVINO EP
+    # Issue #640: Uses OpenVINO Execution Provider for proper Intel NPU support.
+    # DirectML doesn't expose Intel NPUs - OpenVINO EP has explicit NPU device option.
     try:
-        from openvino.runtime import Core
-        core = Core()
-        devices = core.available_devices
-        npu_devices = [d for d in devices if "NPU" in d]
-        info['npu_detected'] = len(npu_devices) > 0
+        import onnxruntime as ort
+        providers = ort.get_available_providers()
+        info['available_providers'] = providers
+
+        # Check for OpenVINO EP (preferred for Intel NPU)
+        has_openvino = "OpenVINOExecutionProvider" in providers
+        has_directml = "DmlExecutionProvider" in providers
+        has_cuda = "CUDAExecutionProvider" in providers
+
+        npu_devices = []
+
+        # OpenVINO EP can detect NPU, GPU, CPU
+        if has_openvino:
+            try:
+                from openvino import Core
+                core = Core()
+                available_devices = core.available_devices
+                info['openvino_devices'] = available_devices
+
+                if "NPU" in available_devices:
+                    npu_devices.append("Intel NPU (OpenVINO)")
+                    info['npu_detected'] = True
+                elif "GPU" in available_devices:
+                    npu_devices.append("Intel GPU (OpenVINO)")
+                    info['npu_detected'] = True
+                else:
+                    info['npu_detected'] = False
+            except ImportError:
+                # OpenVINO EP available but Core not installed
+                npu_devices.append("OpenVINO EP (auto-detect)")
+                info['npu_detected'] = True
+        elif has_directml:
+            # DirectML as fallback (GPU only, not NPU)
+            npu_devices.append("DirectML (GPU only)")
+            info['npu_detected'] = True
+        elif has_cuda:
+            npu_devices.append("CUDA (NVIDIA GPU)")
+            info['npu_detected'] = True
+        else:
+            info['npu_detected'] = False
+
         info['npu_devices'] = npu_devices
     except Exception:
         info['npu_detected'] = False
         info['npu_devices'] = []
+        info['available_providers'] = []
 
     return info
 

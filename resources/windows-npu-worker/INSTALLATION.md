@@ -155,7 +155,8 @@ pip install -r requirements.txt
 
 This will install:
 - FastAPI and Uvicorn (web framework)
-- OpenVINO (NPU acceleration)
+- ONNX Runtime with DirectML (NPU/GPU acceleration)
+- HuggingFace Transformers (model loading)
 - Redis client
 - NumPy, scikit-learn (scientific computing)
 - Additional dependencies
@@ -305,9 +306,9 @@ This checks:
    Test-NetConnection -ComputerName 172.16.168.23 -Port 6379
    ```
 
-3. **NPU Detection:**
+3. **NPU Detection (ONNX Runtime providers):**
    ```powershell
-   C:\Program Files\AutoBot\NPU\venv\Scripts\python.exe -c "from openvino.runtime import Core; print(Core().available_devices)"
+   C:\Program Files\AutoBot\NPU\venv\Scripts\python.exe -c "import onnxruntime as ort; print(ort.get_available_providers())"
    ```
 
 4. **Performance Benchmark:**
@@ -361,18 +362,20 @@ This checks:
    ```
 
 #### Issue: NPU not detected
+
 **Solution:**
-1. Verify OpenVINO installation:
+
+1. Verify ONNX Runtime DirectML installation:
    ```powershell
-   C:\Program Files\AutoBot\NPU\venv\Scripts\python.exe -c "import openvino; print(openvino.__version__)"
+   C:\Program Files\AutoBot\NPU\venv\Scripts\python.exe -c "import onnxruntime as ort; print(f'ONNX Runtime {ort.__version__}')"
    ```
 
-2. Check available devices:
+2. Check available execution providers:
    ```powershell
-   C:\Program Files\AutoBot\NPU\venv\Scripts\python.exe -c "from openvino.runtime import Core; print(Core().available_devices)"
+   C:\Program Files\AutoBot\NPU\venv\Scripts\python.exe -c "import onnxruntime as ort; print(ort.get_available_providers())"
    ```
 
-3. Update Intel drivers from: https://www.intel.com/content/www/us/en/download-center/home.html
+3. For DirectML NPU support, ensure Windows 11 24H2+ and Intel AI Boost drivers are installed
 
 ### Network Issues
 

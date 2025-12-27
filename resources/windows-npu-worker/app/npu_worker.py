@@ -4,18 +4,35 @@
 # Author: mrveiss
 """
 AutoBot NPU Worker - Windows Deployment Version
-Optimized for Intel NPU hardware acceleration with OpenVINO
-Standalone Windows service with port 8082
+Optimized for Intel NPU/GPU hardware acceleration with ONNX Runtime + OpenVINO EP
+
+Issue #640: Uses ONNX Runtime with OpenVINO Execution Provider for proper Intel NPU support.
+DirectML doesn't expose Intel NPUs - OpenVINO EP has explicit NPU device option via device_type='NPU'.
+Device priority: NPU → GPU → CPU (automatic fallback)
 
 Issue #68: NPU worker settings with telemetry, bootstrap, and race condition fixes
 """
 
 import asyncio
 import hashlib
+import io
 import logging
+import os
 import sys
 import time
 import uuid
+
+# Issue #640: Force UTF-8 encoding on Windows to prevent charmap codec errors
+# OpenVINO/PyTorch/HuggingFace output Unicode characters (✅, etc.) during conversion
+if sys.platform == "win32":
+    os.environ["PYTHONIOENCODING"] = "utf-8"
+    # Reconfigure stdout/stderr to use UTF-8 if possible
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass  # Service mode may not support reconfiguration
 from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
@@ -278,85 +295,156 @@ class ThreadSafeStats:
 
 
 # =============================================================================
-# OpenVINO Model Management (Issue #640 - Real NPU Inference)
+# ONNX Runtime Model Management (Issue #640 - OpenVINO Execution Provider)
+# =============================================================================
+#
+# This uses ONNX Runtime with OpenVINO Execution Provider for Intel NPU support.
+# DirectML doesn't properly expose Intel NPUs - OpenVINO EP has explicit
+# NPU device support via device_type='NPU' option.
+#
+# Device priority: NPU → GPU → CPU (automatic fallback)
+# Requires: Windows 11 24H2+ with Intel AI Boost drivers for NPU
 # =============================================================================
 
 
-class OpenVINOModelManager:
+class ONNXModelManager:
     """
-    Manages OpenVINO model downloading, conversion, and loading.
+    Manages ONNX model downloading, conversion, and inference with OpenVINO EP.
 
-    Issue #640: Replaces mock embeddings with real NPU inference.
-    Device priority: NPU → GPU → CPU (CPU is last resort)
+    Issue #640: Uses OpenVINO Execution Provider for proper Intel NPU support.
+    DirectML doesn't expose Intel NPUs - OpenVINO EP has explicit NPU device option.
+    Uses HuggingFace for model downloading and exports to ONNX format for inference.
+
+    Device priority: OpenVINOExecutionProvider (NPU→GPU→CPU) → CPUExecutionProvider
     """
 
     def __init__(self, models_dir: Path = MODELS_DIR):
         self.models_dir = models_dir
         self.models_dir.mkdir(parents=True, exist_ok=True)
         self._tokenizers: Dict[str, Any] = {}
-        self._compiled_models: Dict[str, Any] = {}
+        self._sessions: Dict[str, Any] = {}  # ONNX Runtime InferenceSessions
         self._model_configs: Dict[str, Dict] = {}
         self._lock = asyncio.Lock()
-        self._openvino_core = None
         self._selected_device: Optional[str] = None
+        self._available_providers: List[str] = []
+        self._initialized = False
+        self._openvino_device: str = "CPU"  # NPU, GPU, or CPU
 
-    def _get_openvino_core(self):
-        """Lazy initialize OpenVINO Core"""
-        if self._openvino_core is None:
-            try:
-                from openvino.runtime import Core
-                self._openvino_core = Core()
-            except ImportError:
-                logger.error("OpenVINO not installed. Install with: pip install openvino")
-                raise
-        return self._openvino_core
+    def _initialize_onnx_runtime(self):
+        """Lazy initialize ONNX Runtime and detect available providers"""
+        if self._initialized:
+            return
 
-    def _select_best_device(self) -> str:
-        """
-        Select best available device following priority: NPU → GPU → CPU
+        try:
+            import onnxruntime as ort
 
-        Issue #640: CPU is last resort, not GPU
-        """
-        if self._selected_device:
-            return self._selected_device
+            self._available_providers = ort.get_available_providers()
+            logger.info(f"Available ONNX Runtime providers: {self._available_providers}")
 
-        core = self._get_openvino_core()
-        available_devices = core.available_devices
-        logger.info(f"Available OpenVINO devices: {available_devices}")
+            # Check for OpenVINO Execution Provider (preferred for Intel NPU)
+            if "OpenVINOExecutionProvider" in self._available_providers:
+                # Try to detect NPU availability via OpenVINO
+                self._detect_openvino_devices()
+            elif "DmlExecutionProvider" in self._available_providers:
+                self._selected_device = "DirectML"  # GPU via DirectML (fallback)
+                self._openvino_device = "GPU"
+                logger.info("DirectML available (GPU only, no NPU support)")
+            elif "CUDAExecutionProvider" in self._available_providers:
+                self._selected_device = "CUDA"
+                self._openvino_device = "GPU"
+                logger.info("CUDA execution provider available (NVIDIA GPU)")
+            else:
+                self._selected_device = "CPU"
+                self._openvino_device = "CPU"
+                logger.info("Using CPU execution provider (no GPU/NPU acceleration)")
 
-        # Follow priority: NPU → GPU → CPU
-        for device in DEVICE_PRIORITY:
-            if device in available_devices:
-                self._selected_device = device
-                logger.info(f"Selected device: {device} (priority order: {DEVICE_PRIORITY})")
-                return device
-            # Check for device variations (e.g., GPU.0, NPU.0)
-            for avail in available_devices:
-                if avail.startswith(device):
-                    self._selected_device = avail
-                    logger.info(f"Selected device: {avail} (priority order: {DEVICE_PRIORITY})")
-                    return avail
+            self._initialized = True
 
-        # Fallback to CPU (should always be available)
-        self._selected_device = "CPU"
-        logger.warning("No preferred device found, falling back to CPU")
-        return "CPU"
+        except ImportError as e:
+            logger.error(f"ONNX Runtime not installed: {e}")
+            logger.error("Install with: pip install onnxruntime-openvino")
+            raise
+
+    def _detect_openvino_devices(self):
+        """Detect available OpenVINO devices (NPU, GPU, CPU)"""
+        try:
+            # Try to import OpenVINO to check available devices
+            from openvino import Core
+            core = Core()
+            available_devices = core.available_devices
+            logger.info(f"OpenVINO available devices: {available_devices}")
+
+            # Priority: NPU > GPU > CPU
+            if "NPU" in available_devices:
+                self._selected_device = "NPU"
+                self._openvino_device = "NPU"
+                logger.info("Intel NPU detected via OpenVINO - using NPU acceleration!")
+            elif "GPU" in available_devices:
+                self._selected_device = "GPU"
+                self._openvino_device = "GPU"
+                logger.info("Intel GPU detected via OpenVINO - using GPU acceleration")
+            else:
+                self._selected_device = "CPU"
+                self._openvino_device = "CPU"
+                logger.info("Using CPU via OpenVINO (NPU/GPU not available)")
+
+        except ImportError:
+            # OpenVINO not installed separately, use EP defaults
+            logger.info("OpenVINO EP available, will auto-detect device")
+            self._selected_device = "OpenVINO"
+            self._openvino_device = "NPU"  # Try NPU first
+        except Exception as e:
+            logger.warning(f"OpenVINO device detection failed: {e}")
+            self._selected_device = "OpenVINO"
+            self._openvino_device = "CPU"
+
+    def _get_session_providers(self) -> List[tuple]:
+        """Get ordered list of execution providers with options for session creation"""
+        self._initialize_onnx_runtime()
+
+        providers = []
+
+        # OpenVINO Execution Provider with NPU device (preferred for Intel NPU)
+        if "OpenVINOExecutionProvider" in self._available_providers:
+            # OpenVINO EP provider options for NPU
+            # device_type can be: NPU, GPU, CPU, GPU.0, GPU.1, etc.
+            openvino_options = {
+                "device_type": self._openvino_device,
+                "precision": "FP16",  # FP16 for better NPU performance
+                "enable_opencl_throttling": True,
+                "num_of_threads": DEFAULT_NPU_THREADS,
+            }
+            providers.append(("OpenVINOExecutionProvider", openvino_options))
+            logger.info(f"Using OpenVINO EP with device_type='{self._openvino_device}'")
+
+        # DirectML as fallback for GPU (doesn't support NPU properly)
+        if "DmlExecutionProvider" in self._available_providers:
+            providers.append("DmlExecutionProvider")
+
+        # CUDA for NVIDIA GPUs
+        if "CUDAExecutionProvider" in self._available_providers:
+            providers.append("CUDAExecutionProvider")
+
+        # CPU as final fallback (always available)
+        providers.append("CPUExecutionProvider")
+
+        return providers
 
     async def ensure_model_downloaded(self, model_name: str) -> Path:
         """
-        Ensure model is downloaded and converted to OpenVINO IR format.
+        Ensure model is downloaded and converted to ONNX format.
 
-        Downloads from HuggingFace if not present, then converts to OpenVINO.
+        Downloads from HuggingFace if not present, then exports to ONNX.
         """
         model_config = SUPPORTED_MODELS.get(model_name)
         if not model_config:
             raise ValueError(f"Unsupported model: {model_name}. Supported: {list(SUPPORTED_MODELS.keys())}")
 
         model_path = self.models_dir / model_name
-        ov_model_path = model_path / "openvino_model.xml"
+        onnx_model_path = model_path / "model.onnx"
 
-        if ov_model_path.exists():
-            logger.info(f"Model {model_name} already converted to OpenVINO format")
+        if onnx_model_path.exists():
+            logger.info(f"Model {model_name} already in ONNX format")
             return model_path
 
         logger.info(f"Downloading and converting model: {model_name}")
@@ -368,7 +456,7 @@ class OpenVINOModelManager:
         return model_path
 
     def _download_and_convert(self, model_name: str, model_config: Dict, model_path: Path):
-        """Download model from HuggingFace and convert to OpenVINO IR (blocking)"""
+        """Download model from HuggingFace and export to ONNX (blocking)"""
         try:
             from transformers import AutoModel, AutoTokenizer
             import torch
@@ -381,38 +469,41 @@ class OpenVINOModelManager:
             model = AutoModel.from_pretrained(hf_id, trust_remote_code=True)
             model.eval()
 
-            # Save tokenizer
+            # Save tokenizer for later use
             model_path.mkdir(parents=True, exist_ok=True)
             tokenizer.save_pretrained(str(model_path))
 
-            # Convert to OpenVINO
-            logger.info(f"Converting {model_name} to OpenVINO IR format...")
-            self._convert_to_openvino(model, tokenizer, model_config, model_path)
+            # Export to ONNX
+            logger.info(f"Exporting {model_name} to ONNX format...")
+            self._export_to_onnx(model, tokenizer, model_config, model_path)
 
-            logger.info(f"Model {model_name} successfully converted to OpenVINO format")
+            logger.info(f"Model {model_name} successfully exported to ONNX format")
 
         except Exception as e:
             logger.error(f"Failed to download/convert model {model_name}: {e}")
             raise
 
-    def _convert_to_openvino(self, model, tokenizer, model_config: Dict, model_path: Path):
-        """Convert PyTorch model to OpenVINO IR format"""
+    def _export_to_onnx(self, model, tokenizer, model_config: Dict, model_path: Path):
+        """Export PyTorch model to ONNX format"""
         try:
             import torch
-            from openvino import convert_model, save_model
 
             # Create dummy input for tracing
-            max_length = min(model_config.get("max_length", 512), 512)  # Limit for conversion
+            # Use fixed sequence length for NPU compatibility (static shapes)
+            max_length = min(model_config.get("max_length", 512), 512)
             dummy_input = tokenizer(
-                "This is a sample text for model conversion.",
+                "This is a sample text for model export.",
                 padding="max_length",
                 max_length=max_length,
                 truncation=True,
                 return_tensors="pt"
             )
 
-            # Export to ONNX first (more reliable conversion path)
             onnx_path = model_path / "model.onnx"
+
+            # Export with static shapes for better NPU/DirectML compatibility
+            # Issue #640: NPU prefers static shapes over dynamic
+            logger.info(f"Exporting with static sequence length: {max_length}")
 
             with torch.no_grad():
                 torch.onnx.export(
@@ -421,38 +512,34 @@ class OpenVINOModelManager:
                     str(onnx_path),
                     input_names=["input_ids", "attention_mask"],
                     output_names=["last_hidden_state"],
+                    # Use static batch size but allow dynamic sequence for flexibility
                     dynamic_axes={
-                        "input_ids": {0: "batch_size", 1: "sequence"},
-                        "attention_mask": {0: "batch_size", 1: "sequence"},
-                        "last_hidden_state": {0: "batch_size", 1: "sequence"}
+                        "input_ids": {0: "batch_size"},
+                        "attention_mask": {0: "batch_size"},
+                        "last_hidden_state": {0: "batch_size"}
                     },
-                    opset_version=14
+                    opset_version=14,
+                    do_constant_folding=True,  # Optimize constants
                 )
 
-            # Convert ONNX to OpenVINO IR
-            ov_model = convert_model(str(onnx_path))
-
-            # Save OpenVINO model
-            ov_model_path = model_path / "openvino_model.xml"
-            save_model(ov_model, str(ov_model_path))
-
-            # Clean up ONNX file to save space
-            onnx_path.unlink(missing_ok=True)
-
-            logger.info(f"OpenVINO model saved to {ov_model_path}")
+            # Verify the ONNX model
+            import onnx
+            onnx_model = onnx.load(str(onnx_path))
+            onnx.checker.check_model(onnx_model)
+            logger.info(f"ONNX model verified and saved to {onnx_path}")
 
         except Exception as e:
-            logger.error(f"OpenVINO conversion failed: {e}")
+            logger.error(f"ONNX export failed: {e}")
             raise
 
     async def load_model(self, model_name: str) -> bool:
         """
-        Load and compile model for the selected device (NPU → GPU → CPU).
+        Load ONNX model and create inference session with DirectML.
 
         Returns True if model is ready for inference.
         """
         async with self._lock:
-            if model_name in self._compiled_models:
+            if model_name in self._sessions:
                 logger.debug(f"Model {model_name} already loaded")
                 return True
 
@@ -463,7 +550,7 @@ class OpenVINOModelManager:
                 # Load in thread pool (blocking operations)
                 loop = asyncio.get_event_loop()
                 success = await loop.run_in_executor(
-                    None, self._load_compiled_model, model_name, model_path
+                    None, self._create_inference_session, model_name, model_path
                 )
                 return success
 
@@ -471,61 +558,75 @@ class OpenVINOModelManager:
                 logger.error(f"Failed to load model {model_name}: {e}")
                 return False
 
-    def _load_compiled_model(self, model_name: str, model_path: Path) -> bool:
-        """Load and compile OpenVINO model (blocking)"""
+    def _create_inference_session(self, model_name: str, model_path: Path) -> bool:
+        """Create ONNX Runtime inference session with DirectML (blocking)"""
         try:
+            import onnxruntime as ort
             from transformers import AutoTokenizer
 
-            core = self._get_openvino_core()
-            device = self._select_best_device()
+            self._initialize_onnx_runtime()
 
             # Load tokenizer
+            logger.info(f"Loading tokenizer for {model_name}...")
             tokenizer = AutoTokenizer.from_pretrained(str(model_path), trust_remote_code=True)
             self._tokenizers[model_name] = tokenizer
 
-            # Load OpenVINO model
-            ov_model_path = model_path / "openvino_model.xml"
-            model = core.read_model(str(ov_model_path))
+            # Create ONNX Runtime session with DirectML
+            onnx_model_path = model_path / "model.onnx"
+            logger.info(f"Creating inference session for {onnx_model_path}...")
 
-            # Configure for device
-            config = {}
-            if device.startswith("NPU"):
-                # NPU-specific optimizations
-                config["NPU_COMPILATION_MODE_PARAMS"] = "compute-layers-with-higher-precision=Sqrt,Power,ReduceMean,Add"
-                config["PERFORMANCE_HINT"] = "LATENCY"
-                logger.info(f"Applying NPU optimizations for {model_name}")
-            elif device.startswith("GPU"):
-                config["PERFORMANCE_HINT"] = "THROUGHPUT"
-                logger.info(f"Applying GPU optimizations for {model_name}")
+            providers = self._get_session_providers()
+            logger.info(f"Using execution providers: {providers}")
 
-            # Compile model for device
-            compiled_model = core.compile_model(model, device, config)
-            self._compiled_models[model_name] = compiled_model
+            # Session options for optimization
+            sess_options = ort.SessionOptions()
+            sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+            sess_options.enable_mem_pattern = True
+            sess_options.enable_cpu_mem_arena = True
 
-            # Store config
+            # Create session with provider fallback
+            session = ort.InferenceSession(
+                str(onnx_model_path),
+                sess_options=sess_options,
+                providers=providers
+            )
+
+            # Log which provider was actually used
+            actual_providers = session.get_providers()
+            logger.info(f"Session created with providers: {actual_providers}")
+
+            # Update selected device based on actual provider
+            if "DmlExecutionProvider" in actual_providers:
+                self._selected_device = "DirectML"
+            elif "CUDAExecutionProvider" in actual_providers:
+                self._selected_device = "CUDA"
+            else:
+                self._selected_device = "CPU"
+
+            self._sessions[model_name] = session
             self._model_configs[model_name] = SUPPORTED_MODELS.get(model_name, {})
 
-            logger.info(f"Model {model_name} compiled for {device}")
+            logger.info(f"Model {model_name} loaded successfully on {self._selected_device}")
             return True
 
         except Exception as e:
-            logger.error(f"Failed to compile model {model_name}: {e}")
+            logger.error(f"Failed to create inference session for {model_name}: {e}", exc_info=True)
             return False
 
     def generate_embedding(self, text: str, model_name: str) -> List[float]:
         """
-        Generate embedding using real OpenVINO inference.
+        Generate embedding using ONNX Runtime inference.
 
-        Issue #640: Replaces mock random embeddings with real NPU inference.
+        Issue #640: Real inference using DirectML for NPU/GPU acceleration.
         """
-        if model_name not in self._compiled_models:
+        if model_name not in self._sessions:
             raise RuntimeError(f"Model {model_name} not loaded. Call load_model() first.")
 
         tokenizer = self._tokenizers[model_name]
-        compiled_model = self._compiled_models[model_name]
+        session = self._sessions[model_name]
         model_config = self._model_configs.get(model_name, {})
 
-        # Tokenize input
+        # Tokenize input with fixed max_length for NPU compatibility
         max_length = min(model_config.get("max_length", 512), 512)
         inputs = tokenizer(
             text,
@@ -535,15 +636,20 @@ class OpenVINOModelManager:
             return_tensors="np"
         )
 
-        # Run inference
-        input_ids = inputs["input_ids"]
-        attention_mask = inputs["attention_mask"]
+        # Prepare inputs for ONNX Runtime
+        input_ids = inputs["input_ids"].astype(np.int64)
+        attention_mask = inputs["attention_mask"].astype(np.int64)
 
-        # OpenVINO inference
-        result = compiled_model([input_ids, attention_mask])
+        # Run inference
+        ort_inputs = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask
+        }
+
+        outputs = session.run(None, ort_inputs)
 
         # Extract embeddings (mean pooling over sequence)
-        hidden_states = result[0]  # Shape: (batch, seq_len, hidden_dim)
+        hidden_states = outputs[0]  # Shape: (batch, seq_len, hidden_dim)
         attention_mask_expanded = attention_mask[:, :, np.newaxis]
 
         # Mean pooling with attention mask
@@ -559,31 +665,48 @@ class OpenVINOModelManager:
         return embedding.tolist()
 
     def get_device_info(self) -> Dict[str, Any]:
-        """Get information about the selected device"""
+        """Get information about the selected device and available providers"""
         try:
-            core = self._get_openvino_core()
-            device = self._select_best_device()
+            self._initialize_onnx_runtime()
 
             info = {
-                "selected_device": device,
-                "available_devices": core.available_devices,
-                "device_priority": DEVICE_PRIORITY,
-                "is_npu": device.startswith("NPU"),
-                "is_gpu": device.startswith("GPU"),
-                "is_cpu": device == "CPU",
+                "selected_device": self._selected_device or "Unknown",
+                "openvino_device": self._openvino_device,
+                "available_providers": self._available_providers,
+                "device_priority": ["OpenVINOExecutionProvider (NPU)", "OpenVINOExecutionProvider (GPU)", "DmlExecutionProvider", "CPUExecutionProvider"],
+                "is_npu": self._selected_device == "NPU" or self._openvino_device == "NPU",
+                "is_gpu": self._selected_device in ["GPU", "DirectML", "CUDA"] or self._openvino_device == "GPU",
+                "is_cpu": self._selected_device == "CPU" and self._openvino_device == "CPU",
+                "backend": "ONNX Runtime + OpenVINO EP",
             }
 
-            # Get device-specific properties if available
-            try:
-                props = core.get_property(device, "FULL_DEVICE_NAME")
-                info["device_name"] = props
-            except Exception:
-                info["device_name"] = device
+            # Check OpenVINO EP availability
+            if "OpenVINOExecutionProvider" in self._available_providers:
+                info["openvino_available"] = True
+                info["device_name"] = f"OpenVINO ({self._openvino_device})"
+
+                # Try to get detailed device info
+                try:
+                    from openvino import Core
+                    core = Core()
+                    info["openvino_devices"] = core.available_devices
+                except Exception:
+                    info["openvino_devices"] = ["Unknown"]
+            else:
+                info["openvino_available"] = False
+                info["device_name"] = self._selected_device
+
+            # Check DirectML as fallback
+            info["directml_available"] = "DmlExecutionProvider" in self._available_providers
 
             return info
 
         except Exception as e:
             return {"error": str(e), "selected_device": "UNKNOWN"}
+
+
+# Alias for backwards compatibility
+OpenVINOModelManager = ONNXModelManager
 
 
 # Global model manager instance
@@ -711,12 +834,14 @@ class WindowsNPUWorker:
             Get detailed device information including NPU/GPU/CPU status.
 
             Issue #640: Shows which device is being used for inference.
+            Uses ONNX Runtime + OpenVINO EP for proper Intel NPU support.
             """
             info = {
                 "worker_id": self.worker_id,
                 "npu_available": self.npu_available,
                 "real_inference_enabled": self._use_real_inference,
-                "device_priority": DEVICE_PRIORITY,
+                "backend": "ONNX Runtime + OpenVINO EP",
+                "device_priority": ["OpenVINOExecutionProvider (NPU)", "OpenVINOExecutionProvider (GPU)", "DmlExecutionProvider", "CPUExecutionProvider"],
             }
 
             if self._model_manager is not None:
@@ -724,7 +849,8 @@ class WindowsNPUWorker:
                     manager_info = self._model_manager.get_device_info()
                     info["model_manager"] = manager_info
                     info["selected_device"] = manager_info.get("selected_device", "UNKNOWN")
-                    info["available_devices"] = manager_info.get("available_devices", [])
+                    info["available_providers"] = manager_info.get("available_providers", [])
+                    info["directml_available"] = manager_info.get("directml_available", False)
                 except Exception as e:
                     info["model_manager_error"] = str(e)
             else:
@@ -737,6 +863,7 @@ class WindowsNPUWorker:
                     "device": model_info.get("device", "UNKNOWN"),
                     "real_inference": model_info.get("real_inference", False),
                     "optimized_for_npu": model_info.get("optimized_for_npu", False),
+                    "backend": model_info.get("backend", "Unknown"),
                 }
                 for name, model_info in self.loaded_models.items()
             }
@@ -1028,38 +1155,56 @@ class WindowsNPUWorker:
 
     async def initialize_npu(self):
         """
-        Initialize NPU with OpenVINO and model manager.
+        Initialize NPU/GPU acceleration with ONNX Runtime OpenVINO EP.
 
-        Issue #640: Adds real model management for NPU inference.
-        Device priority: NPU → GPU → CPU (CPU is last resort)
+        Issue #640: Uses OpenVINO Execution Provider for proper Intel NPU support.
+        DirectML doesn't expose Intel NPUs - OpenVINO EP has explicit NPU device option.
+        Device priority: NPU → GPU → CPU (automatic fallback)
         """
         try:
             import platform
             if platform.system() != "Windows":
-                logger.warning("NPU worker optimized for Windows")
+                logger.warning("NPU worker optimized for Windows - OpenVINO NPU not available on this platform")
                 self.npu_available = False
                 return
 
-            from openvino.runtime import Core
-            self.openvino_core = Core()
-            devices = self.openvino_core.available_devices
-            logger.info(f"Available OpenVINO devices: {devices}")
+            # Initialize ONNX Runtime and check available providers
+            import onnxruntime as ort
+            available_providers = ort.get_available_providers()
+            logger.info(f"Available ONNX Runtime providers: {available_providers}")
 
-            # Check device priority: NPU → GPU → CPU
-            npu_devices = [d for d in devices if d.startswith("NPU")]
-            gpu_devices = [d for d in devices if d.startswith("GPU")]
+            # Check for OpenVINO EP (preferred for Intel NPU)
+            if "OpenVINOExecutionProvider" in available_providers:
+                # Try to detect NPU via OpenVINO
+                try:
+                    from openvino import Core
+                    core = Core()
+                    available_devices = core.available_devices
+                    logger.info(f"OpenVINO available devices: {available_devices}")
 
-            if npu_devices:
+                    if "NPU" in available_devices:
+                        self.npu_available = True
+                        logger.info("Intel NPU detected via OpenVINO - NPU acceleration enabled!")
+                    elif "GPU" in available_devices:
+                        self.npu_available = True
+                        logger.info("Intel GPU detected via OpenVINO - GPU acceleration enabled")
+                    else:
+                        self.npu_available = False
+                        logger.warning("OpenVINO EP available but no NPU/GPU detected")
+                except ImportError:
+                    # OpenVINO package not installed, but EP might still work
+                    self.npu_available = True
+                    logger.info("OpenVINO EP available - will try NPU/GPU acceleration")
+            elif "DmlExecutionProvider" in available_providers:
+                # Fallback to DirectML (GPU only, no NPU)
                 self.npu_available = True
-                logger.info(f"NPU initialized - Devices: {npu_devices}")
-            elif gpu_devices:
-                # GPU available but no NPU
-                self.npu_available = False
-                logger.info(f"No NPU found, GPU available: {gpu_devices}")
+                logger.info("DirectML available (GPU only, Intel NPU not exposed via DirectML)")
+            elif "CUDAExecutionProvider" in available_providers:
+                self.npu_available = True
+                logger.info("CUDA execution provider available - NVIDIA GPU acceleration enabled")
             else:
-                # CPU fallback
                 self.npu_available = False
-                logger.warning("No NPU or GPU devices found - using CPU fallback")
+                logger.warning("No GPU/NPU acceleration available - using CPU only")
 
             # Initialize model manager for real inference (Issue #640)
             if self._use_real_inference:
@@ -1067,17 +1212,23 @@ class WindowsNPUWorker:
                     self._model_manager = get_model_manager()
                     device_info = self._model_manager.get_device_info()
                     logger.info(f"Model manager initialized: {device_info}")
+
+                    # Update npu_available based on actual device
+                    if device_info.get("is_gpu") or device_info.get("is_npu"):
+                        self.npu_available = True
+
                 except Exception as e:
                     logger.error(f"Failed to initialize model manager: {e}")
                     logger.info("Falling back to mock inference")
                     self._use_real_inference = False
 
-        except ImportError:
-            logger.error("OpenVINO not installed")
+        except ImportError as e:
+            logger.error(f"ONNX Runtime not installed: {e}")
+            logger.error("Install with: pip install onnxruntime-openvino")
             self.npu_available = False
             self._use_real_inference = False
         except Exception as e:
-            logger.error(f"NPU initialization failed: {e}")
+            logger.error(f"NPU/GPU initialization failed: {e}")
             self.npu_available = False
             self._use_real_inference = False
 
@@ -1100,7 +1251,7 @@ class WindowsNPUWorker:
         """
         Load and optimize model with thread-safe locking (Issue #68 - TOCTOU fix).
 
-        Issue #640: Now uses real OpenVINO model loading with device priority NPU → GPU → CPU.
+        Issue #640: Now uses ONNX Runtime + DirectML for stable NPU/GPU inference.
         Uses lock to prevent race condition where model loading starts
         after check but before load completes.
         """
@@ -1113,29 +1264,35 @@ class WindowsNPUWorker:
             start_time = time.time()
 
             try:
-                # Issue #640: Use real model manager for OpenVINO inference
+                # Issue #640: Use ONNX Runtime model manager for DirectML inference
                 if self._use_real_inference and self._model_manager is not None:
-                    logger.info(f"Loading {model_name} with OpenVINO (real inference)...")
+                    logger.info(f"Loading {model_name} with ONNX Runtime (real inference)...")
 
-                    # Load model via model manager (handles download + conversion)
+                    # Load model via model manager (handles download + ONNX export)
                     success = await self._model_manager.load_model(model_name)
 
                     if success:
                         device_info = self._model_manager.get_device_info()
                         selected_device = device_info.get("selected_device", "CPU")
 
+                        # Map DirectML to NPU/GPU for display
+                        display_device = selected_device
+                        if selected_device == "DirectML":
+                            display_device = "NPU/GPU (DirectML)"
+
                         self.loaded_models[model_name] = {
                             "loaded_at": datetime.now().isoformat(),
                             "load_time": time.time() - start_time,
-                            "device": selected_device,
+                            "device": display_device,
                             "size_mb": self.estimate_model_size(model_name),
-                            "optimized_for_npu": selected_device.startswith("NPU"),
+                            "optimized_for_npu": device_info.get("is_npu", False) or device_info.get("is_gpu", False),
                             "optimization_level": optimization_level,
                             "precision": self.npu_optimization.get("precision", DEFAULT_NPU_PRECISION),
                             "real_inference": True,
                             "device_info": device_info,
+                            "backend": device_info.get("backend", "ONNX Runtime"),
                         }
-                        logger.info(f"Model {model_name} loaded for {selected_device} (real inference)")
+                        logger.info(f"Model {model_name} loaded for {display_device} (real inference)")
                     else:
                         logger.warning(f"Failed to load {model_name} with real inference, using mock")
                         await self._load_mock_model(model_name, optimization_level, start_time)

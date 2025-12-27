@@ -29,7 +29,8 @@ Get `AutoBot-NPU-Worker-Setup-1.0.0.exe` from releases
 - ✅ Click "Install"
 
 **Installation automatically:**
-- Installs all dependencies (Python, OpenVINO, etc.)
+
+- Installs all dependencies (Python, ONNX Runtime DirectML, etc.)
 - Configures Windows Firewall (port 8082)
 - Installs and starts Windows Service
 - Registers with AutoBot backend
@@ -92,8 +93,9 @@ cd C:\AutoBot\NPU
 ```
 
 **Installation will automatically:**
+
 - ✅ Create Python virtual environment
-- ✅ Install all dependencies (OpenVINO, FastAPI, Redis, etc.)
+- ✅ Install all dependencies (ONNX Runtime DirectML, FastAPI, Redis, etc.)
 - ✅ Download NSSM service manager
 - ✅ Configure Windows Firewall (port 8082)
 - ✅ Install and start Windows Service
@@ -213,13 +215,13 @@ Restart-Service AutoBotNPUWorker
 ### NPU Not Detected?
 ```powershell
 # Installer path
-& "C:\Program Files\AutoBot\NPU\python\python.exe" -c "import openvino; print(openvino.__version__)"
+& "C:\Program Files\AutoBot\NPU\python\python.exe" -c "import onnxruntime as ort; print(f'ONNX Runtime {ort.__version__}')"
 
 # Manual installation path
-& C:\AutoBot\NPU\venv\Scripts\python.exe -c "import openvino; print(openvino.__version__)"
+& C:\AutoBot\NPU\venv\Scripts\python.exe -c "import onnxruntime as ort; print(f'ONNX Runtime {ort.__version__}')"
 
-# Check available devices
-& python -c "from openvino.runtime import Core; print(Core().available_devices)"
+# Check available execution providers
+& python -c "import onnxruntime as ort; print(ort.get_available_providers())"
 ```
 
 ### Port Conflict?

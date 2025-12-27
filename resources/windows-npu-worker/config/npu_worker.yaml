@@ -59,12 +59,14 @@ redis:
     failed: "npu_tasks_failed"
 
 # NPU Optimization Settings
+# Issue #640: Uses ONNX Runtime + OpenVINO EP for proper Intel NPU support.
+# DirectML doesn't expose Intel NPUs - OpenVINO EP has explicit NPU device option.
 npu:
   # Hardware acceleration priority
   enabled: true
-  fallback_to_cpu: true  # Use CPU if NPU not available
+  fallback_to_cpu: true  # Use CPU if NPU/GPU not available
 
-  # OpenVINO optimization
+  # ONNX Runtime OpenVINO Execution Provider optimization
   optimization:
     precision: "INT8"           # NPU works best with INT8
     batch_size: 32              # Optimal NPU batch size

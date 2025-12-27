@@ -1,5 +1,8 @@
 # AutoBot NPU Worker - Windows Installation Script
 # Run as Administrator
+#
+# Issue #640: Updated to use ONNX Runtime + DirectML for stable NPU/GPU inference
+# Replaces raw OpenVINO which had silent crash issues on NPU
 
 #Requires -RunAsAdministrator
 
@@ -7,8 +10,30 @@ param(
     [switch]$SkipPythonCheck,
     [switch]$SkipFirewall,
     [switch]$NoAutoStart,
+    [switch]$Uninstall,
+    [switch]$KeepData,
+    [switch]$KeepLogs,
+    [switch]$Force,
     [string]$InstallPath = "C:\AutoBot\NPU"
 )
+
+# Handle uninstall mode - delegate to uninstall.ps1
+if ($Uninstall) {
+    $uninstallScript = Join-Path $PSScriptRoot "uninstall.ps1"
+    if (Test-Path $uninstallScript) {
+        $uninstallArgs = @()
+        if ($KeepData) { $uninstallArgs += "-KeepData" }
+        if ($KeepLogs) { $uninstallArgs += "-KeepLogs" }
+        if ($Force) { $uninstallArgs += "-Force" }
+        $uninstallArgs += "-InstallPath"
+        $uninstallArgs += $InstallPath
+        & $uninstallScript @uninstallArgs
+        exit $LASTEXITCODE
+    } else {
+        Write-Host "Uninstall script not found: $uninstallScript" -ForegroundColor Red
+        exit 1
+    }
+}
 
 $ErrorActionPreference = "Stop"
 
@@ -81,10 +106,49 @@ if (-not (Test-Path $InstallPath)) {
 
 # Copy files to installation directory if not already there
 $currentPath = (Get-Location).Path
-if ($currentPath -ne $InstallPath) {
-    Write-Info "Copying files to installation directory..."
-    Copy-Item -Path "$currentPath\*" -Destination $InstallPath -Recurse -Force
+$scriptRoot = Split-Path -Parent $PSScriptRoot  # Get parent of scripts directory
+
+# Determine source directory (either current location or script's parent)
+if (Test-Path (Join-Path $currentPath "app\npu_worker.py")) {
+    $sourceDir = $currentPath
+} elseif (Test-Path (Join-Path $scriptRoot "app\npu_worker.py")) {
+    $sourceDir = $scriptRoot
+} else {
+    Write-Error "Cannot find NPU worker source files"
+    Write-Info "Run this script from the NPU worker package directory"
+    exit 1
+}
+
+if ($sourceDir -ne $InstallPath) {
+    Write-Info "Copying files from $sourceDir to $InstallPath..."
+
+    # Copy specific directories and files to avoid permission issues with symlinks
+    $itemsToCopy = @("app", "config", "gui", "installer", "nssm", "scripts", "tests",
+                     "requirements.txt", "README.md", "INSTALLATION.md", "QUICK_START.md",
+                     "DEPLOYMENT_SUMMARY.md", "BUILDING.md", "LICENSE.txt")
+
+    foreach ($item in $itemsToCopy) {
+        $sourcePath = Join-Path $sourceDir $item
+        if (Test-Path $sourcePath) {
+            try {
+                Copy-Item -Path $sourcePath -Destination $InstallPath -Recurse -Force -ErrorAction Stop
+            } catch {
+                Write-Warning "Could not copy $item : $_"
+            }
+        }
+    }
+
+    # Create empty directories if they don't exist
+    $emptyDirs = @("logs", "models", "data")
+    foreach ($dir in $emptyDirs) {
+        $dirPath = Join-Path $InstallPath $dir
+        if (-not (Test-Path $dirPath)) {
+            New-Item -ItemType Directory -Path $dirPath -Force | Out-Null
+        }
+    }
+
     Set-Location $InstallPath
+    Write-Success "Files copied to installation directory"
 }
 
 # Create virtual environment
@@ -119,13 +183,47 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Success "Python dependencies installed"
 
-# Verify OpenVINO installation
-Write-Info "Verifying OpenVINO installation..."
-$openvinoCheck = & $pythonExe -c "import openvino; print(openvino.__version__)" 2>&1
+# Verify ONNX Runtime installation (Issue #640: Uses OpenVINO EP for Intel NPU)
+Write-Info "Verifying ONNX Runtime OpenVINO installation..."
+$onnxCheck = & $pythonExe -c "import onnxruntime as ort; print(f'ONNX Runtime {ort.__version__}')" 2>&1
 if ($LASTEXITCODE -eq 0) {
-    Write-Success "OpenVINO version: $openvinoCheck"
+    Write-Success "$onnxCheck"
+
+    # Check available providers
+    $providers = & $pythonExe -c "import onnxruntime as ort; print(', '.join(ort.get_available_providers()))" 2>&1
+    Write-Info "Available providers: $providers"
+
+    if ($providers -match "OpenVINOExecutionProvider") {
+        Write-Success "OpenVINO Execution Provider available!"
+
+        # Check for NPU device via OpenVINO Core
+        try {
+            $devices = & $pythonExe -c "from openvino import Core; print(', '.join(Core().available_devices))" 2>&1
+            if ($LASTEXITCODE -eq 0 -and $devices -notmatch "Traceback") {
+                Write-Info "OpenVINO devices: $devices"
+                if ($devices -match "NPU") {
+                    Write-Success "Intel NPU detected - NPU acceleration enabled!"
+                } elseif ($devices -match "GPU") {
+                    Write-Success "Intel GPU detected - GPU acceleration enabled"
+                } else {
+                    Write-Warning "No NPU/GPU detected in device list - will use CPU"
+                }
+            } else {
+                Write-Info "OpenVINO device enumeration not available (EP will auto-select device)"
+                Write-Info "OpenVINO EP will automatically use best available device: NPU > GPU > CPU"
+            }
+        } catch {
+            Write-Info "OpenVINO device check skipped (EP will auto-select device)"
+        }
+    } elseif ($providers -match "DmlExecutionProvider") {
+        Write-Warning "DirectML available (GPU only, Intel NPU not exposed via DirectML)"
+        Write-Info "For full NPU support, ensure onnxruntime-openvino is installed"
+    } else {
+        Write-Warning "No acceleration providers available - will use CPU only"
+        Write-Info "For NPU acceleration, ensure Windows 11 24H2+ and Intel AI Boost drivers"
+    }
 } else {
-    Write-Warning "OpenVINO verification failed (may work in service mode)"
+    Write-Warning "ONNX Runtime verification failed (may work in service mode)"
 }
 
 # Create directories

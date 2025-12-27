@@ -2,12 +2,14 @@
 
 ## Overview
 
-This package provides a standalone NPU worker installation for Windows systems. It enables optional hardware-accelerated AI processing using Intel OpenVINO NPU without interfering with the existing VM-based infrastructure.
+This package provides a standalone NPU worker installation for Windows systems. It enables optional hardware-accelerated AI processing using ONNX Runtime with DirectML for stable NPU/GPU acceleration without interfering with the existing VM-based infrastructure.
+
+> **Issue #640**: Replaced raw OpenVINO with ONNX Runtime + DirectML for more stable NPU inference. DirectML provides better error handling and automatic device fallback.
 
 ## Features
 
 - Standalone Windows installation
-- Intel OpenVINO NPU hardware acceleration
+- ONNX Runtime + DirectML for NPU/GPU acceleration
 - Windows Service integration with auto-start
 - Separate port (8082) to avoid conflicts with VM worker
 - Easy enable/disable via service management
@@ -222,17 +224,17 @@ Check for NPU worker in the response.
 
 ### NPU Not Detected
 
-1. Verify OpenVINO installation:
+1. Verify ONNX Runtime DirectML installation:
    ```powershell
-   .\venv\Scripts\python.exe -c "import openvino; print(openvino.__version__)"
+   .\venv\Scripts\python.exe -c "import onnxruntime as ort; print(f'ONNX Runtime {ort.__version__}')"
    ```
 
-2. Check available devices:
+2. Check available execution providers:
    ```powershell
-   .\venv\Scripts\python.exe -c "from openvino.runtime import Core; print(Core().available_devices)"
+   .\venv\Scripts\python.exe -c "import onnxruntime as ort; print(ort.get_available_providers())"
    ```
 
-3. Update OpenVINO drivers from Intel website
+3. For NPU support, ensure Windows 11 24H2+ and Intel AI Boost drivers are installed
 
 ### Cannot Connect to Backend/Redis
 
@@ -298,7 +300,7 @@ C:\AutoBot\NPU\
 ├── logs\              # Log files
 │   ├── service.log    # Service logs
 │   └── app.log        # Application logs
-├── models\            # OpenVINO model cache
+├── models\            # ONNX model cache
 ├── data\              # Runtime data
 ├── nssm\              # Service manager
 │   └── nssm.exe
