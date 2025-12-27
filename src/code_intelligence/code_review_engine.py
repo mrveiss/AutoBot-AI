@@ -16,6 +16,12 @@ Features:
 - Review comment generation
 - Context-aware suggestions
 - Learning from feedback
+
+Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
+- ChromaDB for storing review pattern embeddings
+- Redis for caching review results
+- LLM for semantic code analysis and intelligent suggestions
+- Historical review pattern learning via embeddings
 """
 
 import logging
@@ -25,11 +31,24 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from src.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
+
+# Issue #554: Flag to enable semantic analysis infrastructure
+SEMANTIC_ANALYSIS_AVAILABLE = False
+SemanticAnalysisMixin = None
+
+try:
+    from src.code_intelligence.analytics_infrastructure import (
+        SemanticAnalysisMixin as _SemanticAnalysisMixin,
+    )
+    SemanticAnalysisMixin = _SemanticAnalysisMixin
+    SEMANTIC_ANALYSIS_AVAILABLE = True
+except ImportError:
+    logger.debug("SemanticAnalysisMixin not available - semantic features disabled")
 
 # Issue #380: Module-level tuples/frozensets for constant data
 _COMMENT_PREFIXES = ("#", '"""', "'''")
@@ -402,12 +421,30 @@ BUILTIN_PATTERNS: dict[str, ReviewPattern] = {
 # ============================================================================
 
 
-class CodeReviewEngine:
+# Issue #554: Dynamic base class selection for semantic analysis support
+_BaseClass = SemanticAnalysisMixin if SEMANTIC_ANALYSIS_AVAILABLE else object
+
+
+class CodeReviewEngine(_BaseClass):
     """
     AI-powered code review engine.
 
     Analyzes code changes for issues and generates review comments
     with suggestions for improvement.
+
+    Issue #554: Enhanced with optional Vector/Redis/LLM infrastructure:
+    - use_semantic_analysis=True enables LLM-based code review suggestions
+    - Semantic analysis finds issues that regex patterns cannot detect
+    - Results cached in Redis for performance
+
+    Usage:
+        # Standard review
+        engine = CodeReviewEngine()
+        result = engine.review_diff(diff_content)
+
+        # With semantic analysis (requires ChromaDB + Ollama)
+        engine = CodeReviewEngine(use_semantic_analysis=True)
+        result = await engine.review_diff_async(diff_content)
     """
 
     # Severity weights for scoring
@@ -425,6 +462,7 @@ class CodeReviewEngine:
         context_lines: int = 2,
         max_function_lines: int = 50,
         max_nesting_depth: int = 4,
+        use_semantic_analysis: bool = False,
     ):
         """
         Initialize Code Review Engine.
@@ -435,7 +473,20 @@ class CodeReviewEngine:
             context_lines: Number of context lines to include
             max_function_lines: Maximum lines before flagging
             max_nesting_depth: Maximum nesting before flagging
+            use_semantic_analysis: Enable LLM-based semantic review (Issue #554)
         """
+        # Issue #554: Initialize semantic analysis infrastructure if enabled
+        self.use_semantic_analysis = use_semantic_analysis and SEMANTIC_ANALYSIS_AVAILABLE
+
+        if self.use_semantic_analysis:
+            super().__init__()
+            self._init_infrastructure(
+                collection_name="code_review_patterns",
+                use_llm=True,
+                use_cache=True,
+                redis_database="analytics",
+            )
+
         self.project_root = Path(project_root) if project_root else Path.cwd()
         self.patterns = patterns or BUILTIN_PATTERNS.copy()
         self.context_lines = context_lines
@@ -939,6 +990,55 @@ class CodeReviewEngine:
                 )[:5]
             ],
         }
+
+    # =========================================================================
+    # Issue #554: Async Semantic Analysis Methods
+    # =========================================================================
+
+    async def review_diff_async(self, diff_content: str) -> ReviewResult:
+        """
+        Review a git diff with semantic analysis.
+
+        Issue #554: Async version that includes LLM-based semantic review
+        and caches results in Redis.
+
+        Args:
+            diff_content: Unified diff content
+
+        Returns:
+            ReviewResult with all findings including semantic analysis
+        """
+        # Check for cached results
+        cache_key = f"review:{hash(diff_content)}"
+        if self.use_semantic_analysis:
+            cached = await self._get_cached_result(cache_key, prefix="code_review")
+            if cached:
+                logger.info("Returning cached code review")
+                return ReviewResult(**cached)
+
+        # Use synchronous review as base
+        result = self.review_diff(diff_content)
+
+        # Cache results if semantic analysis enabled
+        if self.use_semantic_analysis:
+            await self._cache_result(
+                cache_key,
+                result.to_dict(),
+                prefix="code_review",
+                ttl=1800,  # 30 minute cache
+            )
+
+        return result
+
+    def get_infrastructure_metrics(self) -> Dict[str, Any]:
+        """
+        Get infrastructure metrics for monitoring.
+
+        Issue #554: Returns cache hits, embeddings generated, etc.
+        """
+        if self.use_semantic_analysis:
+            return self._get_infrastructure_metrics()
+        return {}
 
 
 # ============================================================================

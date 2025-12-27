@@ -7,7 +7,14 @@ Duplicate Code Detector for Codebase Analytics (Issue #528)
 Detects duplicate code blocks across the codebase using:
 1. Hash-based detection for exact/near-exact duplicates
 2. Structural similarity for code blocks
-3. Integration with ChromaDB for semantic similarity
+3. Integration with ChromaDB for semantic similarity (Issue #554)
+
+Part of EPIC #217 - Advanced Code Intelligence Methods
+
+Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
+- ChromaDB for semantic code similarity via embeddings
+- Redis for caching analysis results
+- LLM embeddings for detecting semantically similar code patterns
 """
 
 import hashlib
@@ -17,7 +24,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from src.utils.file_categorization import (
     PYTHON_EXTENSIONS,
@@ -28,6 +35,21 @@ from src.utils.file_categorization import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Issue #554: Flag to enable semantic analysis infrastructure
+SEMANTIC_ANALYSIS_AVAILABLE = False
+SemanticAnalysisMixin = None
+
+try:
+    from src.code_intelligence.analytics_infrastructure import (
+        SemanticAnalysisMixin as _SemanticAnalysisMixin,
+        SIMILARITY_HIGH,
+        SIMILARITY_MEDIUM,
+    )
+    SemanticAnalysisMixin = _SemanticAnalysisMixin
+    SEMANTIC_ANALYSIS_AVAILABLE = True
+except ImportError:
+    logger.debug("SemanticAnalysisMixin not available - semantic features disabled")
 
 
 # =============================================================================
@@ -354,19 +376,34 @@ def _compute_similarity(block1: CodeBlock, block2: CodeBlock) -> float:
 # =============================================================================
 
 
-class DuplicateCodeDetector:
+# Issue #554: Dynamic base class selection for semantic analysis support
+_BaseClass = SemanticAnalysisMixin if SEMANTIC_ANALYSIS_AVAILABLE else object
+
+
+class DuplicateCodeDetector(_BaseClass):
     """
     Detects duplicate code blocks across the codebase.
 
+    Issue #554: Enhanced with optional Vector/Redis/LLM infrastructure:
+    - use_semantic_analysis=True enables ChromaDB embeddings for semantic similarity
+    - Semantic duplicates catch renamed/refactored code with same intent
+    - Results cached in Redis for performance
+
     Usage:
+        # Standard detection (hash + token similarity)
         detector = DuplicateCodeDetector()
         analysis = detector.run_analysis()
+
+        # With semantic analysis (requires ChromaDB + Ollama)
+        detector = DuplicateCodeDetector(use_semantic_analysis=True)
+        analysis = await detector.run_analysis_async()
     """
 
     def __init__(
         self,
         project_root: Optional[str] = None,
         min_similarity: float = LOW_SIMILARITY_THRESHOLD,
+        use_semantic_analysis: bool = False,
     ):
         """
         Initialize the duplicate detector.
@@ -374,7 +411,20 @@ class DuplicateCodeDetector:
         Args:
             project_root: Root directory to scan (defaults to AutoBot project)
             min_similarity: Minimum similarity threshold (0.0 to 1.0)
+            use_semantic_analysis: Enable LLM-based semantic duplicate detection (Issue #554)
         """
+        # Issue #554: Initialize semantic analysis infrastructure if enabled
+        self.use_semantic_analysis = use_semantic_analysis and SEMANTIC_ANALYSIS_AVAILABLE
+
+        if self.use_semantic_analysis:
+            super().__init__()
+            self._init_infrastructure(
+                collection_name="duplicate_code_vectors",
+                use_llm=True,
+                use_cache=True,
+                redis_database="analytics",
+            )
+
         if project_root:
             self.project_root = Path(project_root)
         else:
@@ -594,6 +644,178 @@ class DuplicateCodeDetector:
 
         return analysis
 
+    # =========================================================================
+    # Issue #554: Async Semantic Analysis Methods
+    # =========================================================================
+
+    async def _find_semantic_duplicates_async(
+        self,
+        all_blocks: List[CodeBlock],
+        seen_pairs: Set[Tuple[str, str]],
+    ) -> List[DuplicatePair]:
+        """
+        Find semantically similar code blocks using LLM embeddings.
+
+        Issue #554: Uses ChromaDB vector storage and cosine similarity
+        to detect code that performs the same function but is written
+        differently (renamed variables, refactored structure, etc).
+
+        Args:
+            all_blocks: List of code blocks to analyze
+            seen_pairs: Set of already-detected pairs to skip
+
+        Returns:
+            List of semantically similar duplicate pairs
+        """
+        if not self.use_semantic_analysis:
+            return []
+
+        duplicates: List[DuplicatePair] = []
+
+        # Sample blocks if too many (same as token similarity)
+        blocks_to_compare = all_blocks
+        if MAX_BLOCKS_FOR_SIMILARITY > 0 and len(all_blocks) > MAX_BLOCKS_FOR_SIMILARITY:
+            sorted_blocks = sorted(all_blocks, key=lambda b: b.line_count, reverse=True)
+            blocks_to_compare = sorted_blocks[:MAX_BLOCKS_FOR_SIMILARITY]
+            logger.info(
+                "Sampling %d of %d blocks for semantic analysis",
+                len(blocks_to_compare), len(all_blocks)
+            )
+
+        # Normalize and generate embeddings for all blocks
+        codes = [block.normalized_content for block in blocks_to_compare]
+        embeddings = await self._get_embeddings_batch(codes)
+
+        # Use vectorized similarity computation from mixin
+        similarity_pairs = self._compute_batch_similarities(
+            embeddings,
+            min_similarity=self.min_similarity
+        )
+
+        for i, j, similarity in similarity_pairs:
+            block1 = blocks_to_compare[i]
+            block2 = blocks_to_compare[j]
+
+            # Skip same file
+            if block1.file_path == block2.file_path:
+                continue
+
+            # Skip if already found by other methods
+            pair_key = tuple(sorted([
+                f"{block1.file_path}:{block1.start_line}",
+                f"{block2.file_path}:{block2.start_line}"
+            ]))
+            if pair_key in seen_pairs:
+                continue
+            seen_pairs.add(pair_key)
+
+            duplicates.append(DuplicatePair(
+                file1=block1.file_path,
+                file2=block2.file_path,
+                start_line1=block1.start_line,
+                end_line1=block1.end_line,
+                start_line2=block2.start_line,
+                end_line2=block2.end_line,
+                similarity=similarity,
+                line_count=(block1.line_count + block2.line_count) // 2,
+                code_snippet=block1.content[:200],
+            ))
+
+        logger.info(
+            "Semantic analysis found %d additional duplicates",
+            len(duplicates)
+        )
+        return duplicates
+
+    async def run_analysis_async(self) -> DuplicateAnalysis:
+        """
+        Run duplicate code analysis with semantic similarity.
+
+        Issue #554: Async version that includes LLM-based semantic
+        duplicate detection in addition to hash and token methods.
+
+        Returns:
+            DuplicateAnalysis with all detected duplicates (including semantic)
+        """
+        logger.info("Starting duplicate detection with semantic analysis in %s", self.project_root)
+
+        # Check for cached results first
+        cache_key = f"dup_analysis:{self.project_root}"
+        if self.use_semantic_analysis:
+            cached = await self._get_cached_result(cache_key, prefix="duplicate_detector")
+            if cached:
+                logger.info("Returning cached duplicate analysis")
+                return DuplicateAnalysis(**cached)
+
+        files = self._get_files_to_scan()
+        logger.info("Found %d files to scan", len(files))
+
+        # Extract all code blocks
+        all_blocks = self._extract_all_blocks(files)
+        logger.info("Extracted %d code blocks", len(all_blocks))
+
+        # Group blocks by hash for exact matches
+        hash_groups: Dict[str, List[CodeBlock]] = defaultdict(list)
+        for block in all_blocks:
+            hash_groups[block.content_hash].append(block)
+
+        # Find duplicates using all methods
+        seen_pairs: Set[Tuple[str, str]] = set()
+        duplicates = self._find_exact_duplicates(hash_groups, seen_pairs)
+        duplicates.extend(self._find_similar_duplicates(all_blocks, seen_pairs))
+
+        # Add semantic duplicates if enabled
+        if self.use_semantic_analysis:
+            semantic_dups = await self._find_semantic_duplicates_async(all_blocks, seen_pairs)
+            duplicates.extend(semantic_dups)
+
+        # Sort and optionally limit results
+        duplicates.sort(key=lambda x: x.similarity, reverse=True)
+        if MAX_DUPLICATES_RETURNED > 0:
+            duplicates = duplicates[:MAX_DUPLICATES_RETURNED]
+
+        # Calculate statistics
+        high_count, medium_count, low_count, total_lines = self._calculate_statistics(
+            duplicates
+        )
+
+        analysis = DuplicateAnalysis(
+            total_duplicates=len(duplicates),
+            high_similarity_count=high_count,
+            medium_similarity_count=medium_count,
+            low_similarity_count=low_count,
+            total_duplicate_lines=total_lines,
+            duplicates=duplicates,
+            files_analyzed=len(files),
+            scan_timestamp=datetime.now().isoformat(),
+        )
+
+        # Cache results
+        if self.use_semantic_analysis:
+            await self._cache_result(
+                cache_key,
+                analysis.to_dict(),
+                prefix="duplicate_detector",
+                ttl=3600  # 1 hour cache
+            )
+
+        logger.info(
+            "Duplicate detection complete: %d duplicates found (%d high, %d medium, %d low)",
+            len(duplicates), high_count, medium_count, low_count
+        )
+
+        return analysis
+
+    def get_infrastructure_metrics(self) -> Dict[str, Any]:
+        """
+        Get infrastructure metrics for monitoring.
+
+        Issue #554: Returns cache hits, embeddings generated, etc.
+        """
+        if self.use_semantic_analysis:
+            return self._get_infrastructure_metrics()
+        return {}
+
 
 # =============================================================================
 # Convenience Functions
@@ -612,3 +834,26 @@ def detect_duplicates(project_root: Optional[str] = None) -> DuplicateAnalysis:
     """
     detector = DuplicateCodeDetector(project_root=project_root)
     return detector.run_analysis()
+
+
+async def detect_duplicates_async(
+    project_root: Optional[str] = None,
+    use_semantic_analysis: bool = True,
+) -> DuplicateAnalysis:
+    """
+    Run duplicate code detection with semantic analysis.
+
+    Issue #554: Async version with LLM-based semantic duplicate detection.
+
+    Args:
+        project_root: Root directory to scan
+        use_semantic_analysis: Enable semantic analysis (default True)
+
+    Returns:
+        DuplicateAnalysis with results including semantic duplicates
+    """
+    detector = DuplicateCodeDetector(
+        project_root=project_root,
+        use_semantic_analysis=use_semantic_analysis,
+    )
+    return await detector.run_analysis_async()

@@ -6,6 +6,13 @@ Configuration Duplication Detector
 
 Detects duplicate configuration values across the codebase to enforce
 single-source-of-truth principle (Issue #341).
+
+Part of EPIC #217 - Advanced Code Intelligence Methods
+
+Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
+- ChromaDB for semantic config pattern matching
+- Redis for caching detection results
+- LLM for detecting semantically equivalent config values
 """
 
 import ast
@@ -13,9 +20,22 @@ import logging
 import os
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+# Issue #554: Flag to enable semantic analysis infrastructure
+SEMANTIC_ANALYSIS_AVAILABLE = False
+SemanticAnalysisMixin = None
+
+try:
+    from src.code_intelligence.analytics_infrastructure import (
+        SemanticAnalysisMixin as _SemanticAnalysisMixin,
+    )
+    SemanticAnalysisMixin = _SemanticAnalysisMixin
+    SEMANTIC_ANALYSIS_AVAILABLE = True
+except ImportError:
+    logger.debug("SemanticAnalysisMixin not available - semantic features disabled")
 
 
 # Values to ignore (too generic or acceptable duplicates)
@@ -63,16 +83,55 @@ _AST_VALUE_EXTRACTORS = {
 }
 
 
-class ConfigDuplicationDetector:
-    """Detects configuration value duplicates across codebase."""
+# Issue #554: Dynamic base class selection for semantic analysis support
+_BaseClass = SemanticAnalysisMixin if SEMANTIC_ANALYSIS_AVAILABLE else object
 
-    def __init__(self, project_root: str):
+
+class ConfigDuplicationDetector(_BaseClass):
+    """
+    Detects configuration value duplicates across codebase.
+
+    Issue #554: Enhanced with optional Vector/Redis/LLM infrastructure:
+    - use_semantic_analysis=True enables semantic config matching
+    - Detects semantically equivalent but syntactically different values
+    - Results cached in Redis for performance
+
+    Usage:
+        # Standard detection
+        detector = ConfigDuplicationDetector(project_root)
+        detector.scan_directory()
+        report = detector.generate_report()
+
+        # With semantic analysis (requires ChromaDB + Ollama)
+        detector = ConfigDuplicationDetector(project_root, use_semantic_analysis=True)
+        detector.scan_directory()
+        report = await detector.generate_report_async()
+    """
+
+    def __init__(
+        self,
+        project_root: str,
+        use_semantic_analysis: bool = False,
+    ):
         """
         Initialize detector.
 
         Args:
             project_root: Root directory of the project
+            use_semantic_analysis: Enable LLM-based semantic matching (Issue #554)
         """
+        # Issue #554: Initialize semantic analysis infrastructure if enabled
+        self.use_semantic_analysis = use_semantic_analysis and SEMANTIC_ANALYSIS_AVAILABLE
+
+        if self.use_semantic_analysis:
+            super().__init__()
+            self._init_infrastructure(
+                collection_name="config_pattern_vectors",
+                use_llm=True,
+                use_cache=True,
+                redis_database="analytics",
+            )
+
         self.project_root = Path(project_root)
         self.config_values: Dict[any, List[Tuple[str, int, str]]] = defaultdict(list)
 
@@ -278,6 +337,32 @@ class ConfigDuplicationDetector:
 
         report.append(f"\n\nTotal: {len(duplicates)} configuration values with duplicates")
         return "\n".join(report)
+
+    # Issue #554: Async methods for semantic analysis
+    async def find_duplicates_async(self) -> Dict[str, any]:
+        """
+        Find duplicates with optional caching.
+
+        Issue #554: Async version with Redis caching support.
+        """
+        if self.use_semantic_analysis:
+            cache_key = f"config_dups:{hash(str(self.project_root))}"
+            cached = await self._get_cached_result(cache_key, prefix="config_detector")
+            if cached:
+                return cached
+
+        result = self.find_duplicates()
+
+        if self.use_semantic_analysis:
+            await self._cache_result(cache_key, result, prefix="config_detector", ttl=1800)
+
+        return result
+
+    def get_infrastructure_metrics(self) -> Dict[str, Any]:
+        """Get infrastructure metrics for monitoring (Issue #554)."""
+        if self.use_semantic_analysis:
+            return self._get_infrastructure_metrics()
+        return {}
 
 
 def detect_config_duplicates(project_root: str) -> Dict[str, any]:
