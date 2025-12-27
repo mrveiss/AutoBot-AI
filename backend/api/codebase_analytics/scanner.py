@@ -167,11 +167,15 @@ async def _file_needs_reindex(
     if not INCREMENTAL_INDEXING_ENABLED or not redis_client:
         return True, ""
 
-    current_hash = await asyncio.to_thread(_compute_file_hash, file_path)
+    # Issue #619: Parallelize hash computation and Redis lookup
+    current_hash, stored_hash = await asyncio.gather(
+        asyncio.to_thread(_compute_file_hash, file_path),
+        _get_stored_file_hash(redis_client, relative_path),
+    )
+
     if not current_hash:
         return True, ""
 
-    stored_hash = await _get_stored_file_hash(redis_client, relative_path)
     if stored_hash and stored_hash == current_hash:
         return False, current_hash
 
