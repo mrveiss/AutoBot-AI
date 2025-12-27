@@ -713,16 +713,32 @@ class AutoBotMemoryGraph:
                     continue
                 visited.add(current_id)
 
-                # Process outgoing relations
-                if direction in _OUTGOING_DIRECTIONS:
+                # Issue #619: Parallelize relation fetching when processing both directions
+                need_outgoing = direction in _OUTGOING_DIRECTIONS
+                need_incoming = direction in _INCOMING_DIRECTIONS
+
+                if need_outgoing and need_incoming:
+                    # Fetch both in parallel
+                    outgoing, incoming = await asyncio.gather(
+                        self._get_outgoing_relations(current_id),
+                        self._get_incoming_relations(current_id),
+                    )
+                    # Process sequentially (modifies queue)
+                    outgoing_related = await self._process_direction_relations(
+                        outgoing, relation_type, "outgoing", "to", depth, max_depth, queue
+                    )
+                    related.extend(outgoing_related)
+                    incoming_related = await self._process_direction_relations(
+                        incoming, relation_type, "incoming", "from", depth, max_depth, queue
+                    )
+                    related.extend(incoming_related)
+                elif need_outgoing:
                     outgoing = await self._get_outgoing_relations(current_id)
                     outgoing_related = await self._process_direction_relations(
                         outgoing, relation_type, "outgoing", "to", depth, max_depth, queue
                     )
                     related.extend(outgoing_related)
-
-                # Process incoming relations
-                if direction in _INCOMING_DIRECTIONS:
+                elif need_incoming:
                     incoming = await self._get_incoming_relations(current_id)
                     incoming_related = await self._process_direction_relations(
                         incoming, relation_type, "incoming", "from", depth, max_depth, queue

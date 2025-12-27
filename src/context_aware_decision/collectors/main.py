@@ -10,6 +10,7 @@ context collection for decision making.
 Part of Issue #381 - God Class Refactoring
 """
 
+import asyncio
 import logging
 from typing import Any, Dict, List
 
@@ -57,43 +58,43 @@ class ContextCollector:
         ) as task_context:
             try:
                 decision_id = f"decision_{self.time_provider.current_timestamp_millis()}"
-                context_elements = []
 
-                # Collect visual context using specialized collector
-                visual_context = await self.visual_collector.collect()
-                context_elements.extend(visual_context)
-
-                # Collect audio/voice context using specialized collector
-                audio_context = await self.audio_collector.collect()
-                context_elements.extend(audio_context)
-
-                # Collect system state context using specialized collector
-                system_context = await self.system_collector.collect()
-                context_elements.extend(system_context)
-
-                # Collect historical context
-                historical_context = await self._collect_historical_context(
-                    decision_type
+                # Issue #619: Parallelize all independent context collection
+                (
+                    visual_context,
+                    audio_context,
+                    system_context,
+                    historical_context,
+                    environmental_context,
+                ) = await asyncio.gather(
+                    self.visual_collector.collect(),
+                    self.audio_collector.collect(),
+                    self.system_collector.collect(),
+                    self._collect_historical_context(decision_type),
+                    self._collect_environmental_context(),
                 )
-                context_elements.extend(historical_context)
 
-                # Collect environmental context
-                environmental_context = await self._collect_environmental_context()
+                # Combine all context elements
+                context_elements = []
+                context_elements.extend(visual_context)
+                context_elements.extend(audio_context)
+                context_elements.extend(system_context)
+                context_elements.extend(historical_context)
                 context_elements.extend(environmental_context)
 
-                # Determine constraints and available actions
-                constraints = await self._identify_constraints(
-                    decision_type, context_elements
+                # Issue #619: Parallelize independent context analysis operations
+                # First batch: constraints, actions, risk factors (all use context_elements)
+                constraints, available_actions, risk_factors = await asyncio.gather(
+                    self._identify_constraints(decision_type, context_elements),
+                    self._identify_available_actions(decision_type, context_elements),
+                    self._assess_risk_factors(context_elements),
                 )
-                available_actions = await self._identify_available_actions(
-                    decision_type, context_elements
-                )
-                risk_factors = await self._assess_risk_factors(context_elements)
 
-                # Get user preferences and historical patterns
-                user_preferences = await self._get_user_preferences(decision_type)
-                historical_patterns = await self._analyze_historical_patterns(
-                    decision_type
+                # Second batch: user prefs, historical patterns, system state (independent)
+                user_preferences, historical_patterns, system_state = await asyncio.gather(
+                    self._get_user_preferences(decision_type),
+                    self._analyze_historical_patterns(decision_type),
+                    self._get_current_system_state(),
                 )
 
                 # Create decision context
@@ -106,7 +107,7 @@ class ContextCollector:
                     available_actions=available_actions,
                     risk_factors=risk_factors,
                     user_preferences=user_preferences,
-                    system_state=await self._get_current_system_state(),
+                    system_state=system_state,
                     historical_patterns=historical_patterns,
                     timestamp=self.time_provider.current_timestamp(),
                 )
