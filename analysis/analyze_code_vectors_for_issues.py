@@ -308,21 +308,22 @@ class CodeIssueAnalyzer:
             logger.error(f"❌ Hardcoded values analysis failed: {e}")
             return {}
 
+    # Issue #626: Pre-computed lowercase frozensets for O(1) lookups
+    # Moved outside method to avoid recreating on every call
+    _IGNORE_PATTERNS: dict = {
+        "ip_addresses": frozenset({"0.0.0.0", "255.255.255.255", "127.0.0.1"}),
+        "urls": frozenset({"http://example.com", "https://example.org", "http://localhost"}),
+        "file_paths": frozenset({"/dev/null", "/tmp", "/var/log", "~/", "/etc", "/usr", "/bin"}),
+        "passwords": frozenset({"password", "123456", "admin", "test"}),
+        "api_keys": frozenset({"your_api_key", "api_key_here", "xxx"})
+    }
+
     def is_likely_hardcoded_value(self, category: str, value: str) -> bool:
         """Determine if a value is likely a hardcoded value worth reporting"""
 
-        # Common false positives to ignore
-        ignore_patterns = {
-            "ip_addresses": ["0.0.0.0", "255.255.255.255", "127.0.0.1"],
-            "urls": ["http://example.com", "https://example.org", "http://localhost"],
-            "file_paths": ["/dev/null", "/tmp", "/var/log", "~/", "/etc", "/usr", "/bin"],
-            "passwords": ["password", "123456", "admin", "test"],
-            "api_keys": ["your_api_key", "api_key_here", "xxx"]
-        }
-
-        # Check if it's in ignore list
-        if category in ignore_patterns:
-            if value.lower() in [p.lower() for p in ignore_patterns[category]]:
+        # Check if it's in ignore list - O(1) lookup with pre-computed frozensets
+        if category in self._IGNORE_PATTERNS:
+            if value.lower() in self._IGNORE_PATTERNS[category]:
                 return False
 
         # Additional filtering

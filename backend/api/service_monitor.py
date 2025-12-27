@@ -13,6 +13,7 @@ import logging
 import subprocess
 import threading
 import time
+from collections import defaultdict
 from datetime import datetime
 from typing import List, Optional
 
@@ -760,9 +761,17 @@ class ServiceMonitor:
         }
 
     def _build_category_map(self, services: List[ServiceStatus]) -> dict:
-        """Build category mapping (Issue #398: extracted)."""
-        categories = ["core", "database", "web", "ai", "automation", "monitoring", "infrastructure", "knowledge"]
-        return {cat: [s for s in services if s.category == cat] for cat in categories}
+        """Build category mapping (Issue #398: extracted, #626: O(n) optimization)."""
+        # Issue #626: Single pass O(n) instead of O(n*m) nested comprehension
+        from collections import defaultdict
+        category_map = defaultdict(list)
+        for service in services:
+            category_map[service.category].append(service)
+        # Ensure all expected categories exist (even if empty)
+        for cat in ("core", "database", "web", "ai", "automation", "monitoring", "infrastructure", "knowledge"):
+            if cat not in category_map:
+                category_map[cat] = []
+        return dict(category_map)
 
     async def get_all_services(self) -> Metadata:
         """Get comprehensive service status (Issue #398: refactored)."""
