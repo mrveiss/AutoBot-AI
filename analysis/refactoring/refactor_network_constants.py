@@ -168,13 +168,20 @@ def refactor_file_content(content: str, file_path: Path) -> Tuple[str, int]:
     return content, replacements_made
 
 
-def refactor_file(file_path: Path) -> bool:
-    """Refactor a single file. Returns True if changes were made."""
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            original_content = f.read()
+def refactor_file(file_path: Path, content: str = None) -> bool:
+    """Refactor a single file. Returns True if changes were made.
 
-        new_content, replacements = refactor_file_content(original_content, file_path)
+    Args:
+        file_path: Path to the file to refactor
+        content: Optional pre-read content (avoids repeated file open) (#623)
+    """
+    try:
+        # Issue #623: Avoid repeated file opens - use pre-read content if provided
+        if content is None:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+        new_content, replacements = refactor_file_content(content, file_path)
 
         if replacements > 0:
             with open(file_path, 'w', encoding='utf-8') as f:
@@ -222,6 +229,7 @@ def main():
 
     total_files_changed = 0
 
+    # Issue #623: Read each file once, pass content to refactor_file()
     for file_path in files:
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -233,7 +241,8 @@ def main():
                 continue
 
             print(f"🔧 Refactoring {file_path.relative_to(root_path)}...")
-            if refactor_file(file_path):
+            # Pass pre-read content to avoid second file open
+            if refactor_file(file_path, content=content):
                 total_files_changed += 1
 
         except Exception as e:

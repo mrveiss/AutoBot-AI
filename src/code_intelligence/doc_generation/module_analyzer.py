@@ -12,7 +12,7 @@ Part of god class refactoring initiative.
 
 import ast
 import os
-from typing import List, Optional, Set, Tuple, Union
+from typing import List, Optional, Set, Union
 
 from src.code_intelligence.doc_generation.types import (
     ElementType,
@@ -178,16 +178,16 @@ class ModuleAnalyzer:
         if init_module:
             package_doc.init_docstring = init_module.docstring
 
-        # Load README content
-        package_doc.readme_content = helpers.load_readme_content(package_path)
+        # Issue #623: Use PackageContentCache for efficient file loading
+        # Files are read once, then all metadata extracted from pre-loaded content
+        pkg_cache = helpers.PackageContentCache(package_path)
+        package_doc.readme_content = pkg_cache.readme_content
+        package_doc.version = pkg_cache.extract_version()
+        package_doc.author = pkg_cache.extract_author()
 
         # Process all items in package
         for item in os.listdir(package_path):
             self._process_package_item(item, package_path, package_doc, depth)
-
-        # Extract version and author
-        package_doc.version = helpers.extract_version(package_path)
-        package_doc.author = helpers.extract_author(package_path)
 
         return package_doc
 

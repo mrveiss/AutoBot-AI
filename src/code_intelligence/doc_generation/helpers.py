@@ -225,6 +225,128 @@ def extract_all_exports(tree: ast.Module) -> List[str]:
     return []
 
 
+class PackageContentCache:
+    """Cache for pre-loaded package file contents.
+
+    Issue #623: Provides a pattern where files are read once at a higher level,
+    then passed to multiple analyzers that work with the pre-loaded content.
+
+    Usage:
+        cache = PackageContentCache(package_path)
+        version = cache.extract_version()
+        author = cache.extract_author()
+        readme = cache.readme_content
+    """
+
+    def __init__(self, package_path: str):
+        """Initialize cache by pre-loading relevant package files.
+
+        Args:
+            package_path: Path to package directory
+        """
+        self.package_path = package_path
+        self._init_content: Optional[str] = None
+        self._setup_content: Optional[str] = None
+        self._readme_content: Optional[str] = None
+        self._loaded = False
+
+    def _ensure_loaded(self) -> None:
+        """Lazy-load all relevant package files once."""
+        if self._loaded:
+            return
+
+        # Read __init__.py
+        init_path = os.path.join(self.package_path, "__init__.py")
+        if os.path.exists(init_path):
+            try:
+                with open(init_path, "r", encoding="utf-8") as f:
+                    self._init_content = f.read()
+            except OSError:
+                pass
+
+        # Read setup.py (in parent dir)
+        setup_path = os.path.join(os.path.dirname(self.package_path), "setup.py")
+        if os.path.exists(setup_path):
+            try:
+                with open(setup_path, "r", encoding="utf-8") as f:
+                    self._setup_content = f.read()
+            except OSError:
+                pass
+
+        # Read README
+        for readme_name in README_NAMES:
+            readme_path = os.path.join(self.package_path, readme_name)
+            if os.path.exists(readme_path):
+                try:
+                    with open(readme_path, "r", encoding="utf-8") as f:
+                        self._readme_content = f.read()
+                    break
+                except OSError:
+                    pass
+
+        self._loaded = True
+
+    def extract_version(self) -> Optional[str]:
+        """Extract version from pre-loaded content."""
+        self._ensure_loaded()
+
+        # Check __init__.py first
+        if self._init_content:
+            match = VERSION_RE.search(self._init_content)
+            if match:
+                return match.group(1)
+
+        # Fallback to setup.py
+        if self._setup_content:
+            match = SETUP_VERSION_RE.search(self._setup_content)
+            if match:
+                return match.group(1)
+
+        return None
+
+    def extract_author(self) -> Optional[str]:
+        """Extract author from pre-loaded content."""
+        self._ensure_loaded()
+
+        if self._init_content:
+            match = AUTHOR_RE.search(self._init_content)
+            if match:
+                return match.group(1)
+
+        return None
+
+    @property
+    def readme_content(self) -> Optional[str]:
+        """Get pre-loaded README content."""
+        self._ensure_loaded()
+        return self._readme_content
+
+    def get_all_metadata(self) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+        """Get all metadata in one call.
+
+        Returns:
+            Tuple of (version, author, readme_content)
+        """
+        self._ensure_loaded()
+        return self.extract_version(), self.extract_author(), self._readme_content
+
+
+def extract_package_metadata(package_path: str) -> Tuple[Optional[str], Optional[str]]:
+    """Extract version and author from package in single file read.
+
+    Issue #623: Consolidates extract_version and extract_author to avoid
+    repeated file opens on __init__.py.
+
+    Args:
+        package_path: Path to package directory
+
+    Returns:
+        Tuple of (version, author), either may be None
+    """
+    cache = PackageContentCache(package_path)
+    return cache.extract_version(), cache.extract_author()
+
+
 def extract_version(package_path: str) -> Optional[str]:
     """Extract version from package.
 
@@ -234,31 +356,8 @@ def extract_version(package_path: str) -> Optional[str]:
     Returns:
         Version string if found
     """
-    # Check __init__.py
-    init_path = os.path.join(package_path, "__init__.py")
-    if os.path.exists(init_path):
-        try:
-            with open(init_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            match = VERSION_RE.search(content)
-            if match:
-                return match.group(1)
-        except OSError:
-            pass
-
-    # Check setup.py
-    setup_path = os.path.join(os.path.dirname(package_path), "setup.py")
-    if os.path.exists(setup_path):
-        try:
-            with open(setup_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            match = SETUP_VERSION_RE.search(content)
-            if match:
-                return match.group(1)
-        except OSError:
-            pass
-
-    return None
+    cache = PackageContentCache(package_path)
+    return cache.extract_version()
 
 
 def extract_author(package_path: str) -> Optional[str]:
@@ -270,17 +369,8 @@ def extract_author(package_path: str) -> Optional[str]:
     Returns:
         Author string if found
     """
-    init_path = os.path.join(package_path, "__init__.py")
-    if os.path.exists(init_path):
-        try:
-            with open(init_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            match = AUTHOR_RE.search(content)
-            if match:
-                return match.group(1)
-        except OSError:
-            pass
-    return None
+    cache = PackageContentCache(package_path)
+    return cache.extract_author()
 
 
 def load_readme_content(package_path: str) -> Optional[str]:
@@ -292,15 +382,8 @@ def load_readme_content(package_path: str) -> Optional[str]:
     Returns:
         README content if found
     """
-    for readme_name in README_NAMES:
-        readme_path = os.path.join(package_path, readme_name)
-        if os.path.exists(readme_path):
-            try:
-                with open(readme_path, "r", encoding="utf-8") as f:
-                    return f.read()
-            except OSError:
-                pass
-    return None
+    cache = PackageContentCache(package_path)
+    return cache.readme_content
 
 
 def validate_module_path(file_path: str) -> Optional[str]:
@@ -426,6 +509,8 @@ __all__ = [
     "is_all_assignment",
     "extract_all_values",
     "extract_all_exports",
+    "PackageContentCache",
+    "extract_package_metadata",
     "extract_version",
     "extract_author",
     "load_readme_content",
