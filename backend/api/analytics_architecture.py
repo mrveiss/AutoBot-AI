@@ -531,8 +531,12 @@ class ArchitectureAnalyzer:
         await self._analyze_all_files(python_files, target_patterns)
         all_matches, pattern_counts = self._aggregate_pattern_matches()
 
-        consistency_results = await self._check_consistency(all_matches)
-        self.layers = await self._detect_layers()
+        # Issue #619: Parallelize independent analyses
+        consistency_results, layers = await asyncio.gather(
+            self._check_consistency(all_matches),
+            self._detect_layers(),
+        )
+        self.layers = layers
         recommendations = self._generate_recommendations(all_matches, consistency_results)
         mermaid_diagram = self._generate_mermaid_diagram()
 
