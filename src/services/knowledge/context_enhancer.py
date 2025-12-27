@@ -89,8 +89,11 @@ class ConversationContextEnhancer:
         Returns:
             EnhancedQuery with original and enhanced query
         """
+        # #624: Compute word_count once, pass to all methods
+        word_count = len(query.split())
+
         # Check if enhancement is needed
-        needs_context = self._needs_context_enhancement(query)
+        needs_context = self._needs_context_enhancement(query, word_count)
 
         if not needs_context or not conversation_history:
             return EnhancedQuery(
@@ -111,7 +114,7 @@ class ConversationContextEnhancer:
 
         # Build enhanced query
         enhanced_query = self._build_enhanced_query(
-            query, recent_history, context_entities, context_topics
+            query, recent_history, context_entities, context_topics, word_count
         )
 
         return EnhancedQuery(
@@ -120,10 +123,14 @@ class ConversationContextEnhancer:
             context_entities=context_entities,
             context_topics=context_topics,
             enhancement_applied=enhanced_query != query,
-            reasoning=self._get_enhancement_reasoning(query, context_entities),
+            reasoning=self._get_enhancement_reasoning(
+                query, context_entities, word_count
+            ),
         )
 
-    def _needs_context_enhancement(self, query: str) -> bool:
+    def _needs_context_enhancement(
+        self, query: str, word_count: Optional[int] = None
+    ) -> bool:
         """Check if a query would benefit from context enhancement."""
         query_lower = query.lower().strip()
 
@@ -136,8 +143,10 @@ class ConversationContextEnhancer:
             if pattern.search(query_lower):
                 return True
 
-        # Very short queries often need context
-        if len(query.split()) <= 3:
+        # Very short queries often need context (#624: avoid repeated split)
+        if word_count is None:
+            word_count = len(query.split())
+        if word_count <= 3:
             return True
 
         return False
@@ -190,6 +199,7 @@ class ConversationContextEnhancer:
         history: List[Dict[str, str]],
         entities: List[str],
         topics: List[str],
+        word_count: Optional[int] = None,
     ) -> str:
         """Build an enhanced query with context."""
         enhanced_parts = [query]
@@ -200,8 +210,8 @@ class ConversationContextEnhancer:
             context_phrase = f" (context: {', '.join(entities[:2])})"
             enhanced_parts.append(context_phrase)
 
-        # For very short queries, add recent topic
-        elif len(query.split()) <= 3 and topics:
+        # For very short queries, add recent topic (#624: avoid repeated split)
+        elif (word_count if word_count is not None else len(query.split())) <= 3 and topics:
             last_topic = topics[-1]
             # Check if the short query relates to last topic
             enhanced_parts.append(f" (regarding: {last_topic})")
@@ -220,7 +230,7 @@ class ConversationContextEnhancer:
         return "".join(enhanced_parts)
 
     def _get_enhancement_reasoning(
-        self, query: str, entities: List[str]
+        self, query: str, entities: List[str], word_count: Optional[int] = None
     ) -> str:
         """Generate reasoning for the enhancement."""
         reasons = []
@@ -228,7 +238,8 @@ class ConversationContextEnhancer:
         if self._reference_re.search(query.lower()):
             reasons.append("pronoun reference detected")
 
-        if len(query.split()) <= 3:
+        # #624: avoid repeated split
+        if (word_count if word_count is not None else len(query.split())) <= 3:
             reasons.append("short query")
 
         if entities:

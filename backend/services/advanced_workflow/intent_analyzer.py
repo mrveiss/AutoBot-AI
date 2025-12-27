@@ -84,13 +84,14 @@ complexity, and requirements:
                 detected_intent = intent
                 break
 
-        # Complexity estimation
+        # Complexity estimation - cache split result (#624)
+        request_words = request_lower.split()
+        word_count = len(request_words)
+
         complexity_indicators = {
-            "simple": len(request_lower.split()) < 10,
-            "moderate": 10 <= len(request_lower.split()) < 20,
-            "complex": (
-                len(request_lower.split()) >= 20 or "enterprise" in request_lower
-            ),
+            "simple": word_count < 10,
+            "moderate": 10 <= word_count < 20,
+            "complex": word_count >= 20 or "enterprise" in request_lower,
         }
 
         complexity = WorkflowComplexity.SIMPLE
@@ -104,7 +105,7 @@ complexity, and requirements:
             "complexity": complexity.value,
             "components": self._extract_components(request_lower),
             "risk_factors": self._assess_basic_risks(request_lower),
-            "estimated_steps": min(3 + len(request_lower.split()) // 5, 15),
+            "estimated_steps": min(3 + word_count // 5, 15),
             "prerequisites": [],
             "success_criteria": ["Command execution successful", "No errors reported"],
         }

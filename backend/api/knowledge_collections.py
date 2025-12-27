@@ -44,6 +44,14 @@ _COLLECTION_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 router = APIRouter(tags=["knowledge-collections"])
 
 
+def _raise_kb_error(error_message: str, default_code: int = 500) -> None:
+    """Raise appropriate HTTPException based on error message (#624)."""
+    error_lower = error_message.lower()
+    if "not found" in error_lower:
+        raise HTTPException(status_code=404, detail=error_message)
+    raise HTTPException(status_code=default_code, detail=error_message)
+
+
 # ===== COLLECTION CRUD OPERATIONS (Issue #412) =====
 
 
@@ -204,11 +212,7 @@ async def get_collection(
             "collection": result.get("collection"),
         }
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=500, detail=error_message)
+        _raise_kb_error(result.get("message", "Unknown error"))
 
 
 @with_error_handling(
@@ -273,11 +277,7 @@ async def update_collection(
             "message": result.get("message", "Collection updated successfully"),
         }
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=400, detail=error_message)
+        _raise_kb_error(result.get("message", "Unknown error"), 400)
 
 
 @with_error_handling(
@@ -337,11 +337,7 @@ async def delete_collection(
             "message": result.get("message", "Collection deleted successfully"),
         }
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=400, detail=error_message)
+        _raise_kb_error(result.get("message", "Unknown error"), 400)
 
 
 # ===== COLLECTION MEMBERSHIP OPERATIONS (Issue #412) =====
@@ -407,11 +403,7 @@ async def add_facts_to_collection(
             "message": result.get("message"),
         }
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=400, detail=error_message)
+        _raise_kb_error(result.get("message", "Unknown error"), 400)
 
 
 @with_error_handling(
@@ -472,11 +464,7 @@ async def remove_facts_from_collection(
             "message": result.get("message"),
         }
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=400, detail=error_message)
+        _raise_kb_error(result.get("message", "Unknown error"), 400)
 
 
 @with_error_handling(
@@ -544,11 +532,7 @@ async def get_facts_in_collection(
             "has_more": result.get("has_more", False),
         }
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=500, detail=error_message)
+        _raise_kb_error(result.get("message", "Unknown error"))
 
 
 @with_error_handling(
@@ -600,11 +584,7 @@ async def get_fact_collections(
             "count": result.get("count", 0),
         }
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=500, detail=error_message)
+        _raise_kb_error(result.get("message", "Unknown error"))
 
 
 # ===== COLLECTION BULK OPERATIONS (Issue #412) =====
@@ -671,11 +651,7 @@ async def export_collection(
             "exported_at": result.get("exported_at"),
         }
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=500, detail=error_message)
+        _raise_kb_error(result.get("message", "Unknown error"))
 
 
 @with_error_handling(
@@ -733,8 +709,4 @@ async def bulk_delete_collection_facts(
             "message": result.get("message"),
         }
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=400, detail=error_message)
+        _raise_kb_error(result.get("message", "Unknown error"), 400)
