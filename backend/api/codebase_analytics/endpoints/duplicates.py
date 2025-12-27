@@ -7,6 +7,11 @@ Duplicate code detection endpoints (Issue #528)
 Provides:
 - On-demand duplicate code detection using DuplicateCodeDetector
 - Cached results in ChromaDB for persistence
+
+Issue #554: Enhanced with semantic analysis support:
+- Optional LLM-based semantic duplicate detection
+- Redis caching for analysis results
+- ChromaDB vector embeddings for code similarity
 """
 
 import asyncio
@@ -17,9 +22,10 @@ from typing import Optional
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
+from src.constants.threshold_constants import AnalyticsConfig
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
-from ..duplicate_detector import DuplicateCodeDetector
+from ..duplicate_detector import DuplicateCodeDetector, detect_duplicates_async
 from ..storage import get_code_collection
 
 logger = logging.getLogger(__name__)
@@ -39,6 +45,7 @@ _duplicate_cache: Optional[dict] = None
 async def get_duplicate_code(
     refresh: bool = Query(False, description="Force fresh analysis instead of cache"),
     min_similarity: float = Query(0.5, description="Minimum similarity threshold (0.0-1.0)"),
+    use_semantic: bool = Query(False, description="Enable LLM-based semantic analysis (Issue #554)"),
 ):
     """
     Get duplicate code detected in the codebase (Issue #528).
@@ -46,10 +53,12 @@ async def get_duplicate_code(
     Uses the DuplicateCodeDetector for real analysis of:
     - Exact hash matches (100% similarity)
     - Near-duplicate code blocks (token-based similarity)
+    - Semantic duplicates via LLM embeddings (Issue #554, when use_semantic=True)
 
     Args:
         refresh: Force fresh analysis instead of using cached results
         min_similarity: Minimum similarity threshold (0.5 = 50%)
+        use_semantic: Enable LLM-based semantic duplicate detection (Issue #554)
 
     Returns:
         JSON with duplicates, statistics, and analysis metadata
@@ -68,29 +77,44 @@ async def get_duplicate_code(
         # Get project root (4 levels up: endpoints -> codebase_analytics -> api -> backend -> root)
         project_root = str(Path(__file__).resolve().parents[4])
 
+        # Issue #554: Use async method with semantic analysis if enabled
+        if use_semantic:
+            try:
+                analysis = await detect_duplicates_async(
+                    project_root=project_root,
+                    min_similarity=min_similarity,
+                    use_semantic_analysis=True,
+                )
+                logger.info("Semantic duplicate analysis complete")
+            except Exception as e:
+                logger.warning("Semantic analysis failed, falling back to standard: %s", e)
+                # Fall through to standard analysis below
+                use_semantic = False
+
         # Run analysis in thread pool with timeout to prevent hanging
         # Duplicate analysis can be CPU-intensive for large codebases
-        ANALYSIS_TIMEOUT = 60  # 60 second timeout
-        try:
-            analysis = await asyncio.wait_for(
-                loop.run_in_executor(
-                    None,
-                    lambda: DuplicateCodeDetector(
-                        project_root=project_root,
-                        min_similarity=min_similarity,
-                    ).run_analysis()
-                ),
-                timeout=ANALYSIS_TIMEOUT
-            )
-        except asyncio.TimeoutError:
-            logger.warning("Duplicate detection timed out after %d seconds", ANALYSIS_TIMEOUT)
-            return JSONResponse({
-                "status": "partial",
-                "message": f"Analysis timed out after {ANALYSIS_TIMEOUT}s. Try a higher min_similarity threshold.",
-                "duplicates": [],
-                "total_count": 0,
-                "storage_type": "timeout",
-            })
+        # Timeout from SSOT configuration
+        if not use_semantic:
+            try:
+                analysis = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        None,
+                        lambda: DuplicateCodeDetector(
+                            project_root=project_root,
+                            min_similarity=min_similarity,
+                        ).run_analysis()
+                    ),
+                    timeout=AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT
+                )
+            except asyncio.TimeoutError:
+                logger.warning("Duplicate detection timed out after %d seconds", AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT)
+                return JSONResponse({
+                    "status": "partial",
+                    "message": f"Analysis timed out after {AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT}s. Try a higher min_similarity threshold.",
+                    "duplicates": [],
+                    "total_count": 0,
+                    "storage_type": "timeout",
+                })
 
         # Convert to frontend-compatible format
         duplicates_for_frontend = []
@@ -185,23 +209,51 @@ def _make_relative_path(path: str, project_root: str) -> str:
     error_code_prefix="CODEBASE",
 )
 @router.get("/config-duplicates")
-async def detect_config_duplicates_endpoint():
+async def detect_config_duplicates_endpoint(
+    use_semantic: bool = Query(False, description="Enable LLM-based semantic analysis (Issue #554)"),
+):
     """
     Detect configuration value duplicates across codebase (Issue #341).
 
     Returns configuration values that appear in multiple files,
     helping enforce single-source-of-truth principle.
 
+    Issue #554: Enhanced with optional semantic analysis:
+    - use_semantic=True enables LLM-based semantic config pattern matching
+    - Results cached in Redis for performance
+
+    Args:
+        use_semantic: Enable semantic duplicate detection via LLM embeddings
+
     Returns:
         JSONResponse with duplicate detection results
     """
-    from ..config_duplication_detector import detect_config_duplicates
+    from ..config_duplication_detector import ConfigDuplicationDetector, detect_config_duplicates
 
     # Get project root (4 levels up from this file: endpoints -> codebase_analytics -> api -> backend -> root)
     project_root = Path(__file__).resolve().parents[4]
 
-    # Run detection
-    result = detect_config_duplicates(str(project_root))
+    # Issue #554: Use async method with semantic analysis if enabled
+    if use_semantic:
+        try:
+            detector = ConfigDuplicationDetector(
+                str(project_root),
+                use_semantic_analysis=True,
+            )
+            detector.scan_directory()
+            result = {
+                "duplicates_found": 0,
+                "duplicates": await detector.find_duplicates_async(),
+                "report": detector.generate_report(),
+            }
+            result["duplicates_found"] = len(result["duplicates"])
+            logger.info("Semantic config duplicate analysis complete")
+        except Exception as e:
+            logger.warning("Semantic analysis failed, falling back to standard: %s", e)
+            result = detect_config_duplicates(str(project_root))
+    else:
+        # Run standard detection
+        result = detect_config_duplicates(str(project_root))
 
     # Convert duplicates dict to array format for frontend compatibility
     # Backend returns: {value: {value, count, sources, duplicates}}

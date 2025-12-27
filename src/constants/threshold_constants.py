@@ -226,6 +226,30 @@ class ResourceThresholds:
     HIGH_CORE_COUNT = 16  # Systems with more cores benefit from parallel optimization
 
 
+class AnalyticsConfig:
+    """Code analytics and bug prediction configuration constants."""
+
+    # Bug prediction timeouts (seconds)
+    BUG_PREDICTION_TIMEOUT = 120.0  # Extended timeout for large codebases
+    DUPLICATE_DETECTION_TIMEOUT = 60.0  # Timeout for duplicate code analysis
+
+    # Analysis file limits (0 = no limit, scan all files)
+    BUG_PREDICTION_FILE_LIMIT = 0  # No limit on files to analyze
+    DUPLICATE_DETECTION_FILE_LIMIT = 0  # No limit on files to scan
+
+    # Similarity thresholds
+    DUPLICATE_MIN_SIMILARITY = 0.5  # Minimum similarity (50%) to report
+    SEMANTIC_MIN_SIMILARITY = 0.6  # Minimum for semantic matches
+
+    # Report limits
+    TOP_HIGH_RISK_FILES_LIMIT = 10  # Max high-risk files to show in report
+    API_ENDPOINT_LIST_LIMIT = 20  # Max API endpoints to show
+
+    # Cache TTLs (seconds)
+    BUG_PREDICTION_CACHE_TTL = 1800  # 30 minute cache
+    DUPLICATE_DETECTION_CACHE_TTL = 3600  # 1 hour cache
+
+
 class HardwareAcceleratorConfig:
     """Hardware accelerator configuration constants."""
 

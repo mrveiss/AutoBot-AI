@@ -438,14 +438,17 @@ def _generate_bug_risk_section(prediction: PredictionResult) -> List[str]:
     return lines
 
 
-# Maximum files to analyze for bug prediction (Issue #505)
-BUG_PREDICTION_FILE_LIMIT = 100
-# Timeout for bug prediction analysis (seconds)
-BUG_PREDICTION_TIMEOUT = 30.0
-# Maximum high-risk files to show in report
-TOP_HIGH_RISK_FILES_LIMIT = 10
-# Maximum items to show in API endpoint section (Issue #527)
-API_ENDPOINT_LIST_LIMIT = 20
+# Import from SSOT configuration (Issue #554)
+from src.constants.threshold_constants import AnalyticsConfig
+
+# Maximum files to analyze for bug prediction - from SSOT
+BUG_PREDICTION_FILE_LIMIT = AnalyticsConfig.BUG_PREDICTION_FILE_LIMIT
+# Timeout for bug prediction analysis (seconds) - from SSOT
+BUG_PREDICTION_TIMEOUT = AnalyticsConfig.BUG_PREDICTION_TIMEOUT
+# Maximum high-risk files to show in report - from SSOT
+TOP_HIGH_RISK_FILES_LIMIT = AnalyticsConfig.TOP_HIGH_RISK_FILES_LIMIT
+# Maximum items to show in API endpoint section - from SSOT
+API_ENDPOINT_LIST_LIMIT = AnalyticsConfig.API_ENDPOINT_LIST_LIMIT
 
 
 # =============================================================================
@@ -1287,15 +1290,21 @@ async def _get_api_endpoint_analysis() -> Optional[APIEndpointAnalysis]:
 async def _get_bug_prediction(
     project_root: Optional[str] = None,
     limit: int = BUG_PREDICTION_FILE_LIMIT,
+    use_semantic: bool = False,
 ) -> Optional[PredictionResult]:
     """
     Get bug prediction data for the project (Issue #505).
 
     Runs the analysis in a thread pool to avoid blocking the async event loop.
 
+    Issue #554: Enhanced with optional semantic analysis:
+    - use_semantic=True enables LLM-based bug pattern matching
+    - Uses ChromaDB for vector similarity and Redis for caching
+
     Args:
         project_root: Root directory to analyze (defaults to current directory)
         limit: Maximum number of files to analyze
+        use_semantic: Enable semantic analysis via LLM embeddings (Issue #554)
 
     Returns:
         PredictionResult or None if analysis fails or times out
@@ -1306,7 +1315,9 @@ async def _get_bug_prediction(
 
         # Run in thread pool to avoid blocking the event loop
         loop = asyncio.get_event_loop()
-        predictor = BugPredictor(project_root=root)
+
+        # Issue #554: Pass semantic analysis flag
+        predictor = BugPredictor(project_root=root, use_semantic_analysis=use_semantic)
 
         result = await asyncio.wait_for(
             loop.run_in_executor(
@@ -1580,6 +1591,7 @@ async def generate_analysis_report(
     include_cross_language_analysis: bool = True,
     include_pattern_analysis: bool = True,
     quick: bool = False,
+    use_semantic: bool = False,
 ):
     """
     Generate a code analysis report from the indexed data.
@@ -1592,6 +1604,7 @@ async def generate_analysis_report(
         include_cross_language_analysis: Whether to include cross-language pattern analysis (Issue #244)
         include_pattern_analysis: Whether to include code pattern analysis (Issue #208)
         quick: If True, skip expensive analyses for faster export (just problems report)
+        use_semantic: Enable LLM-based semantic analysis for bug prediction (Issue #554)
 
     Returns:
         Markdown formatted report as plain text
@@ -1636,7 +1649,8 @@ async def generate_analysis_report(
         analysis_tasks = []
 
         if include_bug_prediction:
-            analysis_tasks.append(("bug_prediction", _get_bug_prediction()))
+            # Issue #554: Pass semantic analysis flag
+            analysis_tasks.append(("bug_prediction", _get_bug_prediction(use_semantic=use_semantic)))
         if include_api_analysis:
             analysis_tasks.append(("api_endpoint", _get_api_endpoint_analysis()))
         if include_duplicate_analysis:

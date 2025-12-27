@@ -18,6 +18,12 @@ Features:
 - Prevention suggestions
 - Targeted test recommendations
 - Risk heatmap generation
+
+Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
+- ChromaDB for storing bug pattern embeddings
+- Redis for caching prediction results
+- LLM for semantic analysis of code patterns known to cause bugs
+- Historical bug pattern learning via embeddings
 """
 
 import logging
@@ -27,11 +33,24 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional
 
 from src.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
+
+# Issue #554: Flag to enable semantic analysis infrastructure
+SEMANTIC_ANALYSIS_AVAILABLE = False
+SemanticAnalysisMixin = None
+
+try:
+    from src.code_intelligence.analytics_infrastructure import (
+        SemanticAnalysisMixin as _SemanticAnalysisMixin,
+    )
+    SemanticAnalysisMixin = _SemanticAnalysisMixin
+    SEMANTIC_ANALYSIS_AVAILABLE = True
+except ImportError:
+    logger.debug("SemanticAnalysisMixin not available - semantic features disabled")
 
 # Issue #380: Module-level tuple for function definition prefixes (used in startswith)
 _FUNCTION_DEF_PREFIXES = ("def ", "async def ")
@@ -238,12 +257,30 @@ PREVENTION_TIPS: dict[RiskFactor, list[str]] = {
 # ============================================================================
 
 
-class BugPredictor:
+# Issue #554: Dynamic base class selection for semantic analysis support
+_BaseClass = SemanticAnalysisMixin if SEMANTIC_ANALYSIS_AVAILABLE else object
+
+
+class BugPredictor(_BaseClass):
     """
     Predicts bug risk in code files based on multiple factors.
 
     Uses historical data, code metrics, and pattern analysis to
     identify high-risk areas that are likely to contain bugs.
+
+    Issue #554: Enhanced with optional Vector/Redis/LLM infrastructure:
+    - use_semantic_analysis=True enables LLM-based bug pattern matching
+    - Learns from historical bug fix commits to identify similar patterns
+    - Results cached in Redis for performance
+
+    Usage:
+        # Standard prediction
+        predictor = BugPredictor()
+        result = predictor.analyze_directory()
+
+        # With semantic analysis (requires ChromaDB + Ollama)
+        predictor = BugPredictor(use_semantic_analysis=True)
+        result = await predictor.analyze_directory_async()
     """
 
     # Default risk factor weights (must sum to 1.0)
@@ -265,6 +302,7 @@ class BugPredictor:
         project_root: Optional[str] = None,
         weights: Optional[dict[RiskFactor, float]] = None,
         bug_keywords: Optional[list[str]] = None,
+        use_semantic_analysis: bool = False,
     ):
         """
         Initialize Bug Predictor.
@@ -273,7 +311,20 @@ class BugPredictor:
             project_root: Root directory of the project (defaults to cwd)
             weights: Custom risk factor weights (defaults to DEFAULT_WEIGHTS)
             bug_keywords: Keywords to identify bug-fix commits
+            use_semantic_analysis: Enable LLM-based pattern analysis (Issue #554)
         """
+        # Issue #554: Initialize semantic analysis infrastructure if enabled
+        self.use_semantic_analysis = use_semantic_analysis and SEMANTIC_ANALYSIS_AVAILABLE
+
+        if self.use_semantic_analysis:
+            super().__init__()
+            self._init_infrastructure(
+                collection_name="bug_pattern_vectors",
+                use_llm=True,
+                use_cache=True,
+                redis_database="analytics",
+            )
+
         self.project_root = Path(project_root) if project_root else Path.cwd()
         self.weights = weights or self.DEFAULT_WEIGHTS.copy()
         self.bug_keywords = bug_keywords or [
@@ -290,6 +341,8 @@ class BugPredictor:
         self._bug_history_cache: Optional[dict[str, list[dict]]] = None
         self._change_freq_cache: Optional[dict[str, int]] = None
         self._author_stats_cache: Optional[dict[str, dict]] = None
+        # Issue #554: Cache for semantic bug pattern embeddings
+        self._bug_pattern_embeddings: Optional[Dict[str, List[float]]] = None
 
     def _collect_complexity_factors(
         self, path: Path, complexity: dict[str, Any]
@@ -414,7 +467,7 @@ class BugPredictor:
         self,
         directory: Optional[str] = None,
         pattern: str = "*.py",
-        limit: int = 100,
+        limit: int = 0,
     ) -> PredictionResult:
         """
         Analyze all files in a directory for bug risk.
@@ -422,16 +475,17 @@ class BugPredictor:
         Args:
             directory: Directory to analyze (defaults to project root)
             pattern: Glob pattern for files to include
-            limit: Maximum number of files to analyze
+            limit: Maximum number of files to analyze (0 = no limit)
 
         Returns:
             PredictionResult with complete codebase analysis
         """
         root = Path(directory) if directory else self.project_root
 
-        # Find files to analyze
-        files = list(root.rglob(pattern))[:limit]
-        total_files = len(list(root.rglob(pattern)))
+        # Find files to analyze (limit=0 means no limit)
+        all_files = list(root.rglob(pattern))
+        total_files = len(all_files)
+        files = all_files[:limit] if limit > 0 else all_files
 
         # Analyze each file
         assessments = []
@@ -921,6 +975,277 @@ class BugPredictor:
         self._bug_history_cache = None
         self._change_freq_cache = None
         self._author_stats_cache = None
+        self._bug_pattern_embeddings = None
+
+    # =========================================================================
+    # Issue #554: Async Semantic Analysis Methods
+    # =========================================================================
+
+    async def _learn_bug_patterns_async(self) -> None:
+        """
+        Learn bug patterns from historical bug fix commits.
+
+        Issue #554: Extracts code patterns from bug fix commits
+        and stores their embeddings in ChromaDB for similarity matching.
+        """
+        if not self.use_semantic_analysis:
+            return
+
+        if self._bug_history_cache is None:
+            self._build_bug_history_cache()
+
+        # Collect code snippets from bug fixes
+        bug_patterns = []
+        for file_path, bugs in (self._bug_history_cache or {}).items():
+            for bug in bugs[:5]:  # Limit per file for performance
+                pattern_id = f"{file_path}:{bug.get('hash', 'unknown')}"
+                message = bug.get("message", "")
+                bug_patterns.append({
+                    "id": pattern_id,
+                    "file": file_path,
+                    "message": message,
+                })
+
+        if not bug_patterns:
+            logger.debug("No bug patterns found to learn from")
+            return
+
+        # Store patterns in vector DB
+        texts = [f"Bug fix in {p['file']}: {p['message']}" for p in bug_patterns]
+        embeddings = await self._get_embeddings_batch(texts)
+
+        # Filter out failed embeddings and store valid ones
+        valid_ids = []
+        valid_embeddings = []
+        valid_texts = []
+        valid_metadata = []
+        for i, emb in enumerate(embeddings):
+            if emb is not None:
+                valid_ids.append(bug_patterns[i]["id"])
+                valid_embeddings.append(emb)
+                valid_texts.append(texts[i])
+                valid_metadata.append({"file": bug_patterns[i]["file"]})
+
+        if valid_embeddings:
+            await self._store_vectors(
+                ids=valid_ids,
+                embeddings=valid_embeddings,
+                documents=valid_texts,
+                metadatas=valid_metadata,
+            )
+        logger.info("Learned %d bug patterns for semantic analysis", len(valid_embeddings))
+
+    async def _analyze_file_semantic_async(
+        self,
+        file_path: str,
+    ) -> RiskFactorScore:
+        """
+        Analyze file for similarity to known bug patterns.
+
+        Issue #554: Uses LLM embeddings to find semantic similarity
+        between current code and historical bug-prone patterns.
+
+        Args:
+            file_path: Path to the file to analyze
+
+        Returns:
+            RiskFactorScore for semantic bug pattern similarity
+        """
+        if not self.use_semantic_analysis:
+            return RiskFactorScore(
+                factor=RiskFactor.BUG_HISTORY,
+                score=0.0,
+                weight=0.0,
+                details="Semantic analysis not enabled",
+            )
+
+        path = Path(file_path)
+        try:
+            content = path.read_text(encoding="utf-8", errors="ignore")
+            # Use first 1000 chars of content for efficiency
+            content_sample = content[:1000]
+
+            # Generate embedding for the content sample
+            embedding = await self._get_embedding(content_sample)
+            if not embedding:
+                return RiskFactorScore(
+                    factor=RiskFactor.BUG_HISTORY,
+                    score=10.0,
+                    weight=0.05,
+                    details="Could not generate embedding for file",
+                )
+
+            # Find similar bug patterns using the embedding
+            similar = await self._query_similar(
+                embedding,
+                n_results=5,
+                min_similarity=0.6,
+            )
+
+            if not similar:
+                return RiskFactorScore(
+                    factor=RiskFactor.BUG_HISTORY,
+                    score=10.0,
+                    weight=0.10,
+                    details="No similar bug patterns found",
+                )
+
+            # Higher similarity to bug patterns = higher risk
+            avg_similarity = sum(s["similarity"] for s in similar) / len(similar)
+            score = avg_similarity * 100  # Convert to 0-100 scale
+
+            return RiskFactorScore(
+                factor=RiskFactor.BUG_HISTORY,
+                score=score,
+                weight=0.10,  # Additional weight for semantic factor
+                details=f"Similar to {len(similar)} historical bug patterns ({avg_similarity:.1%} avg)",
+            )
+
+        except Exception as e:
+            logger.warning("Semantic analysis failed for %s: %s", file_path, e)
+            return RiskFactorScore(
+                factor=RiskFactor.BUG_HISTORY,
+                score=30.0,
+                weight=0.05,
+                details=f"Semantic analysis error: {e}",
+            )
+
+    async def analyze_file_async(self, file_path: str) -> FileRiskAssessment:
+        """
+        Analyze a single file for bug risk with semantic analysis.
+
+        Issue #554: Async version that includes LLM-based pattern matching.
+
+        Args:
+            file_path: Path to the file to analyze
+
+        Returns:
+            FileRiskAssessment with complete risk analysis
+        """
+        # Get base assessment using synchronous method
+        assessment = self.analyze_file(file_path)
+
+        # Add semantic analysis if enabled
+        if self.use_semantic_analysis:
+            semantic_factor = await self._analyze_file_semantic_async(file_path)
+            if semantic_factor.score > 0:
+                assessment.factor_scores.append(semantic_factor)
+                # Recalculate total risk score
+                assessment.risk_score = sum(
+                    fs.weighted_score for fs in assessment.factor_scores
+                )
+                assessment.risk_level = self._get_risk_level(assessment.risk_score)
+
+        return assessment
+
+    async def analyze_directory_async(
+        self,
+        directory: Optional[str] = None,
+        pattern: str = "*.py",
+        limit: int = 0,
+    ) -> PredictionResult:
+        """
+        Analyze all files in a directory with semantic analysis.
+
+        Issue #554: Async version that includes LLM-based bug pattern
+        matching and caches results in Redis.
+
+        Args:
+            directory: Directory to analyze (defaults to project root)
+            pattern: Glob pattern for files to include
+            limit: Maximum number of files to analyze (0 = no limit)
+
+        Returns:
+            PredictionResult with complete codebase analysis
+        """
+        root = Path(directory) if directory else self.project_root
+
+        # Check for cached results
+        cache_key = f"bug_pred:{root}:{pattern}:{limit}"
+        if self.use_semantic_analysis:
+            cached = await self._get_cached_result(cache_key, prefix="bug_predictor")
+            if cached:
+                logger.info("Returning cached bug prediction")
+                return PredictionResult(**cached)
+
+        # Learn from historical bug patterns
+        await self._learn_bug_patterns_async()
+
+        # Find files to analyze (limit=0 means no limit)
+        all_files = list(root.rglob(pattern))
+        total_files = len(all_files)
+        files = all_files[:limit] if limit > 0 else all_files
+
+        # Analyze each file with semantic analysis
+        assessments = []
+        for file_path in files:
+            try:
+                assessment = await self.analyze_file_async(str(file_path))
+                assessments.append(assessment)
+            except Exception as e:
+                logger.warning("Failed to analyze %s: %s", file_path, e)
+
+        # Sort by risk score
+        assessments.sort(key=lambda x: x.risk_score, reverse=True)
+
+        # Calculate statistics
+        high_risk_count = sum(
+            1
+            for a in assessments
+            if a.risk_level in (RiskLevel.CRITICAL, RiskLevel.HIGH)
+        )
+
+        # Risk distribution
+        risk_dist = {level.value: 0 for level in RiskLevel}
+        for a in assessments:
+            risk_dist[a.risk_level.value] += 1
+
+        # Top risk factors
+        factor_totals: dict[str, float] = {}
+        for a in assessments:
+            for fs in a.factor_scores:
+                factor_totals[fs.factor.value] = (
+                    factor_totals.get(fs.factor.value, 0) + fs.score
+                )
+        top_factors = sorted(factor_totals.items(), key=lambda x: x[1], reverse=True)[
+            :5
+        ]
+
+        # Estimate predicted bugs
+        predicted_bugs = int(high_risk_count * 0.7)
+
+        result = PredictionResult(
+            timestamp=datetime.now(),
+            total_files=total_files,
+            analyzed_files=len(assessments),
+            high_risk_count=high_risk_count,
+            predicted_bugs=predicted_bugs,
+            accuracy_score=None,
+            risk_distribution=risk_dist,
+            file_assessments=assessments,
+            top_risk_factors=top_factors,
+        )
+
+        # Cache results
+        if self.use_semantic_analysis:
+            await self._cache_result(
+                cache_key,
+                result.to_dict(),
+                prefix="bug_predictor",
+                ttl=1800,  # 30 minute cache
+            )
+
+        return result
+
+    def get_infrastructure_metrics(self) -> Dict[str, Any]:
+        """
+        Get infrastructure metrics for monitoring.
+
+        Issue #554: Returns cache hits, embeddings generated, etc.
+        """
+        if self.use_semantic_analysis:
+            return self._get_infrastructure_metrics()
+        return {}
 
 
 # ============================================================================
@@ -946,6 +1271,33 @@ def predict_bugs(
     """
     predictor = BugPredictor(project_root=directory)
     return predictor.analyze_directory(pattern=pattern, limit=limit)
+
+
+async def predict_bugs_async(
+    directory: Optional[str] = None,
+    pattern: str = "*.py",
+    limit: int = 100,
+    use_semantic_analysis: bool = True,
+) -> PredictionResult:
+    """
+    Predict bugs in a directory with semantic analysis.
+
+    Issue #554: Async version with LLM-based bug pattern matching.
+
+    Args:
+        directory: Directory to analyze
+        pattern: File pattern to include
+        limit: Maximum files to analyze
+        use_semantic_analysis: Enable semantic analysis (default True)
+
+    Returns:
+        PredictionResult with analysis including semantic patterns
+    """
+    predictor = BugPredictor(
+        project_root=directory,
+        use_semantic_analysis=use_semantic_analysis,
+    )
+    return await predictor.analyze_directory_async(pattern=pattern, limit=limit)
 
 
 def get_file_risk(file_path: str) -> FileRiskAssessment:
