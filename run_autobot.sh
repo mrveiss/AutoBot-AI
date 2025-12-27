@@ -44,6 +44,18 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# =============================================================================
+# SSOT Configuration - Load from .env file (Single Source of Truth)
+# Issue: #604 - SSOT Phase 4 Cleanup
+# =============================================================================
+if [ -f ".env" ]; then
+    set -a  # Automatically export all variables
+    source .env
+    set +a
+else
+    warning ".env file not found - using fallback defaults"
+fi
+
 # Default configuration
 DEV_MODE=false
 PROD_MODE=false
@@ -51,25 +63,25 @@ NO_BROWSER=false
 DESKTOP_ACCESS=true  # Enable by default per CLAUDE.md guidelines
 VNC_PID=""
 
-# VM Configuration (Distributed Architecture)
+# VM Configuration (Distributed Architecture) - Using SSOT env vars
 SSH_KEY="$HOME/.ssh/autobot_key"
 SSH_USER="autobot"
 declare -A VMS=(
-    ["frontend"]="172.16.168.21"
-    ["npu-worker"]="172.16.168.22"
-    ["redis"]="172.16.168.23"
-    ["ai-stack"]="172.16.168.24"
-    ["browser"]="172.16.168.25"
+    ["frontend"]="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+    ["npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
+    ["redis"]="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+    ["ai-stack"]="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
+    ["browser"]="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
 )
 
-# Service ports
-BACKEND_HOST=172.16.168.20
-BACKEND_PORT=8001
-FRONTEND_PORT=5173
-REDIS_PORT=6379
-BROWSER_PORT=3000
-AI_STACK_PORT=8080
-NPU_WORKER_PORT=8081
+# Service ports - Using SSOT env vars with fallbacks
+BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
+FRONTEND_PORT="${AUTOBOT_FRONTEND_PORT:-5173}"
+REDIS_PORT="${AUTOBOT_REDIS_PORT:-6379}"
+BROWSER_PORT="${AUTOBOT_BROWSER_SERVICE_PORT:-3000}"
+AI_STACK_PORT="${AUTOBOT_AI_STACK_PORT:-8080}"
+NPU_WORKER_PORT="${AUTOBOT_NPU_WORKER_PORT:-8081}"
 
 print_usage() {
     cat << EOF

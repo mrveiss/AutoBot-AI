@@ -4,7 +4,7 @@
 
 This guide provides detailed implementation instructions for the **NO HARDCODED VALUES** policy.
 
-> **⚠️ MANDATORY RULE**: NO HARDCODED VALUES in AutoBot codebase
+> **⚠️ MANDATORY RULE**: NO HARDCODED VALUES - USE SSOT CONFIG
 
 ---
 
@@ -14,11 +14,13 @@ The following values must NEVER be hardcoded in source files:
 
 | Type | Examples | Correct Alternative |
 |------|----------|---------------------|
-| **IP Addresses** | `"172.16.168.20"`, `"192.168.1.100"` | `NetworkConstants.MAIN_MACHINE_IP` or `.env` |
-| **Port Numbers** | `8001`, `6379`, `5173` | `NetworkConstants.BACKEND_PORT` or `.env` |
-| **LLM Model Names** | `"llama3.2:1b-instruct-q4_K_M"` | `config.get_default_llm_model()` or `AUTOBOT_DEFAULT_LLM_MODEL` |
-| **URLs** | `"http://example.com/api"` | Environment variables |
+| **IP Addresses** | `"172.16.168.20"`, `"192.168.1.100"` | `config.backend.host` (Python) or SSOT env vars |
+| **Port Numbers** | `8001`, `6379`, `5173` | `config.backend.port` (Python) or SSOT env vars |
+| **LLM Model Names** | `"llama3.2:1b-instruct-q4_K_M"` | `config.llm.default_model` or `AUTOBOT_DEFAULT_LLM_MODEL` |
+| **URLs** | `"http://example.com/api"` | `getBackendUrl()` (TypeScript) or SSOT config |
 | **API Keys/Secrets** | `"sk-abc123..."`, `"password123"` | Environment variables (NEVER commit) |
+
+> 👉 **See also**: [SSOT_CONFIG_GUIDE.md](SSOT_CONFIG_GUIDE.md) for complete configuration patterns
 
 ---
 
@@ -70,7 +72,7 @@ Run the detection script manually to audit the entire codebase:
 
 ### 1. For IP Addresses and Port Numbers
 
-**Use the `NetworkConstants` class**:
+**Use the SSOT config (Python)**:
 
 ```python
 # ❌ BAD - Hardcoded values
@@ -78,80 +80,91 @@ url = "http://172.16.168.20:8001/api/chat"
 redis_host = "172.16.168.23"
 redis_port = 6379
 
-# ✅ GOOD - Use NetworkConstants
-from src.constants.network_constants import NetworkConstants
+# ✅ GOOD - Use SSOT config
+from src.config.ssot_config import config
 
-url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}/api/chat"
-redis_host = NetworkConstants.REDIS_VM_IP
-redis_port = NetworkConstants.REDIS_PORT
+url = config.backend.url + "/api/chat"
+redis_host = config.redis.host
+redis_port = config.redis.port
 ```
 
-**Available constants** (see `src/constants/network_constants.py`):
-```python
-class NetworkConstants:
-    MAIN_MACHINE_IP = "172.16.168.20"
-    FRONTEND_VM_IP = "172.16.168.21"
-    NPU_WORKER_VM_IP = "172.16.168.22"
-    REDIS_VM_IP = "172.16.168.23"
-    AI_STACK_VM_IP = "172.16.168.24"
-    BROWSER_VM_IP = "172.16.168.25"
+**Use the SSOT config (TypeScript)**:
 
-    BACKEND_PORT = 8001
-    FRONTEND_PORT = 5173
-    REDIS_PORT = 6379
-    # ... and more
+```typescript
+// ❌ BAD - Hardcoded values
+const url = "http://172.16.168.20:8001/api/chat"
+
+// ✅ GOOD - Use SSOT config
+import { getBackendUrl } from '@/config/ssot-config'
+
+const url = getBackendUrl() + "/api/chat"
+```
+
+**Use SSOT in Shell Scripts**:
+
+```bash
+# Load .env at script start
+if [ -f "$PROJECT_ROOT/.env" ]; then
+    set -a
+    source "$PROJECT_ROOT/.env"
+    set +a
+fi
+
+# ❌ BAD - Hardcoded
+BACKEND_HOST="172.16.168.20"
+
+# ✅ GOOD - SSOT env var with fallback
+BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
 ```
 
 ### 2. For LLM Model Names
 
-**Use config methods**:
+**Use SSOT config**:
 
 ```python
 # ❌ BAD - Hardcoded model name
 model = "llama3.2:1b-instruct-q4_K_M"
 
-# ✅ GOOD - Use config method
-from src.config import config
-model = config.get_default_llm_model()
-
-# ✅ ALTERNATIVE - Use environment variable
-import os
-model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "llama3.2:1b")
+# ✅ GOOD - Use SSOT config
+from src.config.ssot_config import config
+model = config.llm.default_model
 ```
 
 **Environment variable**: Set in `.env` file:
+
 ```bash
 AUTOBOT_DEFAULT_LLM_MODEL=llama3.2:1b-instruct-q4_K_M
 ```
 
 ### 3. For Other Values (URLs, API Keys, etc.)
 
-**Use environment variables**:
+**Use environment variables via SSOT**:
 
 **Step 1**: Add to `.env` file (never commit this file):
+
 ```bash
 AUTOBOT_API_BASE_URL=http://api.example.com
 AUTOBOT_API_KEY=sk-abc123...
 AUTOBOT_CUSTOM_SETTING=value
 ```
 
-**Step 2**: Read in code:
+**Step 2**: Read via SSOT config or env vars:
+
 ```python
 # ❌ BAD - Hardcoded URL
 api_url = "http://api.example.com"
-api_key = "sk-abc123..."
 
-# ✅ GOOD - Use environment variables
+# ✅ GOOD - Use SSOT config for standard values
+from src.config.ssot_config import config
+backend_url = config.backend.url
+
+# ✅ GOOD - Use os.getenv for custom values
 import os
-
-api_url = os.getenv("AUTOBOT_API_BASE_URL")
 api_key = os.getenv("AUTOBOT_API_KEY")  # NEVER hardcode secrets!
-
-# Provide defaults for non-sensitive values
-custom_setting = os.getenv("AUTOBOT_CUSTOM_SETTING", "default_value")
 ```
 
 **Step 3**: Document in `.env.example`:
+
 ```bash
 # API Configuration
 AUTOBOT_API_BASE_URL=http://api.example.com
@@ -273,10 +286,11 @@ chmod +x .git/hooks/pre-commit-hardcode-check
 ## ✅ Best Practices
 
 ### 1. Check Before You Code
+
 - Know the proper pattern before writing code
-- Use `NetworkConstants` for IPs/ports
-- Use `config` methods for models
-- Use `.env` for everything else
+- Use SSOT `config` for IPs/ports/URLs
+- Use `config.llm.default_model` for models
+- Use `.env` for custom values
 
 ### 2. Run Manual Scans
 ```bash
@@ -354,20 +368,24 @@ git commit --no-verify -m "Emergency fix - see issue #123"
 
 ## 📚 Related Documentation
 
-- **Network Constants**: `src/constants/network_constants.py`
-- **Config Module**: `src/config.py`
-- **Environment Setup**: `docs/developer/PHASE_5_DEVELOPER_SETUP.md`
-- **Code Quality**: `docs/developer/CODE_QUALITY_ENFORCEMENT.md`
+- **SSOT Config Guide**: [SSOT_CONFIG_GUIDE.md](SSOT_CONFIG_GUIDE.md) - Complete SSOT configuration patterns
+- **Migration Checklist**: [CONFIG_MIGRATION_CHECKLIST.md](CONFIG_MIGRATION_CHECKLIST.md) - Migrating code to SSOT
+- **SSOT Architecture**: [../architecture/SSOT_CONFIGURATION_ARCHITECTURE.md](../architecture/SSOT_CONFIGURATION_ARCHITECTURE.md)
+- **Python SSOT Config**: `src/config/ssot_config.py`
+- **TypeScript SSOT Config**: `autobot-vue/src/config/ssot-config.ts`
+- **Environment Setup**: [PHASE_5_DEVELOPER_SETUP.md](PHASE_5_DEVELOPER_SETUP.md)
+- **Code Quality**: [CODE_QUALITY_ENFORCEMENT.md](CODE_QUALITY_ENFORCEMENT.md)
 
 ---
 
 ## 🎯 Summary Checklist
 
 **Before committing**:
-- [ ] No hardcoded IP addresses (use `NetworkConstants`)
-- [ ] No hardcoded port numbers (use `NetworkConstants` or `.env`)
-- [ ] No hardcoded model names (use `config.get_default_llm_model()`)
-- [ ] No hardcoded URLs (use environment variables)
+
+- [ ] No hardcoded IP addresses (use SSOT `config.*.host`)
+- [ ] No hardcoded port numbers (use SSOT `config.*.port`)
+- [ ] No hardcoded model names (use `config.llm.default_model`)
+- [ ] No hardcoded URLs (use `getBackendUrl()` or SSOT config)
 - [ ] No hardcoded secrets (use environment variables)
 - [ ] Pre-commit hook passes
 - [ ] `.env.example` updated (if new variables added)

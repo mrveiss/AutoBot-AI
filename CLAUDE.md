@@ -416,14 +416,33 @@ docs(api): Update configuration documentation (#159)
 
 ## 🚫 HARDCODING PREVENTION (AUTOMATED ENFORCEMENT)
 
-**⚠️ MANDATORY RULE: NO HARDCODED VALUES**
+**⚠️ MANDATORY RULE: NO HARDCODED VALUES - USE SSOT CONFIG**
 
 **What constitutes hardcoding:**
-- IP addresses (use `NetworkConstants` or `.env`)
-- Port numbers (use `NetworkConstants` or `.env`)
-- LLM model names (use `config.get_default_llm_model()` or `AUTOBOT_DEFAULT_LLM_MODEL`)
-- URLs (use environment variables)
+- IP addresses (use `config.backend.host` or SSOT env vars)
+- Port numbers (use `config.backend.port` or SSOT env vars)
+- LLM model names (use `config.llm.default_model` or `AUTOBOT_DEFAULT_LLM_MODEL`)
+- URLs (use `getBackendUrl()` or SSOT config)
 - API keys, passwords, secrets (use environment variables, NEVER commit)
+
+**SSOT Configuration Pattern:**
+```python
+# Python - Use SSOT config
+from src.config.ssot_config import config
+redis_host = config.redis.host
+```
+
+```typescript
+// TypeScript - Use SSOT config
+import { getConfig, getBackendUrl } from '@/config/ssot-config'
+const apiUrl = getBackendUrl()
+```
+
+```bash
+# Shell - Load .env and use fallbacks
+source "$PROJECT_ROOT/.env"
+BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+```
 
 **Pre-commit hook**: Automatically scans for violations before every commit
 ```bash
@@ -432,6 +451,8 @@ docs(api): Update configuration documentation (#159)
 ```
 
 👉 **Full guide**: [`docs/developer/HARDCODING_PREVENTION.md`](docs/developer/HARDCODING_PREVENTION.md)
+👉 **SSOT Config Guide**: [`docs/developer/SSOT_CONFIG_GUIDE.md`](docs/developer/SSOT_CONFIG_GUIDE.md)
+👉 **Migration Checklist**: [`docs/developer/CONFIG_MIGRATION_CHECKLIST.md`](docs/developer/CONFIG_MIGRATION_CHECKLIST.md)
 
 ---
 
@@ -442,7 +463,7 @@ docs(api): Update configuration documentation (#159)
 **Canonical pattern**: `src/utils/redis_client.py::get_redis_client()`
 
 ```python
-# ✅ CORRECT - Use canonical utility
+# ✅ CORRECT - Use canonical utility (uses SSOT config internally)
 from src.utils.redis_client import get_redis_client
 
 # Get synchronous client for 'main' database
@@ -451,18 +472,20 @@ redis_client = get_redis_client(async_client=False, database="main")
 # Get async client for 'knowledge' database
 async_redis = await get_redis_client(async_client=True, database="knowledge")
 
-# ❌ FORBIDDEN - Direct instantiation
+# ❌ FORBIDDEN - Direct instantiation with hardcoded values
 import redis
 client = redis.Redis(host="172.16.168.23", port=6379, db=0)  # NEVER DO THIS
 ```
 
 **Use named databases** (self-documenting):
+
 - `main` - General cache/queues
 - `knowledge` - Knowledge base vectors
 - `prompts` - LLM prompts/templates
 - `analytics` - Analytics data
 
 👉 **Full guide**: [`docs/developer/REDIS_CLIENT_USAGE.md`](docs/developer/REDIS_CLIENT_USAGE.md)
+👉 **SSOT Config Guide**: [`docs/developer/SSOT_CONFIG_GUIDE.md`](docs/developer/SSOT_CONFIG_GUIDE.md)
 
 ---
 
