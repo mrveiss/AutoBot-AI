@@ -612,15 +612,16 @@ suggest alternatives.
         current_command = {}
 
         for line in lines:
-            line = line.strip()
-            if line.startswith("COMMAND:"):
+            # Cache stripped line to avoid repeated calls (Issue #624)
+            line_stripped = line.strip()
+            if line_stripped.startswith("COMMAND:"):
                 if current_command.get("command"):
                     commands.append(current_command)
-                current_command = {"command": line[8:].strip()}
-            elif line.startswith("EXPLANATION:"):
-                current_command["explanation"] = line[12:].strip()
-            elif line.startswith("NEXT:"):
-                current_command["next"] = line[5:].strip()
+                current_command = {"command": line_stripped[8:].strip()}
+            elif line_stripped.startswith("EXPLANATION:"):
+                current_command["explanation"] = line_stripped[12:].strip()
+            elif line_stripped.startswith("NEXT:"):
+                current_command["next"] = line_stripped[5:].strip()
 
         if current_command.get("command"):
             commands.append(current_command)

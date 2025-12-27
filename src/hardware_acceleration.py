@@ -38,13 +38,16 @@ def _parse_nvidia_smi_output(output: str) -> Dict[str, Dict[str, Any]]:
     lines = output.strip().split("\n")
 
     for i, line in enumerate(lines):
-        if not line.strip():
+        # Cache stripped line to avoid repeated calls (Issue #624)
+        line_stripped = line.strip()
+        if not line_stripped:
             continue
-        parts = line.split(",")
+        parts = line_stripped.split(",")
         if len(parts) < 3:
             continue
 
         try:
+            # Cache stripped parts to avoid repeated strip() calls
             util = int(parts[0].strip())
             mem_used = int(parts[1].strip())
             mem_total = int(parts[2].strip())
@@ -263,9 +266,11 @@ class HardwareAccelerationManager:
         """Parse nvidia-smi output into GPU list (Issue #315 - extracted helper)."""
         gpus = []
         for line in output.strip().split("\n"):
-            if not line.strip():
+            # Cache stripped line to avoid repeated calls (Issue #624)
+            line_stripped = line.strip()
+            if not line_stripped:
                 continue
-            parts = line.split(",")
+            parts = line_stripped.split(",")
             if len(parts) >= 2:
                 name = parts[0].strip()
                 memory = parts[1].strip()

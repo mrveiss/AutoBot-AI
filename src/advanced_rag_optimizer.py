@@ -279,7 +279,9 @@ class AdvancedRAGOptimizer:
     ) -> List[SearchResult]:
         """Perform keyword-based search with TF-IDF-like scoring."""
         try:
-            query_terms = set(query.lower().split())
+            # Cache query.lower() to avoid repeated calls (Issue #624)
+            query_lower = query.lower()
+            query_terms = set(query_lower.split())
             keyword_results = []
 
             for fact in all_facts:
@@ -293,7 +295,7 @@ class AdvancedRAGOptimizer:
                     keyword_score = matches / len(query_terms)
 
                     # Boost score for exact phrase matches
-                    if query.lower() in combined_text:
+                    if query_lower in combined_text:
                         keyword_score *= 1.5
 
                     # Extract metadata - already a dict from get_all_facts()

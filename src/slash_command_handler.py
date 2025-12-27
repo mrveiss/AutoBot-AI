@@ -226,8 +226,10 @@ class DocsCommand(Command):
             lambda: list(self.docs_base_path.rglob("*.md"))
         )
         for md_file in all_md_files:
+            # Cache str(md_file).lower() to avoid repeated calls (Issue #624)
+            md_file_str_lower = str(md_file).lower()
             # Skip archive directories
-            if "archive" in str(md_file).lower() or "legacy" in str(md_file).lower():
+            if "archive" in md_file_str_lower or "legacy" in md_file_str_lower:
                 continue
 
             rel_path = md_file.relative_to(self.docs_base_path)

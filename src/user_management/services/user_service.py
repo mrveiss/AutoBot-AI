@@ -140,21 +140,23 @@ class UserService(BaseService):
         Raises:
             DuplicateUserError: If email or username already exists
         """
-        # Check for duplicates
+        # Check for duplicates - cache lower() values to avoid repeated calls
+        email_lower = email.lower()
+        username_lower = username.lower()
         existing = await self._find_by_email_or_username(email, username)
         if existing:
-            if existing.email.lower() == email.lower():
+            if existing.email.lower() == email_lower:
                 raise DuplicateUserError(f"User with email '{email}' already exists")
             raise DuplicateUserError(f"User with username '{username}' already exists")
 
         # Use provided org_id or context org_id
         effective_org_id = org_id or self.context.org_id
 
-        # Create user
+        # Create user (reuse cached lowercase values)
         user = User(
             id=uuid.uuid4(),
-            email=email.lower(),
-            username=username.lower(),
+            email=email_lower,
+            username=username_lower,
             password_hash=self.hash_password(password) if password else None,
             display_name=display_name or username,
             org_id=effective_org_id,
@@ -340,19 +342,24 @@ class UserService(BaseService):
 
         changes = {}
 
-        if email and email.lower() != user.email.lower():
-            existing = await self.get_user_by_email(email)
-            if existing and existing.id != user_id:
-                raise DuplicateUserError(f"Email '{email}' already in use")
-            changes["email"] = {"old": user.email, "new": email.lower()}
-            user.email = email.lower()
+        # Cache lower() values to avoid repeated calls
+        if email:
+            email_lower = email.lower()
+            if email_lower != user.email.lower():
+                existing = await self.get_user_by_email(email)
+                if existing and existing.id != user_id:
+                    raise DuplicateUserError(f"Email '{email}' already in use")
+                changes["email"] = {"old": user.email, "new": email_lower}
+                user.email = email_lower
 
-        if username and username.lower() != user.username.lower():
-            existing = await self.get_user_by_username(username)
-            if existing and existing.id != user_id:
-                raise DuplicateUserError(f"Username '{username}' already in use")
-            changes["username"] = {"old": user.username, "new": username.lower()}
-            user.username = username.lower()
+        if username:
+            username_lower = username.lower()
+            if username_lower != user.username.lower():
+                existing = await self.get_user_by_username(username)
+                if existing and existing.id != user_id:
+                    raise DuplicateUserError(f"Username '{username}' already in use")
+                changes["username"] = {"old": user.username, "new": username_lower}
+                user.username = username_lower
 
         if display_name is not None:
             changes["display_name"] = {"old": user.display_name, "new": display_name}
@@ -743,11 +750,14 @@ class UserService(BaseService):
         self, email: str, username: str
     ) -> Optional[User]:
         """Find user by email or username."""
+        # Cache lower() values to avoid repeated calls
+        email_lower = email.lower()
+        username_lower = username.lower()
         result = await self.session.execute(
             select(User).where(
                 or_(
-                    func.lower(User.email) == email.lower(),
-                    func.lower(User.username) == username.lower(),
+                    func.lower(User.email) == email_lower,
+                    func.lower(User.username) == username_lower,
                 )
             )
         )

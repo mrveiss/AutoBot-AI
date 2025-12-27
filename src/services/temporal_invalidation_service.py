@@ -597,11 +597,15 @@ class TemporalInvalidationService:
         (Issue #398: extracted helper)
         """
         contradictory_facts = []
+        # Cache new_fact lowercase values to avoid repeated calls (Issue #624)
+        new_subject_lower = new_fact.subject.lower()
+        new_predicate_lower = new_fact.predicate.lower()
+        new_object_lower = new_fact.object.lower()
         for existing_fact in similar_facts:
             if (
-                existing_fact.subject.lower() == new_fact.subject.lower()
-                and existing_fact.predicate.lower() == new_fact.predicate.lower()
-                and existing_fact.object.lower() != new_fact.object.lower()
+                existing_fact.subject.lower() == new_subject_lower
+                and existing_fact.predicate.lower() == new_predicate_lower
+                and existing_fact.object.lower() != new_object_lower
                 and existing_fact.fact_id != new_fact.fact_id
             ):
                 if new_fact.is_contradictory_to(existing_fact):

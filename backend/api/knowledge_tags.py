@@ -54,6 +54,14 @@ _TAG_PREFIX_RE = re.compile(r"^[a-z0-9_-]*$")
 router = APIRouter(tags=["knowledge-tags"])
 
 
+def _raise_kb_error(error_message: str, default_code: int = 500) -> None:
+    """Raise appropriate HTTPException based on error message (#624)."""
+    error_lower = error_message.lower()
+    if "not found" in error_lower:
+        raise HTTPException(status_code=404, detail=error_message)
+    raise HTTPException(status_code=default_code, detail=error_message)
+
+
 # ===== TAG MANAGEMENT ENDPOINTS (Issue #77) =====
 
 
@@ -106,11 +114,7 @@ async def add_tags_to_fact(
             "message": result.get("message", "Tags added successfully"),
         }
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=500, detail=error_message)
+        _raise_kb_error(result.get("message", "Unknown error"))
 
 
 @with_error_handling(
@@ -162,11 +166,7 @@ async def remove_tags_from_fact(
             "message": result.get("message", "Tags removed successfully"),
         }
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=500, detail=error_message)
+        _raise_kb_error(result.get("message", "Unknown error"))
 
 
 @with_error_handling(
@@ -209,11 +209,7 @@ async def get_fact_tags(
             "tags": result.get("tags", []),
         }
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=500, detail=error_message)
+        _raise_kb_error(result.get("message", "Unknown error"))
 
 
 @with_error_handling(
@@ -430,11 +426,7 @@ async def rename_tag(
             "message": result.get("message", "Tag renamed successfully"),
         }
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=400, detail=error_message)
+        _raise_kb_error(result.get("message", "Unknown error"), 400)
 
 
 @with_error_handling(
@@ -488,11 +480,7 @@ async def delete_tag_globally(
             "message": result.get("message", "Tag deleted successfully"),
         }
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=500, detail=error_message)
+        _raise_kb_error(result.get("message", "Unknown error"))
 
 
 @with_error_handling(
@@ -671,11 +659,7 @@ async def get_tag_info(
             "fact_count": result.get("fact_count", 0),
         }
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=500, detail=error_message)
+        _raise_kb_error(result.get("message", "Unknown error"))
 
 
 # ===== TAG STYLING OPERATIONS (Issue #410) =====
@@ -746,11 +730,7 @@ async def update_tag_style(
             "message": result.get("message", "Tag style updated successfully"),
         }
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=400, detail=error_message)
+        _raise_kb_error(result.get("message", "Unknown error"), 400)
 
 
 @with_error_handling(

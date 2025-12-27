@@ -46,6 +46,14 @@ _CATEGORY_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 router = APIRouter(tags=["knowledge-categories"])
 
 
+def _raise_kb_error(error_message: str, default_code: int = 500) -> None:
+    """Raise appropriate HTTPException based on error message (#624)."""
+    error_lower = error_message.lower()
+    if "not found" in error_lower:
+        raise HTTPException(status_code=404, detail=error_message)
+    raise HTTPException(status_code=default_code, detail=error_message)
+
+
 # ===== CATEGORY CRUD OPERATIONS (Issue #411) =====
 
 
@@ -168,11 +176,7 @@ async def get_category_tree(
             "total_categories": result.get("total_categories", 0),
         }
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=500, detail=error_message)
+        _raise_kb_error(result.get("message", "Unknown error"))
 
 
 @with_error_handling(
@@ -221,11 +225,7 @@ async def get_category(
             "category": result.get("category"),
         }
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=500, detail=error_message)
+        _raise_kb_error(result.get("message", "Unknown error"))
 
 
 @with_error_handling(
@@ -266,11 +266,7 @@ async def get_category_by_path(
             "category": result.get("category"),
         }
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=500, detail=error_message)
+        _raise_kb_error(result.get("message", "Unknown error"))
 
 
 @with_error_handling(
@@ -473,11 +469,7 @@ async def get_category_children(
             "count": result.get("count", 0),
         }
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=500, detail=error_message)
+        _raise_kb_error(result.get("message", "Unknown error"))
 
 
 @with_error_handling(
@@ -529,11 +521,7 @@ async def get_category_ancestors(
             "depth": result.get("depth", 0),
         }
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=500, detail=error_message)
+        _raise_kb_error(result.get("message", "Unknown error"))
 
 
 # ===== CATEGORY-FACT OPERATIONS (Issue #411) =====
@@ -605,11 +593,7 @@ async def get_facts_in_category(
             "include_descendants": include_descendants,
         }
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=500, detail=error_message)
+        _raise_kb_error(result.get("message", "Unknown error"))
 
 
 @with_error_handling(
@@ -670,11 +654,7 @@ async def assign_fact_to_category(
             "message": result.get("message", "Fact assigned to category"),
         }
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=400, detail=error_message)
+        _raise_kb_error(result.get("message", "Unknown error"), 400)
 
 
 @with_error_handling(

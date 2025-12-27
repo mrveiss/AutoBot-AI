@@ -86,17 +86,23 @@ class SystemIntegration:
                 check=True,
                 shell=shell,  # nosec B602 - shell=False by default, caller controls
             )
+            # Cache stripped values to avoid repeated calls (Issue #624)
+            stdout_stripped = result.stdout.strip() if result.stdout else ""
+            stderr_stripped = result.stderr.strip() if result.stderr else ""
             return {
                 "status": "success",
-                "output": result.stdout.strip(),
-                "error": result.stderr.strip(),
+                "output": stdout_stripped,
+                "error": stderr_stripped,
             }
         except subprocess.CalledProcessError as e:
+            # Cache stripped values to avoid repeated calls (Issue #624)
+            stdout_stripped = e.stdout.strip() if e.stdout else ""
+            stderr_stripped = e.stderr.strip() if e.stderr else ""
             return {
                 "status": "error",
                 "message": f"Command failed with exit code {e.returncode}",
-                "output": e.stdout.strip(),
-                "error": e.stderr.strip(),
+                "output": stdout_stripped,
+                "error": stderr_stripped,
             }
         except FileNotFoundError:
             return {
