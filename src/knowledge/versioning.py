@@ -65,19 +65,26 @@ class VersioningMixin:
         version_list_key = f"{self.VERSION_PREFIX}{fact_id}"
         version_meta_key = f"{self.VERSION_META}{fact_id}"
 
-        await asyncio.to_thread(
-            self.redis_client.lpush, version_list_key, json.dumps(version_data)
-        )
-        await asyncio.to_thread(
-            self.redis_client.ltrim, version_list_key, 0, MAX_VERSIONS - 1
-        )
-        await asyncio.to_thread(
-            self.redis_client.hset, version_meta_key, mapping={
-                "current_version": str(version_num),
-                "total_versions": str(min(version_num, MAX_VERSIONS)),
-                "last_updated": datetime.utcnow().isoformat(),
-            }
-        )
+        # Issue #619: lpush + ltrim must be sequential (ltrim depends on lpush),
+        # but hset can run in parallel with them
+        async def list_operations():
+            await asyncio.to_thread(
+                self.redis_client.lpush, version_list_key, json.dumps(version_data)
+            )
+            await asyncio.to_thread(
+                self.redis_client.ltrim, version_list_key, 0, MAX_VERSIONS - 1
+            )
+
+        async def meta_operation():
+            await asyncio.to_thread(
+                self.redis_client.hset, version_meta_key, mapping={
+                    "current_version": str(version_num),
+                    "total_versions": str(min(version_num, MAX_VERSIONS)),
+                    "last_updated": datetime.utcnow().isoformat(),
+                }
+            )
+
+        await asyncio.gather(list_operations(), meta_operation())
 
     async def create_version(
         self,
