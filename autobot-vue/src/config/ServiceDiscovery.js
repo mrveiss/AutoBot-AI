@@ -1,12 +1,19 @@
 /**
  * ServiceDiscovery - Dynamic Service URL Resolution
  *
- * Handles environment-aware service discovery, replacing all hardcoded URLs.
+ * Handles environment-aware service discovery using SSOT configuration.
  * Supports Docker, native VM, and development environments.
+ *
+ * Issue: #603 - SSOT Phase 3: Frontend Migration
+ * Related: #599 - SSOT Configuration System Epic
+ *
+ * AutoBot - AI-Powered Automation Platform
+ * Copyright (c) 2025 mrveiss
+ * Author: mrveiss
  */
 
+import { getConfig, getServiceUrl as ssotGetServiceUrl } from './ssot-config';
 import { buildDefaultServiceUrl, buildDefaultVncUrl } from './defaults.js';
-import { NetworkConstants } from '../constants/network';
 import { createLogger } from '@/utils/debugUtils';
 
 const logger = createLogger('ServiceDiscovery');
@@ -15,9 +22,10 @@ export default class ServiceDiscovery {
   constructor() {
     this.cache = new Map();
     this.cacheTimeout = 60000; // 1 minute cache
-    this.debugMode = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEBUG === 'true';
+    this.config = getConfig();
+    this.debugMode = import.meta.env.DEV || this.config.feature.debug;
 
-    this.log('ServiceDiscovery initialized');
+    this.log('ServiceDiscovery initialized with SSOT config');
   }
 
   /**
@@ -70,9 +78,17 @@ export default class ServiceDiscovery {
   }
 
   /**
-   * Internal URL resolution logic
+   * Internal URL resolution logic using SSOT config
    */
   async _resolveServiceUrl(serviceName, options = {}) {
+    // First try SSOT helper function for known services
+    const ssotUrl = ssotGetServiceUrl(serviceName);
+    if (ssotUrl) {
+      this.log(`Using SSOT URL for ${serviceName}:`, ssotUrl);
+      return ssotUrl;
+    }
+
+    // Get environment mappings for additional services
     const envMappings = this._getEnvironmentMappings();
     const serviceConfig = envMappings[serviceName];
 
@@ -92,17 +108,16 @@ export default class ServiceDiscovery {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
       // If VITE_API_BASE_URL is empty, use proxy mode (Vite dev server will proxy /api requests)
-      // VITE_BACKEND_HOST is used BY the Vite proxy, not by the frontend code directly
       if (!apiBaseUrl) {
         this.log('Backend service using proxy mode (empty URL) - requests will go through Vite proxy');
         return '';
       }
     }
 
-    // Build URL from host, port, and protocol
+    // Build URL from SSOT config values
     const host = await this._resolveHost(serviceName, serviceConfig);
     const port = options.port || serviceConfig.port;
-    const protocol = options.protocol || serviceConfig.protocol;
+    const protocol = options.protocol || this.config.httpProtocol;
 
     if (!host) {
       throw new Error(`Could not resolve host for service: ${serviceName}`);
@@ -113,72 +128,75 @@ export default class ServiceDiscovery {
 
   /**
    * Get environment variable mappings for all services
+   * Values now come from SSOT config
    */
   _getEnvironmentMappings() {
+    const cfg = this.config;
+
     return {
       backend: {
         envVar: 'VITE_API_BASE_URL',
         hostVar: 'VITE_BACKEND_HOST',
         portVar: 'VITE_BACKEND_PORT',
-        port: '8001',
-        protocol: 'http',
-        fallbackHosts: [NetworkConstants.MAIN_MACHINE_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP]
+        port: String(cfg.port.backend),
+        protocol: cfg.httpProtocol,
+        fallbackHosts: [cfg.vm.main, 'localhost', '127.0.0.1']
       },
       redis: {
         envVar: 'VITE_REDIS_URL',
         hostVar: 'VITE_REDIS_HOST',
         portVar: 'VITE_REDIS_PORT',
-        port: '6379',
+        port: String(cfg.port.redis),
         protocol: 'redis',
-        fallbackHosts: [NetworkConstants.MAIN_MACHINE_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP]
+        fallbackHosts: [cfg.vm.redis, 'localhost', '127.0.0.1']
       },
       vnc_desktop: {
         envVar: 'VITE_DESKTOP_VNC_URL',
         hostVar: 'VITE_DESKTOP_VNC_HOST',
         portVar: 'VITE_DESKTOP_VNC_PORT',
-        port: '6080',
-        protocol: 'http',
-        fallbackHosts: [NetworkConstants.MAIN_MACHINE_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP] // Backend VM first
+        port: String(cfg.vnc.desktop.port),
+        protocol: cfg.httpProtocol,
+        fallbackHosts: [cfg.vnc.desktop.host, 'localhost', '127.0.0.1']
       },
       vnc_terminal: {
         envVar: 'VITE_TERMINAL_VNC_URL',
         hostVar: 'VITE_TERMINAL_VNC_HOST',
         portVar: 'VITE_TERMINAL_VNC_PORT',
-        port: '6080',
-        protocol: 'http',
-        fallbackHosts: [NetworkConstants.MAIN_MACHINE_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP] // Backend VM first
+        port: String(cfg.vnc.terminal.port),
+        protocol: cfg.httpProtocol,
+        fallbackHosts: [cfg.vnc.terminal.host, 'localhost', '127.0.0.1']
       },
       vnc_playwright: {
         envVar: 'VITE_PLAYWRIGHT_VNC_URL',
         hostVar: 'VITE_PLAYWRIGHT_VNC_HOST',
         portVar: 'VITE_PLAYWRIGHT_VNC_PORT',
-        port: '6080',
-        protocol: 'http',
-        fallbackHosts: [NetworkConstants.BROWSER_VM_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP] // Browser VM first for headed mode VNC
+        port: String(cfg.vnc.playwright.port),
+        protocol: cfg.httpProtocol,
+        fallbackHosts: [cfg.vnc.playwright.host, 'localhost', '127.0.0.1']
       },
       npu_worker: {
         envVar: 'VITE_NPU_WORKER_URL',
         hostVar: 'VITE_NPU_WORKER_HOST',
         portVar: 'VITE_NPU_WORKER_PORT',
-        port: '8081',
-        protocol: 'http',
-        fallbackHosts: [NetworkConstants.NPU_WORKER_VM_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP] // NPU VM first
+        port: String(cfg.port.npu),
+        protocol: cfg.httpProtocol,
+        fallbackHosts: [cfg.vm.npu, 'localhost', '127.0.0.1']
       },
       ollama: {
         envVar: 'VITE_OLLAMA_URL',
         hostVar: 'VITE_OLLAMA_HOST',
         portVar: 'VITE_OLLAMA_PORT',
-        port: '11434',
-        protocol: 'http',
-        fallbackHosts: [NetworkConstants.MAIN_MACHINE_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP]
+        port: String(cfg.port.ollama),
+        protocol: cfg.httpProtocol,
+        fallbackHosts: [cfg.vm.ollama, 'localhost', '127.0.0.1']
       },
       playwright: {
         envVar: 'VITE_PLAYWRIGHT_API_URL',
         hostVar: 'VITE_PLAYWRIGHT_HOST',
         portVar: 'VITE_PLAYWRIGHT_PORT',
-        port: '3000',
-        protocol: 'http',
-        fallbackHosts: [NetworkConstants.MAIN_MACHINE_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP]
+        port: String(cfg.port.browser),
+        protocol: cfg.httpProtocol,
+        fallbackHosts: [cfg.vm.browser, 'localhost', '127.0.0.1']
       }
     };
   }
@@ -246,8 +264,6 @@ export default class ServiceDiscovery {
    * Get host for development environment
    */
   _getDevHost(serviceConfig) {
-    // CRITICAL FIX: In development with Vite dev server, prefer proxy mode for backend
-    // Only return localhost for non-backend services
     return 'localhost';
   }
 
@@ -255,10 +271,8 @@ export default class ServiceDiscovery {
    * Get host for production environment
    */
   _getProdHost(serviceConfig) {
-    // In production, use current hostname or fallback
     const currentHost = window.location.hostname;
 
-    // Use fallback hosts if current host is localhost
     if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
       return serviceConfig.fallbackHosts?.[0] || currentHost;
     }
@@ -270,7 +284,6 @@ export default class ServiceDiscovery {
    * Get host for Docker environment
    */
   _getDockerHost(serviceConfig) {
-    // Docker environment - use proper VM IPs instead of host.docker.internal
     return serviceConfig.fallbackHosts?.[0] || 'localhost';
   }
 
@@ -278,7 +291,6 @@ export default class ServiceDiscovery {
    * Get host for VM environment
    */
   _getVmHost(serviceConfig) {
-    // VM environment - use specific VM IPs from fallback hosts
     return serviceConfig.fallbackHosts?.[0] || window.location.hostname;
   }
 
@@ -294,7 +306,7 @@ export default class ServiceDiscovery {
    */
   _getFallbackUrl(serviceName) {
     try {
-      // CRITICAL FIX: For backend service, return empty string to trigger proxy mode
+      // For backend service, return empty string to trigger proxy mode
       if (serviceName === 'backend') {
         this.log('Backend service fallback: using proxy mode (empty URL)');
         return '';
@@ -306,7 +318,7 @@ export default class ServiceDiscovery {
         return buildDefaultVncUrl(vncType);
       }
 
-      // Handle regular services
+      // Handle regular services using defaults (which now uses SSOT)
       const serviceMap = {
         'npu_worker': 'npu_worker',
         'redis': 'redis',
@@ -321,7 +333,7 @@ export default class ServiceDiscovery {
 
       // Legacy services that need special handling
       const legacyFallbacks = {
-        'ollama': buildDefaultServiceUrl('backend').replace(':8001', ':11434'),
+        'ollama': buildDefaultServiceUrl('backend').replace(`:${this.config.port.backend}`, `:${this.config.port.ollama}`),
         'playwright': buildDefaultServiceUrl('browser')
       };
 
@@ -362,7 +374,6 @@ export default class ServiceDiscovery {
 
       // Handle proxy mode for backend service
       if (serviceName === 'backend' && !url) {
-        // In proxy mode, test relative endpoint
         const testUrl = '/api/health';
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -393,7 +404,6 @@ export default class ServiceDiscovery {
       if (serviceName.startsWith('vnc_')) {
         testEndpoint = '/vnc.html';
       } else if (serviceName === 'redis') {
-        // For Redis, we can't use HTTP, so mark as accessible if URL resolved
         clearTimeout(timeoutId);
         return {
           serviceName,
@@ -406,7 +416,7 @@ export default class ServiceDiscovery {
       }
 
       const response = await fetch(`${url}${testEndpoint}`, {
-        method: 'HEAD', // Use HEAD to avoid downloading content
+        method: 'HEAD',
         signal: controller.signal,
         mode: 'cors'
       });

@@ -50,11 +50,11 @@
     <div class="info-panel">
       <div class="info-item">
         <span class="label">Grafana URL:</span>
-        <span class="value">http://172.16.168.23:3000</span>
+        <span class="value">{{ grafanaUrl }}</span>
       </div>
       <div class="info-item">
         <span class="label">Data Source:</span>
-        <span class="value">Prometheus (http://172.16.168.23:9090)</span>
+        <span class="value">Prometheus ({{ prometheusUrl }})</span>
       </div>
       <div class="info-item">
         <span class="label">Total Dashboards:</span>
@@ -69,11 +69,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import GrafanaDashboard from '@/components/monitoring/GrafanaDashboard.vue'
+import { getConfig } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('GrafanaDashboardsView')
+const config = getConfig()
+
+// Computed URLs from SSOT config
+const grafanaUrl = computed(() => `${config.httpProtocol}://${config.vm.redis}:${config.port.grafana}`)
+const prometheusUrl = computed(() => `${config.httpProtocol}://${config.vm.redis}:${config.port.prometheus}`)
 
 // Dashboard definitions
 const dashboards = [

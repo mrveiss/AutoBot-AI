@@ -55,7 +55,7 @@
         <input
           id="redis-host"
           type="text"
-          :value="memorySettings?.redis_host || '172.16.168.23'"
+          :value="memorySettings?.redis_host || config.vm.redis"
           @input="handleInputChange('redis_host')"
         />
       </div>
@@ -150,8 +150,10 @@
  */
 
 import { createLogger } from '@/utils/debugUtils'
+import { getConfig } from '@/config/ssot-config'
 
 const logger = createLogger('MemorySettingsPanel')
+const config = getConfig()
 
 // Type definitions
 interface MemorySettings {

@@ -10,6 +10,7 @@
 
 import { ref, reactive, computed } from 'vue'
 import appConfig from '@/config/AppConfig.js'
+import { getConfig } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('usePatternAnalysis')
@@ -159,8 +160,8 @@ export function usePatternAnalysis() {
     try {
       return await appConfig.getServiceUrl('backend')
     } catch (e) {
-      logger.warn('AppConfig failed, using default backend URL')
-      return 'http://172.16.168.20:8001'
+      logger.warn('AppConfig failed, using SSOT config backend URL')
+      return getConfig().backendUrl
     }
   }
 

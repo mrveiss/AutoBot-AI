@@ -1,97 +1,115 @@
 /**
  * Centralized Default Configuration Values
  *
- * This file contains ALL fallback values used throughout the AutoBot frontend.
- * This ensures consistency and makes it easy to update network configurations.
+ * This file provides backward compatibility with existing code that imports
+ * from defaults.js. All configuration now comes from the SSOT config.
  *
- * IMPORTANT: Uses hardcoded fallbacks only - environment variables take precedence
- * NOTE: This file MUST NOT import from network.ts to avoid circular dependency
+ * MIGRATION: This file wraps ssot-config.ts for backward compatibility.
+ * New code should import directly from '@/config/ssot-config'.
+ *
+ * Issue: #603 - SSOT Phase 3: Frontend Migration
+ * Related: #599 - SSOT Configuration System Epic
+ *
+ * AutoBot - AI-Powered Automation Platform
+ * Copyright (c) 2025 mrveiss
+ * Author: mrveiss
  */
 
+import { getConfig } from './ssot-config';
+
+// Get the singleton config instance
+const config = getConfig();
+
+/**
+ * DEFAULT_CONFIG - Backward-compatible configuration object
+ *
+ * This object mirrors the old structure but derives all values from SSOT config.
+ * This ensures a single source of truth while maintaining backward compatibility.
+ */
 export const DEFAULT_CONFIG = {
   // Network Infrastructure - AutoBot VM Layout
   network: {
     // Backend VM - Main API server
     backend: {
-      host: import.meta.env.VITE_BACKEND_HOST || '172.16.168.20',
-      port: import.meta.env.VITE_BACKEND_PORT || '8001',
-      protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http'
+      host: config.vm.main,
+      port: String(config.port.backend),
+      protocol: config.httpProtocol
     },
 
     // Frontend VM - Vue.js development server
     frontend: {
-      host: import.meta.env.VITE_FRONTEND_HOST || '172.16.168.21',
-      port: import.meta.env.VITE_FRONTEND_PORT || '5173',
-      protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http'
+      host: config.vm.frontend,
+      port: String(config.port.frontend),
+      protocol: config.httpProtocol
     },
 
     // NPU Worker VM - AI processing
     npu_worker: {
-      host: import.meta.env.VITE_NPU_WORKER_HOST || '172.16.168.22',
-      port: import.meta.env.VITE_NPU_WORKER_PORT || '8081',
-      protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http'
+      host: config.vm.npu,
+      port: String(config.port.npu),
+      protocol: config.httpProtocol
     },
 
     // Redis VM - Database server
     redis: {
-      host: import.meta.env.VITE_REDIS_HOST || '172.16.168.23',
-      port: import.meta.env.VITE_REDIS_PORT || '6379',
+      host: config.vm.redis,
+      port: String(config.port.redis),
       protocol: 'redis'
     },
 
     // AI Stack VM - LLM services
     ai_stack: {
-      host: import.meta.env.VITE_AI_STACK_HOST || '172.16.168.24',
-      port: import.meta.env.VITE_AI_STACK_PORT || '8080',
-      protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http'
+      host: config.vm.aistack,
+      port: String(config.port.aistack),
+      protocol: config.httpProtocol
     },
 
     // Browser Service VM - Playwright automation
     browser: {
-      host: import.meta.env.VITE_BROWSER_HOST || '172.16.168.25',
-      port: import.meta.env.VITE_BROWSER_PORT || '3000',
-      protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http'
+      host: config.vm.browser,
+      port: String(config.port.browser),
+      protocol: config.httpProtocol
     },
 
     // Ollama LLM service (runs on main machine)
     ollama: {
-      host: import.meta.env.VITE_OLLAMA_HOST || '172.16.168.20',
-      port: import.meta.env.VITE_OLLAMA_PORT || '11434',
-      protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http'
+      host: config.vm.ollama,
+      port: String(config.port.ollama),
+      protocol: config.httpProtocol
     }
   },
 
   // VNC Service Configuration
   vnc: {
     desktop: {
-      host: import.meta.env.VITE_DESKTOP_VNC_HOST || '172.16.168.20',
-      port: import.meta.env.VITE_DESKTOP_VNC_PORT || '6080',
-      protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http',
-      password: import.meta.env.VITE_DESKTOP_VNC_PASSWORD || 'autobot'
+      host: config.vnc.desktop.host,
+      port: String(config.vnc.desktop.port),
+      protocol: config.httpProtocol,
+      password: config.vnc.desktop.password
     },
     terminal: {
-      host: import.meta.env.VITE_TERMINAL_VNC_HOST || '172.16.168.20',
-      port: import.meta.env.VITE_TERMINAL_VNC_PORT || '6080',
-      protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http',
-      password: import.meta.env.VITE_TERMINAL_VNC_PASSWORD || 'autobot'
+      host: config.vnc.terminal.host,
+      port: String(config.vnc.terminal.port),
+      protocol: config.httpProtocol,
+      password: config.vnc.terminal.password
     },
     playwright: {
-      host: import.meta.env.VITE_PLAYWRIGHT_VNC_HOST || '172.16.168.25',
-      port: import.meta.env.VITE_PLAYWRIGHT_VNC_PORT || '5900',
-      protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http',
-      password: import.meta.env.VITE_PLAYWRIGHT_VNC_PASSWORD || 'autobot'
+      host: config.vnc.playwright.host,
+      port: String(config.vnc.playwright.port),
+      protocol: config.httpProtocol,
+      password: config.vnc.playwright.password
     }
   },
 
   // API Configuration
   api: {
-    timeout: 30000,           // 30 seconds default timeout
-    knowledgeTimeout: 300000, // 5 minutes for knowledge operations
-    retryAttempts: 3,
-    retryDelay: 1000,
-    enableDebug: false,
-    enableRum: true,
-    disableCache: false
+    timeout: config.timeout.api,
+    knowledgeTimeout: config.timeout.knowledge,
+    retryAttempts: config.timeout.retryAttempts,
+    retryDelay: config.timeout.retryDelay,
+    enableDebug: config.feature.debug,
+    enableRum: config.feature.rum,
+    disableCache: config.feature.cacheDisabled
   },
 
   // Feature Flags
@@ -99,8 +117,8 @@ export const DEFAULT_CONFIG = {
     enableWebSockets: true,
     enableVncDesktop: true,
     enableNpuWorker: true,
-    enableRum: true,
-    enableDebug: false
+    enableRum: config.feature.rum,
+    enableDebug: config.feature.debug
   },
 
   // Development Settings
@@ -149,7 +167,7 @@ export function buildDefaultServiceUrl(serviceName, options = {}) {
   const host = options.host || defaults.host;
   const port = options.port || defaults.port;
   const protocol = options.protocol || defaults.protocol;
-  
+
   return `${protocol}://${host}:${port}`;
 }
 
@@ -165,7 +183,7 @@ export function buildDefaultVncUrl(vncType, options = {}) {
   const port = options.port || defaults.port;
   const protocol = options.protocol || defaults.protocol;
   const password = options.password || defaults.password;
-  
+
   const baseUrl = `${protocol}://${host}:${port}`;
   const params = new URLSearchParams({
     autoconnect: options.autoconnect !== false ? 'true' : 'false',
@@ -175,7 +193,7 @@ export function buildDefaultVncUrl(vncType, options = {}) {
     quality: options.quality || '9',
     compression: options.compression || '9'
   });
-  
+
   return `${baseUrl}/vnc.html?${params.toString()}`;
 }
 
@@ -188,12 +206,12 @@ export function getAllDefaultServiceUrls() {
   for (const serviceName of Object.keys(DEFAULT_CONFIG.network)) {
     services[serviceName] = buildDefaultServiceUrl(serviceName);
   }
-  
+
   const vnc = {};
   for (const vncType of Object.keys(DEFAULT_CONFIG.vnc)) {
     vnc[vncType] = buildDefaultVncUrl(vncType);
   }
-  
+
   return { services, vnc };
 }
 

@@ -518,9 +518,13 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
+import { getConfig } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('SystemArchitectureDiagram')
+
+// Get SSOT config for VM IPs and ports
+const config = getConfig()
 
 // ============================================================================
 // Types
@@ -686,8 +690,8 @@ function generateArchitecture(serviceHealth: Record<string, unknown>) {
       width: 140,
       height: 80,
       status: getServiceStatus(serviceHealth, 'frontend'),
-      host: '172.16.168.21',
-      port: 5173,
+      host: config.vm.frontend,
+      port: config.port.frontend,
       description: 'Vue 3 + TypeScript web interface',
       metrics: 'Active',
       group: 'presentation'
@@ -703,8 +707,8 @@ function generateArchitecture(serviceHealth: Record<string, unknown>) {
       width: 140,
       height: 80,
       status: getServiceStatus(serviceHealth, 'vnc'),
-      host: '172.16.168.20',
-      port: 6080,
+      host: config.vm.main,
+      port: config.port.vnc,
       description: 'NoVNC web-based remote desktop',
       group: 'presentation'
     },
@@ -721,8 +725,8 @@ function generateArchitecture(serviceHealth: Record<string, unknown>) {
       width: 140,
       height: 80,
       status: getServiceStatus(serviceHealth, 'backend'),
-      host: '172.16.168.20',
-      port: 8001,
+      host: config.vm.main,
+      port: config.port.backend,
       description: 'Main API server and orchestration',
       metrics: '8001',
       group: 'services'
@@ -752,8 +756,8 @@ function generateArchitecture(serviceHealth: Record<string, unknown>) {
       width: 140,
       height: 80,
       status: getServiceStatus(serviceHealth, 'playwright'),
-      host: '172.16.168.25',
-      port: 3000,
+      host: config.vm.browser,
+      port: config.port.browser,
       description: 'Headless browser automation via Playwright',
       group: 'services'
     },
@@ -770,8 +774,8 @@ function generateArchitecture(serviceHealth: Record<string, unknown>) {
       width: 140,
       height: 80,
       status: getServiceStatus(serviceHealth, 'redis'),
-      host: '172.16.168.23',
-      port: 6379,
+      host: config.vm.redis,
+      port: config.port.redis,
       description: 'Multi-purpose cache, queues, and search',
       metrics: '6379',
       group: 'data'
@@ -831,8 +835,8 @@ function generateArchitecture(serviceHealth: Record<string, unknown>) {
       width: 140,
       height: 80,
       status: getServiceStatus(serviceHealth, 'npu'),
-      host: '172.16.168.22',
-      port: 8081,
+      host: config.vm.npu,
+      port: config.port.npu,
       description: 'Intel NPU acceleration via OpenVINO',
       group: 'ai'
     },
@@ -847,8 +851,8 @@ function generateArchitecture(serviceHealth: Record<string, unknown>) {
       width: 140,
       height: 80,
       status: getServiceStatus(serviceHealth, 'ai_stack'),
-      host: '172.16.168.24',
-      port: 8080,
+      host: config.vm.aistack,
+      port: config.port.aistack,
       description: 'Advanced AI processing pipeline',
       group: 'ai'
     },

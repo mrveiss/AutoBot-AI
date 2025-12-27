@@ -60,9 +60,14 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import SystemMonitor from './SystemMonitor.vue'
+import { getConfig } from '@/config/ssot-config'
 
+const config = getConfig()
 const viewMode = ref<'grafana' | 'legacy'>('grafana')
 const activeDashboard = ref('autobot-multi-machine')
+
+// Grafana runs on Redis VM with its dedicated port
+const grafanaBaseUrl = `${config.httpProtocol}://${config.vm.redis}:${config.port.grafana}`
 
 const dashboards = [
   {
@@ -121,7 +126,7 @@ const getDashboardUrl = (uid: string) => {
 
   // Grafana embed URL with kiosk mode (removes UI chrome)
   // Removed refresh=5s to prevent flickering - Grafana handles its own refresh
-  return `http://172.16.168.23:3000${dashboard.path}?orgId=1&kiosk=tv&theme=light&from=now-1h&to=now`
+  return `${grafanaBaseUrl}${dashboard.path}?orgId=1&kiosk=tv&theme=light&from=now-1h&to=now`
 }
 </script>
 

@@ -58,6 +58,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { getConfig } from '@/config/ssot-config'
 
 // Issue #469: Added 'performance' dashboard type for GPU/NPU metrics
 // Issue #472: Added new dashboard types for comprehensive monitoring
@@ -93,8 +94,14 @@ const props = withDefaults(defineProps<Props>(), {
   refresh: '5s',
   width: '100%',
   height: 600,
-  showControls: true,
-  grafanaUrl: 'http://172.16.168.23:3000'
+  showControls: true
+})
+
+// Get Grafana URL from SSOT config (computed to handle prop override)
+const config = getConfig()
+const effectiveGrafanaUrl = computed(() => {
+  if (props.grafanaUrl) return props.grafanaUrl
+  return `${config.httpProtocol}://${config.vm.redis}:${config.port.grafana}`
 })
 
 const emit = defineEmits<{
@@ -164,7 +171,7 @@ const dashboardUrl = computed(() => {
     to: 'now',
     refresh: selectedRefresh.value
   })
-  return `${props.grafanaUrl}/d/${dashboardId}?${params}`
+  return `${effectiveGrafanaUrl.value}/d/${dashboardId}?${params}`
 })
 
 const iframeStyle = computed(() => ({

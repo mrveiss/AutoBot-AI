@@ -4,10 +4,11 @@
 /**
  * Network Constants - Consolidated TypeScript Implementation
  *
- * Issue #172: Consolidated from network-constants.js
- * - Preserves ALL features from network-constants.js
- * - Adds TypeScript type safety
- * - NO HARDCODED VALUES - all values from DEFAULT_CONFIG (.env)
+ * Issue #603: Migrated to use SSOT config (ssot-config.ts)
+ * Issue #172: Original consolidation from network-constants.js
+ *
+ * All values now come from the Single Source of Truth configuration.
+ * No hardcoded values - everything derives from environment variables.
  *
  * Usage:
  *     import { NetworkConstants, ServiceURLs, DatabaseConstants } from '@/constants/network'
@@ -19,11 +20,14 @@
  *     const backendUrl = ServiceURLs.BACKEND_API
  */
 
-import { DEFAULT_CONFIG } from '../config/defaults.js'
+import { getConfig, getServiceUrl, getVmIp } from '../config/ssot-config';
+
+// Get the singleton config instance
+const config = getConfig();
 
 /**
  * Core network constants for AutoBot distributed infrastructure
- * CRITICAL: All values read from DEFAULT_CONFIG (which reads from .env)
+ * CRITICAL: All values read from SSOT config (which reads from environment)
  *
  * Service Distribution (6-VM Architecture):
  * - Main Machine (WSL): Backend API + VNC Desktop
@@ -34,74 +38,73 @@ import { DEFAULT_CONFIG } from '../config/defaults.js'
  * - VM5 Browser: Web automation (Playwright)
  */
 export const NetworkConstants = Object.freeze({
-  // Main machine (WSL) - reads from VITE_BACKEND_HOST
-  MAIN_MACHINE_IP: DEFAULT_CONFIG.network.backend.host as string,
+  // Main machine (WSL) - from SSOT config
+  MAIN_MACHINE_IP: config.vm.main,
 
-  // VM Infrastructure IPs - read from VITE_*_HOST environment variables
-  FRONTEND_VM_IP: DEFAULT_CONFIG.network.frontend.host as string,
-  NPU_WORKER_VM_IP: DEFAULT_CONFIG.network.npu_worker.host as string,
-  REDIS_VM_IP: DEFAULT_CONFIG.network.redis.host as string,
-  AI_STACK_VM_IP: DEFAULT_CONFIG.network.ai_stack.host as string,
-  BROWSER_VM_IP: DEFAULT_CONFIG.network.browser.host as string,
+  // VM Infrastructure IPs - from SSOT config
+  FRONTEND_VM_IP: config.vm.frontend,
+  NPU_WORKER_VM_IP: config.vm.npu,
+  REDIS_VM_IP: config.vm.redis,
+  AI_STACK_VM_IP: config.vm.aistack,
+  BROWSER_VM_IP: config.vm.browser,
 
   // Local/Localhost addresses - these are standard and don't need env vars
   LOCALHOST_IP: "127.0.0.1" as const,
   LOCALHOST_NAME: "localhost" as const,
 
-  // Standard ports - read from VITE_*_PORT environment variables
-  BACKEND_PORT: parseInt(DEFAULT_CONFIG.network.backend.port as string),
-  FRONTEND_PORT: parseInt(DEFAULT_CONFIG.network.frontend.port as string),
-  REDIS_PORT: parseInt(DEFAULT_CONFIG.network.redis.port as string),
-  OLLAMA_PORT: parseInt(DEFAULT_CONFIG.network.ollama.port as string),
-  VNC_PORT: parseInt(DEFAULT_CONFIG.vnc.desktop.port as string),
-  VNC_DESKTOP_PORT: parseInt(DEFAULT_CONFIG.vnc.desktop.port as string), // Alias for clarity
-  BROWSER_SERVICE_PORT: parseInt(DEFAULT_CONFIG.network.browser.port as string),
-  AI_STACK_PORT: parseInt(DEFAULT_CONFIG.network.ai_stack.port as string),
-  NPU_WORKER_PORT: parseInt(DEFAULT_CONFIG.network.npu_worker.port as string),
+  // Standard ports - from SSOT config
+  BACKEND_PORT: config.port.backend,
+  FRONTEND_PORT: config.port.frontend,
+  REDIS_PORT: config.port.redis,
+  OLLAMA_PORT: config.port.ollama,
+  VNC_PORT: config.port.vnc,
+  VNC_DESKTOP_PORT: config.port.vnc, // Alias for clarity
+  BROWSER_SERVICE_PORT: config.port.browser,
+  AI_STACK_PORT: config.port.aistack,
+  NPU_WORKER_PORT: config.port.npu,
 
   // Development ports - same as standard ports in current config
-  DEV_FRONTEND_PORT: parseInt(DEFAULT_CONFIG.network.frontend.port as string),
-  DEV_BACKEND_PORT: parseInt(DEFAULT_CONFIG.network.backend.port as string)
+  DEV_FRONTEND_PORT: config.port.frontend,
+  DEV_BACKEND_PORT: config.port.backend
 })
 
 /**
  * Pre-built service URLs for common AutoBot services
- * CRITICAL: Built from NetworkConstants which reads from DEFAULT_CONFIG
- * Protocol (http/https) comes from DEFAULT_CONFIG.network.*.protocol
+ * CRITICAL: All URLs derived from SSOT config
  */
 export const ServiceURLs = Object.freeze({
   // Backend API URLs
-  BACKEND_API: `${DEFAULT_CONFIG.network.backend.protocol}://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`,
-  BACKEND_LOCAL: `${DEFAULT_CONFIG.network.backend.protocol}://${NetworkConstants.LOCALHOST_NAME}:${NetworkConstants.BACKEND_PORT}`,
+  BACKEND_API: config.backendUrl,
+  BACKEND_LOCAL: `${config.httpProtocol}://${NetworkConstants.LOCALHOST_NAME}:${config.port.backend}`,
 
   // Frontend URLs
-  FRONTEND_VM: `${DEFAULT_CONFIG.network.frontend.protocol}://${NetworkConstants.FRONTEND_VM_IP}:${NetworkConstants.FRONTEND_PORT}`,
-  FRONTEND_LOCAL: `${DEFAULT_CONFIG.network.frontend.protocol}://${NetworkConstants.LOCALHOST_NAME}:${NetworkConstants.FRONTEND_PORT}`,
+  FRONTEND_VM: config.frontendUrl,
+  FRONTEND_LOCAL: `${config.httpProtocol}://${NetworkConstants.LOCALHOST_NAME}:${config.port.frontend}`,
 
   // Redis URLs
-  REDIS_VM: `redis://${NetworkConstants.REDIS_VM_IP}:${NetworkConstants.REDIS_PORT}`,
-  REDIS_LOCAL: `redis://${NetworkConstants.LOCALHOST_IP}:${NetworkConstants.REDIS_PORT}`,
+  REDIS_VM: config.redisUrl,
+  REDIS_LOCAL: `redis://${NetworkConstants.LOCALHOST_IP}:${config.port.redis}`,
 
   // Ollama LLM URLs
-  OLLAMA_LOCAL: `${DEFAULT_CONFIG.network.ollama.protocol}://${NetworkConstants.LOCALHOST_NAME}:${NetworkConstants.OLLAMA_PORT}`,
-  OLLAMA_MAIN: `${DEFAULT_CONFIG.network.ollama.protocol}://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.OLLAMA_PORT}`,
+  OLLAMA_LOCAL: `${config.httpProtocol}://${NetworkConstants.LOCALHOST_NAME}:${config.port.ollama}`,
+  OLLAMA_MAIN: config.ollamaUrl,
 
   // VNC Desktop URLs
-  VNC_DESKTOP: `${DEFAULT_CONFIG.vnc.desktop.protocol}://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.VNC_PORT}/vnc.html`,
-  VNC_LOCAL: `${DEFAULT_CONFIG.vnc.desktop.protocol}://${NetworkConstants.LOCALHOST_NAME}:${NetworkConstants.VNC_PORT}/vnc.html`,
+  VNC_DESKTOP: config.vncUrl,
+  VNC_LOCAL: `${config.httpProtocol}://${NetworkConstants.LOCALHOST_NAME}:${config.port.vnc}/vnc.html`,
 
   // Browser automation service
-  BROWSER_SERVICE: `${DEFAULT_CONFIG.network.browser.protocol}://${NetworkConstants.BROWSER_VM_IP}:${NetworkConstants.BROWSER_SERVICE_PORT}`,
+  BROWSER_SERVICE: config.browserServiceUrl,
 
   // AI Stack service
-  AI_STACK_SERVICE: `${DEFAULT_CONFIG.network.ai_stack.protocol}://${NetworkConstants.AI_STACK_VM_IP}:${NetworkConstants.AI_STACK_PORT}`,
+  AI_STACK_SERVICE: config.aistackUrl,
 
   // NPU Worker service
-  NPU_WORKER_SERVICE: `${DEFAULT_CONFIG.network.npu_worker.protocol}://${NetworkConstants.NPU_WORKER_VM_IP}:${NetworkConstants.NPU_WORKER_PORT}`,
+  NPU_WORKER_SERVICE: config.npuWorkerUrl,
 
   // WebSocket URLs
-  WEBSOCKET_API: `ws://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}/ws`,
-  WEBSOCKET_LOCAL: `ws://${NetworkConstants.LOCALHOST_NAME}:${NetworkConstants.BACKEND_PORT}/ws`
+  WEBSOCKET_API: config.websocketUrl,
+  WEBSOCKET_LOCAL: `ws://${NetworkConstants.LOCALHOST_NAME}:${config.port.backend}/ws`
 })
 
 /**
@@ -112,8 +115,8 @@ export class NetworkConfig {
   private _isDevelopment: boolean
 
   constructor() {
-    this._deploymentMode = import.meta.env.VITE_AUTOBOT_DEPLOYMENT_MODE || 'distributed'
-    this._isDevelopment = import.meta.env.MODE === 'development'
+    this._deploymentMode = config.deploymentMode
+    this._isDevelopment = config.environment === 'development'
   }
 
   get backendUrl(): string {
@@ -142,6 +145,11 @@ export class NetworkConfig {
   }
 
   getServiceUrl(serviceName: string): string | null {
+    // Use SSOT helper function
+    const url = getServiceUrl(serviceName)
+    if (url) return url
+
+    // Fallback for deployment mode-specific URLs
     const serviceMap: Record<string, string> = {
       'backend': this.backendUrl,
       'frontend': this.frontendUrl,
@@ -156,6 +164,11 @@ export class NetworkConfig {
   }
 
   getVmIp(vmName: string): string | null {
+    // Use SSOT helper function
+    const ip = getVmIp(vmName)
+    if (ip) return ip
+
+    // Fallback for direct lookups
     const vmMap: Record<string, string> = {
       'main': NetworkConstants.MAIN_MACHINE_IP,
       'frontend': NetworkConstants.FRONTEND_VM_IP,
