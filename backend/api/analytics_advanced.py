@@ -13,6 +13,7 @@ Provides API endpoints for:
 Related Issues: #59 (Advanced Analytics & Business Intelligence)
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -434,7 +435,11 @@ async def get_insights():
     """
     service = get_analytics_service()
 
-    maintenance, optimizations = await service.get_predictive_maintenance(), await service.get_resource_optimizations()
+    # Issue #619: Parallelize independent data fetches
+    maintenance, optimizations = await asyncio.gather(
+        service.get_predictive_maintenance(),
+        service.get_resource_optimizations(),
+    )
 
     # Combine and prioritize
     insights = []
@@ -487,8 +492,11 @@ async def get_trends_analysis(
     Shows how key metrics are changing over time.
     """
     service = get_analytics_service()
-    cost_trends = await service.cost.get_cost_trends(days)
-    agent_trends = await service.agents.get_performance_trends(days=days)
+    # Issue #619: Parallelize independent trend fetches
+    cost_trends, agent_trends = await asyncio.gather(
+        service.cost.get_cost_trends(days),
+        service.agents.get_performance_trends(days=days),
+    )
 
     return {
         "timestamp": datetime.utcnow().isoformat(),

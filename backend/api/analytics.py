@@ -400,9 +400,11 @@ analytics_code.set_analytics_dependencies(analytics_controller, analytics_state)
 @router.get("/realtime/metrics")
 async def get_realtime_metrics():
     """Get current real-time metrics snapshot"""
-    # Get current system metrics (Issue #430: await async)
-    current_metrics = await analytics_controller.metrics_collector.collect_all_metrics()
-    system_resources = await hardware_monitor.get_system_resources()
+    # Issue #619: Parallelize independent metrics collection
+    current_metrics, system_resources = await asyncio.gather(
+        analytics_controller.metrics_collector.collect_all_metrics(),
+        hardware_monitor.get_system_resources(),
+    )
 
     realtime_data = {
         "timestamp": datetime.now().isoformat(),

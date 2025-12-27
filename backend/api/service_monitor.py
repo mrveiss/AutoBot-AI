@@ -1021,18 +1021,15 @@ async def get_all_services():
             "frontend": {"status": "checking", "url": ServiceURLs.FRONTEND_VM, "health": "⏳"},
         }
 
-        # Check services concurrently
-        redis_status, redis_health = await _check_redis_quick()
-        services["redis"]["status"], services["redis"]["health"] = redis_status, redis_health
-
-        ollama_status, ollama_health = await _check_ollama_quick()
-        services["ollama"]["status"], services["ollama"]["health"] = ollama_status, ollama_health
-
-        frontend_status, frontend_health = await _check_frontend_quick()
-        services["frontend"]["status"], services["frontend"]["health"] = (
-            frontend_status,
-            frontend_health,
+        # Issue #619: Check services concurrently with asyncio.gather
+        (redis_status, redis_health), (ollama_status, ollama_health), (frontend_status, frontend_health) = await asyncio.gather(
+            _check_redis_quick(),
+            _check_ollama_quick(),
+            _check_frontend_quick(),
         )
+        services["redis"]["status"], services["redis"]["health"] = redis_status, redis_health
+        services["ollama"]["status"], services["ollama"]["health"] = ollama_status, ollama_health
+        services["frontend"]["status"], services["frontend"]["health"] = frontend_status, frontend_health
 
         return {
             "timestamp": datetime.utcnow().isoformat(),
