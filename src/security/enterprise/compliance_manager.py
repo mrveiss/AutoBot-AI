@@ -602,17 +602,23 @@ class ComplianceManager:
 
     async def _check_compliance_violations(self, audit_event: Dict):
         """Check for compliance violations"""
+        enabled_frameworks = self.config.get("enabled_frameworks", [])
+
+        # Issue #619: Build list of enabled checks and run in parallel
+        check_tasks = []
+        if "soc2" in enabled_frameworks:
+            check_tasks.append(self._check_soc2_violations(audit_event))
+        if "gdpr" in enabled_frameworks:
+            check_tasks.append(self._check_gdpr_violations(audit_event))
+
+        if not check_tasks:
+            return
+
+        # Run all compliance checks in parallel
+        results = await asyncio.gather(*check_tasks)
         violations = []
-
-        # Check SOC2 violations
-        if "soc2" in self.config.get("enabled_frameworks", []):
-            soc2_violations = await self._check_soc2_violations(audit_event)
-            violations.extend(soc2_violations)
-
-        # Check GDPR violations
-        if "gdpr" in self.config.get("enabled_frameworks", []):
-            gdpr_violations = await self._check_gdpr_violations(audit_event)
-            violations.extend(gdpr_violations)
+        for result in results:
+            violations.extend(result)
 
         # Log violations
         if violations:
