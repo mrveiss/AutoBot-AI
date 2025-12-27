@@ -18,7 +18,8 @@ from typing import Any, Dict, List
 try:
     import psutil
 except ImportError:
-    print("Installing psutil for memory profiling...")
+    # Use sys.stderr for early init before logger is available
+    sys.stderr.write("Installing psutil for memory profiling...\n")
     import subprocess
 
     subprocess.run([sys.executable, "-m", "pip", "install", "psutil"])
@@ -29,7 +30,8 @@ try:
 
     MEMORY_PROFILER_AVAILABLE = True
 except ImportError:
-    print("memory_profiler not available - install with: pip install memory-profiler")
+    # Use sys.stderr for early init before logger is available
+    sys.stderr.write("memory_profiler not available - install with: pip install memory-profiler\n")
     MEMORY_PROFILER_AVAILABLE = False
 
 # Setup logging
@@ -439,9 +441,13 @@ class MemoryProfiler:
 ### Top Object Types
 """
 
+        # Issue #622: Use list comprehension + join for O(n) performance
         top_objects = object_analysis.get("top_object_types", {})
-        for obj_type, count in list(top_objects.items())[:10]:
-            report += f"- **{obj_type}:** {count:,} instances\n"
+        object_lines = [
+            f"- **{obj_type}:** {count:,} instances"
+            for obj_type, count in list(top_objects.items())[:10]
+        ]
+        report += "\n".join(object_lines) + "\n" if object_lines else ""
 
         report += """
 ### Garbage Collector Stats
@@ -459,33 +465,42 @@ class MemoryProfiler:
 ### Largest Files
 """
 
+        # Issue #622: Use list comprehension + join for O(n) performance
         largest_files = file_analysis.get("largest_files", [])
-        for file_info in largest_files[:10]:
-            report += f"- **{file_info['path']}:** {file_info['size_mb']}MB\n"
+        file_lines = [
+            f"- **{file_info['path']}:** {file_info['size_mb']}MB"
+            for file_info in largest_files[:10]
+        ]
+        report += "\n".join(file_lines) + "\n" if file_lines else ""
 
         report += "\n## 🎯 Optimization Opportunities\n\n"
 
         opportunities = self.profile_results.get("optimization_opportunities", {})
 
+        # Issue #622: Use list comprehension + join for O(n) performance
         # Large files section
         large_file_opps = opportunities.get("large_files", [])
         if large_file_opps:
             report += "### Large Files\n"
-            for opp in large_file_opps[:5]:
-                report += f"- **{opp['file']}** ({opp['size_mb']}MB): {opp['recommendation']}\n"
-            report += "\n"
+            large_file_lines = [
+                f"- **{opp['file']}** ({opp['size_mb']}MB): {opp['recommendation']}"
+                for opp in large_file_opps[:5]
+            ]
+            report += "\n".join(large_file_lines) + "\n\n"
 
         # Object patterns section
         object_opps = opportunities.get("object_patterns", [])
         if object_opps:
             report += "### Object Patterns\n"
-            for opp in object_opps:
-                report += f"- **{opp['type']}** ({opp['count']:,} instances): {opp['recommendation']}\n"
-            report += "\n"
+            object_pattern_lines = [
+                f"- **{opp['type']}** ({opp['count']:,} instances): {opp['recommendation']}"
+                for opp in object_opps
+            ]
+            report += "\n".join(object_pattern_lines) + "\n\n"
 
         report += "## 📋 Recommendations\n\n"
-        for recommendation in recommendations:
-            report += f"1. {recommendation}\n"
+        recommendation_lines = [f"1. {rec}" for rec in recommendations]
+        report += "\n".join(recommendation_lines) + "\n" if recommendation_lines else ""
 
         if not recommendations:
             report += "✅ No immediate memory optimization actions required\n"

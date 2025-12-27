@@ -522,9 +522,10 @@ class MarkdownReferenceSystem:
                 params.append(document_type)
 
             if tags:
-                for tag in tags:
-                    sql += " AND md.tags LIKE ?"
-                    params.append(f"%{tag}%")
+                # Issue #622: Use list + join for O(n) performance
+                tag_conditions = [" AND md.tags LIKE ?" for _ in tags]
+                sql += "".join(tag_conditions)
+                params.extend(f"%{tag}%" for tag in tags)
 
             sql += " LIMIT ?"
             params.append(limit)

@@ -442,41 +442,47 @@ class SecurityScanner:
 
 """
 
+        # Issue #622: Use list comprehension + join for O(n) performance
         # Add dependency security details
         dep_results = self.scan_results.get("dependency_security", {})
+        dep_lines = []
         for tool, result in dep_results.items():
             status = result.get("status", "unknown")
             if status == "clean":
-                report += f"- ✅ {tool}: No vulnerabilities found\n"
+                dep_lines.append(f"- ✅ {tool}: No vulnerabilities found")
             elif status == "vulnerabilities_found":
                 count = result.get("vulnerabilities", 0)
                 if isinstance(count, list):
                     count = len(count)
-                report += f"- ⚠️ {tool}: {count} vulnerabilities found\n"
+                dep_lines.append(f"- ⚠️ {tool}: {count} vulnerabilities found")
             elif status == "tool_missing":
-                report += f"- ❓ {tool}: Tool not available\n"
+                dep_lines.append(f"- ❓ {tool}: Tool not available")
             else:
-                report += f"- ❌ {tool}: Error during scan\n"
+                dep_lines.append(f"- ❌ {tool}: Error during scan")
+        report += "\n".join(dep_lines) + "\n" if dep_lines else ""
 
         report += """
 ## 🔍 Static Analysis Security Testing
 
 """
 
+        # Issue #622: Use list comprehension + join for O(n) performance
         # Add SAST details
         static_results = self.scan_results.get("static_analysis", {})
+        static_lines = []
         for tool, result in static_results.items():
             status = result.get("status", "unknown")
             if status == "completed":
                 issues = result.get("issues_found", result.get("findings_count", 0))
                 if issues == 0:
-                    report += f"- ✅ {tool}: No security issues found\n"
+                    static_lines.append(f"- ✅ {tool}: No security issues found")
                 else:
-                    report += f"- ⚠️ {tool}: {issues} potential issues found\n"
+                    static_lines.append(f"- ⚠️ {tool}: {issues} potential issues found")
             elif status == "tool_missing":
-                report += f"- ❓ {tool}: Tool not available\n"
+                static_lines.append(f"- ❓ {tool}: Tool not available")
             else:
-                report += f"- ❌ {tool}: Error during scan\n"
+                static_lines.append(f"- ❌ {tool}: Error during scan")
+        report += "\n".join(static_lines) + "\n" if static_lines else ""
 
         report += """
 ## 🔐 Secret Detection

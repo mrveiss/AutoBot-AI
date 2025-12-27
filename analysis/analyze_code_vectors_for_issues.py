@@ -449,7 +449,11 @@ class CodeIssueAnalyzer:
             return []
 
     async def generate_summary_report(self) -> str:
-        """Generate a comprehensive summary report"""
+        """Generate a comprehensive summary report.
+
+        Uses list accumulation + join() instead of += for O(n) performance.
+        Issue #622: Fix excessive string concatenation in loops.
+        """
         try:
             logger.info("📝 Generating summary report...")
 
@@ -457,7 +461,10 @@ class CodeIssueAnalyzer:
             hardcoded = self.analysis_results["hardcoded_values"]
             architectural = self.analysis_results["architectural_issues"]
 
-            report = f"""
+            # Use list accumulation for O(n) string building instead of += (O(n²))
+            report_parts = []
+
+            report_parts.append(f"""
 # AutoBot Codebase Analysis Report
 Generated: {datetime.now().isoformat()}
 
@@ -472,51 +479,62 @@ This analysis examined code vectors from the AutoBot codebase to identify:
 
 ### 🔄 Code Duplication
 - **{len(duplicates)} duplicate patterns** identified
-- **Top duplicates:**
-"""
+- **Top duplicates:**""")
 
-            # Add top 5 duplicates
-            for i, dup in enumerate(duplicates[:5]):
-                report += f"\n  {i+1}. {dup['occurrences']} occurrences ({dup['severity']} severity)"
+            # Add top 5 duplicates using list comprehension + join
+            duplicate_lines = [
+                f"\n  {i+1}. {dup['occurrences']} occurrences ({dup['severity']} severity)"
+                for i, dup in enumerate(duplicates[:5])
+            ]
+            report_parts.append("".join(duplicate_lines))
 
             # Hardcoded values summary
             total_hardcoded = sum(len(items) for items in hardcoded.values())
-            critical_hardcoded = sum(len([item for item in items if item.get('severity') == 'critical']) for items in hardcoded.values())
+            critical_hardcoded = sum(
+                len([item for item in items if item.get('severity') == 'critical'])
+                for items in hardcoded.values()
+            )
 
-            report += f"""
+            report_parts.append(f"""
 
 ### 🔒 Hardcoded Values
 - **{total_hardcoded} hardcoded values** found
 - **{critical_hardcoded} critical security issues**
-- **Breakdown by category:**
-"""
+- **Breakdown by category:**""")
 
-            for category, items in hardcoded.items():
-                if items:
-                    critical_count = len([item for item in items if item.get('severity') == 'critical'])
-                    report += f"\n  - {category}: {len(items)} total ({critical_count} critical)"
+            # Add hardcoded breakdown using list comprehension + join
+            hardcoded_lines = [
+                f"\n  - {category}: {len(items)} total "
+                f"({len([item for item in items if item.get('severity') == 'critical'])} critical)"
+                for category, items in hardcoded.items()
+                if items
+            ]
+            report_parts.append("".join(hardcoded_lines))
 
             # Architectural issues
             critical_arch = len([issue for issue in architectural if issue.get('severity') == 'critical'])
             high_arch = len([issue for issue in architectural if issue.get('severity') == 'high'])
 
-            report += f"""
+            report_parts.append(f"""
 
 ### 🏗️ Architectural Issues
 - **{len(architectural)} architectural issues** identified
 - **{critical_arch} critical** and **{high_arch} high** severity issues
-- **Common issues:**
-"""
+- **Common issues:**""")
 
             # Group architectural issues by type
             issue_types = defaultdict(int)
             for issue in architectural:
                 issue_types[issue['type']] += 1
 
-            for issue_type, count in sorted(issue_types.items(), key=lambda x: x[1], reverse=True):
-                report += f"\n  - {issue_type}: {count} occurrences"
+            # Add issue types using list comprehension + join
+            issue_type_lines = [
+                f"\n  - {issue_type}: {count} occurrences"
+                for issue_type, count in sorted(issue_types.items(), key=lambda x: x[1], reverse=True)
+            ]
+            report_parts.append("".join(issue_type_lines))
 
-            report += f"""
+            report_parts.append(f"""
 
 ## Recommendations
 
@@ -534,9 +552,9 @@ This analysis examined code vectors from the AutoBot codebase to identify:
 ## Detailed Findings
 
 [See individual sections below for specific items and recommendations]
-"""
+""")
 
-            return report
+            return "".join(report_parts)
 
         except Exception as e:
             logger.error(f"❌ Report generation failed: {e}")
