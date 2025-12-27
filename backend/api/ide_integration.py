@@ -869,18 +869,22 @@ async def batch_analyze(
 ) -> Dict[str, Any]:
     """Analyze multiple files in batch."""
     engine = await get_engine()
-    results = []
 
-    for request in requests:
-        result = await engine.analyze(request)
-        results.append(result)
+    # Issue #619: Parallelize independent file analyses
+    results = await asyncio.gather(
+        *[engine.analyze(request) for request in requests],
+        return_exceptions=True
+    )
 
-    total_issues = sum(r.issues_found for r in results)
+    # Filter out exceptions and count issues
+    valid_results = [r for r in results if not isinstance(r, Exception)]
+    total_issues = sum(r.issues_found for r in valid_results)
 
     return {
-        "results": [r.model_dump() for r in results],
-        "files_analyzed": len(results),
+        "results": [r.model_dump() for r in valid_results],
+        "files_analyzed": len(valid_results),
         "total_issues": total_issues,
+        "errors": len(results) - len(valid_results),
     }
 
 
