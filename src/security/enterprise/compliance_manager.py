@@ -318,11 +318,11 @@ class ComplianceManager:
         # Update statistics
         self._update_statistics(audit_event)
 
-        # Check compliance violations
-        await self._check_compliance_violations(audit_event)
-
-        # Send real-time alerts if needed
-        await self._check_real_time_alerts(audit_event)
+        # Issue #619: Check compliance violations and alerts in parallel
+        await asyncio.gather(
+            self._check_compliance_violations(audit_event),
+            self._check_real_time_alerts(audit_event),
+        )
 
         return event_id
 

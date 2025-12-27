@@ -173,11 +173,11 @@ class FrontendAnalyzer:
 
         logger.info(f"Analyzing frontend code in {root_path}")
 
-        # Discover frontend files and components
-        components = await self._discover_frontend_components(root_path, patterns)
-
-        # Analyze for issues
-        issues = await self._analyze_frontend_issues(root_path, patterns)
+        # Issue #619: Discover components and analyze issues in parallel
+        components, issues = await asyncio.gather(
+            self._discover_frontend_components(root_path, patterns),
+            self._analyze_frontend_issues(root_path, patterns),
+        )
 
         # Framework usage analysis
         framework_usage = self._analyze_framework_usage(components)
