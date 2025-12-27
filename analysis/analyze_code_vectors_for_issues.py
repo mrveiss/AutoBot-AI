@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Use canonical Redis client utility
 from src.utils.redis_client import get_redis_client
+from src.constants.network_constants import NetworkConstants
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -327,7 +328,7 @@ class CodeIssueAnalyzer:
         # Additional filtering
         if category == "ip_addresses":
             # Skip localhost and common test IPs
-            if value in ["127.0.0.1", "localhost", "0.0.0.0"]:
+            if value in NetworkConstants.LOOPBACK_IPS_V4:
                 return False
 
         elif category == "file_paths":
@@ -337,7 +338,7 @@ class CodeIssueAnalyzer:
 
         elif category == "passwords":
             # Skip obvious placeholders
-            if len(value) < 6 or value.lower() in ["password", "placeholder", "example"]:
+            if len(value) < 6 or value.lower() in {"password", "placeholder", "example"}:
                 return False
 
         return True

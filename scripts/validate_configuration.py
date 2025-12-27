@@ -54,8 +54,8 @@ def test_default_configuration():
         assert isinstance(REDIS_PORT, int)
 
         # Test protocols are valid
-        assert HTTP_PROTOCOL in ["http", "https"]
-        assert WS_PROTOCOL in ["ws", "wss"]
+        assert HTTP_PROTOCOL in {"http", "https"}
+        assert WS_PROTOCOL in {"ws", "wss"}
         assert REDIS_PROTOCOL == "redis"
 
         logger.info("Default configuration validation passed")

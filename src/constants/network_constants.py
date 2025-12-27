@@ -115,6 +115,15 @@ class NetworkConstants:
     LOCALHOST_NAME: str = "localhost"
     BIND_ALL_INTERFACES: str = "0.0.0.0"  # Bind server to all network interfaces
 
+    # === Loopback/Local IP sets for O(1) membership checks (#625) ===
+    # Use these frozensets instead of inline lists for `in` checks
+    LOOPBACK_IPS: frozenset = frozenset({
+        "127.0.0.1", "localhost", "0.0.0.0", "::1"
+    })
+    LOOPBACK_IPS_V4: frozenset = frozenset({
+        "127.0.0.1", "localhost", "0.0.0.0"
+    })
+
     # === Network prefixes for IP validation (static) ===
     VM_IP_PREFIX: str = "172.16.168."  # AutoBot VM network prefix
     DEFAULT_SCAN_NETWORK: str = (
