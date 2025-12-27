@@ -602,10 +602,14 @@ class TemporalInvalidationService:
         new_predicate_lower = new_fact.predicate.lower()
         new_object_lower = new_fact.object.lower()
         for existing_fact in similar_facts:
+            # Cache existing_fact lowercase values inside loop (Issue #624)
+            existing_subject_lower = existing_fact.subject.lower()
+            existing_predicate_lower = existing_fact.predicate.lower()
+            existing_object_lower = existing_fact.object.lower()
             if (
-                existing_fact.subject.lower() == new_subject_lower
-                and existing_fact.predicate.lower() == new_predicate_lower
-                and existing_fact.object.lower() != new_object_lower
+                existing_subject_lower == new_subject_lower
+                and existing_predicate_lower == new_predicate_lower
+                and existing_object_lower != new_object_lower
                 and existing_fact.fact_id != new_fact.fact_id
             ):
                 if new_fact.is_contradictory_to(existing_fact):
