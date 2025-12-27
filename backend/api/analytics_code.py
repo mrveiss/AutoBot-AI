@@ -78,12 +78,10 @@ async def index_codebase(request: CodeAnalysisRequest):
 @router.get("/code/status")
 async def get_code_analysis_status():
     """Get current code analysis status and capabilities"""
-    # Issue #358 - avoid blocking
-    code_analysis_exists = await asyncio.to_thread(
-        analytics_controller.code_analysis_path.exists
-    )
-    code_index_exists = await asyncio.to_thread(
-        analytics_controller.code_index_path.exists
+    # Issue #619: Parallelize independent file existence checks
+    code_analysis_exists, code_index_exists = await asyncio.gather(
+        asyncio.to_thread(analytics_controller.code_analysis_path.exists),
+        asyncio.to_thread(analytics_controller.code_index_path.exists),
     )
     status = {
         "tools_available": {
