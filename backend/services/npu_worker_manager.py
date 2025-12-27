@@ -119,10 +119,11 @@ class NPUWorkerManager:
                 self.config_file.parent.mkdir, parents=True, exist_ok=True
             )
 
-            # Prepare data
+            # Prepare data - use mode='json' to serialize enums as strings
+            # This prevents !!python/object tags that yaml.safe_load() cannot parse
             data = {
-                "workers": [worker.dict() for worker in self._workers.values()],
-                "load_balancing": self._load_balancing_config.dict(),
+                "workers": [worker.model_dump(mode='json') for worker in self._workers.values()],
+                "load_balancing": self._load_balancing_config.model_dump(mode='json'),
             }
 
             # Write to file asynchronously
