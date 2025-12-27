@@ -126,10 +126,15 @@ from backend.api.terminal_models import (
     MODERATE_RISK_PATTERNS,
     RISKY_COMMAND_PATTERNS,
     SecurityLevel,
+    SSHKeyAgentRequest,
+    SSHKeySetupRequest,
     TerminalInputRequest,
     TerminalSessionRequest,
 )
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+
+# Import terminal secrets service for SSH key integration (Issue #211)
+from backend.services.terminal_secrets_service import get_terminal_secrets_service
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +165,10 @@ router.include_router(tools_router, prefix="/terminal")
 )
 @router.post("/sessions")
 async def create_terminal_session(request: TerminalSessionRequest):
-    """Create a new terminal session with enhanced security options"""
+    """Create a new terminal session with enhanced security options.
+
+    Supports automatic SSH key injection from secrets management (Issue #211).
+    """
     session_id = str(uuid.uuid4())
 
     # Store session configuration for WebSocket connection
@@ -170,6 +178,7 @@ async def create_terminal_session(request: TerminalSessionRequest):
         "conversation_id": (
             request.conversation_id
         ),  # For linking chat to terminal logging
+        "chat_id": request.chat_id,  # For chat-scoped SSH keys (Issue #211)
         "security_level": request.security_level,
         "enable_logging": request.enable_logging,
         "enable_workflow_control": request.enable_workflow_control,
@@ -180,15 +189,40 @@ async def create_terminal_session(request: TerminalSessionRequest):
     # Store in session manager (you would use a proper store in production)
     session_manager.session_configs[session_id] = session_config
 
+    # Setup SSH keys if requested (Issue #211)
+    ssh_key_result = None
+    if request.setup_ssh_keys:
+        try:
+            terminal_secrets = get_terminal_secrets_service()
+            ssh_key_result = await terminal_secrets.setup_ssh_keys(
+                session_id=session_id,
+                chat_id=request.chat_id,
+                include_general=True,
+                specific_key_names=request.ssh_key_names,
+            )
+            logger.info(
+                "SSH keys setup for session %s: %d keys loaded",
+                session_id,
+                ssh_key_result.get("keys_loaded", 0),
+            )
+        except Exception as e:
+            logger.warning("Failed to setup SSH keys for session %s: %s", session_id, e)
+            ssh_key_result = {"error": str(e)}
+
     logger.info("Created terminal session: %s", session_id)
 
-    return {
+    response = {
         "session_id": session_id,
         "status": "created",
         "security_level": request.security_level.value,
         "websocket_url": f"/api/terminal/ws/{session_id}",
         "created_at": session_config["created_at"],
     }
+
+    if ssh_key_result:
+        response["ssh_keys"] = ssh_key_result
+
+    return response
 
 
 @with_error_handling(
@@ -253,7 +287,10 @@ async def get_terminal_session(session_id: str):
 )
 @router.delete("/sessions/{session_id}")
 async def delete_terminal_session(session_id: str):
-    """Delete a terminal session and close any active connections"""
+    """Delete a terminal session and close any active connections.
+
+    Also cleans up any SSH keys loaded for this session (Issue #211).
+    """
     config = session_manager.session_configs.get(session_id)
     if not config:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -262,12 +299,154 @@ async def delete_terminal_session(session_id: str):
     if session_manager.has_connection(session_id):
         await session_manager.close_connection(session_id)
 
+    # Cleanup SSH keys for this session (Issue #211)
+    try:
+        terminal_secrets = get_terminal_secrets_service()
+        await terminal_secrets.cleanup_session_keys(session_id)
+    except Exception as e:
+        logger.warning("Failed to cleanup SSH keys for session %s: %s", session_id, e)
+
     # Remove session configuration
     del session_manager.session_configs[session_id]
 
     logger.info("Deleted terminal session: %s", session_id)
 
     return {"session_id": session_id, "status": "deleted"}
+
+
+# SSH Key Management Endpoints (Issue #211)
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="setup_ssh_keys",
+    error_code_prefix="TERMINAL",
+)
+@router.post("/sessions/{session_id}/ssh-keys")
+async def setup_ssh_keys(session_id: str, request: SSHKeySetupRequest):
+    """Setup SSH keys for an existing terminal session.
+
+    Retrieves SSH keys from secrets storage and makes them available
+    for use in SSH commands. Keys are written to temporary files with
+    proper permissions.
+
+    Args:
+        session_id: Terminal session ID
+        request: SSH key setup options
+
+    Returns:
+        Dictionary with setup results including available keys
+    """
+    config = session_manager.session_configs.get(session_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    try:
+        terminal_secrets = get_terminal_secrets_service()
+        result = await terminal_secrets.setup_ssh_keys(
+            session_id=session_id,
+            chat_id=request.chat_id or config.get("chat_id"),
+            include_general=request.include_general,
+            specific_key_names=request.key_names,
+        )
+        return result
+    except Exception as e:
+        logger.error("Failed to setup SSH keys: %s", e)
+        raise HTTPException(status_code=500, detail=f"SSH key setup failed: {e}")
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_session_ssh_keys",
+    error_code_prefix="TERMINAL",
+)
+@router.get("/sessions/{session_id}/ssh-keys")
+async def list_session_ssh_keys(session_id: str):
+    """Get list of SSH keys available for a terminal session.
+
+    Returns information about loaded SSH keys including name,
+    fingerprint, and whether a passphrase is required.
+    """
+    config = session_manager.session_configs.get(session_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    terminal_secrets = get_terminal_secrets_service()
+    keys = terminal_secrets.get_session_keys(session_id)
+
+    return {
+        "session_id": session_id,
+        "keys": keys,
+        "total": len(keys),
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="add_key_to_agent",
+    error_code_prefix="TERMINAL",
+)
+@router.post("/sessions/{session_id}/ssh-keys/{key_name}/agent")
+async def add_key_to_ssh_agent(
+    session_id: str, key_name: str, request: SSHKeyAgentRequest
+):
+    """Add an SSH key to ssh-agent for easier authentication.
+
+    For keys that require a passphrase, the passphrase must be provided.
+    The key remains in the agent until the session ends.
+    """
+    config = session_manager.session_configs.get(session_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    terminal_secrets = get_terminal_secrets_service()
+    success = await terminal_secrets.add_key_to_agent(
+        session_id=session_id,
+        key_name=key_name,
+        passphrase=request.passphrase,
+    )
+
+    if success:
+        return {
+            "session_id": session_id,
+            "key_name": key_name,
+            "status": "added",
+            "message": f"Key '{key_name}' added to ssh-agent",
+        }
+    else:
+        raise HTTPException(
+            status_code=400, detail=f"Failed to add key '{key_name}' to ssh-agent"
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_key_path",
+    error_code_prefix="TERMINAL",
+)
+@router.get("/sessions/{session_id}/ssh-keys/{key_name}/path")
+async def get_ssh_key_path(session_id: str, key_name: str):
+    """Get the file path for an SSH key in a terminal session.
+
+    Returns the temporary file path where the key is stored.
+    Use this path with ssh -i option for explicit key specification.
+    """
+    config = session_manager.session_configs.get(session_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    terminal_secrets = get_terminal_secrets_service()
+    key_path = terminal_secrets.get_key_path(session_id, key_name)
+
+    if key_path:
+        return {
+            "session_id": session_id,
+            "key_name": key_name,
+            "key_path": key_path,
+            "usage": f"ssh -i {key_path} user@host",
+        }
+    else:
+        raise HTTPException(status_code=404, detail=f"Key '{key_name}' not found")
 
 
 @with_error_handling(

@@ -26,6 +26,7 @@ Updated: 2025-12-06 - Refactored to fix Feature Envy with Command pattern
 import asyncio
 import logging
 import re
+import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
@@ -68,6 +69,7 @@ class CommandType(Enum):
     STATUS = "status"
     SCAN = "scan"
     SECURITY = "security"
+    SECRETS = "secrets"  # Issue #211 - Secrets Management
     UNKNOWN = "unknown"
 
 
@@ -294,6 +296,7 @@ class HelpCommand(Command):
 | `/status` | Show system status |
 | `/scan <target>` | Start security assessment scan |
 | `/security` | Manage security assessments |
+| `/secrets` | Manage secrets and credentials |
 
 **Documentation Categories:**
   • `api` - API Reference
@@ -312,10 +315,17 @@ class HelpCommand(Command):
   • `/security status <id>` - Check assessment progress
   • `/security resume <id>` - Resume assessment
 
+**Secrets Management:**
+  • `/secrets list` - List all accessible secrets
+  • `/secrets add <name> <type> <value>` - Add a secret
+  • `/secrets show <name>` - View a secret's value
+  • `/secrets delete <name>` - Delete a secret
+  • `/secrets transfer <name>` - Transfer to general scope
+
 **Examples:**
   • `/docs api` - Browse API documentation
   • `/docs redis` - Search for Redis-related docs
-  • `/docs developer` - View developer guide
+  • `/secrets add my-key api_key sk-xxx...` - Add an API key
 
 💬 For general questions, just type normally without a slash command."""
 
@@ -858,6 +868,515 @@ class SecurityPhasesSubcommand(Command):
         return "\n".join(lines)
 
 
+# ============================================================================
+# Secrets Command Implementation (Issue #211)
+# ============================================================================
+
+
+class SecretsCommand(Command):
+    """Secrets management command - Issue #211."""
+
+    def __init__(self, args: Optional[str], chat_id: Optional[str] = None):
+        """Initialize secrets command with subcommand arguments."""
+        self.args = args
+        self.chat_id = chat_id
+
+    async def execute(self) -> SlashCommandResult:
+        """Execute /secrets command - Manage secrets via chat."""
+        if not self.args:
+            return self._show_usage()
+
+        # Parse subcommand
+        parts = self.args.strip().split(maxsplit=1)
+        subcommand = parts[0].lower()
+        sub_args = parts[1] if len(parts) > 1 else None
+
+        try:
+            from backend.api.secrets import secrets_manager, SecretScope, SecretType
+
+            # Dispatch to appropriate subcommand
+            subcommand_handlers = {
+                "list": lambda: SecretsListSubcommand(secrets_manager, self.chat_id).execute(),
+                "add": lambda: SecretsAddSubcommand(secrets_manager, sub_args, self.chat_id).execute(),
+                "show": lambda: SecretsShowSubcommand(secrets_manager, sub_args, self.chat_id).execute(),
+                "delete": lambda: SecretsDeleteSubcommand(secrets_manager, sub_args, self.chat_id).execute(),
+                "transfer": lambda: SecretsTransferSubcommand(secrets_manager, sub_args, self.chat_id).execute(),
+                "types": lambda: SecretsTypesSubcommand().execute(),
+            }
+
+            handler = subcommand_handlers.get(subcommand)
+            if handler:
+                return await handler()
+            else:
+                return SlashCommandResult(
+                    success=False,
+                    command_type=CommandType.SECRETS,
+                    content=f"❓ Unknown subcommand: `{subcommand}`\n\nUse `/secrets` for available commands.",
+                )
+
+        except Exception as e:
+            logger.error("Secrets command failed: %s", e)
+            return SlashCommandResult(
+                success=False,
+                command_type=CommandType.SECRETS,
+                content=f"❌ Secrets command failed: {e}",
+            )
+
+    def _show_usage(self) -> SlashCommandResult:
+        """Show secrets command usage."""
+        content = """## 🔐 Secrets Management Commands
+
+**Usage:** `/secrets <subcommand> [options]`
+
+**Subcommands:**
+
+| Command | Description |
+|---------|-------------|
+| `/secrets list` | List all accessible secrets |
+| `/secrets add <name> <type> <value>` | Add a new secret |
+| `/secrets show <name>` | Show a secret's value |
+| `/secrets delete <name>` | Delete a secret |
+| `/secrets transfer <name> [to-general]` | Transfer secret scope |
+| `/secrets types` | Show available secret types |
+
+**Secret Types:**
+  • `ssh_key` - SSH private/public keys
+  • `password` - Passwords and passphrases
+  • `api_key` - API keys for services
+  • `token` - Authentication tokens
+  • `certificate` - X.509 certificates
+  • `database_url` - Database connection strings
+
+**Examples:**
+  • `/secrets add my-api-key api_key sk-xxx...` - Add an API key
+  • `/secrets list` - List all secrets
+  • `/secrets show my-api-key` - View secret value
+  • `/secrets transfer my-api-key to-general` - Move to general scope
+
+**Scopes:**
+  • **Chat-scoped**: Only accessible in current conversation (default)
+  • **General**: Accessible across all conversations"""
+
+        return SlashCommandResult(
+            success=True,
+            command_type=CommandType.SECRETS,
+            content=content,
+        )
+
+
+class SecretsListSubcommand(Command):
+    """List accessible secrets."""
+
+    def __init__(self, manager, chat_id: Optional[str]):
+        """Initialize list subcommand with secrets manager."""
+        self.manager = manager
+        self.chat_id = chat_id
+
+    async def execute(self) -> SlashCommandResult:
+        """List accessible secrets."""
+        secrets = self.manager.list_secrets(chat_id=self.chat_id)
+
+        if not secrets:
+            content = self._format_empty_list()
+        else:
+            content = self._format_secrets_list(secrets)
+
+        return SlashCommandResult(
+            success=True,
+            command_type=CommandType.SECRETS,
+            content=content,
+        )
+
+    def _format_empty_list(self) -> str:
+        """Format empty secrets list message."""
+        return """## 🔐 Your Secrets
+
+No secrets found.
+
+**Add a secret:**
+  • `/secrets add <name> <type> <value>`
+  • Example: `/secrets add my-key api_key sk-xxx...`"""
+
+    def _format_secrets_list(self, secrets: list) -> str:
+        """Format secrets list display."""
+        lines = [
+            "## 🔐 Your Secrets",
+            "",
+            f"Found {len(secrets)} secret(s):",
+            "",
+        ]
+
+        type_emojis = {
+            "ssh_key": "🔑",
+            "password": "🔒",
+            "api_key": "🔌",
+            "token": "🎫",
+            "certificate": "📜",
+            "database_url": "🗄️",
+            "other": "📦",
+        }
+
+        for s in secrets[:15]:
+            emoji = type_emojis.get(s.get("type", "other"), "📦")
+            scope = "💬" if s.get("scope") == "chat" else "🌐"
+            name = s.get("name", "unknown")
+            secret_type = s.get("type", "unknown")
+            lines.append(f"  {emoji} `{name}` ({secret_type}) {scope}")
+
+        if len(secrets) > 15:
+            lines.append(f"  ... and {len(secrets) - 15} more")
+
+        lines.extend([
+            "",
+            "**Scope:** 💬 = Chat-scoped, 🌐 = General",
+            "",
+            "**Commands:**",
+            "  • `/secrets show <name>` - View value",
+            "  • `/secrets delete <name>` - Remove secret",
+        ])
+
+        return "\n".join(lines)
+
+
+class SecretsAddSubcommand(Command):
+    """Add a new secret."""
+
+    def __init__(self, manager, args: Optional[str], chat_id: Optional[str]):
+        """Initialize add subcommand with manager and arguments."""
+        self.manager = manager
+        self.args = args
+        self.chat_id = chat_id
+
+    async def execute(self) -> SlashCommandResult:
+        """Add a new secret."""
+        if not self.args:
+            return SlashCommandResult(
+                success=False,
+                command_type=CommandType.SECRETS,
+                content="❌ Usage: `/secrets add <name> <type> <value>`\n\nExample: `/secrets add my-key api_key sk-xxx...`",
+            )
+
+        # Parse arguments: name type value
+        parts = self.args.split(maxsplit=2)
+        if len(parts) < 3:
+            return SlashCommandResult(
+                success=False,
+                command_type=CommandType.SECRETS,
+                content="❌ Missing arguments. Usage: `/secrets add <name> <type> <value>`",
+            )
+
+        name, secret_type, value = parts
+
+        # Validate secret type
+        valid_types = ["ssh_key", "password", "api_key", "token", "certificate", "database_url", "other"]
+        if secret_type not in valid_types:
+            return SlashCommandResult(
+                success=False,
+                command_type=CommandType.SECRETS,
+                content=f"❌ Invalid type `{secret_type}`.\n\nValid types: {', '.join(valid_types)}",
+            )
+
+        try:
+            from backend.api.secrets import SecretCreateRequest, SecretScope, SecretType
+
+            # Create request - chat-scoped by default if chat_id is provided
+            scope = SecretScope.CHAT if self.chat_id else SecretScope.GENERAL
+            request = SecretCreateRequest(
+                name=name,
+                type=SecretType(secret_type),
+                scope=scope,
+                value=value,
+                chat_id=self.chat_id,
+                description=f"Created via /secrets add command",
+            )
+
+            secret = self.manager.create_secret(request)
+
+            scope_text = "chat-scoped 💬" if scope == SecretScope.CHAT else "general 🌐"
+            return SlashCommandResult(
+                success=True,
+                command_type=CommandType.SECRETS,
+                content=f"""## ✅ Secret Created
+
+**Name:** `{name}`
+**Type:** {secret_type}
+**Scope:** {scope_text}
+
+Your secret has been securely encrypted and stored.
+
+**Next steps:**
+  • `/secrets list` - View all secrets
+  • `/secrets show {name}` - View the value""",
+            )
+
+        except ValueError as e:
+            return SlashCommandResult(
+                success=False,
+                command_type=CommandType.SECRETS,
+                content=f"❌ Failed to create secret: {e}",
+            )
+        except Exception as e:
+            logger.error("Failed to create secret: %s", e)
+            return SlashCommandResult(
+                success=False,
+                command_type=CommandType.SECRETS,
+                content=f"❌ Failed to create secret: {e}",
+            )
+
+
+class SecretsShowSubcommand(Command):
+    """Show a secret's value."""
+
+    def __init__(self, manager, secret_name: Optional[str], chat_id: Optional[str]):
+        """Initialize show subcommand."""
+        self.manager = manager
+        self.secret_name = secret_name
+        self.chat_id = chat_id
+
+    async def execute(self) -> SlashCommandResult:
+        """Show a secret's value."""
+        if not self.secret_name:
+            return SlashCommandResult(
+                success=False,
+                command_type=CommandType.SECRETS,
+                content="❌ Please provide a secret name: `/secrets show <name>`",
+            )
+
+        # Find the secret by name
+        secrets = self.manager.list_secrets(chat_id=self.chat_id)
+        target_secret = None
+
+        for s in secrets:
+            if s.get("name") == self.secret_name:
+                target_secret = s
+                break
+
+        if not target_secret:
+            return SlashCommandResult(
+                success=False,
+                command_type=CommandType.SECRETS,
+                content=f"❌ Secret not found: `{self.secret_name}`",
+            )
+
+        try:
+            # Get the full secret with value
+            full_secret = self.manager.get_secret(
+                target_secret["id"],
+                chat_id=self.chat_id,
+            )
+
+            if not full_secret:
+                return SlashCommandResult(
+                    success=False,
+                    command_type=CommandType.SECRETS,
+                    content=f"❌ Could not retrieve secret: `{self.secret_name}`",
+                )
+
+            # Mask value for display (show first/last 4 chars)
+            value = full_secret.get("value", "")
+            if len(value) > 12:
+                masked = f"{value[:4]}...{value[-4:]}"
+            else:
+                masked = "****" if value else "(empty)"
+
+            # Build response with metadata only (no full value for security)
+            description = full_secret.get("description", "")
+            desc_line = f"\n**Description:** {description}" if description else ""
+
+            return SlashCommandResult(
+                success=True,
+                command_type=CommandType.SECRETS,
+                content=f"""## 🔐 Secret: {self.secret_name}
+
+**Type:** {full_secret.get('type', 'unknown')}
+**Scope:** {'Chat' if full_secret.get('scope') == 'chat' else 'General'}
+**Value (masked):** `{masked}`{desc_line}
+
+💡 Use `/secrets copy {self.secret_name}` to copy the full value to clipboard.
+📋 The full value is NOT displayed to protect against chat history exposure.""",
+            )
+
+        except PermissionError:
+            return SlashCommandResult(
+                success=False,
+                command_type=CommandType.SECRETS,
+                content=f"❌ Access denied to secret: `{self.secret_name}`",
+            )
+
+
+class SecretsDeleteSubcommand(Command):
+    """Delete a secret."""
+
+    def __init__(self, manager, secret_name: Optional[str], chat_id: Optional[str]):
+        """Initialize delete subcommand."""
+        self.manager = manager
+        self.secret_name = secret_name
+        self.chat_id = chat_id
+
+    async def execute(self) -> SlashCommandResult:
+        """Delete a secret."""
+        if not self.secret_name:
+            return SlashCommandResult(
+                success=False,
+                command_type=CommandType.SECRETS,
+                content="❌ Please provide a secret name: `/secrets delete <name>`",
+            )
+
+        # Find the secret by name
+        secrets = self.manager.list_secrets(chat_id=self.chat_id)
+        target_secret = None
+
+        for s in secrets:
+            if s.get("name") == self.secret_name:
+                target_secret = s
+                break
+
+        if not target_secret:
+            return SlashCommandResult(
+                success=False,
+                command_type=CommandType.SECRETS,
+                content=f"❌ Secret not found: `{self.secret_name}`",
+            )
+
+        try:
+            success = self.manager.delete_secret(
+                target_secret["id"],
+                chat_id=self.chat_id,
+            )
+
+            if success:
+                return SlashCommandResult(
+                    success=True,
+                    command_type=CommandType.SECRETS,
+                    content=f"## ✅ Secret Deleted\n\n`{self.secret_name}` has been permanently removed.",
+                )
+            else:
+                return SlashCommandResult(
+                    success=False,
+                    command_type=CommandType.SECRETS,
+                    content=f"❌ Failed to delete secret: `{self.secret_name}`",
+                )
+
+        except PermissionError:
+            return SlashCommandResult(
+                success=False,
+                command_type=CommandType.SECRETS,
+                content=f"❌ Access denied: Cannot delete `{self.secret_name}`",
+            )
+
+
+class SecretsTransferSubcommand(Command):
+    """Transfer a secret between scopes."""
+
+    def __init__(self, manager, args: Optional[str], chat_id: Optional[str]):
+        """Initialize transfer subcommand."""
+        self.manager = manager
+        self.args = args
+        self.chat_id = chat_id
+
+    async def execute(self) -> SlashCommandResult:
+        """Transfer a secret between scopes."""
+        if not self.args:
+            return SlashCommandResult(
+                success=False,
+                command_type=CommandType.SECRETS,
+                content="❌ Usage: `/secrets transfer <name> [to-general|to-chat]`",
+            )
+
+        parts = self.args.split()
+        secret_name = parts[0]
+        target_scope = parts[1] if len(parts) > 1 else "to-general"
+
+        # Find the secret by name
+        secrets = self.manager.list_secrets(chat_id=self.chat_id)
+        target_secret = None
+
+        for s in secrets:
+            if s.get("name") == secret_name:
+                target_secret = s
+                break
+
+        if not target_secret:
+            return SlashCommandResult(
+                success=False,
+                command_type=CommandType.SECRETS,
+                content=f"❌ Secret not found: `{secret_name}`",
+            )
+
+        try:
+            from backend.api.secrets import SecretTransferRequest, SecretScope
+
+            if target_scope == "to-general":
+                new_scope = SecretScope.GENERAL
+                scope_text = "General 🌐"
+            else:
+                new_scope = SecretScope.CHAT
+                scope_text = "Chat 💬"
+
+            request = SecretTransferRequest(
+                secret_ids=[target_secret["id"]],
+                target_scope=new_scope,
+                target_chat_id=self.chat_id if new_scope == SecretScope.CHAT else None,
+            )
+
+            result = self.manager.transfer_secrets(request, chat_id=self.chat_id)
+
+            if result.get("transferred"):
+                return SlashCommandResult(
+                    success=True,
+                    command_type=CommandType.SECRETS,
+                    content=f"## ✅ Secret Transferred\n\n`{secret_name}` is now {scope_text}.",
+                )
+            else:
+                return SlashCommandResult(
+                    success=False,
+                    command_type=CommandType.SECRETS,
+                    content=f"❌ Failed to transfer secret: {result.get('failed', [])}",
+                )
+
+        except Exception as e:
+            logger.error("Failed to transfer secret: %s", e)
+            return SlashCommandResult(
+                success=False,
+                command_type=CommandType.SECRETS,
+                content=f"❌ Failed to transfer secret: {e}",
+            )
+
+
+class SecretsTypesSubcommand(Command):
+    """Show available secret types."""
+
+    async def execute(self) -> SlashCommandResult:
+        """Show available secret types."""
+        content = """## 🔐 Secret Types
+
+| Type | Description | Use Case |
+|------|-------------|----------|
+| `ssh_key` | SSH private/public keys | Remote server access |
+| `password` | Passwords & passphrases | Authentication |
+| `api_key` | API keys for services | External API access |
+| `token` | Authentication tokens | OAuth, JWT tokens |
+| `certificate` | X.509 certificates | TLS/SSL, signing |
+| `database_url` | Database connection strings | Database access |
+| `other` | Other sensitive data | Custom use |
+
+**Usage:**
+```
+/secrets add <name> <type> <value>
+```
+
+**Examples:**
+  • `/secrets add openai-key api_key sk-xxx...`
+  • `/secrets add server-ssh ssh_key "-----BEGIN..."`
+  • `/secrets add db-prod database_url postgres://...`"""
+
+        return SlashCommandResult(
+            success=True,
+            command_type=CommandType.SECRETS,
+            content=content,
+        )
+
+
 class UnknownCommand(Command):
     """Handler for unknown commands."""
 
@@ -897,6 +1416,9 @@ class SlashCommandHandler:
         self.docs_base_path = Path(docs_base_path)
         self._command_pattern = re.compile(r"^/(\w+)(?:\s+(.*))?$", re.IGNORECASE)
 
+        # Current chat context for secrets (Issue #211)
+        self.current_chat_id: Optional[str] = None
+
         # Documentation category mappings
         self.doc_categories = {
             "api": "api/",
@@ -912,6 +1434,14 @@ class SlashCommandHandler:
         }
 
         logger.info("SlashCommandHandler initialized with docs path: %s", docs_base_path)
+
+    def set_chat_context(self, chat_id: Optional[str]) -> None:
+        """Set the current chat context for chat-scoped commands (Issue #211).
+
+        Args:
+            chat_id: Current chat ID or None for general context
+        """
+        self.current_chat_id = chat_id
 
     def is_slash_command(self, message: str) -> bool:
         """
@@ -958,6 +1488,9 @@ class SlashCommandHandler:
             "security": CommandType.SECURITY,
             "sec": CommandType.SECURITY,
             "assessment": CommandType.SECURITY,
+            # Secrets management commands (#211)
+            "secrets": CommandType.SECRETS,
+            "secret": CommandType.SECRETS,
         }
 
         return command_map.get(cmd, CommandType.UNKNOWN), args
@@ -986,6 +1519,8 @@ class SlashCommandHandler:
             CommandType.STATUS: lambda args: StatusCommand(),
             CommandType.SCAN: lambda args: ScanCommand(args),
             CommandType.SECURITY: lambda args: SecurityCommand(args),
+            # Issue #211 - Secrets management
+            CommandType.SECRETS: lambda args: SecretsCommand(args, self.current_chat_id),
         }
 
     def _create_command(self, cmd_type: CommandType, args: Optional[str]) -> Command:
@@ -1001,8 +1536,6 @@ class SlashCommandHandler:
 
 
 # Module-level instance for easy access (thread-safe)
-import threading
-
 _handler_instance: Optional[SlashCommandHandler] = None
 _handler_instance_lock = threading.Lock()
 

@@ -59,10 +59,13 @@ class CommandRequest(BaseModel):
 class TerminalSessionRequest(BaseModel):
     user_id: Optional[str] = "default"
     conversation_id: Optional[str] = None  # Link to chat session for logging
+    chat_id: Optional[str] = None  # For chat-scoped SSH keys (Issue #211)
     security_level: Optional[SecurityLevel] = SecurityLevel.STANDARD
     enable_logging: Optional[bool] = True
     enable_workflow_control: Optional[bool] = True
     initial_directory: Optional[str] = None
+    setup_ssh_keys: Optional[bool] = False  # Auto-setup SSH keys (Issue #211)
+    ssh_key_names: Optional[list] = None  # Specific SSH keys to load (Issue #211)
 
 
 class TerminalInputRequest(BaseModel):
@@ -83,6 +86,21 @@ class ToolInstallRequest(BaseModel):
     install_method: Optional[str] = "auto"
     custom_command: Optional[str] = None
     update_first: Optional[bool] = True
+
+
+class SSHKeySetupRequest(BaseModel):
+    """Request model for SSH key setup in terminal sessions (Issue #211)."""
+
+    chat_id: Optional[str] = None  # For chat-scoped keys
+    include_general: Optional[bool] = True  # Include general-scoped keys
+    key_names: Optional[list] = None  # Specific keys to load
+
+
+class SSHKeyAgentRequest(BaseModel):
+    """Request model for adding SSH key to ssh-agent (Issue #211)."""
+
+    key_name: str
+    passphrase: Optional[str] = None  # For encrypted keys
 
 
 # Security patterns for command risk assessment
