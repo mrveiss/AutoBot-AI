@@ -4,11 +4,28 @@
 # Author: mrveiss
 """
 Backward compatibility wrappers and legacy class support.
+
+SSOT Migration (Issue #639):
+    Constants now source from SSOT config when available,
+    with fallback to NetworkConstants for backward compatibility.
 """
 
 from typing import Any, Dict
 
 from src.constants.network_constants import NetworkConstants
+
+
+def _get_ssot_config():
+    """Get SSOT config with graceful fallback."""
+    try:
+        from src.config.ssot_config import get_config
+        return get_config()
+    except Exception:
+        return None
+
+
+# Load SSOT once at module level
+_ssot = _get_ssot_config()
 
 
 class Config:
@@ -92,21 +109,21 @@ async def set_config_value_async(
 
 
 # Export host and service constants for backward compatibility
-# Using NetworkConstants directly to avoid circular import (Issue #63)
+# SSOT Migration (Issue #639): Use SSOT as primary source, NetworkConstants as fallback
 HTTP_PROTOCOL = "http"
-OLLAMA_HOST_IP = NetworkConstants.AI_STACK_HOST
-OLLAMA_PORT = NetworkConstants.OLLAMA_PORT
-REDIS_HOST_IP = NetworkConstants.REDIS_VM_IP
+OLLAMA_HOST_IP = _ssot.vm.ollama if _ssot else NetworkConstants.AI_STACK_HOST
+OLLAMA_PORT = _ssot.port.ollama if _ssot else NetworkConstants.OLLAMA_PORT
+REDIS_HOST_IP = _ssot.vm.redis if _ssot else NetworkConstants.REDIS_VM_IP
 OLLAMA_URL = f"http://{OLLAMA_HOST_IP}:{OLLAMA_PORT}"
 
 # Backend/API service constants
-BACKEND_HOST_IP = NetworkConstants.MAIN_MACHINE_IP
-BACKEND_PORT = NetworkConstants.BACKEND_PORT
+BACKEND_HOST_IP = _ssot.vm.main if _ssot else NetworkConstants.MAIN_MACHINE_IP
+BACKEND_PORT = _ssot.port.backend if _ssot else NetworkConstants.BACKEND_PORT
 API_BASE_URL = f"http://{BACKEND_HOST_IP}:{BACKEND_PORT}"
 
 # Playwright/Browser service constants
-PLAYWRIGHT_HOST_IP = NetworkConstants.BROWSER_VM_IP
-PLAYWRIGHT_VNC_PORT = NetworkConstants.VNC_PORT
+PLAYWRIGHT_HOST_IP = _ssot.vm.browser if _ssot else NetworkConstants.BROWSER_VM_IP
+PLAYWRIGHT_VNC_PORT = _ssot.port.vnc if _ssot else NetworkConstants.VNC_PORT
 PLAYWRIGHT_VNC_URL = f"http://{PLAYWRIGHT_HOST_IP}:{PLAYWRIGHT_VNC_PORT}/vnc.html"
 
 

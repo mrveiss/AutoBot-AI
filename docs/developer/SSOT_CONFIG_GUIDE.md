@@ -293,14 +293,83 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 source "../../.env"
 ```
 
+## config.yaml vs .env (SSOT)
+
+**Issue #639** consolidated the configuration system. Here's the separation of concerns:
+
+### config.yaml - User Preferences Only
+
+The `config/config.yaml` file now contains **only user-configurable preferences**:
+
+```yaml
+# User preferences - configurable at runtime
+ui:
+  theme: light
+  language: en
+  font_size: medium
+
+chat:
+  auto_scroll: true
+  max_messages: 100
+
+logging:
+  log_level: INFO
+  log_to_file: true
+
+voice_interface:
+  enabled: false
+  speech_rate: 1
+```
+
+### .env - Infrastructure Configuration (SSOT)
+
+All infrastructure configuration (IPs, ports, hosts) is in `.env`:
+
+```bash
+# Infrastructure - managed by SSOT
+AUTOBOT_BACKEND_HOST=172.16.168.20
+AUTOBOT_REDIS_HOST=172.16.168.23
+AUTOBOT_OLLAMA_HOST=127.0.0.1
+AUTOBOT_DEFAULT_LLM_MODEL=mistral:7b-instruct
+```
+
+### What Goes Where?
+
+| Setting Type | Location | Example |
+|-------------|----------|---------|
+| VM IP addresses | `.env` | `AUTOBOT_REDIS_HOST` |
+| Service ports | `.env` | `AUTOBOT_BACKEND_PORT` |
+| LLM endpoints | `.env` | `AUTOBOT_OLLAMA_HOST` |
+| Default models | `.env` | `AUTOBOT_DEFAULT_LLM_MODEL` |
+| UI preferences | `config.yaml` | `ui.theme` |
+| Chat settings | `config.yaml` | `chat.auto_scroll` |
+| Log settings | `config.yaml` | `logging.log_level` |
+| Feature flags | `config.yaml` | `developer.enabled` |
+| Timeout values | `config.yaml` | `timeouts.redis.get` |
+
+### Accessing Configuration
+
+```python
+# For infrastructure (network, ports, hosts) - use SSOT
+from src.config.ssot_config import config
+redis_host = config.vm.redis           # Infrastructure from .env
+backend_url = config.backend_url       # Computed URL from .env
+
+# For user preferences - use unified config manager
+from src.config import unified_config_manager
+theme = unified_config_manager.get_nested('ui.theme')  # From config.yaml
+auto_scroll = unified_config_manager.get_nested('chat.auto_scroll')
+```
+
 ## Related Documentation
 
 - [HARDCODING_PREVENTION.md](HARDCODING_PREVENTION.md) - Hardcoding policy
 - [REDIS_CLIENT_USAGE.md](REDIS_CLIENT_USAGE.md) - Redis client patterns
 - [SSOT_CONFIGURATION_ARCHITECTURE.md](../architecture/SSOT_CONFIGURATION_ARCHITECTURE.md) - Full architecture spec
+- [CONFIG_MIGRATION_CHECKLIST.md](CONFIG_MIGRATION_CHECKLIST.md) - Migration steps
 
 ---
 
 **Author**: mrveiss
 **Copyright**: © 2025 mrveiss
-**Issue**: #604 - SSOT Phase 4 Cleanup
+**Issues**: #604 - SSOT Phase 4 Cleanup, #639 - SSOT Phase 5 config.yaml Consolidation

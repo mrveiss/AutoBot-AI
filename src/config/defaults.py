@@ -4,6 +4,10 @@
 # Author: mrveiss
 """
 Default configuration generation for unified config manager.
+
+SSOT Migration (Issue #639):
+    Default values now source from SSOT config (ssot_config.py) when available,
+    with fallback to NetworkConstants for backward compatibility.
 """
 
 import os
@@ -11,6 +15,27 @@ from typing import Any, Dict
 
 from src.constants.model_constants import ModelConstants
 from src.constants.network_constants import NetworkConstants
+
+
+def _get_ssot_config():
+    """Get SSOT config with graceful fallback."""
+    try:
+        from src.config.ssot_config import get_config
+        return get_config()
+    except Exception:
+        return None
+
+
+# Module-level SSOT reference (lazy loaded)
+_ssot = None
+
+
+def _get_ssot():
+    """Get or create SSOT singleton reference."""
+    global _ssot
+    if _ssot is None:
+        _ssot = _get_ssot_config()
+    return _ssot
 
 
 def _get_backend_config(ollama_host: str, ollama_port: int) -> Dict[str, Any]:
@@ -140,11 +165,18 @@ def _get_simple_configs() -> Dict[str, Any]:
 
 
 def get_default_config() -> Dict[str, Any]:
-    """Get default configuration values."""
-    ollama_host = NetworkConstants.AI_STACK_HOST
-    ollama_port = NetworkConstants.OLLAMA_PORT
-    redis_host = NetworkConstants.REDIS_HOST
-    redis_port = NetworkConstants.REDIS_PORT
+    """Get default configuration values.
+
+    SSOT Migration (Issue #639):
+        Infrastructure defaults now come from SSOT config when available.
+    """
+    ssot = _get_ssot()
+
+    # Use SSOT values with fallback to NetworkConstants
+    ollama_host = ssot.vm.ollama if ssot else NetworkConstants.AI_STACK_HOST
+    ollama_port = ssot.port.ollama if ssot else NetworkConstants.OLLAMA_PORT
+    redis_host = ssot.vm.redis if ssot else NetworkConstants.REDIS_HOST
+    redis_port = ssot.port.redis if ssot else NetworkConstants.REDIS_PORT
 
     config = {
         "backend": _get_backend_config(ollama_host, ollama_port),

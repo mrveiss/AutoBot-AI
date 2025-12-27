@@ -1,108 +1,95 @@
-# AutoBot Configuration File
+# AutoBot Configuration - User Preferences Template
+# =================================================
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# IMPORTANT: This file contains USER PREFERENCES only.
+# Infrastructure configuration (IPs, ports, hosts) is managed by:
+#   - .env file (SSOT - Single Source of Truth)
+#   - src/config/ssot_config.py (typed Python access)
+#   - autobot-vue/src/config/ssot-config.ts (typed TypeScript access)
+#
+# To use: Copy this file to config/config.yaml and customize
+# See: docs/developer/SSOT_CONFIG_GUIDE.md
 
-# Backend Configuration
-backend:
-  # API Settings
-  api_endpoint: "http://localhost:8001"
-  audit_log_file: "data/audit.log"
-  chat_data_dir: "data/chats"
-  chat_history_file: "data/chat_history.json"
+# ============================================================================
+# User Interface Settings
+# ============================================================================
+ui:
+  theme: light              # light, dark, system
+  language: en              # Language code
+  font_size: medium         # small, medium, large
+  animations: true          # Enable UI animations
+  developer_mode: false     # Show developer tools
 
-  # CORS Settings
-  cors_origins:
-    - "http://localhost:5173"
-    - "http://127.0.0.1:5173"
-    - "http://localhost:3000"
-    - "http://127.0.0.1:3000"
-
-  # Data Storage
-  knowledge_base_db: "data/knowledge_base.db"
-
-  # LLM Configuration
-  llm:
-    cloud:
-      provider: "openai"
-      providers:
-        anthropic:
-          api_key: ""
-          endpoint: "https://api.anthropic.com/v1"
-          models:
-            - "claude-3-sonnet-20240229"
-            - "claude-3-haiku-20240307"
-          selected_model: ""
-        openai:
-          api_key: ""
-          endpoint: "https://api.openai.com/v1"
-          models:
-            - "gpt-3.5-turbo"
-            - "gpt-4"
-          selected_model: ""
-    local:
-      provider: "ollama"
-      providers:
-        lmstudio:
-          endpoint: "http://localhost:1234/v1"
-          models: []
-          selected_model: ""
-        ollama:
-          endpoint: "http://localhost:11434/api/generate"
-          models:
-            - "phi:2.7b"
-            - "phi:latest"
-            - "tinyllama:latest"
-            - "llama2:latest"
-          selected_model: "phi:2.7b"
-    provider_type: "local"
-
-  # Connection Settings
-  max_retries: 3
-  ollama_endpoint: "http://localhost:11434"
-  ollama_model: "phi:2.7b"
-  reliability_stats_file: "data/reliability_stats.json"
-  server_host: "0.0.0.0"
-  server_port: 8001
-  streaming: false
-  timeout: 60
-  use_phi2: false
-
-# Chat Configuration
+# ============================================================================
+# Chat Settings
+# ============================================================================
 chat:
-  auto_scroll: true
-  default_welcome_message: "Hello! How can I assist you today?"
-  max_messages: 100
-  message_retention_days: 30
+  auto_scroll: true         # Auto-scroll to new messages
+  max_messages: 100         # Max messages in view
+  message_retention_days: 30  # Days to keep message history
 
-# Developer Mode Configuration
-developer:
-  debug_logging: false
-  enabled: false
-  endpoint_suggestions: true
-  enhanced_errors: true
+# ============================================================================
+# Message Display Settings
+# ============================================================================
+message_display:
+  show_debug: false         # Show debug messages
+  show_json: false          # Show raw JSON responses
+  show_planning: true       # Show agent planning
+  show_thoughts: true       # Show AI thought process
+  show_utility: false       # Show utility messages
 
-# Knowledge Base Configuration
-knowledge_base:
-  enabled: true
-  update_frequency_days: 7
+# ============================================================================
+# Voice Interface Settings
+# ============================================================================
+voice_interface:
+  enabled: false            # Enable voice input/output
+  speech_rate: 1.0          # Speech rate (0.5 - 2.0)
+  voice: default            # Voice selection
 
-# Logging Configuration
+# ============================================================================
+# Logging Settings
+# ============================================================================
 logging:
-  log_file_path: "logs/autobot.log"
-  log_level: "info"
-  log_to_file: true
+  log_level: INFO           # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  log_to_file: true         # Write logs to file
+  log_file_path: logs/system.log  # Log file location
 
-# Memory and Storage Configuration
+# ============================================================================
+# Security Settings (User-configurable options only)
+# ============================================================================
+security:
+  enable_encryption: false  # Enable data encryption
+  session_timeout_minutes: 30  # Session timeout
+
+# ============================================================================
+# Developer Settings
+# ============================================================================
+developer:
+  enabled: false            # Enable developer mode
+  debug_logging: false      # Enable debug logging
+  endpoint_suggestions: true  # Show API endpoint suggestions
+  enhanced_errors: true     # Show detailed error messages
+
+# ============================================================================
+# Knowledge Base Settings
+# ============================================================================
+knowledge_base:
+  enabled: true             # Enable knowledge base
+  update_frequency_days: 7  # Auto-update frequency
+
+# ============================================================================
+# Memory Settings (Storage preferences - hosts come from SSOT/.env)
+# ============================================================================
 memory:
   chromadb:
-    collection_name: "autobot_memory"
+    collection_name: autobot_memory
     enabled: true
-    path: "data/chromadb"
+    path: data/chromadb
   long_term:
     enabled: true
     retention_days: 30
-  redis:
-    enabled: false
-    host: "localhost"
-    port: 6379
   short_term:
     duration_minutes: 30
     enabled: true
@@ -110,112 +97,84 @@ memory:
     enabled: true
     update_frequency_days: 7
 
-# Message Display Configuration
-message_display:
-  show_debug: false
-  show_json: false
-  show_planning: true
-  show_thoughts: true
-  show_utility: false
+# ============================================================================
+# LLM Settings (Model preferences - endpoints come from SSOT/.env)
+# ============================================================================
+# Note: Network endpoints (ollama_url, etc.) come from SSOT/.env
+# This section contains user model PREFERENCES only
+llm:
+  provider_type: local
+  default_provider: ollama
+  models:
+    # Available models list - for UI dropdown display
+    - phi:2.7b
+    - phi:latest
+    - tinyllama:latest
+    - llama2:latest
+    - llama3.2:3b
+    - mistral:7b-instruct
+    - nomic-embed-text:latest
+  classification_model: gemma2:2b
+  vllm:
+    enabled: false
+    default_model: meta-llama/Llama-3.2-3B-Instruct
+    tensor_parallel_size: 1
+    gpu_memory_utilization: 0.9
+    max_model_len: 8192
+    trust_remote_code: false
+    dtype: auto
+    enable_chunked_prefill: true
 
-# Security Configuration
-security:
-  enable_encryption: true  # Changed to true for better security by default
-  session_timeout_minutes: 30
-
-# Security Configuration for Authentication and Authorization
-security_config:
-  enable_auth: true
+# ============================================================================
+# Backend Settings (User tunable - network config comes from SSOT/.env)
+# ============================================================================
+backend:
+  # Data paths
   audit_log_file: logs/audit.log
-  allowed_users:
-    admin:
-      password_hash: $2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4SH.LKhO/y  # password: autobotadmin123
-      role: admin
-      email: admin@autobot.local
-      created_at: '2025-01-01T00:00:00Z'
-    developer:
-      password_hash: $2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lrw3vjPiS394C2u  # password: dev123secure
-      role: developer
-      email: dev@autobot.local
-      created_at: '2025-01-01T00:00:00Z'
-    readonly:
-      password_hash: $2b$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi  # password: readonly123
-      role: readonly
-      email: readonly@autobot.local
-      created_at: '2025-01-01T00:00:00Z'
-  roles:
-    admin:
-      permissions:
-      - allow_all
-      description: Full system access with all permissions
-    developer:
-      permissions:
-      - files.*
-      - allow_goal_submission
-      - allow_kb_read
-      - allow_kb_write
-      - allow_chat_control
-      - allow_agent_control
-      - allow_command_approval
-      - allow_voice_listen
-      - allow_voice_speak
-      description: Development access with most permissions except system commands
-    editor:
-      permissions:
-      - files.view
-      - files.download
-      - files.upload
-      - files.create
-      - allow_goal_submission
-      - allow_kb_read
-      - allow_kb_write
-      - allow_chat_control
-      description: Content editing and knowledge base management
-    user:
-      permissions:
-      - files.view
-      - files.download
-      - allow_goal_submission
-      - allow_kb_read
-      - allow_chat_control
-      description: Basic user access for interaction
-    readonly:
-      permissions:
-      - files.view
-      - files.download
-      - allow_kb_read
-      description: Read-only access for viewing content
-    guest:
-      permissions:
-      - files.view
-      description: Very limited guest access
-  password_policy:
-    min_length: 12
-    require_uppercase: true
-    require_lowercase: true
-    require_numbers: true
-    require_special_chars: true
-    max_age_days: 90
-  session_config:
-    session_timeout_minutes: 30
-    max_concurrent_sessions: 5
-    require_2fa: false
-  audit_config:
-    log_all_actions: true
-    log_failed_attempts: true
-    retention_days: 365
-    sensitive_data_masking: true
+  chat_data_dir: data/chats
+  chat_history_file: data/chat_history.json
+  knowledge_base_db: data/knowledge_base.db
+  reliability_stats_file: data/reliability_stats.json
+  # Behavior settings
+  max_retries: 3
+  streaming: false
+  timeout: 60
 
-# UI Configuration
-ui:
-  animations: true
-  developer_mode: false
-  font_size: "medium"
-  language: "en"
-  theme: "light"
+# ============================================================================
+# Timeout Configuration (all values in seconds)
+# ============================================================================
+timeouts:
+  redis:
+    connection:
+      socket_connect: 2.0
+      socket_timeout: 2.0
+      health_check: 1.0
+    operations:
+      get: 1.0
+      set: 1.0
+      hgetall: 2.0
+      pipeline: 5.0
+      scan_iter: 10.0
+  llamaindex:
+    embedding:
+      generation: 10.0
+      batch: 30.0
+    search:
+      query: 10.0
+      hybrid: 15.0
+  http:
+    standard: 30.0
+    long_running: 120.0
+    streaming: 300.0
+  llm:
+    default: 120.0
+    fast: 30.0
+    reasoning: 300.0
 
-# Voice Interface Configuration
-voice_interface:
-  enabled: false
-  speech_rate: 1.0
-  voice: "default"
+# ============================================================================
+# Monitoring Settings
+# ============================================================================
+monitoring:
+  metrics:
+    collection_interval: 10
+    retention_hours: 24
