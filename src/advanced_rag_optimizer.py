@@ -505,15 +505,13 @@ class AdvancedRAGOptimizer:
             # Step 2: Multi-strategy retrieval
             retrieval_start = time.time()
 
-            # Semantic search
-            semantic_results = await self._perform_semantic_search(
-                query, limit=self.max_results_per_stage
+            # Issue #619: Parallelize semantic search and facts retrieval
+            semantic_results, all_facts = await asyncio.gather(
+                self._perform_semantic_search(query, limit=self.max_results_per_stage),
+                self.kb.get_all_facts(),
             )
 
-            # Get all facts for keyword search
-            all_facts = await self.kb.get_all_facts()
-
-            # Keyword search
+            # Keyword search (needs all_facts from above)
             keyword_results = self._perform_keyword_search(query, all_facts)
 
             # Combine with hybrid scoring
