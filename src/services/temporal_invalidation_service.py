@@ -408,20 +408,22 @@ class TemporalInvalidationService:
                     "message": "Fact extraction service not available",
                 }
 
-            # Load invalidation rules
-            rules = await self._load_invalidation_rules()
+            # Issue #619: Parallelize rules and facts loading
+            # Both operations are independent - load concurrently for better performance
+            rules, all_facts = await asyncio.gather(
+                self._load_invalidation_rules(),
+                self.fact_extraction_service.get_facts_by_criteria(
+                    source=source_filter,
+                    active_only=True,
+                    limit=10000,  # Large limit to get all facts
+                ),
+            )
+
             if not rules:
                 return {"status": "error", "message": "No invalidation rules available"}
 
             enabled_rules = {k: v for k, v in rules.items() if v.enabled}
             logger.info("Using %s enabled invalidation rules", len(enabled_rules))
-
-            # Get all active facts
-            all_facts = await self.fact_extraction_service.get_facts_by_criteria(
-                source=source_filter,
-                active_only=True,
-                limit=10000,  # Large limit to get all facts
-            )
 
             if not all_facts:
                 return {

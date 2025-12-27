@@ -7,6 +7,7 @@ Enhanced Search API with NPU Acceleration
 Provides NPU-accelerated semantic search endpoints for AutoBot
 """
 
+import asyncio
 import time
 from typing import List, Optional
 
@@ -283,8 +284,11 @@ async def get_performance_analytics():
         # Get hardware status from AI accelerator
         ai_accelerator = search_engine.ai_accelerator
         if ai_accelerator:
-            hardware_status = await ai_accelerator.get_hardware_status()
-            performance_analysis = await ai_accelerator.optimize_performance()
+            # Issue #619: Parallelize independent hardware operations
+            hardware_status, performance_analysis = await asyncio.gather(
+                ai_accelerator.get_hardware_status(),
+                ai_accelerator.optimize_performance(),
+            )
         else:
             hardware_status = {}
             performance_analysis = {"message": "AI accelerator not available"}

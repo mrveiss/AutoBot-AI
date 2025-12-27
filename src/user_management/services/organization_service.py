@@ -8,6 +8,7 @@ Business logic for organization (tenant) management operations.
 Used in multi_company and provider deployment modes.
 """
 
+import asyncio
 import logging
 import re
 import uuid
@@ -427,8 +428,12 @@ class OrganizationService(BaseService):
         if not org:
             raise OrganizationNotFoundError(f"Organization {org_id} not found")
 
-        user_count = await self.get_user_count(org_id)
-        team_count = await self.get_team_count(org_id)
+        # Issue #619: Parallelize independent async operations
+        user_count, team_count, can_add = await asyncio.gather(
+            self.get_user_count(org_id),
+            self.get_team_count(org_id),
+            self.can_add_user(org_id),
+        )
 
         return {
             "organization_id": str(org_id),
@@ -438,7 +443,7 @@ class OrganizationService(BaseService):
             "users": {
                 "current": user_count,
                 "max": org.max_users if org.max_users != -1 else "unlimited",
-                "can_add": await self.can_add_user(org_id),
+                "can_add": can_add,
             },
             "teams": {
                 "current": team_count,

@@ -14,6 +14,7 @@ Provides API endpoints for:
 Related Issues: #59 (Advanced Analytics & Business Intelligence)
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -492,11 +493,12 @@ async def get_budget_status():
     week_start = today - timedelta(days=today.weekday())
     month_start = today.replace(day=1)
 
-    daily_summary = await tracker.get_cost_summary(
-        today.replace(hour=0, minute=0, second=0), today
+    # Issue #619: Parallelize independent cost summary fetches
+    daily_summary, weekly_summary, monthly_summary = await asyncio.gather(
+        tracker.get_cost_summary(today.replace(hour=0, minute=0, second=0), today),
+        tracker.get_cost_summary(week_start, today),
+        tracker.get_cost_summary(month_start, today),
     )
-    weekly_summary = await tracker.get_cost_summary(week_start, today)
-    monthly_summary = await tracker.get_cost_summary(month_start, today)
 
     current_costs = {
         "daily": daily_summary.get("total_cost_usd", 0),

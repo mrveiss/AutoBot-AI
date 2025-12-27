@@ -15,6 +15,7 @@ Provides API endpoints for:
 Related Issues: #59 (Advanced Analytics & Business Intelligence)
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Optional
@@ -365,10 +366,12 @@ async def get_behavior_summary():
     """
     analytics = get_behavior_analytics()
 
-    # Gather all metrics
-    engagement = await analytics.get_engagement_metrics()
-    daily_stats = await analytics.get_daily_stats(7)
-    heatmap = await analytics.get_usage_heatmap(7)
+    # Issue #619: Parallelize independent metrics fetches
+    engagement, daily_stats, heatmap = await asyncio.gather(
+        analytics.get_engagement_metrics(),
+        analytics.get_daily_stats(7),
+        analytics.get_usage_heatmap(7),
+    )
 
     return {
         "timestamp": datetime.utcnow().isoformat(),

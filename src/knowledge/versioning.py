@@ -304,8 +304,11 @@ class VersioningMixin:
     ) -> Dict[str, Any]:
         """Compare two versions of a fact (Issue #398: refactored)."""
         try:
-            result_a = await self.get_version(fact_id, version_a)
-            result_b = await self.get_version(fact_id, version_b)
+            # Issue #619: Parallelize independent version fetches
+            result_a, result_b = await asyncio.gather(
+                self.get_version(fact_id, version_a),
+                self.get_version(fact_id, version_b),
+            )
 
             if result_a.get("status") != "success":
                 return result_a

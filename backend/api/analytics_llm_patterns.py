@@ -15,6 +15,7 @@ This module provides intelligent analysis of LLM usage patterns for cost optimiz
 Related Issues: #229 (LLM Integration Pattern Analyzer)
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -631,9 +632,11 @@ class LLMPatternAnalyzer:
         """Generate optimization recommendations based on usage patterns"""
         recommendations = []
 
-        # Get recent stats
-        stats = await self.get_usage_stats(days=7)
-        cache_opportunities = await self.identify_cache_opportunities(min_occurrences=2)
+        # Issue #619: Parallelize independent data fetches
+        stats, cache_opportunities = await asyncio.gather(
+            self.get_usage_stats(days=7),
+            self.identify_cache_opportunities(min_occurrences=2),
+        )
 
         # Recommendation 1: Caching
         if cache_opportunities:
