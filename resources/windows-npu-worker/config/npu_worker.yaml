@@ -33,11 +33,14 @@ backend:
   connect_timeout: 10
 
 # Redis Configuration
+# NOTE: Redis credentials are fetched from backend via bootstrap endpoint
+# No credentials should be hardcoded here - worker gets them on first contact
 redis:
-  # Redis server connection
-  host: "172.16.168.23"
-  port: 6379
-  password: null  # Set if Redis has password authentication
+  # Connection settings (host/port/password come from bootstrap)
+  # These are fallbacks only if bootstrap fails
+  host: null      # Fetched from backend
+  port: 6379      # Default port
+  password: null  # NEVER hardcode - fetched from backend
 
   # Database selection
   db: 0  # Main database for task queues

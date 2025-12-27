@@ -2,18 +2,34 @@
 Connection Info Widget - Display network connection information with copy functionality
 """
 
+import logging
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
     QLabel, QPushButton, QTextEdit, QMessageBox, QGridLayout
 )
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import Qt, Slot, QTimer
 
-from gui.utils.network_info import (
-    get_network_interfaces,
-    get_platform_info,
-    get_primary_ip,
-    get_registration_config
-)
+logger = logging.getLogger(__name__)
+
+# Import with error handling
+try:
+    from gui.utils.network_info import (
+        get_network_interfaces,
+        get_platform_info,
+        get_primary_ip,
+        get_registration_config
+    )
+except Exception as e:
+    logger.error("Failed to import network_info: %s", e, exc_info=True)
+    # Provide fallback functions
+    def get_network_interfaces():
+        return []
+    def get_platform_info():
+        return {"system": "Unknown", "release": "", "npu_detected": False, "npu_devices": []}
+    def get_primary_ip():
+        return None
+    def get_registration_config(port):
+        return "# Network info unavailable"
 
 
 class ConnectionInfoWidget(QWidget):
@@ -21,10 +37,25 @@ class ConnectionInfoWidget(QWidget):
 
     def __init__(self, worker_id: str = "N/A", port: int = 8082, parent=None):
         super().__init__(parent)
+        logger.debug("ConnectionInfoWidget.__init__ starting")
         self.worker_id = worker_id
         self.port = port
+        self._initialized = False
         self.init_ui()
-        self.update_connection_info()
+        # Delay network info fetch to avoid crash during init
+        QTimer.singleShot(200, self._delayed_init)
+        logger.debug("ConnectionInfoWidget.__init__ complete")
+
+    def _delayed_init(self):
+        """Delayed initialization after event loop starts"""
+        logger.debug("ConnectionInfoWidget._delayed_init starting")
+        try:
+            self._initialized = True
+            self.update_connection_info()
+        except Exception as e:
+            logger.error("ConnectionInfoWidget._delayed_init failed: %s", e, exc_info=True)
+            self.network_info_text.setText(f"Error loading network info: {e}")
+        logger.debug("ConnectionInfoWidget._delayed_init complete")
 
     def init_ui(self):
         """Initialize user interface"""

@@ -2,6 +2,8 @@
 Main Window - NPU Worker Dashboard
 """
 
+import logging
+
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QTabWidget, QStatusBar,
@@ -10,13 +12,64 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import QTimer, Slot
 from PySide6.QtGui import QIcon, QAction
 
-from gui.widgets.status_panel import StatusPanel
-from gui.widgets.metrics_display import MetricsDisplay
-from gui.widgets.connection_info import ConnectionInfoWidget
-from gui.windows.settings_dialog import SettingsDialog
-from gui.windows.log_viewer import LogViewer
-from gui.controllers.worker_controller import WorkerController
-from gui.controllers.config_manager import ConfigManager
+logger = logging.getLogger(__name__)
+
+# Import widgets with error handling
+try:
+    logger.debug("Importing StatusPanel")
+    from gui.widgets.status_panel import StatusPanel
+except Exception as e:
+    logger.error("Failed to import StatusPanel: %s", e, exc_info=True)
+    raise
+
+try:
+    logger.debug("Importing MetricsDisplay")
+    from gui.widgets.metrics_display import MetricsDisplay
+except Exception as e:
+    logger.error("Failed to import MetricsDisplay: %s", e, exc_info=True)
+    raise
+
+try:
+    logger.debug("Importing ConnectionInfoWidget")
+    from gui.widgets.connection_info import ConnectionInfoWidget
+except Exception as e:
+    logger.error("Failed to import ConnectionInfoWidget: %s", e, exc_info=True)
+    raise
+
+try:
+    logger.debug("Importing SettingsDialog")
+    from gui.windows.settings_dialog import SettingsDialog
+except Exception as e:
+    logger.error("Failed to import SettingsDialog: %s", e, exc_info=True)
+    raise
+
+try:
+    logger.debug("Importing LogViewer")
+    from gui.windows.log_viewer import LogViewer
+except Exception as e:
+    logger.error("Failed to import LogViewer: %s", e, exc_info=True)
+    raise
+
+try:
+    logger.debug("Importing BenchmarkWidget")
+    from gui.widgets.benchmark_widget import BenchmarkWidget
+except Exception as e:
+    logger.error("Failed to import BenchmarkWidget: %s", e, exc_info=True)
+    raise
+
+try:
+    logger.debug("Importing WorkerController")
+    from gui.controllers.worker_controller import WorkerController
+except Exception as e:
+    logger.error("Failed to import WorkerController: %s", e, exc_info=True)
+    raise
+
+try:
+    logger.debug("Importing ConfigManager")
+    from gui.controllers.config_manager import ConfigManager
+except Exception as e:
+    logger.error("Failed to import ConfigManager: %s", e, exc_info=True)
+    raise
 
 
 class MainWindow(QMainWindow):
@@ -24,17 +77,55 @@ class MainWindow(QMainWindow):
 
     def __init__(self, app_config):
         super().__init__()
+        logger.debug("MainWindow.__init__ starting")
         self.app_config = app_config
-        self.worker_controller = WorkerController()
-        self.config_manager = ConfigManager()
 
-        self.init_ui()
-        self.init_system_tray()
-        self.init_timers()
-        self.connect_signals()
+        try:
+            logger.debug("Creating WorkerController")
+            self.worker_controller = WorkerController()
+        except Exception as e:
+            logger.error("Failed to create WorkerController: %s", e, exc_info=True)
+            raise
+
+        try:
+            logger.debug("Creating ConfigManager")
+            self.config_manager = ConfigManager()
+        except Exception as e:
+            logger.error("Failed to create ConfigManager: %s", e, exc_info=True)
+            raise
+
+        try:
+            logger.debug("Initializing UI")
+            self.init_ui()
+        except Exception as e:
+            logger.error("Failed to init_ui: %s", e, exc_info=True)
+            raise
+
+        try:
+            logger.debug("Initializing system tray")
+            self.init_system_tray()
+        except Exception as e:
+            logger.error("Failed to init_system_tray: %s", e, exc_info=True)
+            raise
+
+        try:
+            logger.debug("Initializing timers")
+            self.init_timers()
+        except Exception as e:
+            logger.error("Failed to init_timers: %s", e, exc_info=True)
+            raise
+
+        try:
+            logger.debug("Connecting signals")
+            self.connect_signals()
+        except Exception as e:
+            logger.error("Failed to connect_signals: %s", e, exc_info=True)
+            raise
 
         # Initial status update
+        logger.debug("Initial status update")
         self.update_status()
+        logger.debug("MainWindow.__init__ complete")
 
     def init_ui(self):
         """Initialize user interface"""
@@ -57,6 +148,10 @@ class MainWindow(QMainWindow):
         # Dashboard tab
         dashboard_tab = self.create_dashboard_tab()
         self.tabs.addTab(dashboard_tab, "Dashboard")
+
+        # Benchmark tab (Issue #640)
+        self.benchmark_widget = BenchmarkWidget()
+        self.tabs.addTab(self.benchmark_widget, "Benchmark")
 
         # Connection Info tab
         self.connection_info = ConnectionInfoWidget()
@@ -155,6 +250,14 @@ class MainWindow(QMainWindow):
         restart_action.triggered.connect(self.restart_service)
         service_menu.addAction(restart_action)
 
+        service_menu.addSeparator()
+
+        # Issue #640: Re-pair action
+        repair_action = QAction("Re-&pair with Master...", self)
+        repair_action.setShortcut("Ctrl+R")
+        repair_action.triggered.connect(self.show_repair_dialog)
+        service_menu.addAction(repair_action)
+
         # Help menu
         help_menu = menu_bar.addMenu("&Help")
 
@@ -236,7 +339,10 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def update_status(self):
-        """Update service status display"""
+        """Update service status display (non-blocking)"""
+        # Trigger async status check - result comes via on_status_changed signal
+        self.worker_controller.check_status_async()
+        # Also update UI with cached status immediately for responsiveness
         status = self.worker_controller.get_status()
         self.update_ui_for_status(status)
 
@@ -283,6 +389,10 @@ class MainWindow(QMainWindow):
         port = metrics.get('port', 8082)
         self.connection_info.set_worker_id(worker_id)
         self.connection_info.set_port(port)
+
+        # Issue #640: Update benchmark widget with correct API URL
+        if port:
+            self.benchmark_widget.set_api_url(f"http://localhost:{port}")
 
     def update_ui_for_status(self, status: str):
         """Update UI elements based on service status"""
@@ -356,6 +466,104 @@ class MainWindow(QMainWindow):
             f"<p><strong>Primary IP:</strong> {primary_ip}</p>"
             "<p>© 2025 AutoBot Development Team</p>"
         )
+
+    @Slot()
+    def show_repair_dialog(self):
+        """Show re-pair dialog (Issue #640)
+
+        Allows user to clear pairing data and re-pair with master.
+        This removes the worker ID, bootstrap cache, and backend/redis config.
+        """
+        # Get current pairing status
+        status = self.config_manager.get_pairing_status()
+
+        if not status['paired']:
+            QMessageBox.information(
+                self,
+                "Not Paired",
+                "This worker is not currently paired with a master.\n\n"
+                "Start the service to initiate pairing with a master backend.",
+                QMessageBox.StandardButton.Ok
+            )
+            return
+
+        # Show confirmation dialog with current pairing info
+        worker_id = status.get('worker_id', 'Unknown')
+        backend_host = status.get('backend_host', 'Unknown')
+
+        reply = QMessageBox.warning(
+            self,
+            "Re-pair with Master",
+            f"<b>Current Pairing:</b><br><br>"
+            f"Worker ID: <code>{worker_id}</code><br>"
+            f"Master Host: <code>{backend_host}</code><br><br>"
+            f"<b>This action will:</b><br>"
+            f"• Remove the worker ID<br>"
+            f"• Clear cached bootstrap configuration<br>"
+            f"• Clear backend and Redis host settings<br><br>"
+            f"The worker will need to re-pair with a master on next start.<br><br>"
+            f"<b>Continue?</b>",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        # Stop service if running
+        was_running = self.worker_controller.get_status() == "running"
+        if was_running:
+            self.status_label.setText("Stopping service for re-pair...")
+            self.worker_controller.stop_worker()
+            # Give it a moment to stop
+            QTimer.singleShot(1000, lambda: self._complete_repair(was_running))
+        else:
+            self._complete_repair(was_running)
+
+    def _complete_repair(self, was_running: bool):
+        """Complete the re-pair process after service is stopped"""
+        # Clear pairing data
+        result = self.config_manager.clear_pairing()
+
+        if result['success']:
+            cleared_items = "\n• ".join(result['cleared']) if result['cleared'] else "No items to clear"
+
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setWindowTitle("Re-pair Complete")
+            msg.setText("Pairing data has been cleared successfully.")
+            msg.setInformativeText(
+                f"<b>Cleared:</b><br>• {cleared_items}<br><br>"
+                "The worker will re-pair with the master on next start."
+            )
+
+            if was_running:
+                msg.setStandardButtons(
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                msg.button(QMessageBox.StandardButton.Yes).setText("Start Service Now")
+                msg.button(QMessageBox.StandardButton.No).setText("Start Later")
+                msg.setDefaultButton(QMessageBox.StandardButton.Yes)
+
+                if msg.exec() == QMessageBox.StandardButton.Yes:
+                    self.status_label.setText("Starting service for re-pairing...")
+                    self.start_service()
+            else:
+                msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+                msg.exec()
+
+            # Update connection info to show unpaired status
+            self.connection_info.set_worker_id("Not paired")
+        else:
+            errors = "\n• ".join(result['errors']) if result['errors'] else "Unknown error"
+            QMessageBox.critical(
+                self,
+                "Re-pair Failed",
+                f"Failed to clear pairing data:\n\n• {errors}",
+                QMessageBox.StandardButton.Ok
+            )
+
+        self.status_label.setText("Ready")
 
     @Slot(QSystemTrayIcon.ActivationReason)
     def tray_icon_activated(self, reason):

@@ -10,6 +10,11 @@ Issue #554: Provides shared infrastructure for code analysis modules including:
 - LLM: Semantic analysis and intelligent pattern detection
 - Embedding Cache: Performance optimization for repeated embeddings
 
+Issue #640: NPU Worker Integration
+- When NPU worker is available, embedding generation is offloaded to NPU/GPU
+- Falls back to Ollama if NPU worker is unavailable
+- Provides 3-10x faster embedding generation on supported hardware
+
 This mixin can be added to any analyzer class to provide standardized
 infrastructure access following the pattern established in cross_language_patterns.
 
@@ -25,6 +30,11 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+# Issue #640: NPU Worker availability flag (lazy-checked)
+_npu_worker_available: Optional[bool] = None
+_npu_worker_check_time: float = 0
+NPU_CHECK_INTERVAL = 60  # Re-check NPU availability every 60 seconds
 
 # Default configuration
 DEFAULT_EMBEDDING_MODEL = "nomic-embed-text"
@@ -243,7 +253,10 @@ class AnalyticsInfrastructureMixin:
 
     async def _get_embedding(self, text: str) -> Optional[List[float]]:
         """
-        Get embedding for text using LLM.
+        Get embedding for text using NPU worker (preferred) or Ollama (fallback).
+
+        Issue #640: Attempts to use NPU worker for hardware-accelerated embedding
+        generation. Falls back to Ollama if NPU worker is unavailable.
 
         Args:
             text: Text to generate embedding for
@@ -254,7 +267,7 @@ class AnalyticsInfrastructureMixin:
         if not self._use_llm or not text.strip():
             return None
 
-        # Issue #554: Truncate text to prevent Ollama token limit errors
+        # Issue #554: Truncate text to prevent token limit errors
         # nomic-embed-text has ~8192 token limit, roughly 4 chars per token
         max_chars = 30000  # Conservative limit
         if len(text) > max_chars:
@@ -268,6 +281,83 @@ class AnalyticsInfrastructureMixin:
                 return cached
             self._metrics.cache_misses += 1
 
+        # Issue #640: Try NPU worker first for hardware acceleration
+        embedding = await self._get_embedding_via_npu(text)
+        if embedding:
+            self._metrics.embeddings_generated += 1
+            self._metrics.llm_requests += 1
+            if cache:
+                await cache.put(text, embedding)
+            return embedding
+
+        # Fallback to Ollama
+        embedding = await self._get_embedding_via_ollama(text)
+        if embedding:
+            self._metrics.embeddings_generated += 1
+            self._metrics.llm_requests += 1
+            if cache:
+                await cache.put(text, embedding)
+            return embedding
+
+        return None
+
+    async def _get_embedding_via_npu(self, text: str) -> Optional[List[float]]:
+        """
+        Generate embedding using NPU worker.
+
+        Issue #640: Offloads embedding generation to NPU/GPU for acceleration.
+
+        Args:
+            text: Text to embed
+
+        Returns:
+            Embedding vector or None if NPU worker unavailable/failed
+        """
+        global _npu_worker_available, _npu_worker_check_time
+        import time
+
+        # Check if we should re-verify NPU availability
+        current_time = time.time()
+        if _npu_worker_available is False:
+            if current_time - _npu_worker_check_time < NPU_CHECK_INTERVAL:
+                return None  # Skip NPU - recently confirmed unavailable
+
+        try:
+            from backend.services.npu_client import get_npu_client
+
+            client = get_npu_client()
+
+            # Check availability (uses cached result if recent)
+            if not await client.is_available():
+                _npu_worker_available = False
+                _npu_worker_check_time = current_time
+                return None
+
+            _npu_worker_available = True
+            embedding = await client.generate_embedding(text, self._embedding_model)
+            if embedding:
+                logger.debug("Embedding generated via NPU worker")
+                return embedding
+
+        except ImportError:
+            logger.debug("NPU client not available (import failed)")
+            _npu_worker_available = False
+            _npu_worker_check_time = current_time
+        except Exception as e:
+            logger.debug("NPU worker embedding failed: %s", e)
+
+        return None
+
+    async def _get_embedding_via_ollama(self, text: str) -> Optional[List[float]]:
+        """
+        Generate embedding using Ollama (fallback method).
+
+        Args:
+            text: Text to embed
+
+        Returns:
+            Embedding vector or None if failed
+        """
         try:
             import aiohttp
 
@@ -285,13 +375,10 @@ class AnalyticsInfrastructureMixin:
                         data = await response.json()
                         embedding = data.get("embedding")
                         if embedding:
-                            self._metrics.embeddings_generated += 1
-                            self._metrics.llm_requests += 1
-                            if cache:
-                                await cache.put(text, embedding)
+                            logger.debug("Embedding generated via Ollama")
                             return embedding
         except Exception as e:
-            logger.warning("Failed to generate embedding: %s", e)
+            logger.warning("Ollama embedding generation failed: %s", e)
             self._metrics.add_error(f"Embedding generation failed: {e}")
 
         return None
@@ -303,7 +390,7 @@ class AnalyticsInfrastructureMixin:
         Generate embeddings for multiple texts in parallel.
 
         Issue #554: Uses asyncio.gather for 3-5x faster batch embedding generation.
-        Limits concurrency to prevent overwhelming Ollama server.
+        Issue #640: Uses NPU worker batch endpoint when available for optimal throughput.
 
         Args:
             texts: List of texts to generate embeddings for
@@ -315,7 +402,16 @@ class AnalyticsInfrastructureMixin:
         if not self._use_llm or not texts:
             return [None] * len(texts)
 
-        # Create semaphore to limit concurrent requests
+        # Issue #640: Try NPU worker batch endpoint first (most efficient)
+        npu_results = await self._get_embeddings_batch_via_npu(texts)
+        if npu_results and len(npu_results) == len(texts):
+            # Check if we got valid results (not all None)
+            valid_count = sum(1 for r in npu_results if r is not None)
+            if valid_count > 0:
+                self._metrics.embeddings_generated += valid_count
+                return npu_results
+
+        # Fallback to parallel individual requests
         semaphore = asyncio.Semaphore(max_concurrent)
 
         async def get_with_limit(text: str) -> Optional[List[float]]:
@@ -331,6 +427,56 @@ class AnalyticsInfrastructureMixin:
             r if isinstance(r, list) else None
             for r in results
         ]
+
+    async def _get_embeddings_batch_via_npu(
+        self, texts: List[str]
+    ) -> Optional[List[Optional[List[float]]]]:
+        """
+        Generate embeddings batch using NPU worker.
+
+        Issue #640: Uses NPU worker's batch endpoint for efficient bulk processing.
+
+        Args:
+            texts: List of texts to embed
+
+        Returns:
+            List of embeddings or None if NPU worker unavailable
+        """
+        global _npu_worker_available, _npu_worker_check_time
+        import time
+
+        current_time = time.time()
+        if _npu_worker_available is False:
+            if current_time - _npu_worker_check_time < NPU_CHECK_INTERVAL:
+                return None
+
+        try:
+            from backend.services.npu_client import get_npu_client
+
+            client = get_npu_client()
+
+            if not await client.is_available():
+                _npu_worker_available = False
+                _npu_worker_check_time = current_time
+                return None
+
+            _npu_worker_available = True
+            result = await client.generate_embeddings(texts, self._embedding_model)
+            if result and result.embeddings:
+                logger.info(
+                    "Batch embeddings (%d) generated via NPU worker in %.1fms",
+                    len(texts),
+                    result.processing_time_ms
+                )
+                return result.embeddings
+
+        except ImportError:
+            _npu_worker_available = False
+            _npu_worker_check_time = current_time
+        except Exception as e:
+            logger.debug("NPU worker batch embedding failed: %s", e)
+
+        return None
 
     def _sanitize_redis_key(self, key: str, prefix: str = "") -> Optional[str]:
         """

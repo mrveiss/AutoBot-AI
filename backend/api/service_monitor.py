@@ -1000,6 +1000,30 @@ async def _check_frontend_quick() -> tuple:
         return "offline", "❌"
 
 
+async def _check_npu_worker_quick() -> tuple:
+    """Quick NPU Worker check (Issue #640). Returns (status, health, device_info)."""
+    try:
+        from backend.services.npu_client import get_npu_client
+
+        client = get_npu_client()
+        if await client.is_available():
+            device_info = await client.get_device_info()
+            if device_info:
+                device_type = "NPU" if device_info.is_npu else ("GPU" if device_info.is_gpu else "CPU")
+                return "online", "✅", {
+                    "device": device_info.selected_device,
+                    "device_type": device_type,
+                    "real_inference": device_info.real_inference,
+                }
+            return "online", "✅", {"device": "unknown"}
+        return "offline", "❌", None
+    except ImportError:
+        return "unavailable", "⚠️", {"error": "NPU client not installed"}
+    except Exception as e:
+        logger.debug("NPU worker check failed: %s", e)
+        return "offline", "❌", None
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_all_services",
@@ -1014,22 +1038,37 @@ async def get_all_services():
         redis_host = os.environ.get("REDIS_HOST", NetworkConstants.REDIS_VM_IP)
         redis_port = os.environ.get("REDIS_PORT", str(NetworkConstants.REDIS_PORT))
 
+        # Issue #640: NPU worker URL from environment
+        npu_host = os.environ.get("AUTOBOT_NPU_WORKER_HOST", NetworkConstants.NPU_WORKER_VM_IP)
+        npu_port = os.environ.get("AUTOBOT_NPU_WORKER_PORT", "8082")
+
         services = {
             "backend": {"status": "online", "url": ServiceURLs.BACKEND_LOCAL, "health": "✅"},
             "redis": {"status": "checking", "url": f"redis://{redis_host}:{redis_port}", "health": "⏳"},
             "ollama": {"status": "checking", "url": ServiceURLs.OLLAMA_LOCAL, "health": "⏳"},
             "frontend": {"status": "checking", "url": ServiceURLs.FRONTEND_VM, "health": "⏳"},
+            "npu_worker": {"status": "checking", "url": f"http://{npu_host}:{npu_port}", "health": "⏳"},
         }
 
         # Issue #619: Check services concurrently with asyncio.gather
-        (redis_status, redis_health), (ollama_status, ollama_health), (frontend_status, frontend_health) = await asyncio.gather(
+        # Issue #640: Added NPU worker check
+        (
+            (redis_status, redis_health),
+            (ollama_status, ollama_health),
+            (frontend_status, frontend_health),
+            (npu_status, npu_health, npu_details),
+        ) = await asyncio.gather(
             _check_redis_quick(),
             _check_ollama_quick(),
             _check_frontend_quick(),
+            _check_npu_worker_quick(),
         )
         services["redis"]["status"], services["redis"]["health"] = redis_status, redis_health
         services["ollama"]["status"], services["ollama"]["health"] = ollama_status, ollama_health
         services["frontend"]["status"], services["frontend"]["health"] = frontend_status, frontend_health
+        services["npu_worker"]["status"], services["npu_worker"]["health"] = npu_status, npu_health
+        if npu_details:
+            services["npu_worker"]["details"] = npu_details
 
         return {
             "timestamp": datetime.utcnow().isoformat(),

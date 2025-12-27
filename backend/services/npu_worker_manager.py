@@ -453,6 +453,37 @@ class NPUWorkerManager:
 
         return worker_details
 
+    async def update_worker_status_from_heartbeat(self, heartbeat) -> None:
+        """Update worker status from heartbeat telemetry (Issue #68).
+
+        Args:
+            heartbeat: WorkerHeartbeat model with worker status data
+        """
+        worker_id = heartbeat.worker_id
+
+        # Create status from heartbeat
+        status = NPUWorkerStatus(
+            id=worker_id,
+            status=WorkerStatus.ONLINE if heartbeat.status == "online" else WorkerStatus.ERROR,
+            current_load=heartbeat.current_load,
+            total_tasks_completed=heartbeat.total_tasks_completed,
+            total_tasks_failed=heartbeat.total_tasks_failed,
+            uptime_seconds=heartbeat.uptime_seconds,
+            last_heartbeat=datetime.utcnow(),
+            error_message=None,
+        )
+
+        # Store in Redis
+        await self._store_worker_status(worker_id, status)
+
+        # Emit status changed event if worker exists
+        if worker_id in self._workers:
+            worker_details = await self.get_worker(worker_id)
+            if worker_details:
+                await self._emit_worker_event("worker.heartbeat", worker_details)
+
+        logger.debug("Updated worker status from heartbeat: %s", worker_id)
+
     async def remove_worker(self, worker_id: str):
         """Remove worker from registry"""
         if worker_id not in self._workers:

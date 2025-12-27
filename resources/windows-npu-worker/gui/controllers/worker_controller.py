@@ -2,11 +2,39 @@
 Worker Controller - NPU Worker Process Management
 """
 
+import logging
 import subprocess
 import requests
 from pathlib import Path
 from PySide6.QtCore import QObject, Signal, Slot, QThread
 from typing import Optional
+
+logger = logging.getLogger(__name__)
+
+
+class StatusChecker(QThread):
+    """Background thread for checking worker status without blocking UI"""
+
+    status_checked = Signal(str)  # "running" or "stopped"
+
+    def __init__(self, api_url: str, timeout: float = 0.5):
+        super().__init__()
+        self.api_url = api_url
+        self.timeout = timeout
+
+    def run(self):
+        """Check if worker API is responding"""
+        try:
+            response = requests.get(
+                f"{self.api_url}/health",
+                timeout=self.timeout
+            )
+            if response.status_code == 200:
+                self.status_checked.emit("running")
+                return
+        except requests.RequestException:
+            pass
+        self.status_checked.emit("stopped")
 
 
 class MetricsWorker(QThread):
@@ -18,17 +46,24 @@ class MetricsWorker(QThread):
     def __init__(self, api_url: str):
         super().__init__()
         self.api_url = api_url
-        self.running = True
 
     def run(self):
         """Fetch metrics from API"""
         try:
             response = requests.get(
                 f"{self.api_url}/health",
-                timeout=5
+                timeout=2
             )
             if response.status_code == 200:
-                self.metrics_fetched.emit(response.json())
+                metrics = response.json()
+                # Also try to get stats
+                try:
+                    stats_response = requests.get(f"{self.api_url}/stats", timeout=2)
+                    if stats_response.status_code == 200:
+                        metrics.update(stats_response.json())
+                except Exception:
+                    pass
+                self.metrics_fetched.emit(metrics)
             else:
                 self.error_occurred.emit(f"API returned status {response.status_code}")
         except requests.RequestException as e:
@@ -44,9 +79,12 @@ class WorkerController(QObject):
 
     def __init__(self):
         super().__init__()
+        logger.debug("WorkerController.__init__")
         self.worker_process: Optional[subprocess.Popen] = None
         self.api_url = "http://localhost:8082"
-        self.worker_status = "stopped"
+        self.worker_status = "unknown"  # Start as unknown until first check
+        self._status_checker: Optional[StatusChecker] = None
+        self._metrics_worker: Optional[MetricsWorker] = None
 
         # Paths
         self.worker_dir = Path(__file__).parent.parent.parent
@@ -54,30 +92,37 @@ class WorkerController(QObject):
         self.python_exe = self.worker_dir / "venv" / "Scripts" / "python.exe"
 
     def get_status(self) -> str:
-        """Get current worker status"""
-        # Try to ping the API to confirm it's really running
-        try:
-            response = requests.get(f"{self.api_url}/health", timeout=2)
-            if response.status_code == 200:
-                self.worker_status = "running"
-                return "running"
-        except requests.RequestException:
-            pass
+        """Get cached worker status (non-blocking)"""
+        # Return cached status - actual checking done async
+        return self.worker_status
 
-        # Check if process exists
-        if self.worker_process and self.worker_process.poll() is None:
-            self.worker_status = "running"
-            return "running"
+    def check_status_async(self):
+        """Check worker status asynchronously (non-blocking)"""
+        # Don't start new check if one is already running
+        if self._status_checker is not None and self._status_checker.isRunning():
+            return
 
-        self.worker_status = "stopped"
-        return "stopped"
+        self._status_checker = StatusChecker(self.api_url, timeout=0.5)
+        self._status_checker.status_checked.connect(self._on_status_checked)
+        self._status_checker.start()
+
+    @Slot(str)
+    def _on_status_checked(self, status: str):
+        """Handle async status check result"""
+        old_status = self.worker_status
+        self.worker_status = status
+        if old_status != status:
+            logger.debug("Status changed: %s -> %s", old_status, status)
+            self.status_changed.emit(status)
 
     @Slot()
     def start_worker(self):
         """Start NPU worker process"""
+        from PySide6.QtCore import QTimer
+
         try:
-            # Check if already running
-            if self.get_status() == "running":
+            # Check if already running (use cached status)
+            if self.worker_status == "running":
                 self.error_occurred.emit("Worker is already running")
                 return
 
@@ -93,6 +138,8 @@ class WorkerController(QObject):
             else:
                 python_cmd = str(self.python_exe)
 
+            logger.info("Starting worker process: %s %s", python_cmd, self.worker_script)
+
             # Start worker process
             self.worker_process = subprocess.Popen(
                 [python_cmd, str(self.worker_script)],
@@ -102,19 +149,19 @@ class WorkerController(QObject):
                 creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
             )
 
-            # Wait a moment for startup
-            import time
-            time.sleep(2)
-
-            # Verify it started
-            if self.get_status() == "running":
-                self.worker_status = "running"
-                self.status_changed.emit("running")
-            else:
-                self.error_occurred.emit("Worker failed to start")
+            # Set status to starting and trigger async check after delay
+            # Don't block the GUI - use QTimer for delayed verification
+            self.worker_status = "starting"
+            QTimer.singleShot(2000, self._verify_worker_started)
 
         except Exception as e:
+            logger.error("Failed to start worker: %s", e, exc_info=True)
             self.error_occurred.emit(f"Failed to start worker: {e}")
+
+    def _verify_worker_started(self):
+        """Verify worker started after delay (called by QTimer)"""
+        # Trigger async status check - result will come via _on_status_checked
+        self.check_status_async()
 
     @Slot()
     def stop_worker(self):
@@ -133,39 +180,34 @@ class WorkerController(QObject):
 
     @Slot()
     def restart_worker(self):
-        """Restart NPU worker process"""
+        """Restart NPU worker process (non-blocking)"""
+        from PySide6.QtCore import QTimer
+
         self.stop_worker()
-        import time
-        time.sleep(1)
-        self.start_worker()
+        # Use QTimer instead of blocking sleep
+        QTimer.singleShot(1000, self.start_worker)
 
     @Slot()
     def fetch_metrics(self):
-        """Fetch metrics from worker API"""
+        """Fetch metrics from worker API (non-blocking)"""
         if self.get_status() != "running":
             return
 
+        # Don't start new fetch if one is already running
+        if self._metrics_worker is not None and self._metrics_worker.isRunning():
+            return
+
         # Create worker thread to fetch metrics
-        worker = MetricsWorker(self.api_url)
-        worker.metrics_fetched.connect(self._on_metrics_fetched)
-        worker.error_occurred.connect(self._on_metrics_error)
-        worker.start()
+        self._metrics_worker = MetricsWorker(self.api_url)
+        self._metrics_worker.metrics_fetched.connect(self._on_metrics_fetched)
+        self._metrics_worker.error_occurred.connect(self._on_metrics_error)
+        self._metrics_worker.start()
 
     @Slot(dict)
     def _on_metrics_fetched(self, metrics: dict):
-        """Handle fetched metrics"""
-        # Also fetch detailed stats
-        try:
-            response = requests.get(f"{self.api_url}/stats", timeout=5)
-            if response.status_code == 200:
-                stats = response.json()
-                # Merge metrics and stats
-                combined = {**metrics, **stats}
-                self.metrics_updated.emit(combined)
-            else:
-                self.metrics_updated.emit(metrics)
-        except Exception:
-            self.metrics_updated.emit(metrics)
+        """Handle fetched metrics (already includes stats from MetricsWorker)"""
+        # MetricsWorker already fetched stats, just emit the metrics
+        self.metrics_updated.emit(metrics)
 
     @Slot(str)
     def _on_metrics_error(self, error: str):

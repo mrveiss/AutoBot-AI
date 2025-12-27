@@ -103,6 +103,59 @@ class PerformanceMetricsRecorder(BaseMetricsRecorder):
         )
 
         # =========================================================================
+        # Per-Worker NPU Metrics (Issue #68)
+        # =========================================================================
+        self.npu_worker_status = Gauge(
+            "autobot_npu_worker_status",
+            "NPU worker status (1=online, 0=offline)",
+            ["worker_id", "platform"],
+            registry=self.registry,
+        )
+
+        self.npu_worker_load = Gauge(
+            "autobot_npu_worker_load",
+            "Current load on NPU worker",
+            ["worker_id"],
+            registry=self.registry,
+        )
+
+        self.npu_worker_tasks_completed = Counter(
+            "autobot_npu_worker_tasks_completed_total",
+            "Total tasks completed by NPU worker",
+            ["worker_id"],
+            registry=self.registry,
+        )
+
+        self.npu_worker_tasks_failed = Counter(
+            "autobot_npu_worker_tasks_failed_total",
+            "Total tasks failed on NPU worker",
+            ["worker_id"],
+            registry=self.registry,
+        )
+
+        self.npu_worker_uptime = Gauge(
+            "autobot_npu_worker_uptime_seconds",
+            "NPU worker uptime in seconds",
+            ["worker_id"],
+            registry=self.registry,
+        )
+
+        self.npu_worker_response_time = Histogram(
+            "autobot_npu_worker_response_time_seconds",
+            "NPU worker response time in seconds",
+            ["worker_id"],
+            buckets=[0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
+            registry=self.registry,
+        )
+
+        self.npu_worker_heartbeat_timestamp = Gauge(
+            "autobot_npu_worker_last_heartbeat_timestamp",
+            "Unix timestamp of last heartbeat from NPU worker",
+            ["worker_id"],
+            registry=self.registry,
+        )
+
+        # =========================================================================
         # Performance Metrics
         # =========================================================================
         self.performance_score = Gauge(
@@ -219,6 +272,51 @@ class PerformanceMetricsRecorder(BaseMetricsRecorder):
     def record_npu_inference(self, model_type: str) -> None:
         """Record an NPU inference operation."""
         self.npu_inference_total.labels(model_type=model_type).inc()
+
+    # =========================================================================
+    # Per-Worker NPU Methods (Issue #68)
+    # =========================================================================
+
+    def update_npu_worker_status(
+        self,
+        worker_id: str,
+        platform: str,
+        online: bool,
+    ) -> None:
+        """Update NPU worker status."""
+        self.npu_worker_status.labels(worker_id=worker_id, platform=platform).set(
+            1 if online else 0
+        )
+
+    def update_npu_worker_metrics(
+        self,
+        worker_id: str,
+        current_load: int,
+        uptime_seconds: float,
+    ) -> None:
+        """Update NPU worker load and uptime metrics."""
+        self.npu_worker_load.labels(worker_id=worker_id).set(current_load)
+        self.npu_worker_uptime.labels(worker_id=worker_id).set(uptime_seconds)
+
+    def record_npu_worker_task_completed(self, worker_id: str) -> None:
+        """Record a completed task on NPU worker."""
+        self.npu_worker_tasks_completed.labels(worker_id=worker_id).inc()
+
+    def record_npu_worker_task_failed(self, worker_id: str) -> None:
+        """Record a failed task on NPU worker."""
+        self.npu_worker_tasks_failed.labels(worker_id=worker_id).inc()
+
+    def record_npu_worker_response_time(
+        self, worker_id: str, duration_seconds: float
+    ) -> None:
+        """Record NPU worker response time."""
+        self.npu_worker_response_time.labels(worker_id=worker_id).observe(
+            duration_seconds
+        )
+
+    def update_npu_worker_heartbeat(self, worker_id: str, timestamp: float) -> None:
+        """Update last heartbeat timestamp for NPU worker."""
+        self.npu_worker_heartbeat_timestamp.labels(worker_id=worker_id).set(timestamp)
 
     # =========================================================================
     # Performance Score Methods

@@ -170,42 +170,30 @@ if (-not $SkipFirewall) {
     }
 }
 
-# Download NSSM if not present
-$nssmPath = Join-Path $InstallPath "nssm\nssm.exe"
+# Setup NSSM (bundled with installation package)
+$arch = if ([Environment]::Is64BitOperatingSystem) { "win64" } else { "win32" }
+$nssmDir = Join-Path $InstallPath "nssm"
+$nssmPath = Join-Path $nssmDir "nssm.exe"
+
+# Check if NSSM is already in place
 if (-not (Test-Path $nssmPath)) {
-    Write-Info "NSSM not found, downloading..."
-    try {
-        $nssmDir = Join-Path $InstallPath "nssm"
-        if (-not (Test-Path $nssmDir)) {
-            New-Item -ItemType Directory -Path $nssmDir -Force | Out-Null
-        }
+    Write-Info "Setting up NSSM (bundled)..."
 
-        # Download NSSM (2.24)
-        $nssmUrl = "https://nssm.cc/release/nssm-2.24.zip"
-        $nssmZip = Join-Path $env:TEMP "nssm.zip"
+    # NSSM is bundled in the installation package under nssm/win64 or nssm/win32
+    $bundledNssmPath = Join-Path $InstallPath "nssm\$arch\nssm.exe"
 
-        Write-Info "Downloading NSSM from $nssmUrl..."
-        Invoke-WebRequest -Uri $nssmUrl -OutFile $nssmZip -UseBasicParsing
-
-        # Extract NSSM
-        Write-Info "Extracting NSSM..."
-        Expand-Archive -Path $nssmZip -DestinationPath $env:TEMP -Force
-
-        # Copy appropriate architecture
-        $arch = if ([Environment]::Is64BitOperatingSystem) { "win64" } else { "win32" }
-        $nssmExeSource = Join-Path $env:TEMP "nssm-2.24\$arch\nssm.exe"
-        Copy-Item -Path $nssmExeSource -Destination $nssmPath -Force
-
-        # Cleanup
-        Remove-Item -Path $nssmZip -Force
-        Remove-Item -Path (Join-Path $env:TEMP "nssm-2.24") -Recurse -Force
-
-        Write-Success "NSSM downloaded and installed"
-    } catch {
-        Write-Error "Failed to download NSSM: $_"
-        Write-Info "Please manually download NSSM from https://nssm.cc/ and place nssm.exe in: $nssmDir"
+    if (Test-Path $bundledNssmPath) {
+        # Copy from bundled location to main nssm directory
+        Copy-Item -Path $bundledNssmPath -Destination $nssmPath -Force
+        Write-Success "NSSM configured from bundled package"
+    } else {
+        Write-Error "NSSM not found in bundled package at: $bundledNssmPath"
+        Write-Info "The installation package appears to be incomplete."
+        Write-Info "Please re-download the full NPU Worker package."
         exit 1
     }
+} else {
+    Write-Success "NSSM already configured"
 }
 
 # Install Windows Service
@@ -213,9 +201,20 @@ Write-Info "Installing Windows Service..."
 $appPath = Join-Path $InstallPath "app\npu_worker.py"
 $logPath = Join-Path $InstallPath "logs\service.log"
 
-# Remove service if exists
-& $nssmPath stop AutoBotNPUWorker 2>&1 | Out-Null
-& $nssmPath remove AutoBotNPUWorker confirm 2>&1 | Out-Null
+# Remove existing service if present (ignore errors if service doesn't exist)
+Write-Info "  Checking for existing service..."
+try {
+    $existingService = Get-Service -Name "AutoBotNPUWorker" -ErrorAction SilentlyContinue
+    if ($existingService) {
+        Write-Info "  Removing existing service..."
+        & $nssmPath stop AutoBotNPUWorker 2>&1 | Out-Null
+        Start-Sleep -Seconds 2
+        & $nssmPath remove AutoBotNPUWorker confirm 2>&1 | Out-Null
+        Start-Sleep -Seconds 1
+    }
+} catch {
+    # Service doesn't exist, that's fine for fresh install
+}
 
 # Install service
 & $nssmPath install AutoBotNPUWorker $pythonExe $appPath

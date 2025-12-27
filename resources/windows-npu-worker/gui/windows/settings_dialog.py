@@ -237,11 +237,11 @@ class SettingsDialog(QDialog):
             self.service_workers.setValue(service.get('workers', 1))
 
             backend = config.get('backend', {})
-            self.backend_host.setText(backend.get('host', '172.16.168.20'))
+            self.backend_host.setText(backend.get('host', ''))
             self.backend_port.setValue(backend.get('port', 8001))
 
             redis = config.get('redis', {})
-            self.redis_host.setText(redis.get('host', '172.16.168.23'))
+            self.redis_host.setText(redis.get('host', ''))
             self.redis_port.setValue(redis.get('port', 6379))
 
             # Load NPU settings
@@ -370,7 +370,7 @@ class SettingsDialog(QDialog):
 
         if file_path:
             try:
-                with open(file_path, 'r') as f:
+                with open(file_path, 'r', encoding='utf-8') as f:
                     yaml_text = f.read()
                 self.yaml_editor.setPlainText(yaml_text)
             except Exception as e:

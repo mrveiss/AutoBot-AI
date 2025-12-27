@@ -74,11 +74,11 @@ def _get_interfaces_fallback() -> List[Dict[str, str]]:
             pass
 
         # Also try getting IP by connecting to external address
+        sock = None
         try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(('8.8.8.8', 80))
-            local_ip = s.getsockname()[0]
-            s.close()
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.connect(('8.8.8.8', 80))
+            local_ip = sock.getsockname()[0]
 
             if local_ip and not local_ip.startswith('127.'):
                 # Check if we already have this IP
@@ -91,6 +91,13 @@ def _get_interfaces_fallback() -> List[Dict[str, str]]:
                     })
         except Exception:
             pass
+        finally:
+            # Proper socket cleanup to prevent resource leak
+            if sock is not None:
+                try:
+                    sock.close()
+                except Exception:
+                    pass
 
     except Exception:
         pass
@@ -142,10 +149,27 @@ def get_primary_ip() -> Optional[str]:
 
 def get_platform_info() -> Dict[str, str]:
     """Get platform information"""
+    system = platform.system()
+    release = platform.release()
+    version = platform.version()
+
+    # Windows 11 detection: Windows 11 reports as version 10 but build >= 22000
+    # Example version string: "10.0.22631" (Windows 11 23H2)
+    if system == "Windows" and release == "10":
+        try:
+            # Parse build number from version string (e.g., "10.0.22631")
+            parts = version.split('.')
+            if len(parts) >= 3:
+                build_number = int(parts[2])
+                if build_number >= 22000:
+                    release = "11"
+        except (ValueError, IndexError):
+            pass
+
     info = {
-        'system': platform.system(),
-        'release': platform.release(),
-        'version': platform.version(),
+        'system': system,
+        'release': release,
+        'version': version,
         'machine': platform.machine(),
         'processor': platform.processor(),
     }

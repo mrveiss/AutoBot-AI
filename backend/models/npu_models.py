@@ -283,6 +283,41 @@ class NPUWorkerDetails(BaseModel):
         }
 
 
+class WorkerHeartbeat(BaseModel):
+    """Heartbeat message from NPU worker for active telemetry"""
+    worker_id: str = Field(..., description="Worker identifier")
+    status: str = Field(default="online", description="Current worker status")
+    platform: str = Field(default="unknown", description="Worker platform (linux, windows, macos)")
+    url: str = Field(..., description="Worker's accessible URL for health checks")
+    current_load: int = Field(default=0, ge=0, description="Current number of active tasks")
+    total_tasks_completed: int = Field(default=0, ge=0, description="Total tasks completed")
+    total_tasks_failed: int = Field(default=0, ge=0, description="Total tasks failed")
+    uptime_seconds: float = Field(default=0.0, ge=0.0, description="Worker uptime in seconds")
+    npu_available: bool = Field(default=False, description="Whether NPU hardware is available")
+    loaded_models: list = Field(default_factory=list, description="List of loaded model names")
+    metrics: Optional[Dict[str, Any]] = Field(default=None, description="Performance metrics")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "worker_id": "windows_npu_worker_abc123",
+                "status": "online",
+                "platform": "windows",
+                "url": "http://192.168.168.21:8082",
+                "current_load": 1,
+                "total_tasks_completed": 42,
+                "total_tasks_failed": 2,
+                "uptime_seconds": 3600.5,
+                "npu_available": True,
+                "loaded_models": ["nomic-embed-text"],
+                "metrics": {
+                    "avg_response_time_ms": 25.5,
+                    "cache_hit_rate": 85.2
+                }
+            }
+        }
+
+
 class WorkerTestResult(BaseModel):
     """Result of worker connection test"""
     worker_id: str = Field(..., description="Worker identifier")

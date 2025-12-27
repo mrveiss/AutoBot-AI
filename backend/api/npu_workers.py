@@ -14,8 +14,13 @@ Endpoints:
 - DELETE /api/npu/workers/{id} - Remove worker
 - POST   /api/npu/workers/{id}/test - Test worker connection
 - GET    /api/npu/workers/{id}/metrics - Get worker metrics
+- POST   /api/npu/workers/{id}/unpair - Unpair worker from master (Issue #640)
+- POST   /api/npu/workers/{id}/repair - Re-pair worker with master (Issue #640)
 - GET    /api/npu/load-balancing - Get load balancing config
 - PUT    /api/npu/load-balancing - Update load balancing config
+- GET    /api/npu/status - Get NPU worker pool status
+- POST   /api/npu/workers/heartbeat - Receive worker heartbeat/telemetry
+- POST   /api/npu/workers/bootstrap - Bootstrap configuration for workers
 """
 
 import logging
@@ -29,6 +34,7 @@ from backend.models.npu_models import (
     NPUWorkerConfig,
     NPUWorkerDetails,
     NPUWorkerMetrics,
+    WorkerHeartbeat,
     WorkerTestResult,
 )
 from backend.services.npu_worker_manager import get_worker_manager
@@ -451,4 +457,376 @@ async def get_npu_status():
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve NPU status: {str(e)}",
+        )
+
+
+# ==============================================
+# WORKER RE-PAIRING ENDPOINTS (Issue #640)
+# ==============================================
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="unpair_worker",
+    error_code_prefix="NPU_WORKERS",
+)
+@router.post("/npu/workers/{worker_id}/unpair")
+async def unpair_worker(worker_id: str):
+    """
+    Unpair a worker from the master (Issue #640).
+
+    This clears the worker's registration, allowing it to re-pair
+    when it next starts or receives a bootstrap request.
+
+    Args:
+        worker_id: Worker identifier to unpair
+
+    Returns:
+        Confirmation of unpair action
+
+    Raises:
+        404: If worker not found
+        500: If unpair fails
+    """
+    try:
+        manager = await get_worker_manager()
+        worker = await manager.get_worker(worker_id)
+
+        if not worker:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Worker '{worker_id}' not found",
+            )
+
+        # Remove worker from registry
+        await manager.remove_worker(worker_id)
+
+        logger.info("Successfully unpaired worker: %s", worker_id)
+        return {
+            "success": True,
+            "worker_id": worker_id,
+            "message": "Worker unpaired successfully. It will re-register on next startup.",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to unpair worker %s: %s", worker_id, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to unpair worker: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="repair_worker",
+    error_code_prefix="NPU_WORKERS",
+)
+@router.post("/npu/workers/{worker_id}/repair")
+async def repair_worker(worker_id: str, request: dict = None):
+    """
+    Re-pair a worker with the master (Issue #640).
+
+    This initiates a re-pairing sequence:
+    1. Removes existing worker registration (if any)
+    2. Optionally sends command to worker to clear its local pairing
+    3. Returns new bootstrap configuration for immediate re-registration
+
+    Args:
+        worker_id: Worker identifier
+        request: Optional dict with:
+            - url: Worker URL (if different from registered)
+            - force: Force re-pair even if worker is active
+
+    Returns:
+        New bootstrap configuration for the worker
+
+    Raises:
+        400: If re-pair is not possible
+        500: If re-pair fails
+    """
+    from datetime import datetime
+
+    try:
+        manager = await get_worker_manager()
+        worker = await manager.get_worker(worker_id)
+
+        request = request or {}
+        worker_url = request.get("url", "")
+        force = request.get("force", False)
+
+        # Get existing worker info before removal
+        if worker:
+            worker_url = worker_url or worker.config.url
+            platform = worker.config.platform
+
+            # Check if worker is currently active
+            if worker.status.status == "online" and not force:
+                logger.warning("Attempted to re-pair active worker %s without force flag", worker_id)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Worker is currently active. Use force=true to re-pair anyway.",
+                )
+
+            # Remove existing registration
+            await manager.remove_worker(worker_id)
+            logger.info("Removed existing registration for worker: %s", worker_id)
+        else:
+            platform = request.get("platform", "unknown")
+
+        # Generate new worker ID if needed
+        import uuid
+        new_worker_id = f"{platform}_npu_worker_{uuid.uuid4().hex[:8]}"
+
+        # Get fresh bootstrap config
+        from src.config.ssot_config import config as ssot_config
+
+        redis_config = {
+            "host": ssot_config.redis.host,
+            "port": ssot_config.redis.port,
+            "password": ssot_config.redis.password,
+            "db": 0,
+            "socket_timeout": 5,
+            "max_connections": 10,
+        }
+
+        backend_config = {
+            "host": ssot_config.backend.host,
+            "port": ssot_config.backend.port,
+            "register_with_backend": True,
+            "health_check_interval": 30,
+        }
+
+        logger.info(
+            "Re-pair initiated for worker %s -> new ID: %s",
+            worker_id, new_worker_id
+        )
+
+        return {
+            "success": True,
+            "old_worker_id": worker_id,
+            "new_worker_id": new_worker_id,
+            "config": {
+                "redis": redis_config,
+                "backend": backend_config,
+                "models": {
+                    "autoload_defaults": True,
+                    "default_embedding": "nomic-embed-text",
+                    "default_llm": "llama3.2:1b-instruct-q4_K_M",
+                },
+                "logging": {"level": "INFO", "format": "structured"},
+            },
+            "server_timestamp": datetime.utcnow().isoformat() + "Z",
+            "message": "Worker unpaired. Use provided config for re-registration.",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to re-pair worker %s: %s", worker_id, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to re-pair worker: {str(e)}",
+        )
+
+
+# ==============================================
+# WORKER HEARTBEAT/TELEMETRY ENDPOINTS
+# ==============================================
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="worker_heartbeat",
+    error_code_prefix="NPU_WORKERS",
+)
+@router.post("/npu/workers/heartbeat")
+async def worker_heartbeat(heartbeat: WorkerHeartbeat):
+    """
+    Receive heartbeat/telemetry from NPU worker.
+
+    Workers can proactively send their status instead of waiting for
+    backend health checks. This enables:
+    - Faster status updates
+    - Rich telemetry data (metrics, models loaded)
+    - Worker self-registration
+
+    Args:
+        heartbeat: Heartbeat data from worker
+
+    Returns:
+        Acknowledgement with server timestamp
+    """
+    import time
+    from datetime import datetime
+
+    try:
+        manager = await get_worker_manager()
+
+        # Check if worker exists, if not try to register it
+        worker = await manager.get_worker(heartbeat.worker_id)
+
+        if not worker:
+            # Auto-register new worker from heartbeat
+            logger.info("Auto-registering new worker from heartbeat: %s", heartbeat.worker_id)
+            from backend.models.npu_models import NPUWorkerConfig
+
+            new_config = NPUWorkerConfig(
+                id=heartbeat.worker_id,
+                name=f"Auto-registered: {heartbeat.worker_id}",
+                url=heartbeat.url,
+                platform=heartbeat.platform,
+                enabled=True,
+                priority=5,
+                weight=1,
+                max_concurrent_tasks=4,
+            )
+            try:
+                await manager.add_worker(new_config)
+                logger.info("Successfully auto-registered worker: %s", heartbeat.worker_id)
+            except ValueError as e:
+                logger.warning("Worker registration from heartbeat failed: %s", e)
+
+        # Update worker status from heartbeat
+        await manager.update_worker_status_from_heartbeat(heartbeat)
+
+        # Update Prometheus metrics
+        try:
+            from src.monitoring.prometheus_metrics import get_metrics_manager
+
+            metrics = get_metrics_manager()
+            if metrics and hasattr(metrics, 'performance'):
+                perf = metrics.performance
+                perf.update_npu_worker_status(
+                    heartbeat.worker_id, heartbeat.platform, heartbeat.status == "online"
+                )
+                perf.update_npu_worker_metrics(
+                    heartbeat.worker_id, heartbeat.current_load, heartbeat.uptime_seconds
+                )
+                perf.update_npu_worker_heartbeat(heartbeat.worker_id, time.time())
+        except Exception as metrics_error:
+            logger.warning("Failed to update Prometheus metrics: %s", metrics_error)
+
+        logger.debug("Received heartbeat from worker %s: status=%s",
+                     heartbeat.worker_id, heartbeat.status)
+
+        return {
+            "acknowledged": True,
+            "worker_id": heartbeat.worker_id,
+            "server_timestamp": datetime.utcnow().isoformat() + "Z",
+            "message": "Heartbeat received",
+        }
+
+    except Exception as e:
+        logger.error("Failed to process heartbeat from %s: %s", heartbeat.worker_id, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process heartbeat: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="worker_bootstrap",
+    error_code_prefix="NPU_WORKERS",
+)
+@router.post("/npu/workers/bootstrap")
+async def worker_bootstrap(request: dict):
+    """
+    Bootstrap configuration endpoint for NPU workers.
+
+    Workers call this on startup to receive their configuration from the
+    main backend. This eliminates the need to hardcode credentials in workers.
+
+    Issue #640: If worker provides an existing worker_id, reuse it instead of
+    generating a new one. This prevents duplicate registrations on restart.
+
+    Args:
+        request: Bootstrap request containing:
+            - worker_id: Worker identifier (or "auto" for auto-generated)
+            - platform: Worker platform (windows, linux, macos)
+            - url: Worker's accessible URL
+            - capabilities: Optional list of worker capabilities
+
+    Returns:
+        Configuration for the worker including:
+            - redis: Redis connection details (host, port, password, db)
+            - backend: Backend connection details
+            - models: Model configuration
+            - logging: Logging configuration
+            - worker_id: Assigned worker ID (reused if provided, generated if "auto")
+    """
+    from datetime import datetime
+
+    try:
+        worker_id = request.get("worker_id", "auto")
+        platform = request.get("platform", "unknown")
+        worker_url = request.get("url", "")
+        capabilities = request.get("capabilities", [])
+
+        # Issue #640: Only generate new ID if "auto" - reuse existing IDs
+        if worker_id == "auto" or not worker_id:
+            import uuid
+            worker_id = f"{platform}_npu_worker_{uuid.uuid4().hex[:8]}"
+            logger.info("Generated new worker ID: %s", worker_id)
+        else:
+            logger.info("Reusing existing worker ID: %s", worker_id)
+
+        # Get Redis configuration from SSOT config
+        from src.config.ssot_config import config as ssot_config
+
+        redis_config = {
+            "host": ssot_config.redis.host,
+            "port": ssot_config.redis.port,
+            "password": ssot_config.redis.password,
+            "db": 0,  # Default db for workers
+            "socket_timeout": 5,
+            "max_connections": 10,
+        }
+
+        # Backend config for telemetry
+        backend_config = {
+            "host": ssot_config.backend.host,
+            "port": ssot_config.backend.port,
+            "register_with_backend": True,
+            "health_check_interval": 30,
+        }
+
+        # Model configuration
+        models_config = {
+            "autoload_defaults": True,
+            "default_embedding": "nomic-embed-text",
+            "default_llm": "llama3.2:1b-instruct-q4_K_M",
+        }
+
+        # Logging configuration
+        logging_config = {
+            "level": "INFO",
+            "format": "structured",
+        }
+
+        logger.info(
+            "Bootstrap config sent to worker %s (%s) at %s",
+            worker_id, platform, worker_url
+        )
+
+        return {
+            "success": True,
+            "worker_id": worker_id,
+            "config": {
+                "redis": redis_config,
+                "backend": backend_config,
+                "models": models_config,
+                "logging": logging_config,
+            },
+            "server_timestamp": datetime.utcnow().isoformat() + "Z",
+            "message": "Bootstrap configuration provided",
+        }
+
+    except Exception as e:
+        logger.error("Failed to bootstrap worker: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to bootstrap worker: {str(e)}",
         )
