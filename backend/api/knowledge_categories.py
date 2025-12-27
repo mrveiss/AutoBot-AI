@@ -51,6 +51,8 @@ def _raise_kb_error(error_message: str, default_code: int = 500) -> None:
     error_lower = error_message.lower()
     if "not found" in error_lower:
         raise HTTPException(status_code=404, detail=error_message)
+    if "already exists" in error_lower or "has children" in error_lower:
+        raise HTTPException(status_code=409, detail=error_message)
     raise HTTPException(status_code=default_code, detail=error_message)
 
 
