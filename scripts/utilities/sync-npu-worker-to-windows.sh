@@ -217,8 +217,11 @@ else
     echo "  4. Verify the service is running:"
     echo -e "     ${CYAN}.\\scripts\\check-health.ps1${NC}"
     echo ""
-    echo "  Or test NPU availability directly:"
-    echo -e "     ${CYAN}python -c \"from openvino import Core; c=Core(); print(c.available_devices)\"${NC}"
+    echo "  Or test ONNX Runtime OpenVINO EP availability:"
+    echo -e "     ${CYAN}python -c \"import onnxruntime as ort; print(ort.get_available_providers())\"${NC}"
+    echo ""
+    echo "  Check for Intel NPU device:"
+    echo -e "     ${CYAN}python -c \"from openvino import Core; print(Core().available_devices)\"${NC}"
     echo ""
 fi
 
