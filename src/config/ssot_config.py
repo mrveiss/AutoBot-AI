@@ -219,6 +219,9 @@ class RedisConfig(BaseSettings):
         extra="ignore",
     )
 
+    # Enable/disable Redis
+    enabled: bool = Field(default=True, alias="AUTOBOT_REDIS_ENABLED")
+
     # Database assignments
     db_main: int = Field(default=0, alias="AUTOBOT_REDIS_DB_MAIN")
     db_knowledge: int = Field(default=1, alias="AUTOBOT_REDIS_DB_KNOWLEDGE")

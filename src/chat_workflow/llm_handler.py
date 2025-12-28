@@ -69,10 +69,17 @@ class LLMHandlerMixin:
         return f"http://{ollama_host}:{ollama_port}/api/generate"
 
     def _get_ollama_endpoint(self) -> str:
-        """Get Ollama endpoint from config with fallbacks."""
+        """Get Ollama endpoint from config with fallbacks.
+
+        Returns the Ollama API endpoint URL including /api/generate path.
+        Config may store just the base URL, so we ensure the path is appended.
+        """
         try:
             endpoint = global_config_manager.get_nested("backend.llm.ollama.endpoint", None)
             if endpoint and endpoint.startswith(_VALID_URL_SCHEMES):  # Issue #380
+                # Ensure /api/generate path is included
+                if not endpoint.endswith("/api/generate"):
+                    endpoint = endpoint.rstrip("/") + "/api/generate"
                 return endpoint
             logger.error("Invalid endpoint URL: %s, using config-based default", endpoint)
             return self._get_ollama_endpoint_fallback()

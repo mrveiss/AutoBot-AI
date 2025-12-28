@@ -156,24 +156,16 @@ class ServiceConfigMixin:
         return self.get_nested(section, {})
 
     def get_redis_config(self) -> Dict[str, Any]:
-        """Get Redis configuration with fallback defaults"""
-        redis_config = self.get_nested("memory.redis", {})
+        """Get Redis configuration from SSOT config (single source of truth)."""
+        from src.config.ssot_config import config as ssot
 
-        # Use self.get_host/get_port for consistency (Issue #63 consolidation)
-        default_host = self.get_host("redis")
-        default_port = self.get_port("redis")
-
-        # FIX: Don't override password with None - let it come from redis_config
-        defaults = {
-            "enabled": True,
-            "host": default_host,
-            "port": default_port,
-            "db": 1,
+        return {
+            "enabled": ssot.redis.enabled,
+            "host": ssot.vm.redis,
+            "port": ssot.port.redis,
+            "password": ssot.redis.password,
+            "db": ssot.redis.db_main,
         }
-
-        from src.config.loader import deep_merge
-
-        return deep_merge(defaults, redis_config)
 
     def get_ollama_url(self) -> str:
         """Get the Ollama service URL from configuration (backward compatibility)"""
