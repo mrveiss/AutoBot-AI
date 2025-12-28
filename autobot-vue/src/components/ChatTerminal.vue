@@ -72,7 +72,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, shallowRef, computed, onMounted, onUnmounted, watch } from 'vue'
 import BaseXTerminal from '@/components/terminal/BaseXTerminal.vue'
 import { useTerminalStore } from '@/composables/useTerminalStore'
 import { useTerminalService } from '@/services/TerminalService'
@@ -100,7 +100,9 @@ const terminalService = useTerminalService()
 
 // Refs
 const baseTerminalRef = ref<InstanceType<typeof BaseXTerminal>>()
-const terminal = ref<Terminal>()
+// CRITICAL: Use shallowRef for xterm Terminal to prevent Vue's deep reactivity
+// from causing "Cannot read properties of undefined (reading 'dimensions')" errors
+const terminal = shallowRef<Terminal>()
 const mounted = ref(false)
 const isConnected = ref(false)
 

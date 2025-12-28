@@ -5,7 +5,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, shallowRef, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -43,9 +43,13 @@ const emit = defineEmits<{
 // Refs
 const containerRef = ref<HTMLElement>()
 const terminalRef = ref<HTMLElement>()
-const terminal = ref<Terminal>()
-const fitAddon = ref<FitAddon>()
-const webLinksAddon = ref<WebLinksAddon>()
+// CRITICAL: Use shallowRef for xterm.js objects to prevent Vue's reactivity
+// from proxying the internal state. Deep reactivity causes "Cannot read
+// properties of undefined (reading 'dimensions')" errors when Vue's proxy
+// intercepts xterm's internal property access.
+const terminal = shallowRef<Terminal>()
+const fitAddon = shallowRef<FitAddon>()
+const webLinksAddon = shallowRef<WebLinksAddon>()
 // Track whether addons have been successfully loaded to prevent dispose errors
 const addonsLoaded = ref(false)
 
