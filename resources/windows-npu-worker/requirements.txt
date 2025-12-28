@@ -43,6 +43,7 @@ einops>=0.7.0
 
 # ONNX model format and export
 onnx>=1.14.0
+onnxscript>=0.1.0
 
 # =============================================================================
 # PyTorch (CPU-only for model downloading and ONNX export)
