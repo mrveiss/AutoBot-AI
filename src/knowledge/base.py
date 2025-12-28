@@ -165,18 +165,18 @@ class KnowledgeBaseCore:
     async def _configure_llama_index(self):
         """Configure LlamaIndex with Ollama models"""
         try:
-            # Issue #649: Use SSOT config for Ollama URL
-            from src.config.ssot_config import config as ssot_config
+            # Issue #649: Use SSOT config for Ollama URL and LLM model
+            from src.config.ssot_config import config as ssot_config, get_default_llm_model
             ollama_url = ssot_config.ollama_url
+            default_model = get_default_llm_model()
             logger.debug("Using Ollama URL from SSOT config: %s", ollama_url)
-            # Use kb_timeouts fallback directly since config.get_timeout() has different signature
-            try:
-                llm_timeout = config.get_timeout("llm", "default")
-            except Exception:
-                llm_timeout = kb_timeouts.llm_default
+            logger.debug("Using default LLM model from SSOT config: %s", default_model)
+
+            # Use kb_timeouts for LLM timeout
+            llm_timeout = kb_timeouts.llm_default
 
             Settings.llm = LlamaIndexOllamaLLM(
-                model=config.get_default_llm_model(),
+                model=default_model,
                 request_timeout=llm_timeout,
                 base_url=ollama_url,
             )
