@@ -351,6 +351,55 @@ class LLMInterface:
             logger.error("Ollama connection check failed: %s", e)
             return False
 
+    async def _check_cache(
+        self, messages: list, model_name: str, provider: str,
+        request_id: str, start_time: float, **kwargs
+    ) -> tuple[Optional[LLMResponse], Optional[str]]:
+        """
+        Check L1/L2 cache for existing response.
+
+        Returns:
+            Tuple of (cached_response or None, cache_key or None)
+        """
+        cache_key = self._response_cache.generate_cache_key(
+            messages=messages,
+            model=model_name,
+            temperature=kwargs.get("temperature", self.settings.temperature),
+            top_k=kwargs.get("top_k", self.settings.top_k),
+            top_p=kwargs.get("top_p", self.settings.top_p),
+        )
+        cached = await self._response_cache.get(cache_key)
+        if cached:
+            self._metrics["cache_hits"] += 1
+            processing_time = time.time() - start_time
+            logger.debug(f"Cache hit for request {request_id[:8]}...")
+            return LLMResponse(
+                content=cached.content,
+                model=cached.model,
+                provider=provider,
+                processing_time=processing_time,
+                request_id=request_id,
+                cached=True,
+                metadata=cached.metadata or {},
+            ), cache_key
+        self._metrics["cache_misses"] += 1
+        return None, cache_key
+
+    async def _store_in_cache(
+        self, cache_key: str, response: LLMResponse, request_id: str
+    ) -> None:
+        """Store successful response in cache."""
+        await self._response_cache.set(
+            cache_key,
+            CachedResponse(
+                content=response.content,
+                model=response.model,
+                tokens_used=response.tokens_used,
+                processing_time=response.processing_time,
+                metadata={"request_id": request_id},
+            ),
+        )
+
     # Main chat completion method
     async def chat_completion(
         self, messages: list, llm_type: str = "orchestrator", **kwargs
@@ -373,45 +422,20 @@ class LLMInterface:
         skip_cache = kwargs.pop("skip_cache", False)
 
         try:
-            # Update metrics
             self._metrics["total_requests"] += 1
-
-            # Determine provider and model
-            provider, model_name = self._determine_provider_and_model(
-                llm_type, **kwargs
-            )
-
-            # Setup system prompt
+            provider, model_name = self._determine_provider_and_model(llm_type, **kwargs)
             messages = self._setup_system_prompt(messages, llm_type)
 
             # Issue #551: Check L1/L2 cache first (unless skip_cache=True)
+            cache_key = None
             if not skip_cache and not kwargs.get("stream", False):
-                cache_key = self._response_cache.generate_cache_key(
-                    messages=messages,
-                    model=model_name,
-                    temperature=kwargs.get("temperature", self.settings.temperature),
-                    top_k=kwargs.get("top_k", self.settings.top_k),
-                    top_p=kwargs.get("top_p", self.settings.top_p),
+                cached_response, cache_key = await self._check_cache(
+                    messages, model_name, provider, request_id, start_time, **kwargs
                 )
-                cached = await self._response_cache.get(cache_key)
-                if cached:
-                    self._metrics["cache_hits"] += 1
-                    processing_time = time.time() - start_time
-                    logger.debug(f"Cache hit for request {request_id[:8]}...")
-                    return LLMResponse(
-                        content=cached.content,
-                        model=cached.model,
-                        provider=provider,
-                        processing_time=processing_time,
-                        request_id=request_id,
-                        cached=True,
-                        metadata=cached.metadata or {},
-                    )
-                self._metrics["cache_misses"] += 1
-            else:
-                cache_key = None
+                if cached_response:
+                    return cached_response
 
-            # Create standardized request
+            # Create standardized request and execute with fallback
             request = LLMRequest(
                 messages=messages,
                 llm_type=llm_type,
@@ -420,9 +444,6 @@ class LLMInterface:
                 request_id=request_id,
                 **kwargs,
             )
-
-            # Issue #551: Provider fallback chain
-            # Try primary provider first, then fallback to others if enabled
             response = await self._execute_with_fallback(request, provider)
 
             # Update metrics
@@ -435,16 +456,7 @@ class LLMInterface:
 
             # Issue #551: Cache successful responses
             if cache_key and not response.error and response.content:
-                await self._response_cache.set(
-                    cache_key,
-                    CachedResponse(
-                        content=response.content,
-                        model=response.model,
-                        tokens_used=response.tokens_used,
-                        processing_time=response.processing_time,
-                        metadata={"request_id": request_id},
-                    ),
-                )
+                await self._store_in_cache(cache_key, response, request_id)
 
             # Track usage for cost optimization (Issue #229)
             await self._track_llm_usage(

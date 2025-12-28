@@ -752,6 +752,82 @@ class CrossLanguagePatternDetector:
         except Exception as e:
             logger.warning("Failed to cache results: %s", e)
 
+    async def _run_pattern_detection(
+        self, analysis: CrossLanguageAnalysis
+    ) -> tuple[list, list]:
+        """
+        Collect files, extract patterns, and find mismatches.
+
+        Returns:
+            Tuple of (python_patterns, all_ts_patterns)
+        """
+        # Collect files
+        python_files, typescript_files, vue_files = await self._collect_files()
+        analysis.python_files_analyzed = len(python_files)
+        analysis.typescript_files_analyzed = len(typescript_files)
+        analysis.vue_files_analyzed = len(vue_files)
+
+        logger.info(
+            "Found %d Python, %d TypeScript, %d Vue files",
+            len(python_files), len(typescript_files), len(vue_files)
+        )
+
+        # Extract patterns
+        python_patterns, typescript_patterns, vue_patterns = await self._extract_all_patterns(
+            python_files, typescript_files, vue_files
+        )
+        all_ts_patterns = typescript_patterns + vue_patterns
+
+        logger.info(
+            "Extracted %d Python, %d TypeScript/Vue patterns",
+            len(python_patterns), len(all_ts_patterns)
+        )
+
+        # Find mismatches
+        analysis.dto_mismatches = await self._find_dto_mismatches(python_patterns, all_ts_patterns)
+        analysis.validation_duplications = await self._find_validation_duplications(python_patterns, all_ts_patterns)
+        analysis.api_contract_mismatches = await self._find_api_contract_mismatches(python_patterns, all_ts_patterns)
+
+        if self.use_llm:
+            analysis.pattern_matches = await self._find_semantic_matches(python_patterns, all_ts_patterns)
+
+        return python_patterns, all_ts_patterns
+
+    def _convert_to_cross_language_patterns(
+        self, patterns: list, analysis: CrossLanguageAnalysis
+    ) -> None:
+        """Convert extracted patterns to CrossLanguagePattern objects."""
+        for p in patterns:
+            pattern_type = p.get("type", PatternType.UTILITY_FUNCTION)
+            if not isinstance(pattern_type, PatternType):
+                continue
+
+            category = p.get("category", PatternCategory.UTILITIES)
+            if not isinstance(category, PatternCategory):
+                category = PatternCategory.UTILITIES
+
+            location = p.get("location")
+            if not location:
+                continue
+
+            cross_pattern = CrossLanguagePattern(
+                pattern_id=f"pattern_{uuid.uuid4().hex[:8]}",
+                pattern_type=pattern_type,
+                category=category,
+                severity=PatternSeverity.INFO,
+                name=p.get("name", "unknown"),
+                description=f"{pattern_type.value}: {p.get('name', 'unknown')}",
+            )
+
+            if location.language == "python":
+                cross_pattern.python_locations.append(location)
+                cross_pattern.python_code = p.get("code", "")[:500]
+            else:
+                cross_pattern.typescript_locations.append(location)
+                cross_pattern.typescript_code = p.get("code", "")[:500]
+
+            analysis.patterns.append(cross_pattern)
+
     async def run_analysis(self) -> CrossLanguageAnalysis:
         """
         Run full cross-language pattern analysis.
@@ -768,90 +844,19 @@ class CrossLanguagePatternDetector:
         logger.info("Starting cross-language pattern analysis on %s", self.project_root)
 
         try:
-            # Step 1: Collect files
-            python_files, typescript_files, vue_files = await self._collect_files()
+            # Run pattern detection and mismatch finding
+            python_patterns, all_ts_patterns = await self._run_pattern_detection(analysis)
 
-            analysis.python_files_analyzed = len(python_files)
-            analysis.typescript_files_analyzed = len(typescript_files)
-            analysis.vue_files_analyzed = len(vue_files)
+            # Convert to CrossLanguagePattern objects
+            self._convert_to_cross_language_patterns(python_patterns + all_ts_patterns, analysis)
 
-            logger.info(
-                "Found %d Python, %d TypeScript, %d Vue files",
-                len(python_files), len(typescript_files), len(vue_files)
-            )
-
-            # Step 2: Extract patterns
-            python_patterns, typescript_patterns, vue_patterns = await self._extract_all_patterns(
-                python_files, typescript_files, vue_files
-            )
-
-            # Combine TypeScript and Vue patterns for analysis
-            all_ts_patterns = typescript_patterns + vue_patterns
-
-            logger.info(
-                "Extracted %d Python, %d TypeScript/Vue patterns",
-                len(python_patterns), len(all_ts_patterns)
-            )
-
-            # Step 3: Find DTO mismatches
-            dto_mismatches = await self._find_dto_mismatches(python_patterns, all_ts_patterns)
-            analysis.dto_mismatches = dto_mismatches
-
-            # Step 4: Find validation duplications
-            validation_dups = await self._find_validation_duplications(python_patterns, all_ts_patterns)
-            analysis.validation_duplications = validation_dups
-
-            # Step 5: Find API contract mismatches
-            api_mismatches = await self._find_api_contract_mismatches(python_patterns, all_ts_patterns)
-            analysis.api_contract_mismatches = api_mismatches
-
-            # Step 6: Find semantic matches using LLM embeddings
-            if self.use_llm:
-                pattern_matches = await self._find_semantic_matches(python_patterns, all_ts_patterns)
-                analysis.pattern_matches = pattern_matches
-
-            # Step 7: Convert patterns to CrossLanguagePattern objects
-            for p in python_patterns + all_ts_patterns:
-                pattern_type = p.get("type", PatternType.UTILITY_FUNCTION)
-                if not isinstance(pattern_type, PatternType):
-                    continue
-
-                category = p.get("category", PatternCategory.UTILITIES)
-                if not isinstance(category, PatternCategory):
-                    category = PatternCategory.UTILITIES
-
-                location = p.get("location")
-                if not location:
-                    continue
-
-                cross_pattern = CrossLanguagePattern(
-                    pattern_id=f"pattern_{uuid.uuid4().hex[:8]}",
-                    pattern_type=pattern_type,
-                    category=category,
-                    severity=PatternSeverity.INFO,
-                    name=p.get("name", "unknown"),
-                    description=f"{pattern_type.value}: {p.get('name', 'unknown')}",
-                )
-
-                if location.language == "python":
-                    cross_pattern.python_locations.append(location)
-                    cross_pattern.python_code = p.get("code", "")[:500]
-                else:
-                    cross_pattern.typescript_locations.append(location)
-                    cross_pattern.typescript_code = p.get("code", "")[:500]
-
-                analysis.patterns.append(cross_pattern)
-
-            # Calculate statistics
+            # Calculate statistics and update metrics
             analysis.calculate_stats()
-
-            # Update performance metrics
             analysis.analysis_time_ms = (time.time() - start_time) * 1000
             analysis.embeddings_generated = self._embeddings_generated
             analysis.cache_hits = self._cache_hits
             analysis.cache_misses = self._cache_misses
 
-            # Cache results
             await self._cache_results(analysis)
 
             logger.info(

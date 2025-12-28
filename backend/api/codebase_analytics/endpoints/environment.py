@@ -31,6 +31,87 @@ _env_analysis_cache: Optional[dict] = None
 _env_analysis_cache_lock = asyncio.Lock()
 
 
+def _get_project_root() -> str:
+    """Get project root path (4 levels up from this file)."""
+    return str(Path(__file__).resolve().parents[4])
+
+
+def _validate_env_path_security(path: str, project_root: str) -> Optional[JSONResponse]:
+    """
+    Validate that path is within project root.
+
+    Returns:
+        JSONResponse error if validation fails, None if valid
+    """
+    try:
+        resolved_path = Path(path).resolve()
+        if not str(resolved_path).startswith(project_root):
+            logger.warning("Path traversal attempt blocked: %s", path)
+            return JSONResponse({
+                "status": "error",
+                "message": "Invalid path: must be within project root",
+                "total_hardcoded_values": 0,
+                "categories": {},
+                "recommendations_count": 0,
+            }, status_code=400)
+    except Exception as e:
+        logger.warning("Invalid path provided: %s - %s", path, e)
+        return JSONResponse({
+            "status": "error",
+            "message": f"Invalid path: {str(e)}",
+            "total_hardcoded_values": 0,
+            "categories": {},
+            "recommendations_count": 0,
+        }, status_code=400)
+
+    return None
+
+
+async def _run_environment_analysis(analyzer, path: str, pattern_list: list):
+    """
+    Run environment analysis with timeout.
+
+    Args:
+        analyzer: EnvironmentAnalyzer instance
+        path: Path to analyze
+        pattern_list: List of glob patterns
+
+    Returns:
+        Analysis result or None if timed out
+    """
+    ANALYSIS_TIMEOUT = 120  # 2 minute timeout for large codebases
+    try:
+        coro = analyzer.analyze_codebase(path, pattern_list)
+        if asyncio.iscoroutine(coro):
+            return await asyncio.wait_for(coro, timeout=ANALYSIS_TIMEOUT)
+        else:
+            loop = asyncio.get_event_loop()
+            return await asyncio.wait_for(
+                loop.run_in_executor(None, lambda: coro),
+                timeout=ANALYSIS_TIMEOUT
+            )
+    except asyncio.TimeoutError:
+        logger.warning("Environment analysis timed out after %d seconds", ANALYSIS_TIMEOUT)
+        return None
+
+
+def _build_environment_result(analysis: dict, path: str) -> dict:
+    """Build success result from analysis data with limits on list sizes."""
+    return {
+        "status": "success",
+        "path": path,
+        "total_hardcoded_values": analysis.get("total_hardcoded_values", 0),
+        "high_priority_count": analysis.get("high_priority_count", 0),
+        "recommendations_count": analysis.get("recommendations_count", 0),
+        "categories": analysis.get("categories", {}),
+        "analysis_time_seconds": analysis.get("analysis_time_seconds", 0),
+        "hardcoded_values": analysis.get("hardcoded_details", [])[:50],
+        "recommendations": analysis.get("configuration_recommendations", [])[:20],
+        "metrics": analysis.get("metrics", {}),
+        "storage_type": "live_analysis",
+    }
+
+
 def _get_environment_analyzer():
     """
     Get EnvironmentAnalyzer instance.
@@ -114,34 +195,15 @@ async def get_environment_analysis(
             )
             return JSONResponse(_env_analysis_cache)
 
-    # Get project root if path not specified
-    project_root = str(Path(__file__).resolve().parents[4])
+    project_root = _get_project_root()
     if not path:
         path = project_root
 
-    # Security: Validate path is within project root to prevent path traversal
-    try:
-        resolved_path = Path(path).resolve()
-        if not str(resolved_path).startswith(project_root):
-            logger.warning("Path traversal attempt blocked: %s", path)
-            return JSONResponse({
-                "status": "error",
-                "message": "Invalid path: must be within project root",
-                "total_hardcoded_values": 0,
-                "categories": {},
-                "recommendations_count": 0,
-            }, status_code=400)
-    except Exception as e:
-        logger.warning("Invalid path provided: %s - %s", path, e)
-        return JSONResponse({
-            "status": "error",
-            "message": f"Invalid path: {str(e)}",
-            "total_hardcoded_values": 0,
-            "categories": {},
-            "recommendations_count": 0,
-        }, status_code=400)
+    # Security validation
+    error_response = _validate_env_path_security(path, project_root)
+    if error_response:
+        return error_response
 
-    # Parse patterns
     pattern_list = [p.strip() for p in patterns.split(",")]
 
     try:
@@ -155,48 +217,22 @@ async def get_environment_analysis(
                 "recommendations_count": 0,
             })
 
-        # Run analysis with timeout
-        # Handle both async and sync analyzer methods
-        ANALYSIS_TIMEOUT = 120  # 2 minute timeout for large codebases
-        try:
-            coro = analyzer.analyze_codebase(path, pattern_list)
-            # Check if the method returns a coroutine
-            if asyncio.iscoroutine(coro):
-                analysis = await asyncio.wait_for(coro, timeout=ANALYSIS_TIMEOUT)
-            else:
-                # If sync method, run in thread pool
-                loop = asyncio.get_event_loop()
-                analysis = await asyncio.wait_for(
-                    loop.run_in_executor(None, lambda: coro),
-                    timeout=ANALYSIS_TIMEOUT
-                )
-        except asyncio.TimeoutError:
-            logger.warning("Environment analysis timed out after %d seconds", ANALYSIS_TIMEOUT)
+        analysis = await _run_environment_analysis(analyzer, path, pattern_list)
+        if analysis is None:
             return JSONResponse({
                 "status": "partial",
-                "message": f"Analysis timed out after {ANALYSIS_TIMEOUT}s. Try with fewer patterns.",
+                "message": "Analysis timed out after 120s. Try with fewer patterns.",
                 "total_hardcoded_values": 0,
                 "categories": {},
                 "recommendations_count": 0,
             })
 
-        result = {
-            "status": "success",
-            "path": path,
-            "total_hardcoded_values": analysis.get("total_hardcoded_values", 0),
-            "high_priority_count": analysis.get("high_priority_count", 0),
-            "recommendations_count": analysis.get("recommendations_count", 0),
-            "categories": analysis.get("categories", {}),
-            "analysis_time_seconds": analysis.get("analysis_time_seconds", 0),
-            "hardcoded_values": analysis.get("hardcoded_details", [])[:50],  # Limit to 50 for response size
-            "recommendations": analysis.get("configuration_recommendations", [])[:20],  # Limit recommendations
-            "metrics": analysis.get("metrics", {}),
-            "storage_type": "live_analysis",
-        }
+        result = _build_environment_result(analysis, path)
 
         # Cache the results (thread-safe, Issue #559)
         async with _env_analysis_cache_lock:
             _env_analysis_cache = result
+
         logger.info(
             "Environment analysis complete: %d hardcoded values, %d recommendations",
             result["total_hardcoded_values"],

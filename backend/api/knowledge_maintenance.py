@@ -762,6 +762,100 @@ async def cleanup_orphaned_facts(req: Request, dry_run: bool = True):
 # ===== SESSION-ORPHAN MANAGEMENT (Issue #547) =====
 
 
+def _parse_fact_metadata(fact_data: dict) -> dict | None:
+    """Parse metadata from fact data, handling bytes/str and JSON parsing."""
+    metadata_str = fact_data.get(b"metadata") or fact_data.get("metadata")
+    if not metadata_str:
+        return None
+
+    try:
+        if isinstance(metadata_str, bytes):
+            metadata_str = metadata_str.decode("utf-8")
+        return json.loads(metadata_str)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None
+
+
+def _build_orphan_fact_info(key, fact_data: dict, metadata: dict, source_session_id: str) -> dict:
+    """Build orphan fact information dictionary."""
+    fact_key = key.decode("utf-8") if isinstance(key, bytes) else key
+    fact_id = fact_key.replace("fact:", "")
+
+    content = fact_data.get(b"content") or fact_data.get("content", b"")
+    if isinstance(content, bytes):
+        content = content.decode("utf-8", errors="replace")
+
+    return {
+        "fact_id": fact_id,
+        "fact_key": fact_key,
+        "session_id": source_session_id,
+        "content_preview": content[:200] + ("..." if len(content) > 200 else ""),
+        "category": metadata.get("category", "unknown"),
+        "created_at": metadata.get("created_at"),
+        "important": metadata.get("important", False),
+        "preserve": metadata.get("preserve", False),
+    }
+
+
+def _scan_redis_for_session_orphans(redis_client, existing_session_ids: set) -> tuple:
+    """
+    Scan Redis for session-orphan facts.
+
+    Args:
+        redis_client: Redis client for scanning
+        existing_session_ids: Set of valid session IDs
+
+    Returns:
+        Tuple of (total_checked, total_with_session, orphaned_facts, session_stats)
+    """
+    orphaned_facts = []
+    session_stats = {}  # session_id -> count
+    cursor = 0
+    total_checked = 0
+    total_with_session = 0
+
+    while True:
+        cursor, keys = redis_client.scan(cursor, match="fact:*", count=100)
+
+        if not keys:
+            if cursor == 0:
+                break
+            continue
+
+        # Use pipeline for batch metadata fetch
+        pipe = redis_client.pipeline()
+        for key in keys:
+            pipe.hgetall(key)
+        results = pipe.execute()
+
+        for key, fact_data in zip(keys, results):
+            if not fact_data:
+                continue
+
+            total_checked += 1
+            metadata = _parse_fact_metadata(fact_data)
+            if not metadata:
+                continue
+
+            source_session_id = metadata.get("source_session_id")
+            if not source_session_id:
+                continue
+
+            total_with_session += 1
+
+            # Check if this session still exists
+            if source_session_id not in existing_session_ids:
+                orphaned_facts.append(
+                    _build_orphan_fact_info(key, fact_data, metadata, source_session_id)
+                )
+                session_stats[source_session_id] = session_stats.get(source_session_id, 0) + 1
+
+        if cursor == 0:
+            break
+
+    return total_checked, total_with_session, orphaned_facts, session_stats
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="find_session_orphans",
@@ -784,7 +878,6 @@ async def find_session_orphan_facts(req: Request):
     if kb is None:
         raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
-    # Get the chat history manager to check if sessions exist
     from backend.utils.chat_utils import get_chat_history_manager
 
     chat_manager = get_chat_history_manager(req)
@@ -793,7 +886,6 @@ async def find_session_orphan_facts(req: Request):
             status_code=500, detail="Chat history manager not available"
         )
 
-    # Get all existing session IDs
     existing_sessions = await chat_manager.list_sessions_fast()
     existing_session_ids = {s["id"] for s in existing_sessions}
 
@@ -802,87 +894,14 @@ async def find_session_orphan_facts(req: Request):
         len(existing_session_ids)
     )
 
-    # Scan all facts for source_session_id metadata
-    def _scan_for_session_orphans():
-        orphaned_facts = []
-        session_stats = {}  # session_id -> count
-        cursor = 0
-        total_checked = 0
-        total_with_session = 0
-
-        while True:
-            cursor, keys = kb.redis_client.scan(cursor, match="fact:*", count=100)
-
-            if not keys:
-                if cursor == 0:
-                    break
-                continue
-
-            # Use pipeline for batch metadata fetch
-            pipe = kb.redis_client.pipeline()
-            for key in keys:
-                pipe.hgetall(key)
-            results = pipe.execute()
-
-            for key, fact_data in zip(keys, results):
-                if not fact_data:
-                    continue
-
-                total_checked += 1
-
-                # Parse metadata
-                metadata_str = fact_data.get(b"metadata") or fact_data.get("metadata")
-                if not metadata_str:
-                    continue
-
-                try:
-                    if isinstance(metadata_str, bytes):
-                        metadata_str = metadata_str.decode("utf-8")
-                    metadata = json.loads(metadata_str)
-                except (json.JSONDecodeError, UnicodeDecodeError):
-                    continue
-
-                source_session_id = metadata.get("source_session_id")
-                if not source_session_id:
-                    continue
-
-                total_with_session += 1
-
-                # Check if this session still exists
-                if source_session_id not in existing_session_ids:
-                    # This is an orphan
-                    fact_key = key.decode("utf-8") if isinstance(key, bytes) else key
-                    fact_id = fact_key.replace("fact:", "")
-
-                    content = fact_data.get(b"content") or fact_data.get("content", b"")
-                    if isinstance(content, bytes):
-                        content = content.decode("utf-8", errors="replace")
-
-                    orphaned_facts.append({
-                        "fact_id": fact_id,
-                        "fact_key": fact_key,
-                        "session_id": source_session_id,
-                        "content_preview": content[:200] + ("..." if len(content) > 200 else ""),
-                        "category": metadata.get("category", "unknown"),
-                        "created_at": metadata.get("created_at"),
-                        "important": metadata.get("important", False),
-                        "preserve": metadata.get("preserve", False),
-                    })
-
-                    # Track by session
-                    session_stats[source_session_id] = session_stats.get(source_session_id, 0) + 1
-
-            if cursor == 0:
-                break
-
-        return total_checked, total_with_session, orphaned_facts, session_stats
-
     (
         total_checked,
         total_with_session,
         orphaned_facts,
         session_stats
-    ) = await asyncio.to_thread(_scan_for_session_orphans)
+    ) = await asyncio.to_thread(
+        _scan_redis_for_session_orphans, kb.redis_client, existing_session_ids
+    )
 
     logger.info(
         "Session-orphan scan: checked %d facts, %d with session tracking, %d orphans found",
@@ -896,7 +915,7 @@ async def find_session_orphan_facts(req: Request):
         "orphaned_count": len(orphaned_facts),
         "orphaned_sessions": len(session_stats),
         "session_breakdown": session_stats,
-        "orphaned_facts": orphaned_facts[:50],  # Return first 50 for preview
+        "orphaned_facts": orphaned_facts[:50],
     }
 
 

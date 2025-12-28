@@ -75,6 +75,88 @@ def _get_ownership_analyzer():
         return None
 
 
+def _get_project_root() -> str:
+    """Get project root path (4 levels up from this file)."""
+    return str(Path(__file__).resolve().parents[4])
+
+
+def _validate_path_security(path: str, project_root: str) -> Optional[JSONResponse]:
+    """
+    Validate that path is within project root.
+
+    Returns:
+        JSONResponse error if validation fails, None if valid
+    """
+    try:
+        resolved_path = Path(path).resolve()
+        if not str(resolved_path).startswith(project_root):
+            logger.warning("Path traversal attempt blocked: %s", path)
+            return JSONResponse({
+                "status": "error",
+                "message": "Invalid path: must be within project root",
+                "summary": {},
+                "file_ownership": [],
+                "directory_ownership": [],
+                "expertise_scores": [],
+                "knowledge_gaps": [],
+                "metrics": {},
+            }, status_code=400)
+    except Exception as e:
+        logger.warning("Invalid path provided: %s - %s", path, e)
+        return JSONResponse({
+            "status": "error",
+            "message": f"Invalid path: {str(e)}",
+            "summary": {},
+        }, status_code=400)
+
+    return None
+
+
+async def _run_ownership_analysis(analyzer, path: str, pattern_list: list, days: int):
+    """
+    Run ownership analysis with timeout.
+
+    Args:
+        analyzer: OwnershipAnalyzer instance
+        path: Path to analyze
+        pattern_list: List of glob patterns
+        days: Days for recency scoring
+
+    Returns:
+        Analysis result or None if timed out
+    """
+    ANALYSIS_TIMEOUT = 180  # 3 minute timeout for git operations
+    try:
+        coro = analyzer.analyze_ownership(path, pattern_list, days)
+        if asyncio.iscoroutine(coro):
+            return await asyncio.wait_for(coro, timeout=ANALYSIS_TIMEOUT)
+        else:
+            loop = asyncio.get_event_loop()
+            return await asyncio.wait_for(
+                loop.run_in_executor(None, lambda: coro),
+                timeout=ANALYSIS_TIMEOUT
+            )
+    except asyncio.TimeoutError:
+        logger.warning("Ownership analysis timed out after %d seconds", ANALYSIS_TIMEOUT)
+        return None
+
+
+def _build_ownership_result(analysis: dict, path: str) -> dict:
+    """Build success result from analysis data with limits on list sizes."""
+    return {
+        "status": "success",
+        "path": path,
+        "analysis_time_seconds": analysis.get("analysis_time_seconds", 0),
+        "summary": analysis.get("summary", {}),
+        "file_ownership": analysis.get("file_ownership", [])[:50],
+        "directory_ownership": analysis.get("directory_ownership", [])[:30],
+        "expertise_scores": analysis.get("expertise_scores", [])[:20],
+        "knowledge_gaps": analysis.get("knowledge_gaps", [])[:30],
+        "metrics": analysis.get("metrics", {}),
+        "storage_type": "live_analysis",
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_ownership_analysis",
@@ -119,35 +201,15 @@ async def get_ownership_analysis(
             )
             return JSONResponse(_ownership_analysis_cache)
 
-    # Get project root if path not specified
-    project_root = str(Path(__file__).resolve().parents[4])
+    project_root = _get_project_root()
     if not path:
         path = project_root
 
-    # Security: Validate path is within project root
-    try:
-        resolved_path = Path(path).resolve()
-        if not str(resolved_path).startswith(project_root):
-            logger.warning("Path traversal attempt blocked: %s", path)
-            return JSONResponse({
-                "status": "error",
-                "message": "Invalid path: must be within project root",
-                "summary": {},
-                "file_ownership": [],
-                "directory_ownership": [],
-                "expertise_scores": [],
-                "knowledge_gaps": [],
-                "metrics": {},
-            }, status_code=400)
-    except Exception as e:
-        logger.warning("Invalid path provided: %s - %s", path, e)
-        return JSONResponse({
-            "status": "error",
-            "message": f"Invalid path: {str(e)}",
-            "summary": {},
-        }, status_code=400)
+    # Security validation
+    error_response = _validate_path_security(path, project_root)
+    if error_response:
+        return error_response
 
-    # Parse patterns
     pattern_list = [p.strip() for p in patterns.split(",")]
 
     try:
@@ -164,38 +226,15 @@ async def get_ownership_analysis(
                 "metrics": {},
             })
 
-        # Run analysis with timeout
-        ANALYSIS_TIMEOUT = 180  # 3 minute timeout for git operations
-        try:
-            coro = analyzer.analyze_ownership(path, pattern_list, days)
-            if asyncio.iscoroutine(coro):
-                analysis = await asyncio.wait_for(coro, timeout=ANALYSIS_TIMEOUT)
-            else:
-                loop = asyncio.get_event_loop()
-                analysis = await asyncio.wait_for(
-                    loop.run_in_executor(None, lambda: coro),
-                    timeout=ANALYSIS_TIMEOUT
-                )
-        except asyncio.TimeoutError:
-            logger.warning("Ownership analysis timed out after %d seconds", ANALYSIS_TIMEOUT)
+        analysis = await _run_ownership_analysis(analyzer, path, pattern_list, days)
+        if analysis is None:
             return JSONResponse({
                 "status": "partial",
-                "message": f"Analysis timed out after {ANALYSIS_TIMEOUT}s. Try with fewer patterns.",
+                "message": "Analysis timed out after 180s. Try with fewer patterns.",
                 "summary": {},
             })
 
-        result = {
-            "status": "success",
-            "path": path,
-            "analysis_time_seconds": analysis.get("analysis_time_seconds", 0),
-            "summary": analysis.get("summary", {}),
-            "file_ownership": analysis.get("file_ownership", [])[:50],
-            "directory_ownership": analysis.get("directory_ownership", [])[:30],
-            "expertise_scores": analysis.get("expertise_scores", [])[:20],
-            "knowledge_gaps": analysis.get("knowledge_gaps", [])[:30],
-            "metrics": analysis.get("metrics", {}),
-            "storage_type": "live_analysis",
-        }
+        result = _build_ownership_result(analysis, path)
 
         # Cache the results
         async with _ownership_analysis_cache_lock:
