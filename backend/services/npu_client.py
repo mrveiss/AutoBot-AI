@@ -24,11 +24,14 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 
+from src.config.ssot_config import get_config
+
 logger = logging.getLogger(__name__)
 
-# Configuration from environment with SSOT defaults
-NPU_WORKER_HOST = os.getenv("AUTOBOT_NPU_WORKER_HOST", "172.16.168.22")
-NPU_WORKER_PORT = os.getenv("AUTOBOT_NPU_WORKER_PORT", "8082")
+# Configuration from SSOT with environment override capability
+_ssot = get_config()
+NPU_WORKER_HOST = os.getenv("AUTOBOT_NPU_WORKER_HOST", _ssot.vm.npu)
+NPU_WORKER_PORT = os.getenv("AUTOBOT_NPU_WORKER_PORT", str(_ssot.port.npu))
 NPU_WORKER_URL = f"http://{NPU_WORKER_HOST}:{NPU_WORKER_PORT}"
 
 # Timeouts
@@ -290,9 +293,9 @@ async def generate_embedding_with_fallback(
             logger.debug(f"Generated embedding via NPU worker ({model_name})")
             return embedding
 
-    # Fallback to Ollama
-    ollama_host = ollama_host or os.getenv("AUTOBOT_OLLAMA_HOST", "172.16.168.24")
-    ollama_port = ollama_port or os.getenv("AUTOBOT_OLLAMA_PORT", "11434")
+    # Fallback to Ollama - use SSOT config for defaults
+    ollama_host = ollama_host or os.getenv("AUTOBOT_OLLAMA_HOST", _ssot.vm.ollama)
+    ollama_port = ollama_port or os.getenv("AUTOBOT_OLLAMA_PORT", str(_ssot.port.ollama))
     ollama_url = f"http://{ollama_host}:{ollama_port}/api/embeddings"
 
     try:

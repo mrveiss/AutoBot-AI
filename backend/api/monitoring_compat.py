@@ -21,19 +21,21 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 from fastapi import APIRouter, Query
 
+from src.config.ssot_config import get_config
 from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/metrics", tags=["metrics-compat"])
 
-# Prometheus server configuration
-PROMETHEUS_URL = "http://172.16.168.20:9090"
+# Prometheus server configuration - use SSOT config
+_ssot = get_config()
+PROMETHEUS_URL = f"http://{_ssot.vm.main}:{_ssot.port.prometheus}"
 
 # Deprecation warning message
 DEPRECATION_MSG = (
     "This endpoint is deprecated. "
-    "Use Grafana dashboards at http://172.16.168.23:3000 instead. "
+    f"Use Grafana dashboards at http://{_ssot.vm.redis}:{_ssot.port.grafana} instead. "
     "This endpoint will be removed in v3.0."
 )
 

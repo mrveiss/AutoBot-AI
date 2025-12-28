@@ -328,9 +328,14 @@ class ThinkTool:
         # Use Ollama directly
         import httpx
 
+        from src.config.ssot_config import get_config
+
+        ssot = get_config()
+        ollama_url = f"{ssot.ollama_url}/api/generate"
+
         async with httpx.AsyncClient(timeout=self.config.timeout_ms / 1000) as client:
             response = await client.post(
-                "http://172.16.168.24:11434/api/generate",
+                ollama_url,
                 json={
                     "model": self.config.model,
                     "prompt": prompt,

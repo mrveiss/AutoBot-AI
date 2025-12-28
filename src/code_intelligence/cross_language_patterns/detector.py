@@ -184,11 +184,11 @@ class CrossLanguagePatternDetector:
         # Generate embedding using Ollama
         try:
             import aiohttp
-            import os
 
-            ollama_host = os.getenv("AUTOBOT_OLLAMA_HOST", "172.16.168.24")
-            ollama_port = os.getenv("AUTOBOT_OLLAMA_PORT", "11434")
-            url = f"http://{ollama_host}:{ollama_port}/api/embeddings"
+            from src.config.ssot_config import get_config
+
+            ssot = get_config()
+            url = f"{ssot.ollama_url}/api/embeddings"
 
             async with aiohttp.ClientSession() as session:
                 async with session.post(

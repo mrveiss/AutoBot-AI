@@ -18,14 +18,16 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from backend.type_defs.common import Metadata
+from src.config.ssot_config import get_config
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["prometheus_mcp", "mcp", "monitoring"])
 
-# Prometheus configuration
-PROMETHEUS_URL = "http://172.16.168.23:9090"
+# Prometheus configuration - use SSOT config
+_ssot = get_config()
+PROMETHEUS_URL = f"http://{_ssot.vm.redis}:{_ssot.port.prometheus}"
 
 
 class MCPTool(BaseModel):
