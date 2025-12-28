@@ -73,8 +73,13 @@ _SKIP_FILE_PATTERNS = (
 
 # Issue #630: Context patterns that indicate non-configurable numeric values
 _NON_CONFIG_NUMERIC_CONTEXTS = (
+    # Loop and iteration patterns
     'range(',      # Loop counters
     'enumerate(',  # Iteration
+    'for ',        # For loops
+    'while ',      # While loops
+
+    # Math operations
     'min(',        # Math operations
     'max(',        # Math operations
     'len(',        # Length operations
@@ -85,9 +90,13 @@ _NON_CONFIG_NUMERIC_CONTEXTS = (
     'ceil(',       # Math
     'pow(',        # Math
     'divmod(',     # Math
+
+    # Array/slice operations
     'slice(',      # Indexing
     '[',           # Array indexing
     ']:',          # Slice notation
+
+    # Arithmetic operators
     '% ',          # Modulo operation
     '%=',          # Modulo assignment
     '+ 1',         # Increment pattern
@@ -98,6 +107,8 @@ _NON_CONFIG_NUMERIC_CONTEXTS = (
     '/=',          # Compound assignment
     '//=',         # Floor division assignment
     '**',          # Power
+
+    # Buffer/sizing patterns
     'chunk_size',  # Buffer/chunk sizing
     'batch_size',  # Batch processing
     'buffer_size', # Buffer sizing
@@ -109,6 +120,60 @@ _NON_CONFIG_NUMERIC_CONTEXTS = (
     'height',      # Dimensions
     'padding',     # Spacing
     'margin',      # Spacing
+
+    # Issue #630: Function parameters and type hints
+    ': int =',     # Type-hinted default parameters
+    ': float =',   # Type-hinted default parameters
+    '= Query(',    # FastAPI query parameters
+    '= Path(',     # FastAPI path parameters
+    '= Body(',     # FastAPI body parameters
+    '= Field(',    # Pydantic field defaults
+
+    # HTTP and status codes
+    '.status',     # HTTP status checks
+    'status_code', # HTTP status code
+    'status ==',   # Status comparison
+    'status !=',   # Status comparison
+
+    # Version and comparison patterns
+    'version_info',  # Python version checks
+    'VERSION',       # Version constants
+    '__version__',   # Package versions
+
+    # Comparison operators with literals
+    ' < (',        # Tuple comparisons
+    ' > (',        # Tuple comparisons
+    ' <= ',        # Less than or equal
+    ' >= ',        # Greater than or equal
+    ' == ',        # Equality check
+    ' != ',        # Inequality check
+
+    # Common non-config variable patterns
+    'days_back',   # Time range parameters
+    'limit:',      # Parameter limits
+    'limit =',     # Variable limits (not config)
+    'count =',     # Counting variables
+    'index =',     # Index variables
+    'level =',     # Level indicators
+    'priority',    # Priority values
+    'severity',    # Severity levels
+
+    # Security/crypto parameters (fixed values, not configurable)
+    'gensalt(',    # bcrypt salt rounds
+    'token_urlsafe(',  # Token length
+    'token_bytes(',    # Token length
+    'token_hex(',      # Token length
+    'secrets.',        # Secrets module calls
+    'hashlib.',        # Hash functions
+    'hmac.',           # HMAC functions
+    'urandom(',        # Random bytes
+
+    # Embedding/ML dimensions (architecture constants)
+    'embedding_dim',   # Model dimensions
+    'hidden_size',     # Model dimensions
+    'num_layers',      # Model architecture
+    'num_heads',       # Attention heads
+    'vocab_size',      # Vocabulary size
 )
 
 # Issue #630: Path patterns that are NOT configurable (API routes, URL patterns)
@@ -474,14 +539,29 @@ class EnvironmentAnalyzer:
         Issue #510: Optimized O(n³) → O(n²) by using precompiled combined patterns.
         Now iterates: categories × (single regex per category) instead of
         categories × patterns × matches.
+
+        Issue #630: Added docstring detection to filter regex matches inside docstrings.
         """
 
         hardcoded_values = []
+
+        # Issue #630: Pre-compute docstring line ranges to filter regex matches
+        docstring_lines = set()
+        try:
+            tree = ast.parse(content, filename=file_path)
+            docstring_lines = self._get_docstring_lines(tree)
+        except SyntaxError:
+            pass  # If we can't parse, proceed without docstring filtering
 
         # Issue #510: Use precompiled combined patterns
         for category, compiled in self._compiled_patterns.items():
             for match in compiled.finditer(content):
                 line_num = content[:match.start()].count('\n') + 1
+
+                # Issue #630: Skip matches inside docstrings
+                if line_num in docstring_lines:
+                    continue
+
                 # Issue #630: Find the first non-None group
                 value = None
                 if match.groups():
@@ -494,6 +574,11 @@ class EnvironmentAnalyzer:
 
                 # Issue #630: Skip None or empty values
                 if not value:
+                    continue
+
+                # Issue #630: Skip values that look like docstring content
+                # (contains newlines or starts with whitespace)
+                if '\n' in value or value.startswith(('    ', '\t', '"""', "'''")):
                     continue
 
                 # Skip if already found by AST scanning
