@@ -113,6 +113,48 @@ async def _run_analysis(task_id: str, request: PatternAnalysisRequest) -> None:
         _analysis_tasks[task_id]["completed_at"] = datetime.now().isoformat()
 
 
+def _cleanup_stuck_tasks() -> int:
+    """Clean up tasks that have been running too long.
+
+    Returns:
+        Number of tasks cleaned up
+
+    Issue #647: Auto-recover from stuck tasks.
+    """
+    cleaned = 0
+    now = datetime.now()
+
+    for task_id, task in list(_analysis_tasks.items()):
+        if task.get("status") == "running":
+            started_at = task.get("started_at")
+            is_stuck = False
+
+            if started_at:
+                try:
+                    start_time = datetime.fromisoformat(started_at)
+                    elapsed = (now - start_time).total_seconds()
+                    # Mark as stuck if running longer than timeout
+                    is_stuck = elapsed > TASK_TIMEOUT_SECONDS
+                except (ValueError, TypeError):
+                    is_stuck = True
+            else:
+                # No start time means task never actually started
+                is_stuck = True
+
+            if is_stuck:
+                _analysis_tasks[task_id]["status"] = "failed"
+                _analysis_tasks[task_id]["error"] = "Task timed out (auto-recovered)"
+                _analysis_tasks[task_id]["completed_at"] = now.isoformat()
+                cleaned += 1
+                logger.warning("Auto-recovered stuck task %s", task_id)
+
+    return cleaned
+
+
+# Task timeout threshold in seconds (10 minutes)
+TASK_TIMEOUT_SECONDS = 600
+
+
 @router.post("/patterns/analyze", response_model=PatternAnalysisStatus)
 async def start_pattern_analysis(
     request: PatternAnalysisRequest,
@@ -124,13 +166,19 @@ async def start_pattern_analysis(
     a task ID that can be used to check status and retrieve results.
 
     Issue #208: Code Pattern Detection & Optimization System
+    Issue #647: Auto-recover from stuck tasks before checking for running tasks.
     """
     import uuid
 
     # Generate task ID
     task_id = str(uuid.uuid4())[:8]
 
-    # Check if another analysis is running
+    # Auto-cleanup any stuck tasks before checking (Issue #647)
+    cleaned = _cleanup_stuck_tasks()
+    if cleaned > 0:
+        logger.info("Auto-recovered %d stuck task(s) before starting new analysis", cleaned)
+
+    # Check if another analysis is genuinely running
     running_tasks = [
         t for t in _analysis_tasks.values() if t.get("status") == "running"
     ]
@@ -237,6 +285,100 @@ async def cancel_analysis(task_id: str) -> Dict[str, str]:
     del _analysis_tasks[task_id]
 
     return {"message": f"Task {task_id} removed"}
+
+
+@router.get("/patterns/tasks")
+async def list_analysis_tasks() -> Dict[str, Any]:
+    """List all pattern analysis tasks.
+
+    Returns:
+        Dictionary with all tasks and their status
+
+    Issue #647: Added endpoint to view all tasks for debugging stuck analyses.
+    """
+    tasks = []
+    for task_id, task in _analysis_tasks.items():
+        tasks.append({
+            "task_id": task_id,
+            "status": task.get("status"),
+            "progress": task.get("progress", 0.0),
+            "started_at": task.get("started_at"),
+            "completed_at": task.get("completed_at"),
+            "error": task.get("error"),
+        })
+
+    return {
+        "total": len(tasks),
+        "running": len([t for t in tasks if t["status"] == "running"]),
+        "tasks": tasks,
+    }
+
+
+@router.post("/patterns/tasks/clear-stuck")
+async def clear_stuck_tasks(
+    force: bool = Query(default=False, description="Force clear ALL running tasks, not just timed-out ones")
+) -> Dict[str, Any]:
+    """Clear tasks that are stuck in 'running' status.
+
+    This marks long-running tasks as failed and allows new analyses to start.
+    Tasks running longer than TASK_TIMEOUT_SECONDS are considered stuck.
+
+    Args:
+        force: If True, clears ALL running tasks regardless of how long they've been running
+
+    Returns:
+        Summary of cleared tasks
+
+    Issue #647: Added endpoint to clear stuck analysis tasks.
+    """
+    cleared = []
+    now = datetime.now()
+
+    for task_id, task in list(_analysis_tasks.items()):
+        if task.get("status") == "running":
+            should_clear = force  # Force mode clears all
+
+            if not force:
+                # Normal mode: only clear timed-out tasks
+                started_at = task.get("started_at")
+                if started_at:
+                    try:
+                        start_time = datetime.fromisoformat(started_at)
+                        elapsed = (now - start_time).total_seconds()
+                        should_clear = elapsed > TASK_TIMEOUT_SECONDS
+                    except (ValueError, TypeError):
+                        should_clear = True  # Can't parse time, assume stuck
+                else:
+                    should_clear = True  # No start time, assume stuck
+
+            if should_clear:
+                _analysis_tasks[task_id]["status"] = "failed"
+                _analysis_tasks[task_id]["error"] = "Task cleared manually" if force else "Task timed out or was stuck"
+                _analysis_tasks[task_id]["completed_at"] = now.isoformat()
+                cleared.append(task_id)
+                logger.info("Cleared %s task %s", "forced" if force else "stuck", task_id)
+
+    return {
+        "cleared_count": len(cleared),
+        "cleared_task_ids": cleared,
+        "message": f"Cleared {len(cleared)} task(s)" + (" (forced)" if force else ""),
+    }
+
+
+@router.post("/patterns/tasks/clear-all")
+async def clear_all_tasks() -> Dict[str, str]:
+    """Clear all pattern analysis tasks.
+
+    This removes all tasks from memory, allowing fresh analyses.
+
+    Returns:
+        Confirmation message
+
+    Issue #647: Added endpoint to clear all tasks.
+    """
+    count = len(_analysis_tasks)
+    _analysis_tasks.clear()
+    return {"message": f"Cleared {count} task(s)"}
 
 
 @router.get("/patterns/summary", response_model=PatternSummary)

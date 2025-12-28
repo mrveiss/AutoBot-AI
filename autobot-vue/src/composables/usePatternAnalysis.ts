@@ -193,7 +193,7 @@ export function usePatternAnalysis() {
 
     try {
       const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/analyze`, {
+      let response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -206,8 +206,40 @@ export function usePatternAnalysis() {
         })
       })
 
+      // Issue #647: Handle 409 Conflict by clearing stuck tasks and retrying
+      if (response.status === 409) {
+        logger.info('Another analysis is running, attempting to clear stuck tasks...')
+
+        // Try to clear stuck tasks with force=true
+        const clearResponse = await fetch(`${backendUrl}/api/analytics/codebase/patterns/tasks/clear-stuck?force=true`, {
+          method: 'POST'
+        })
+
+        if (clearResponse.ok) {
+          const clearResult = await clearResponse.json()
+          logger.info('Cleared stuck tasks:', clearResult)
+
+          // Retry the analysis
+          response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/analyze`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              path,
+              enable_regex_detection: enableRegex,
+              enable_complexity_analysis: enableComplexity,
+              enable_duplicate_detection: enableDuplicates,
+              similarity_threshold: similarityThreshold,
+              run_in_background: runInBackground
+            })
+          })
+        }
+      }
+
       if (!response.ok) {
-        throw new Error(`Analysis failed: ${response.statusText}`)
+        const errorDetail = response.status === 409
+          ? 'Another analysis is still running. Please wait for it to complete.'
+          : `Analysis failed: ${response.statusText}`
+        throw new Error(errorDetail)
       }
 
       const data = await response.json()
@@ -675,6 +707,51 @@ export function usePatternAnalysis() {
     ])
   }
 
+  /**
+   * Clear stuck analysis tasks
+   * Issue #647: Manual recovery for stuck tasks
+   */
+  const clearStuckTasks = async (force: boolean = false): Promise<{ cleared: number; message: string }> => {
+    try {
+      const backendUrl = await getBackendUrl()
+      const response = await fetch(
+        `${backendUrl}/api/analytics/codebase/patterns/tasks/clear-stuck?force=${force}`,
+        { method: 'POST' }
+      )
+
+      if (!response.ok) {
+        throw new Error(`Failed to clear tasks: ${response.statusText}`)
+      }
+
+      const result = await response.json()
+      logger.info('Cleared stuck tasks:', result)
+      return { cleared: result.cleared_count, message: result.message }
+    } catch (e: any) {
+      logger.error('Failed to clear stuck tasks:', e)
+      throw e
+    }
+  }
+
+  /**
+   * List all analysis tasks
+   * Issue #647: View task status for debugging
+   */
+  const listTasks = async (): Promise<{ total: number; running: number; tasks: any[] }> => {
+    try {
+      const backendUrl = await getBackendUrl()
+      const response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/tasks`)
+
+      if (!response.ok) {
+        throw new Error(`Failed to list tasks: ${response.statusText}`)
+      }
+
+      return await response.json()
+    } catch (e: any) {
+      logger.error('Failed to list tasks:', e)
+      throw e
+    }
+  }
+
   return {
     // State
     loading,
@@ -708,7 +785,9 @@ export function usePatternAnalysis() {
     getReport,
     reset,
     loadAllData,
-    loadCachedData
+    loadCachedData,
+    clearStuckTasks,
+    listTasks
   }
 }
 
