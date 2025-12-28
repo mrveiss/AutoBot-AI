@@ -163,51 +163,95 @@ class KnowledgeBaseCore:
         return await self.initialize()
 
     async def _configure_llama_index(self):
-        """Configure LlamaIndex with Ollama models"""
-        try:
-            # Issue #649: Use SSOT config for Ollama URL and LLM model
-            from src.config.ssot_config import config as ssot_config, get_default_llm_model
-            ollama_url = ssot_config.ollama_url
-            default_model = get_default_llm_model()
-            logger.debug("Using Ollama URL from SSOT config: %s", ollama_url)
-            logger.debug("Using default LLM model from SSOT config: %s", default_model)
+        """Configure LlamaIndex with explicit SSOT settings.
 
-            # Use kb_timeouts for LLM timeout
-            llm_timeout = kb_timeouts.llm_default
+        Uses AUTOBOT_LLAMAINDEX_* environment variables for RAG/vectorization.
+        No fallbacks - settings must be explicitly configured.
 
+        Environment variables:
+        - AUTOBOT_LLAMAINDEX_LLM_PROVIDER: ollama, openai, or anthropic
+        - AUTOBOT_LLAMAINDEX_LLM_ENDPOINT: Provider endpoint URL
+        - AUTOBOT_LLAMAINDEX_LLM_MODEL: Model name for LLM
+        - AUTOBOT_LLAMAINDEX_EMBEDDING_PROVIDER: ollama or openai
+        - AUTOBOT_LLAMAINDEX_EMBEDDING_ENDPOINT: Provider endpoint URL
+        - AUTOBOT_EMBEDDING_MODEL: Model name for embeddings
+        """
+        from src.config.ssot_config import config as ssot_config
+
+        llm_timeout = kb_timeouts.llm_default
+
+        # Get LlamaIndex-specific settings (no fallbacks)
+        llm_provider = ssot_config.llm.llamaindex_llm_provider.lower()
+        llm_endpoint = ssot_config.llm.llamaindex_llm_endpoint
+        llm_model = ssot_config.llm.llamaindex_llm_model
+        embed_provider = ssot_config.llm.llamaindex_embedding_provider.lower()
+        embed_endpoint = ssot_config.llm.llamaindex_embedding_endpoint
+
+        logger.info(
+            "Configuring LlamaIndex: llm=%s@%s, embed_provider=%s@%s",
+            llm_model, llm_provider, embed_provider, embed_endpoint
+        )
+
+        # Configure LLM based on provider
+        if llm_provider == "ollama":
             Settings.llm = LlamaIndexOllamaLLM(
-                model=default_model,
+                model=llm_model,
                 request_timeout=llm_timeout,
-                base_url=ollama_url,
+                base_url=llm_endpoint,
             )
+        elif llm_provider == "openai":
+            from llama_index.llms.openai import OpenAI as LlamaIndexOpenAI
+            Settings.llm = LlamaIndexOpenAI(
+                model=llm_model,
+                api_key=ssot_config.llm.openai_api_key,
+                timeout=llm_timeout,
+            )
+        elif llm_provider == "anthropic":
+            from llama_index.llms.anthropic import Anthropic as LlamaIndexAnthropic
+            Settings.llm = LlamaIndexAnthropic(
+                model=llm_model,
+                api_key=ssot_config.llm.anthropic_api_key,
+                timeout=llm_timeout,
+            )
+        else:
+            raise ValueError(f"Unsupported LlamaIndex LLM provider: {llm_provider}")
 
-            # Check what embedding model was used for existing data
-            stored_model = await self._detect_stored_embedding_model()
+        # Check for stored embedding model to maintain consistency across knowledge base
+        stored_model = await self._detect_stored_embedding_model()
+        if stored_model:
+            embed_model_name = stored_model
+            logger.info("Using stored embedding model for consistency: %s", embed_model_name)
+        else:
+            embed_model_name = ssot_config.llm.embedding_model
+            logger.info("Using embedding model from config: %s", embed_model_name)
 
-            if stored_model:
-                embed_model_name = stored_model
-                logger.info("Using stored embedding model: %s", embed_model_name)
-            else:
-                # Default to nomic-embed-text (768 dimensions)
-                embed_model_name = "nomic-embed-text"
-                logger.info("Using nomic-embed-text embedding model (768 dimensions)")
-
-            # Store model configuration in instance variables
-            self.embedding_model_name = embed_model_name
-            self.embedding_dimensions = 768  # nomic-embed-text dimensions
-
+        # Configure embeddings based on provider
+        if embed_provider == "ollama":
             Settings.embed_model = LlamaIndexOllamaEmbedding(
                 model_name=embed_model_name,
-                base_url=ollama_url,
+                base_url=embed_endpoint,
                 ollama_additional_kwargs={"num_ctx": 2048},
             )
+            self.embedding_dimensions = 768  # nomic-embed-text dimensions
+        elif embed_provider == "openai":
+            from llama_index.embeddings.openai import OpenAIEmbedding
+            Settings.embed_model = OpenAIEmbedding(
+                model=embed_model_name,
+                api_key=ssot_config.llm.openai_api_key,
+            )
+            # OpenAI text-embedding-3-small: 1536, text-embedding-3-large: 3072
+            self.embedding_dimensions = 1536
+        else:
+            raise ValueError(f"Unsupported LlamaIndex embedding provider: {embed_provider}")
 
-            self.llama_index_configured = True
-            logger.info("LlamaIndex configured with Ollama at %s", ollama_url)
+        # Store model configuration
+        self.embedding_model_name = embed_model_name
+        self.llama_index_configured = True
 
-        except Exception as e:
-            logger.warning("Could not configure LlamaIndex with Ollama: %s", e)
-            self.llama_index_configured = False
+        logger.info(
+            "LlamaIndex configured: llm=%s@%s, embed=%s@%s",
+            llm_model, llm_provider, embed_model_name, embed_provider
+        )
 
     async def _init_redis_connections(self):
         """Initialize Redis connections using canonical utility"""

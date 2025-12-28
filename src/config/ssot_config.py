@@ -194,6 +194,24 @@ class LLMConfig(BaseSettings):
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
 
+    # LlamaIndex-specific configuration for RAG/vectorization
+    # These are explicit settings - no fallbacks. Must be configured correctly.
+    llamaindex_llm_provider: str = Field(
+        default="ollama", alias="AUTOBOT_LLAMAINDEX_LLM_PROVIDER"
+    )
+    llamaindex_llm_endpoint: str = Field(
+        default="http://127.0.0.1:11434", alias="AUTOBOT_LLAMAINDEX_LLM_ENDPOINT"
+    )
+    llamaindex_llm_model: str = Field(
+        default=DEFAULT_LLM_MODEL, alias="AUTOBOT_LLAMAINDEX_LLM_MODEL"
+    )
+    llamaindex_embedding_provider: str = Field(
+        default="ollama", alias="AUTOBOT_LLAMAINDEX_EMBEDDING_PROVIDER"
+    )
+    llamaindex_embedding_endpoint: str = Field(
+        default="http://127.0.0.1:11434", alias="AUTOBOT_LLAMAINDEX_EMBEDDING_ENDPOINT"
+    )
+
     def get_provider_for_agent(self, agent_id: str) -> str:
         """
         Get the LLM provider for a specific agent.
