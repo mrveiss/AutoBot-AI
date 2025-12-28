@@ -9,6 +9,14 @@ const logger = createLogger('main');
 
 import './assets/tailwind.css'
 import './assets/vue-notus.css'
+// Import fonts from local npm packages (avoid CDN tracking prevention warnings)
+import '@fortawesome/fontawesome-free/css/all.min.css'
+import '@fontsource/inter/300.css'
+import '@fontsource/inter/400.css'
+import '@fontsource/inter/500.css'
+import '@fontsource/inter/600.css'
+import '@fontsource/inter/700.css'
+import '@fontsource/inter/800.css'
 // Import centralized theme system (Issue #548)
 import './assets/styles/theme.css'
 import './assets/styles/view.css'
@@ -59,8 +67,8 @@ app.use(rumPlugin)
 app.use(errorHandlerPlugin)
 
 // Global error handler for uncaught errors
-app.config.errorHandler = (err, instance, info) => {
-  logger.error('Vue Error Handler:', err, info)
+app.config.errorHandler = (err, _instance, info) => {
+  logger.error('Vue Error Handler:', { error: err, info })
 
   // Check if this is a chunk loading error
   const error = err as Error
@@ -71,7 +79,7 @@ app.config.errorHandler = (err, instance, info) => {
 
     // Import and use cache management
     import('./utils/cacheManagement').then(({ handleChunkLoadingError }) => {
-      handleChunkLoadingError(error, instance?.$?.type?.name || 'Unknown')
+      handleChunkLoadingError(error, _instance?.$?.type?.name || 'Unknown')
     }).catch(cacheError => {
       logger.error('Failed to handle chunk error:', cacheError)
       // Fallback to hard reload
@@ -81,9 +89,9 @@ app.config.errorHandler = (err, instance, info) => {
 }
 
 // Global warning handler
-app.config.warnHandler = (msg, instance, trace) => {
+app.config.warnHandler = (msg, _instance, trace) => {
   if (import.meta.env.DEV) {
-    logger.warn('Vue Warning:', msg, trace)
+    logger.warn('Vue Warning:', { message: msg, trace })
   }
 }
 
