@@ -14,8 +14,7 @@ import aiohttp
 
 from src.agents.classification_agent import ClassificationResult
 from src.autobot_types import TaskComplexity
-from src.constants.model_constants import ModelConstants
-from src.unified_config_manager import config as global_config_manager
+from src.config.ssot_config import get_agent_endpoint, get_agent_model
 from src.utils.http_client import get_http_client
 from src.utils.redis_client import get_redis_client
 from src.workflow_classifier import WorkflowClassifier
@@ -32,18 +31,21 @@ logger = logging.getLogger(__name__)
 class GemmaClassificationAgent(StandardizedAgent):
     """Ultra-fast classification agent using Google's Gemma models."""
 
+    # Agent identifier for SSOT config lookup
+    AGENT_ID = "classification"
+
     def __init__(self, ollama_host: str = None):
         """Initialize Gemma classification agent with Ollama connection and Redis."""
         super().__init__("gemma_classification")
-        # Get Ollama URL from configuration instead of hardcoding
-        self.ollama_host = ollama_host or global_config_manager.get_ollama_url()
+        # Get endpoint URL from agent-specific SSOT config
+        self.ollama_host = ollama_host or get_agent_endpoint(self.AGENT_ID)
         self.redis_client = get_redis_client()
         self.keyword_classifier = WorkflowClassifier(self.redis_client)
 
-        # Preferred models - uses centralized default model from config
-        # All model selection should come from AUTOBOT_DEFAULT_LLM_MODEL
+        # Get model from agent-specific SSOT config
+        # Can be overridden via AUTOBOT_CLASSIFICATION_MODEL
         self.preferred_models = [
-            ModelConstants.DEFAULT_OLLAMA_MODEL,  # Use centralized model config
+            get_agent_model(self.AGENT_ID),
         ]
 
         self.capabilities = [

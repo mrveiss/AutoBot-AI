@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from src.constants.model_constants import ModelConstants
+from src.config.ssot_config import get_agent_model
 
 logger = logging.getLogger(__name__)
 
@@ -70,13 +70,13 @@ class LLMFailsafeAgent:
             tier: {"requests": 0, "failures": 0, "avg_time": 0.0} for tier in LLMTier
         }
 
-        # Configuration - use centralized model from config
-        # All model selection should come from AUTOBOT_DEFAULT_LLM_MODEL
+        # Configuration - use agent-specific SSOT config
+        # Each model can be overridden via AUTOBOT_LLM_FAILSAFE_MODEL
         self.primary_models = [
-            ModelConstants.DEFAULT_OLLAMA_MODEL,  # Use centralized model config
+            get_agent_model("llm_failsafe"),
         ]
         self.secondary_models = [
-            ModelConstants.DEFAULT_OLLAMA_MODEL,  # Use centralized model config
+            get_agent_model("llm_failsafe"),
         ]
 
         # Timeout settings (in seconds)

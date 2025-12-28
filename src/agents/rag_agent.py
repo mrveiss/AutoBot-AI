@@ -12,10 +12,9 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from src.constants.model_constants import ModelConstants
+from src.config.ssot_config import get_agent_model
 from src.constants.threshold_constants import LLMDefaults
 from src.llm_interface import LLMInterface
-from src.unified_config_manager import config
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
@@ -26,16 +25,17 @@ logger = logging.getLogger(__name__)
 class RAGAgent(StandardizedAgent):
     """RAG agent for document synthesis and knowledge integration."""
 
+    # Agent identifier for SSOT config lookup
+    AGENT_ID = "rag"
+
     def __init__(self):
         """Initialize the RAG Agent with 3B model for complex reasoning."""
         super().__init__("rag")
         self.llm_interface = LLMInterface()
 
-        # Use unified config with centralized fallback
-        try:
-            self.model_name = config.get("llm.models.rag", ModelConstants.DEFAULT_OLLAMA_MODEL)
-        except Exception:
-            self.model_name = ModelConstants.DEFAULT_OLLAMA_MODEL
+        # Use agent-specific SSOT config
+        # Can be overridden via AUTOBOT_RAG_MODEL
+        self.model_name = get_agent_model(self.AGENT_ID)
 
         self.capabilities = [
             "document_synthesis",
