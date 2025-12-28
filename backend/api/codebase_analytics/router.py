@@ -22,6 +22,7 @@ from .endpoints import (
     environment,    # Issue #538: Environment analysis
     cross_language_patterns,  # Issue #244: Cross-Language Pattern Detector
     pattern_analysis,  # Issue #208: Code Pattern Detection & Optimization
+    ownership,  # Issue #248: Code Ownership and Expertise Map
 )
 
 # Create main router with common prefix and tags
@@ -42,3 +43,4 @@ router.include_router(api_endpoints.router)  # Issue #527: API Endpoint Checker
 router.include_router(environment.router)    # Issue #538: Environment analysis
 router.include_router(cross_language_patterns.router)  # Issue #244: Cross-Language Patterns
 router.include_router(pattern_analysis.router)  # Issue #208: Code Pattern Detection
+router.include_router(ownership.router)  # Issue #248: Code Ownership and Expertise Map
