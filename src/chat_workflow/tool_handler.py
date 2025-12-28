@@ -77,6 +77,7 @@ class ToolHandlerMixin:
         Parse tool calls from LLM response using XML-style markers.
 
         Supports both uppercase and lowercase tags, and handles HTML entities.
+        Issue #650: Fixed regex to handle nested JSON in params.
 
         Args:
             text: LLM response text
@@ -98,21 +99,22 @@ class ToolHandlerMixin:
         )
 
         tool_calls = []
-        # Match both single and double quotes, and both TOOL_CALL and tool_call (case-insensitive)
-        # Format: <TOOL_CALL name="..." params='...' OR params="...">...</TOOL_CALL>
-        pattern = r'<tool_call\s+name="([^"]+)"\s+params=(["\'])({[^}]+})\2>([^<]*)</tool_call>'
+
+        # Issue #650: Fixed regex pattern to handle nested JSON
+        # Old pattern: {[^}]+} couldn't handle {"key": {"nested": "value"}}
+        # New pattern: Uses non-greedy match (.+?) to capture everything up to closing quote+tag
+        # Format: <TOOL_CALL name="..." params='...'>...</TOOL_CALL>
+        pattern = r'<tool_call\s+name="([^"]+)"\s+params=(["\'])(.+?)\2>([^<]*)</tool_call>'
 
         logger.debug("[_parse_tool_calls] Using regex pattern: %s", pattern)
 
-        matches = re.finditer(pattern, text, re.IGNORECASE)
+        matches = re.finditer(pattern, text, re.IGNORECASE | re.DOTALL)
         match_count = 0
         for match in matches:
             match_count += 1
             tool_name = match.group(1)
-            params_str = match.group(
-                3
-            )  # Group 2 is the quote character, group 3 is the JSON
-            description = match.group(4)
+            params_str = match.group(3)  # Group 2 is the quote character, group 3 is the JSON
+            description = match.group(4).strip()
 
             try:
                 params = json.loads(params_str)
@@ -125,13 +127,21 @@ class ToolHandlerMixin:
                 )
             except json.JSONDecodeError as e:
                 logger.error("Failed to parse tool call params: %s", e)
-                logger.error("Params string was: %s", params_str)
+                logger.error("Params string was: %s", params_str[:200])
                 continue
 
         logger.info(
             "[_parse_tool_calls] Total matches found: %d, successfully parsed: %d",
             match_count, len(tool_calls)
         )
+
+        # Issue #650: Add warning when TOOL_CALL tags found but parsing failed
+        if not tool_calls and has_tool_call:
+            logger.warning(
+                "[Issue #650] TOOL_CALL tag found but regex didn't match! "
+                "Response snippet: %s", text[:500]
+            )
+
         return tool_calls
 
     async def _execute_terminal_command(

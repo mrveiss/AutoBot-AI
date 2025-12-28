@@ -312,12 +312,18 @@ class ChatWorkflowManager(
         rag_citations: List[Dict[str, Any]],
         current_message_id: str,
     ) -> WorkflowMessage:
-        """Build a WorkflowMessage for a streaming chunk."""
+        """Build a WorkflowMessage for a streaming chunk.
+
+        Issue #650: Added display_type to metadata for frontend filtering.
+        The top-level 'type' field now carries the detected display type (thought/planning/response),
+        while 'message_type' in metadata indicates streaming status.
+        """
         return WorkflowMessage(
-            type=current_message_type,
+            type=current_message_type,  # Issue #650: This is the display type
             content=chunk_text,
             metadata={
-                "message_type": "llm_response_chunk",
+                "message_type": "llm_response_chunk",  # Backwards compat
+                "display_type": current_message_type,  # Issue #650: Explicit display type
                 "model": selected_model,
                 "streaming": True,
                 "terminal_session_id": terminal_session_id,
@@ -399,7 +405,11 @@ class ChatWorkflowManager(
                 break
 
     def _format_execution_step(self, step_num: int, result: Dict[str, Any]) -> str:
-        """Format a single execution step for the continuation prompt."""
+        """Format a single execution step for the continuation prompt.
+
+        Issue #650: Increased output limit from 500 to 2000 chars for better LLM context.
+        Truncated output is clearly marked to help LLM understand when data is incomplete.
+        """
         cmd = result.get("command", "unknown")
         stdout = result.get("stdout", "").strip()
         stderr = result.get("stderr", "").strip()
@@ -409,7 +419,12 @@ class ChatWorkflowManager(
         if stderr:
             output_text += f"\nStderr: {stderr}"
 
-        return f"**Step {step_num}:** `{cmd}`\n- Status: {status}\n- Output:\n```\n{output_text[:500]}\n```"
+        # Issue #650: Increased from 500 to 2000 for better continuation context
+        max_output_len = 2000
+        if len(output_text) > max_output_len:
+            output_text = output_text[:max_output_len] + "\n... (output truncated)"
+
+        return f"**Step {step_num}:** `{cmd}`\n- Status: {status}\n- Output:\n```\n{output_text}\n```"
 
     def _get_continuation_instructions(self, original_message: str) -> str:
         """Get the critical instructions for continuation prompts."""

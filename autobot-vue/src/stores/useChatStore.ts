@@ -131,6 +131,57 @@ export const useChatStore = defineStore('chat', () => {
     return newMessage.id
   }
 
+  /**
+   * Issue #650: Add or update a message with ID-based deduplication.
+   * Used for streaming messages where chunks arrive with the same ID.
+   *
+   * @param message - Message with optional id field
+   * @returns The message ID (new or existing)
+   */
+  function addOrUpdateMessage(message: Partial<ChatMessage> & { content: string; sender: ChatMessage['sender'] }): string {
+    if (!currentSession.value) {
+      createNewSession()
+    }
+
+    // If message has an ID, check if it already exists (streaming update)
+    if (message.id) {
+      const existingIndex = currentSession.value!.messages.findIndex(m => m.id === message.id)
+      if (existingIndex >= 0) {
+        // Update existing message (streaming chunk accumulation)
+        const existing = currentSession.value!.messages[existingIndex]
+        currentSession.value!.messages[existingIndex] = {
+          ...existing,
+          content: message.content,  // Replace with accumulated content
+          type: message.type || existing.type,  // Issue #650: Preserve display type
+          metadata: {
+            ...existing.metadata,
+            ...message.metadata
+          }
+        }
+        currentSession.value!.updatedAt = new Date()
+        logger.debug(`[Issue #650] Updated existing message: ${message.id}`)
+        return message.id
+      }
+    }
+
+    // Add new message
+    const newMessage: ChatMessage = {
+      id: message.id || generateMessageId(),
+      timestamp: new Date(),
+      content: message.content,
+      sender: message.sender,
+      type: message.type,
+      status: message.status,
+      metadata: message.metadata
+    }
+
+    currentSession.value!.messages.push(newMessage)
+    currentSession.value!.updatedAt = new Date()
+    logger.debug(`[Issue #650] Added new message: ${newMessage.id}`)
+
+    return newMessage.id
+  }
+
   function updateMessage(messageId: string, updates: Partial<ChatMessage>) {
     if (!currentSession.value) return
 
@@ -491,6 +542,7 @@ export const useChatStore = defineStore('chat', () => {
     createNewSession,
     switchToSession,
     addMessage,
+    addOrUpdateMessage,  // Issue #650: ID-based deduplication for streaming
     updateMessage,
     updateMessageMetadata,
     findMessageByMetadata,

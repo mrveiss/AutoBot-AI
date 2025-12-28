@@ -65,7 +65,11 @@ OptionalMetadata = Optional[Metadata]
 
 
 class MessageTypes:
-    """Constants for message types in the chat system."""
+    """Constants for message types in the chat system.
+
+    Issue #650: Extended to include display-related types for frontend filtering.
+    Aligned with Agent Zero's 13-type message system for better UX.
+    """
 
     # Streaming LLM response types - these accumulate tokens progressively
     LLM_RESPONSE = "llm_response"
@@ -85,6 +89,19 @@ class MessageTypes:
     # User message types
     USER = "user"
     TERMINAL_INTERPRETATION = "terminal_interpretation"
+
+    # Issue #650: Display-related types for frontend filtering
+    # These types allow users to toggle visibility of different message categories
+    THOUGHT = "thought"      # LLM internal reasoning ([THOUGHT]...[/THOUGHT])
+    PLANNING = "planning"    # LLM task planning ([PLANNING]...[/PLANNING])
+    DEBUG = "debug"          # Debug/diagnostic messages
+    UTILITY = "utility"      # Utility/tool status messages
+    SOURCES = "sources"      # Knowledge base source references
+    PROGRESS = "progress"    # Progress indicators for long-running tasks
+    TOOL = "tool"            # Tool execution status
+    HINT = "hint"            # Helpful hints/suggestions
+    WARNING = "warning"      # Warning messages (non-fatal)
+    INFO = "info"            # Informational messages
 
 
 # Frozenset of message types that should NOT be persisted in websockets.py

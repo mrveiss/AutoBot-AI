@@ -548,21 +548,25 @@ const autoApproveFuture = ref(false)
 // Computed
 const filteredMessages = computed(() => {
   return store.currentMessages.filter(message => {
+    // Issue #650: Check both top-level type AND metadata.display_type for filtering
+    // Backend now sends display_type in metadata for proper categorization
+    const displayType = message.type || message.metadata?.display_type || 'response'
+
     // Filter messages based on display settings and message type
     // Show Utility Messages - controls tool usage messages
-    if (message.type === 'utility' && !displaySettings.value.showUtility) return false
+    if (displayType === 'utility' && !displaySettings.value.showUtility) return false
 
     // Show Thoughts - controls LLM thought messages
-    if (message.type === 'thought' && !displaySettings.value.showThoughts) return false
+    if (displayType === 'thought' && !displaySettings.value.showThoughts) return false
 
     // Show Planning Messages - controls LLM planning process messages
-    if (message.type === 'planning' && !displaySettings.value.showPlanning) return false
+    if (displayType === 'planning' && !displaySettings.value.showPlanning) return false
 
     // Show Debug Messages - controls debug output
-    if (message.type === 'debug' && !displaySettings.value.showDebug) return false
+    if (displayType === 'debug' && !displaySettings.value.showDebug) return false
 
     // Show Sources - controls source reference messages
-    if (message.type === 'sources' && !displaySettings.value.showSources) return false
+    if (displayType === 'sources' && !displaySettings.value.showSources) return false
 
     // Always show regular messages and responses
     return true

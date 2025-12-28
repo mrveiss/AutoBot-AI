@@ -10,6 +10,7 @@ Replaces SimpleChatWorkflow with proper async architecture
 import asyncio
 import logging
 import time
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -50,16 +51,21 @@ class KnowledgeStatus(Enum):
 
 @dataclass
 class WorkflowMessage:
-    """Structured workflow message"""
+    """Structured workflow message.
+
+    Issue #650: Added unique `id` field for message deduplication and tracking.
+    """
 
     type: str  # thought, planning, debug, utility, sources, json, response
     content: str
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))  # Issue #650: Unique ID
     timestamp: float = field(default_factory=time.time)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API response"""
         return {
+            "id": self.id,  # Issue #650: Include ID for frontend deduplication
             "type": self.type,
             "content": (
                 self.content
