@@ -42,20 +42,21 @@ export class BatchApiService {
   }
 
   /**
-   * DEPRECATED: Backend doesn't have /api/batch/chat-init endpoint
-   * Using fallback method to load chat interface data
+   * Load chat interface data using individual API calls.
+   * Note: Batch endpoint doesn't exist, so we use parallel individual calls instead.
    */
   async initializeChatInterface(): Promise<any> {
-    logger.warn('Batch chat initialization endpoint does not exist. Using fallback individual API calls.');
+    // Debug level - this is expected behavior, not a warning condition
+    logger.debug('Using individual API calls for chat initialization');
     return await this.fallbackChatInitialization();
   }
 
   /**
-   * DEPRECATED: Backend doesn't have /api/batch/chat-init/{sessionId} endpoint
-   * Load chat initialization data for a specific session using individual calls
+   * Load chat initialization data for a specific session using individual calls.
+   * Note: Batch endpoint doesn't exist, so we use parallel individual calls instead.
    */
   async loadChatInitData(sessionId: string): Promise<ChatInitData> {
-    logger.warn('Batch chat init data endpoint does not exist. Using individual API calls.');
+    logger.debug('Loading chat init data for session:', sessionId);
 
     try {
       // Get session messages

@@ -116,7 +116,8 @@ async function loadHostsFromBackend(): Promise<void> {
         logger.warn('Backend hosts array contained no valid hosts, using defaults')
       }
     } else {
-      logger.warn('Backend config does not contain valid hosts array, using defaults')
+      // Debug level - using defaults is expected when backend doesn't provide hosts
+      logger.debug('Backend config does not contain hosts array, using defaults')
     }
   } catch (error) {
     logger.warn('Failed to load hosts from backend, using defaults:', error)
