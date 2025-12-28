@@ -98,6 +98,38 @@ _NON_CONFIG_NUMERIC_CONTEXTS = (
     '/=',          # Compound assignment
     '//=',         # Floor division assignment
     '**',          # Power
+    'chunk_size',  # Buffer/chunk sizing
+    'batch_size',  # Batch processing
+    'buffer_size', # Buffer sizing
+    'page_size',   # Pagination
+    'step',        # Iteration steps
+    'offset',      # Pagination offset
+    'indent',      # Formatting
+    'width',       # Dimensions
+    'height',      # Dimensions
+    'padding',     # Spacing
+    'margin',      # Spacing
+)
+
+# Issue #630: Path patterns that are NOT configurable (API routes, URL patterns)
+_NON_CONFIG_PATH_PATTERNS = (
+    '@router.',     # FastAPI/Flask route decorators
+    '@app.',        # Flask/FastAPI app decorators
+    'path(',        # FastAPI path parameter
+    'prefix=',      # Router prefix
+    'include_router',  # Router includes
+    'add_api_route',   # Route registration
+    'APIRouter',    # Router definition
+    'WebSocket(',   # WebSocket routes
+)
+
+# Issue #630: Variable name patterns that indicate non-configurable values
+_NON_CONFIG_VARIABLE_NAMES = (
+    'chunk_size', 'batch_size', 'buffer_size', 'page_size',
+    'step', 'offset', 'indent', 'width', 'height',
+    'padding', 'margin', 'count', 'index', 'size',
+    'length', 'capacity', 'threshold', 'level',
+    'retry', 'retries', 'attempt', 'attempts',
 )
 
 
@@ -165,7 +197,8 @@ class EnvironmentAnalyzer:
             ],
             'api_keys': [
                 r'["\'](?:sk-|pk_|rk_)[A-Za-z0-9_-]+["\']',  # API key patterns
-                r'["\'][A-Za-z0-9_-]{20,}["\']',  # Long strings that might be keys
+                # Issue #630: Removed overly broad "long string" pattern that caused false positives
+                # Previously: r'["\'][A-Za-z0-9_-]{20,}["\']' matched any 20+ char string
             ],
             'hostnames': [
                 r'["\']localhost["\']',
@@ -501,7 +534,7 @@ class EnvironmentAnalyzer:
             current_usage=current_usage
         )
 
-    def _is_potentially_configurable(self, value: str) -> bool:
+    def _is_potentially_configurable(self, value: str, context: str = "") -> bool:
         """Check if a string value is potentially configurable (Issue #630 - stricter filtering)"""
 
         # Issue #630: Guard against None values
@@ -539,10 +572,15 @@ class EnvironmentAnalyzer:
         if len(value) > 200:
             return False
 
+        # Issue #630: Skip API route paths (FastAPI/Flask decorators)
+        if value.startswith('/') and self._is_api_route_context(value, context):
+            return False
+
         # Check for actual configuration patterns (be specific, not broad)
         config_indicators = [
             # Paths (but not just any path - actual file system paths)
-            value.startswith('/') and not value.startswith('//'),  # Absolute paths, not URLs
+            # Must have at least one directory component to be a real path
+            value.startswith('/') and not value.startswith('//') and '/' in value[1:],
             value.startswith('./') and '/' in value[2:],  # Relative paths with depth
 
             # Config file extensions
@@ -558,6 +596,29 @@ class EnvironmentAnalyzer:
         ]
 
         return any(config_indicators)
+
+    def _is_api_route_context(self, value: str, context: str) -> bool:
+        """Issue #630: Check if a path value is an API route decorator.
+
+        API routes like @router.post("/enhanced") should not be flagged as
+        configurable paths - they are part of the API contract.
+        """
+        # Check if context contains API route patterns
+        for pattern in _NON_CONFIG_PATH_PATTERNS:
+            if pattern in context:
+                return True
+
+        # Also check for common route decorator patterns directly
+        if context.strip().startswith(('@router.', '@app.', '@api.')):
+            return True
+
+        # Check for single-segment paths (likely routes, not file paths)
+        # e.g., "/enhanced" vs "/home/user/data"
+        if value.startswith('/') and value.count('/') == 1:
+            # Single segment like "/api" or "/health" - likely a route
+            return True
+
+        return False
 
     def _is_numeric_config_candidate(self, value: str) -> bool:
         """Check if a numeric value is a configuration candidate"""
