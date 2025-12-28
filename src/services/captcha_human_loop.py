@@ -221,6 +221,33 @@ class CaptchaHumanLoop:
 
         return None
 
+    async def _wait_for_human_resolution(
+        self, captcha_id: str, url: str, resolution_event: asyncio.Event
+    ) -> tuple[CaptchaResolutionStatus, bool]:
+        """Wait for human resolution with timeout handling."""
+        try:
+            await asyncio.wait_for(
+                resolution_event.wait(),
+                timeout=self.timeout_seconds,
+            )
+
+            status = self._resolution_results.get(
+                captcha_id, CaptchaResolutionStatus.ERROR
+            )
+            success = status == CaptchaResolutionStatus.SOLVED
+
+            if success:
+                logger.info("CAPTCHA %s solved by user", captcha_id)
+            else:
+                logger.info("CAPTCHA %s skipped by user", captcha_id)
+
+            return status, success
+
+        except asyncio.TimeoutError:
+            logger.warning("CAPTCHA resolution timeout after %ss", self.timeout_seconds)
+            await self._notify_captcha_timeout(captcha_id, url)
+            return CaptchaResolutionStatus.TIMEOUT, False
+
     async def request_human_intervention(
         self,
         page: Page,
@@ -229,8 +256,6 @@ class CaptchaHumanLoop:
         captcha_input_selector: Optional[str] = None,
     ) -> CaptchaResolutionResult:
         """Handle CAPTCHA with automatic solving attempt, then human fallback.
-
-        Issue #315: Refactored to use helper methods for reduced nesting.
 
         Args:
             page: Playwright page with CAPTCHA
@@ -247,11 +272,10 @@ class CaptchaHumanLoop:
         logger.info("Handling CAPTCHA at %s (type: %s)", url, captcha_type)
 
         try:
-            # Take screenshot of CAPTCHA
             screenshot = await page.screenshot(full_page=False)
             screenshot_b64 = base64.b64encode(screenshot).decode("utf-8")
 
-            # === STEP 1: Attempt automatic solving ===
+            # Step 1: Attempt automatic solving
             auto_result = await self._handle_auto_solve(
                 page, screenshot, captcha_type, captcha_input_selector,
                 captcha_id, url, start_time
@@ -259,15 +283,13 @@ class CaptchaHumanLoop:
             if auto_result:
                 return auto_result
 
-            # === STEP 2: Fall back to human intervention ===
+            # Step 2: Fall back to human intervention
             logger.info("Requesting human intervention for CAPTCHA at %s", url)
 
-            # Create pending resolution event
             resolution_event = asyncio.Event()
             self._pending_resolutions[captcha_id] = resolution_event
             self._resolution_results[captcha_id] = CaptchaResolutionStatus.PENDING
 
-            # Send WebSocket notification
             await self._notify_captcha_detected(
                 captcha_id=captcha_id,
                 url=url,
@@ -275,40 +297,15 @@ class CaptchaHumanLoop:
                 screenshot_b64=screenshot_b64,
             )
 
-            # Wait for resolution or timeout
-            try:
-                await asyncio.wait_for(
-                    resolution_event.wait(),
-                    timeout=self.timeout_seconds,
-                )
-
-                # Check result
-                status = self._resolution_results.get(
-                    captcha_id, CaptchaResolutionStatus.ERROR
-                )
-                success = status == CaptchaResolutionStatus.SOLVED
-
-                if success:
-                    logger.info("CAPTCHA %s solved by user", captcha_id)
-                else:
-                    logger.info("CAPTCHA %s skipped by user", captcha_id)
-
-            except asyncio.TimeoutError:
-                status = CaptchaResolutionStatus.TIMEOUT
-                success = False
-                logger.warning("CAPTCHA resolution timeout after %ss", self.timeout_seconds)
-
-                # Notify frontend of timeout
-                await self._notify_captcha_timeout(captcha_id, url)
+            status, success = await self._wait_for_human_resolution(
+                captcha_id, url, resolution_event
+            )
 
         except Exception as e:
-            status = CaptchaResolutionStatus.ERROR
-            success = False
             logger.error("Error requesting CAPTCHA intervention: %s", e)
-
             return CaptchaResolutionResult(
                 success=False,
-                status=status,
+                status=CaptchaResolutionStatus.ERROR,
                 captcha_id=captcha_id,
                 url=url,
                 duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
@@ -316,18 +313,15 @@ class CaptchaHumanLoop:
             )
 
         finally:
-            # Cleanup
             self._pending_resolutions.pop(captcha_id, None)
             self._resolution_results.pop(captcha_id, None)
-
-        duration = (datetime.utcnow() - start_time).total_seconds()
 
         return CaptchaResolutionResult(
             success=success,
             status=status,
             captcha_id=captcha_id,
             url=url,
-            duration_seconds=duration,
+            duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
         )
 
     async def mark_captcha_resolved(

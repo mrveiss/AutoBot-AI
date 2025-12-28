@@ -122,6 +122,94 @@ class ParallelToolExecutor:
         self.config = config or ParallelExecutorConfig()
         self.analyzer = DependencyAnalyzer()
 
+    async def _execute_group(
+        self,
+        group: list[ToolCall],
+        group_idx: int,
+        task_id: Optional[str],
+        results: dict[str, Any],
+        metrics: ExecutionMetrics,
+    ) -> None:
+        """Execute a single group of parallel tool calls."""
+        group_id = f"group-{group_idx}"
+
+        logger.debug(
+            "Executing group %d with %d calls: %s",
+            group_idx + 1,
+            len(group),
+            [c.tool_name for c in group],
+        )
+
+        for call in group:
+            call.parallel_group_id = group_id
+
+        if len(group) == 1:
+            metrics.sequential_calls += 1
+
+        semaphore = asyncio.Semaphore(self.config.max_parallel_calls)
+        tasks = [
+            self._execute_with_semaphore(call, task_id, semaphore)
+            for call in group
+        ]
+
+        try:
+            group_results = await asyncio.wait_for(
+                asyncio.gather(*tasks, return_exceptions=True),
+                timeout=self.config.group_timeout_ms / 1000,
+            )
+        except asyncio.TimeoutError:
+            logger.error("Group %d timed out", group_idx)
+            for call in group:
+                if call.status == "running":
+                    call.status = "failed"
+                    call.error = "Timeout"
+                    results[call.call_id] = {"error": "Timeout"}
+            return
+
+        await self._process_group_results(group, group_results, task_id, results)
+
+    async def _process_group_results(
+        self,
+        group: list[ToolCall],
+        group_results: list[Any],
+        task_id: Optional[str],
+        results: dict[str, Any],
+    ) -> None:
+        """Process results from a group execution."""
+        for call, result in zip(group, group_results):
+            if isinstance(result, Exception):
+                call.status = "failed"
+                call.error = str(result)
+                results[call.call_id] = {"error": str(result)}
+
+                if self.config.retry_failed:
+                    retry_result = await self._retry_call(call, task_id)
+                    if retry_result is not None:
+                        results[call.call_id] = retry_result
+            else:
+                call.status = "completed"
+                call.result = result
+                results[call.call_id] = result
+
+    def _log_execution_metrics(
+        self, metrics: ExecutionMetrics, tool_calls: list[ToolCall], start_time: float
+    ) -> None:
+        """Calculate and log execution metrics."""
+        total_time = (time.monotonic() - start_time) * 1000
+        metrics.parallel_time_ms = total_time
+        metrics.sequential_time_ms = sum(c.execution_time_ms for c in tool_calls)
+        metrics.total_time_ms = total_time
+        metrics.calculate_speedup()
+
+        if self.config.collect_metrics:
+            logger.info(
+                "Parallel execution complete: %.1fms (sequential would be %.1fms, "
+                "speedup: %.2fx)",
+                metrics.parallel_time_ms,
+                metrics.sequential_time_ms,
+                metrics.speedup_factor,
+            )
+
     async def execute_batch(
         self,
         tool_calls: list[ToolCall],
@@ -143,10 +231,7 @@ class ParallelToolExecutor:
         start_time = time.monotonic()
         metrics = ExecutionMetrics(total_calls=len(tool_calls))
 
-        # Analyze dependencies
         self.analyzer.analyze_dependencies(tool_calls)
-
-        # Get parallel groups
         groups = self.analyzer.get_parallel_groups(tool_calls)
         metrics.parallel_groups = len(groups)
 
@@ -159,80 +244,10 @@ class ParallelToolExecutor:
 
         results: dict[str, Any] = {}
 
-        # Execute groups sequentially, calls within groups in parallel
         for group_idx, group in enumerate(groups):
-            group_id = f"group-{group_idx}"
+            await self._execute_group(group, group_idx, task_id, results, metrics)
 
-            logger.debug(
-                "Executing group %d/%d with %d calls: %s",
-                group_idx + 1,
-                len(groups),
-                len(group),
-                [c.tool_name for c in group],
-            )
-
-            # Assign parallel group ID
-            for call in group:
-                call.parallel_group_id = group_id
-
-            # Track if this is truly parallel
-            if len(group) == 1:
-                metrics.sequential_calls += 1
-
-            # Execute group in parallel (with limit)
-            semaphore = asyncio.Semaphore(self.config.max_parallel_calls)
-            tasks = [
-                self._execute_with_semaphore(call, task_id, semaphore)
-                for call in group
-            ]
-
-            # Wait for group with timeout
-            try:
-                group_results = await asyncio.wait_for(
-                    asyncio.gather(*tasks, return_exceptions=True),
-                    timeout=self.config.group_timeout_ms / 1000,
-                )
-            except asyncio.TimeoutError:
-                logger.error("Group %d timed out", group_idx)
-                for call in group:
-                    if call.status == "running":
-                        call.status = "failed"
-                        call.error = "Timeout"
-                        results[call.call_id] = {"error": "Timeout"}
-                continue
-
-            # Process results
-            for call, result in zip(group, group_results):
-                if isinstance(result, Exception):
-                    call.status = "failed"
-                    call.error = str(result)
-                    results[call.call_id] = {"error": str(result)}
-
-                    # Retry if configured
-                    if self.config.retry_failed:
-                        retry_result = await self._retry_call(call, task_id)
-                        if retry_result is not None:
-                            results[call.call_id] = retry_result
-                else:
-                    call.status = "completed"
-                    call.result = result
-                    results[call.call_id] = result
-
-        # Calculate metrics
-        total_time = (time.monotonic() - start_time) * 1000
-        metrics.parallel_time_ms = total_time
-        metrics.sequential_time_ms = sum(c.execution_time_ms for c in tool_calls)
-        metrics.total_time_ms = total_time
-        metrics.calculate_speedup()
-
-        if self.config.collect_metrics:
-            logger.info(
-                "Parallel execution complete: %.1fms (sequential would be %.1fms, "
-                "speedup: %.2fx)",
-                metrics.parallel_time_ms,
-                metrics.sequential_time_ms,
-                metrics.speedup_factor,
-            )
+        self._log_execution_metrics(metrics, tool_calls, start_time)
 
         return results
 

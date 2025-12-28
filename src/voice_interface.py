@@ -80,6 +80,114 @@ except ImportError:
     SOUNDDEVICE_AVAILABLE = False
 
 
+def _check_vosk_dependencies(vosk_model_path: str, model) -> Optional[Dict[str, Any]]:
+    """
+    Check Vosk dependencies and return error dict if not available.
+
+    Returns:
+        Error dict if dependencies missing, None if all OK
+    """
+    if not VOSK_AVAILABLE:
+        return {
+            "status": "error",
+            "message": "Vosk not available. Install with: pip install vosk",
+        }
+
+    if not SOUNDDEVICE_AVAILABLE:
+        return {
+            "status": "error",
+            "message": (
+                "sounddevice not available. "
+                "Install with: pip install sounddevice soundfile"
+            ),
+        }
+
+    if model is None:
+        return {
+            "status": "error",
+            "message": (
+                f"Vosk model not found at {vosk_model_path}. "
+                "Download from https://alphacephei.com/vosk/models"
+            ),
+        }
+
+    return None
+
+
+def _vosk_recognize_blocking(
+    model,
+    timeout: Optional[float],
+    phrase_time_limit: Optional[float],
+) -> Dict[str, Any]:
+    """
+    Blocking Vosk recognition for use in executor.
+
+    Args:
+        model: Vosk KaldiRecognizer model
+        timeout: Maximum wait time for speech start
+        phrase_time_limit: Maximum phrase duration
+
+    Returns:
+        Recognition result dict
+    """
+    import queue
+
+    sample_rate = 16000
+    block_size = 8000
+
+    recognizer = KaldiRecognizer(model, sample_rate)
+    audio_queue = queue.Queue()
+
+    def callback(indata, frames, time_info, status):
+        if status:
+            logger.warning("Vosk audio callback status: %s", status)
+        audio_queue.put(bytes(indata))
+
+    with sd.RawInputStream(
+        samplerate=sample_rate,
+        blocksize=block_size,
+        dtype="int16",
+        channels=1,
+        callback=callback,
+    ):
+        logger.debug("Vosk listening started...")
+        start_time = asyncio.get_event_loop().time()
+        speech_detected = False
+
+        while True:
+            elapsed = asyncio.get_event_loop().time() - start_time
+
+            # Check timeout
+            if timeout and elapsed > timeout and not speech_detected:
+                return {
+                    "status": "timeout",
+                    "message": "No speech detected within timeout.",
+                }
+
+            # Check phrase time limit
+            if phrase_time_limit and elapsed > phrase_time_limit:
+                partial = json.loads(recognizer.FinalResult())
+                text = partial.get("text", "").strip()
+                if text:
+                    return {"status": "success", "text": text}
+                return {
+                    "status": "no_match",
+                    "message": "Could not understand audio.",
+                }
+
+            try:
+                data = audio_queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
+
+            if recognizer.AcceptWaveform(data):
+                speech_detected = True
+                result = json.loads(recognizer.Result())
+                text = result.get("text", "").strip()
+                if text:
+                    return {"status": "success", "text": text}
+
+
 class VoiceInterface:
     """Voice interface for speech-to-text and text-to-speech operations.
 
@@ -362,95 +470,20 @@ class VoiceInterface:
         Returns:
             Dict with status and recognized text or error message.
         """
-        if not VOSK_AVAILABLE:
-            return {
-                "status": "error",
-                "message": "Vosk not available. Install with: pip install vosk",
-            }
-
-        if not SOUNDDEVICE_AVAILABLE:
-            return {
-                "status": "error",
-                "message": (
-                    "sounddevice not available. "
-                    "Install with: pip install sounddevice soundfile"
-                ),
-            }
-
         model = self._get_vosk_model()
-        if model is None:
-            return {
-                "status": "error",
-                "message": (
-                    f"Vosk model not found at {self._vosk_model_path}. "
-                    "Download from https://alphacephei.com/vosk/models"
-                ),
-            }
+        dep_error = _check_vosk_dependencies(self._vosk_model_path, model)
+        if dep_error:
+            return dep_error
 
         try:
             loop = asyncio.get_running_loop()
-
-            def _vosk_recognize():
-                """Blocking Vosk recognition in executor."""
-                import queue
-
-                sample_rate = 16000
-                block_size = 8000
-
-                recognizer = KaldiRecognizer(model, sample_rate)
-                audio_queue = queue.Queue()
-
-                def callback(indata, frames, time_info, status):
-                    if status:
-                        logger.warning("Vosk audio callback status: %s", status)
-                    audio_queue.put(bytes(indata))
-
-                with sd.RawInputStream(
-                    samplerate=sample_rate,
-                    blocksize=block_size,
-                    dtype="int16",
-                    channels=1,
-                    callback=callback,
-                ):
-                    logger.debug("Vosk listening started...")
-                    start_time = asyncio.get_event_loop().time()
-                    speech_detected = False
-
-                    while True:
-                        elapsed = asyncio.get_event_loop().time() - start_time
-
-                        # Check timeout
-                        if timeout and elapsed > timeout and not speech_detected:
-                            return {
-                                "status": "timeout",
-                                "message": "No speech detected within timeout.",
-                            }
-
-                        # Check phrase time limit
-                        if phrase_time_limit and elapsed > phrase_time_limit:
-                            # Get partial result
-                            partial = json.loads(recognizer.FinalResult())
-                            text = partial.get("text", "").strip()
-                            if text:
-                                return {"status": "success", "text": text}
-                            return {
-                                "status": "no_match",
-                                "message": "Could not understand audio.",
-                            }
-
-                        try:
-                            data = audio_queue.get(timeout=0.5)
-                        except queue.Empty:
-                            continue
-
-                        if recognizer.AcceptWaveform(data):
-                            speech_detected = True
-                            result = json.loads(recognizer.Result())
-                            text = result.get("text", "").strip()
-                            if text:
-                                return {"status": "success", "text": text}
-
-            result = await loop.run_in_executor(None, _vosk_recognize)
+            result = await loop.run_in_executor(
+                None,
+                _vosk_recognize_blocking,
+                model,
+                timeout,
+                phrase_time_limit,
+            )
             logger.debug("Vosk recognition result: %s", result)
             return result
 
