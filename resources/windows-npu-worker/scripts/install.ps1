@@ -183,6 +183,25 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Success "Python dependencies installed"
 
+# Verify PyTorch installation (required for model downloading and ONNX export)
+Write-Info "Verifying PyTorch installation..."
+$torchCheck = & $pythonExe -c "import torch; print(f'PyTorch {torch.__version__}')" 2>&1
+if ($LASTEXITCODE -eq 0) {
+    Write-Success "$torchCheck"
+} else {
+    Write-Warning "PyTorch verification failed - model downloading may not work"
+    Write-Info "Try: pip install torch --index-url https://download.pytorch.org/whl/cpu"
+}
+
+# Verify sentence-transformers installation
+Write-Info "Verifying sentence-transformers installation..."
+$stCheck = & $pythonExe -c "import sentence_transformers; print(f'sentence-transformers {sentence_transformers.__version__}')" 2>&1
+if ($LASTEXITCODE -eq 0) {
+    Write-Success "$stCheck"
+} else {
+    Write-Warning "sentence-transformers verification failed - embedding models may not work"
+}
+
 # Verify ONNX Runtime installation (Issue #640: Uses OpenVINO EP for Intel NPU)
 Write-Info "Verifying ONNX Runtime OpenVINO installation..."
 $onnxCheck = & $pythonExe -c "import onnxruntime as ort; print(f'ONNX Runtime {ort.__version__}')" 2>&1

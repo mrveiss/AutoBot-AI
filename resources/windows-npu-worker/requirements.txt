@@ -38,9 +38,19 @@ openvino>=2024.0.0
 transformers>=4.36.0
 tokenizers>=0.15.0
 sentencepiece>=0.1.99
+sentence-transformers>=2.2.0
 
-# ONNX model format
+# ONNX model format and export
 onnx>=1.14.0
+
+# =============================================================================
+# PyTorch (CPU-only for model downloading and ONNX export)
+# =============================================================================
+# Required for downloading models from HuggingFace and exporting to ONNX format.
+# CPU-only version keeps installation smaller - actual inference uses ONNX Runtime.
+# Note: This installs from PyTorch's CPU-only index for Windows.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.0.0
 
 # =============================================================================
 # Scientific Computing
