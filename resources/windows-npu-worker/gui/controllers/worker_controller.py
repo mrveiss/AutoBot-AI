@@ -17,7 +17,7 @@ class StatusChecker(QThread):
 
     status_checked = Signal(str)  # "running" or "stopped"
 
-    def __init__(self, api_url: str, timeout: float = 0.5):
+    def __init__(self, api_url: str, timeout: float = 5.0):
         super().__init__()
         self.api_url = api_url
         self.timeout = timeout
@@ -102,7 +102,7 @@ class WorkerController(QObject):
         if self._status_checker is not None and self._status_checker.isRunning():
             return
 
-        self._status_checker = StatusChecker(self.api_url, timeout=0.5)
+        self._status_checker = StatusChecker(self.api_url, timeout=5.0)
         self._status_checker.status_checked.connect(self._on_status_checked)
         self._status_checker.start()
 

@@ -329,6 +329,7 @@ class ONNXModelManager:
         self._available_providers: List[str] = []
         self._initialized = False
         self._openvino_device: str = "CPU"  # NPU, GPU, or CPU
+        self._device_full_names: Dict[str, str] = {}  # Full device names from OpenVINO
 
     def _initialize_onnx_runtime(self):
         """Lazy initialize ONNX Runtime and detect available providers"""
@@ -366,7 +367,7 @@ class ONNXModelManager:
             raise
 
     def _detect_openvino_devices(self):
-        """Detect available OpenVINO devices (NPU, GPU, CPU)"""
+        """Detect available OpenVINO devices (NPU, GPU, CPU) and their full names"""
         try:
             # Try to import OpenVINO to check available devices
             from openvino import Core
@@ -374,19 +375,32 @@ class ONNXModelManager:
             available_devices = core.available_devices
             logger.info(f"OpenVINO available devices: {available_devices}")
 
+            # Get full device names for each device
+            for device in available_devices:
+                try:
+                    full_name = core.get_property(device, "FULL_DEVICE_NAME")
+                    self._device_full_names[device] = full_name
+                    logger.info(f"Device {device}: {full_name}")
+                except Exception as e:
+                    logger.debug(f"Could not get full name for {device}: {e}")
+                    self._device_full_names[device] = device
+
             # Priority: NPU > GPU > CPU
             if "NPU" in available_devices:
                 self._selected_device = "NPU"
                 self._openvino_device = "NPU"
-                logger.info("Intel NPU detected via OpenVINO - using NPU acceleration!")
+                npu_name = self._device_full_names.get("NPU", "Intel NPU")
+                logger.info(f"Intel NPU detected: {npu_name} - using NPU acceleration!")
             elif "GPU" in available_devices:
                 self._selected_device = "GPU"
                 self._openvino_device = "GPU"
-                logger.info("Intel GPU detected via OpenVINO - using GPU acceleration")
+                gpu_name = self._device_full_names.get("GPU", "Intel GPU")
+                logger.info(f"Intel GPU detected: {gpu_name} - using GPU acceleration")
             else:
                 self._selected_device = "CPU"
                 self._openvino_device = "CPU"
-                logger.info("Using CPU via OpenVINO (NPU/GPU not available)")
+                cpu_name = self._device_full_names.get("CPU", "CPU")
+                logger.info(f"Using CPU via OpenVINO: {cpu_name}")
 
         except ImportError:
             # OpenVINO not installed separately, use EP defaults
@@ -596,7 +610,10 @@ class ONNXModelManager:
             logger.info(f"Session created with providers: {actual_providers}")
 
             # Update selected device based on actual provider
-            if "DmlExecutionProvider" in actual_providers:
+            if "OpenVINOExecutionProvider" in actual_providers:
+                # OpenVINO EP is being used - check which device it's targeting
+                self._selected_device = self._openvino_device  # NPU, GPU, or CPU
+            elif "DmlExecutionProvider" in actual_providers:
                 self._selected_device = "DirectML"
             elif "CUDAExecutionProvider" in actual_providers:
                 self._selected_device = "CUDA"
@@ -669,8 +686,15 @@ class ONNXModelManager:
         try:
             self._initialize_onnx_runtime()
 
+            # Get the full device name for the selected device
+            selected_full_name = self._device_full_names.get(
+                self._openvino_device,
+                self._selected_device or "Unknown"
+            )
+
             info = {
                 "selected_device": self._selected_device or "Unknown",
+                "selected_device_full_name": selected_full_name,
                 "openvino_device": self._openvino_device,
                 "available_providers": self._available_providers,
                 "device_priority": ["OpenVINOExecutionProvider (NPU)", "OpenVINOExecutionProvider (GPU)", "DmlExecutionProvider", "CPUExecutionProvider"],
@@ -678,12 +702,13 @@ class ONNXModelManager:
                 "is_gpu": self._selected_device in ["GPU", "DirectML", "CUDA"] or self._openvino_device == "GPU",
                 "is_cpu": self._selected_device == "CPU" and self._openvino_device == "CPU",
                 "backend": "ONNX Runtime + OpenVINO EP",
+                "device_full_names": self._device_full_names,
             }
 
             # Check OpenVINO EP availability
             if "OpenVINOExecutionProvider" in self._available_providers:
                 info["openvino_available"] = True
-                info["device_name"] = f"OpenVINO ({self._openvino_device})"
+                info["device_name"] = selected_full_name
 
                 # Try to get detailed device info
                 try:

@@ -28,6 +28,8 @@ class StatusPanel(QWidget):
         npu_layout.addWidget(QLabel("NPU Available:"), 0, 0)
         self.npu_available_label = QLabel("Unknown")
         self.npu_available_label.setStyleSheet("font-weight: bold;")
+        self.npu_available_label.setWordWrap(True)
+        self.npu_available_label.setMinimumWidth(150)
         npu_layout.addWidget(self.npu_available_label, 0, 1)
 
         # NPU Utilization

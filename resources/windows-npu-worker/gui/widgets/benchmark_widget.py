@@ -198,14 +198,19 @@ class BenchmarkWidget(QWidget):
         device_layout.addWidget(QLabel("Selected Device:"), 0, 0)
         self.device_label = QLabel("Unknown")
         self.device_label.setStyleSheet("font-weight: bold;")
+        self.device_label.setWordWrap(True)
+        self.device_label.setMinimumWidth(200)
         device_layout.addWidget(self.device_label, 0, 1)
 
         device_layout.addWidget(QLabel("Available Devices:"), 1, 0)
         self.available_devices_label = QLabel("...")
+        self.available_devices_label.setWordWrap(True)
+        self.available_devices_label.setMinimumWidth(200)
         device_layout.addWidget(self.available_devices_label, 1, 1)
 
         device_layout.addWidget(QLabel("Real Inference:"), 2, 0)
         self.real_inference_label = QLabel("Unknown")
+        self.real_inference_label.setWordWrap(True)
         device_layout.addWidget(self.real_inference_label, 2, 1)
 
         layout.addWidget(device_group)
@@ -374,8 +379,28 @@ Success Rate: {results.get('successful', 0) / max(results.get('total_requests', 
             response = requests.get(f"{self.api_url}/device-info", timeout=5)
             if response.status_code == 200:
                 info = response.json()
-                device = info.get("selected_device", "Unknown")
-                available = ", ".join(info.get("available_devices", []))
+                model_manager = info.get("model_manager", {})
+
+                # Use full device name if available, fallback to selected_device
+                device = (model_manager.get("selected_device_full_name") or
+                          model_manager.get("device_name") or
+                          info.get("selected_device", "Unknown"))
+                device_type = info.get("selected_device", "Unknown")
+
+                # Build available devices with full names if present
+                # device_full_names is inside model_manager
+                device_full_names = model_manager.get("device_full_names", {})
+                openvino_devices = model_manager.get("openvino_devices", [])
+
+                if device_full_names and openvino_devices:
+                    available_list = []
+                    for dev in openvino_devices:
+                        full_name = device_full_names.get(dev, dev)
+                        available_list.append(f"{dev}: {full_name}")
+                    available = "\n".join(available_list)
+                else:
+                    available = ", ".join(info.get("available_providers", []))
+
                 real_inference = info.get("real_inference_enabled", False)
 
                 self.device_label.setText(device)
@@ -389,9 +414,9 @@ Success Rate: {results.get('successful', 0) / max(results.get('total_requests', 
                     self.real_inference_label.setStyleSheet("color: orange; font-weight: bold;")
 
                 # Color device based on type
-                if device.startswith("NPU"):
+                if device_type == "NPU" or "NPU" in device:
                     self.device_label.setStyleSheet("color: green; font-weight: bold;")
-                elif device.startswith("GPU"):
+                elif device_type == "GPU" or "GPU" in device:
                     self.device_label.setStyleSheet("color: blue; font-weight: bold;")
                 else:
                     self.device_label.setStyleSheet("color: orange; font-weight: bold;")
