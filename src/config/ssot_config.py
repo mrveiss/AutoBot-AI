@@ -689,6 +689,76 @@ def get_default_llm_model() -> str:
     return get_config().llm.default_model
 
 
+# =============================================================================
+# Agent-Specific Configuration Functions
+# =============================================================================
+
+
+def get_agent_llm_config(agent_id: str) -> dict:
+    """
+    Get complete LLM configuration for a specific agent.
+
+    Each agent can have its own provider, endpoint, and model via environment variables:
+    - AUTOBOT_{AGENT_ID}_PROVIDER (e.g., AUTOBOT_ORCHESTRATOR_PROVIDER=openai)
+    - AUTOBOT_{AGENT_ID}_ENDPOINT (e.g., AUTOBOT_ORCHESTRATOR_ENDPOINT=https://api.openai.com/v1)
+    - AUTOBOT_{AGENT_ID}_MODEL (e.g., AUTOBOT_ORCHESTRATOR_MODEL=gpt-4)
+
+    If not specified, falls back to defaults from SSOT config.
+
+    Args:
+        agent_id: The agent identifier (e.g., "orchestrator", "chat", "rag")
+
+    Returns:
+        Dict with provider, endpoint, model, api_key, and timeout
+    """
+    return get_config().llm.get_agent_config(agent_id)
+
+
+def get_agent_endpoint(agent_id: str) -> str:
+    """
+    Get LLM API endpoint URL for a specific agent.
+
+    Checks AUTOBOT_{AGENT_ID}_ENDPOINT first, falls back to provider default.
+
+    Args:
+        agent_id: The agent identifier
+
+    Returns:
+        API endpoint URL for the agent's LLM provider
+    """
+    return get_config().llm.get_endpoint_for_agent(agent_id)
+
+
+def get_agent_model(agent_id: str) -> str:
+    """
+    Get LLM model name for a specific agent.
+
+    Checks AUTOBOT_{AGENT_ID}_MODEL first, falls back to default_model.
+
+    Args:
+        agent_id: The agent identifier
+
+    Returns:
+        Model name for the agent
+    """
+    return get_config().llm.get_model_for_agent(agent_id)
+
+
+def get_agent_provider(agent_id: str) -> str:
+    """
+    Get LLM provider for a specific agent.
+
+    Checks AUTOBOT_{AGENT_ID}_PROVIDER first, falls back to default provider.
+
+    Args:
+        agent_id: The agent identifier
+
+    Returns:
+        Provider name (ollama, openai, anthropic, custom)
+    """
+    return get_config().llm.get_provider_for_agent(agent_id)
+
+
 # Export commonly used values at module level for convenience
 __all__ = [
     "AutoBotConfig",
@@ -707,4 +777,9 @@ __all__ = [
     "get_ollama_url",
     "get_default_llm_model",
     "PROJECT_ROOT",
+    # Agent-specific configuration
+    "get_agent_llm_config",
+    "get_agent_endpoint",
+    "get_agent_model",
+    "get_agent_provider",
 ]
