@@ -39,6 +39,7 @@ transformers>=4.36.0
 tokenizers>=0.15.0
 sentencepiece>=0.1.99
 sentence-transformers>=2.2.0
+einops>=0.7.0
 
 # ONNX model format and export
 onnx>=1.14.0
