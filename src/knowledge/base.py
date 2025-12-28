@@ -165,14 +165,10 @@ class KnowledgeBaseCore:
     async def _configure_llama_index(self):
         """Configure LlamaIndex with Ollama models"""
         try:
-            # Manually construct Ollama URL due to config interpolation issue
-            ollama_host = config.get(
-                "infrastructure.hosts.ollama", NetworkConstants.MAIN_MACHINE_IP
-            )
-            ollama_port = config.get(
-                "infrastructure.ports.ollama", str(NetworkConstants.OLLAMA_PORT)
-            )
-            ollama_url = f"http://{ollama_host}:{ollama_port}"
+            # Issue #649: Use SSOT config for Ollama URL
+            from src.config.ssot_config import config as ssot_config
+            ollama_url = ssot_config.ollama_url
+            logger.debug("Using Ollama URL from SSOT config: %s", ollama_url)
             # Use kb_timeouts fallback directly since config.get_timeout() has different signature
             try:
                 llm_timeout = config.get_timeout("llm", "default")
