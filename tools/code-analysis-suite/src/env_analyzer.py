@@ -52,6 +52,54 @@ _URL_PROTOCOL_PREFIXES = ('http://', 'https://', 'ws://', 'wss://', 'ftp://', 'r
 _WEB_PROTOCOL_PREFIXES = ('http://', 'https://', 'ws://', 'wss://')
 _DATABASE_PROTOCOL_PREFIXES = ('postgresql://', 'mysql://', 'redis://', 'mongodb://')
 
+# Issue #630: Directories to skip during analysis (false positive reduction)
+_SKIP_DIRECTORIES = (
+    '__pycache__', '.git', 'node_modules', '.venv', 'venv', 'env',
+    'tests', 'test', 'testing', 'benchmark', 'benchmarks',
+    '.pytest_cache', '.mypy_cache', '.tox', 'htmlcov',
+    'dist', 'build', 'egg-info', '.eggs',
+    'migrations', 'fixtures', 'mocks', 'stubs',
+    'templates', 'static', 'assets',  # Code generation templates
+)
+
+# Issue #630: File patterns to skip
+_SKIP_FILE_PATTERNS = (
+    'test_', '_test.py', '_tests.py', 'conftest.py',
+    'setup.py', 'setup.cfg', 'pyproject.toml',
+    '__init__.py',  # Usually just imports
+    '_fixture', '_mock', '_stub',
+    'benchmark_', '_benchmark.py',
+)
+
+# Issue #630: Context patterns that indicate non-configurable numeric values
+_NON_CONFIG_NUMERIC_CONTEXTS = (
+    'range(',      # Loop counters
+    'enumerate(',  # Iteration
+    'min(',        # Math operations
+    'max(',        # Math operations
+    'len(',        # Length operations
+    'abs(',        # Math
+    'sum(',        # Math
+    'round(',      # Math
+    'floor(',      # Math
+    'ceil(',       # Math
+    'pow(',        # Math
+    'divmod(',     # Math
+    'slice(',      # Indexing
+    '[',           # Array indexing
+    ']:',          # Slice notation
+    '% ',          # Modulo operation
+    '%=',          # Modulo assignment
+    '+ 1',         # Increment pattern
+    '- 1',         # Decrement pattern
+    '+=',          # Compound assignment
+    '-=',          # Compound assignment
+    '*=',          # Compound assignment
+    '/=',          # Compound assignment
+    '//=',         # Floor division assignment
+    '**',          # Power
+)
+
 
 @dataclass
 class HardcodedValue:
@@ -211,20 +259,26 @@ class EnvironmentAnalyzer:
             logger.warning(f"Failed to scan {file_path}: {e}")
 
     def _should_skip_file(self, file_path: Path) -> bool:
-        """Check if file should be skipped"""
-        skip_patterns = [
-            "__pycache__",
-            ".git",
-            "node_modules",
-            ".venv",
-            "venv",
-            "test_",
-            "_test.py",
-            ".pyc",
-        ]
-
+        """Check if file should be skipped (Issue #630: Enhanced filtering)"""
         path_str = str(file_path)
-        return any(pattern in path_str for pattern in skip_patterns)
+        file_name = file_path.name
+
+        # Check directory-based exclusions
+        path_parts = path_str.lower().split('/')
+        for skip_dir in _SKIP_DIRECTORIES:
+            if skip_dir in path_parts:
+                return True
+
+        # Check file pattern exclusions
+        for pattern in _SKIP_FILE_PATTERNS:
+            if pattern in file_name:
+                return True
+
+        # Skip compiled Python files
+        if file_name.endswith('.pyc'):
+            return True
+
+        return False
 
     async def _scan_file_for_hardcoded_values(self, file_path: str) -> List[HardcodedValue]:
         """Scan a single file for hardcoded values"""
@@ -253,15 +307,61 @@ class EnvironmentAnalyzer:
         return hardcoded_values
 
     async def _scan_ast_for_hardcoded_values(self, file_path: str, tree: ast.AST, lines: List[str]) -> List[HardcodedValue]:
-        """Scan AST for hardcoded values with context (Issue #340 - refactored)"""
+        """Scan AST for hardcoded values with context (Issue #340, #630 - docstring filtering)"""
         hardcoded_values = []
 
+        # Issue #630: Collect all docstring line numbers to filter them out
+        docstring_lines = self._get_docstring_lines(tree)
+
         for node in ast.walk(tree):
+            # Issue #630: Skip nodes on docstring lines
+            if hasattr(node, 'lineno') and node.lineno in docstring_lines:
+                continue
+
             hv = self._extract_hardcoded_from_node(node, file_path, lines)
             if hv:
                 hardcoded_values.append(hv)
 
         return hardcoded_values
+
+    def _get_docstring_lines(self, tree: ast.AST) -> set:
+        """Issue #630: Identify all lines that are part of docstrings.
+
+        Docstrings are:
+        - Module-level string literals as first statement
+        - Function/method-level string literals as first statement in body
+        - Class-level string literals as first statement in body
+        """
+        docstring_lines = set()
+
+        # Check module docstring
+        if tree.body and isinstance(tree.body[0], ast.Expr):
+            expr_value = tree.body[0].value
+            if isinstance(expr_value, (ast.Str, ast.Constant)):
+                node = tree.body[0]
+                start = node.lineno
+                end = getattr(node, 'end_lineno', start) or start
+                for line in range(start, end + 1):
+                    docstring_lines.add(line)
+
+        # Walk tree for function and class definitions
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                if node.body and isinstance(node.body[0], ast.Expr):
+                    expr_value = node.body[0].value
+                    # Check for string constant (docstring)
+                    is_docstring = (
+                        isinstance(expr_value, ast.Str) or
+                        (isinstance(expr_value, ast.Constant) and isinstance(expr_value.value, str))
+                    )
+                    if is_docstring:
+                        doc_node = node.body[0]
+                        start = doc_node.lineno
+                        end = getattr(doc_node, 'end_lineno', start) or start
+                        for line in range(start, end + 1):
+                            docstring_lines.add(line)
+
+        return docstring_lines
 
     def _extract_hardcoded_from_node(self, node: ast.AST, file_path: str, lines: List[str]) -> Optional[HardcodedValue]:
         """Extract hardcoded value from AST node (Issue #340 - extracted)"""
@@ -284,11 +384,32 @@ class EnvironmentAnalyzer:
         return self._create_hardcoded_value(file_path, node.lineno, None, value, lines)
 
     def _extract_from_num_node(self, node: ast.Num, file_path: str, lines: List[str]) -> Optional[HardcodedValue]:
-        """Extract from numeric node (Issue #340 - extracted)"""
+        """Extract from numeric node (Issue #340 - extracted, Issue #630 - context filtering)"""
         value = str(node.n)
         if not self._is_numeric_config_candidate(value):
             return None
+
+        # Issue #630: Check context to filter out non-configurable numerics
+        if node.lineno <= len(lines):
+            line_context = lines[node.lineno - 1]
+            if self._is_non_config_numeric_context(line_context):
+                return None
+
         return self._create_hardcoded_value(file_path, node.lineno, None, value, lines)
+
+    def _is_non_config_numeric_context(self, line: str) -> bool:
+        """Issue #630: Check if a line contains patterns indicating non-configurable numerics.
+
+        This filters out:
+        - Loop counters: range(30), enumerate(items, 1)
+        - Math operations: min(5, x), max(10, y), x + 1, x - 1
+        - Array indexing: items[0], data[1:5]
+        - Compound assignments: x += 1, count -= 1
+        """
+        for pattern in _NON_CONFIG_NUMERIC_CONTEXTS:
+            if pattern in line:
+                return True
+        return False
 
     def _extract_from_assign_node(self, node: ast.Assign, file_path: str, lines: List[str]) -> Optional[HardcodedValue]:
         """Extract from assignment node (Issue #340 - extracted)"""
@@ -328,7 +449,19 @@ class EnvironmentAnalyzer:
         for category, compiled in self._compiled_patterns.items():
             for match in compiled.finditer(content):
                 line_num = content[:match.start()].count('\n') + 1
-                value = match.group(1) if match.groups() else match.group(0)
+                # Issue #630: Find the first non-None group
+                value = None
+                if match.groups():
+                    for g in match.groups():
+                        if g is not None:
+                            value = g
+                            break
+                if value is None:
+                    value = match.group(0)
+
+                # Issue #630: Skip None or empty values
+                if not value:
+                    continue
 
                 # Skip if already found by AST scanning
                 if not any(hv.line_number == line_num and hv.value == value for hv in hardcoded_values):
@@ -369,25 +502,59 @@ class EnvironmentAnalyzer:
         )
 
     def _is_potentially_configurable(self, value: str) -> bool:
-        """Check if a string value is potentially configurable"""
+        """Check if a string value is potentially configurable (Issue #630 - stricter filtering)"""
 
-        # Skip very short strings or common words
-        if len(value) < 3 or value.lower() in ['get', 'post', 'put', 'delete', 'true', 'false']:
+        # Issue #630: Guard against None values
+        if value is None:
             return False
 
-        # Check for configuration patterns
+        # Skip very short strings or common words
+        if len(value) < 3:
+            return False
+
+        # Issue #630: Common non-configurable strings to skip
+        skip_values = {
+            # HTTP methods
+            'get', 'post', 'put', 'delete', 'patch', 'head', 'options',
+            # Boolean-like
+            'true', 'false', 'yes', 'no', 'none', 'null',
+            # Common status/state strings
+            'success', 'error', 'warning', 'info', 'debug',
+            'pending', 'active', 'inactive', 'completed', 'failed',
+            # Common type annotations
+            'str', 'int', 'float', 'bool', 'list', 'dict', 'tuple', 'set',
+            'string', 'integer', 'number', 'boolean', 'array', 'object',
+            # Common method names/keywords
+            'init', 'self', 'cls', 'args', 'kwargs',
+        }
+        if value.lower() in skip_values:
+            return False
+
+        # Issue #630: Skip strings that look like code/documentation
+        # (contain newlines, start with common doc patterns, etc.)
+        if '\n' in value or value.startswith(('    ', '\t', '#', '//', '/*', '"""', "'''")):
+            return False
+
+        # Issue #630: Skip very long strings (likely templates/docs, not config)
+        if len(value) > 200:
+            return False
+
+        # Check for actual configuration patterns (be specific, not broad)
         config_indicators = [
-            # Paths
-            value.startswith('/'),
-            value.startswith('./'),
+            # Paths (but not just any path - actual file system paths)
+            value.startswith('/') and not value.startswith('//'),  # Absolute paths, not URLs
+            value.startswith('./') and '/' in value[2:],  # Relative paths with depth
+
+            # Config file extensions
             value.endswith(_CONFIG_FILE_EXTENSIONS),  # Issue #380
 
-            # URLs and network
+            # URLs and network (high-value targets)
             value.startswith(_URL_PROTOCOL_PREFIXES),  # Issue #380
             value in ['localhost', '127.0.0.1', '0.0.0.0'],
 
-            # API keys and tokens (basic heuristics)
-            (len(value) > 15 and any(c.isalnum() for c in value) and not value.isdigit()),
+            # Issue #630: Only flag strings that look like actual secrets/keys
+            # Must start with known API key prefixes
+            value.startswith(('sk-', 'pk_', 'rk_', 'api_', 'API_', 'Bearer ', 'token_')),
         ]
 
         return any(config_indicators)
@@ -409,6 +576,10 @@ class EnvironmentAnalyzer:
 
     def _classify_value(self, value: str, category: Optional[str], context: str) -> Tuple[str, str]:
         """Classify the value type and determine severity"""
+
+        # Issue #630: Guard against None values
+        if value is None:
+            return category or 'string', 'low'
 
         # High severity (security/infrastructure)
         if any(pattern in value.lower() for pattern in ['key', 'token', 'password', 'secret']):
