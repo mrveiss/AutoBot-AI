@@ -19,6 +19,13 @@ from src.async_chat_workflow import WorkflowMessage
 
 logger = logging.getLogger(__name__)
 
+# Issue #650: Pre-compiled regex for tool call parsing (performance optimization)
+# Handles both uppercase and lowercase TOOL_CALL tags with nested JSON in params
+_TOOL_CALL_PATTERN = re.compile(
+    r'<tool_call\s+name="([^"]+)"\s+params=(["\'])(.+?)\2>([^<]*)</tool_call>',
+    re.IGNORECASE | re.DOTALL
+)
+
 
 def _create_execution_result(
     command: str, host: str, result: Dict[str, Any], approved: bool = False
@@ -100,15 +107,11 @@ class ToolHandlerMixin:
 
         tool_calls = []
 
-        # Issue #650: Fixed regex pattern to handle nested JSON
-        # Old pattern: {[^}]+} couldn't handle {"key": {"nested": "value"}}
-        # New pattern: Uses non-greedy match (.+?) to capture everything up to closing quote+tag
-        # Format: <TOOL_CALL name="..." params='...'>...</TOOL_CALL>
-        pattern = r'<tool_call\s+name="([^"]+)"\s+params=(["\'])(.+?)\2>([^<]*)</tool_call>'
+        # Issue #650: Use pre-compiled regex pattern for performance
+        # Pattern handles nested JSON in params with non-greedy matching
+        logger.debug("[_parse_tool_calls] Using pre-compiled _TOOL_CALL_PATTERN")
 
-        logger.debug("[_parse_tool_calls] Using regex pattern: %s", pattern)
-
-        matches = re.finditer(pattern, text, re.IGNORECASE | re.DOTALL)
+        matches = _TOOL_CALL_PATTERN.finditer(text)
         match_count = 0
         for match in matches:
             match_count += 1
@@ -127,7 +130,11 @@ class ToolHandlerMixin:
                 )
             except json.JSONDecodeError as e:
                 logger.error("Failed to parse tool call params: %s", e)
-                logger.error("Params string was: %s", params_str[:200])
+                # Issue #650: Include total length for debugging truncated params
+                logger.error(
+                    "Params string (first 200 of %d chars): %s",
+                    len(params_str), params_str[:200]
+                )
                 continue
 
         logger.info(
