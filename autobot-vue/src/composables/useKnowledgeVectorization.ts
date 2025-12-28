@@ -234,13 +234,13 @@ export function useKnowledgeVectorization() {
       const knowledgeTimeout = appConfig.getTimeout('knowledge')
 
       // Call backend API to vectorize the fact with proper timeout
-      // ApiClient.ts returns Response object, need to parse JSON
+      // Issue #648: Use parseApiResponse to handle both Response objects and parsed JSON
       const response = await apiClient.post(`/api/knowledge_base/vectorize_fact/${documentId}`, undefined, {
         timeout: knowledgeTimeout
       })
 
-      // Parse JSON response
-      const data = await response.json()
+      // Parse JSON response (handles both ApiClient.ts Response and ApiClient.js parsed JSON)
+      const data = await parseApiResponse(response)
 
       // Check if backend returned success status
       if (data.status !== 'success') {
@@ -259,11 +259,11 @@ export function useKnowledgeVectorization() {
         await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second
 
         // Use knowledge timeout for job status polling as well
-        // ApiClient.ts returns Response object, need to parse JSON
+        // Issue #648: Use parseApiResponse to handle both Response objects and parsed JSON
         const jobResponse = await apiClient.get(`/api/knowledge_base/vectorize_job/${jobId}`, {
           timeout: knowledgeTimeout
         })
-        const jobData = await jobResponse.json()
+        const jobData = await parseApiResponse(jobResponse)
 
         // Backend returns: { status: "success", job: { status: "completed", error: null, ... } }
         const job = jobData.job
