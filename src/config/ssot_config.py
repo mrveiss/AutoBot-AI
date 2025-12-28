@@ -190,34 +190,142 @@ class LLMConfig(BaseSettings):
         default="", alias="AUTOBOT_CUSTOM_LLM_ENDPOINT"
     )
 
-    # Per-model provider overrides (optional - defaults to main provider)
-    embedding_provider: str = Field(default="", alias="AUTOBOT_EMBEDDING_PROVIDER")
-    orchestrator_provider: str = Field(default="", alias="AUTOBOT_ORCHESTRATOR_PROVIDER")
-    research_provider: str = Field(default="", alias="AUTOBOT_RESEARCH_PROVIDER")
-    coding_provider: str = Field(default="", alias="AUTOBOT_CODING_PROVIDER")
-
     # API keys (optional - can also come from provider-specific env vars)
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
 
-    def get_provider_for_model(self, model_type: str) -> str:
+    def get_provider_for_agent(self, agent_id: str) -> str:
         """
-        Get the provider for a specific model type.
+        Get the LLM provider for a specific agent.
+
+        Looks up AUTOBOT_{AGENT_ID}_PROVIDER environment variable.
+        Falls back to AUTOBOT_LLM_PROVIDER if not set.
 
         Args:
-            model_type: Model type (embedding, orchestrator, research, coding, etc.)
+            agent_id: Agent identifier (e.g., 'orchestrator', 'research', 'code_analysis')
 
         Returns:
             Provider name (ollama, openai, anthropic, custom)
+
+        Example:
+            # In .env:
+            AUTOBOT_RESEARCH_PROVIDER=openai
+            AUTOBOT_CODE_ANALYSIS_PROVIDER=anthropic
+
+            # In code:
+            provider = config.llm.get_provider_for_agent("research")  # Returns "openai"
+            provider = config.llm.get_provider_for_agent("chat")  # Returns default provider
         """
-        # Check for model-specific provider override
-        provider_attr = f"{model_type}_provider"
-        if hasattr(self, provider_attr):
-            specific_provider = getattr(self, provider_attr)
-            if specific_provider:
-                return specific_provider
+        # Check for agent-specific provider override via environment
+        env_key = f"AUTOBOT_{agent_id.upper()}_PROVIDER"
+        agent_provider = os.environ.get(env_key, "")
+        if agent_provider:
+            return agent_provider
         # Fall back to default provider
         return self.provider
+
+    def get_endpoint_for_agent(self, agent_id: str) -> str:
+        """
+        Get the LLM API endpoint URL for a specific agent.
+
+        First checks for agent-specific endpoint (AUTOBOT_{AGENT_ID}_ENDPOINT),
+        then falls back to provider endpoint based on agent's provider setting.
+
+        Args:
+            agent_id: Agent identifier (e.g., 'orchestrator', 'research', 'code_analysis')
+
+        Returns:
+            API endpoint URL for the agent
+
+        Example:
+            # In .env:
+            AUTOBOT_RESEARCH_PROVIDER=openai
+            AUTOBOT_CODE_ANALYSIS_ENDPOINT=http://custom-claude-proxy:8080
+
+            # In code:
+            endpoint = config.llm.get_endpoint_for_agent("research")  # Returns OpenAI endpoint
+            endpoint = config.llm.get_endpoint_for_agent("code_analysis")  # Returns custom endpoint
+        """
+        # Check for agent-specific endpoint override
+        env_key = f"AUTOBOT_{agent_id.upper()}_ENDPOINT"
+        agent_endpoint = os.environ.get(env_key, "")
+        if agent_endpoint:
+            return agent_endpoint
+
+        # Get provider for this agent and return its endpoint
+        provider = self.get_provider_for_agent(agent_id)
+        return self.get_endpoint_for_provider(provider)
+
+    def get_model_for_agent(self, agent_id: str) -> str:
+        """
+        Get the LLM model name for a specific agent.
+
+        Looks up AUTOBOT_{AGENT_ID}_MODEL environment variable.
+        Falls back to AUTOBOT_DEFAULT_LLM_MODEL if not set.
+
+        Args:
+            agent_id: Agent identifier (e.g., 'orchestrator', 'research', 'code_analysis')
+
+        Returns:
+            Model name (e.g., 'gpt-4', 'claude-3-opus', 'mistral:7b-instruct')
+
+        Example:
+            # In .env:
+            AUTOBOT_RESEARCH_MODEL=gpt-4-turbo
+            AUTOBOT_CODE_ANALYSIS_MODEL=claude-3-opus-20240229
+
+            # In code:
+            model = config.llm.get_model_for_agent("research")  # Returns "gpt-4-turbo"
+            model = config.llm.get_model_for_agent("chat")  # Returns default model
+        """
+        # Check for agent-specific model override via environment
+        env_key = f"AUTOBOT_{agent_id.upper()}_MODEL"
+        agent_model = os.environ.get(env_key, "")
+        if agent_model:
+            return agent_model
+        # Fall back to default model
+        return self.default_model
+
+    def get_agent_config(self, agent_id: str) -> dict:
+        """
+        Get complete LLM configuration for a specific agent.
+
+        Returns a dictionary with provider, endpoint, model, and API key
+        for the specified agent.
+
+        Args:
+            agent_id: Agent identifier (e.g., 'orchestrator', 'research', 'code_analysis')
+
+        Returns:
+            Dict with keys: provider, endpoint, model, api_key, timeout
+
+        Example:
+            config = config.llm.get_agent_config("research")
+            # Returns: {
+            #     "provider": "openai",
+            #     "endpoint": "https://api.openai.com/v1",
+            #     "model": "gpt-4-turbo",
+            #     "api_key": "sk-...",
+            #     "timeout": 30
+            # }
+        """
+        provider = self.get_provider_for_agent(agent_id)
+        return {
+            "provider": provider,
+            "endpoint": self.get_endpoint_for_agent(agent_id),
+            "model": self.get_model_for_agent(agent_id),
+            "api_key": self._get_api_key_for_provider(provider),
+            "timeout": self.timeout,
+        }
+
+    def _get_api_key_for_provider(self, provider: str) -> str:
+        """Get API key for a specific provider."""
+        if provider.lower() == "openai":
+            return self.openai_api_key
+        elif provider.lower() == "anthropic":
+            return self.anthropic_api_key
+        # Ollama and custom providers may use different auth mechanisms
+        return ""
 
     def get_endpoint_for_provider(self, provider: str) -> str:
         """
@@ -236,6 +344,11 @@ class LLMConfig(BaseSettings):
             "custom": self.custom_endpoint,
         }
         return endpoints.get(provider.lower(), self.ollama_endpoint)
+
+    # Backward compatibility aliases
+    def get_provider_for_model(self, model_type: str) -> str:
+        """Alias for get_provider_for_agent for backward compatibility."""
+        return self.get_provider_for_agent(model_type)
 
     def get_endpoint_for_model(self, model_type: str) -> str:
         """
