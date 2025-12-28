@@ -426,23 +426,36 @@ class ChatWorkflowManager(
 
         return f"**Step {step_num}:** `{cmd}`\n- Status: {status}\n- Output:\n```\n{output_text}\n```"
 
-    def _get_continuation_instructions(self, original_message: str) -> str:
-        """Get the critical instructions for continuation prompts."""
-        return f"""**CRITICAL INSTRUCTIONS - You MUST follow these exactly:**
+    def _get_continuation_instructions(self, original_message: str, steps_completed: int) -> str:
+        """Get the critical instructions for continuation prompts.
 
-1. **Analyze the original request**: Does "{original_message}" require more commands to be fully satisfied?
+        Issue #651: Enhanced instructions to prevent premature task completion.
+        """
+        return f"""**CRITICAL MULTI-STEP TASK INSTRUCTIONS - READ CAREFULLY:**
 
-2. **If MORE commands are needed** (task NOT complete):
-   - Generate the NEXT `<TOOL_CALL>` immediately
-   - Do NOT summarize yet - continue executing
-   - Do NOT repeat commands already executed above
+You are in the middle of a multi-step task. {steps_completed} step(s) have been completed.
 
-3. **If task IS complete** (all steps done):
-   - Provide a comprehensive summary of ALL results
-   - Do NOT generate any TOOL_CALL
-   - Explain what was accomplished
+**ORIGINAL USER REQUEST (analyze this to determine if more steps needed):**
+"{original_message}"
 
-**Remember**: You're in a continuation loop. Either generate the next TOOL_CALL or provide the final summary. Nothing else."""
+**DECISION PROCESS:**
+1. Read the original request above carefully
+2. Look at what has been executed so far
+3. Determine: Are ALL parts of the request satisfied?
+
+**IF MORE STEPS NEEDED** (task NOT fully complete):
+- Generate the NEXT `<TOOL_CALL>` for the next command
+- Do NOT provide a summary yet
+- Do NOT repeat commands already executed
+- Format: `<TOOL_CALL name="execute_command" params='{{"command":"YOUR_NEXT_CMD"}}'>description</TOOL_CALL>`
+
+**IF TASK IS COMPLETE** (all parts of original request are done):
+- Provide a summary of what was accomplished
+- Do NOT generate any TOOL_CALL
+
+**IMPORTANT**: Look at the original request. If it mentions multiple actions (e.g., "create X, then do Y, then do Z"), ensure ALL actions are complete before summarizing.
+
+**YOUR RESPONSE:**"""
 
     def _build_continuation_prompt(
         self,
@@ -450,22 +463,24 @@ class ChatWorkflowManager(
         execution_history: List[Dict[str, Any]],
         system_prompt: str,
     ) -> str:
-        """Build continuation prompt with execution results for multi-step tasks."""
+        """Build continuation prompt with execution results for multi-step tasks.
+
+        Issue #651: Enhanced prompt structure for better multi-step task handling.
+        """
         history_parts = [
             self._format_execution_step(i, result)
             for i, result in enumerate(execution_history, 1)
         ]
         history_text = "\n\n".join(history_parts)
-        instructions = self._get_continuation_instructions(original_message)
+        steps_completed = len(execution_history)
+        instructions = self._get_continuation_instructions(original_message, steps_completed)
 
         return f"""{system_prompt}
 
 ---
-## MULTI-STEP TASK CONTINUATION
+## MULTI-STEP TASK CONTINUATION (Step {steps_completed + 1})
 
-**Original User Request:** {original_message}
-
-**Commands Already Executed ({len(execution_history)} step(s) completed):**
+**Commands Already Executed ({steps_completed} step(s) completed so far):**
 {history_text}
 
 ---
@@ -533,13 +548,20 @@ class ChatWorkflowManager(
     ):
         """Process tool calls and collect results (Issue #315: extracted).
 
+        Issue #651: Fixed logic that incorrectly broke continuation loop.
+        The loop should ALWAYS continue so the LLM can decide next steps,
+        even if execution failed or was denied. Only break on actual errors
+        in the tool processing itself.
+
         Yields:
             WorkflowMessage items
 
         Returns:
-            Tuple of (new_execution_results, should_break)
+            Tuple of (new_execution_results, has_pending_approval, should_break)
         """
         new_execution_results = []
+        has_pending_approval = False
+        processed_any_command = False
 
         async for tool_msg in self._process_tool_calls(
             tool_calls, session_id, terminal_session_id, ollama_endpoint, selected_model
@@ -548,14 +570,43 @@ class ChatWorkflowManager(
                 new_results = tool_msg.metadata.get("execution_results", [])
                 new_execution_results.extend(new_results)
                 execution_history.extend(new_results)
-                logger.info("[ChatWorkflowManager] Collected %d execution results", len(new_results))
+                processed_any_command = True
+                logger.info(
+                    "[Issue #651] Collected %d execution results (total history: %d)",
+                    len(new_results), len(execution_history)
+                )
                 continue
+
+            # Issue #651: Track approval requests to prevent premature loop termination
+            if tool_msg.type == "command_approval_request":
+                has_pending_approval = True
+                processed_any_command = True
+                logger.info("[Issue #651] Command requires approval - will wait for resolution")
 
             if tool_msg.type in _TERMINAL_MESSAGE_TYPES:
                 workflow_messages.append(tool_msg)
+                processed_any_command = True
+
+            # Issue #651: Track terminal errors - continue so LLM can decide next step
+            if tool_msg.type == "error":
+                processed_any_command = True
+                logger.warning(
+                    "[Issue #651] Tool processing error: %s - LLM will decide next action",
+                    tool_msg.content[:100]
+                )
+
             yield tool_msg
 
-        yield (new_execution_results, not new_execution_results)
+        # Issue #651: Never break the loop prematurely - always let LLM decide next action
+        # The LLM will either generate more TOOL_CALLs or provide a final summary
+        should_break = False
+
+        logger.info(
+            "[Issue #651] Tool results: exec_results=%d, pending_approval=%s, should_break=%s",
+            len(new_execution_results), has_pending_approval, should_break
+        )
+
+        yield (new_execution_results, has_pending_approval, should_break)
 
     async def _collect_llm_iteration_response(
         self,
@@ -602,9 +653,15 @@ class ChatWorkflowManager(
         Run a single continuation iteration. Yields WorkflowMessages, then (llm_response, tool_calls, should_continue).
 
         Issue #375: Uses LLMIterationContext to reduce parameter count from 12 to 4.
+        Issue #651: Fixed premature loop termination by allowing continuation even with empty results.
         """
         llm_response = None
         tool_calls = None
+
+        logger.info(
+            "[Issue #651] Starting iteration %d - execution history has %d entries",
+            iteration, len(ctx.execution_history)
+        )
 
         async for item in self._collect_llm_iteration_response(
             http_client, current_prompt, iteration, ctx
@@ -615,28 +672,57 @@ class ChatWorkflowManager(
                 yield item
 
         if llm_response is None:
+            logger.warning("[Issue #651] Iteration %d: No LLM response - stopping", iteration)
             yield (None, None, False)
             return
 
         if not tool_calls:
-            logger.info("[Issue #352] No more tool calls - task complete after %d iteration(s)", iteration)
+            logger.info(
+                "[Issue #651] Iteration %d: No tool calls in response - task complete after %d step(s)",
+                iteration, len(ctx.execution_history)
+            )
             yield (llm_response, tool_calls, False)
             return
 
+        logger.info(
+            "[Issue #651] Iteration %d: Processing %d tool call(s)",
+            iteration, len(tool_calls)
+        )
+
+        new_results = []
+        has_pending_approval = False
         should_break = False
+
         async for item in self._process_tool_results(
             tool_calls, ctx.session_id, ctx.terminal_session_id, ctx.ollama_endpoint,
             ctx.selected_model, ctx.execution_history, ctx.workflow_messages
         ):
             if isinstance(item, tuple):
-                _, should_break = item
+                # Issue #651: Now returns 3-tuple (results, has_pending_approval, should_break)
+                if len(item) == 3:
+                    new_results, has_pending_approval, should_break = item
+                else:
+                    # Backwards compatibility for 2-tuple
+                    new_results_or_empty, should_break = item
+                    if isinstance(new_results_or_empty, list):
+                        new_results = new_results_or_empty
             else:
                 yield item
 
+        # Issue #651: Only break if there was a catastrophic failure, not just empty results
         if should_break:
-            logger.warning("[Issue #352] No execution results - stopping continuation")
+            logger.warning(
+                "[Issue #651] Iteration %d: Catastrophic tool failure - stopping continuation",
+                iteration
+            )
             yield (llm_response, tool_calls, False)
             return
+
+        # Issue #651: Log decision to continue
+        logger.info(
+            "[Issue #651] Iteration %d: Completed with %d new result(s), pending_approval=%s - continuing to next iteration",
+            iteration, len(new_results), has_pending_approval
+        )
 
         yield (llm_response, tool_calls, True)
 
@@ -692,10 +778,16 @@ class ChatWorkflowManager(
         Run LLM continuation iterations. Yields messages, then (all_responses, history, error).
 
         Issue #375: Uses LLMIterationContext to reduce parameter count from 11 to 2.
+        Issue #651: Added comprehensive logging for debugging multi-step tasks.
         """
         execution_history = ctx.execution_history
         all_llm_responses = []
         current_prompt = ctx.initial_prompt
+
+        logger.info(
+            "[Issue #651] Starting multi-step task loop. Max iterations: %d, Original message: '%s'",
+            self.MAX_CONTINUATION_ITERATIONS, ctx.message[:100] if ctx.message else "None"
+        )
 
         for iteration in range(1, self.MAX_CONTINUATION_ITERATIONS + 1):
             llm_response, should_continue = None, False
@@ -709,20 +801,38 @@ class ChatWorkflowManager(
                     yield item
 
             if llm_response is None:
+                logger.warning("[Issue #651] No LLM response in iteration %d - aborting", iteration)
                 yield ([], [], None)
                 return
 
             all_llm_responses.append(llm_response)
+
+            logger.info(
+                "[Issue #651] Iteration %d complete: should_continue=%s, total_responses=%d, execution_history=%d",
+                iteration, should_continue, len(all_llm_responses), len(execution_history)
+            )
+
             if not should_continue:
+                logger.info(
+                    "[Issue #651] Task complete after %d iteration(s). Executed %d command(s) total.",
+                    iteration, len(execution_history)
+                )
                 break
 
+            # Issue #651: Build continuation prompt with full execution history
             current_prompt = self._build_continuation_prompt(
                 ctx.message, execution_history, ctx.system_prompt
             )
-            logger.info("[Issue #352] Continuation prompt built: %d chars", len(current_prompt))
+            logger.info(
+                "[Issue #651] Built continuation prompt: %d chars, %d executed steps",
+                len(current_prompt), len(execution_history)
+            )
 
         if iteration >= self.MAX_CONTINUATION_ITERATIONS:
-            logger.warning("[ChatWorkflowManager] Reached max continuation iterations (%d)", self.MAX_CONTINUATION_ITERATIONS)
+            logger.warning(
+                "[Issue #651] Reached max continuation iterations (%d) - stopping loop",
+                self.MAX_CONTINUATION_ITERATIONS
+            )
 
         yield (all_llm_responses, execution_history, None)
 
