@@ -6,9 +6,15 @@ NPU Worker Registry API
 
 RESTful API endpoints for managing NPU workers, load balancing, and monitoring.
 
+Issue #641: Workers no longer self-register. Main host controls all registration.
+- Workers are added via POST /api/npu/workers/pair (contacts worker, assigns ID)
+- Heartbeats from unpaired workers are rejected
+- Bootstrap endpoint deprecated in favor of pair endpoint
+
 Endpoints:
 - GET    /api/npu/workers - List all workers
-- POST   /api/npu/workers - Register new worker
+- POST   /api/npu/workers - Register new worker (manual)
+- POST   /api/npu/workers/pair - Pair with worker at URL (Issue #641 - preferred method)
 - GET    /api/npu/workers/{id} - Get worker details
 - PUT    /api/npu/workers/{id} - Update worker
 - DELETE /api/npu/workers/{id} - Remove worker
@@ -19,8 +25,8 @@ Endpoints:
 - GET    /api/npu/load-balancing - Get load balancing config
 - PUT    /api/npu/load-balancing - Update load balancing config
 - GET    /api/npu/status - Get NPU worker pool status
-- POST   /api/npu/workers/heartbeat - Receive worker heartbeat/telemetry
-- POST   /api/npu/workers/bootstrap - Bootstrap configuration for workers
+- POST   /api/npu/workers/heartbeat - Receive worker heartbeat (paired workers only)
+- POST   /api/npu/workers/bootstrap - Bootstrap configuration (deprecated)
 """
 
 import logging
@@ -632,6 +638,193 @@ async def repair_worker(worker_id: str, request: dict = None):
 
 
 # ==============================================
+# WORKER PAIRING ENDPOINT (Issue #641)
+# ==============================================
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="pair_worker",
+    error_code_prefix="NPU_WORKERS",
+)
+@router.post("/npu/workers/pair")
+async def pair_worker(request: dict):
+    """
+    Issue #641: Pair with an NPU worker at the given IP:port.
+
+    This is the AUTHORITATIVE way to register workers. The main host:
+    1. Contacts the worker at the given URL
+    2. Generates a permanent worker ID
+    3. Sends the ID to the worker via POST /pair
+    4. Registers the worker in the backend
+
+    Workers do NOT self-register. All registration goes through this endpoint.
+
+    Args:
+        request: Pairing request containing:
+            - url: Worker URL (e.g., "http://192.168.1.100:8082")
+            - name: Optional friendly name for the worker
+            - enabled: Whether worker is enabled (default: True)
+
+    Returns:
+        Pairing result with worker details
+
+    Raises:
+        400: If worker is unreachable or pairing fails
+        500: If registration fails
+    """
+    import uuid
+    from datetime import datetime
+
+    import httpx
+
+    try:
+        worker_url = request.get("url", "").rstrip("/")
+        worker_name = request.get("name", "")
+        enabled = request.get("enabled", True)
+
+        if not worker_url:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Worker URL is required",
+            )
+
+        # Step 1: Check if worker is reachable
+        logger.info("Attempting to pair with worker at %s", worker_url)
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # First, check if worker is reachable via health endpoint
+            try:
+                health_response = await client.get(f"{worker_url}/health")
+                if health_response.status_code != 200:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Worker health check failed: {health_response.status_code}",
+                    )
+                health_data = health_response.json()
+                platform = health_data.get("platform", "unknown")
+                existing_worker_id = health_data.get("worker_id")
+                already_paired = health_data.get("paired", False)
+
+                logger.info(
+                    "Worker reachable: platform=%s, existing_id=%s, paired=%s",
+                    platform, existing_worker_id, already_paired
+                )
+
+            except httpx.RequestError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Cannot reach worker at {worker_url}: {str(e)}",
+                )
+
+            # Step 2: Generate a permanent worker ID (or reuse if already paired)
+            if existing_worker_id and already_paired:
+                worker_id = existing_worker_id
+                logger.info("Reusing existing worker ID: %s", worker_id)
+            else:
+                worker_id = f"{platform}_npu_worker_{uuid.uuid4().hex[:8]}"
+                logger.info("Generated new worker ID: %s", worker_id)
+
+            # Step 3: Get SSOT config for worker
+            from src.config.ssot_config import config as ssot_config
+
+            worker_config = {
+                "redis": {
+                    "host": ssot_config.redis.host,
+                    "port": ssot_config.redis.port,
+                    "password": ssot_config.redis.password,
+                    "db": 0,
+                },
+                "backend": {
+                    "host": ssot_config.backend.host,
+                    "port": ssot_config.backend.port,
+                },
+            }
+
+            # Step 4: Send pairing request to worker
+            pair_request = {
+                "worker_id": worker_id,
+                "main_host": f"{ssot_config.backend.host}:{ssot_config.backend.port}",
+                "config": worker_config,
+            }
+
+            try:
+                pair_response = await client.post(
+                    f"{worker_url}/pair",
+                    json=pair_request,
+                )
+                if pair_response.status_code != 200:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Worker rejected pairing: {pair_response.text}",
+                    )
+                pair_result = pair_response.json()
+                device_info = pair_result.get("device_info", {})
+
+            except httpx.RequestError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Failed to send pair request to worker: {str(e)}",
+                )
+
+        # Step 5: Register worker in backend
+        manager = await get_worker_manager()
+
+        # Check if worker already exists
+        existing = await manager.get_worker(worker_id)
+        if existing:
+            # Update existing worker
+            logger.info("Updating existing worker registration: %s", worker_id)
+            # Just update status - worker is now paired
+            from backend.models.npu_models import WorkerHeartbeat
+            heartbeat = WorkerHeartbeat(
+                worker_id=worker_id,
+                platform=platform,
+                url=worker_url,
+                status="online",
+                current_load=0,
+                models_loaded=[],
+                uptime_seconds=0,
+            )
+            await manager.update_worker_status_from_heartbeat(heartbeat)
+        else:
+            # Create new worker registration
+            from backend.models.npu_models import NPUWorkerConfig
+
+            new_config = NPUWorkerConfig(
+                id=worker_id,
+                name=worker_name or f"NPU Worker ({platform})",
+                url=worker_url,
+                platform=platform,
+                enabled=enabled,
+                priority=5,
+                weight=1,
+                max_concurrent_tasks=4,
+            )
+            await manager.add_worker(new_config)
+            logger.info("Registered new worker: %s", worker_id)
+
+        return {
+            "success": True,
+            "worker_id": worker_id,
+            "url": worker_url,
+            "platform": platform,
+            "device_info": device_info,
+            "paired_at": datetime.utcnow().isoformat() + "Z",
+            "message": f"Successfully paired with worker at {worker_url}",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to pair with worker: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to pair with worker: {str(e)}",
+        )
+
+
+# ==============================================
 # WORKER HEARTBEAT/TELEMETRY ENDPOINTS
 # ==============================================
 
@@ -646,17 +839,18 @@ async def worker_heartbeat(heartbeat: WorkerHeartbeat):
     """
     Receive heartbeat/telemetry from NPU worker.
 
-    Workers can proactively send their status instead of waiting for
-    backend health checks. This enables:
-    - Faster status updates
-    - Rich telemetry data (metrics, models loaded)
-    - Worker self-registration
+    Issue #641: Workers no longer self-register via heartbeat.
+    Workers must be explicitly paired via /npu/workers/pair endpoint.
+    Heartbeats from unpaired workers are rejected.
 
     Args:
         heartbeat: Heartbeat data from worker
 
     Returns:
         Acknowledgement with server timestamp
+
+    Raises:
+        400: If worker is not paired (Issue #641)
     """
     import time
     from datetime import datetime
@@ -664,29 +858,22 @@ async def worker_heartbeat(heartbeat: WorkerHeartbeat):
     try:
         manager = await get_worker_manager()
 
-        # Check if worker exists, if not try to register it
+        # Check if worker exists
         worker = await manager.get_worker(heartbeat.worker_id)
 
         if not worker:
-            # Auto-register new worker from heartbeat
-            logger.info("Auto-registering new worker from heartbeat: %s", heartbeat.worker_id)
-            from backend.models.npu_models import NPUWorkerConfig
-
-            new_config = NPUWorkerConfig(
-                id=heartbeat.worker_id,
-                name=f"Auto-registered: {heartbeat.worker_id}",
-                url=heartbeat.url,
-                platform=heartbeat.platform,
-                enabled=True,
-                priority=5,
-                weight=1,
-                max_concurrent_tasks=4,
+            # Issue #641: Do NOT auto-register workers from heartbeat
+            # Workers must be explicitly paired via GUI/API
+            logger.warning(
+                "Heartbeat from unpaired worker %s at %s - ignoring. "
+                "Worker must be paired via /npu/workers/pair endpoint.",
+                heartbeat.worker_id, heartbeat.url
             )
-            try:
-                await manager.add_worker(new_config)
-                logger.info("Successfully auto-registered worker: %s", heartbeat.worker_id)
-            except ValueError as e:
-                logger.warning("Worker registration from heartbeat failed: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Worker '{heartbeat.worker_id}' is not paired. "
+                       f"Add worker via GUI or POST /api/npu/workers/pair",
+            )
 
         # Update worker status from heartbeat
         await manager.update_worker_status_from_heartbeat(heartbeat)

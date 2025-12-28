@@ -110,6 +110,10 @@ DEVICE_PRIORITY = ["NPU", "GPU", "CPU"]
 # Worker ID file for persistence across restarts (Issue #68 - duplicate registration fix)
 WORKER_ID_FILE = Path(__file__).parent.parent / "config" / ".worker_id"
 
+# Issue #641: Registration status
+# Tracks whether this worker has been paired with main host
+PAIRING_STATUS_FILE = Path(__file__).parent.parent / "config" / ".pairing_status"
+
 
 def load_config() -> Dict[str, Any]:
     """Load configuration from YAML file with UTF-8 encoding"""
@@ -120,19 +124,19 @@ def load_config() -> Dict[str, Any]:
     return {}
 
 
-def get_persistent_worker_id(prefix: str = "windows_npu_worker") -> str:
+def get_persistent_worker_id(prefix: str = "windows_npu_worker") -> Optional[str]:
     """
-    Get or create a persistent worker ID.
+    Get persistent worker ID assigned by main host.
 
-    Issue #68: Prevents duplicate worker registrations by persisting the worker ID
-    to a file. On first run, generates a new ID and saves it. On subsequent runs,
-    reads the existing ID from the file.
+    Issue #641: Worker ID is now assigned by main host, not self-generated.
+    This function only READS an existing ID - it does not generate new ones.
+    New workers start with no ID and wait for main host to assign one via /pair endpoint.
 
     Args:
-        prefix: Worker ID prefix (default: 'windows_npu_worker')
+        prefix: Worker ID prefix (unused, kept for backwards compatibility)
 
     Returns:
-        Persistent worker ID string
+        Persistent worker ID string if assigned, None if not yet paired
     """
     try:
         if WORKER_ID_FILE.exists():
@@ -144,19 +148,87 @@ def get_persistent_worker_id(prefix: str = "windows_npu_worker") -> str:
     except Exception as e:
         logger.warning("Failed to read worker ID file: %s", e)
 
-    # Generate new worker ID
-    worker_id = f"{prefix}_{uuid.uuid4().hex[:8]}"
+    # Issue #641: Do NOT generate new ID - wait for main host to assign one
+    logger.info("No worker ID assigned yet - waiting for main host to pair")
+    return None
 
-    # Save to file for persistence
+
+def save_worker_id(worker_id: str) -> bool:
+    """
+    Save worker ID assigned by main host.
+
+    Issue #641: Called when main host pairs with this worker and assigns an ID.
+
+    Args:
+        worker_id: The ID assigned by main host
+
+    Returns:
+        True if saved successfully, False otherwise
+    """
     try:
         WORKER_ID_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(WORKER_ID_FILE, 'w', encoding='utf-8') as f:
             f.write(worker_id)
-        logger.info("Created new persistent worker ID: %s", worker_id)
+        logger.info("Saved worker ID from main host: %s", worker_id)
+        return True
     except Exception as e:
-        logger.warning("Failed to save worker ID file: %s", e)
+        logger.error("Failed to save worker ID: %s", e)
+        return False
 
-    return worker_id
+
+def get_pairing_status() -> Dict[str, Any]:
+    """
+    Get current pairing status with main host.
+
+    Issue #641: Returns information about whether this worker is paired.
+
+    Returns:
+        Dict with pairing status information
+    """
+    try:
+        if PAIRING_STATUS_FILE.exists():
+            with open(PAIRING_STATUS_FILE, 'r', encoding='utf-8') as f:
+                import json
+                return json.load(f)
+    except Exception as e:
+        logger.warning("Failed to read pairing status: %s", e)
+
+    return {
+        "paired": False,
+        "main_host": None,
+        "paired_at": None,
+    }
+
+
+def save_pairing_status(main_host: str, worker_id: str) -> bool:
+    """
+    Save pairing status after successful pairing with main host.
+
+    Issue #641: Records when and with which main host this worker was paired.
+
+    Args:
+        main_host: IP/hostname of the main host
+        worker_id: The assigned worker ID
+
+    Returns:
+        True if saved successfully, False otherwise
+    """
+    try:
+        import json
+        PAIRING_STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        status = {
+            "paired": True,
+            "main_host": main_host,
+            "worker_id": worker_id,
+            "paired_at": datetime.now().isoformat(),
+        }
+        with open(PAIRING_STATUS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(status, f, indent=2)
+        logger.info("Saved pairing status: paired with %s", main_host)
+        return True
+    except Exception as e:
+        logger.error("Failed to save pairing status: %s", e)
+        return False
 
 
 # Load configuration
@@ -768,6 +840,27 @@ class NPUTaskResponse(BaseModel):
     optimization_metrics: Optional[Dict[str, Any]] = None
 
 
+class PairRequest(BaseModel):
+    """
+    Issue #641: Request from main host to pair with this worker.
+
+    Main host sends this request to assign a permanent worker ID.
+    """
+    worker_id: str  # ID assigned by main host
+    main_host: str  # IP/hostname of the main host
+    config: Optional[Dict[str, Any]] = None  # Optional config from main host
+
+
+class PairResponse(BaseModel):
+    """
+    Issue #641: Response after successful pairing.
+    """
+    success: bool
+    worker_id: str
+    message: str
+    device_info: Optional[Dict[str, Any]] = None
+
+
 class WindowsNPUWorker:
     """
     Windows-optimized NPU Worker
@@ -785,9 +878,10 @@ class WindowsNPUWorker:
         npu_config = config.get('npu', {})
         cache_config = config.get('performance', {}).get('embedding_cache', {})
 
-        # Use persistent worker ID to prevent duplicate registrations on restart (Issue #68)
-        worker_id_prefix = service_config.get('worker_id_prefix', 'windows_npu_worker')
-        self.worker_id = get_persistent_worker_id(prefix=worker_id_prefix)
+        # Issue #641: Worker ID is assigned by main host, not self-generated
+        # If no ID exists, worker_id will be None until main host pairs with us
+        self.worker_id = get_persistent_worker_id()
+        self.pairing_status = get_pairing_status()
         self.redis_client = None
 
         self.app = FastAPI(title="AutoBot Windows NPU Worker", version="2.0.0")
@@ -851,7 +945,118 @@ class WindowsNPUWorker:
                 "npu_metrics": npu_metrics,
                 "optimization_config": self.npu_optimization,
                 "timestamp": datetime.now().isoformat(),
+                "paired": self.pairing_status.get("paired", False),
             }
+
+        @self.app.post("/pair", response_model=PairResponse)
+        async def pair_with_main_host(request: PairRequest):
+            """
+            Issue #641: Endpoint for main host to pair with this worker.
+
+            Main host calls this endpoint to:
+            1. Assign a permanent worker ID
+            2. Send configuration
+            3. Establish the pairing relationship
+
+            This is the ONLY way a worker gets its ID - workers do NOT self-register.
+            """
+            try:
+                # Check if already paired with a different ID
+                if self.worker_id and self.worker_id != request.worker_id:
+                    # Worker is already paired - check if it's the same main host
+                    if self.pairing_status.get("main_host") != request.main_host:
+                        return PairResponse(
+                            success=False,
+                            worker_id=self.worker_id,
+                            message=f"Worker already paired with different host: {self.pairing_status.get('main_host')}",
+                        )
+
+                # Save the worker ID from main host
+                if save_worker_id(request.worker_id):
+                    self.worker_id = request.worker_id
+
+                    # Save pairing status
+                    save_pairing_status(request.main_host, request.worker_id)
+                    self.pairing_status = get_pairing_status()
+
+                    # Apply any config from main host
+                    if request.config:
+                        self._apply_main_host_config(request.config)
+
+                    logger.info(f"Successfully paired with main host {request.main_host}")
+
+                    # Get device info to return
+                    device_info = None
+                    if self._model_manager:
+                        try:
+                            device_info = self._model_manager.get_device_info()
+                        except Exception:
+                            pass
+
+                    return PairResponse(
+                        success=True,
+                        worker_id=self.worker_id,
+                        message=f"Successfully paired with main host {request.main_host}",
+                        device_info=device_info,
+                    )
+                else:
+                    return PairResponse(
+                        success=False,
+                        worker_id=request.worker_id,
+                        message="Failed to save worker ID",
+                    )
+
+            except Exception as e:
+                logger.error(f"Pairing failed: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+
+        @self.app.get("/pairing-status")
+        async def get_pairing_status_endpoint():
+            """
+            Issue #641: Get current pairing status.
+
+            Returns whether this worker is paired with a main host.
+            """
+            return {
+                "paired": self.pairing_status.get("paired", False),
+                "worker_id": self.worker_id,
+                "main_host": self.pairing_status.get("main_host"),
+                "paired_at": self.pairing_status.get("paired_at"),
+                "npu_available": self.npu_available,
+                "platform": "windows",
+            }
+
+        @self.app.post("/unpair")
+        async def unpair_from_main_host():
+            """
+            Issue #641: Unpair from main host.
+
+            Removes the worker ID and pairing status, allowing re-pairing.
+            """
+            try:
+                # Remove worker ID file
+                if WORKER_ID_FILE.exists():
+                    WORKER_ID_FILE.unlink()
+
+                # Remove pairing status file
+                if PAIRING_STATUS_FILE.exists():
+                    PAIRING_STATUS_FILE.unlink()
+
+                # Reset in-memory state
+                old_id = self.worker_id
+                self.worker_id = None
+                self.pairing_status = {"paired": False, "main_host": None, "paired_at": None}
+
+                logger.info(f"Unpaired worker (was: {old_id})")
+
+                return {
+                    "success": True,
+                    "message": f"Worker unpaired (was: {old_id})",
+                }
+
+            except Exception as e:
+                logger.error(f"Unpair failed: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
 
         @self.app.get("/device-info")
         async def device_info():
@@ -1044,18 +1249,25 @@ class WindowsNPUWorker:
         Initialize NPU worker with parallel initialization for efficiency.
 
         Issue #68: Uses asyncio.gather for parallel init where possible.
+        Issue #641: Worker is now passive - does NOT self-register.
+                   Waits for main host to pair via /pair endpoint.
         """
         self.start_time = time.time()
-        logger.info(f"Starting Windows NPU Worker {self.worker_id}")
+
+        # Issue #641: Log pairing status
+        if self.worker_id:
+            logger.info(f"Starting Windows NPU Worker (paired): {self.worker_id}")
+        else:
+            logger.info("Starting Windows NPU Worker (unpaired - waiting for main host)")
+
         logger.info(f"Port: {config.get('service', {}).get('port', DEFAULT_PORT)}")
 
         # Display network connection information
         self._display_network_info()
 
-        # Bootstrap configuration from backend (Issue #68)
-        # This fetches Redis credentials and other config from main host
-        # Must run first as other components may depend on it
-        await self.bootstrap_config()
+        # Issue #641: REMOVED bootstrap_config() call
+        # Worker no longer self-registers. Main host controls registration via /pair endpoint.
+        # If worker is already paired, we use the stored config.
 
         # Parallel initialization of independent components (Issue #68 - efficiency)
         # Redis and NPU initialization can run in parallel
@@ -1069,10 +1281,16 @@ class WindowsNPUWorker:
         if config.get('models', {}).get('autoload_defaults', True):
             await self.load_default_models()
 
-        # Initialize backend telemetry (Issue #68)
-        await self.initialize_telemetry()
+        # Issue #641: REMOVED auto-registration telemetry
+        # Telemetry only runs AFTER worker is paired with main host
+        if self.pairing_status.get("paired"):
+            await self.initialize_telemetry()
+        else:
+            logger.info("Telemetry disabled - worker not yet paired with main host")
+            self.telemetry_client = None
 
-        logger.info(f"Windows NPU Worker initialized - NPU Available: {self.npu_available}")
+        pairing_msg = "paired" if self.pairing_status.get("paired") else "waiting for pairing"
+        logger.info(f"Windows NPU Worker initialized - NPU: {self.npu_available}, Status: {pairing_msg}")
 
     async def bootstrap_config(self):
         """
@@ -1675,6 +1893,54 @@ class WindowsNPUWorker:
         except Exception as e:
             logger.warning(f"Failed to display network info: {e}")
             # Non-critical error, continue with initialization
+
+    def _apply_main_host_config(self, host_config: Dict[str, Any]) -> None:
+        """
+        Apply configuration received from main host during pairing.
+
+        Issue #641: Main host sends configuration when pairing with worker.
+        This allows centralized configuration management.
+
+        Args:
+            host_config: Configuration dictionary from main host
+        """
+        try:
+            logger.info("Applying configuration from main host")
+
+            # Apply Redis config if provided
+            if "redis" in host_config:
+                redis_cfg = host_config["redis"]
+                logger.info(f"Received Redis config from main host: {redis_cfg.get('host', 'N/A')}")
+                # Store for use by initialize_redis on next restart
+                self._bootstrap_config = {"redis": redis_cfg}
+
+            # Apply NPU optimization settings if provided
+            if "npu" in host_config:
+                npu_cfg = host_config["npu"]
+                if "optimization" in npu_cfg:
+                    self.npu_optimization.update(npu_cfg["optimization"])
+                    logger.info(f"Updated NPU optimization: {self.npu_optimization}")
+
+            # Apply model preload settings if provided
+            if "models" in host_config:
+                models_cfg = host_config["models"]
+                if models_cfg.get("preload"):
+                    # Schedule model loading (don't block pairing response)
+                    asyncio.create_task(self._preload_models_from_config(models_cfg))
+
+            logger.info("Main host configuration applied successfully")
+
+        except Exception as e:
+            logger.error(f"Failed to apply main host config: {e}")
+
+    async def _preload_models_from_config(self, models_config: Dict[str, Any]) -> None:
+        """Preload models specified in main host configuration."""
+        try:
+            for model_name in models_config.get("preload", []):
+                logger.info(f"Preloading model from main host config: {model_name}")
+                await self.load_and_optimize_model(model_name)
+        except Exception as e:
+            logger.warning(f"Failed to preload models: {e}")
 
     async def cleanup(self):
         """Cleanup resources"""

@@ -5,9 +5,10 @@
         <h3 class="text-xl font-semibold text-gray-800">NPU Worker Management</h3>
         <p class="text-sm text-gray-600 mt-1">Manage distributed NPU workers for AI processing</p>
       </div>
+      <!-- Issue #641: Button text reflects new pairing flow -->
       <button @click="openAddWorkerDialog" class="btn-primary">
-        <i class="fas fa-plus mr-2"></i>
-        Add Worker
+        <i class="fas fa-link mr-2"></i>
+        Pair Worker
       </button>
     </div>
 
@@ -62,10 +63,11 @@
         icon="fas fa-server"
         message="No NPU workers registered"
       >
+        <!-- Issue #641: Updated button text for pairing flow -->
         <template #actions>
           <button @click="openAddWorkerDialog" class="btn-secondary mt-4">
-            <i class="fas fa-plus mr-2"></i>
-            Add Your First Worker
+            <i class="fas fa-link mr-2"></i>
+            Pair Your First Worker
           </button>
         </template>
       </EmptyState>
@@ -150,8 +152,17 @@
               <td>
                 <div class="action-buttons">
                   <button
+                    @click="toggleWorkerEnabled(worker)"
+                    :disabled="operationInProgress"
+                    class="action-btn toggle-btn"
+                    :class="worker.enabled ? 'toggle-enabled' : 'toggle-disabled'"
+                    :title="worker.enabled ? 'Disable worker' : 'Enable worker'"
+                  >
+                    <i :class="worker.enabled ? 'fas fa-toggle-on' : 'fas fa-toggle-off'"></i>
+                  </button>
+                  <button
                     @click="testWorker(worker)"
-                    :disabled="isTestingWorker[worker.id]"
+                    :disabled="isTestingWorker[worker.id] || !worker.enabled"
                     class="action-btn test-btn"
                     :title="'Test connection to ' + worker.name"
                   >
@@ -160,6 +171,7 @@
                   <button
                     @click="viewWorkerMetrics(worker)"
                     class="action-btn metrics-btn"
+                    :disabled="!worker.enabled"
                     title="View detailed metrics"
                   >
                     <i class="fas fa-chart-line"></i>
@@ -187,10 +199,11 @@
     </div>
 
     <!-- Add/Edit Worker Dialog -->
+    <!-- Issue #641: New workers are paired (main host contacts worker) -->
     <BaseModal
       :modelValue="showAddWorkerDialog || showEditWorkerDialog"
       @update:modelValue="val => !val && closeWorkerDialog()"
-      :title="showEditWorkerDialog ? 'Edit Worker' : 'Add New Worker'"
+      :title="showEditWorkerDialog ? 'Edit Worker' : 'Pair New Worker'"
       size="medium"
       :closeOnOverlay="!isSavingWorker && !operationInProgress"
     >
@@ -277,13 +290,14 @@
         <button @click="closeWorkerDialog" class="btn-secondary">
           Cancel
         </button>
+        <!-- Issue #641: Button text reflects pairing vs update -->
         <button
           @click="saveWorker"
           :disabled="!isWorkerFormValid || isSavingWorker || operationInProgress"
           class="btn-primary"
         >
-          <i :class="isSavingWorker ? 'fas fa-spinner fa-spin mr-2' : 'fas fa-save mr-2'"></i>
-          {{ isSavingWorker ? 'Saving...' : 'Save Worker' }}
+          <i :class="isSavingWorker ? 'fas fa-spinner fa-spin mr-2' : (showEditWorkerDialog ? 'fas fa-save mr-2' : 'fas fa-link mr-2')"></i>
+          {{ isSavingWorker ? (showEditWorkerDialog ? 'Saving...' : 'Pairing...') : (showEditWorkerDialog ? 'Save Worker' : 'Pair Worker') }}
         </button>
       </template>
     </BaseModal>
@@ -446,6 +460,7 @@ interface NPUWorker {
   weight: number
   last_heartbeat: string
   created_at: string
+  enabled: boolean
 }
 
 interface WorkerForm {
@@ -620,7 +635,8 @@ const loadWorkers = async () => {
         last_heartbeat: worker.status.last_heartbeat
           ? new Date(worker.status.last_heartbeat).toLocaleString()
           : 'Never',
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        enabled: worker.config.enabled !== false  // Default to true if not specified
       }
     })
   } catch (error) {
@@ -668,6 +684,7 @@ const editWorker = (worker: NPUWorker) => {
 
 /**
  * Save worker with operation locking and validation
+ * Issue #641: New workers are added via /pair endpoint (main host contacts worker)
  * Fixes C3: Race Condition, C5: Silent Error Failures
  */
 const saveWorker = async () => {
@@ -687,26 +704,36 @@ const saveWorker = async () => {
     isSavingWorker.value = true
     workerFormError.value = null
 
-    // Transform frontend form to backend API format
-    const workerPayload = {
-      id: editingWorker.value?.id || generateWorkerId(workerForm.value.name),
-      name: workerForm.value.name,
-      url: `http://${workerForm.value.ip_address}:${workerForm.value.port}`,
-      platform: workerForm.value.platform,
-      enabled: true,
-      priority: workerForm.value.priority,
-      weight: workerForm.value.weight,
-      max_concurrent_tasks: 4  // Default value
-    }
-
     if (showEditWorkerDialog.value && editingWorker.value) {
-      // Update existing worker
+      // Update existing worker - use PUT endpoint
+      const workerPayload = {
+        id: editingWorker.value.id,
+        name: workerForm.value.name,
+        url: `http://${workerForm.value.ip_address}:${workerForm.value.port}`,
+        platform: workerForm.value.platform,
+        enabled: true,
+        priority: workerForm.value.priority,
+        weight: workerForm.value.weight,
+        max_concurrent_tasks: 4
+      }
       await axios.put(`/api/npu/workers/${editingWorker.value.id}`, workerPayload)
       notify(`Worker "${workerForm.value.name}" updated`, 'success')
     } else {
-      // Add new worker
-      await axios.post('/api/npu/workers', workerPayload)
-      notify(`Worker "${workerForm.value.name}" added`, 'success')
+      // Issue #641: Add new worker via /pair endpoint
+      // Main host contacts worker and assigns permanent ID
+      const pairPayload = {
+        url: `http://${workerForm.value.ip_address}:${workerForm.value.port}`,
+        name: workerForm.value.name,
+        enabled: true
+      }
+
+      const response = await axios.post('/api/npu/workers/pair', pairPayload)
+
+      if (response.data.success) {
+        notify(`Worker "${workerForm.value.name}" paired successfully (ID: ${response.data.worker_id})`, 'success')
+      } else {
+        throw new Error(response.data.message || 'Pairing failed')
+      }
     }
 
     emit('change')
@@ -769,6 +796,54 @@ const deleteWorker = async () => {
     notify(errorMessage, 'error')
   } finally {
     isDeletingWorker.value = false
+    operationInProgress.value = false
+  }
+}
+
+/**
+ * Toggle worker enabled/disabled state
+ * Calls PUT /api/npu/workers/{id} with updated enabled flag
+ */
+const toggleWorkerEnabled = async (worker: NPUWorker) => {
+  if (operationInProgress.value) {
+    logger.warn('Operation already in progress')
+    return
+  }
+
+  const newEnabledState = !worker.enabled
+  const action = newEnabledState ? 'enabled' : 'disabled'
+
+  try {
+    operationInProgress.value = true
+
+    // Build worker payload with toggled enabled state
+    const workerPayload = {
+      id: worker.id,
+      name: worker.name,
+      url: `http://${worker.ip_address}:${worker.port}`,
+      platform: worker.platform,
+      enabled: newEnabledState,
+      priority: worker.priority,
+      weight: worker.weight,
+      max_concurrent_tasks: worker.max_capacity
+    }
+
+    await axios.put(`/api/npu/workers/${worker.id}`, workerPayload)
+
+    // Update local state immediately for responsive UI
+    worker.enabled = newEnabledState
+
+    emit('change')
+    notify(`Worker "${worker.name}" ${action}`, 'success')
+  } catch (error) {
+    logger.error(`Failed to toggle worker ${worker.name}:`, error)
+    const axiosError = error as { response?: { data?: { detail?: string; message?: string } }; message?: string }
+    const errorMessage = axiosError.response?.data?.detail ||
+                        axiosError.response?.data?.message ||
+                        axiosError.message ||
+                        `Failed to ${action.slice(0, -1)} worker`
+    notify(errorMessage, 'error')
+  } finally {
     operationInProgress.value = false
   }
 }
@@ -876,7 +951,9 @@ const getLoadBarClass = (load: number) => {
 }
 
 const getWorkerRowClass = (worker: NPUWorker) => {
-  return worker.status === 'error' ? 'worker-row-error' : ''
+  if (!worker.enabled) return 'worker-row-disabled'
+  if (worker.status === 'error') return 'worker-row-error'
+  return ''
 }
 
 // ===== WEBSOCKET =====
@@ -1048,6 +1125,19 @@ onUnmounted(() => {
   background: #fff5f5 !important;
 }
 
+.worker-row-disabled {
+  background: #f5f5f5 !important;
+  opacity: 0.65;
+}
+
+.worker-row-disabled .worker-name {
+  color: #999;
+}
+
+.worker-row-disabled .platform-badge {
+  opacity: 0.7;
+}
+
 .worker-info {
   display: flex;
   flex-direction: column;
@@ -1207,6 +1297,28 @@ onUnmounted(() => {
 
 .delete-btn:hover {
   background: #ffcdd2;
+}
+
+.toggle-btn {
+  font-size: 18px;
+}
+
+.toggle-enabled {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.toggle-enabled:hover:not(:disabled) {
+  background: #c8e6c9;
+}
+
+.toggle-disabled {
+  background: #f5f5f5;
+  color: #9e9e9e;
+}
+
+.toggle-disabled:hover:not(:disabled) {
+  background: #e0e0e0;
 }
 
 .action-btn:disabled {
