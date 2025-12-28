@@ -116,7 +116,18 @@ class PortConfig(BaseSettings):
 
 
 class LLMConfig(BaseSettings):
-    """LLM model configuration."""
+    """
+    LLM model configuration with multi-provider support.
+
+    Supports multiple LLM providers with different endpoints:
+    - Ollama (local): http://127.0.0.1:11434
+    - OpenAI: https://api.openai.com/v1
+    - Anthropic: https://api.anthropic.com/v1
+    - Custom providers via environment variables
+
+    Each model type can specify its own provider via AUTOBOT_{MODEL}_PROVIDER
+    environment variables, defaulting to the main AUTOBOT_LLM_PROVIDER.
+    """
 
     model_config = SettingsConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),
@@ -162,8 +173,82 @@ class LLMConfig(BaseSettings):
     # Timeout (seconds)
     timeout: int = Field(default=30, alias="AUTOBOT_LLM_TIMEOUT")
 
-    # Provider (for future multi-provider support)
+    # Default provider for all models (can be overridden per-model)
     provider: str = Field(default="ollama", alias="AUTOBOT_LLM_PROVIDER")
+
+    # Provider-specific endpoints (each provider can have its own URL)
+    ollama_endpoint: str = Field(
+        default="http://127.0.0.1:11434", alias="AUTOBOT_OLLAMA_ENDPOINT"
+    )
+    openai_endpoint: str = Field(
+        default="https://api.openai.com/v1", alias="AUTOBOT_OPENAI_ENDPOINT"
+    )
+    anthropic_endpoint: str = Field(
+        default="https://api.anthropic.com/v1", alias="AUTOBOT_ANTHROPIC_ENDPOINT"
+    )
+    custom_endpoint: str = Field(
+        default="", alias="AUTOBOT_CUSTOM_LLM_ENDPOINT"
+    )
+
+    # Per-model provider overrides (optional - defaults to main provider)
+    embedding_provider: str = Field(default="", alias="AUTOBOT_EMBEDDING_PROVIDER")
+    orchestrator_provider: str = Field(default="", alias="AUTOBOT_ORCHESTRATOR_PROVIDER")
+    research_provider: str = Field(default="", alias="AUTOBOT_RESEARCH_PROVIDER")
+    coding_provider: str = Field(default="", alias="AUTOBOT_CODING_PROVIDER")
+
+    # API keys (optional - can also come from provider-specific env vars)
+    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
+    anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
+
+    def get_provider_for_model(self, model_type: str) -> str:
+        """
+        Get the provider for a specific model type.
+
+        Args:
+            model_type: Model type (embedding, orchestrator, research, coding, etc.)
+
+        Returns:
+            Provider name (ollama, openai, anthropic, custom)
+        """
+        # Check for model-specific provider override
+        provider_attr = f"{model_type}_provider"
+        if hasattr(self, provider_attr):
+            specific_provider = getattr(self, provider_attr)
+            if specific_provider:
+                return specific_provider
+        # Fall back to default provider
+        return self.provider
+
+    def get_endpoint_for_provider(self, provider: str) -> str:
+        """
+        Get the API endpoint URL for a specific provider.
+
+        Args:
+            provider: Provider name (ollama, openai, anthropic, custom)
+
+        Returns:
+            API endpoint URL
+        """
+        endpoints = {
+            "ollama": self.ollama_endpoint,
+            "openai": self.openai_endpoint,
+            "anthropic": self.anthropic_endpoint,
+            "custom": self.custom_endpoint,
+        }
+        return endpoints.get(provider.lower(), self.ollama_endpoint)
+
+    def get_endpoint_for_model(self, model_type: str) -> str:
+        """
+        Get the API endpoint URL for a specific model type.
+
+        Args:
+            model_type: Model type (embedding, orchestrator, research, coding, etc.)
+
+        Returns:
+            API endpoint URL for the model's provider
+        """
+        provider = self.get_provider_for_model(model_type)
+        return self.get_endpoint_for_provider(provider)
 
 
 class TimeoutConfig(BaseSettings):
@@ -317,8 +402,37 @@ class AutoBotConfig(BaseSettings):
 
     @property
     def ollama_url(self) -> str:
-        """Get the full Ollama API URL."""
+        """
+        Get the full Ollama API URL.
+
+        Uses llm.ollama_endpoint if configured, otherwise constructs from vm.ollama + port.ollama.
+        This allows flexibility: use the configured endpoint or build from host/port.
+        """
+        # If ollama_endpoint is set and not the default, use it directly
+        if self.llm.ollama_endpoint and self.llm.ollama_endpoint != "http://127.0.0.1:11434":
+            return self.llm.ollama_endpoint
+        # Otherwise construct from VM config (allows using different Ollama host)
         return f"http://{self.vm.ollama}:{self.port.ollama}"
+
+    def get_llm_endpoint(self, model_type: str = "default") -> str:
+        """
+        Get the LLM API endpoint for a specific model type.
+
+        This is the recommended method for getting LLM endpoints as it supports
+        multi-provider configurations where different models use different providers.
+
+        Args:
+            model_type: Model type (embedding, orchestrator, research, coding, default, etc.)
+
+        Returns:
+            API endpoint URL for the model's provider
+
+        Usage:
+            endpoint = config.get_llm_endpoint("embedding")  # May return OpenAI endpoint
+            endpoint = config.get_llm_endpoint("coding")     # May return Anthropic endpoint
+            endpoint = config.get_llm_endpoint()             # Returns default provider endpoint
+        """
+        return self.llm.get_endpoint_for_model(model_type)
 
     @property
     def websocket_url(self) -> str:
