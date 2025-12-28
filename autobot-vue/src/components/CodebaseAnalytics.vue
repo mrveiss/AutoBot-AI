@@ -3462,17 +3462,7 @@ const pollJobStatus = async () => {
         // Keep analyzing true while job is active
         analyzing.value = true
 
-        // Update progress - use correct field names from backend
-        if (data.progress) {
-          progressPercent.value = data.progress.percent || 0
-
-          // Build status from operation and current_file
-          const operation = data.progress.operation || 'Processing'
-          const currentFile = data.progress.current_file || ''
-          progressStatus.value = currentFile ? `${operation}: ${currentFile}` : operation
-        }
-
-        // Update phase tracking
+        // Update phase tracking first (used in status building)
         if (data.phases) {
           jobPhases.value = data.phases
         }
@@ -3487,7 +3477,31 @@ const pollJobStatus = async () => {
           jobStats.value = data.stats
         }
 
-        // Also poll for intermediate results
+        // Update progress - build informative status message
+        if (data.progress) {
+          progressPercent.value = data.progress.percent || 0
+
+          // Build detailed status from operation, current_file, and progress counts
+          const operation = data.progress.operation || 'Processing'
+          const currentFile = data.progress.current_file || ''
+          const current = data.progress.current || 0
+          const total = data.progress.total || 0
+
+          // Build status with progress counts when available
+          let statusParts: string[] = []
+          if (currentFile && currentFile !== 'Initializing...') {
+            statusParts.push(currentFile)
+          }
+          if (total > 0) {
+            statusParts.push(`(${current}/${total})`)
+          }
+
+          progressStatus.value = statusParts.length > 0
+            ? `${operation}: ${statusParts.join(' ')}`
+            : operation
+        }
+
+        // Also poll for intermediate results (but don't overwrite detailed status)
         await pollIntermediateResults()
       } else {
         // Job finished
@@ -3524,6 +3538,7 @@ const pollJobStatus = async () => {
 }
 
 // Poll for intermediate results during indexing
+// Note: Does NOT update progressStatus - that's handled by pollJobStatus with detailed info
 const pollIntermediateResults = async () => {
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
@@ -3536,15 +3551,14 @@ const pollIntermediateResults = async () => {
       problemsReport.value = problemsData.problems || []
     }
 
-    // Poll for stats
+    // Poll for stats - update codebaseStats but don't overwrite progressStatus
     const statsResponse = await fetch(`${backendUrl}/api/analytics/codebase/stats`)
     if (statsResponse.ok) {
       const statsData = await statsResponse.json()
       if (statsData.stats) {
         codebaseStats.value = statsData.stats
-        const filesIndexed = statsData.stats.total_files || 0
-        const problemsFound = problemsReport.value.length
-        progressStatus.value = `Indexed ${filesIndexed} files, ${problemsFound} problems found...`
+        // Note: progressStatus is now set by pollJobStatus with detailed operation info
+        // The jobStats ref already shows files_scanned, problems_found in the UI
       }
     }
   } catch (error: unknown) {
