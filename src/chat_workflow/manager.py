@@ -564,7 +564,14 @@ class ChatWorkflowManager(
             if isinstance(item, tuple):
                 llm_response, tool_calls = item
             else:
-                ctx.workflow_messages.append(item)
+                # Don't persist streaming chunks - they're for live display only
+                # The final complete response is persisted in _persist_workflow_messages
+                is_streaming_chunk = (
+                    hasattr(item, 'metadata') and
+                    item.metadata.get('streaming', False)
+                )
+                if not is_streaming_chunk:
+                    ctx.workflow_messages.append(item)
                 yield item
 
         yield (llm_response, tool_calls)
