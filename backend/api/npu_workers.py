@@ -768,6 +768,192 @@ async def repair_worker(worker_id: str, request: dict = None):
 # WORKER PAIRING ENDPOINT (Issue #641)
 # ==============================================
 
+import uuid
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Dict, Tuple
+
+import httpx
+
+
+@dataclass
+class WorkerHealthInfo:
+    """Health information from a worker."""
+    platform: str
+    existing_worker_id: Optional[str]
+    already_paired: bool
+
+
+async def _check_worker_health(client: httpx.AsyncClient, worker_url: str) -> WorkerHealthInfo:
+    """
+    Check if worker is reachable and get health information.
+
+    Args:
+        client: HTTP client for requests
+        worker_url: Base URL of the worker
+
+    Returns:
+        WorkerHealthInfo with platform and pairing status
+
+    Raises:
+        HTTPException: If worker is unreachable or health check fails
+    """
+    try:
+        health_response = await client.get(f"{worker_url}/health")
+        if health_response.status_code != 200:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Worker health check failed: {health_response.status_code}",
+            )
+        health_data = health_response.json()
+
+        info = WorkerHealthInfo(
+            platform=health_data.get("platform", "unknown"),
+            existing_worker_id=health_data.get("worker_id"),
+            already_paired=health_data.get("paired", False),
+        )
+
+        logger.info(
+            "Worker reachable: platform=%s, existing_id=%s, paired=%s",
+            info.platform, info.existing_worker_id, info.already_paired
+        )
+        return info
+
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot reach worker at {worker_url}: {str(e)}",
+        )
+
+
+def _generate_worker_id(health_info: WorkerHealthInfo) -> str:
+    """Generate or reuse worker ID based on health information."""
+    if health_info.existing_worker_id and health_info.already_paired:
+        logger.info("Reusing existing worker ID: %s", health_info.existing_worker_id)
+        return health_info.existing_worker_id
+
+    worker_id = f"{health_info.platform}_npu_worker_{uuid.uuid4().hex[:8]}"
+    logger.info("Generated new worker ID: %s", worker_id)
+    return worker_id
+
+
+def _build_pairing_config() -> Tuple[Dict, str]:
+    """
+    Build configuration to send to worker during pairing.
+
+    Returns:
+        Tuple of (worker_config dict, main_host string)
+    """
+    from src.config.ssot_config import config as ssot_config
+
+    worker_config = {
+        "redis": {
+            "host": ssot_config.redis.host,
+            "port": ssot_config.redis.port,
+            "password": ssot_config.redis.password,
+            "db": 0,
+        },
+        "backend": {
+            "host": ssot_config.backend.host,
+            "port": ssot_config.backend.port,
+        },
+    }
+    main_host = f"{ssot_config.backend.host}:{ssot_config.backend.port}"
+    return worker_config, main_host
+
+
+async def _send_pairing_request(
+    client: httpx.AsyncClient,
+    worker_url: str,
+    worker_id: str,
+    worker_config: Dict,
+    main_host: str,
+) -> Dict:
+    """
+    Send pairing request to worker and return device info.
+
+    Args:
+        client: HTTP client for requests
+        worker_url: Base URL of the worker
+        worker_id: Assigned worker ID
+        worker_config: Configuration for the worker
+        main_host: Main host address
+
+    Returns:
+        Device info dict from worker response
+
+    Raises:
+        HTTPException: If pairing request fails
+    """
+    pair_request = {
+        "worker_id": worker_id,
+        "main_host": main_host,
+        "config": worker_config,
+    }
+
+    try:
+        pair_response = await client.post(f"{worker_url}/pair", json=pair_request)
+        if pair_response.status_code != 200:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Worker rejected pairing: {pair_response.text}",
+            )
+        pair_result = pair_response.json()
+        return pair_result.get("device_info", {})
+
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to send pair request to worker: {str(e)}",
+        )
+
+
+async def _register_worker_in_backend(
+    worker_id: str,
+    worker_url: str,
+    platform: str,
+    worker_name: str,
+    enabled: bool,
+) -> None:
+    """
+    Register or update worker in backend database.
+
+    Args:
+        worker_id: Worker's unique ID
+        worker_url: Worker's URL
+        platform: Worker's platform (windows/linux)
+        worker_name: Friendly name for worker
+        enabled: Whether worker is enabled
+    """
+    manager = await get_worker_manager()
+
+    existing = await manager.get_worker(worker_id)
+    if existing:
+        logger.info("Updating existing worker registration: %s", worker_id)
+        heartbeat = WorkerHeartbeat(
+            worker_id=worker_id,
+            platform=platform,
+            url=worker_url,
+            status="online",
+            current_load=0,
+            models_loaded=[],
+            uptime_seconds=0,
+        )
+        await manager.update_worker_status_from_heartbeat(heartbeat)
+    else:
+        new_config = NPUWorkerConfig(
+            id=worker_id,
+            name=worker_name or f"NPU Worker ({platform})",
+            url=worker_url,
+            platform=platform,
+            enabled=enabled,
+            priority=5,
+            weight=1,
+            max_concurrent_tasks=4,
+        )
+        await manager.add_worker(new_config)
+        logger.info("Registered new worker: %s", worker_id)
+
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -800,11 +986,6 @@ async def pair_worker(request: dict):
         400: If worker is unreachable or pairing fails
         500: If registration fails
     """
-    import uuid
-    from datetime import datetime
-
-    import httpx
-
     try:
         worker_url = request.get("url", "").rstrip("/")
         worker_name = request.get("name", "")
@@ -816,126 +997,33 @@ async def pair_worker(request: dict):
                 detail="Worker URL is required",
             )
 
-        # Step 1: Check if worker is reachable
         logger.info("Attempting to pair with worker at %s", worker_url)
 
         async with httpx.AsyncClient(timeout=10.0) as client:
-            # First, check if worker is reachable via health endpoint
-            try:
-                health_response = await client.get(f"{worker_url}/health")
-                if health_response.status_code != 200:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Worker health check failed: {health_response.status_code}",
-                    )
-                health_data = health_response.json()
-                platform = health_data.get("platform", "unknown")
-                existing_worker_id = health_data.get("worker_id")
-                already_paired = health_data.get("paired", False)
+            # Step 1: Check worker health
+            health_info = await _check_worker_health(client, worker_url)
 
-                logger.info(
-                    "Worker reachable: platform=%s, existing_id=%s, paired=%s",
-                    platform, existing_worker_id, already_paired
-                )
+            # Step 2: Generate or reuse worker ID
+            worker_id = _generate_worker_id(health_info)
 
-            except httpx.RequestError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Cannot reach worker at {worker_url}: {str(e)}",
-                )
-
-            # Step 2: Generate a permanent worker ID (or reuse if already paired)
-            if existing_worker_id and already_paired:
-                worker_id = existing_worker_id
-                logger.info("Reusing existing worker ID: %s", worker_id)
-            else:
-                worker_id = f"{platform}_npu_worker_{uuid.uuid4().hex[:8]}"
-                logger.info("Generated new worker ID: %s", worker_id)
-
-            # Step 3: Get SSOT config for worker
-            from src.config.ssot_config import config as ssot_config
-
-            worker_config = {
-                "redis": {
-                    "host": ssot_config.redis.host,
-                    "port": ssot_config.redis.port,
-                    "password": ssot_config.redis.password,
-                    "db": 0,
-                },
-                "backend": {
-                    "host": ssot_config.backend.host,
-                    "port": ssot_config.backend.port,
-                },
-            }
+            # Step 3: Build pairing configuration
+            worker_config, main_host = _build_pairing_config()
 
             # Step 4: Send pairing request to worker
-            pair_request = {
-                "worker_id": worker_id,
-                "main_host": f"{ssot_config.backend.host}:{ssot_config.backend.port}",
-                "config": worker_config,
-            }
-
-            try:
-                pair_response = await client.post(
-                    f"{worker_url}/pair",
-                    json=pair_request,
-                )
-                if pair_response.status_code != 200:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Worker rejected pairing: {pair_response.text}",
-                    )
-                pair_result = pair_response.json()
-                device_info = pair_result.get("device_info", {})
-
-            except httpx.RequestError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Failed to send pair request to worker: {str(e)}",
-                )
+            device_info = await _send_pairing_request(
+                client, worker_url, worker_id, worker_config, main_host
+            )
 
         # Step 5: Register worker in backend
-        manager = await get_worker_manager()
-
-        # Check if worker already exists
-        existing = await manager.get_worker(worker_id)
-        if existing:
-            # Update existing worker
-            logger.info("Updating existing worker registration: %s", worker_id)
-            # Just update status - worker is now paired
-            from backend.models.npu_models import WorkerHeartbeat
-            heartbeat = WorkerHeartbeat(
-                worker_id=worker_id,
-                platform=platform,
-                url=worker_url,
-                status="online",
-                current_load=0,
-                models_loaded=[],
-                uptime_seconds=0,
-            )
-            await manager.update_worker_status_from_heartbeat(heartbeat)
-        else:
-            # Create new worker registration
-            from backend.models.npu_models import NPUWorkerConfig
-
-            new_config = NPUWorkerConfig(
-                id=worker_id,
-                name=worker_name or f"NPU Worker ({platform})",
-                url=worker_url,
-                platform=platform,
-                enabled=enabled,
-                priority=5,
-                weight=1,
-                max_concurrent_tasks=4,
-            )
-            await manager.add_worker(new_config)
-            logger.info("Registered new worker: %s", worker_id)
+        await _register_worker_in_backend(
+            worker_id, worker_url, health_info.platform, worker_name, enabled
+        )
 
         return {
             "success": True,
             "worker_id": worker_id,
             "url": worker_url,
-            "platform": platform,
+            "platform": health_info.platform,
             "device_info": device_info,
             "paired_at": datetime.utcnow().isoformat() + "Z",
             "message": f"Successfully paired with worker at {worker_url}",

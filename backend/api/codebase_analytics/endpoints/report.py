@@ -1159,6 +1159,176 @@ def _generate_cross_language_section(analysis: Optional[CrossLanguageAnalysis]) 
     return lines
 
 
+def _fetch_problems_from_chromadb() -> List[Dict]:
+    """
+    Fetch code problems from ChromaDB collection.
+
+    Returns:
+        List of problem dictionaries with type, severity, file_path, etc.
+    """
+    code_collection = get_code_collection()
+    problems = []
+
+    if not code_collection:
+        return problems
+
+    try:
+        results = code_collection.get(
+            where={"type": "problem"},
+            include=["metadatas"],
+        )
+
+        if results and results.get("metadatas"):
+            for metadata in results["metadatas"]:
+                problems.append({
+                    "type": metadata.get("problem_type", "unknown"),
+                    "severity": metadata.get("severity", "low"),
+                    "file_path": metadata.get("file_path", ""),
+                    "file_category": metadata.get("file_category", FILE_CATEGORY_CODE),
+                    "line_number": metadata.get("line_number"),
+                    "description": metadata.get("description", ""),
+                    "suggestion": metadata.get("suggestion", ""),
+                })
+
+        logger.info("Retrieved %s problems for report", len(problems))
+    except Exception as e:
+        logger.error("Failed to fetch problems from ChromaDB: %s", e)
+
+    return problems
+
+
+async def _run_parallel_analyses(
+    include_bug_prediction: bool,
+    include_api_analysis: bool,
+    include_duplicate_analysis: bool,
+    include_cross_language_analysis: bool,
+    include_pattern_analysis: bool,
+    use_semantic: bool,
+) -> Dict[str, Optional[object]]:
+    """
+    Run multiple code analyses in parallel.
+
+    Args:
+        include_bug_prediction: Whether to run bug prediction
+        include_api_analysis: Whether to run API endpoint analysis
+        include_duplicate_analysis: Whether to run duplicate code analysis
+        include_cross_language_analysis: Whether to run cross-language analysis
+        include_pattern_analysis: Whether to run pattern analysis
+        use_semantic: Enable LLM-based semantic analysis for bug prediction
+
+    Returns:
+        Dict with keys: bug_prediction, api_endpoint, duplicate, cross_language, pattern_analysis
+    """
+    analysis_tasks = []
+
+    if include_bug_prediction:
+        analysis_tasks.append(("bug_prediction", _get_bug_prediction(use_semantic=use_semantic)))
+    if include_api_analysis:
+        analysis_tasks.append(("api_endpoint", _get_api_endpoint_analysis()))
+    if include_duplicate_analysis:
+        analysis_tasks.append(("duplicate", _get_duplicate_analysis()))
+    if include_cross_language_analysis:
+        analysis_tasks.append(("cross_language", _get_cross_language_analysis()))
+    if include_pattern_analysis:
+        analysis_tasks.append(("pattern_analysis", _get_pattern_analysis()))
+
+    # Initialize results
+    result = {
+        "bug_prediction": None,
+        "api_endpoint": None,
+        "duplicate": None,
+        "cross_language": None,
+        "pattern_analysis": None,
+    }
+
+    if not analysis_tasks:
+        return result
+
+    # Run all analyses in parallel with individual error handling
+    results = await asyncio.gather(
+        *[task for _, task in analysis_tasks],
+        return_exceptions=True,
+    )
+
+    # Map results back to dict
+    for i, (task_name, _) in enumerate(analysis_tasks):
+        task_result = results[i]
+        if isinstance(task_result, Exception):
+            logger.warning("Analysis %s failed: %s", task_name, task_result)
+            continue
+        result[task_name] = task_result
+
+    return result
+
+
+def _generate_empty_report_with_analyses(
+    api_endpoint_analysis: Optional[APIEndpointAnalysis],
+    duplicate_analysis: Optional[DuplicateAnalysis],
+    cross_language_analysis: Optional[CrossLanguageAnalysis],
+    pattern_analysis: Optional[PatternAnalysisReport],
+    bug_prediction: Optional[PredictionResult],
+) -> str:
+    """
+    Generate report when no code issues are detected but analyses are available.
+
+    Args:
+        api_endpoint_analysis: API endpoint analysis result
+        duplicate_analysis: Duplicate code analysis result
+        cross_language_analysis: Cross-language pattern analysis result
+        pattern_analysis: Code pattern analysis result
+        bug_prediction: Bug prediction analysis result
+
+    Returns:
+        Markdown formatted report string
+    """
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    lines = [
+        "# Code Analysis Report",
+        "",
+        f"**Generated:** {now}",
+        "**Status:** No code issues detected",
+        "",
+        "> No static analysis issues found.",
+        "",
+        "---",
+        "",
+    ]
+
+    # Add API endpoint analysis (Issue #527)
+    if api_endpoint_analysis:
+        lines.extend(_generate_api_endpoint_section(api_endpoint_analysis))
+
+    # Add duplicate code analysis (Issue #528)
+    if duplicate_analysis and duplicate_analysis.total_duplicates > 0:
+        lines.extend(_generate_duplicate_code_section(duplicate_analysis))
+
+    # Add cross-language pattern analysis (Issue #244)
+    if cross_language_analysis and cross_language_analysis.total_patterns > 0:
+        lines.extend(_generate_cross_language_section(cross_language_analysis))
+
+    # Add code pattern analysis (Issue #208)
+    if pattern_analysis and pattern_analysis.total_patterns > 0:
+        lines.extend(_generate_pattern_analysis_section(pattern_analysis))
+
+    # Add bug prediction (Issue #505)
+    if bug_prediction and bug_prediction.analyzed_files > 0:
+        lines.extend(_generate_bug_risk_section(bug_prediction))
+
+    has_analyses = (
+        api_endpoint_analysis or
+        (duplicate_analysis and duplicate_analysis.total_duplicates > 0) or
+        (cross_language_analysis and cross_language_analysis.total_patterns > 0) or
+        (pattern_analysis and pattern_analysis.total_patterns > 0) or
+        (bug_prediction and bug_prediction.analyzed_files > 0)
+    )
+    if not has_analyses:
+        lines.append("Run \"Index Codebase\" first to analyze the code.")
+        lines.append("")
+
+    lines.append("*Report generated by AutoBot Code Analysis*")
+    return "\n".join(lines)
+
+
 async def _get_cross_language_analysis() -> Optional[CrossLanguageAnalysis]:
     """
     Get cross-language pattern analysis for the project (Issue #244).
@@ -1609,148 +1779,47 @@ async def generate_analysis_report(
     Returns:
         Markdown formatted report as plain text
     """
-    code_collection = get_code_collection()
-    problems = []
+    # Fetch problems from indexed data
+    problems = _fetch_problems_from_chromadb()
 
-    if code_collection:
-        try:
-            # Fetch all problems from ChromaDB
-            results = code_collection.get(
-                where={"type": "problem"},
-                include=["metadatas"],
-            )
-
-            if results and results.get("metadatas"):
-                for metadata in results["metadatas"]:
-                    problems.append({
-                        "type": metadata.get("problem_type", "unknown"),
-                        "severity": metadata.get("severity", "low"),
-                        "file_path": metadata.get("file_path", ""),
-                        "file_category": metadata.get("file_category", FILE_CATEGORY_CODE),
-                        "line_number": metadata.get("line_number"),
-                        "description": metadata.get("description", ""),
-                        "suggestion": metadata.get("suggestion", ""),
-                    })
-
-            logger.info("Retrieved %s problems for report", len(problems))
-        except Exception as e:
-            logger.error("Failed to fetch problems from ChromaDB: %s", e)
-
-    # Quick mode: Skip expensive analyses for faster export
+    # Get analysis results (or skip in quick mode)
     if quick:
         logger.info("Quick mode: Skipping expensive analyses")
-        bug_prediction = None
-        api_endpoint_analysis = None
-        duplicate_analysis = None
-        cross_language_analysis = None
-        pattern_analysis = None
+        analyses = {
+            "bug_prediction": None,
+            "api_endpoint": None,
+            "duplicate": None,
+            "cross_language": None,
+            "pattern_analysis": None,
+        }
     else:
-        # Run analyses in parallel for better performance
-        analysis_tasks = []
-
-        if include_bug_prediction:
-            # Issue #554: Pass semantic analysis flag
-            analysis_tasks.append(("bug_prediction", _get_bug_prediction(use_semantic=use_semantic)))
-        if include_api_analysis:
-            analysis_tasks.append(("api_endpoint", _get_api_endpoint_analysis()))
-        if include_duplicate_analysis:
-            analysis_tasks.append(("duplicate", _get_duplicate_analysis()))
-        if include_cross_language_analysis:
-            analysis_tasks.append(("cross_language", _get_cross_language_analysis()))
-        if include_pattern_analysis:
-            analysis_tasks.append(("pattern_analysis", _get_pattern_analysis()))
-
-        # Initialize results
-        bug_prediction = None
-        api_endpoint_analysis = None
-        duplicate_analysis = None
-        cross_language_analysis = None
-        pattern_analysis = None
-
-        if analysis_tasks:
-            # Run all analyses in parallel with individual error handling
-            results = await asyncio.gather(
-                *[task for _, task in analysis_tasks],
-                return_exceptions=True,
-            )
-
-            # Map results back to variables
-            for i, (task_name, _) in enumerate(analysis_tasks):
-                result = results[i]
-                if isinstance(result, Exception):
-                    logger.warning("Analysis %s failed: %s", task_name, result)
-                    continue
-
-                if task_name == "bug_prediction":
-                    bug_prediction = result
-                elif task_name == "api_endpoint":
-                    api_endpoint_analysis = result
-                elif task_name == "duplicate":
-                    duplicate_analysis = result
-                elif task_name == "cross_language":
-                    cross_language_analysis = result
-                elif task_name == "pattern_analysis":
-                    pattern_analysis = result
-
-    if not problems:
-        # Even with no issues, include other analyses if available
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        lines = [
-            "# Code Analysis Report",
-            "",
-            f"**Generated:** {now}",
-            "**Status:** No code issues detected",
-            "",
-            "> No static analysis issues found.",
-            "",
-            "---",
-            "",
-        ]
-
-        # Add API endpoint analysis even with no code issues (Issue #527)
-        if api_endpoint_analysis:
-            lines.extend(_generate_api_endpoint_section(api_endpoint_analysis))
-
-        # Add duplicate code analysis even with no code issues (Issue #528)
-        if duplicate_analysis and duplicate_analysis.total_duplicates > 0:
-            lines.extend(_generate_duplicate_code_section(duplicate_analysis))
-
-        # Add cross-language pattern analysis even with no code issues (Issue #244)
-        if cross_language_analysis and cross_language_analysis.total_patterns > 0:
-            lines.extend(_generate_cross_language_section(cross_language_analysis))
-
-        # Add code pattern analysis even with no code issues (Issue #208)
-        if pattern_analysis and pattern_analysis.total_patterns > 0:
-            lines.extend(_generate_pattern_analysis_section(pattern_analysis))
-
-        # Add bug prediction if available (Issue #505)
-        if bug_prediction and bug_prediction.analyzed_files > 0:
-            lines.extend(_generate_bug_risk_section(bug_prediction))
-
-        has_analyses = (
-            api_endpoint_analysis or
-            (duplicate_analysis and duplicate_analysis.total_duplicates > 0) or
-            (cross_language_analysis and cross_language_analysis.total_patterns > 0) or
-            (pattern_analysis and pattern_analysis.total_patterns > 0) or
-            (bug_prediction and bug_prediction.analyzed_files > 0)
+        analyses = await _run_parallel_analyses(
+            include_bug_prediction=include_bug_prediction,
+            include_api_analysis=include_api_analysis,
+            include_duplicate_analysis=include_duplicate_analysis,
+            include_cross_language_analysis=include_cross_language_analysis,
+            include_pattern_analysis=include_pattern_analysis,
+            use_semantic=use_semantic,
         )
-        if not has_analyses:
-            lines.append("Run \"Index Codebase\" first to analyze the code.")
-            lines.append("")
 
-        lines.append("*Report generated by AutoBot Code Analysis*")
-        report = "\n".join(lines)
+    # Generate the report
+    if not problems:
+        report = _generate_empty_report_with_analyses(
+            api_endpoint_analysis=analyses["api_endpoint"],
+            duplicate_analysis=analyses["duplicate"],
+            cross_language_analysis=analyses["cross_language"],
+            pattern_analysis=analyses["pattern_analysis"],
+            bug_prediction=analyses["bug_prediction"],
+        )
     else:
-        # Try to get the analyzed path from the latest indexing task
-        # For now, we'll note it as "Indexed Codebase"
         report = _generate_markdown_report(
             problems,
             analyzed_path="Indexed Codebase",
-            bug_prediction=bug_prediction,
-            api_endpoint_analysis=api_endpoint_analysis,
-            duplicate_analysis=duplicate_analysis,
-            cross_language_analysis=cross_language_analysis,
-            pattern_analysis=pattern_analysis,
+            bug_prediction=analyses["bug_prediction"],
+            api_endpoint_analysis=analyses["api_endpoint"],
+            duplicate_analysis=analyses["duplicate"],
+            cross_language_analysis=analyses["cross_language"],
+            pattern_analysis=analyses["pattern_analysis"],
         )
 
     return PlainTextResponse(

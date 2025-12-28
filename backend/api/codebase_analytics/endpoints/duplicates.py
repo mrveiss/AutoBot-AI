@@ -36,6 +36,146 @@ router = APIRouter()
 _duplicate_cache: Optional[dict] = None
 
 
+def _get_project_root() -> str:
+    """Get project root path (4 levels up from this file)."""
+    return str(Path(__file__).resolve().parents[4])
+
+
+async def _run_semantic_analysis(project_root: str, min_similarity: float):
+    """
+    Run semantic duplicate analysis using LLM embeddings.
+
+    Args:
+        project_root: Root directory to analyze
+        min_similarity: Minimum similarity threshold
+
+    Returns:
+        Analysis result or None if failed
+    """
+    try:
+        analysis = await detect_duplicates_async(
+            project_root=project_root,
+            min_similarity=min_similarity,
+            use_semantic_analysis=True,
+        )
+        logger.info("Semantic duplicate analysis complete")
+        return analysis
+    except Exception as e:
+        logger.warning("Semantic analysis failed, falling back to standard: %s", e)
+        return None
+
+
+async def _run_standard_analysis(project_root: str, min_similarity: float):
+    """
+    Run standard duplicate analysis in thread pool with timeout.
+
+    Args:
+        project_root: Root directory to analyze
+        min_similarity: Minimum similarity threshold
+
+    Returns:
+        Analysis result or None if timed out
+    """
+    loop = asyncio.get_event_loop()
+    try:
+        analysis = await asyncio.wait_for(
+            loop.run_in_executor(
+                None,
+                lambda: DuplicateCodeDetector(
+                    project_root=project_root,
+                    min_similarity=min_similarity,
+                ).run_analysis()
+            ),
+            timeout=AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT
+        )
+        return analysis
+    except asyncio.TimeoutError:
+        logger.warning(
+            "Duplicate detection timed out after %d seconds",
+            AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT
+        )
+        return None
+
+
+def _convert_analysis_to_result(analysis, project_root: str) -> dict:
+    """
+    Convert analysis result to frontend-compatible format.
+
+    Args:
+        analysis: DuplicateAnalysis result
+        project_root: Project root for relative paths
+
+    Returns:
+        Frontend-compatible result dict
+    """
+    duplicates_for_frontend = []
+    for dup in analysis.duplicates:
+        duplicates_for_frontend.append({
+            "file1": _make_relative_path(dup.file1, project_root),
+            "file2": _make_relative_path(dup.file2, project_root),
+            "start_line1": dup.start_line1,
+            "end_line1": dup.end_line1,
+            "start_line2": dup.start_line2,
+            "end_line2": dup.end_line2,
+            "similarity": round(dup.similarity * 100, 1),
+            "lines": dup.line_count,
+            "code_snippet": dup.code_snippet[:200] if dup.code_snippet else "",
+        })
+
+    return {
+        "status": "success",
+        "duplicates": duplicates_for_frontend,
+        "total_count": analysis.total_duplicates,
+        "high_similarity_count": analysis.high_similarity_count,
+        "medium_similarity_count": analysis.medium_similarity_count,
+        "low_similarity_count": analysis.low_similarity_count,
+        "total_duplicate_lines": analysis.total_duplicate_lines,
+        "files_analyzed": analysis.files_analyzed,
+        "scan_timestamp": analysis.scan_timestamp,
+        "storage_type": "live_analysis",
+    }
+
+
+def _get_chromadb_fallback(error_msg: str) -> Optional[dict]:
+    """
+    Get cached duplicates from ChromaDB as fallback.
+
+    Args:
+        error_msg: Error message to include in warning
+
+    Returns:
+        Fallback result dict or None if unavailable
+    """
+    code_collection = get_code_collection()
+    if not code_collection:
+        return None
+
+    try:
+        results = code_collection.get(
+            where={"type": "duplicate"}, include=["metadatas"]
+        )
+
+        all_duplicates = []
+        for metadata in results.get("metadatas", []):
+            all_duplicates.append({
+                "file1": metadata.get("file1", ""),
+                "file2": metadata.get("file2", ""),
+                "similarity": float(metadata.get("similarity", 0)),
+                "lines": int(metadata.get("lines", 0)),
+                "code_snippet": metadata.get("code_snippet", ""),
+            })
+
+        return {
+            "status": "success",
+            "duplicates": all_duplicates,
+            "total_count": len(all_duplicates),
+            "storage_type": "chromadb_fallback",
+            "warning": f"Live analysis failed, showing cached results: {error_msg}",
+        }
+    except Exception:
+        return None
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_duplicate_code",
@@ -70,82 +210,32 @@ async def get_duplicate_code(
         logger.info("Returning cached duplicate analysis (%d duplicates)", _duplicate_cache.get("total_count", 0))
         return JSONResponse(_duplicate_cache)
 
-    # Run duplicate detection in thread pool to avoid blocking
+    project_root = _get_project_root()
+
     try:
-        loop = asyncio.get_event_loop()
-
-        # Get project root (4 levels up: endpoints -> codebase_analytics -> api -> backend -> root)
-        project_root = str(Path(__file__).resolve().parents[4])
-
-        # Issue #554: Use async method with semantic analysis if enabled
+        # Try semantic analysis first if requested
+        analysis = None
         if use_semantic:
-            try:
-                analysis = await detect_duplicates_async(
-                    project_root=project_root,
-                    min_similarity=min_similarity,
-                    use_semantic_analysis=True,
-                )
-                logger.info("Semantic duplicate analysis complete")
-            except Exception as e:
-                logger.warning("Semantic analysis failed, falling back to standard: %s", e)
-                # Fall through to standard analysis below
-                use_semantic = False
+            analysis = await _run_semantic_analysis(project_root, min_similarity)
 
-        # Run analysis in thread pool with timeout to prevent hanging
-        # Duplicate analysis can be CPU-intensive for large codebases
-        # Timeout from SSOT configuration
-        if not use_semantic:
-            try:
-                analysis = await asyncio.wait_for(
-                    loop.run_in_executor(
-                        None,
-                        lambda: DuplicateCodeDetector(
-                            project_root=project_root,
-                            min_similarity=min_similarity,
-                        ).run_analysis()
-                    ),
-                    timeout=AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT
-                )
-            except asyncio.TimeoutError:
-                logger.warning("Duplicate detection timed out after %d seconds", AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT)
-                return JSONResponse({
-                    "status": "partial",
-                    "message": f"Analysis timed out after {AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT}s. Try a higher min_similarity threshold.",
-                    "duplicates": [],
-                    "total_count": 0,
-                    "storage_type": "timeout",
-                })
+        # Fall back to standard analysis
+        if analysis is None:
+            analysis = await _run_standard_analysis(project_root, min_similarity)
 
-        # Convert to frontend-compatible format
-        duplicates_for_frontend = []
-        for dup in analysis.duplicates:
-            duplicates_for_frontend.append({
-                "file1": _make_relative_path(dup.file1, project_root),
-                "file2": _make_relative_path(dup.file2, project_root),
-                "start_line1": dup.start_line1,
-                "end_line1": dup.end_line1,
-                "start_line2": dup.start_line2,
-                "end_line2": dup.end_line2,
-                "similarity": round(dup.similarity * 100, 1),  # Convert to percentage
-                "lines": dup.line_count,
-                "code_snippet": dup.code_snippet[:200] if dup.code_snippet else "",
+        # Handle timeout case
+        if analysis is None:
+            return JSONResponse({
+                "status": "partial",
+                "message": f"Analysis timed out after {AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT}s. Try a higher min_similarity threshold.",
+                "duplicates": [],
+                "total_count": 0,
+                "storage_type": "timeout",
             })
 
-        result = {
-            "status": "success",
-            "duplicates": duplicates_for_frontend,
-            "total_count": analysis.total_duplicates,
-            "high_similarity_count": analysis.high_similarity_count,
-            "medium_similarity_count": analysis.medium_similarity_count,
-            "low_similarity_count": analysis.low_similarity_count,
-            "total_duplicate_lines": analysis.total_duplicate_lines,
-            "files_analyzed": analysis.files_analyzed,
-            "scan_timestamp": analysis.scan_timestamp,
-            "storage_type": "live_analysis",
-        }
-
-        # Cache the results
+        # Convert and cache results
+        result = _convert_analysis_to_result(analysis, project_root)
         _duplicate_cache = result
+
         logger.info(
             "Duplicate analysis complete: %d duplicates (%d high, %d medium, %d low)",
             analysis.total_duplicates,
@@ -159,33 +249,10 @@ async def get_duplicate_code(
     except Exception as e:
         logger.error("Duplicate detection failed: %s", e, exc_info=True)
 
-        # Fall back to ChromaDB stored duplicates if available
-        code_collection = get_code_collection()
-        if code_collection:
-            try:
-                results = code_collection.get(
-                    where={"type": "duplicate"}, include=["metadatas"]
-                )
-
-                all_duplicates = []
-                for metadata in results.get("metadatas", []):
-                    all_duplicates.append({
-                        "file1": metadata.get("file1", ""),
-                        "file2": metadata.get("file2", ""),
-                        "similarity": float(metadata.get("similarity", 0)),
-                        "lines": int(metadata.get("lines", 0)),
-                        "code_snippet": metadata.get("code_snippet", ""),
-                    })
-
-                return JSONResponse({
-                    "status": "success",
-                    "duplicates": all_duplicates,
-                    "total_count": len(all_duplicates),
-                    "storage_type": "chromadb_fallback",
-                    "warning": f"Live analysis failed, showing cached results: {str(e)}",
-                })
-            except Exception:
-                pass
+        # Try ChromaDB fallback
+        fallback = _get_chromadb_fallback(str(e))
+        if fallback:
+            return JSONResponse(fallback)
 
         return JSONResponse({
             "status": "error",

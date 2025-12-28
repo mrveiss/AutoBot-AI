@@ -532,6 +532,168 @@ class CrossLanguagePatternDetector:
         path = re.sub(r":\w+", "{param}", path)
         return f"/{path}"
 
+    async def _build_patterns_with_embeddings(
+        self,
+        patterns: List[Dict],
+        language: str,
+    ) -> List[Dict]:
+        """
+        Build pattern objects with embeddings for a list of patterns.
+
+        Args:
+            patterns: Raw patterns to process
+            language: Language identifier (python/typescript)
+
+        Returns:
+            List of patterns with embeddings added
+        """
+        prefix = "py_" if language == "python" else "ts_"
+        result = []
+
+        for p in patterns:
+            normalized = await self._normalize_pattern(p)
+            embedding = await self._get_embedding(normalized)
+            if embedding:
+                pattern_id = f"{prefix}{hashlib.sha256(normalized.encode()).hexdigest()[:12]}"
+                result.append({
+                    "id": pattern_id,
+                    "pattern": p,
+                    "normalized": normalized,
+                    "embedding": embedding,
+                    "language": language,
+                })
+
+        return result
+
+    async def _store_patterns_in_chromadb(
+        self,
+        collection,
+        patterns: List[Dict],
+    ) -> List[Dict]:
+        """
+        Store patterns in ChromaDB with error recovery.
+
+        Args:
+            collection: ChromaDB collection
+            patterns: Patterns with embeddings to store
+
+        Returns:
+            List of successfully stored patterns
+        """
+        # Try batch insertion first
+        try:
+            await collection.add(
+                ids=[p["id"] for p in patterns],
+                embeddings=[p["embedding"] for p in patterns],
+                documents=[p["normalized"] for p in patterns],
+                metadatas=[{
+                    "language": p["language"],
+                    "type": str(p["pattern"].get("type", "unknown")),
+                    "name": p["pattern"].get("name", ""),
+                } for p in patterns],
+            )
+            return patterns
+        except Exception as batch_error:
+            logger.warning(
+                "Batch insertion failed (%s), falling back to individual insertion",
+                batch_error
+            )
+
+        # Fall back to individual insertion for error recovery
+        stored_patterns = []
+        for pattern in patterns:
+            try:
+                await collection.add(
+                    ids=[pattern["id"]],
+                    embeddings=[pattern["embedding"]],
+                    documents=[pattern["normalized"]],
+                    metadatas=[{
+                        "language": pattern["language"],
+                        "type": str(pattern["pattern"].get("type", "unknown")),
+                        "name": pattern["pattern"].get("name", ""),
+                    }],
+                )
+                stored_patterns.append(pattern)
+            except Exception as individual_error:
+                logger.debug(
+                    "Failed to store pattern %s: %s",
+                    pattern["id"],
+                    individual_error
+                )
+
+        if stored_patterns:
+            logger.info(
+                "Recovered %d/%d patterns via individual insertion",
+                len(stored_patterns),
+                len(patterns)
+            )
+        else:
+            logger.error("All pattern insertions failed")
+
+        return stored_patterns
+
+    async def _query_cross_language_matches(
+        self,
+        collection,
+        python_patterns: List[Dict],
+        typescript_patterns: List[Dict],
+    ) -> List[PatternMatch]:
+        """
+        Query for similar patterns across Python and TypeScript.
+
+        Args:
+            collection: ChromaDB collection
+            python_patterns: Python patterns with embeddings
+            typescript_patterns: TypeScript patterns with embeddings
+
+        Returns:
+            List of pattern matches above similarity threshold
+        """
+        matches = []
+        ts_pattern_lookup = {p["id"]: p for p in typescript_patterns}
+
+        for py_p in python_patterns[:50]:  # Limit queries
+            try:
+                results = await collection.query(
+                    query_embeddings=[py_p["embedding"]],
+                    n_results=5,
+                    where={"language": "typescript"},
+                )
+
+                if not results or not results.get("distances"):
+                    continue
+
+                for distance, doc_id in zip(
+                    results["distances"][0],
+                    results["ids"][0]
+                ):
+                    similarity = 1 - distance  # Convert distance to similarity
+
+                    if similarity < SIMILARITY_MEDIUM:
+                        continue
+
+                    ts_pattern = ts_pattern_lookup.get(doc_id)
+                    if ts_pattern:
+                        matches.append(PatternMatch(
+                            pattern_id=f"match_{uuid.uuid4().hex[:8]}",
+                            similarity_score=similarity,
+                            source_location=py_p["pattern"].get("location"),
+                            target_location=ts_pattern["pattern"].get("location"),
+                            source_code=py_p["pattern"].get("code", "")[:300],
+                            target_code=ts_pattern["pattern"].get("code", "")[:300],
+                            match_type="semantic",
+                            confidence=similarity,
+                            metadata={
+                                "python_name": py_p["pattern"].get("name"),
+                                "typescript_name": ts_pattern["pattern"].get("name"),
+                                "pattern_type": str(py_p["pattern"].get("type")),
+                            },
+                        ))
+            except Exception as e:
+                logger.warning("Query failed for pattern %s: %s", py_p["id"], e)
+
+        return matches
+
     async def _find_semantic_matches(
         self,
         python_patterns: List[Dict],
@@ -541,142 +703,36 @@ class CrossLanguagePatternDetector:
         if not self.use_llm:
             return []
 
-        matches = []
         collection = await self._get_chromadb_collection()
-
         if not collection:
             logger.warning("ChromaDB not available for semantic matching")
             return []
 
-        # Generate embeddings and store in ChromaDB
-        all_patterns = []
+        # Build patterns with embeddings for both languages
+        python_with_emb = await self._build_patterns_with_embeddings(
+            python_patterns, "python"
+        )
+        ts_with_emb = await self._build_patterns_with_embeddings(
+            typescript_patterns, "typescript"
+        )
 
-        for p in python_patterns:
-            normalized = await self._normalize_pattern(p)
-            embedding = await self._get_embedding(normalized)
-            if embedding:
-                pattern_id = f"py_{hashlib.sha256(normalized.encode()).hexdigest()[:12]}"
-                all_patterns.append({
-                    "id": pattern_id,
-                    "pattern": p,
-                    "normalized": normalized,
-                    "embedding": embedding,
-                    "language": "python",
-                })
-
-        for p in typescript_patterns:
-            normalized = await self._normalize_pattern(p)
-            embedding = await self._get_embedding(normalized)
-            if embedding:
-                pattern_id = f"ts_{hashlib.sha256(normalized.encode()).hexdigest()[:12]}"
-                all_patterns.append({
-                    "id": pattern_id,
-                    "pattern": p,
-                    "normalized": normalized,
-                    "embedding": embedding,
-                    "language": "typescript",
-                })
-
+        all_patterns = python_with_emb + ts_with_emb
         if not all_patterns:
             return []
 
-        # Store in ChromaDB with error recovery
-        stored_patterns = []
-        try:
-            await collection.add(
-                ids=[p["id"] for p in all_patterns],
-                embeddings=[p["embedding"] for p in all_patterns],
-                documents=[p["normalized"] for p in all_patterns],
-                metadatas=[{
-                    "language": p["language"],
-                    "type": str(p["pattern"].get("type", "unknown")),
-                    "name": p["pattern"].get("name", ""),
-                } for p in all_patterns],
-            )
-            stored_patterns = all_patterns
-        except Exception as batch_error:
-            logger.warning(
-                "Batch insertion failed (%s), falling back to individual insertion",
-                batch_error
-            )
-            # Fall back to individual insertion for error recovery
-            for pattern in all_patterns:
-                try:
-                    await collection.add(
-                        ids=[pattern["id"]],
-                        embeddings=[pattern["embedding"]],
-                        documents=[pattern["normalized"]],
-                        metadatas=[{
-                            "language": pattern["language"],
-                            "type": str(pattern["pattern"].get("type", "unknown")),
-                            "name": pattern["pattern"].get("name", ""),
-                        }],
-                    )
-                    stored_patterns.append(pattern)
-                except Exception as individual_error:
-                    # Log but continue - pattern might already exist (duplicate ID)
-                    logger.debug(
-                        "Failed to store pattern %s: %s",
-                        pattern["id"],
-                        individual_error
-                    )
+        # Store in ChromaDB
+        stored_patterns = await self._store_patterns_in_chromadb(collection, all_patterns)
+        if not stored_patterns:
+            return []
 
-            if not stored_patterns:
-                logger.error("All pattern insertions failed")
-                return []
+        # Filter stored patterns by language
+        stored_python = [p for p in stored_patterns if p["language"] == "python"]
+        stored_ts = [p for p in stored_patterns if p["language"] == "typescript"]
 
-            logger.info(
-                "Recovered %d/%d patterns via individual insertion",
-                len(stored_patterns),
-                len(all_patterns)
-            )
-
-        # Query for similar patterns across languages (only from stored patterns)
-        python_patterns_with_emb = [p for p in stored_patterns if p["language"] == "python"]
-        ts_patterns_with_emb = [p for p in stored_patterns if p["language"] == "typescript"]
-
-        for py_p in python_patterns_with_emb[:50]:  # Limit queries
-            try:
-                results = await collection.query(
-                    query_embeddings=[py_p["embedding"]],
-                    n_results=5,
-                    where={"language": "typescript"},
-                )
-
-                if results and results.get("distances"):
-                    for i, (distance, doc_id) in enumerate(zip(
-                        results["distances"][0],
-                        results["ids"][0]
-                    )):
-                        # Convert distance to similarity (cosine distance)
-                        similarity = 1 - distance
-
-                        if similarity >= SIMILARITY_MEDIUM:
-                            # Find the matching TypeScript pattern
-                            ts_pattern = next(
-                                (p for p in ts_patterns_with_emb if p["id"] == doc_id),
-                                None
-                            )
-                            if ts_pattern:
-                                matches.append(PatternMatch(
-                                    pattern_id=f"match_{uuid.uuid4().hex[:8]}",
-                                    similarity_score=similarity,
-                                    source_location=py_p["pattern"].get("location"),
-                                    target_location=ts_pattern["pattern"].get("location"),
-                                    source_code=py_p["pattern"].get("code", "")[:300],
-                                    target_code=ts_pattern["pattern"].get("code", "")[:300],
-                                    match_type="semantic",
-                                    confidence=similarity,
-                                    metadata={
-                                        "python_name": py_p["pattern"].get("name"),
-                                        "typescript_name": ts_pattern["pattern"].get("name"),
-                                        "pattern_type": str(py_p["pattern"].get("type")),
-                                    },
-                                ))
-            except Exception as e:
-                logger.warning("Query failed for pattern %s: %s", py_p["id"], e)
-
-        return matches
+        # Query for cross-language matches
+        return await self._query_cross_language_matches(
+            collection, stored_python, stored_ts
+        )
 
     async def _cache_results(
         self,
