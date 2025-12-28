@@ -201,6 +201,18 @@
       size="medium"
       :closeOnOverlay="!isChangingPassword"
     >
+      <!-- Success Message -->
+      <div v-if="passwordSuccess" class="alert alert-success">
+        <i class="fas fa-check-circle"></i>
+        {{ passwordSuccess }}
+      </div>
+
+      <!-- Error Message -->
+      <div v-if="passwordError" class="alert alert-error">
+        <i class="fas fa-exclamation-circle"></i>
+        {{ passwordError }}
+      </div>
+
       <div class="form-group">
         <label for="currentPassword">Current Password</label>
         <input
@@ -208,6 +220,7 @@
           type="password"
           v-model="passwordForm.currentPassword"
           class="form-control"
+          :disabled="isChangingPassword"
         />
       </div>
 
@@ -218,7 +231,11 @@
           type="password"
           v-model="passwordForm.newPassword"
           class="form-control"
+          :disabled="isChangingPassword"
         />
+        <small class="form-hint">
+          Password must be at least 8 characters with uppercase, lowercase, and a number.
+        </small>
       </div>
 
       <div class="form-group">
@@ -228,14 +245,15 @@
           type="password"
           v-model="passwordForm.confirmPassword"
           class="form-control"
+          :disabled="isChangingPassword"
         />
       </div>
 
       <template #actions>
-        <button @click="showChangePasswordModal = false" class="cancel-btn">
+        <button @click="showChangePasswordModal = false" class="cancel-btn" :disabled="isChangingPassword">
           Cancel
         </button>
-        <button @click="changePassword" class="save-btn" :disabled="isChangingPassword">
+        <button @click="changePassword" class="save-btn" :disabled="isChangingPassword || passwordSuccess !== ''">
           <i :class="isChangingPassword ? 'fas fa-spinner fa-spin' : 'fas fa-save'"></i>
           {{ isChangingPassword ? 'Changing...' : 'Change Password' }}
         </button>
@@ -272,6 +290,8 @@ const showChangePasswordModal = ref(false)
 const isEditingProfile = ref(false)
 const isSaving = ref(false)
 const isChangingPassword = ref(false)
+const passwordError = ref('')
+const passwordSuccess = ref('')
 
 // Forms
 const profileForm = reactive({
@@ -370,34 +390,42 @@ const handleSecurityCheckboxChange = (key: string) => (event: Event) => {
 }
 
 const changePassword = async () => {
+  // Validate passwords match
   if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-    alert('New passwords do not match')
+    passwordError.value = 'New passwords do not match'
     return
   }
+
+  // Clear any previous errors
+  passwordError.value = ''
+  passwordSuccess.value = ''
 
   try {
     isChangingPassword.value = true
 
-    // TODO: Implement password change functionality
-    // This requires:
-    // 1. Creating a UserRepository with changePassword method
-    // 2. Adding the changePassword API endpoint
-    // 3. Implementing userStore.changePassword method
-    // For now, show a message that this feature is not yet implemented
+    const result = await userStore.changePassword(
+      passwordForm.currentPassword,
+      passwordForm.newPassword
+    )
 
-    alert('Password change functionality is not yet implemented. This requires backend API support.')
-
-    // When implemented, should look like:
-    // await userStore.changePassword(passwordForm.currentPassword, passwordForm.newPassword)
-
-    showChangePasswordModal.value = false
-    passwordForm.currentPassword = ''
-    passwordForm.newPassword = ''
-    passwordForm.confirmPassword = ''
-    // emit('setting-changed', 'user.password', true)
+    if (result.success) {
+      passwordSuccess.value = result.message
+      // Clear form and close modal after a short delay to show success message
+      setTimeout(() => {
+        showChangePasswordModal.value = false
+        passwordForm.currentPassword = ''
+        passwordForm.newPassword = ''
+        passwordForm.confirmPassword = ''
+        passwordSuccess.value = ''
+        passwordError.value = ''
+      }, 1500)
+      emit('setting-changed', 'user.password', true)
+    } else {
+      passwordError.value = result.message
+    }
   } catch (error) {
     logger.error('Failed to change password:', error)
-    alert('Failed to change password')
+    passwordError.value = 'An unexpected error occurred. Please try again.'
   } finally {
     isChangingPassword.value = false
   }
@@ -601,6 +629,46 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* Alert messages */
+.alert {
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.alert-success {
+  background: #d4edda;
+  border: 1px solid #c3e6cb;
+  color: #155724;
+}
+
+.alert-error {
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  color: #721c24;
+}
+
+.alert i {
+  font-size: 16px;
+}
+
+/* Form hint */
+.form-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #6c757d;
+}
+
+/* Disabled button styles */
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* Dark theme support */

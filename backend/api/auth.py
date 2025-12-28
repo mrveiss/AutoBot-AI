@@ -7,7 +7,9 @@ Provides login, logout, and session management functionality
 """
 
 import logging
-from typing import Optional
+from collections import defaultdict
+from time import time
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, validator
@@ -17,6 +19,51 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+# Rate limiting for password change endpoint (stricter limits for security)
+PASSWORD_CHANGE_RATE_WINDOW = 300  # 5 minutes
+PASSWORD_CHANGE_MAX_ATTEMPTS = 5  # max attempts per window
+
+
+class PasswordChangeRateLimiter:
+    """Rate limiter for password change attempts to prevent brute-force attacks."""
+
+    def __init__(
+        self,
+        window: int = PASSWORD_CHANGE_RATE_WINDOW,
+        max_attempts: int = PASSWORD_CHANGE_MAX_ATTEMPTS,
+    ):
+        """Initialize rate limiter."""
+        self.window = window
+        self.max_attempts = max_attempts
+        self.attempts: Dict[str, List[float]] = defaultdict(list)
+
+    def is_allowed(self, client_id: str) -> bool:
+        """Check if password change attempt is allowed."""
+        now = time()
+        # Clean old attempts
+        self.attempts[client_id] = [
+            t for t in self.attempts[client_id] if now - t < self.window
+        ]
+        # Check limit
+        if len(self.attempts[client_id]) >= self.max_attempts:
+            return False
+        # Record attempt
+        self.attempts[client_id].append(now)
+        return True
+
+    def get_remaining(self, client_id: str) -> int:
+        """Get remaining attempts for client."""
+        now = time()
+        self.attempts[client_id] = [
+            t for t in self.attempts[client_id] if now - t < self.window
+        ]
+        return max(0, self.max_attempts - len(self.attempts[client_id]))
+
+
+# Global rate limiter for password changes
+password_change_limiter = PasswordChangeRateLimiter()
 
 
 class LoginRequest(BaseModel):
@@ -62,6 +109,35 @@ class LogoutRequest(BaseModel):
     """Logout request model"""
 
     session_id: Optional[str] = None
+
+
+class ChangePasswordRequest(BaseModel):
+    """Change password request model"""
+
+    current_password: str
+    new_password: str
+
+    @validator("new_password")
+    def validate_new_password(cls, v):
+        """Validate password strength requirements."""
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters long")
+        if len(v) > 128:
+            raise ValueError("Password too long")
+        if not any(c.isupper() for c in v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not any(c.islower() for c in v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one digit")
+        return v
+
+
+class ChangePasswordResponse(BaseModel):
+    """Change password response model"""
+
+    success: bool
+    message: str
 
 
 @with_error_handling(
@@ -275,14 +351,115 @@ async def check_permission(request: Request, operation: str):
     operation="change_password",
     error_code_prefix="AUTH",
 )
-@router.post("/change-password")
-async def change_password(request: Request, old_password: str, new_password: str):
+@router.post("/change-password", response_model=ChangePasswordResponse)
+async def change_password(request: Request, password_data: ChangePasswordRequest):
     """
-    Change user password (placeholder - implement based on user store)
+    Change the current user's password.
+
+    Requires the current password for verification before allowing the change.
+    Password must meet strength requirements:
+    - At least 8 characters
+    - At least one uppercase letter
+    - At least one lowercase letter
+    - At least one digit
+
+    Rate limited to 5 attempts per 5 minutes to prevent brute-force attacks.
     """
-    # This would require a persistent user store to implement properly
-    # For now, return not implemented
-    raise HTTPException(
-        status_code=501,
-        detail="Password change not implemented - requires persistent user store",
-    )
+    try:
+        from src.user_management.config import DeploymentMode, get_deployment_config
+
+        config = get_deployment_config()
+
+        # In single_user mode, password change is not supported
+        if config.mode == DeploymentMode.SINGLE_USER:
+            raise HTTPException(
+                status_code=400,
+                detail="Password change is not available in single-user mode",
+            )
+
+        # Get current user from request
+        user_data = auth_middleware.get_user_from_request(request)
+        if not user_data or user_data.get("auth_method") == "guest":
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        username = user_data.get("username")
+        if not username:
+            raise HTTPException(status_code=401, detail="Unable to identify user")
+
+        # Rate limiting - use username + IP as client ID for better security
+        ip_address = request.client.host if request.client else "unknown"
+        client_id = f"{username}:{ip_address}"
+        if not password_change_limiter.is_allowed(client_id):
+            remaining_time = PASSWORD_CHANGE_RATE_WINDOW // 60
+            auth_middleware.security_layer.audit_log(
+                action="password_change_rate_limited",
+                user=username,
+                outcome="denied",
+                details={"ip": ip_address, "reason": "rate_limit_exceeded"},
+            )
+            raise HTTPException(
+                status_code=429,
+                detail=f"Too many password change attempts. Please try again in {remaining_time} minutes.",
+            )
+
+        # Get user config from security settings
+        allowed_users = auth_middleware.security_config.get("allowed_users", {})
+        if username not in allowed_users:
+            raise HTTPException(status_code=404, detail="User not found in system")
+
+        user_config = allowed_users[username]
+        current_password_hash = user_config.get("password_hash", "")
+
+        # Verify current password
+        if not auth_middleware.verify_password(
+            password_data.current_password, current_password_hash
+        ):
+            # Log failed attempt
+            auth_middleware.security_layer.audit_log(
+                action="password_change_failed",
+                user=username,
+                outcome="denied",
+                details={"ip": ip_address, "reason": "invalid_current_password"},
+            )
+            raise HTTPException(
+                status_code=401, detail="Current password is incorrect"
+            )
+
+        # Hash new password
+        new_password_hash = auth_middleware.hash_password(password_data.new_password)
+
+        # Update password in config (in-memory)
+        allowed_users[username]["password_hash"] = new_password_hash
+
+        # Persist the change to config file
+        from src.unified_config_manager import UnifiedConfigManager
+
+        config_manager = UnifiedConfigManager()
+        config_manager.set_nested(
+            f"security_config.allowed_users.{username}.password_hash",
+            new_password_hash,
+        )
+        # Save settings to disk to persist the password change across restarts
+        config_manager.save_settings()
+
+        # Log successful password change
+        auth_middleware.security_layer.audit_log(
+            action="password_changed",
+            user=username,
+            outcome="success",
+            details={"ip": ip_address},
+        )
+
+        logger.info("Password changed successfully for user: %s", username)
+
+        return ChangePasswordResponse(
+            success=True, message="Password changed successfully"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Password change error: %s", e)
+        raise HTTPException(
+            status_code=500, detail="Failed to change password. Please try again."
+        )

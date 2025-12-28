@@ -333,6 +333,53 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
+  // Change user password
+  async function changePassword(
+    currentPassword: string,
+    newPassword: string
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      }
+
+      // Add authorization header if we have a token
+      if (authState.value.token && authState.value.token !== 'single_user_mode') {
+        headers['Authorization'] = `Bearer ${authState.value.token}`
+      }
+
+      const response = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          current_password: currentPassword,
+          new_password: newPassword
+        })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        // Handle validation errors from Pydantic
+        if (data.detail) {
+          // Check if it's a validation error array
+          if (Array.isArray(data.detail)) {
+            const messages = data.detail.map((err: { msg?: string }) => err.msg || 'Validation error')
+            return { success: false, message: messages.join('. ') }
+          }
+          return { success: false, message: data.detail }
+        }
+        return { success: false, message: 'Failed to change password' }
+      }
+
+      logger.info('Password changed successfully')
+      return { success: true, message: data.message || 'Password changed successfully' }
+    } catch (error) {
+      logger.error('Failed to change password:', error)
+      return { success: false, message: 'Network error. Please try again.' }
+    }
+  }
+
   return {
     // State
     authState,
@@ -362,6 +409,7 @@ export const useUserStore = defineStore('user', () => {
     applyAccessibilitySettings,
     initializeFromStorage,
     persistToStorage,
-    checkAuthFromBackend
+    checkAuthFromBackend,
+    changePassword
   }
 })
