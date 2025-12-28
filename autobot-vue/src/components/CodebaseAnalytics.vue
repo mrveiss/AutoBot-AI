@@ -4393,7 +4393,7 @@ const loadOwnershipAnalysis = async () => {
   ownershipError.value = ''
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/analytics/codebase/ownership?path=${encodeURIComponent(rootPath.value)}`, {
+    const response = await fetch(`${backendUrl}/api/analytics/codebase/ownership/analysis?path=${encodeURIComponent(rootPath.value)}`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',

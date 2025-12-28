@@ -24,7 +24,7 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(prefix="/ownership", tags=["ownership"])
 
 # Cache for ownership analysis (in-memory, refreshed on demand)
 _ownership_analysis_cache: Optional[dict] = None
@@ -80,7 +80,7 @@ def _get_ownership_analyzer():
     operation="get_ownership_analysis",
     error_code_prefix="CODEBASE",
 )
-@router.get("/ownership")
+@router.get("/analysis")
 async def get_ownership_analysis(
     path: str = Query(None, description="Root path to analyze (defaults to project root)"),
     refresh: bool = Query(False, description="Force fresh analysis instead of cache"),
