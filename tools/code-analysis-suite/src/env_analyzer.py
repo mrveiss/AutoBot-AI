@@ -36,6 +36,22 @@ except ImportError:
     _REDIS_AVAILABLE = False
     _CONFIG_AVAILABLE = False
 
+# Issue #642: SSOT mapping integration
+try:
+    from src.config.ssot_mappings import (
+        get_mapping_for_value,
+        validate_against_ssot,
+        generate_ssot_coverage_report,
+        SSOTMapping,
+    )
+    _SSOT_MAPPINGS_AVAILABLE = True
+except ImportError:
+    _SSOT_MAPPINGS_AVAILABLE = False
+    get_mapping_for_value = None
+    validate_against_ssot = None
+    generate_ssot_coverage_report = None
+    SSOTMapping = None
+
 
 # Initialize unified config (with fallback)
 config = UnifiedConfig() if _CONFIG_AVAILABLE else None
@@ -317,16 +333,27 @@ class EnvironmentAnalyzer:
 
         analysis_time = time.time() - start_time
 
+        # Serialize hardcoded values (includes SSOT mapping - Issue #642)
+        serialized_values = [self._serialize_hardcoded_value(v) for v in hardcoded_values]
+
         results = {
             "total_hardcoded_values": len(hardcoded_values),
             "categories": {cat: len(vals) for cat, vals in categorized.items()},
             "high_priority_count": len([v for v in hardcoded_values if v.severity == "high"]),
             "recommendations_count": len(recommendations),
             "analysis_time_seconds": analysis_time,
-            "hardcoded_details": [self._serialize_hardcoded_value(v) for v in hardcoded_values],
+            "hardcoded_details": serialized_values,
             "configuration_recommendations": [self._serialize_recommendation(r) for r in recommendations],
             "metrics": metrics
         }
+
+        # Issue #642: Add SSOT coverage report if mappings are available
+        if _SSOT_MAPPINGS_AVAILABLE and generate_ssot_coverage_report:
+            results["ssot_coverage"] = generate_ssot_coverage_report(serialized_values)
+            logger.info(
+                f"SSOT coverage: {results['ssot_coverage']['ssot_compliance_pct']}%% compliant, "
+                f"{results['ssot_coverage']['with_ssot_equivalent']} violations have SSOT equivalents"
+            )
 
         # Cache results
         await self._cache_results(results)
@@ -877,8 +904,8 @@ class EnvironmentAnalyzer:
         }
 
     def _serialize_hardcoded_value(self, value: HardcodedValue) -> Dict[str, Any]:
-        """Serialize hardcoded value for output"""
-        return {
+        """Serialize hardcoded value for output with SSOT mapping (Issue #642)"""
+        result = {
             "file": value.file_path,
             "line": value.line_number,
             "variable_name": value.variable_name,
@@ -889,6 +916,31 @@ class EnvironmentAnalyzer:
             "context": value.context,
             "current_usage": value.current_usage
         }
+
+        # Issue #642: Add SSOT mapping if available
+        if _SSOT_MAPPINGS_AVAILABLE and get_mapping_for_value:
+            mapping = get_mapping_for_value(value.value)
+            if mapping:
+                result["ssot_mapping"] = {
+                    "has_ssot_equivalent": True,
+                    "python_config": mapping.python_config,
+                    "typescript_config": mapping.typescript_config,
+                    "env_var": mapping.env_var,
+                    "description": mapping.description,
+                    "category": mapping.category.value,
+                    "ssot_severity": mapping.severity,
+                    "status": "NOT_USING_SSOT",
+                }
+                # Upgrade severity if SSOT equivalent exists
+                if mapping.severity == "high" and value.severity != "high":
+                    result["severity"] = "high"
+            else:
+                result["ssot_mapping"] = {
+                    "has_ssot_equivalent": False,
+                    "status": "NO_SSOT_MAPPING",
+                }
+
+        return result
 
     def _serialize_recommendation(self, rec: ConfigRecommendation) -> Dict[str, Any]:
         """Serialize configuration recommendation for output"""

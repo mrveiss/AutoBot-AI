@@ -240,11 +240,11 @@ REMOTE_HOST="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
 ssh autobot@$REMOTE_HOST "command"
 ```
 
-## Validation
+## Validation & Enforcement
 
-### Pre-commit Hook
+### Pre-commit Hook (Issue #642)
 
-A pre-commit hook validates that new code doesn't introduce hardcoded values:
+The enhanced SSOT-aware pre-commit hook validates that new code doesn't introduce hardcoded values and specifically identifies when hardcoded values have SSOT config equivalents:
 
 ```bash
 # Runs automatically on git commit
@@ -253,13 +253,98 @@ A pre-commit hook validates that new code doesn't introduce hardcoded values:
 
 ### Manual Check
 
-Run the detection script manually:
+Run the detection script manually with different modes:
 
 ```bash
+# Standard check
 ./scripts/detect-hardcoded-values.sh
 
 # Expected output for clean code:
 # ✅ No hardcoding violations found!
+
+# Generate detailed compliance report
+./scripts/detect-hardcoded-values.sh --report
+
+# Output in JSON format (for CI/CD integration)
+./scripts/detect-hardcoded-values.sh --json
+```
+
+### SSOT Violation Types
+
+The script distinguishes between two types of violations:
+
+1. **SSOT Violations** (High Priority): Values that have known SSOT config equivalents
+   - These should ALWAYS use SSOT config imports
+   - The script shows the exact SSOT config path to use
+
+2. **Other Violations** (Medium Priority): Generic hardcoded values
+   - These may need environment variables or constants files
+
+### CI/CD Integration (Issue #642)
+
+A GitHub Actions workflow automatically checks SSOT compliance on every PR:
+
+```yaml
+# .github/workflows/ssot-coverage.yml
+# Runs on: push, pull_request
+# Reports: Total violations, SSOT violations, compliance percentage
+```
+
+The workflow:
+
+- Comments on PRs with SSOT compliance status
+- Shows exact config replacements needed
+- Tracks compliance over time
+
+### SSOT Mappings Registry
+
+The `src/config/ssot_mappings.py` module provides programmatic access to SSOT mappings:
+
+```python
+from src.config.ssot_mappings import get_mapping_for_value, get_ssot_suggestion
+
+# Check if a value has an SSOT equivalent
+mapping = get_mapping_for_value("172.16.168.23")
+if mapping:
+    print(f"Use {mapping.python_config} instead")
+    # Output: Use config.vm.redis instead
+
+# Get language-specific suggestion
+suggestion = get_ssot_suggestion("8001", "typescript")
+# Output: Use config.port.backend from @/config/ssot-config
+```
+
+### Environment Analyzer Integration
+
+The EnvironmentAnalyzer now includes SSOT mapping in its output:
+
+```python
+from tools.code-analysis-suite.src.env_analyzer import EnvironmentAnalyzer
+
+analyzer = EnvironmentAnalyzer()
+results = await analyzer.analyze_codebase(".")
+
+# New in Issue #642: SSOT coverage report
+if "ssot_coverage" in results:
+    print(f"Compliance: {results['ssot_coverage']['ssot_compliance_pct']}%")
+    print(f"Values with SSOT equivalents: {results['ssot_coverage']['with_ssot_equivalent']}")
+```
+
+Each hardcoded value now includes SSOT mapping info:
+
+```json
+{
+  "file": "src/example.py",
+  "line": 42,
+  "value": "172.16.168.23",
+  "ssot_mapping": {
+    "has_ssot_equivalent": true,
+    "python_config": "config.vm.redis",
+    "typescript_config": "config.vm.redis",
+    "env_var": "AUTOBOT_REDIS_HOST",
+    "status": "NOT_USING_SSOT"
+  }
+}
 ```
 
 ## Troubleshooting
@@ -372,4 +457,4 @@ auto_scroll = unified_config_manager.get_nested('chat.auto_scroll')
 
 **Author**: mrveiss
 **Copyright**: © 2025 mrveiss
-**Issues**: #604 - SSOT Phase 4 Cleanup, #639 - SSOT Phase 5 config.yaml Consolidation
+**Issues**: #604 - SSOT Phase 4 Cleanup, #639 - SSOT Phase 5 config.yaml Consolidation, #642 - SSOT Config Validation & Enforcement
