@@ -346,6 +346,63 @@ async def check_permission(request: Request, operation: str):
         }
 
 
+def _check_password_change_rate_limit(username: str, ip_address: str) -> None:
+    """Check rate limit for password change attempts."""
+    client_id = f"{username}:{ip_address}"
+    if not password_change_limiter.is_allowed(client_id):
+        remaining_time = PASSWORD_CHANGE_RATE_WINDOW // 60
+        auth_middleware.security_layer.audit_log(
+            action="password_change_rate_limited",
+            user=username,
+            outcome="denied",
+            details={"ip": ip_address, "reason": "rate_limit_exceeded"},
+        )
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many password change attempts. Please try again in {remaining_time} minutes.",
+        )
+
+
+def _verify_current_password(
+    username: str, current_password: str, ip_address: str
+) -> str:
+    """Verify current password and return the hash. Raises HTTPException on failure."""
+    allowed_users = auth_middleware.security_config.get("allowed_users", {})
+    if username not in allowed_users:
+        raise HTTPException(status_code=404, detail="User not found in system")
+
+    user_config = allowed_users[username]
+    current_password_hash = user_config.get("password_hash", "")
+
+    if not auth_middleware.verify_password(current_password, current_password_hash):
+        auth_middleware.security_layer.audit_log(
+            action="password_change_failed",
+            user=username,
+            outcome="denied",
+            details={"ip": ip_address, "reason": "invalid_current_password"},
+        )
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+
+    return current_password_hash
+
+
+def _persist_password_change(username: str, new_password_hash: str) -> None:
+    """Persist password change to config file."""
+    from src.unified_config_manager import UnifiedConfigManager
+
+    # Update in-memory config
+    allowed_users = auth_middleware.security_config.get("allowed_users", {})
+    allowed_users[username]["password_hash"] = new_password_hash
+
+    # Persist to disk
+    config_manager = UnifiedConfigManager()
+    config_manager.set_nested(
+        f"security_config.allowed_users.{username}.password_hash",
+        new_password_hash,
+    )
+    config_manager.save_settings()
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="change_password",
@@ -357,27 +414,19 @@ async def change_password(request: Request, password_data: ChangePasswordRequest
     Change the current user's password.
 
     Requires the current password for verification before allowing the change.
-    Password must meet strength requirements:
-    - At least 8 characters
-    - At least one uppercase letter
-    - At least one lowercase letter
-    - At least one digit
-
-    Rate limited to 5 attempts per 5 minutes to prevent brute-force attacks.
+    Password must meet strength requirements (8+ chars, upper/lower/digit).
+    Rate limited to 5 attempts per 5 minutes.
     """
     try:
         from src.user_management.config import DeploymentMode, get_deployment_config
 
         config = get_deployment_config()
-
-        # In single_user mode, password change is not supported
         if config.mode == DeploymentMode.SINGLE_USER:
             raise HTTPException(
                 status_code=400,
                 detail="Password change is not available in single-user mode",
             )
 
-        # Get current user from request
         user_data = auth_middleware.get_user_from_request(request)
         if not user_data or user_data.get("auth_method") == "guest":
             raise HTTPException(status_code=401, detail="Authentication required")
@@ -386,70 +435,20 @@ async def change_password(request: Request, password_data: ChangePasswordRequest
         if not username:
             raise HTTPException(status_code=401, detail="Unable to identify user")
 
-        # Rate limiting - use username + IP as client ID for better security
         ip_address = request.client.host if request.client else "unknown"
-        client_id = f"{username}:{ip_address}"
-        if not password_change_limiter.is_allowed(client_id):
-            remaining_time = PASSWORD_CHANGE_RATE_WINDOW // 60
-            auth_middleware.security_layer.audit_log(
-                action="password_change_rate_limited",
-                user=username,
-                outcome="denied",
-                details={"ip": ip_address, "reason": "rate_limit_exceeded"},
-            )
-            raise HTTPException(
-                status_code=429,
-                detail=f"Too many password change attempts. Please try again in {remaining_time} minutes.",
-            )
 
-        # Get user config from security settings
-        allowed_users = auth_middleware.security_config.get("allowed_users", {})
-        if username not in allowed_users:
-            raise HTTPException(status_code=404, detail="User not found in system")
+        _check_password_change_rate_limit(username, ip_address)
+        _verify_current_password(username, password_data.current_password, ip_address)
 
-        user_config = allowed_users[username]
-        current_password_hash = user_config.get("password_hash", "")
-
-        # Verify current password
-        if not auth_middleware.verify_password(
-            password_data.current_password, current_password_hash
-        ):
-            # Log failed attempt
-            auth_middleware.security_layer.audit_log(
-                action="password_change_failed",
-                user=username,
-                outcome="denied",
-                details={"ip": ip_address, "reason": "invalid_current_password"},
-            )
-            raise HTTPException(
-                status_code=401, detail="Current password is incorrect"
-            )
-
-        # Hash new password
         new_password_hash = auth_middleware.hash_password(password_data.new_password)
+        _persist_password_change(username, new_password_hash)
 
-        # Update password in config (in-memory)
-        allowed_users[username]["password_hash"] = new_password_hash
-
-        # Persist the change to config file
-        from src.unified_config_manager import UnifiedConfigManager
-
-        config_manager = UnifiedConfigManager()
-        config_manager.set_nested(
-            f"security_config.allowed_users.{username}.password_hash",
-            new_password_hash,
-        )
-        # Save settings to disk to persist the password change across restarts
-        config_manager.save_settings()
-
-        # Log successful password change
         auth_middleware.security_layer.audit_log(
             action="password_changed",
             user=username,
             outcome="success",
             details={"ip": ip_address},
         )
-
         logger.info("Password changed successfully for user: %s", username)
 
         return ChangePasswordResponse(

@@ -855,6 +855,68 @@ async def get_session_facts(session_id: str, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+async def _preserve_single_fact(
+    knowledge_base,
+    fact_id: str,
+    session_id: str,
+    preserve: bool,
+    preserve_time: str,
+    semaphore: asyncio.Semaphore,
+) -> dict:
+    """Preserve a single fact with bounded concurrency."""
+    async with semaphore:
+        try:
+            fact = await knowledge_base.get_fact(fact_id)
+            if not fact:
+                return {"status": "error", "fact_id": fact_id, "error": "not_found"}
+
+            fact_session = await knowledge_base.get_session_for_fact(fact_id)
+            if fact_session != session_id:
+                return {"status": "error", "fact_id": fact_id, "error": "wrong_session"}
+
+            metadata = fact.get("metadata", {})
+            metadata["important"] = preserve
+            metadata["preserve"] = preserve
+            metadata["preserved_at"] = preserve_time
+            metadata["preserved_from_deletion"] = True
+
+            success = await knowledge_base.update_fact(fact_id=fact_id, metadata=metadata)
+            if success:
+                return {"status": "success", "fact_id": fact_id}
+            else:
+                return {"status": "error", "fact_id": fact_id, "error": "update_failed"}
+
+        except Exception as e:
+            logger.error(f"Error preserving fact {fact_id}: {e}")
+            return {"status": "error", "fact_id": fact_id, "error": str(e)}
+
+
+def _count_preserve_results(results: list, session_id: str) -> tuple[int, int, list]:
+    """Count results and collect error messages."""
+    errors = []
+    updated_count = 0
+    failed_count = 0
+
+    for result in results:
+        if isinstance(result, Exception):
+            errors.append(f"Unexpected error: {str(result)}")
+            failed_count += 1
+        elif result.get("status") == "success":
+            updated_count += 1
+        else:
+            error_msg = result.get("error", "unknown")
+            fact_id = result.get("fact_id", "unknown")
+            if error_msg == "not_found":
+                errors.append(f"Fact {fact_id} not found")
+            elif error_msg == "wrong_session":
+                errors.append(f"Fact {fact_id} does not belong to session {session_id}")
+            else:
+                errors.append(f"Error with fact {fact_id}: {error_msg}")
+            failed_count += 1
+
+    return updated_count, failed_count, errors
+
+
 @router.post("/chat/sessions/{session_id}/facts/preserve")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -879,89 +941,31 @@ async def preserve_session_facts(
     Returns:
         Update result with counts
     """
-    # Validate input size (prevent abuse)
     if len(body.fact_ids) > 100:
         raise HTTPException(
             status_code=400,
             detail="Maximum 100 facts can be preserved at once"
         )
 
-    # Get knowledge base from app state
     knowledge_base = getattr(request.app.state, "knowledge_base", None)
     if not knowledge_base:
-        raise HTTPException(
-            status_code=503, detail="Knowledge base not available"
-        )
+        raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
-        errors = []
         preserve_time = datetime.now().isoformat()
-
-        # Use semaphore to limit concurrent operations (prevent overload)
         semaphore = asyncio.Semaphore(20)
 
-        async def preserve_single_fact(fact_id: str) -> dict:
-            """Preserve a single fact with bounded concurrency."""
-            async with semaphore:
-                try:
-                    # Get current fact
-                    fact = await knowledge_base.get_fact(fact_id)
-                    if not fact:
-                        return {"status": "error", "fact_id": fact_id, "error": "not_found"}
-
-                    # Verify fact belongs to this session
-                    fact_session = await knowledge_base.get_session_for_fact(fact_id)
-                    if fact_session != session_id:
-                        return {"status": "error", "fact_id": fact_id, "error": "wrong_session"}
-
-                    # Update fact metadata to mark as preserved/important
-                    metadata = fact.get("metadata", {})
-                    metadata["important"] = body.preserve
-                    metadata["preserve"] = body.preserve
-                    metadata["preserved_at"] = preserve_time
-                    metadata["preserved_from_deletion"] = True
-
-                    # Update the fact
-                    success = await knowledge_base.update_fact(
-                        fact_id=fact_id,
-                        metadata=metadata,
-                    )
-
-                    if success:
-                        return {"status": "success", "fact_id": fact_id}
-                    else:
-                        return {"status": "error", "fact_id": fact_id, "error": "update_failed"}
-
-                except Exception as e:
-                    logger.error(f"Error preserving fact {fact_id}: {e}")
-                    return {"status": "error", "fact_id": fact_id, "error": str(e)}
-
-        # Execute all preservations in parallel with bounded concurrency
         results = await asyncio.gather(
-            *[preserve_single_fact(fid) for fid in body.fact_ids],
+            *[
+                _preserve_single_fact(
+                    knowledge_base, fid, session_id, body.preserve, preserve_time, semaphore
+                )
+                for fid in body.fact_ids
+            ],
             return_exceptions=True
         )
 
-        # Count results
-        updated_count = 0
-        failed_count = 0
-
-        for result in results:
-            if isinstance(result, Exception):
-                errors.append(f"Unexpected error: {str(result)}")
-                failed_count += 1
-            elif result.get("status") == "success":
-                updated_count += 1
-            else:
-                error_msg = result.get("error", "unknown")
-                fact_id = result.get("fact_id", "unknown")
-                if error_msg == "not_found":
-                    errors.append(f"Fact {fact_id} not found")
-                elif error_msg == "wrong_session":
-                    errors.append(f"Fact {fact_id} does not belong to session {session_id}")
-                else:
-                    errors.append(f"Error with fact {fact_id}: {error_msg}")
-                failed_count += 1
+        updated_count, failed_count, errors = _count_preserve_results(results, session_id)
 
         return {
             "status": "success" if failed_count == 0 else "partial",

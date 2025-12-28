@@ -659,6 +659,77 @@ async def add_url_to_knowledge(request: AddUrlRequest, req: Request):
     }
 
 
+def _extract_file_content(filename: str, file_content: bytes) -> str:
+    """
+    Extract text content from uploaded file based on extension.
+
+    Args:
+        filename: Name of the file (used to determine extension)
+        file_content: Raw file bytes
+
+    Returns:
+        Extracted text content
+
+    Raises:
+        HTTPException: If file cannot be parsed or library is missing
+    """
+    import io
+    import os
+
+    ext = os.path.splitext(filename.lower())[1]
+
+    if ext in {".txt", ".md", ".csv"}:
+        return file_content.decode("utf-8", errors="replace")
+
+    if ext == ".html":
+        html_text = file_content.decode("utf-8", errors="replace")
+        content, _ = _sanitize_html_content(html_text)
+        return content
+
+    if ext == ".json":
+        try:
+            data = json.loads(file_content.decode("utf-8"))
+            return json.dumps(data, indent=2)
+        except json.JSONDecodeError:
+            return file_content.decode("utf-8", errors="replace")
+
+    if ext == ".pdf":
+        try:
+            import pypdf
+            pdf_reader = pypdf.PdfReader(io.BytesIO(file_content))
+            return "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
+        except ImportError:
+            raise HTTPException(status_code=400, detail="PDF support requires pypdf library")
+        except Exception as e:
+            logger.error("PDF parse error for %s: %s", filename, e)
+            raise HTTPException(status_code=400, detail="Failed to parse PDF file")
+
+    if ext == ".docx":
+        try:
+            import docx
+            doc = docx.Document(io.BytesIO(file_content))
+            return "\n".join(para.text for para in doc.paragraphs)
+        except ImportError:
+            raise HTTPException(status_code=400, detail="DOCX support requires python-docx library")
+        except Exception as e:
+            logger.error("DOCX parse error for %s: %s", filename, e)
+            raise HTTPException(status_code=400, detail="Failed to parse DOCX file")
+
+    # Default: treat as text
+    return file_content.decode("utf-8", errors="replace")
+
+
+def _parse_upload_tags(tags_str) -> list:
+    """Parse and validate tags from upload form."""
+    try:
+        tags = json.loads(tags_str) if isinstance(tags_str, str) else tags_str
+        if not isinstance(tags, list):
+            return []
+        return [str(t)[:50] for t in tags[:20]]  # Limit tags
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="upload_file_to_knowledge",
@@ -672,86 +743,33 @@ async def upload_file_to_knowledge(req: Request):
     Issue #549: Created to match KnowledgeRepository.ts POST /api/knowledge_base/upload
     Supports: .txt, .md, .pdf, .docx, .json, .csv, .html files
     """
-    import io
     import os
 
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
-
     if kb_to_use is None:
         raise InternalError("Knowledge base not initialized")
 
     form = await req.form()
     file = form.get("file")
-    title = form.get("title", "")
-    category = form.get("category", "uploads")
-    tags_str = form.get("tags", "[]")
-
     if not file or not hasattr(file, "read"):
         raise HTTPException(status_code=400, detail="File is required")
 
     # Get filename and sanitize (Issue #549 Code Review: Security)
-    filename = getattr(file, "filename", "unknown")
-    filename = os.path.basename(filename)  # Strip any path components
-
-    # Read file content
+    filename = os.path.basename(getattr(file, "filename", "unknown"))
     file_content = await file.read()
 
     # Validate file upload BEFORE processing (Issue #549 Code Review: Security)
     _validate_file_upload(filename, len(file_content))
 
-    try:
-        tags = json.loads(tags_str) if isinstance(tags_str, str) else tags_str
-        if not isinstance(tags, list):
-            tags = []
-        tags = [str(t)[:50] for t in tags[:20]]  # Limit tags
-    except (json.JSONDecodeError, TypeError):
-        tags = []
+    title = form.get("title", "") or filename
+    category = form.get("category", "uploads")
+    tags = _parse_upload_tags(form.get("tags", "[]"))
 
-    if not title:
-        title = filename
-
-    # Extract text based on file type
-    content = ""
-    ext = os.path.splitext(filename.lower())[1]
-
-    if ext in {".txt", ".md", ".csv"}:
-        content = file_content.decode("utf-8", errors="replace")
-    elif ext == ".html":
-        html_text = file_content.decode("utf-8", errors="replace")
-        content, _ = _sanitize_html_content(html_text)
-    elif ext == ".json":
-        try:
-            data = json.loads(file_content.decode("utf-8"))
-            content = json.dumps(data, indent=2)
-        except json.JSONDecodeError:
-            content = file_content.decode("utf-8", errors="replace")
-    elif ext == ".pdf":
-        try:
-            import pypdf
-            pdf_reader = pypdf.PdfReader(io.BytesIO(file_content))
-            content = "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
-        except ImportError:
-            raise HTTPException(status_code=400, detail="PDF support requires pypdf library")
-        except Exception as e:
-            logger.error(f"PDF parse error for {filename}: {e}")
-            raise HTTPException(status_code=400, detail="Failed to parse PDF file")
-    elif ext == ".docx":
-        try:
-            import docx
-            doc = docx.Document(io.BytesIO(file_content))
-            content = "\n".join(para.text for para in doc.paragraphs)
-        except ImportError:
-            raise HTTPException(status_code=400, detail="DOCX support requires python-docx library")
-        except Exception as e:
-            logger.error(f"DOCX parse error for {filename}: {e}")
-            raise HTTPException(status_code=400, detail="Failed to parse DOCX file")
-    else:
-        content = file_content.decode("utf-8", errors="replace")
-
+    content = _extract_file_content(filename, file_content)
     if not content.strip():
         raise HTTPException(status_code=400, detail="No text content could be extracted from file")
 
-    logger.info(f"Uploading file: filename='{filename}', size={len(file_content)}")
+    logger.info("Uploading file: filename='%s', size=%d", filename, len(file_content))
 
     fact_id = await _store_fact_in_kb(
         kb_to_use,
@@ -767,7 +785,6 @@ async def upload_file_to_knowledge(req: Request):
     )
 
     word_count = len(content.split())
-
     return {
         "success": True,
         "document_id": fact_id,
