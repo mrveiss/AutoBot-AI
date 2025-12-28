@@ -177,6 +177,14 @@
                     <i class="fas fa-chart-line"></i>
                   </button>
                   <button
+                    @click="openLogLevelDialog(worker)"
+                    class="action-btn log-btn"
+                    :disabled="!worker.enabled"
+                    title="Set log level (for debugging)"
+                  >
+                    <i class="fas fa-bug"></i>
+                  </button>
+                  <button
                     @click="editWorker(worker)"
                     class="action-btn edit-btn"
                     title="Edit worker configuration"
@@ -379,6 +387,60 @@
         </button>
       </template>
     </BaseModal>
+
+    <!-- Log Level Configuration Modal -->
+    <BaseModal
+      v-if="selectedLogLevelWorker"
+      v-model="showLogLevelDialog"
+      title="Worker Log Level"
+      size="small"
+    >
+      <template #title>
+        <i class="fas fa-bug mr-2"></i>
+        Log Level: {{ selectedLogLevelWorker.name }}
+      </template>
+
+      <div class="log-level-config">
+        <p class="text-sm text-gray-600 mb-4">
+          Set the logging verbosity for debugging. Use DEBUG to capture detailed crash information.
+        </p>
+
+        <div class="form-group">
+          <label class="form-label">Current Level</label>
+          <div class="current-level-badge" :class="'level-' + currentLogLevel.toLowerCase()">
+            {{ currentLogLevel }}
+          </div>
+        </div>
+
+        <div class="form-group mt-4">
+          <label class="form-label">Set New Level</label>
+          <div class="log-level-buttons">
+            <button
+              v-for="level in logLevels"
+              :key="level"
+              @click="setLogLevel(level)"
+              :disabled="isSettingLogLevel"
+              class="log-level-btn"
+              :class="{ 'active': currentLogLevel === level, 'level-debug': level === 'DEBUG' }"
+            >
+              {{ level }}
+            </button>
+          </div>
+          <p class="form-help mt-2">
+            <strong>DEBUG</strong>: Full details for crash investigation<br>
+            <strong>INFO</strong>: Normal operation logs<br>
+            <strong>WARNING</strong>: Potential issues only<br>
+            <strong>ERROR</strong>: Errors only
+          </p>
+        </div>
+      </div>
+
+      <template #actions>
+        <button @click="closeLogLevelDialog" class="btn-secondary">
+          Close
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -505,6 +567,13 @@ const { isOpen: showAddWorkerDialog, open: openAddWorkerDialog, close: closeAddW
 const { isOpen: showEditWorkerDialog, open: openEditWorkerDialog, close: closeEditWorkerDialog } = useModal({ id: 'edit-worker' })
 const { isOpen: showDeleteDialog, open: openDeleteDialog, close: closeDeleteDialog } = useModal({ id: 'delete-worker' })
 const { isOpen: showMetricsDialog, open: openMetricsDialog, close: closeMetricsDialog } = useModal({ id: 'metrics' })
+const { isOpen: showLogLevelDialog, open: openLogLevelDialogModal, close: closeLogLevelDialogModal } = useModal({ id: 'log-level' })
+
+// Log level configuration state
+const selectedLogLevelWorker = ref<NPUWorker | null>(null)
+const currentLogLevel = ref('INFO')
+const isSettingLogLevel = ref(false)
+const logLevels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
 
 // Use composables for async operations
 const { execute: loadWorkersOp, loading: isLoading } = useAsyncOperation()
@@ -876,6 +945,56 @@ const viewWorkerMetrics = async (worker: NPUWorker) => {
     logger.error('Failed to load worker metrics:', error)
     notify(`Failed to load metrics for "${worker.name}"`, 'error')
   }
+}
+
+/**
+ * Open log level configuration dialog for a worker
+ * Fetches current log level from the worker
+ */
+const openLogLevelDialog = async (worker: NPUWorker) => {
+  selectedLogLevelWorker.value = worker
+  currentLogLevel.value = 'INFO' // Default while fetching
+
+  try {
+    const response = await axios.get(`/api/npu/workers/${worker.id}/logging`)
+    currentLogLevel.value = response.data.level || 'INFO'
+    openLogLevelDialogModal()
+  } catch (error) {
+    logger.error('Failed to get worker log level:', error)
+    notify(`Failed to get log level for "${worker.name}"`, 'error')
+    // Still open dialog with default level
+    openLogLevelDialogModal()
+  }
+}
+
+/**
+ * Set log level for the selected worker
+ */
+const setLogLevel = async (level: string) => {
+  if (!selectedLogLevelWorker.value || isSettingLogLevel.value) return
+
+  try {
+    isSettingLogLevel.value = true
+    await axios.put(`/api/npu/workers/${selectedLogLevelWorker.value.id}/logging?level=${level}`)
+    currentLogLevel.value = level
+    notify(`Log level set to ${level} for "${selectedLogLevelWorker.value.name}"`, 'success')
+  } catch (error) {
+    logger.error('Failed to set worker log level:', error)
+    const axiosError = error as { response?: { data?: { detail?: string } }; message?: string }
+    const errorMessage = axiosError.response?.data?.detail || axiosError.message || 'Failed to set log level'
+    notify(errorMessage, 'error')
+  } finally {
+    isSettingLogLevel.value = false
+  }
+}
+
+/**
+ * Close log level dialog
+ */
+const closeLogLevelDialog = () => {
+  closeLogLevelDialogModal()
+  selectedLogLevelWorker.value = null
+  currentLogLevel.value = 'INFO'
 }
 
 const closeWorkerDialog = () => {
@@ -1502,5 +1621,86 @@ onUnmounted(() => {
   .metric-value {
     color: #ffffff;
   }
+}
+
+/* Log Level Dialog Styles */
+.log-level-config {
+  padding: 8px 0;
+}
+
+.current-level-badge {
+  display: inline-block;
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.level-debug {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.level-info {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.level-warning {
+  background: #fed7aa;
+  color: #c2410c;
+}
+
+.level-error {
+  background: #fecaca;
+  color: #b91c1c;
+}
+
+.level-critical {
+  background: #fca5a5;
+  color: #7f1d1d;
+}
+
+.log-level-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.log-level-btn {
+  padding: 8px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.log-level-btn:hover:not(:disabled) {
+  border-color: #667eea;
+  background: #f5f3ff;
+}
+
+.log-level-btn.active {
+  background: #667eea;
+  color: white;
+  border-color: #667eea;
+}
+
+.log-level-btn.level-debug:hover:not(:disabled) {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.log-level-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.log-btn:hover:not(:disabled) {
+  color: #7c3aed;
+  background: #ede9fe;
 }
 </style>

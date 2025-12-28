@@ -347,6 +347,133 @@ async def get_worker_metrics(worker_id: str):
 
 
 # ==============================================
+# WORKER LOGGING CONFIGURATION ENDPOINTS
+# ==============================================
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_worker_log_level",
+    error_code_prefix="NPU_WORKERS",
+)
+@router.get("/npu/workers/{worker_id}/logging")
+async def get_worker_log_level(worker_id: str):
+    """
+    Get the current log level of a worker.
+
+    Args:
+        worker_id: Worker identifier
+
+    Returns:
+        Current log level configuration
+
+    Raises:
+        404: If worker not found
+        500: If request fails
+    """
+    import httpx
+
+    try:
+        manager = await get_worker_manager()
+        worker = await manager.get_worker(worker_id)
+
+        if not worker:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Worker '{worker_id}' not found",
+            )
+
+        worker_url = f"http://{worker.config.ip_address}:{worker.config.port}"
+
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{worker_url}/config/logging")
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Worker returned error: {response.status_code}",
+                )
+            return response.json()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to get log level for worker %s: %s", worker_id, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get log level: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="set_worker_log_level",
+    error_code_prefix="NPU_WORKERS",
+)
+@router.put("/npu/workers/{worker_id}/logging")
+async def set_worker_log_level(worker_id: str, level: str = "INFO"):
+    """
+    Set the log level of a worker at runtime.
+
+    Args:
+        worker_id: Worker identifier
+        level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+
+    Returns:
+        Updated log level configuration
+
+    Raises:
+        400: If invalid log level
+        404: If worker not found
+        500: If request fails
+    """
+    import httpx
+
+    level = level.upper()
+    valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+
+    if level not in valid_levels:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid log level '{level}'. Must be one of: {valid_levels}",
+        )
+
+    try:
+        manager = await get_worker_manager()
+        worker = await manager.get_worker(worker_id)
+
+        if not worker:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Worker '{worker_id}' not found",
+            )
+
+        worker_url = f"http://{worker.config.ip_address}:{worker.config.port}"
+
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.put(
+                f"{worker_url}/config/logging",
+                params={"level": level}
+            )
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Worker returned error: {response.status_code}",
+                )
+
+            logger.info("Set log level to %s for worker %s", level, worker_id)
+            return response.json()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to set log level for worker %s: %s", worker_id, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to set log level: {str(e)}",
+        )
+
+
+# ==============================================
 # LOAD BALANCING CONFIGURATION ENDPOINTS
 # ==============================================
 
