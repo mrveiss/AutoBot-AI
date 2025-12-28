@@ -4504,12 +4504,13 @@ const indexCodebase = async () => {
       notify('Indexing job already running, now monitoring', 'info')
     } else {
       currentJobId.value = data.task_id
-      progressStatus.value = 'Indexing started...'
+      progressStatus.value = 'Initializing indexing...'
       notify('Codebase indexing started', 'success')
     }
 
-    // Start polling for job status updates
-    progressPercent.value = 20
+    // Poll immediately to get initial phases/stats, then continue at interval
+    progressPercent.value = 5  // Start lower, let backend report actual progress
+    await pollJobStatus()  // Get initial state immediately (don't wait 2s)
     startJobPolling()
   } catch (error: unknown) {
     logger.error('Indexing failed:', error)
