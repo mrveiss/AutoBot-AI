@@ -11,12 +11,11 @@ import './assets/tailwind.css'
 import './assets/vue-notus.css'
 // Import fonts from local npm packages (avoid CDN tracking prevention warnings)
 import '@fortawesome/fontawesome-free/css/all.min.css'
-import '@fontsource/inter/300.css'
-import '@fontsource/inter/400.css'
-import '@fontsource/inter/500.css'
-import '@fontsource/inter/600.css'
-import '@fontsource/inter/700.css'
-import '@fontsource/inter/800.css'
+// Import only latin subset with weights actually used (400, 500, 600, 700)
+import '@fontsource/inter/latin-400.css'
+import '@fontsource/inter/latin-500.css'
+import '@fontsource/inter/latin-600.css'
+import '@fontsource/inter/latin-700.css'
 // Import centralized theme system (Issue #548)
 import './assets/styles/theme.css'
 import './assets/styles/view.css'
