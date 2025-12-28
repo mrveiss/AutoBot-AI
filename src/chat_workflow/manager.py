@@ -532,6 +532,12 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
                     break
 
             logger.info("[ChatWorkflowManager] Full LLM response length: %d characters (iteration %d)", len(llm_response), iteration)
+            # Issue #651: Log response snippet to debug multi-step issues
+            has_tool_call_tag = '<TOOL_CALL' in llm_response or '<tool_call' in llm_response
+            logger.info(
+                "[Issue #651] Iteration %d: Response has TOOL_CALL tag: %s, snippet: %s",
+                iteration, has_tool_call_tag, llm_response[:500].replace('\n', ' ')
+            )
             tool_calls = self._parse_tool_calls(llm_response)
             logger.info("[Issue #352] Iteration %d: Parsed %d tool calls", iteration, len(tool_calls))
             yield (llm_response, tool_calls)
@@ -827,6 +833,13 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
                 "[Issue #651] Built continuation prompt: %d chars, %d executed steps",
                 len(current_prompt), len(execution_history)
             )
+            # Log the continuation prompt for debugging (first 1000 chars of instructions section)
+            instructions_start = current_prompt.find("MULTI-STEP TASK CONTINUATION")
+            if instructions_start > -1:
+                logger.debug(
+                    "[Issue #651] Continuation prompt instructions: %s",
+                    current_prompt[instructions_start:instructions_start+1500].replace('\n', ' | ')
+                )
 
         if iteration >= self.MAX_CONTINUATION_ITERATIONS:
             logger.warning(

@@ -265,31 +265,16 @@ class ToolHandlerMixin:
 
         return approval_result, status_msg, True
 
-    async def _handle_pending_approval(
+    def _build_approval_request_message(
         self,
         session_id: str,
         command: str,
         result: Dict[str, Any],
         terminal_session_id: str,
         description: str,
-    ):
-        """
-        Handle command approval workflow with polling.
-
-        Args:
-            session_id: Chat session ID
-            command: Command requiring approval
-            result: Result from terminal tool (contains approval request info)
-            terminal_session_id: Terminal session ID for approval API
-            description: Command description
-
-        Yields:
-            WorkflowMessage for approval request and status updates
-        Returns:
-            Approval result dict or None if timeout
-        """
-        # Build and yield approval request
-        approval_msg = WorkflowMessage(
+    ) -> WorkflowMessage:
+        """Build the approval request WorkflowMessage."""
+        return WorkflowMessage(
             type="command_approval_request",
             content=result.get("approval_ui_message", "Command requires approval"),
             metadata={
@@ -302,13 +287,12 @@ class ToolHandlerMixin:
                 "conversation_id": session_id,
             },
         )
-        yield approval_msg
 
-        # Persist approval request (Issue #332 - uses helper)
-        await self._persist_approval_request(approval_msg, session_id, terminal_session_id)
-
-        # Yield waiting message
-        yield WorkflowMessage(
+    def _build_waiting_message(
+        self, command: str, result: Dict[str, Any]
+    ) -> WorkflowMessage:
+        """Build the waiting for approval WorkflowMessage."""
+        return WorkflowMessage(
             type="response",
             content=(
                 f"\n\n⏳ Waiting for your approval to execute: `{command}`\n"
@@ -318,18 +302,21 @@ class ToolHandlerMixin:
             metadata={"message_type": "approval_waiting", "command": command},
         )
 
-        # Poll for approval (Issue #332 - refactored loop)
-        logger.info("🔍 [APPROVAL POLLING] Waiting for approval of command: %s", command)
-        logger.info(
-            "🔍 [APPROVAL POLLING] Chat session: %s, Terminal session: %s",
-            session_id, terminal_session_id
-        )
+    async def _poll_for_approval(
+        self,
+        terminal_session_id: str,
+        command: str,
+        max_wait_time: int = 3600,
+        poll_interval: float = 0.5,
+    ):
+        """
+        Poll for approval status until approved/denied or timeout.
 
-        max_wait_time = 3600
-        poll_interval = 0.5
+        Yields:
+            Tuple of (approval_result, status_msg) when found, None while waiting
+        """
         elapsed_time = 0
         poll_count = 0
-        approval_result = None
 
         while elapsed_time < max_wait_time:
             await asyncio.sleep(poll_interval)
@@ -337,43 +324,74 @@ class ToolHandlerMixin:
             poll_count += 1
 
             try:
-                # Issue #321: Use delegation method to reduce message chains
                 session_info = await self.terminal_tool.get_session_info(
                     terminal_session_id
                 )
 
-                # Log polling every 10 seconds
                 if poll_count % 20 == 0:
                     pending = session_info.get('pending_approval') is not None if session_info else 'NO SESSION'
                     logger.info(
-                        f"🔍 [APPROVAL POLLING] Still waiting... (elapsed: {elapsed_time:.1f}s, pending: {pending})"
+                        "🔍 [APPROVAL POLLING] Still waiting... (elapsed: %.1fs, pending: %s)",
+                        elapsed_time, pending
                     )
 
-                # Check completion (uses helper)
                 result_data, status_msg, should_break = self._check_approval_completion(
                     session_info, command, elapsed_time, max_wait_time
                 )
 
-                if result_data:
-                    approval_result = result_data
-                    yield WorkflowMessage(
-                        type="metadata_update",
-                        content="",
-                        metadata={
-                            "message_type": "approval_status_update",
-                            "terminal_session_id": terminal_session_id,
-                            "command": command,
-                            **status_msg,
-                        },
-                    )
-
                 if should_break:
-                    break
+                    yield (result_data, status_msg)
+                    return
 
             except Exception as check_error:
                 logger.error("Error checking approval status: %s", check_error)
 
-        yield approval_result
+        yield (None, None)  # Timeout
+
+    async def _handle_pending_approval(
+        self,
+        session_id: str,
+        command: str,
+        result: Dict[str, Any],
+        terminal_session_id: str,
+        description: str,
+    ):
+        """
+        Handle command approval workflow with polling.
+
+        Yields:
+            WorkflowMessage for approval request and status updates
+        Returns:
+            Approval result dict or None if timeout
+        """
+        approval_msg = self._build_approval_request_message(
+            session_id, command, result, terminal_session_id, description
+        )
+        yield approval_msg
+
+        await self._persist_approval_request(approval_msg, session_id, terminal_session_id)
+        yield self._build_waiting_message(command, result)
+
+        logger.info("🔍 [APPROVAL POLLING] Waiting for approval of command: %s", command)
+        logger.info(
+            "🔍 [APPROVAL POLLING] Chat session: %s, Terminal session: %s",
+            session_id, terminal_session_id
+        )
+
+        async for poll_result in self._poll_for_approval(terminal_session_id, command):
+            approval_result, status_msg = poll_result
+            if approval_result:
+                yield WorkflowMessage(
+                    type="metadata_update",
+                    content="",
+                    metadata={
+                        "message_type": "approval_status_update",
+                        "terminal_session_id": terminal_session_id,
+                        "command": command,
+                        **status_msg,
+                    },
+                )
+            yield approval_result
 
     async def _handle_approval_workflow(
         self,
@@ -480,17 +498,8 @@ class ToolHandlerMixin:
                 interpretation += msg.content
             yield msg
 
-        if interpretation:
-            yield WorkflowMessage(
-                type="response",
-                content=f"\n\n{interpretation}",
-                metadata={
-                    "message_type": "command_result_interpretation",
-                    "command": command,
-                    "executed": True,
-                },
-            )
-
+        # Issue #651: Removed duplicate WorkflowMessage yield - interpretation was already
+        # yielded in the loop above. Only yield the tuple for the continuation loop.
         yield (exec_result, f"\n\n{interpretation}")
 
     async def _collect_workflow_results(
