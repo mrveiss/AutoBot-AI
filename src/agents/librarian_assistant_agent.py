@@ -26,6 +26,12 @@ except ImportError:
     Page = None
     PLAYWRIGHT_AVAILABLE = False
 
+from src.config.ssot_config import (
+    AgentConfigurationError,
+    get_agent_endpoint_explicit,
+    get_agent_model_explicit,
+    get_agent_provider_explicit,
+)
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
 from src.unified_config_manager import config
@@ -36,11 +42,24 @@ logger = logging.getLogger(__name__)
 class LibrarianAssistantAgent:
     """An agent that researches information on the web and manages knowledge."""
 
+    # Agent identifier for SSOT config lookup
+    AGENT_ID = "librarian_assistant"
+
     def __init__(self):
-        """Initialize the Librarian Assistant Agent."""
+        """Initialize the Librarian Assistant Agent with explicit LLM configuration."""
         self.config = config
         self.knowledge_base = KnowledgeBase()
         self.llm = LLMInterface()
+
+        # Use explicit SSOT config - raises AgentConfigurationError if not set
+        self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
+        self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
+        self.model_name = get_agent_model_explicit(self.AGENT_ID)
+
+        logger.info(
+            "Librarian Assistant Agent initialized with provider=%s, endpoint=%s, model=%s",
+            self.llm_provider, self.llm_endpoint, self.model_name
+        )
 
         # Configuration
         self.enabled = self.config.get_nested("librarian_assistant.enabled", True)

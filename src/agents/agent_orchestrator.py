@@ -22,8 +22,13 @@ import threading
 import uuid
 from typing import Any, Dict, List, Optional
 
+from src.config.ssot_config import (
+    AgentConfigurationError,
+    get_agent_endpoint_explicit,
+    get_agent_model_explicit,
+    get_agent_provider_explicit,
+)
 from src.llm_interface import LLMInterface
-from src.unified_config_manager import config as global_config_manager
 
 # Re-export all public API from the package for backward compatibility
 from src.agents.agent_orchestration import (
@@ -117,12 +122,25 @@ class AgentOrchestrator:
     Automatically falls back between modes based on availability.
     """
 
+    # Agent identifier for SSOT config lookup
+    AGENT_ID = "orchestrator"
+
     def __init__(self):
-        """Initialize the Enhanced Agent Orchestrator."""
+        """Initialize the Enhanced Agent Orchestrator with explicit LLM configuration."""
         self.llm_interface = LLMInterface()
-        self.model_name = global_config_manager.get_task_specific_model("orchestrator")
+
+        # Use explicit SSOT config - raises AgentConfigurationError if not set
+        self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
+        self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
+        self.model_name = get_agent_model_explicit(self.AGENT_ID)
+
         self.agent_type = "orchestrator"
         self.orchestrator_id = f"orchestrator_{uuid.uuid4().hex[:8]}"
+
+        logger.info(
+            "Agent Orchestrator initialized with provider=%s, endpoint=%s, model=%s",
+            self.llm_provider, self.llm_endpoint, self.model_name
+        )
 
         # Initialize agent capabilities map
         self.agent_capabilities = DEFAULT_AGENT_CAPABILITIES.copy()

@@ -15,6 +15,12 @@ from typing import Any, Dict, List, Optional
 from src.agents.json_formatter_agent import CLASSIFICATION_SCHEMA, json_formatter
 from src.agents.llm_failsafe_agent import get_robust_llm_response
 from src.autobot_types import TaskComplexity
+from src.config.ssot_config import (
+    AgentConfigurationError,
+    get_agent_endpoint_explicit,
+    get_agent_model_explicit,
+    get_agent_provider_explicit,
+)
 from src.llm_interface import LLMInterface
 from src.utils.redis_client import get_redis_client
 from src.workflow_classifier import WorkflowClassifier
@@ -41,12 +47,26 @@ class ClassificationResult:
 class ClassificationAgent(StandardizedAgent):
     """Intelligent agent that understands user intent for workflow classification."""
 
+    # Agent identifier for SSOT config lookup
+    AGENT_ID = "classification"
+
     def __init__(self, llm_interface: Optional[LLMInterface] = None):
-        """Initialize classification agent with LLM interface and communication protocol."""
+        """Initialize classification agent with explicit LLM configuration."""
         super().__init__("classification")
+
+        # Use explicit SSOT config - raises AgentConfigurationError if not set
+        self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
+        self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
+        self.model_name = get_agent_model_explicit(self.AGENT_ID)
+
         self.llm = llm_interface or LLMInterface()
         self.redis_client = get_redis_client()
         self.keyword_classifier = WorkflowClassifier(self.redis_client)
+
+        logger.info(
+            "ClassificationAgent initialized with provider=%s, endpoint=%s, model=%s",
+            self.llm_provider, self.llm_endpoint, self.model_name
+        )
         self.capabilities = [
             "intent_classification",
             "complexity_analysis",

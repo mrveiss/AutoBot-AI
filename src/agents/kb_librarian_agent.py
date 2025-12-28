@@ -11,6 +11,12 @@ import asyncio
 import logging
 from typing import Any, Dict, List
 
+from src.config.ssot_config import (
+    AgentConfigurationError,
+    get_agent_endpoint_explicit,
+    get_agent_model_explicit,
+    get_agent_provider_explicit,
+)
 from src.constants.path_constants import PATH
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
@@ -22,12 +28,26 @@ logger = logging.getLogger(__name__)
 class KBLibrarianAgent:
     """A librarian agent that searches knowledge base for relevant information."""
 
+    # Agent identifier for SSOT config lookup
+    AGENT_ID = "kb_librarian"
+
     def __init__(self):
-        """Initialize KB librarian agent with knowledge base and auto-learning config."""
+        """Initialize KB librarian agent with explicit LLM configuration."""
         self.knowledge_base = KnowledgeBase()
         self.llm = LLMInterface()
+
+        # Use explicit SSOT config - raises AgentConfigurationError if not set
+        self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
+        self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
+        self.model_name = get_agent_model_explicit(self.AGENT_ID)
+
         self.auto_learning_enabled = config.get(
             "agents.kb_librarian.auto_learning_enabled", True
+        )
+
+        logger.info(
+            "KB Librarian Agent initialized with provider=%s, endpoint=%s, model=%s",
+            self.llm_provider, self.llm_endpoint, self.model_name
         )
 
         if self.auto_learning_enabled:

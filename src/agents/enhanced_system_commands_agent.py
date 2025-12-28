@@ -14,9 +14,14 @@ import re
 import shlex
 from typing import Any, Dict, FrozenSet, List, Optional
 
+from src.config.ssot_config import (
+    AgentConfigurationError,
+    get_agent_endpoint_explicit,
+    get_agent_model_explicit,
+    get_agent_provider_explicit,
+)
 from src.constants.threshold_constants import LLMDefaults
 from src.llm_interface import LLMInterface
-from src.unified_config_manager import config as global_config_manager
 
 from .base_agent import AgentRequest
 from .standardized_agent import StandardizedAgent
@@ -29,6 +34,9 @@ _DANGEROUS_RM_FLAGS: FrozenSet[str] = frozenset({"-r", "-rf", "-f"})
 
 class EnhancedSystemCommandsAgent(StandardizedAgent):
     """System commands agent with security-focused prompting and validation."""
+
+    # Agent identifier for SSOT config lookup
+    AGENT_ID = "system_commands"
 
     def _init_allowed_commands(self) -> set:
         """Initialize set of allowed commands (Issue #398: extracted)."""
@@ -55,17 +63,25 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
         ]
 
     def __init__(self):
-        """Initialize the System Commands Agent (Issue #398: refactored)."""
+        """Initialize the System Commands Agent with explicit LLM configuration."""
         super().__init__("enhanced_system_commands")
         self.llm_interface = LLMInterface()
-        self.model_name = global_config_manager.get_task_specific_model("system_commands")
+
+        # Use explicit SSOT config - raises AgentConfigurationError if not set
+        self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
+        self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
+        self.model_name = get_agent_model_explicit(self.AGENT_ID)
+
         self.capabilities = [
             "command_generation", "security_validation", "shell_operations",
             "system_administration", "command_explanation",
         ]
         self.allowed_commands = self._init_allowed_commands()
         self.dangerous_patterns = self._init_dangerous_patterns()
-        logger.info("System Commands Agent initialized with model: %s", self.model_name)
+        logger.info(
+            "System Commands Agent initialized with provider=%s, endpoint=%s, model=%s",
+            self.llm_provider, self.llm_endpoint, self.model_name
+        )
 
     async def action_process_command(self, request: AgentRequest) -> Dict[str, Any]:
         """Handle process_command action."""

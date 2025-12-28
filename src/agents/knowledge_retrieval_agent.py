@@ -12,10 +12,15 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
+from src.config.ssot_config import (
+    AgentConfigurationError,
+    get_agent_endpoint_explicit,
+    get_agent_model_explicit,
+    get_agent_provider_explicit,
+)
 from src.constants.threshold_constants import LLMDefaults
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
-from src.unified_config_manager import config as global_config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +50,18 @@ _QUICK_LOOKUP_PATTERNS = ("quick", "fast", "briefly", "simple", "basic", "just t
 class KnowledgeRetrievalAgent:
     """Fast knowledge retrieval agent for simple facts and quick lookups."""
 
+    # Agent identifier for SSOT config lookup
+    AGENT_ID = "knowledge_retrieval"
+
     def __init__(self):
-        """Initialize the Knowledge Retrieval Agent with 1B model for speed."""
+        """Initialize the Knowledge Retrieval Agent with explicit LLM configuration."""
         self.llm_interface = LLMInterface()
-        self.model_name = global_config_manager.get_task_specific_model(
-            "knowledge_retrieval"
-        )
+
+        # Use explicit SSOT config - raises AgentConfigurationError if not set
+        self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
+        self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
+        self.model_name = get_agent_model_explicit(self.AGENT_ID)
+
         self.agent_type = "knowledge_retrieval"
         self.knowledge_base = None
 
@@ -58,7 +69,8 @@ class KnowledgeRetrievalAgent:
         self._kb_initialized = False
 
         logger.info(
-            f"Knowledge Retrieval Agent initialized with model: {self.model_name}"
+            "Knowledge Retrieval Agent initialized with provider=%s, endpoint=%s, model=%s",
+            self.llm_provider, self.llm_endpoint, self.model_name
         )
 
     async def _ensure_kb_initialized(self):

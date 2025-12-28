@@ -17,6 +17,12 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from src.config.ssot_config import (
+    AgentConfigurationError,
+    get_agent_endpoint_explicit,
+    get_agent_model_explicit,
+    get_agent_provider_explicit,
+)
 from src.llm_interface import LLMType, get_llm_interface
 from src.models.atomic_fact import (
     AtomicFact,
@@ -46,13 +52,21 @@ class KnowledgeExtractionAgent:
     representations.
     """
 
+    # Agent identifier for SSOT config lookup
+    AGENT_ID = "knowledge_extraction"
+
     def __init__(self, llm_interface=None):
         """
-        Initialize the knowledge extraction agent.
+        Initialize the knowledge extraction agent with explicit LLM configuration.
 
         Args:
             llm_interface: LLM interface for fact extraction (optional)
         """
+        # Use explicit SSOT config - raises AgentConfigurationError if not set
+        self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
+        self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
+        self.model_name = get_agent_model_explicit(self.AGENT_ID)
+
         self.llm_interface = llm_interface or get_llm_interface()
 
         # Configuration
@@ -67,7 +81,10 @@ class KnowledgeExtractionAgent:
         )
         self.temporal_keywords = self._load_temporal_keywords()
 
-        logger.info("Knowledge Extraction Agent initialized")
+        logger.info(
+            "Knowledge Extraction Agent initialized with provider=%s, endpoint=%s, model=%s",
+            self.llm_provider, self.llm_endpoint, self.model_name
+        )
 
     def _get_dynamic_indicators(self) -> List[str]:
         """Get keywords indicating dynamic/changing information."""

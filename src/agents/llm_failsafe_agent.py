@@ -17,7 +17,12 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from src.config.ssot_config import get_agent_model
+from src.config.ssot_config import (
+    AgentConfigurationError,
+    get_agent_endpoint_explicit,
+    get_agent_model_explicit,
+    get_agent_provider_explicit,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,9 +58,22 @@ class LLMFailsafeAgent:
     even when primary LLM systems are down or malfunctioning.
     """
 
+    # Agent identifier for SSOT config lookup
+    AGENT_ID = "llm_failsafe"
+
     def __init__(self):
-        """Initialize the failsafe LLM agent"""
+        """Initialize the failsafe LLM agent with explicit LLM configuration."""
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+
+        # Use explicit SSOT config - raises AgentConfigurationError if not set
+        self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
+        self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
+        self.model_name = get_agent_model_explicit(self.AGENT_ID)
+
+        self.logger.info(
+            "LLM Failsafe Agent initialized with provider=%s, endpoint=%s, model=%s",
+            self.llm_provider, self.llm_endpoint, self.model_name
+        )
 
         # Track system health
         self.tier_health = {
@@ -70,14 +88,9 @@ class LLMFailsafeAgent:
             tier: {"requests": 0, "failures": 0, "avg_time": 0.0} for tier in LLMTier
         }
 
-        # Configuration - use agent-specific SSOT config
-        # Each model can be overridden via AUTOBOT_LLM_FAILSAFE_MODEL
-        self.primary_models = [
-            get_agent_model("llm_failsafe"),
-        ]
-        self.secondary_models = [
-            get_agent_model("llm_failsafe"),
-        ]
+        # Configuration - use explicit model from SSOT config
+        self.primary_models = [self.model_name]
+        self.secondary_models = [self.model_name]
 
         # Timeout settings (in seconds)
         self.timeouts = {

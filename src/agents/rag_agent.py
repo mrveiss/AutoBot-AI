@@ -12,7 +12,12 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from src.config.ssot_config import get_agent_model
+from src.config.ssot_config import (
+    AgentConfigurationError,
+    get_agent_endpoint_explicit,
+    get_agent_model_explicit,
+    get_agent_provider_explicit,
+)
 from src.constants.threshold_constants import LLMDefaults
 from src.llm_interface import LLMInterface
 
@@ -29,13 +34,14 @@ class RAGAgent(StandardizedAgent):
     AGENT_ID = "rag"
 
     def __init__(self):
-        """Initialize the RAG Agent with 3B model for complex reasoning."""
+        """Initialize the RAG Agent with explicit LLM configuration (no fallbacks)."""
         super().__init__("rag")
         self.llm_interface = LLMInterface()
 
-        # Use agent-specific SSOT config
-        # Can be overridden via AUTOBOT_RAG_MODEL
-        self.model_name = get_agent_model(self.AGENT_ID)
+        # Use explicit SSOT config - raises AgentConfigurationError if not set
+        self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
+        self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
+        self.model_name = get_agent_model_explicit(self.AGENT_ID)
 
         self.capabilities = [
             "document_synthesis",
@@ -68,7 +74,10 @@ class RAGAgent(StandardizedAgent):
             }
         )
 
-        logger.info("RAG Agent initialized with model: %s", self.model_name)
+        logger.info(
+            "RAG Agent initialized with provider=%s, endpoint=%s, model=%s",
+            self.llm_provider, self.llm_endpoint, self.model_name
+        )
 
     async def handle_document_query(self, request: AgentRequest) -> Dict[str, Any]:
         """Handle document query action"""

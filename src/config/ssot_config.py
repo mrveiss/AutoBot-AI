@@ -708,13 +708,160 @@ def get_default_llm_model() -> str:
 
 
 # =============================================================================
-# Agent-Specific Configuration Functions
+# Agent-Specific Configuration Functions (EXPLICIT - NO FALLBACKS)
+# =============================================================================
+#
+# These functions provide explicit configuration for agents.
+# Each agent MUST have its configuration explicitly set in .env:
+#   - AUTOBOT_{AGENT_ID}_PROVIDER
+#   - AUTOBOT_{AGENT_ID}_ENDPOINT
+#   - AUTOBOT_{AGENT_ID}_MODEL
+#
+# If any setting is missing, a ConfigurationError is raised.
+# This enforces explicit configuration - no silent fallbacks that hide misconfigurations.
+# =============================================================================
+
+
+class AgentConfigurationError(Exception):
+    """Raised when agent LLM configuration is missing or invalid."""
+    pass
+
+
+def get_agent_llm_config_explicit(agent_id: str) -> dict:
+    """
+    Get complete LLM configuration for a specific agent (EXPLICIT - NO FALLBACKS).
+
+    Each agent MUST have its own provider, endpoint, and model via environment variables:
+    - AUTOBOT_{AGENT_ID}_PROVIDER (e.g., AUTOBOT_ORCHESTRATOR_PROVIDER=ollama)
+    - AUTOBOT_{AGENT_ID}_ENDPOINT (e.g., AUTOBOT_ORCHESTRATOR_ENDPOINT=http://127.0.0.1:11434)
+    - AUTOBOT_{AGENT_ID}_MODEL (e.g., AUTOBOT_ORCHESTRATOR_MODEL=mistral:7b-instruct)
+
+    Raises AgentConfigurationError if any setting is missing.
+
+    Args:
+        agent_id: The agent identifier (e.g., "orchestrator", "chat", "rag")
+
+    Returns:
+        Dict with provider, endpoint, model, api_key, and timeout
+
+    Raises:
+        AgentConfigurationError: If any required setting is missing
+    """
+    provider = get_agent_provider_explicit(agent_id)
+    endpoint = get_agent_endpoint_explicit(agent_id)
+    model = get_agent_model_explicit(agent_id)
+
+    # Get API key for provider
+    cfg = get_config()
+    api_key = ""
+    if provider.lower() == "openai":
+        api_key = cfg.llm.openai_api_key
+    elif provider.lower() == "anthropic":
+        api_key = cfg.llm.anthropic_api_key
+
+    return {
+        "provider": provider,
+        "endpoint": endpoint,
+        "model": model,
+        "api_key": api_key,
+        "timeout": cfg.llm.timeout,
+    }
+
+
+def get_agent_endpoint_explicit(agent_id: str) -> str:
+    """
+    Get LLM API endpoint URL for a specific agent (EXPLICIT - NO FALLBACK).
+
+    Reads AUTOBOT_{AGENT_ID}_ENDPOINT from environment.
+    Raises AgentConfigurationError if not set.
+
+    Args:
+        agent_id: The agent identifier
+
+    Returns:
+        API endpoint URL for the agent's LLM provider
+
+    Raises:
+        AgentConfigurationError: If AUTOBOT_{AGENT_ID}_ENDPOINT is not set
+    """
+    env_key = f"AUTOBOT_{agent_id.upper()}_ENDPOINT"
+    endpoint = os.environ.get(env_key, "")
+    if not endpoint:
+        raise AgentConfigurationError(
+            f"Agent '{agent_id}' requires explicit LLM endpoint configuration. "
+            f"Set {env_key} in .env file. "
+            f"Example: {env_key}=http://127.0.0.1:11434"
+        )
+    return endpoint
+
+
+def get_agent_model_explicit(agent_id: str) -> str:
+    """
+    Get LLM model name for a specific agent (EXPLICIT - NO FALLBACK).
+
+    Reads AUTOBOT_{AGENT_ID}_MODEL from environment.
+    Raises AgentConfigurationError if not set.
+
+    Args:
+        agent_id: The agent identifier
+
+    Returns:
+        Model name for the agent
+
+    Raises:
+        AgentConfigurationError: If AUTOBOT_{AGENT_ID}_MODEL is not set
+    """
+    env_key = f"AUTOBOT_{agent_id.upper()}_MODEL"
+    model = os.environ.get(env_key, "")
+    if not model:
+        raise AgentConfigurationError(
+            f"Agent '{agent_id}' requires explicit LLM model configuration. "
+            f"Set {env_key} in .env file. "
+            f"Example: {env_key}=mistral:7b-instruct"
+        )
+    return model
+
+
+def get_agent_provider_explicit(agent_id: str) -> str:
+    """
+    Get LLM provider for a specific agent (EXPLICIT - NO FALLBACK).
+
+    Reads AUTOBOT_{AGENT_ID}_PROVIDER from environment.
+    Raises AgentConfigurationError if not set.
+
+    Args:
+        agent_id: The agent identifier
+
+    Returns:
+        Provider name (ollama, openai, anthropic, custom)
+
+    Raises:
+        AgentConfigurationError: If AUTOBOT_{AGENT_ID}_PROVIDER is not set
+    """
+    env_key = f"AUTOBOT_{agent_id.upper()}_PROVIDER"
+    provider = os.environ.get(env_key, "")
+    if not provider:
+        raise AgentConfigurationError(
+            f"Agent '{agent_id}' requires explicit LLM provider configuration. "
+            f"Set {env_key} in .env file. "
+            f"Supported providers: ollama, openai, anthropic, custom"
+        )
+    return provider
+
+
+# =============================================================================
+# Agent-Specific Configuration Functions (WITH FALLBACKS - DEPRECATED)
+# =============================================================================
+# These functions provide backward compatibility but are deprecated.
+# New code should use the _explicit versions above.
 # =============================================================================
 
 
 def get_agent_llm_config(agent_id: str) -> dict:
     """
     Get complete LLM configuration for a specific agent.
+
+    DEPRECATED: Use get_agent_llm_config_explicit() for new code.
 
     Each agent can have its own provider, endpoint, and model via environment variables:
     - AUTOBOT_{AGENT_ID}_PROVIDER (e.g., AUTOBOT_ORCHESTRATOR_PROVIDER=openai)
@@ -736,6 +883,8 @@ def get_agent_endpoint(agent_id: str) -> str:
     """
     Get LLM API endpoint URL for a specific agent.
 
+    DEPRECATED: Use get_agent_endpoint_explicit() for new code.
+
     Checks AUTOBOT_{AGENT_ID}_ENDPOINT first, falls back to provider default.
 
     Args:
@@ -751,6 +900,8 @@ def get_agent_model(agent_id: str) -> str:
     """
     Get LLM model name for a specific agent.
 
+    DEPRECATED: Use get_agent_model_explicit() for new code.
+
     Checks AUTOBOT_{AGENT_ID}_MODEL first, falls back to default_model.
 
     Args:
@@ -765,6 +916,8 @@ def get_agent_model(agent_id: str) -> str:
 def get_agent_provider(agent_id: str) -> str:
     """
     Get LLM provider for a specific agent.
+
+    DEPRECATED: Use get_agent_provider_explicit() for new code.
 
     Checks AUTOBOT_{AGENT_ID}_PROVIDER first, falls back to default provider.
 
@@ -795,7 +948,13 @@ __all__ = [
     "get_ollama_url",
     "get_default_llm_model",
     "PROJECT_ROOT",
-    # Agent-specific configuration
+    # Agent-specific configuration (EXPLICIT - NO FALLBACKS)
+    "AgentConfigurationError",
+    "get_agent_llm_config_explicit",
+    "get_agent_endpoint_explicit",
+    "get_agent_model_explicit",
+    "get_agent_provider_explicit",
+    # Agent-specific configuration (DEPRECATED - WITH FALLBACKS)
     "get_agent_llm_config",
     "get_agent_endpoint",
     "get_agent_model",

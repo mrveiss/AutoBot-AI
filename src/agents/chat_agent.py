@@ -11,9 +11,14 @@ Focuses on quick, natural interactions without complex reasoning.
 import logging
 from typing import Any, Dict, List, Optional
 
+from src.config.ssot_config import (
+    AgentConfigurationError,
+    get_agent_endpoint_explicit,
+    get_agent_model_explicit,
+    get_agent_provider_explicit,
+)
 from src.constants.threshold_constants import LLMDefaults
 from src.llm_interface import LLMInterface
-from src.unified_config_manager import config as global_config_manager
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
@@ -24,11 +29,18 @@ logger = logging.getLogger(__name__)
 class ChatAgent(StandardizedAgent):
     """Lightweight chat agent for quick conversational responses."""
 
+    # Agent identifier for SSOT config lookup
+    AGENT_ID = "chat"
+
     def __init__(self):
-        """Initialize the Chat Agent with 1B model for efficiency."""
+        """Initialize the Chat Agent with explicit LLM configuration (no fallbacks)."""
         super().__init__("chat")
         self.llm_interface = LLMInterface()
-        self.model_name = global_config_manager.get_task_specific_model("chat")
+
+        # Use explicit SSOT config - raises AgentConfigurationError if not set
+        self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
+        self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
+        self.model_name = get_agent_model_explicit(self.AGENT_ID)
         self.capabilities = [
             "conversational_chat",
             "simple_questions",
@@ -48,7 +60,10 @@ class ChatAgent(StandardizedAgent):
             }
         )
 
-        logger.info("Chat Agent initialized with model: %s", self.model_name)
+        logger.info(
+            "Chat Agent initialized with provider=%s, endpoint=%s, model=%s",
+            self.llm_provider, self.llm_endpoint, self.model_name
+        )
 
     async def handle_chat(self, request: AgentRequest) -> Dict[str, Any]:
         """Handle chat action - replaces duplicate process_request logic"""

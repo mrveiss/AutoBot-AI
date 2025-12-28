@@ -14,7 +14,12 @@ import aiohttp
 
 from src.agents.classification_agent import ClassificationResult
 from src.autobot_types import TaskComplexity
-from src.config.ssot_config import get_agent_endpoint, get_agent_model
+from src.config.ssot_config import (
+    AgentConfigurationError,
+    get_agent_endpoint_explicit,
+    get_agent_model_explicit,
+    get_agent_provider_explicit,
+)
 from src.utils.http_client import get_http_client
 from src.utils.redis_client import get_redis_client
 from src.workflow_classifier import WorkflowClassifier
@@ -35,18 +40,26 @@ class GemmaClassificationAgent(StandardizedAgent):
     AGENT_ID = "classification"
 
     def __init__(self, ollama_host: str = None):
-        """Initialize Gemma classification agent with Ollama connection and Redis."""
+        """Initialize Gemma classification agent with explicit LLM configuration."""
         super().__init__("gemma_classification")
-        # Get endpoint URL from agent-specific SSOT config
-        self.ollama_host = ollama_host or get_agent_endpoint(self.AGENT_ID)
+
+        # Use explicit SSOT config - raises AgentConfigurationError if not set
+        self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
+        self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
+        self.model_name = get_agent_model_explicit(self.AGENT_ID)
+
+        # Allow override via constructor for testing
+        self.ollama_host = ollama_host or self.llm_endpoint
         self.redis_client = get_redis_client()
         self.keyword_classifier = WorkflowClassifier(self.redis_client)
 
-        # Get model from agent-specific SSOT config
-        # Can be overridden via AUTOBOT_CLASSIFICATION_MODEL
-        self.preferred_models = [
-            get_agent_model(self.AGENT_ID),
-        ]
+        # Use explicit model from SSOT config
+        self.preferred_models = [self.model_name]
+
+        logger.info(
+            "GemmaClassificationAgent initialized with provider=%s, endpoint=%s, model=%s",
+            self.llm_provider, self.llm_endpoint, self.model_name
+        )
 
         self.capabilities = [
             "ultra_fast_classification",
