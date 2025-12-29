@@ -30,14 +30,16 @@ from src.unified_config import API_BASE_URL
 
 try:
     import aiohttp
+    import aiofiles
 except ImportError:
     # Use logging instead of print for package installation messages
-    logging.warning("Installing required packages (aiohttp)...")
+    logging.warning("Installing required packages (aiohttp, aiofiles)...")
     import subprocess
     import sys
 
-    subprocess.run([sys.executable, "-m", "pip", "install", "aiohttp"])
+    subprocess.run([sys.executable, "-m", "pip", "install", "aiohttp", "aiofiles"])
     import aiohttp
+    import aiofiles
 
 # Import centralized Redis client
 from src.utils.redis_client import get_redis_client
@@ -327,17 +329,18 @@ class SystemMonitor:
             service_metrics["error_count"] = 1
             logger.debug("Service %s health check failed: %s", service_name, e)
 
-    def _check_redis_health(self, service_metrics: Dict[str, Any]) -> None:
+    async def _check_redis_health(self, service_metrics: Dict[str, Any]) -> None:
         """
         Check Redis service health and update metrics.
 
         Issue #665: Extracted from _collect_service_metrics to reduce function length.
+        Issue #666: Fixed blocking I/O - use async Redis client in async context.
         """
         try:
-            # Use canonical get_redis_client() for production Redis VM
-            r = get_redis_client(async_client=False, database="main")
+            # Issue #666: Use async_client=True to avoid blocking the event loop
+            r = await get_redis_client(async_client=True, database="main")
             if r:
-                r.ping()
+                await r.ping()
                 service_metrics["status"] = "healthy"
                 service_metrics["success_count"] = 1
             else:
@@ -376,7 +379,8 @@ class SystemMonitor:
                     service["url"], service_name, service_metrics
                 )
             elif service_name == "redis":
-                self._check_redis_health(service_metrics)
+                # Issue #666: Now properly awaited since _check_redis_health is async
+                await self._check_redis_health(service_metrics)
 
             # Try to get process-specific metrics
             service_metrics.update(self._get_process_metrics(service_name))
@@ -577,10 +581,10 @@ class SystemMonitor:
                             result["error_message"] = f"HTTP {response.status}"
 
             elif check["service"] == "redis" and check["endpoint"] == "ping":
-                # Redis health check - use canonical client for central Redis VM
-                r = get_redis_client(async_client=False, database="main")
+                # Issue #666: Fixed blocking I/O - use async Redis client
+                r = await get_redis_client(async_client=True, database="main")
                 if r:
-                    r.ping()
+                    await r.ping()
                     result["response_time_ms"] = (time.time() - start_time) * 1000
                     result["status"] = "healthy"
                 else:
@@ -860,10 +864,11 @@ class SystemMonitor:
             dashboard = self.generate_monitoring_dashboard()
 
             # Save dashboard data
+            # Issue #666: Fixed blocking I/O - use aiofiles for async file write
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             dashboard_file = self.reports_dir / f"dashboard_{timestamp}.json"
-            with open(dashboard_file, "w") as f:
-                json.dump(dashboard, f, indent=2)
+            async with aiofiles.open(dashboard_file, "w", encoding="utf-8") as f:
+                await f.write(json.dumps(dashboard, indent=2, ensure_ascii=False))
 
             # Check for alerts
             if self.alerts_triggered:
