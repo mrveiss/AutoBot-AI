@@ -654,7 +654,8 @@ async def create_secret(request: SecretCreateRequest, http_request: Request):
     """Create a new secret"""
     check_rate_limit(http_request)
     try:
-        secret = secrets_manager.create_secret(request)
+        # Issue #666: Wrap blocking file I/O in asyncio.to_thread
+        secret = await asyncio.to_thread(secrets_manager.create_secret, request)
         # Convert datetime objects to strings for JSON serialization
         secret_data = secret.dict()
         if secret_data.get("created_at"):
@@ -698,7 +699,10 @@ async def list_secrets(
     """List secrets with optional filtering"""
     check_rate_limit(http_request)
     try:
-        secrets = secrets_manager.list_secrets(chat_id=chat_id, scope=scope)
+        # Issue #666: Wrap blocking file I/O in asyncio.to_thread
+        secrets = await asyncio.to_thread(
+            secrets_manager.list_secrets, chat_id=chat_id, scope=scope
+        )
         audit_log("LIST", "N/A", http_request, details=f"count={len(secrets)}")
         return JSONResponse(
             status_code=200,
@@ -744,7 +748,8 @@ async def get_secret_types():
 async def get_secrets_status():
     """Get secrets service status"""
     try:
-        secrets = secrets_manager._load_secrets()
+        # Issue #666: Wrap blocking file I/O in asyncio.to_thread
+        secrets = await asyncio.to_thread(secrets_manager._load_secrets)
 
         return {
             "status": "healthy",
@@ -773,7 +778,8 @@ async def get_secrets_status():
 async def get_secrets_stats():
     """Get secrets statistics"""
     try:
-        secrets = secrets_manager._load_secrets()
+        # Issue #666: Wrap blocking file I/O in asyncio.to_thread
+        secrets = await asyncio.to_thread(secrets_manager._load_secrets)
 
         stats = {
             "total_secrets": len(secrets),
@@ -822,7 +828,10 @@ async def get_secret(
     """Get a specific secret with its value"""
     check_rate_limit(http_request)
     try:
-        secret = secrets_manager.get_secret(secret_id, chat_id=chat_id)
+        # Issue #666: Wrap blocking file I/O in asyncio.to_thread
+        secret = await asyncio.to_thread(
+            secrets_manager.get_secret, secret_id, chat_id=chat_id
+        )
         if not secret:
             audit_log("ACCESS", secret_id, http_request, success=False, details="not_found")
             raise HTTPException(status_code=404, detail="Secret not found")
@@ -855,7 +864,10 @@ async def update_secret(
     """Update a secret's metadata"""
     check_rate_limit(http_request)
     try:
-        secret = secrets_manager.update_secret(secret_id, request, chat_id=chat_id)
+        # Issue #666: Wrap blocking file I/O in asyncio.to_thread
+        secret = await asyncio.to_thread(
+            secrets_manager.update_secret, secret_id, request, chat_id=chat_id
+        )
         if not secret:
             audit_log("UPDATE", secret_id, http_request, success=False, details="not_found")
             raise HTTPException(status_code=404, detail="Secret not found")
@@ -903,7 +915,10 @@ async def delete_secret(
     """Delete a secret"""
     check_rate_limit(http_request)
     try:
-        success = secrets_manager.delete_secret(secret_id, chat_id=chat_id)
+        # Issue #666: Wrap blocking file I/O in asyncio.to_thread
+        success = await asyncio.to_thread(
+            secrets_manager.delete_secret, secret_id, chat_id=chat_id
+        )
         if not success:
             audit_log("DELETE", secret_id, http_request, success=False, details="not_found")
             raise HTTPException(status_code=404, detail="Secret not found")
@@ -940,7 +955,10 @@ async def transfer_secrets(
     """Transfer secrets between scopes"""
     check_rate_limit(http_request)
     try:
-        result = secrets_manager.transfer_secrets(request, chat_id=chat_id)
+        # Issue #666: Wrap blocking file I/O in asyncio.to_thread
+        result = await asyncio.to_thread(
+            secrets_manager.transfer_secrets, request, chat_id=chat_id
+        )
         audit_log(
             "TRANSFER",
             ",".join(result.get("transferred", [])),
@@ -975,7 +993,8 @@ async def transfer_secrets(
 async def get_chat_cleanup_info(chat_id: str):
     """Get information about secrets that would be affected by chat deletion"""
     try:
-        info = secrets_manager.cleanup_chat_secrets(chat_id)
+        # Issue #666: Wrap blocking file I/O in asyncio.to_thread
+        info = await asyncio.to_thread(secrets_manager.cleanup_chat_secrets, chat_id)
         return JSONResponse(status_code=200, content=info)
     except Exception as e:
         logger.error("Failed to get chat cleanup info: %s", e)
@@ -996,7 +1015,10 @@ async def delete_chat_secrets(
     """Delete secrets for a specific chat (used during chat cleanup)"""
     check_rate_limit(http_request)
     try:
-        result = secrets_manager.delete_chat_secrets(chat_id, secret_ids)
+        # Issue #666: Wrap blocking file I/O in asyncio.to_thread
+        result = await asyncio.to_thread(
+            secrets_manager.delete_chat_secrets, chat_id, secret_ids
+        )
         deleted_ids = [s.get("id", "unknown") for s in result.get("deleted_secrets", [])]
         audit_log(
             "BULK_DELETE",
