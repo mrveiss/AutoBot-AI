@@ -307,20 +307,24 @@ async def detect_config_duplicates_endpoint(
                 str(project_root),
                 use_semantic_analysis=True,
             )
-            detector.scan_directory()
+            # Issue #666: Wrap blocking file I/O in asyncio.to_thread
+            await asyncio.to_thread(detector.scan_directory)
             result = {
                 "duplicates_found": 0,
                 "duplicates": await detector.find_duplicates_async(),
-                "report": detector.generate_report(),
+                # Issue #666: Wrap blocking call in asyncio.to_thread
+                "report": await asyncio.to_thread(detector.generate_report),
             }
             result["duplicates_found"] = len(result["duplicates"])
             logger.info("Semantic config duplicate analysis complete")
         except Exception as e:
             logger.warning("Semantic analysis failed, falling back to standard: %s", e)
-            result = detect_config_duplicates(str(project_root))
+            # Issue #666: Wrap blocking file I/O in asyncio.to_thread
+            result = await asyncio.to_thread(detect_config_duplicates, str(project_root))
     else:
         # Run standard detection
-        result = detect_config_duplicates(str(project_root))
+        # Issue #666: Wrap blocking file I/O in asyncio.to_thread
+        result = await asyncio.to_thread(detect_config_duplicates, str(project_root))
 
     # Convert duplicates dict to array format for frontend compatibility
     # Backend returns: {value: {value, count, sources, duplicates}}
