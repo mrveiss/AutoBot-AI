@@ -217,7 +217,7 @@ kill_autobot_processes() {
 check_vm_health() {
     log "Quick VM health check..."
     local healthy_vms=0
-    local total_vms=5
+    local total_required_vms=4  # Frontend, Redis, Browser, AI-stack (NPU is optional)
 
     # Parallel health checks using background processes
     local health_results=()
@@ -230,15 +230,12 @@ check_vm_health() {
     (timeout 2 redis-cli -h "${VMS["redis"]}" ping 2>/dev/null | grep -q PONG && echo "redis:healthy" || echo "redis:unhealthy") &
     health_results+=($!)
 
-    # NPU Worker
-    (timeout 3 curl -s "http://${VMS["npu-worker"]}:$NPU_WORKER_PORT" >/dev/null 2>&1 && echo "npu:healthy" || echo "npu:unhealthy") &
-    health_results+=($!)
-
-    # AI Stack (Ollama) - Running locally on main machine, not on remote VM
-    # Removed health check since it's a local service, not a VM service
-
     # Browser
     (timeout 3 curl -s "http://${VMS["browser"]}:$BROWSER_PORT" >/dev/null 2>&1 && echo "browser:healthy" || echo "browser:unhealthy") &
+    health_results+=($!)
+
+    # AI-stack
+    (timeout 3 curl -s "http://${VMS["ai-stack"]}:$AI_STACK_PORT" >/dev/null 2>&1 && echo "ai-stack:healthy" || echo "ai-stack:unhealthy") &
     health_results+=($!)
 
     # Wait for all checks and collect results
@@ -266,17 +263,6 @@ check_vm_health() {
         echo -e "${RED}❌${NC}"
     fi
 
-    echo -n "  NPU Worker... "
-    if timeout 3 curl -s "http://${VMS["npu-worker"]}:$NPU_WORKER_PORT" >/dev/null 2>&1; then
-        echo -e "${GREEN}✅${NC}"
-        healthy_vms=$((healthy_vms + 1))
-    else
-        echo -e "${RED}❌${NC}"
-    fi
-
-    # AI Stack (Ollama) - Running locally on main machine, skipping VM check
-    # Ollama is checked as part of backend health, not as a separate VM
-
     echo -n "  Browser... "
     if timeout 3 curl -s "http://${VMS["browser"]}:$BROWSER_PORT" >/dev/null 2>&1; then
         echo -e "${GREEN}✅${NC}"
@@ -285,11 +271,27 @@ check_vm_health() {
         echo -e "${RED}❌${NC}"
     fi
 
-    local health_percentage=$((healthy_vms * 100 / total_vms))
-    log "VM Health: $healthy_vms/$total_vms services healthy ($health_percentage%)"
+    echo -n "  AI-stack... "
+    if timeout 3 curl -s "http://${VMS["ai-stack"]}:$AI_STACK_PORT" >/dev/null 2>&1; then
+        echo -e "${GREEN}✅${NC}"
+        healthy_vms=$((healthy_vms + 1))
+    else
+        echo -e "${RED}❌${NC}"
+    fi
 
-    # Return success if >= 80% of services are healthy
-    if [ $health_percentage -ge 80 ]; then
+    # NPU Worker - Optional, check but don't count against health
+    echo -n "  NPU Worker (optional)... "
+    if timeout 3 curl -s "http://${VMS["npu-worker"]}:$NPU_WORKER_PORT" >/dev/null 2>&1; then
+        echo -e "${GREEN}✅${NC}"
+    else
+        echo -e "${YELLOW}⚠️ Not running${NC}"
+    fi
+
+    local health_percentage=$((healthy_vms * 100 / total_required_vms))
+    log "VM Health: $healthy_vms/$total_required_vms required services healthy ($health_percentage%)"
+
+    # Return success if >= 75% of required services are healthy (3 out of 4)
+    if [ $health_percentage -ge 75 ]; then
         return 0
     else
         return 1
@@ -338,8 +340,7 @@ check_vm_services() {
                 if timeout 5 curl -s "http://$vm_ip:$port" >/dev/null 2>&1; then
                     echo -e "${GREEN}✅ Running${NC}"
                 else
-                    echo -e "${RED}❌ Not running${NC}"
-                    echo -e "${YELLOW}    Start with: ssh $SSH_USER@$vm_ip 'cd npu-worker && python simple_npu_worker.py'${NC}"
+                    echo -e "${YELLOW}⚠️ Not running (optional - AI acceleration helper)${NC}"
                 fi
                 ;;
             "ai-stack")
@@ -431,18 +432,23 @@ start_vnc_desktop() {
             return 0
         fi
 
-        # Start VNC services using systemd
+        # Start VNC services using systemd (non-blocking - don't fail if VNC has issues)
         echo "Starting VNC services..."
 
-        if sudo systemctl start xvfb@1 vncserver@1 novnc 2>/dev/null; then
+        # Use || true to prevent set -e from exiting on VNC failures
+        # VNC is optional - backend should start regardless
+        if sudo systemctl start xvfb@1 vncserver@1 novnc 2>/dev/null || true; then
             sleep 2  # Reduced from 3 seconds
             if systemctl is-active --quiet xvfb@1 && systemctl is-active --quiet vncserver@1 && systemctl is-active --quiet novnc; then
                 echo -e "${GREEN}✅ VNC Desktop available at: ${BLUE}http://localhost:6080/vnc.html${NC}"
             else
-                echo -e "${YELLOW}⚠️  VNC services partially started. Check: ${BLUE}sudo systemctl status xvfb@1 vncserver@1 novnc${NC}"
+                echo -e "${YELLOW}⚠️  VNC services partially started or failed. Check: ${BLUE}sudo systemctl status xvfb@1 vncserver@1 novnc${NC}"
+                echo -e "${CYAN}ℹ️  Continuing without VNC desktop - backend will still start${NC}"
+                DESKTOP_ACCESS=false
             fi
         else
             echo -e "${YELLOW}⚠️  VNC services not available. Run: ${BLUE}bash setup.sh desktop${NC}"
+            echo -e "${CYAN}ℹ️  Continuing without VNC desktop - backend will still start${NC}"
             DESKTOP_ACCESS=false
         fi
     fi
@@ -740,25 +746,45 @@ check_vm_connectivity() {
     fi
 
     local connectivity_failed=false
+    local optional_services=("npu-worker")  # Services that don't block startup
 
     for vm_name in "${!VMS[@]}"; do
         vm_ip=${VMS[$vm_name]}
         echo -n "  Testing $vm_name ($vm_ip)... "
 
-        if timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "echo 'ok'" >/dev/null 2>&1; then
+        # Check if this is the local backend host (skip SSH check for local services)
+        if [ "$vm_ip" = "$BACKEND_HOST" ]; then
+            echo -e "${CYAN}⚡ Local service${NC}"
+            continue
+        fi
+
+        if timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "echo 'ok'" >/dev/null 2>&1; then
             echo -e "${GREEN}✅ Connected${NC}"
         else
-            echo -e "${RED}❌ Failed${NC}"
-            connectivity_failed=true
+            # Check if this is an optional service
+            local is_optional=false
+            for opt_svc in "${optional_services[@]}"; do
+                if [ "$vm_name" = "$opt_svc" ]; then
+                    is_optional=true
+                    break
+                fi
+            done
+
+            if [ "$is_optional" = true ]; then
+                echo -e "${YELLOW}⚠️ Not available (optional)${NC}"
+            else
+                echo -e "${RED}❌ Failed${NC}"
+                connectivity_failed=true
+            fi
         fi
     done
 
     if [ "$connectivity_failed" = true ]; then
-        warning "Some VMs are not accessible"
+        warning "Some required VMs are not accessible"
         echo -e "${YELLOW}Use: bash setup.sh initial --distributed  # To configure VM connectivity${NC}"
-        echo -e "${CYAN}Backend will start anyway, but VM services may not be available${NC}"
+        echo -e "${CYAN}Backend will start anyway, but some VM services may not be available${NC}"
     else
-        success "All VMs are accessible"
+        success "All required VMs are accessible"
     fi
 }
 
