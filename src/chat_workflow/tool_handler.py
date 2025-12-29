@@ -750,6 +750,40 @@ class ToolHandlerMixin:
                 )
                 continue
 
+            # Issue #657: Handle 'delegate' tool for subordinate agent delegation
+            if tool_name == "delegate":
+                params = tool_call.get("params", {})
+                task = params.get("task", "")
+                reason = params.get("reason", "Task delegation")
+                wait_for_result = params.get("wait_for_result", True)
+
+                logger.info(
+                    "[Issue #657] Delegate tool invoked: task=%s, reason=%s",
+                    task[:100], reason
+                )
+
+                # Yield status message
+                yield WorkflowMessage(
+                    type="delegation",
+                    content=f"Delegating subtask: {task[:100]}...",
+                    metadata={
+                        "message_type": "delegate_tool",
+                        "reason": reason,
+                        "task": task,
+                    },
+                )
+
+                # Note: Actual delegation happens in manager.py with HierarchicalAgent
+                # Here we just record the delegation request for the manager to process
+                execution_results.append({
+                    "tool": "delegate",
+                    "task": task,
+                    "reason": reason,
+                    "wait_for_result": wait_for_result,
+                    "status": "pending_delegation",
+                })
+                continue
+
             if tool_name != "execute_command":
                 logger.debug("[_process_tool_calls] Skipping unknown tool: %s", tool_name)
                 continue

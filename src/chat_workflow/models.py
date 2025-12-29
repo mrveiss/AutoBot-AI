@@ -187,6 +187,85 @@ class StreamingMessage:
 
 
 @dataclass
+class AgentContext:
+    """
+    Context for hierarchical agent delegation.
+
+    Issue #657: Implements Agent Zero's subordinate agent pattern where complex
+    tasks can be delegated to child agents. This enables better task decomposition
+    and parallel execution of independent subtasks.
+
+    Attributes:
+        agent_id: Unique identifier for this agent instance
+        level: Depth in hierarchy (0 = root, 1+ = subordinates)
+        parent_id: ID of parent agent (None for root)
+        max_depth: Maximum allowed delegation depth (prevents infinite delegation)
+        session_id: Associated chat session ID
+        created_at: When this agent context was created
+
+    Usage:
+        # Root agent
+        root_ctx = AgentContext(agent_id="root", level=0)
+
+        # Subordinate agent
+        sub_ctx = AgentContext(
+            agent_id="sub-123",
+            level=1,
+            parent_id="root"
+        )
+    """
+
+    agent_id: str
+    level: int = 0
+    parent_id: Optional[str] = None
+    max_depth: int = 3
+    session_id: Optional[str] = None
+    created_at: float = field(default_factory=time.time)
+
+    def can_delegate(self) -> bool:
+        """Check if this agent can delegate to subordinates."""
+        return self.level < self.max_depth
+
+    def create_subordinate_context(self, subordinate_id: str) -> "AgentContext":
+        """
+        Create context for a subordinate agent.
+
+        Args:
+            subordinate_id: ID for the new subordinate
+
+        Returns:
+            New AgentContext for the subordinate
+
+        Raises:
+            ValueError: If max delegation depth would be exceeded
+        """
+        if not self.can_delegate():
+            raise ValueError(
+                f"Cannot delegate: already at max depth {self.max_depth}"
+            )
+
+        return AgentContext(
+            agent_id=subordinate_id,
+            level=self.level + 1,
+            parent_id=self.agent_id,
+            max_depth=self.max_depth,
+            session_id=self.session_id,
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "agent_id": self.agent_id,
+            "level": self.level,
+            "parent_id": self.parent_id,
+            "max_depth": self.max_depth,
+            "session_id": self.session_id,
+            "created_at": self.created_at,
+            "can_delegate": self.can_delegate(),
+        }
+
+
+@dataclass
 class LLMIterationContext:
     """
     Context for LLM continuation iterations.
@@ -206,6 +285,7 @@ class LLMIterationContext:
     system_prompt: Optional[str] = None
     initial_prompt: Optional[str] = None
     message: Optional[str] = None
+    agent_context: Optional[AgentContext] = None  # Issue #657: Agent hierarchy
 
 
 @dataclass
