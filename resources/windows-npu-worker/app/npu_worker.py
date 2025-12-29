@@ -33,6 +33,7 @@ if sys.platform == "win32":
             sys.stderr.reconfigure(encoding="utf-8", errors="replace")
         except Exception:
             pass  # Service mode may not support reconfiguration
+import threading
 from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
@@ -806,15 +807,19 @@ class ONNXModelManager:
 OpenVINOModelManager = ONNXModelManager
 
 
-# Global model manager instance
+# Global model manager instance with thread-safe initialization (Issue #662)
 _model_manager: Optional[OpenVINOModelManager] = None
+_model_manager_lock = threading.Lock()
 
 
 def get_model_manager() -> OpenVINOModelManager:
-    """Get or create the global model manager instance"""
+    """Get or create the global model manager instance (thread-safe)."""
     global _model_manager
     if _model_manager is None:
-        _model_manager = OpenVINOModelManager()
+        with _model_manager_lock:
+            # Double-check after acquiring lock
+            if _model_manager is None:
+                _model_manager = OpenVINOModelManager()
     return _model_manager
 
 

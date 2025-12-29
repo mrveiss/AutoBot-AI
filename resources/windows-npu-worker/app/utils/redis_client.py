@@ -42,6 +42,7 @@ redis:
   retry_on_timeout: true
 """
 
+import asyncio
 import logging
 from typing import Optional
 
@@ -181,13 +182,14 @@ class RedisConnectionManager:
                 self._connection_pool = None
 
 
-# Global connection manager instance
+# Global connection manager instance with thread-safe initialization (Issue #662)
 _connection_manager: Optional[RedisConnectionManager] = None
+_connection_manager_lock = asyncio.Lock()
 
 
 async def get_redis_client(config: dict) -> Optional[async_redis.Redis]:
     """
-    Get Redis client with connection pooling (canonical pattern)
+    Get Redis client with connection pooling (canonical pattern, thread-safe)
 
     This is the ONLY approved method for getting a Redis client in the
     Windows NPU worker. Direct redis.Redis() instantiation is FORBIDDEN.
@@ -206,9 +208,12 @@ async def get_redis_client(config: dict) -> Optional[async_redis.Redis]:
     """
     global _connection_manager
 
-    # Create connection manager on first call
+    # Create connection manager on first call (thread-safe)
     if _connection_manager is None:
-        _connection_manager = RedisConnectionManager(config)
+        async with _connection_manager_lock:
+            # Double-check after acquiring lock
+            if _connection_manager is None:
+                _connection_manager = RedisConnectionManager(config)
 
     # Get client from manager
     return await _connection_manager.get_client()
@@ -218,6 +223,7 @@ async def close_redis_client():
     """Close Redis client and cleanup resources"""
     global _connection_manager
 
-    if _connection_manager is not None:
-        await _connection_manager.close()
-        _connection_manager = None
+    async with _connection_manager_lock:
+        if _connection_manager is not None:
+            await _connection_manager.close()
+            _connection_manager = None

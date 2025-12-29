@@ -14,6 +14,7 @@ Issue: #260
 """
 
 import ast
+import asyncio
 import json
 import logging
 import uuid
@@ -28,22 +29,25 @@ from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
-# Lazy import for memory integration to avoid circular imports
+# Lazy import for memory integration to avoid circular imports (Issue #662: thread-safe)
 _memory_integration = None
+_memory_integration_lock = asyncio.Lock()
 
 
 async def _get_memory_integration():
-    """Lazy load memory integration."""
+    """Lazy load memory integration (thread-safe)."""
     global _memory_integration
     if _memory_integration is None:
-        try:
-            from src.services.security_memory_integration import (
-                get_security_memory_integration,
-            )
-            _memory_integration = await get_security_memory_integration()
-        except Exception as e:
-            logger.warning("Memory integration not available: %s", e)
-            _memory_integration = None
+        async with _memory_integration_lock:
+            # Double-check after acquiring lock
+            if _memory_integration is None:
+                try:
+                    from src.services.security_memory_integration import (
+                        get_security_memory_integration,
+                    )
+                    _memory_integration = await get_security_memory_integration()
+                except Exception as e:
+                    logger.warning("Memory integration not available: %s", e)
     return _memory_integration
 
 
