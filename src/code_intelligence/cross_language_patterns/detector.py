@@ -58,6 +58,11 @@ PATTERNS_COLLECTION = "cross_language_patterns"
 # Sample the most significant patterns (DTOs, APIs, validators) first
 MAX_PATTERNS_FOR_EMBEDDING = 500
 
+# Issue #659: Batch embedding configuration for parallel processing
+# Concurrent requests with semaphore limiting provides 5-10x speedup
+EMBEDDING_BATCH_CONCURRENCY = 10  # Max concurrent embedding requests
+EMBEDDING_BATCH_SIZE = 50  # Process embeddings in batches of this size
+
 
 class CrossLanguagePatternDetector:
     """
@@ -214,6 +219,46 @@ class CrossLanguagePatternDetector:
             logger.warning("Failed to generate embedding: %s", e)
 
         return None
+
+    async def _get_embeddings_batch(
+        self,
+        texts: List[str],
+        concurrency: int = EMBEDDING_BATCH_CONCURRENCY,
+    ) -> List[Optional[List[float]]]:
+        """
+        Get embeddings for multiple texts in parallel.
+
+        Issue #659: Batch embedding generation with semaphore-limited concurrency.
+        Provides 5-10x speedup vs sequential calls by overlapping network latency.
+
+        500 texts × 100-200ms = 50-100s sequential → 5-10s with 10 concurrent requests
+
+        Args:
+            texts: List of texts to embed
+            concurrency: Maximum concurrent requests (default: 10)
+
+        Returns:
+            List of embeddings (same order as input texts, None for failures)
+        """
+        if not self.use_llm or not texts:
+            return [None] * len(texts)
+
+        semaphore = asyncio.Semaphore(concurrency)
+
+        async def get_one(text: str) -> Optional[List[float]]:
+            async with semaphore:
+                return await self._get_embedding(text)
+
+        # Execute all embedding requests in parallel with semaphore limiting
+        results = await asyncio.gather(*[get_one(text) for text in texts])
+
+        logger.info(
+            "Batch generated %d embeddings (%d concurrent)",
+            sum(1 for r in results if r is not None),
+            concurrency,
+        )
+
+        return list(results)
 
     async def _normalize_pattern(self, pattern: Dict[str, Any]) -> str:
         """
@@ -545,6 +590,8 @@ class CrossLanguagePatternDetector:
         """
         Build pattern objects with embeddings for a list of patterns.
 
+        Issue #659: Uses batch embedding for 5-10x speedup via parallel requests.
+
         Args:
             patterns: Raw patterns to process
             language: Language identifier (python/typescript)
@@ -565,9 +612,19 @@ class CrossLanguagePatternDetector:
                 len(patterns_to_process), len(patterns), language
             )
 
+        # Issue #659: Normalize all patterns first, then batch embed
+        normalized_texts = []
         for p in patterns_to_process:
             normalized = await self._normalize_pattern(p)
-            embedding = await self._get_embedding(normalized)
+            normalized_texts.append(normalized)
+
+        # Batch generate embeddings with parallel requests (5-10x faster)
+        embeddings = await self._get_embeddings_batch(normalized_texts)
+
+        # Build result list with successful embeddings
+        for i, (p, normalized, embedding) in enumerate(
+            zip(patterns_to_process, normalized_texts, embeddings)
+        ):
             if embedding:
                 pattern_id = f"{prefix}{hashlib.sha256(normalized.encode()).hexdigest()[:12]}"
                 result.append({

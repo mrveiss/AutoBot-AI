@@ -36,3 +36,7 @@ aiosqlite>=0.21.0
 # Security - XML parsing protection (Issue #67)
 # Prevents XXE (XML External Entity) attacks in threat intelligence parsing
 defusedxml>=0.7.1
+
+# MinHash LSH - Locality-Sensitive Hashing for duplicate detection (Issue #659)
+# Provides 10-100x speedup for similarity search via O(n) expected complexity
+datasketch>=1.6.0
