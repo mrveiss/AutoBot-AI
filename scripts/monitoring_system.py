@@ -134,48 +134,53 @@ class SystemMonitor:
             """
             )
 
-    def collect_system_metrics(self) -> Dict[str, Any]:
-        """Collect comprehensive system metrics"""
+    def _collect_resource_metrics(self) -> Dict[str, Any]:
+        """
+        Collect CPU, memory, disk, and network metrics.
+
+        Issue #665: Extracted from collect_system_metrics to reduce function length.
+        """
+        # CPU metrics
+        cpu_percent = psutil.cpu_percent(interval=1)
+
+        # Memory metrics
+        memory = psutil.virtual_memory()
+
+        # Disk metrics
+        disk = psutil.disk_usage("/")
+
+        # Network metrics
+        network = psutil.net_io_counters()
+
+        # Load average (Unix-like systems)
         try:
-            # CPU metrics
-            cpu_percent = psutil.cpu_percent(interval=1)
+            load_average = os.getloadavg()[0] if hasattr(os, "getloadavg") else 0.0
+        except (AttributeError, OSError):
+            load_average = 0.0
 
-            # Memory metrics
-            memory = psutil.virtual_memory()
-            memory_percent = memory.percent
-            memory_used_mb = memory.used / (1024**2)
+        return {
+            "cpu_percent": cpu_percent,
+            "memory_percent": memory.percent,
+            "memory_used_mb": memory.used / (1024**2),
+            "disk_percent": (disk.used / disk.total) * 100,
+            "disk_used_gb": disk.used / (1024**3),
+            "network_sent_mb": network.bytes_sent / (1024**2),
+            "network_recv_mb": network.bytes_recv / (1024**2),
+            "process_count": len(psutil.pids()),
+            "load_average": load_average,
+        }
 
-            # Disk metrics
-            disk = psutil.disk_usage("/")
-            disk_percent = (disk.used / disk.total) * 100
-            disk_used_gb = disk.used / (1024**3)
+    def collect_system_metrics(self) -> Dict[str, Any]:
+        """
+        Collect comprehensive system metrics.
 
-            # Network metrics
-            network = psutil.net_io_counters()
-            network_sent_mb = network.bytes_sent / (1024**2)
-            network_recv_mb = network.bytes_recv / (1024**2)
-
-            # Process metrics
-            process_count = len(psutil.pids())
-
-            # Load average (Unix-like systems)
-            try:
-                load_average = os.getloadavg()[0] if hasattr(os, "getloadavg") else 0.0
-            except (AttributeError, OSError):
-                load_average = 0.0
-
-            metrics = {
-                "timestamp": datetime.now().isoformat(),
-                "cpu_percent": cpu_percent,
-                "memory_percent": memory_percent,
-                "memory_used_mb": memory_used_mb,
-                "disk_percent": disk_percent,
-                "disk_used_gb": disk_used_gb,
-                "network_sent_mb": network_sent_mb,
-                "network_recv_mb": network_recv_mb,
-                "process_count": process_count,
-                "load_average": load_average,
-            }
+        Issue #665: Refactored to extract _collect_resource_metrics() helper,
+        reducing function from 54 to ~20 lines.
+        """
+        try:
+            # Issue #665: Use extracted helper for resource collection
+            metrics = self._collect_resource_metrics()
+            metrics["timestamp"] = datetime.now().isoformat()
 
             # Store in database
             self._store_system_metrics(metrics)
@@ -290,8 +295,65 @@ class SystemMonitor:
 
         return metrics
 
+    async def _check_http_service_health(
+        self, url: str, service_name: str, service_metrics: Dict[str, Any]
+    ) -> None:
+        """
+        Check HTTP service health and update metrics.
+
+        Issue #665: Extracted from _collect_service_metrics to reduce function length.
+        """
+        start_time = time.time()
+        try:
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=5)
+            ) as session:
+                async with session.get(url) as response:
+                    response_time = (time.time() - start_time) * 1000
+                    service_metrics["response_time_ms"] = response_time
+
+                    if response.status == 200:
+                        service_metrics["status"] = "healthy"
+                        service_metrics["success_count"] = 1
+                    else:
+                        service_metrics["status"] = "unhealthy"
+                        service_metrics["error_count"] = 1
+
+        except asyncio.TimeoutError:
+            service_metrics["status"] = "timeout"
+            service_metrics["error_count"] = 1
+        except Exception as e:
+            service_metrics["status"] = "error"
+            service_metrics["error_count"] = 1
+            logger.debug("Service %s health check failed: %s", service_name, e)
+
+    def _check_redis_health(self, service_metrics: Dict[str, Any]) -> None:
+        """
+        Check Redis service health and update metrics.
+
+        Issue #665: Extracted from _collect_service_metrics to reduce function length.
+        """
+        try:
+            # Use canonical get_redis_client() for production Redis VM
+            r = get_redis_client(async_client=False, database="main")
+            if r:
+                r.ping()
+                service_metrics["status"] = "healthy"
+                service_metrics["success_count"] = 1
+            else:
+                service_metrics["status"] = "unhealthy"
+                service_metrics["error_count"] = 1
+        except Exception:
+            service_metrics["status"] = "unhealthy"
+            service_metrics["error_count"] = 1
+
     async def _collect_service_metrics(self, service: Dict[str, Any]) -> Dict[str, Any]:
-        """Collect metrics for a specific service"""
+        """
+        Collect metrics for a specific service.
+
+        Issue #665: Refactored to extract _check_http_service_health() and
+        _check_redis_health() helpers, reducing function from 74 to ~30 lines.
+        """
         service_name = service["name"]
         service_metrics = {
             "status": "unknown",
@@ -304,53 +366,17 @@ class SystemMonitor:
 
         try:
             # Check if service is running on expected port
-            port_open = self._check_port(service["port"])
-
-            if not port_open:
+            if not self._check_port(service["port"]):
                 service_metrics["status"] = "down"
                 return service_metrics
 
-            # For HTTP services, make health check request
+            # Issue #665: Use extracted helper methods for specific service types
             if service["url"]:
-                start_time = time.time()
-                try:
-                    async with aiohttp.ClientSession(
-                        timeout=aiohttp.ClientTimeout(total=5)
-                    ) as session:
-                        async with session.get(service["url"]) as response:
-                            response_time = (time.time() - start_time) * 1000
-                            service_metrics["response_time_ms"] = response_time
-
-                            if response.status == 200:
-                                service_metrics["status"] = "healthy"
-                                service_metrics["success_count"] = 1
-                            else:
-                                service_metrics["status"] = "unhealthy"
-                                service_metrics["error_count"] = 1
-
-                except asyncio.TimeoutError:
-                    service_metrics["status"] = "timeout"
-                    service_metrics["error_count"] = 1
-                except Exception as e:
-                    service_metrics["status"] = "error"
-                    service_metrics["error_count"] = 1
-                    logger.debug("Service %s health check failed: %s", service_name, e)
-
-            # For Redis, try connection using canonical client
+                await self._check_http_service_health(
+                    service["url"], service_name, service_metrics
+                )
             elif service_name == "redis":
-                try:
-                    # Use canonical get_redis_client() for production Redis VM
-                    r = get_redis_client(async_client=False, database="main")
-                    if r:
-                        r.ping()
-                        service_metrics["status"] = "healthy"
-                        service_metrics["success_count"] = 1
-                    else:
-                        service_metrics["status"] = "unhealthy"
-                        service_metrics["error_count"] = 1
-                except Exception:
-                    service_metrics["status"] = "unhealthy"
-                    service_metrics["error_count"] = 1
+                self._check_redis_health(service_metrics)
 
             # Try to get process-specific metrics
             service_metrics.update(self._get_process_metrics(service_name))
@@ -441,19 +467,13 @@ class SystemMonitor:
         except Exception as e:
             logger.error("Failed to store application metrics: %s", e)
 
-    async def perform_health_checks(self) -> Dict[str, Any]:
-        """Perform comprehensive health checks"""
-        logger.info("🏥 Performing health checks...")
+    def _get_health_check_endpoints(self) -> list:
+        """
+        Get list of health check endpoint definitions.
 
-        health_results = {
-            "timestamp": datetime.now().isoformat(),
-            "overall_status": "healthy",
-            "services": {},
-            "issues": [],
-        }
-
-        # Define health check endpoints
-        health_checks = [
+        Issue #665: Extracted from perform_health_checks to reduce function length.
+        """
+        return [
             {
                 "service": "backend",
                 "endpoint": "/api/system/health",
@@ -472,26 +492,55 @@ class SystemMonitor:
             {"service": "redis", "endpoint": "ping", "url": None},
         ]
 
-        for check in health_checks:
+    def _process_health_check_result(
+        self,
+        check: Dict[str, Any],
+        result: Dict[str, Any],
+        health_results: Dict[str, Any],
+    ) -> None:
+        """
+        Process a single health check result and update aggregated results.
+
+        Issue #665: Extracted from perform_health_checks to reduce function length.
+        """
+        service_name = check["service"]
+        if service_name not in health_results["services"]:
+            health_results["services"][service_name] = {
+                "status": "healthy",
+                "checks": [],
+                "issues": [],
+            }
+
+        health_results["services"][service_name]["checks"].append(result)
+
+        if result["status"] != "healthy":
+            health_results["services"][service_name]["status"] = "unhealthy"
+            health_results["overall_status"] = "unhealthy"
+
+            issue = f"{service_name} {check['endpoint']}: {result.get('error_message', 'Unknown error')}"
+            health_results["services"][service_name]["issues"].append(issue)
+            health_results["issues"].append(issue)
+
+    async def perform_health_checks(self) -> Dict[str, Any]:
+        """
+        Perform comprehensive health checks.
+
+        Issue #665: Refactored to extract _get_health_check_endpoints() and
+        _process_health_check_result() helpers, reducing function from 56 to ~20 lines.
+        """
+        logger.info("🏥 Performing health checks...")
+
+        health_results = {
+            "timestamp": datetime.now().isoformat(),
+            "overall_status": "healthy",
+            "services": {},
+            "issues": [],
+        }
+
+        # Issue #665: Use extracted helper for endpoint definitions
+        for check in self._get_health_check_endpoints():
             result = await self._perform_single_health_check(check)
-
-            service_name = check["service"]
-            if service_name not in health_results["services"]:
-                health_results["services"][service_name] = {
-                    "status": "healthy",
-                    "checks": [],
-                    "issues": [],
-                }
-
-            health_results["services"][service_name]["checks"].append(result)
-
-            if result["status"] != "healthy":
-                health_results["services"][service_name]["status"] = "unhealthy"
-                health_results["overall_status"] = "unhealthy"
-
-                issue = f"{service_name} {check['endpoint']}: {result.get('error_message', 'Unknown error')}"
-                health_results["services"][service_name]["issues"].append(issue)
-                health_results["issues"].append(issue)
+            self._process_health_check_result(check, result, health_results)
 
         # Store health check results
         self._store_health_check_results(health_results)
@@ -737,61 +786,52 @@ class SystemMonitor:
 
         return dashboard
 
+    def _delete_old_records(
+        self, conn, table_name: str, retention_date: datetime
+    ) -> int:
+        """
+        Delete old records from a specific table.
+
+        Issue #665: Extracted from cleanup_old_metrics to reduce duplication.
+        """
+        result = conn.execute(
+            f"DELETE FROM {table_name} WHERE timestamp < ?",
+            (retention_date.isoformat(),),
+        )
+        return result.rowcount
+
     def cleanup_old_metrics(self):
-        """Clean up old metrics data"""
+        """
+        Clean up old metrics data.
+
+        Issue #665: Refactored to extract _delete_old_records() helper,
+        reducing function from 59 to ~25 lines.
+        """
         logger.info("🧹 Cleaning up old metrics...")
 
         retention_date = datetime.now() - timedelta(days=self.config["retention_days"])
+        alert_retention_date = datetime.now() - timedelta(days=90)
 
         try:
             with sqlite3.connect(self.metrics_db) as conn:
-                # Clean up old system metrics
-                result = conn.execute(
-                    """
-                    DELETE FROM system_metrics
-                    WHERE timestamp < ?
-                """,
-                    (retention_date.isoformat(),),
+                # Issue #665: Use extracted helper for consistent cleanup
+                deleted_system = self._delete_old_records(
+                    conn, "system_metrics", retention_date
                 )
-
-                deleted_system = result.rowcount
-
-                # Clean up old application metrics
-                result = conn.execute(
-                    """
-                    DELETE FROM application_metrics
-                    WHERE timestamp < ?
-                """,
-                    (retention_date.isoformat(),),
+                deleted_app = self._delete_old_records(
+                    conn, "application_metrics", retention_date
                 )
-
-                deleted_app = result.rowcount
-
-                # Clean up old health checks
-                result = conn.execute(
-                    """
-                    DELETE FROM health_checks
-                    WHERE timestamp < ?
-                """,
-                    (retention_date.isoformat(),),
+                deleted_health = self._delete_old_records(
+                    conn, "health_checks", retention_date
                 )
-
-                deleted_health = result.rowcount
-
-                # Keep alerts for longer (90 days)
-                alert_retention_date = datetime.now() - timedelta(days=90)
-                result = conn.execute(
-                    """
-                    DELETE FROM alerts
-                    WHERE timestamp < ?
-                """,
-                    (alert_retention_date.isoformat(),),
+                # Alerts have longer retention (90 days)
+                deleted_alerts = self._delete_old_records(
+                    conn, "alerts", alert_retention_date
                 )
-
-                deleted_alerts = result.rowcount
 
                 logger.info(
-                    f"Cleaned up {deleted_system} system metrics, {deleted_app} app metrics, {deleted_health} health checks, {deleted_alerts} alerts"
+                    f"Cleaned up {deleted_system} system metrics, {deleted_app} app metrics, "
+                    f"{deleted_health} health checks, {deleted_alerts} alerts"
                 )
 
         except Exception as e:
