@@ -74,8 +74,9 @@ MAX_DUPLICATES_RETURNED = 0
 # Maximum blocks for O(n^2) similarity comparison
 # Issue #609: Exact hash matches have no limit (O(n) via hash grouping)
 # Similarity comparison is O(n^2), so we sample larger blocks for performance
-# 2000 blocks = ~2M comparisons, targets <20s runtime for similarity phase
-MAX_BLOCKS_FOR_SIMILARITY = 2000
+# 500 blocks = ~125K comparisons, targets <30s runtime for similarity phase
+# (Previous 2000 blocks = 2M+ comparisons was causing 60s timeouts)
+MAX_BLOCKS_FOR_SIMILARITY = 500
 
 
 # =============================================================================

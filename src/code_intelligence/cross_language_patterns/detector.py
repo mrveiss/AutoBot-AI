@@ -53,6 +53,11 @@ SIMILARITY_LOW = 0.50
 # ChromaDB collection name
 PATTERNS_COLLECTION = "cross_language_patterns"
 
+# Maximum patterns to process for semantic embedding (performance limit)
+# Processing 12K+ patterns with individual LLM calls would take hours
+# Sample the most significant patterns (DTOs, APIs, validators) first
+MAX_PATTERNS_FOR_EMBEDDING = 500
+
 
 class CrossLanguagePatternDetector:
     """
@@ -550,7 +555,17 @@ class CrossLanguagePatternDetector:
         prefix = "py_" if language == "python" else "ts_"
         result = []
 
-        for p in patterns:
+        # Limit patterns to process for performance (individual LLM calls are slow)
+        # Prioritize significant patterns: DTOs, APIs, validators over utility functions
+        patterns_to_process = self._prioritize_patterns_for_embedding(patterns)
+
+        if len(patterns_to_process) < len(patterns):
+            logger.info(
+                "Sampling %d of %d %s patterns for embedding",
+                len(patterns_to_process), len(patterns), language
+            )
+
+        for p in patterns_to_process:
             normalized = await self._normalize_pattern(p)
             embedding = await self._get_embedding(normalized)
             if embedding:
@@ -564,6 +579,43 @@ class CrossLanguagePatternDetector:
                 })
 
         return result
+
+    def _prioritize_patterns_for_embedding(self, patterns: List[Dict]) -> List[Dict]:
+        """
+        Prioritize patterns for embedding generation.
+
+        Returns up to MAX_PATTERNS_FOR_EMBEDDING patterns, prioritizing:
+        1. DTOs and type definitions
+        2. API endpoints and routes
+        3. Validators
+        4. Other patterns (by code length for significance)
+        """
+        from .models import PatternType
+
+        # Separate by priority
+        high_priority = []  # DTOs, APIs, Validators
+        normal_priority = []  # Everything else
+
+        for p in patterns:
+            pattern_type = p.get("type")
+            if pattern_type in (
+                PatternType.DTO_DEFINITION,
+                PatternType.API_ENDPOINT,
+                PatternType.VALIDATION_RULE,
+                PatternType.TYPE_ALIAS,
+            ):
+                high_priority.append(p)
+            else:
+                normal_priority.append(p)
+
+        # Sort normal priority by code length (longer = more significant)
+        normal_priority.sort(key=lambda x: len(x.get("code", "")), reverse=True)
+
+        # Combine with high priority first
+        combined = high_priority + normal_priority
+
+        # Apply limit
+        return combined[:MAX_PATTERNS_FOR_EMBEDDING]
 
     async def _store_patterns_in_chromadb(
         self,

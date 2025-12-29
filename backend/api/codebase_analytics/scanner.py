@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -56,6 +57,41 @@ from .analyzers import analyze_python_file, analyze_javascript_vue_file, analyze
 from .storage import get_code_collection_async, get_redis_connection
 
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# Dedicated Indexing Thread Pool (Issue #XXX: Prevent thread starvation)
+# =============================================================================
+# The indexing task needs its own thread pool to avoid being starved by
+# concurrent analytics requests (duplicates, hardcodes, etc.) that also use
+# the default executor. With 175k+ files, the default pool can be exhausted.
+_INDEXING_EXECUTOR: ThreadPoolExecutor | None = None
+_INDEXING_EXECUTOR_MAX_WORKERS = 4  # Dedicated threads for indexing operations
+
+
+def _get_indexing_executor() -> ThreadPoolExecutor:
+    """Get or create the dedicated indexing thread pool."""
+    global _INDEXING_EXECUTOR
+    if _INDEXING_EXECUTOR is None:
+        _INDEXING_EXECUTOR = ThreadPoolExecutor(
+            max_workers=_INDEXING_EXECUTOR_MAX_WORKERS,
+            thread_name_prefix="indexing_worker"
+        )
+        logger.info("Created dedicated indexing thread pool (%d workers)", _INDEXING_EXECUTOR_MAX_WORKERS)
+    return _INDEXING_EXECUTOR
+
+
+async def _run_in_indexing_thread(func, *args):
+    """Run a function in the dedicated indexing thread pool.
+
+    If no args are provided (e.g., when using a lambda), calls func directly.
+    Otherwise, calls func(*args).
+    """
+    loop = asyncio.get_running_loop()
+    executor = _get_indexing_executor()
+    if args:
+        return await loop.run_in_executor(executor, func, *args)
+    else:
+        return await loop.run_in_executor(executor, func)
 
 # =============================================================================
 # Configuration Constants (Issue #539: Configurable via environment variables)
@@ -168,8 +204,9 @@ async def _file_needs_reindex(
         return True, ""
 
     # Issue #619: Parallelize hash computation and Redis lookup
+    # Use dedicated indexing thread pool for file hash computation
     current_hash, stored_hash = await asyncio.gather(
-        asyncio.to_thread(_compute_file_hash, file_path),
+        _run_in_indexing_thread(_compute_file_hash, file_path),
         _get_stored_file_hash(redis_client, relative_path),
     )
 
@@ -189,20 +226,38 @@ def _should_count_file(file_path: Path) -> bool:
     return not any(skip_dir in file_path.parts for skip_dir in SKIP_DIRS)
 
 
-async def _count_scannable_files(root_path_obj: Path) -> int:
-    """Count files to be scanned for progress tracking (Issue #315: extracted)."""
-    # Issue #358 - avoid blocking (must use lambda to defer rglob execution)
-    all_files = await asyncio.to_thread(lambda: list(root_path_obj.rglob("*")))
-    total_files = 0
-    file_count = 0
-    for file_path in all_files:
-        if _should_count_file(file_path):
-            total_files += 1
-            file_count += 1
-            # Yield to event loop every 100 files during counting
-            if file_count % 100 == 0:
-                await asyncio.sleep(0)
-    return total_files
+def _count_scannable_files_sync(root_path_obj: Path) -> Tuple[int, list]:
+    """
+    Synchronous file counting - runs in thread pool.
+
+    Returns:
+        Tuple of (scannable_file_count, scannable_files_list).
+        Only returns files that should be scanned (not all files).
+    """
+    all_files = list(root_path_obj.rglob("*"))
+    # Filter to only scannable files to avoid iterating through 200K files
+    scannable_files = [f for f in all_files if _should_count_file(f)]
+    return len(scannable_files), scannable_files
+
+
+async def _count_scannable_files(root_path_obj: Path) -> Tuple[int, list]:
+    """
+    Count files to be scanned and return the file list for reuse.
+
+    Issue #315: extracted for progress tracking.
+    Issue #358: avoid blocking with dedicated thread pool.
+    Fixed: Run entire counting (including is_file checks) in thread pool.
+
+    Returns:
+        Tuple of (scannable_file_count, all_files_list) to avoid duplicate rglob.
+    """
+    logger.info("DEBUG: _count_scannable_files starting for %s", root_path_obj)
+    # Run entire counting operation in thread pool (rglob + is_file checks)
+    total_files, all_files = await _run_in_indexing_thread(
+        _count_scannable_files_sync, root_path_obj
+    )
+    logger.info("DEBUG: _count_scannable_files returned %d scannable, %d total files", total_files, len(all_files))
+    return total_files, all_files
 
 
 # Issue #398: File type mapping for cleaner dispatch in _get_file_analysis
@@ -295,11 +350,13 @@ Suggestion: {problem.get('suggestion', '')}
             "suggestion": problem.get("suggestion", ""),
         }
 
-        await asyncio.to_thread(
-            collection.add,
-            ids=[f"problem_{problem_idx}_{problem.get('type', 'unknown')}"],
-            documents=[problem_doc],
-            metadatas=[metadata],
+        # Use dedicated indexing thread pool for ChromaDB operations
+        await _run_in_indexing_thread(
+            lambda: collection.add(
+                ids=[f"problem_{problem_idx}_{problem.get('type', 'unknown')}"],
+                documents=[problem_doc],
+                metadatas=[metadata],
+            )
         )
     except Exception as e:
         logger.debug("Failed to store problem immediately: %s", e)
@@ -1087,7 +1144,8 @@ async def _process_single_file(
     Returns:
         Tuple of (was_processed: bool, was_skipped_unchanged: bool)
     """
-    is_file = await asyncio.to_thread(file_path.is_file)
+    # Use dedicated indexing thread pool for file checks
+    is_file = await _run_in_indexing_thread(file_path.is_file)
     if not is_file:
         return False, False
     if any(skip_dir in file_path.parts for skip_dir in SKIP_DIRS):
@@ -1183,14 +1241,27 @@ async def scan_codebase(
     try:
         root_path_obj = Path(root_path)
         total_files = 0
+        all_files = []
+        logger.info("DEBUG: scan_codebase starting for %s", root_path)
         if progress_callback:
-            total_files = await _count_scannable_files(root_path_obj)
+            logger.info("DEBUG: about to call _count_scannable_files")
+            # Get both count and file list to avoid duplicate rglob
+            total_files, all_files = await _count_scannable_files(root_path_obj)
+            logger.info("DEBUG: Got %d scannable files from %d total files", total_files, len(all_files))
+            logger.info("DEBUG: About to call progress_callback for scan init")
             await progress_callback(
                 operation="Scanning files", current=0,
                 total=total_files, current_file="Initializing..."
             )
+            logger.info("DEBUG: progress_callback returned, about to iterate")
+        else:
+            # No progress callback - still need file list but skip counting
+            logger.info("DEBUG: No progress callback, doing direct rglob")
+            all_files = await _run_in_indexing_thread(lambda: list(root_path_obj.rglob("*")))
+            logger.info("DEBUG: Direct rglob returned %d files", len(all_files))
 
-        all_files = await asyncio.to_thread(lambda: list(root_path_obj.rglob("*")))
+        # all_files is now already populated - no second rglob needed
+        logger.info("DEBUG: Starting _iterate_and_process_files with %d files", len(all_files))
         files_processed, files_skipped = await _iterate_and_process_files(
             all_files, root_path_obj, analysis_results,
             immediate_store_collection, progress_callback, total_files,

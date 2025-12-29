@@ -231,7 +231,7 @@ class AnalyticsConfig:
 
     # Bug prediction timeouts (seconds)
     BUG_PREDICTION_TIMEOUT = 120.0  # Extended timeout for large codebases
-    DUPLICATE_DETECTION_TIMEOUT = 60.0  # Timeout for duplicate code analysis
+    DUPLICATE_DETECTION_TIMEOUT = 120.0  # Timeout for duplicate code analysis (increased from 60s)
 
     # Analysis file limits (0 = no limit, scan all files)
     BUG_PREDICTION_FILE_LIMIT = 0  # No limit on files to analyze
