@@ -626,11 +626,12 @@ async def consolidated_terminal_websocket(websocket: WebSocket, session_id: str)
         conversation_id = config.get("conversation_id")  # For chat/terminal linking
 
         # Get Redis client for TerminalLogger
+        # Issue #666: Use async Redis client since TerminalLogger uses await with Redis ops
         redis_client = None
         try:
-            from backend.dependencies import get_redis_client
+            from backend.dependencies import get_async_redis_client
 
-            redis_client = get_redis_client()
+            redis_client = await get_async_redis_client(database="main")
         except Exception as e:
             logger.warning("Could not get Redis client for terminal logging: %s", e)
 

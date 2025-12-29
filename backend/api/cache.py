@@ -112,12 +112,14 @@ async def get_cache_stats():
         }
 
         # Get Redis stats for each database
+        # Issue #666: Wrap blocking Redis calls in asyncio.to_thread
         total_keys = 0
         for db_name, db_number in REDIS_DATABASES.items():
             try:
                 redis_conn = get_redis_connection(db_name)
-                db_info = redis_conn.info()
-                key_count = redis_conn.dbsize()
+                # Issue #666: Use asyncio.to_thread to avoid blocking event loop
+                db_info = await asyncio.to_thread(redis_conn.info)
+                key_count = await asyncio.to_thread(redis_conn.dbsize)
 
                 stats["redis_databases"][db_name] = {
                     "database": db_number,
@@ -163,8 +165,11 @@ async def clear_redis_cache(database: str):
 
         if database == "all":
             # Clear all Redis databases using helper (Issue #315)
+            # Issue #666: Wrap blocking sync function in asyncio.to_thread
             for db_name, db_number in REDIS_DATABASES.items():
-                result = _clear_single_redis_database(db_name, db_number)
+                result = await asyncio.to_thread(
+                    _clear_single_redis_database, db_name, db_number
+                )
                 cleared_databases.append(result)
         else:
             # Clear specific database
@@ -179,8 +184,9 @@ async def clear_redis_cache(database: str):
 
             db_number = REDIS_DATABASES[database]
             redis_conn = get_redis_connection(database)
-            keys_before = redis_conn.dbsize()
-            redis_conn.flushdb()
+            # Issue #666: Use asyncio.to_thread to avoid blocking event loop
+            keys_before = await asyncio.to_thread(redis_conn.dbsize)
+            await asyncio.to_thread(redis_conn.flushdb)
 
             cleared_databases.append(
                 {"name": database, "database": db_number, "keys_cleared": keys_before}
