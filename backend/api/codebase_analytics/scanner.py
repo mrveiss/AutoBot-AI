@@ -419,9 +419,11 @@ async def _get_file_analysis(file_path: Path, extension: str, stats: dict) -> Op
             if analyzer_type == "python":
                 return await analyze_python_file(str(file_path))
             elif analyzer_type == "js":
-                return analyze_javascript_vue_file(str(file_path))
+                # Issue #666: Wrap blocking file I/O in asyncio.to_thread
+                return await asyncio.to_thread(analyze_javascript_vue_file, str(file_path))
             elif analyzer_type == "doc":
-                return analyze_documentation_file(str(file_path))
+                # Issue #666: Wrap blocking file I/O in asyncio.to_thread
+                return await asyncio.to_thread(analyze_documentation_file, str(file_path))
             return None
 
     stats["other_files"] += 1
@@ -1023,6 +1025,97 @@ async def _store_single_batch(
     return items_in_batch
 
 
+async def _precompute_embeddings(
+    batch_documents: list, task_id: str, update_progress, update_phase
+) -> Optional[List[List[float]]]:
+    """
+    Pre-compute embeddings for documents before storage.
+
+    Issue #665: Extracted from _store_batches_to_chromadb for single responsibility.
+    Issue #660: Original embedding pre-computation logic.
+
+    Returns:
+        List of embeddings if successful, None otherwise.
+    """
+    if CHROMADB_EMBEDDING_MODE != "precompute":
+        if CHROMADB_EMBEDDING_MODE == "skip":
+            logger.info("[Task %s] Skipping pre-computed embeddings (mode=skip)", task_id)
+        return None
+
+    update_phase("embed", "running")
+    await update_progress(
+        operation="Generating embeddings", current=0, total=len(batch_documents),
+        current_file="Pre-computing embeddings...", phase="embed",
+    )
+
+    try:
+        batch_embeddings = await _generate_batch_embeddings(batch_documents)
+
+        if len(batch_embeddings) != len(batch_documents):
+            logger.error(
+                "[Task %s] Embedding count mismatch: %d embeddings for %d documents",
+                task_id, len(batch_embeddings), len(batch_documents)
+            )
+            batch_embeddings = None
+        else:
+            logger.info(
+                "[Task %s] Pre-computed %d embeddings (mode=%s)",
+                task_id, len(batch_embeddings), CHROMADB_EMBEDDING_MODE
+            )
+    except Exception as e:
+        logger.warning(
+            "[Task %s] Embedding pre-computation failed, falling back to auto: %s",
+            task_id, e
+        )
+        batch_embeddings = None
+
+    update_phase("embed", "completed")
+    return batch_embeddings
+
+
+async def _process_batches_parallel(
+    code_collection, batch_ids: list, batch_documents: list, batch_metadatas: list,
+    batch_indices: list, batch_size: int, parallel_count: int,
+    total_batches: int, total_items: int, task_id: str,
+    update_progress, update_stats, batch_embeddings: Optional[List[List[float]]],
+) -> int:
+    """
+    Process batches with parallel execution.
+
+    Issue #665: Extracted from _store_batches_to_chromadb for single responsibility.
+    Issue #539: Original parallel batch processing logic.
+
+    Returns:
+        Total number of items stored.
+    """
+    items_stored = 0
+
+    for group_start in range(0, len(batch_indices), parallel_count):
+        group_end = min(group_start + parallel_count, len(batch_indices))
+        parallel_tasks = []
+
+        for idx in range(group_start, group_end):
+            i = batch_indices[idx]
+            batch_num = idx + 1
+            task = _store_single_batch(
+                code_collection, batch_ids, batch_documents, batch_metadatas,
+                i, batch_size, batch_num, total_batches, total_items,
+                task_id, update_progress, update_stats,
+                batch_embeddings=batch_embeddings,
+            )
+            parallel_tasks.append(task)
+
+        results = await asyncio.gather(*parallel_tasks, return_exceptions=True)
+
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error("[Task %s] Batch storage error: %s", task_id, result)
+            else:
+                items_stored += result
+
+    return items_stored
+
+
 async def _store_batches_to_chromadb(
     code_collection, batch_ids: list, batch_documents: list, batch_metadatas: list,
     task_id: str, update_progress, update_phase, update_batch_info, update_stats,
@@ -1033,60 +1126,22 @@ async def _store_batches_to_chromadb(
     Issue #281, #398: refactored
     Issue #539: Added configurable batch size and parallel processing
     Issue #660: Added pre-computed embeddings for 5-10x speedup
+    Issue #665: Refactored to extract helper methods.
 
     Configuration via environment variables:
         CODEBASE_INDEX_BATCH_SIZE: Items per batch (default: 5000)
         CODEBASE_INDEX_PARALLEL_BATCHES: Concurrent batches (default: 1)
         CODEBASE_INDEX_EMBEDDING_MODE: "precompute", "auto", or "skip" (default: precompute)
     """
-    # Issue #660: Pre-compute embeddings before storage for 5-10x speedup
-    batch_embeddings = None
-    if CHROMADB_EMBEDDING_MODE == "precompute":
-        update_phase("embed", "running")
-        await update_progress(
-            operation="Generating embeddings", current=0, total=len(batch_documents),
-            current_file="Pre-computing embeddings...", phase="embed",
-        )
-
-        try:
-            batch_embeddings = await _generate_batch_embeddings(batch_documents)
-
-            # Issue #660: Validate embedding count matches document count
-            if len(batch_embeddings) != len(batch_documents):
-                logger.error(
-                    "[Task %s] Embedding count mismatch: %d embeddings for %d documents",
-                    task_id, len(batch_embeddings), len(batch_documents)
-                )
-                batch_embeddings = None
-            else:
-                logger.info(
-                    "[Task %s] Pre-computed %d embeddings (mode=%s)",
-                    task_id, len(batch_embeddings), CHROMADB_EMBEDDING_MODE
-                )
-        except Exception as e:
-            logger.warning(
-                "[Task %s] Embedding pre-computation failed, falling back to auto: %s",
-                task_id, e
-            )
-            batch_embeddings = None
-
-        update_phase("embed", "completed")
-
-    elif CHROMADB_EMBEDDING_MODE == "skip":
-        # Skip embeddings entirely - ChromaDB will use default embedding function
-        # Note: Not using zero vectors as that would pollute semantic search
-        logger.info("[Task %s] Skipping pre-computed embeddings (mode=skip)", task_id)
-        batch_embeddings = None  # Let ChromaDB handle it
-
-    # If mode is "auto" or precompute failed, batch_embeddings stays None
-    # and ChromaDB will generate embeddings on-the-fly (slower but reliable)
+    # Pre-compute embeddings if configured
+    batch_embeddings = await _precompute_embeddings(
+        batch_documents, task_id, update_progress, update_phase
+    )
 
     update_phase("store", "running")
 
-    # Issue #539: Use configurable batch size
     batch_size = CHROMADB_BATCH_SIZE
     parallel_count = PARALLEL_BATCH_COUNT
-
     total_items = len(batch_ids)
     total_batches = (total_items + batch_size - 1) // batch_size
 
@@ -1103,43 +1158,24 @@ async def _store_batches_to_chromadb(
         batch_info={"current": 0, "total": total_batches, "items": 0}
     )
 
-    items_stored = 0
     batch_indices = list(range(0, total_items, batch_size))
 
     if parallel_count > 1:
-        # Issue #539: Parallel batch processing
-        for group_start in range(0, len(batch_indices), parallel_count):
-            group_end = min(group_start + parallel_count, len(batch_indices))
-            parallel_tasks = []
-
-            for idx in range(group_start, group_end):
-                i = batch_indices[idx]
-                batch_num = idx + 1
-                task = _store_single_batch(
-                    code_collection, batch_ids, batch_documents, batch_metadatas,
-                    i, batch_size, batch_num, total_batches, total_items,
-                    task_id, update_progress, update_stats,
-                    batch_embeddings=batch_embeddings,  # Issue #660
-                )
-                parallel_tasks.append(task)
-
-            # Execute parallel batches
-            results = await asyncio.gather(*parallel_tasks, return_exceptions=True)
-
-            for result in results:
-                if isinstance(result, Exception):
-                    logger.error("[Task %s] Batch storage error: %s", task_id, result)
-                else:
-                    items_stored += result
+        items_stored = await _process_batches_parallel(
+            code_collection, batch_ids, batch_documents, batch_metadatas,
+            batch_indices, batch_size, parallel_count,
+            total_batches, total_items, task_id,
+            update_progress, update_stats, batch_embeddings,
+        )
     else:
-        # Sequential processing (default behavior)
+        items_stored = 0
         for i in range(0, total_items, batch_size):
             batch_num = i // batch_size + 1
             items_stored += await _store_single_batch(
                 code_collection, batch_ids, batch_documents, batch_metadatas,
                 i, batch_size, batch_num, total_batches, total_items,
                 task_id, update_progress, update_stats,
-                batch_embeddings=batch_embeddings,  # Issue #660
+                batch_embeddings=batch_embeddings,
             )
 
     update_phase("store", "completed")

@@ -86,6 +86,122 @@ class HierarchicalAgent:
             context.parent_id[:8] if context.parent_id and len(context.parent_id) > 8 else context.parent_id,
         )
 
+    def _validate_delegation_depth(self) -> None:
+        """
+        Validate that delegation depth allows further delegation.
+
+        Issue #665: Extracted from delegate() for single responsibility.
+
+        Raises:
+            RepairableException: If max delegation depth exceeded
+        """
+        if not self.context.can_delegate():
+            raise RepairableException(
+                message=f"Maximum delegation depth ({self.context.max_depth}) reached",
+                suggestion="Complete this task directly instead of delegating further",
+            )
+
+    def _create_subordinate(
+        self, subordinate_id: str, task: str, reason: str
+    ) -> tuple["HierarchicalAgent", "AgentContext"]:
+        """
+        Create a subordinate agent with its context.
+
+        Issue #665: Extracted from delegate() for single responsibility.
+
+        Args:
+            subordinate_id: UUID for the new subordinate
+            task: Task description (for logging)
+            reason: Delegation reason (for logging)
+
+        Returns:
+            Tuple of (subordinate agent, subordinate context)
+
+        Raises:
+            RepairableException: If subordinate context creation fails
+        """
+        try:
+            sub_context = self.context.create_subordinate_context(subordinate_id)
+        except ValueError as e:
+            raise RepairableException(
+                message=str(e),
+                suggestion="Complete this task directly instead of delegating further",
+            )
+
+        subordinate = HierarchicalAgent(
+            context=sub_context,
+            task_callback=self.task_callback,
+        )
+        self.subordinates[subordinate_id] = subordinate
+
+        logger.info(
+            "[Issue #657] Agent %s delegating to %s: %s (reason: %s)",
+            self.context.agent_id[:8],
+            subordinate_id[:8],
+            task[:100],
+            reason,
+        )
+
+        return subordinate, sub_context
+
+    async def _execute_sync_delegation(
+        self,
+        subordinate: "HierarchicalAgent",
+        subordinate_id: str,
+        task: str,
+        sub_context: "AgentContext",
+        start_time: float,
+    ) -> DelegationResult:
+        """
+        Execute delegation synchronously and wait for result.
+
+        Issue #665: Extracted from delegate() for single responsibility.
+        """
+        import time
+
+        result = await subordinate.execute(task)
+        execution_time = time.time() - start_time
+
+        logger.info(
+            "[Issue #657] Subordinate %s completed in %.2fs",
+            subordinate_id[:8],
+            execution_time,
+        )
+
+        return DelegationResult(
+            agent_id=subordinate_id,
+            task=task,
+            result=result,
+            success=True,
+            execution_time=execution_time,
+            metadata={"level": sub_context.level},
+        )
+
+    def _execute_async_delegation(
+        self,
+        subordinate: "HierarchicalAgent",
+        subordinate_id: str,
+        task: str,
+        sub_context: "AgentContext",
+    ) -> DelegationResult:
+        """
+        Start delegation in background (fire and forget).
+
+        Issue #665: Extracted from delegate() for single responsibility.
+        """
+        asyncio.create_task(subordinate.execute(task))
+
+        return DelegationResult(
+            agent_id=subordinate_id,
+            task=task,
+            result="Task started in background",
+            success=True,
+            metadata={
+                "level": sub_context.level,
+                "async": True,
+            },
+        )
+
     async def delegate(
         self,
         task: str,
@@ -98,6 +214,8 @@ class HierarchicalAgent:
         Creates a new subordinate agent to handle the specified task.
         The subordinate operates with its own context and can further
         delegate if needed (up to max_depth).
+
+        Issue #665: Refactored to extract helper methods.
 
         Args:
             task: Task description for the subordinate
@@ -114,36 +232,13 @@ class HierarchicalAgent:
 
         start_time = time.time()
 
-        # Check delegation depth
-        if not self.context.can_delegate():
-            raise RepairableException(
-                message=f"Maximum delegation depth ({self.context.max_depth}) reached",
-                suggestion="Complete this task directly instead of delegating further",
-            )
-
-        # Create subordinate context
-        subordinate_id = str(uuid.uuid4())
-        try:
-            sub_context = self.context.create_subordinate_context(subordinate_id)
-        except ValueError as e:
-            raise RepairableException(
-                message=str(e),
-                suggestion="Complete this task directly instead of delegating further",
-            )
+        # Validate delegation is allowed
+        self._validate_delegation_depth()
 
         # Create subordinate agent
-        subordinate = HierarchicalAgent(
-            context=sub_context,
-            task_callback=self.task_callback,
-        )
-        self.subordinates[subordinate_id] = subordinate
-
-        logger.info(
-            "[Issue #657] Agent %s delegating to %s: %s (reason: %s)",
-            self.context.agent_id[:8],
-            subordinate_id[:8],
-            task[:100],
-            reason,
+        subordinate_id = str(uuid.uuid4())
+        subordinate, sub_context = self._create_subordinate(
+            subordinate_id, task, reason
         )
 
         # Record delegation in history
@@ -157,39 +252,12 @@ class HierarchicalAgent:
 
         try:
             if wait_for_result:
-                # Execute task synchronously and wait
-                result = await subordinate.execute(task)
-                execution_time = time.time() - start_time
-
-                delegation_result = DelegationResult(
-                    agent_id=subordinate_id,
-                    task=task,
-                    result=result,
-                    success=True,
-                    execution_time=execution_time,
-                    metadata={"level": sub_context.level},
+                return await self._execute_sync_delegation(
+                    subordinate, subordinate_id, task, sub_context, start_time
                 )
-
-                logger.info(
-                    "[Issue #657] Subordinate %s completed in %.2fs",
-                    subordinate_id[:8],
-                    execution_time,
-                )
-
-                return delegation_result
             else:
-                # Start task in background (fire and forget)
-                asyncio.create_task(subordinate.execute(task))
-
-                return DelegationResult(
-                    agent_id=subordinate_id,
-                    task=task,
-                    result="Task started in background",
-                    success=True,
-                    metadata={
-                        "level": sub_context.level,
-                        "async": True,
-                    },
+                return self._execute_async_delegation(
+                    subordinate, subordinate_id, task, sub_context
                 )
 
         except Exception as e:

@@ -703,6 +703,80 @@ class ToolHandlerMixin:
             suggestion="Check the error details and try an alternative approach",
         )
 
+    def _handle_respond_tool(
+        self, tool_call: Dict[str, Any]
+    ) -> tuple[WorkflowMessage, bool, str]:
+        """
+        Handle the 'respond' tool for explicit task completion.
+
+        Issue #665: Extracted from _process_tool_calls for single responsibility.
+        Issue #654: Original respond tool handling logic.
+
+        Returns:
+            Tuple of (message, break_loop_requested, respond_content)
+        """
+        params = tool_call.get("params", {})
+        respond_content = params.get("text", params.get("content", ""))
+        break_loop_requested = params.get("break_loop", True)
+
+        logger.info(
+            "[Issue #654] Respond tool invoked: break_loop=%s, content_len=%d",
+            break_loop_requested, len(respond_content)
+        )
+
+        message = WorkflowMessage(
+            type="response",
+            content=respond_content,
+            metadata={
+                "message_type": "respond_tool",
+                "break_loop": break_loop_requested,
+                "explicit_completion": True,
+            },
+        )
+
+        return message, break_loop_requested, respond_content
+
+    def _handle_delegate_tool(
+        self, tool_call: Dict[str, Any], execution_results: List[Dict[str, Any]]
+    ) -> WorkflowMessage:
+        """
+        Handle the 'delegate' tool for subordinate agent delegation.
+
+        Issue #665: Extracted from _process_tool_calls for single responsibility.
+        Issue #657: Original delegate tool handling logic.
+
+        Returns:
+            WorkflowMessage for delegation status
+        """
+        params = tool_call.get("params", {})
+        task = params.get("task", "")
+        reason = params.get("reason", "Task delegation")
+        wait_for_result = params.get("wait_for_result", True)
+
+        logger.info(
+            "[Issue #657] Delegate tool invoked: task=%s, reason=%s",
+            task[:100], reason
+        )
+
+        # Record delegation for manager to process
+        execution_results.append({
+            "tool": "delegate",
+            "task": task,
+            "reason": reason,
+            "wait_for_result": wait_for_result,
+            "status": "pending_delegation",
+        })
+
+        return WorkflowMessage(
+            type="delegation",
+            content=f"Delegating subtask: {task[:100]}...",
+            metadata={
+                "message_type": "delegate_tool",
+                "reason": reason,
+                "task": task,
+            },
+        )
+
     async def _process_tool_calls(
         self,
         tool_calls: List[Dict[str, Any]],
@@ -715,6 +789,7 @@ class ToolHandlerMixin:
 
         Issue #315: Refactored to use helper methods for reduced nesting.
         Issue #654: Added support for 'respond' tool with break_loop pattern.
+        Issue #665: Refactored to extract tool-specific handlers.
 
         Yields:
             WorkflowMessage for each stage of execution
@@ -729,59 +804,15 @@ class ToolHandlerMixin:
         for tool_call in tool_calls:
             tool_name = tool_call["name"]
 
-            # Issue #654: Handle 'respond' tool for explicit task completion
             if tool_name == "respond":
-                params = tool_call.get("params", {})
-                respond_content = params.get("text", params.get("content", ""))
-                break_loop_requested = params.get("break_loop", True)
-                logger.info(
-                    "[Issue #654] Respond tool invoked: break_loop=%s, content_len=%d",
-                    break_loop_requested, len(respond_content)
+                msg, break_loop_requested, respond_content = self._handle_respond_tool(
+                    tool_call
                 )
-                # Yield the final response message
-                yield WorkflowMessage(
-                    type="response",
-                    content=respond_content,
-                    metadata={
-                        "message_type": "respond_tool",
-                        "break_loop": break_loop_requested,
-                        "explicit_completion": True,
-                    },
-                )
+                yield msg
                 continue
 
-            # Issue #657: Handle 'delegate' tool for subordinate agent delegation
             if tool_name == "delegate":
-                params = tool_call.get("params", {})
-                task = params.get("task", "")
-                reason = params.get("reason", "Task delegation")
-                wait_for_result = params.get("wait_for_result", True)
-
-                logger.info(
-                    "[Issue #657] Delegate tool invoked: task=%s, reason=%s",
-                    task[:100], reason
-                )
-
-                # Yield status message
-                yield WorkflowMessage(
-                    type="delegation",
-                    content=f"Delegating subtask: {task[:100]}...",
-                    metadata={
-                        "message_type": "delegate_tool",
-                        "reason": reason,
-                        "task": task,
-                    },
-                )
-
-                # Note: Actual delegation happens in manager.py with HierarchicalAgent
-                # Here we just record the delegation request for the manager to process
-                execution_results.append({
-                    "tool": "delegate",
-                    "task": task,
-                    "reason": reason,
-                    "wait_for_result": wait_for_result,
-                    "status": "pending_delegation",
-                })
+                yield self._handle_delegate_tool(tool_call, execution_results)
                 continue
 
             if tool_name != "execute_command":
