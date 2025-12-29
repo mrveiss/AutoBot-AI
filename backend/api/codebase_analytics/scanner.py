@@ -66,17 +66,21 @@ logger = logging.getLogger(__name__)
 # the default executor. With 175k+ files, the default pool can be exhausted.
 _INDEXING_EXECUTOR: ThreadPoolExecutor | None = None
 _INDEXING_EXECUTOR_MAX_WORKERS = 4  # Dedicated threads for indexing operations
+_INDEXING_EXECUTOR_LOCK = threading.Lock()  # Issue #662: Thread-safe initialization
 
 
 def _get_indexing_executor() -> ThreadPoolExecutor:
-    """Get or create the dedicated indexing thread pool."""
+    """Get or create the dedicated indexing thread pool (thread-safe)."""
     global _INDEXING_EXECUTOR
     if _INDEXING_EXECUTOR is None:
-        _INDEXING_EXECUTOR = ThreadPoolExecutor(
-            max_workers=_INDEXING_EXECUTOR_MAX_WORKERS,
-            thread_name_prefix="indexing_worker"
-        )
-        logger.info("Created dedicated indexing thread pool (%d workers)", _INDEXING_EXECUTOR_MAX_WORKERS)
+        with _INDEXING_EXECUTOR_LOCK:
+            # Double-check after acquiring lock
+            if _INDEXING_EXECUTOR is None:
+                _INDEXING_EXECUTOR = ThreadPoolExecutor(
+                    max_workers=_INDEXING_EXECUTOR_MAX_WORKERS,
+                    thread_name_prefix="indexing_worker"
+                )
+                logger.info("Created dedicated indexing thread pool (%d workers)", _INDEXING_EXECUTOR_MAX_WORKERS)
     return _INDEXING_EXECUTOR
 
 

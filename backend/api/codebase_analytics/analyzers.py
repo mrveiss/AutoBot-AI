@@ -9,6 +9,7 @@ import ast
 import json
 import logging
 import re
+import threading
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Set
 
@@ -21,6 +22,9 @@ from src.llm_interface import LLMInterface
 logger = logging.getLogger(__name__)
 
 # Code intelligence analyzers (Issue #268)
+# Issue #662: Thread-safe locks for analyzer singletons
+_analyzers_lock = threading.Lock()
+
 try:
     from src.code_intelligence.anti_pattern_detector import AntiPatternDetector
     from src.code_intelligence.performance_analyzer import PerformanceAnalyzer
@@ -769,13 +773,16 @@ def _detect_technical_debt_in_line(
 
 
 def _run_anti_pattern_analysis(file_path: str) -> List[Dict]:
-    """Run anti-pattern detection (Issue #398: extracted)."""
+    """Run anti-pattern detection (Issue #398: extracted, Issue #662: thread-safe)."""
     global _anti_pattern_detector
 
     problems = []
     try:
         if _anti_pattern_detector is None:
-            _anti_pattern_detector = AntiPatternDetector()
+            with _analyzers_lock:
+                # Double-check after acquiring lock
+                if _anti_pattern_detector is None:
+                    _anti_pattern_detector = AntiPatternDetector()
         result = _anti_pattern_detector.analyze_file(file_path)
         for pattern in result.get("patterns", []):
             problems.append({
@@ -791,13 +798,16 @@ def _run_anti_pattern_analysis(file_path: str) -> List[Dict]:
 
 
 def _run_performance_analysis(file_path: str) -> List[Dict]:
-    """Run performance analysis (Issue #398: extracted)."""
+    """Run performance analysis (Issue #398: extracted, Issue #662: thread-safe)."""
     global _performance_analyzer
 
     problems = []
     try:
         if _performance_analyzer is None:
-            _performance_analyzer = PerformanceAnalyzer()
+            with _analyzers_lock:
+                # Double-check after acquiring lock
+                if _performance_analyzer is None:
+                    _performance_analyzer = PerformanceAnalyzer()
         perf_issues = _performance_analyzer.analyze_file(file_path)
         for issue in perf_issues:
             problems.append({
@@ -813,18 +823,21 @@ def _run_performance_analysis(file_path: str) -> List[Dict]:
 
 
 def _run_bug_prediction(file_path: str) -> List[Dict]:
-    """Run bug prediction analysis (Issue #398: extracted)."""
+    """Run bug prediction analysis (Issue #398: extracted, Issue #662: thread-safe)."""
     global _bug_predictor
 
     problems = []
     try:
         if _bug_predictor is None:
-            project_root = Path(file_path).parent
-            while project_root.parent != project_root:
-                if (project_root / ".git").exists():
-                    break
-                project_root = project_root.parent
-            _bug_predictor = BugPredictor(str(project_root))
+            with _analyzers_lock:
+                # Double-check after acquiring lock
+                if _bug_predictor is None:
+                    project_root = Path(file_path).parent
+                    while project_root.parent != project_root:
+                        if (project_root / ".git").exists():
+                            break
+                        project_root = project_root.parent
+                    _bug_predictor = BugPredictor(str(project_root))
 
         risk_assessment = _bug_predictor.analyze_file(file_path)
         if risk_assessment.overall_risk >= 70:

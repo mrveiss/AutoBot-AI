@@ -11,6 +11,7 @@ SSOT Migration (Issue #639):
 """
 
 import os
+import threading
 from typing import Any, Dict
 
 from src.constants.model_constants import ModelConstants
@@ -26,15 +27,19 @@ def _get_ssot_config():
         return None
 
 
-# Module-level SSOT reference (lazy loaded)
+# Module-level SSOT reference (lazy loaded, Issue #662: thread-safe)
 _ssot = None
+_ssot_lock = threading.Lock()
 
 
 def _get_ssot():
-    """Get or create SSOT singleton reference."""
+    """Get or create SSOT singleton reference (thread-safe)."""
     global _ssot
     if _ssot is None:
-        _ssot = _get_ssot_config()
+        with _ssot_lock:
+            # Double-check after acquiring lock
+            if _ssot is None:
+                _ssot = _get_ssot_config()
     return _ssot
 
 

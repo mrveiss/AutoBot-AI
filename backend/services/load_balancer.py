@@ -701,8 +701,9 @@ class NPULoadBalancer:
 # GLOBAL INSTANCE
 # ==============================================
 
-# Global load balancer instance (can be configured via environment or config)
+# Global load balancer instance with thread-safe initialization (Issue #662)
 _global_load_balancer: Optional[NPULoadBalancer] = None
+_load_balancer_lock = threading.Lock()
 
 
 def get_load_balancer(
@@ -712,7 +713,7 @@ def get_load_balancer(
     circuit_breaker_timeout: int = 300,
 ) -> NPULoadBalancer:
     """
-    Get or create global load balancer instance.
+    Get or create global load balancer instance (thread-safe).
 
     Args:
         strategy: Load balancing strategy
@@ -725,10 +726,13 @@ def get_load_balancer(
     """
     global _global_load_balancer
     if _global_load_balancer is None:
-        _global_load_balancer = NPULoadBalancer(
-            strategy=strategy,
-            health_check_interval=health_check_interval,
-            circuit_breaker_threshold=circuit_breaker_threshold,
-            circuit_breaker_timeout=circuit_breaker_timeout,
-        )
+        with _load_balancer_lock:
+            # Double-check after acquiring lock
+            if _global_load_balancer is None:
+                _global_load_balancer = NPULoadBalancer(
+                    strategy=strategy,
+                    health_check_interval=health_check_interval,
+                    circuit_breaker_threshold=circuit_breaker_threshold,
+                    circuit_breaker_timeout=circuit_breaker_timeout,
+                )
     return _global_load_balancer

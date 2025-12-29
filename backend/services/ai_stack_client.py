@@ -624,17 +624,21 @@ class AIStackClient:
         )
 
 
-# Global AI Stack client instance
+# Global AI Stack client instance with thread-safe initialization (Issue #662)
 _ai_stack_client: Optional[AIStackClient] = None
+_ai_stack_client_lock = asyncio.Lock()
 
 
 async def get_ai_stack_client() -> AIStackClient:
-    """Get or create global AI Stack client instance."""
+    """Get or create global AI Stack client instance (thread-safe)."""
     global _ai_stack_client
 
     if _ai_stack_client is None:
-        _ai_stack_client = AIStackClient()
-        await _ai_stack_client.connect()
+        async with _ai_stack_client_lock:
+            # Double-check after acquiring lock
+            if _ai_stack_client is None:
+                _ai_stack_client = AIStackClient()
+                await _ai_stack_client.connect()
 
     return _ai_stack_client
 

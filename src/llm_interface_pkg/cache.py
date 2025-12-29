@@ -14,6 +14,7 @@ Provides significant performance improvements:
 import asyncio
 import json
 import logging
+import threading
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -336,17 +337,17 @@ class LLMResponseCache:
         return {"l1_cleared": l1_count, "l2_cleared": l2_count}
 
 
-# Global cache instance with thread-safe initialization
+# Global cache instance with thread-safe initialization (Issue #662)
 _llm_response_cache: Optional[LLMResponseCache] = None
 _cache_init_lock = asyncio.Lock()
+_cache_sync_lock = threading.Lock()  # Issue #662: Thread-safe sync initialization
 
 
 def get_llm_cache() -> LLMResponseCache:
     """
-    Get or create the global LLM response cache instance.
+    Get or create the global LLM response cache instance (thread-safe).
 
-    Note: This uses a simple check-then-create pattern which is safe for
-    the singleton initialization case since the object is immutable once created.
+    Issue #662: Now uses double-checked locking for thread safety.
     For async contexts needing guaranteed single initialization, use get_llm_cache_async().
 
     Returns:
@@ -354,7 +355,10 @@ def get_llm_cache() -> LLMResponseCache:
     """
     global _llm_response_cache
     if _llm_response_cache is None:
-        _llm_response_cache = LLMResponseCache()
+        with _cache_sync_lock:
+            # Double-check after acquiring lock
+            if _llm_response_cache is None:
+                _llm_response_cache = LLMResponseCache()
     return _llm_response_cache
 
 

@@ -9,6 +9,7 @@ hook invocations across all registered extensions.
 """
 
 import logging
+import threading
 from typing import Any, Dict, List, Optional, Type
 
 from src.extensions.base import Extension, HookContext
@@ -371,24 +372,29 @@ class ExtensionManager:
         return [e.name for e in self.extensions]
 
 
-# Singleton instance for global access
+# Singleton instance for global access (Issue #662: thread-safe)
 _global_manager: Optional[ExtensionManager] = None
+_global_manager_lock = threading.Lock()
 
 
 def get_extension_manager() -> ExtensionManager:
     """
-    Get the global extension manager instance.
+    Get the global extension manager instance (thread-safe).
 
     Returns:
         Global ExtensionManager singleton
     """
     global _global_manager
     if _global_manager is None:
-        _global_manager = ExtensionManager()
+        with _global_manager_lock:
+            # Double-check after acquiring lock
+            if _global_manager is None:
+                _global_manager = ExtensionManager()
     return _global_manager
 
 
 def reset_extension_manager() -> None:
     """Reset the global extension manager (for testing)."""
     global _global_manager
-    _global_manager = None
+    with _global_manager_lock:
+        _global_manager = None

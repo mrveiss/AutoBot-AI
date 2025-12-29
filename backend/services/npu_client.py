@@ -19,6 +19,7 @@ Usage:
 import asyncio
 import logging
 import os
+import threading
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -243,15 +244,19 @@ class NPUClient:
         return None
 
 
-# Global client instance
+# Global client instance with thread-safe initialization (Issue #662)
 _npu_client: Optional[NPUClient] = None
+_npu_client_lock = threading.Lock()
 
 
 def get_npu_client() -> NPUClient:
-    """Get or create global NPU client instance"""
+    """Get or create global NPU client instance (thread-safe)."""
     global _npu_client
     if _npu_client is None:
-        _npu_client = NPUClient()
+        with _npu_client_lock:
+            # Double-check after acquiring lock
+            if _npu_client is None:
+                _npu_client = NPUClient()
     return _npu_client
 
 
