@@ -653,79 +653,65 @@ class DuplicateCodeDetector(_BaseClass):
 
         return duplicates
 
-    def _find_similar_duplicates(
+    def _process_lsh_candidates(
         self,
         all_blocks: List[CodeBlock],
+        lsh_candidates: List[Tuple[int, int, float]],
         seen_pairs: Set[Tuple[str, str]],
     ) -> List[DuplicatePair]:
-        """Find similarity-based duplicates (Issue #560, #609, #659: LSH optimized).
+        """
+        Process LSH candidate pairs into DuplicatePair results.
 
-        Issue #659: Uses Locality-Sensitive Hashing (LSH) for O(n) expected complexity
-        instead of O(n²) pairwise comparison. LSH is 10-100x faster for large codebases.
-        Falls back to O(n²) if datasketch is not available or LSH is disabled.
+        Issue #665: Extracted from _find_similar_duplicates for single responsibility.
+        Issue #659: Original LSH processing logic.
         """
         duplicates: List[DuplicatePair] = []
 
-        # Issue #659: Use LSH for O(n) expected similarity search
-        if LSH_ENABLED and LSH_AVAILABLE and len(all_blocks) > 10:
-            # LSH can handle all blocks - no sampling needed
-            logger.info("Using LSH for similarity search on %d blocks", len(all_blocks))
+        for idx1, idx2, similarity in lsh_candidates:
+            block1 = all_blocks[idx1]
+            block2 = all_blocks[idx2]
 
-            lsh_candidates = _find_lsh_candidates(
-                all_blocks,
-                threshold=LSH_SIMILARITY_THRESHOLD,
-                num_perm=LSH_NUM_PERMUTATIONS,
-            )
+            if block1.file_path == block2.file_path:
+                continue
 
-            for idx1, idx2, similarity in lsh_candidates:
-                block1 = all_blocks[idx1]
-                block2 = all_blocks[idx2]
+            if block1.content_hash == block2.content_hash:
+                continue
 
-                # Skip same file
-                if block1.file_path == block2.file_path:
-                    continue
+            pair_key = tuple(sorted([
+                f"{block1.file_path}:{block1.start_line}",
+                f"{block2.file_path}:{block2.start_line}"
+            ]))
+            if pair_key in seen_pairs:
+                continue
 
-                # Skip exact hash matches (handled by _find_exact_duplicates)
-                if block1.content_hash == block2.content_hash:
-                    continue
+            if similarity >= self.min_similarity:
+                seen_pairs.add(pair_key)
+                duplicates.append(DuplicatePair(
+                    file1=block1.file_path,
+                    file2=block2.file_path,
+                    start_line1=block1.start_line,
+                    end_line1=block1.end_line,
+                    start_line2=block2.start_line,
+                    end_line2=block2.end_line,
+                    similarity=similarity,
+                    line_count=(block1.line_count + block2.line_count) // 2,
+                    code_snippet=block1.content[:200],
+                ))
 
-                pair_key = tuple(sorted([
-                    f"{block1.file_path}:{block1.start_line}",
-                    f"{block2.file_path}:{block2.start_line}"
-                ]))
-                if pair_key in seen_pairs:
-                    continue
+        return duplicates
 
-                if similarity >= self.min_similarity:
-                    seen_pairs.add(pair_key)
-                    duplicates.append(DuplicatePair(
-                        file1=block1.file_path,
-                        file2=block2.file_path,
-                        start_line1=block1.start_line,
-                        end_line1=block1.end_line,
-                        start_line2=block2.start_line,
-                        end_line2=block2.end_line,
-                        similarity=similarity,
-                        line_count=(block1.line_count + block2.line_count) // 2,
-                        code_snippet=block1.content[:200],
-                    ))
+    def _pairwise_similarity_search(
+        self,
+        blocks_to_compare: List[CodeBlock],
+        seen_pairs: Set[Tuple[str, str]],
+    ) -> List[DuplicatePair]:
+        """
+        O(n²) pairwise similarity comparison fallback.
 
-            return duplicates
-
-        # Fallback: O(n²) pairwise comparison (original implementation)
-        # Used when LSH not available, disabled, or for small block counts
-        logger.info("Using O(n²) fallback for similarity search")
-
-        # Issue #609: Use configurable limit (0 = no limit) and sample blocks if too many
-        blocks_to_compare = all_blocks
-        if MAX_BLOCKS_FOR_SIMILARITY > 0 and len(all_blocks) > MAX_BLOCKS_FOR_SIMILARITY:
-            # Sample blocks prioritizing longer ones (more likely to be meaningful duplicates)
-            sorted_blocks = sorted(all_blocks, key=lambda b: b.line_count, reverse=True)
-            blocks_to_compare = sorted_blocks[:MAX_BLOCKS_FOR_SIMILARITY]
-            logger.info(
-                "Sampling %d of %d blocks for similarity comparison",
-                len(blocks_to_compare), len(all_blocks)
-            )
+        Issue #665: Extracted from _find_similar_duplicates for single responsibility.
+        Issue #609: Original pairwise comparison logic.
+        """
+        duplicates: List[DuplicatePair] = []
 
         for i, block1 in enumerate(blocks_to_compare):
             for block2 in blocks_to_compare[i + 1:]:
@@ -758,6 +744,45 @@ class DuplicateCodeDetector(_BaseClass):
                     ))
 
         return duplicates
+
+    def _find_similar_duplicates(
+        self,
+        all_blocks: List[CodeBlock],
+        seen_pairs: Set[Tuple[str, str]],
+    ) -> List[DuplicatePair]:
+        """Find similarity-based duplicates (Issue #560, #609, #659: LSH optimized).
+
+        Issue #659: Uses Locality-Sensitive Hashing (LSH) for O(n) expected complexity
+        instead of O(n²) pairwise comparison. LSH is 10-100x faster for large codebases.
+        Falls back to O(n²) if datasketch is not available or LSH is disabled.
+
+        Issue #665: Refactored to extract helper methods.
+        """
+        # Issue #659: Use LSH for O(n) expected similarity search
+        if LSH_ENABLED and LSH_AVAILABLE and len(all_blocks) > 10:
+            logger.info("Using LSH for similarity search on %d blocks", len(all_blocks))
+
+            lsh_candidates = _find_lsh_candidates(
+                all_blocks,
+                threshold=LSH_SIMILARITY_THRESHOLD,
+                num_perm=LSH_NUM_PERMUTATIONS,
+            )
+
+            return self._process_lsh_candidates(all_blocks, lsh_candidates, seen_pairs)
+
+        # Fallback: O(n²) pairwise comparison
+        logger.info("Using O(n²) fallback for similarity search")
+
+        blocks_to_compare = all_blocks
+        if MAX_BLOCKS_FOR_SIMILARITY > 0 and len(all_blocks) > MAX_BLOCKS_FOR_SIMILARITY:
+            sorted_blocks = sorted(all_blocks, key=lambda b: b.line_count, reverse=True)
+            blocks_to_compare = sorted_blocks[:MAX_BLOCKS_FOR_SIMILARITY]
+            logger.info(
+                "Sampling %d of %d blocks for similarity comparison",
+                len(blocks_to_compare), len(all_blocks)
+            )
+
+        return self._pairwise_similarity_search(blocks_to_compare, seen_pairs)
 
     def _calculate_statistics(
         self,

@@ -651,6 +651,71 @@ async def unpair_worker(worker_id: str):
         )
 
 
+def _generate_repair_bootstrap_config() -> dict:
+    """
+    Generate fresh bootstrap configuration for worker re-pairing.
+
+    Issue #665: Extracted from repair_worker() for single responsibility.
+
+    Returns:
+        Dict with redis, backend, models, and logging configuration.
+    """
+    from src.config.ssot_config import config as ssot_config
+
+    return {
+        "redis": {
+            "host": ssot_config.redis.host,
+            "port": ssot_config.redis.port,
+            "password": ssot_config.redis.password,
+            "db": 0,
+            "socket_timeout": 5,
+            "max_connections": 10,
+        },
+        "backend": {
+            "host": ssot_config.backend.host,
+            "port": ssot_config.backend.port,
+            "register_with_backend": True,
+            "health_check_interval": 30,
+        },
+        "models": {
+            "autoload_defaults": True,
+            "default_embedding": "nomic-embed-text",
+            "default_llm": "llama3.2:1b-instruct-q4_K_M",
+        },
+        "logging": {"level": "INFO", "format": "structured"},
+    }
+
+
+async def _handle_existing_worker_removal(
+    manager, worker, worker_id: str, force: bool
+) -> tuple[str, str]:
+    """
+    Handle removal of existing worker registration.
+
+    Issue #665: Extracted from repair_worker() for single responsibility.
+
+    Returns:
+        Tuple of (worker_url, platform)
+
+    Raises:
+        HTTPException: If worker is active and force is not set
+    """
+    worker_url = worker.config.url
+    platform = worker.config.platform
+
+    if worker.status.status == "online" and not force:
+        logger.warning("Attempted to re-pair active worker %s without force flag", worker_id)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Worker is currently active. Use force=true to re-pair anyway.",
+        )
+
+    await manager.remove_worker(worker_id)
+    logger.info("Removed existing registration for worker: %s", worker_id)
+
+    return worker_url, platform
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="repair_worker",
@@ -666,6 +731,8 @@ async def repair_worker(worker_id: str, request: dict = None):
     2. Optionally sends command to worker to clear its local pairing
     3. Returns new bootstrap configuration for immediate re-registration
 
+    Issue #665: Refactored to extract helper methods.
+
     Args:
         worker_id: Worker identifier
         request: Optional dict with:
@@ -679,6 +746,7 @@ async def repair_worker(worker_id: str, request: dict = None):
         400: If re-pair is not possible
         500: If re-pair fails
     """
+    import uuid
     from datetime import datetime
 
     try:
@@ -686,50 +754,18 @@ async def repair_worker(worker_id: str, request: dict = None):
         worker = await manager.get_worker(worker_id)
 
         request = request or {}
-        worker_url = request.get("url", "")
         force = request.get("force", False)
 
-        # Get existing worker info before removal
         if worker:
-            worker_url = worker_url or worker.config.url
-            platform = worker.config.platform
-
-            # Check if worker is currently active
-            if worker.status.status == "online" and not force:
-                logger.warning("Attempted to re-pair active worker %s without force flag", worker_id)
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Worker is currently active. Use force=true to re-pair anyway.",
-                )
-
-            # Remove existing registration
-            await manager.remove_worker(worker_id)
-            logger.info("Removed existing registration for worker: %s", worker_id)
+            worker_url, platform = await _handle_existing_worker_removal(
+                manager, worker, worker_id, force
+            )
+            worker_url = request.get("url", "") or worker_url
         else:
+            worker_url = request.get("url", "")
             platform = request.get("platform", "unknown")
 
-        # Generate new worker ID if needed
-        import uuid
         new_worker_id = f"{platform}_npu_worker_{uuid.uuid4().hex[:8]}"
-
-        # Get fresh bootstrap config
-        from src.config.ssot_config import config as ssot_config
-
-        redis_config = {
-            "host": ssot_config.redis.host,
-            "port": ssot_config.redis.port,
-            "password": ssot_config.redis.password,
-            "db": 0,
-            "socket_timeout": 5,
-            "max_connections": 10,
-        }
-
-        backend_config = {
-            "host": ssot_config.backend.host,
-            "port": ssot_config.backend.port,
-            "register_with_backend": True,
-            "health_check_interval": 30,
-        }
 
         logger.info(
             "Re-pair initiated for worker %s -> new ID: %s",
@@ -740,16 +776,7 @@ async def repair_worker(worker_id: str, request: dict = None):
             "success": True,
             "old_worker_id": worker_id,
             "new_worker_id": new_worker_id,
-            "config": {
-                "redis": redis_config,
-                "backend": backend_config,
-                "models": {
-                    "autoload_defaults": True,
-                    "default_embedding": "nomic-embed-text",
-                    "default_llm": "llama3.2:1b-instruct-q4_K_M",
-                },
-                "logging": {"level": "INFO", "format": "structured"},
-            },
+            "config": _generate_repair_bootstrap_config(),
             "server_timestamp": datetime.utcnow().isoformat() + "Z",
             "message": "Worker unpaired. Use provided config for re-registration.",
         }
