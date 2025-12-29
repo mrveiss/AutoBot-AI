@@ -298,7 +298,8 @@ async def _get_stored_file_hash(redis_client, relative_path: str) -> Optional[st
         return None
     try:
         key = f"{FILE_HASH_REDIS_PREFIX}{relative_path}"
-        stored = redis_client.get(key)
+        # Issue #666: Wrap blocking Redis call in asyncio.to_thread
+        stored = await asyncio.to_thread(redis_client.get, key)
         return stored.decode("utf-8") if isinstance(stored, bytes) else stored
     except Exception as e:
         logger.debug("Failed to get stored hash for %s: %s", relative_path, e)
@@ -315,7 +316,8 @@ async def _store_file_hash(redis_client, relative_path: str, file_hash: str) -> 
         return
     try:
         key = f"{FILE_HASH_REDIS_PREFIX}{relative_path}"
-        redis_client.set(key, file_hash)
+        # Issue #666: Wrap blocking Redis call in asyncio.to_thread
+        await asyncio.to_thread(redis_client.set, key, file_hash)
     except Exception as e:
         logger.debug("Failed to store hash for %s: %s", relative_path, e)
 
@@ -716,9 +718,12 @@ async def _clear_redis_codebase_cache(task_id: str) -> None:
         from .storage import get_redis_connection
         redis_client = await get_redis_connection()
         if redis_client:
-            keys_to_delete = [key for key in redis_client.scan_iter(match="codebase:*")]
+            # Issue #666: Wrap blocking Redis calls in asyncio.to_thread
+            keys_to_delete = await asyncio.to_thread(
+                lambda: [key for key in redis_client.scan_iter(match="codebase:*")]
+            )
             if keys_to_delete:
-                redis_client.delete(*keys_to_delete)
+                await asyncio.to_thread(redis_client.delete, *keys_to_delete)
                 logger.info("[Task %s] Cleared %s Redis cache entries", task_id, len(keys_to_delete))
     except Exception as e:
         logger.warning("[Task %s] Error clearing Redis cache: %s", task_id, e)
@@ -1179,11 +1184,12 @@ async def _store_hardcodes_to_redis(
         grouped[htype].append(hardcode)
 
     # Store each type group to Redis
+    # Issue #666: Use asyncio.to_thread to wrap blocking Redis calls
     stored_count = 0
     for htype, items in grouped.items():
         key = f"codebase:hardcodes:{htype}"
         try:
-            redis_client.set(key, json.dumps(items))
+            await asyncio.to_thread(redis_client.set, key, json.dumps(items))
             stored_count += len(items)
             logger.debug("[Task %s] Stored %s hardcodes of type '%s'", task_id, len(items), htype)
         except Exception as e:
