@@ -27,7 +27,7 @@ from src.utils.redis_client import get_redis_client as get_redis_manager
 
 from .conversation import ConversationHandlerMixin
 from .llm_handler import LLMHandlerMixin
-from .models import LLMIterationContext, WorkflowSession
+from .models import LLMIterationContext, StreamingMessage, WorkflowSession
 from .session_handler import SessionHandlerMixin
 from .tool_handler import ToolHandlerMixin
 
@@ -356,13 +356,25 @@ class ChatWorkflowManager(
         used_knowledge: bool,
         rag_citations: List[Dict[str, Any]],
     ):
-        """Stream LLM response chunks and yield WorkflowMessages."""
-        import uuid
+        """
+        Stream LLM response chunks and yield WorkflowMessages.
 
+        Issue #656: Uses StreamingMessage for stable identity and version tracking.
+        The streaming_msg object maintains content accumulation with stream() method,
+        while the ID remains stable across all chunks for frontend deduplication.
+        """
         llm_response = ""
         current_segment = ""
         current_message_type = "response"
-        current_message_id = str(uuid.uuid4())
+
+        # Issue #656: Use StreamingMessage for stable identity
+        streaming_msg = StreamingMessage(type="response")
+        streaming_msg.merge_metadata({
+            "model": selected_model,
+            "terminal_session_id": terminal_session_id,
+            "used_knowledge": used_knowledge,
+            "citations": rag_citations if used_knowledge else [],
+        })
 
         async for line in response.content:
             chunk_data = self._parse_stream_chunk(line)
@@ -379,25 +391,40 @@ class ChatWorkflowManager(
 
                 # Handle type transitions
                 complete_msg, new_id, new_segment, new_type = self._handle_type_transition(
-                    new_type, current_message_type, current_message_id,
+                    new_type, current_message_type, streaming_msg.id,
                     selected_model, llm_response, chunk_text
                 )
 
                 if complete_msg:
                     yield (complete_msg, llm_response, False, True)
-                    current_message_id = new_id
+                    # Issue #656: Create new StreamingMessage for new type
+                    streaming_msg = StreamingMessage(type=new_type)
+                    streaming_msg.merge_metadata({
+                        "model": selected_model,
+                        "terminal_session_id": terminal_session_id,
+                        "used_knowledge": used_knowledge,
+                        "citations": rag_citations if used_knowledge else [],
+                    })
                     current_segment = new_segment
                     current_message_type = new_type
                 elif new_segment is not None:
-                    current_message_id = new_id
+                    # Type changed without completion message
+                    streaming_msg = StreamingMessage(type=new_type)
+                    streaming_msg.merge_metadata({
+                        "model": selected_model,
+                        "terminal_session_id": terminal_session_id,
+                        "used_knowledge": used_knowledge,
+                        "citations": rag_citations if used_knowledge else [],
+                    })
                     current_segment = new_segment
                     current_message_type = new_type
 
-                chunk_msg = self._build_stream_chunk_message(
-                    chunk_text, current_message_type, selected_model,
-                    terminal_session_id, used_knowledge, rag_citations, current_message_id
-                )
-                yield (chunk_msg, llm_response, False, False)
+                # Issue #656: Use stream() to append chunk and increment version
+                streaming_msg.stream(chunk_text)
+                streaming_msg.set_metadata("display_type", current_message_type)
+                streaming_msg.set_metadata("message_type", "llm_response_chunk")
+
+                yield (streaming_msg.to_workflow_message(), llm_response, False, False)
 
             if chunk_data.get("done", False):
                 self._log_stream_completion(llm_response)

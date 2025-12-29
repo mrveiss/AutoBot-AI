@@ -133,9 +133,12 @@ export const useChatStore = defineStore('chat', () => {
 
   /**
    * Issue #650: Add or update a message with ID-based deduplication.
-   * Used for streaming messages where chunks arrive with the same ID.
+   * Issue #656: Enhanced with version-based updates to prevent processing old chunks.
    *
-   * @param message - Message with optional id field
+   * Used for streaming messages where chunks arrive with the same ID.
+   * The version field (from StreamingMessage) ensures we only process newer updates.
+   *
+   * @param message - Message with optional id and version fields
    * @returns The message ID (new or existing)
    */
   function addOrUpdateMessage(message: Partial<ChatMessage> & { content: string; sender: ChatMessage['sender'] }): string {
@@ -147,19 +150,31 @@ export const useChatStore = defineStore('chat', () => {
     if (message.id) {
       const existingIndex = currentSession.value!.messages.findIndex(m => m.id === message.id)
       if (existingIndex >= 0) {
-        // Update existing message (streaming chunk accumulation)
         const existing = currentSession.value!.messages[existingIndex]
+
+        // Issue #656: Version-based deduplication - skip if we already have this or newer version
+        const incomingVersion = message.metadata?.version ?? 0
+        const existingVersion = existing.metadata?.version ?? 0
+
+        if (incomingVersion <= existingVersion) {
+          // Already processed this version, skip update
+          logger.debug(`[Issue #656] Skipping old version: incoming=${incomingVersion}, existing=${existingVersion}`)
+          return message.id
+        }
+
+        // Update existing message (streaming chunk accumulation)
         currentSession.value!.messages[existingIndex] = {
           ...existing,
           content: message.content,  // Replace with accumulated content
           type: message.type || existing.type,  // Issue #650: Preserve display type
           metadata: {
             ...existing.metadata,
-            ...message.metadata
+            ...message.metadata,
+            version: incomingVersion  // Track version for next comparison
           }
         }
         currentSession.value!.updatedAt = new Date()
-        logger.debug(`[Issue #650] Updated existing message: ${message.id}`)
+        logger.debug(`[Issue #656] Updated message ${message.id} to version ${incomingVersion}`)
         return message.id
       }
     }
@@ -177,7 +192,7 @@ export const useChatStore = defineStore('chat', () => {
 
     currentSession.value!.messages.push(newMessage)
     currentSession.value!.updatedAt = new Date()
-    logger.debug(`[Issue #650] Added new message: ${newMessage.id}`)
+    logger.debug(`[Issue #656] Added new message: ${newMessage.id}, version: ${message.metadata?.version ?? 0}`)
 
     return newMessage.id
   }
