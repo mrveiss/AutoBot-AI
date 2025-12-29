@@ -1004,7 +1004,9 @@ async def _scan_and_store_man_pages(
         scanner = FastDocumentScanner(redis_client)
 
         logger.info("Scanning man pages (limit=%s, sections=%s)...", limit, sections)
-        man_pages = scanner.get_all_man_pages_for_indexing(
+        # Issue #666: Wrap blocking scanner call in asyncio.to_thread to avoid event loop blocking
+        man_pages = await asyncio.to_thread(
+            scanner.get_all_man_pages_for_indexing,
             limit=limit, sections=sections, system_context=system_context,
         )
 
@@ -1110,7 +1112,9 @@ async def scan_man_pages_changes(
     scanner = FastDocumentScanner(redis_client)
     system_context = _get_system_context_safe(machine_id)
 
-    scan_result = scanner.scan_and_parse_changes(
+    # Issue #666: Wrap blocking scanner call in asyncio.to_thread to avoid event loop blocking
+    scan_result = await asyncio.to_thread(
+        scanner.scan_and_parse_changes,
         machine_id=machine_id, limit=limit, system_context=system_context,
     )
 
