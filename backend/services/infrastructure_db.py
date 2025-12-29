@@ -17,7 +17,7 @@ from typing import Dict, List, Optional
 from backend.type_defs.common import Metadata
 
 from cryptography.fernet import Fernet
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func
 from sqlalchemy.orm import Session, joinedload, sessionmaker
 
 from backend.models.infrastructure import (
@@ -678,21 +678,25 @@ class InfrastructureDB:
                 ),
             }
 
-            # Count hosts by status (Issue #380: use module-level tuple)
-            for status in _HOST_STATUSES:
-                count = (
-                    session.query(InfraHost).filter(InfraHost.status == status).count()
-                )
+            # Issue #663: Use GROUP BY to eliminate N+1 query pattern
+            # Single query instead of 6 queries for host status counts
+            host_status_counts = (
+                session.query(InfraHost.status, func.count(InfraHost.id))
+                .group_by(InfraHost.status)
+                .all()
+            )
+            for status, count in host_status_counts:
                 if count > 0:
                     stats["hosts_by_status"][status] = count
 
-            # Count deployments by status (Issue #380: use module-level tuple)
-            for status in _DEPLOYMENT_STATUSES:
-                count = (
-                    session.query(InfraDeployment)
-                    .filter(InfraDeployment.status == status)
-                    .count()
-                )
+            # Issue #663: Use GROUP BY to eliminate N+1 query pattern
+            # Single query instead of 5 queries for deployment status counts
+            deployment_status_counts = (
+                session.query(InfraDeployment.status, func.count(InfraDeployment.id))
+                .group_by(InfraDeployment.status)
+                .all()
+            )
+            for status, count in deployment_status_counts:
                 if count > 0:
                     stats["deployments_by_status"][status] = count
 

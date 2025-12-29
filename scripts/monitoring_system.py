@@ -31,7 +31,8 @@ from src.unified_config import API_BASE_URL
 try:
     import aiohttp
 except ImportError:
-    print("Installing required packages...")
+    # Use logging instead of print for package installation messages
+    logging.warning("Installing required packages (aiohttp)...")
     import subprocess
     import sys
 
@@ -547,26 +548,35 @@ class SystemMonitor:
         return result
 
     def _store_health_check_results(self, health_results: Dict[str, Any]):
-        """Store health check results in database"""
+        """Store health check results in database.
+
+        Issue #663: Uses executemany for batch insert to eliminate N+1 pattern.
+        """
         try:
-            with sqlite3.connect(self.metrics_db) as conn:
-                for service_name, service_data in health_results["services"].items():
-                    for check in service_data["checks"]:
-                        conn.execute(
-                            """
-                            INSERT INTO health_checks (
-                                service_name, endpoint, status_code, response_time_ms, status, error_message
-                            ) VALUES (?, ?, ?, ?, ?, ?)
+            # Issue #663: Collect all checks into a list for batch insert
+            check_rows = []
+            for service_name, service_data in health_results["services"].items():
+                for check in service_data["checks"]:
+                    check_rows.append((
+                        check["service"],
+                        check["endpoint"],
+                        200 if check["status"] == "healthy" else 500,
+                        check["response_time_ms"],
+                        check["status"],
+                        check["error_message"],
+                    ))
+
+            # Issue #663: Single executemany call instead of N individual inserts
+            if check_rows:
+                with sqlite3.connect(self.metrics_db) as conn:
+                    conn.executemany(
+                        """
+                        INSERT INTO health_checks (
+                            service_name, endpoint, status_code, response_time_ms, status, error_message
+                        ) VALUES (?, ?, ?, ?, ?, ?)
                         """,
-                            (
-                                check["service"],
-                                check["endpoint"],
-                                200 if check["status"] == "healthy" else 500,
-                                check["response_time_ms"],
-                                check["status"],
-                                check["error_message"],
-                            ),
-                        )
+                        check_rows,
+                    )
         except Exception as e:
             logger.error("Failed to store health check results: %s", e)
 
