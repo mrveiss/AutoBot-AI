@@ -9,6 +9,7 @@ comprehensive multi-agent orchestration system, enabling intelligent task routin
 coordination, and execution across multiple specialized AI agents.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -554,11 +555,11 @@ async def get_agents_status():
     try:
         ai_client = await get_ai_stack_client()
 
-        # Get basic health
-        health_status = await ai_client.health_check()
-
-        # Get available agents
-        agents_info = await ai_client.list_available_agents()
+        # Issue #664: Parallelize independent AI Stack queries
+        health_status, agents_info = await asyncio.gather(
+            ai_client.health_check(),
+            ai_client.list_available_agents(),
+        )
 
         return create_success_response(
             {

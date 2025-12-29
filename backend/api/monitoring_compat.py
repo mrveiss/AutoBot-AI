@@ -383,10 +383,13 @@ async def get_github_status():
     warnings.warn(DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
     logger.warning("Deprecated endpoint called: /metrics/github/status - %s", DEPRECATION_MSG)
 
-    rate_limit = await query_prometheus_instant("autobot_github_api_rate_limit_remaining")
-    total_ops = await query_prometheus_instant("sum(autobot_github_api_operations_total)")
-    p95_latency = await query_prometheus_instant(
-        "histogram_quantile(0.95, rate(autobot_github_api_duration_seconds_bucket[5m]))"
+    # Issue #664: Parallelize independent Prometheus queries
+    rate_limit, total_ops, p95_latency = await asyncio.gather(
+        query_prometheus_instant("autobot_github_api_rate_limit_remaining"),
+        query_prometheus_instant("sum(autobot_github_api_operations_total)"),
+        query_prometheus_instant(
+            "histogram_quantile(0.95, rate(autobot_github_api_duration_seconds_bucket[5m]))"
+        ),
     )
 
     return {

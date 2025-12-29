@@ -492,11 +492,11 @@ async def analyze_codebase(
     Returns risk assessment for all files matching the pattern.
     """
     try:
-        bug_history = await get_git_bug_history()
-        change_freq = await get_file_change_frequency()
-
-        files_to_analyze = await asyncio.to_thread(
-            _find_files_sync, path, include_pattern, limit
+        # Issue #664: Parallelize independent data fetches
+        bug_history, change_freq, files_to_analyze = await asyncio.gather(
+            get_git_bug_history(),
+            get_file_change_frequency(),
+            asyncio.to_thread(_find_files_sync, path, include_pattern, limit),
         )
 
         if not files_to_analyze:
@@ -534,11 +534,11 @@ async def get_high_risk_files(
     Returns files with risk score above the threshold.
     """
     try:
-        bug_history = await get_git_bug_history()
-        change_freq = await get_file_change_frequency()
-
-        files_to_analyze = await asyncio.to_thread(
-            _find_files_sync, path, include_pattern, 200  # Higher limit to find high-risk files
+        # Issue #664: Parallelize independent data fetches
+        bug_history, change_freq, files_to_analyze = await asyncio.gather(
+            get_git_bug_history(),
+            get_file_change_frequency(),
+            asyncio.to_thread(_find_files_sync, path, include_pattern, 200),
         )
 
         if not files_to_analyze:
@@ -585,10 +585,13 @@ async def get_file_risk(file_path: str) -> dict[str, Any]:
         return _no_data_response(f"File not found: {file_path}")
 
     try:
-        complexity = await analyze_file_complexity(str(path))
-        bug_history = await get_git_bug_history()
-        change_freq = await get_file_change_frequency()
-        file_stat = await asyncio.to_thread(path.stat)
+        # Issue #664: Parallelize independent data fetches
+        complexity, bug_history, change_freq, file_stat = await asyncio.gather(
+            analyze_file_complexity(str(path)),
+            get_git_bug_history(),
+            get_file_change_frequency(),
+            asyncio.to_thread(path.stat),
+        )
 
         factors = {
             "complexity": complexity,
@@ -661,11 +664,11 @@ async def get_risk_heatmap(
 ) -> dict[str, Any]:
     """Get risk heatmap data for visualization (Issue #543: no demo data)."""
     try:
-        bug_history = await get_git_bug_history()
-        change_freq = await get_file_change_frequency()
-
-        files_to_analyze = await asyncio.to_thread(
-            _find_files_sync, path, include_pattern, limit
+        # Issue #664: Parallelize independent data fetches
+        bug_history, change_freq, files_to_analyze = await asyncio.gather(
+            get_git_bug_history(),
+            get_file_change_frequency(),
+            asyncio.to_thread(_find_files_sync, path, include_pattern, limit),
         )
 
         if not files_to_analyze:
@@ -722,11 +725,11 @@ async def get_prediction_summary(
     Returns high-level metrics for dashboard display.
     """
     try:
-        bug_history = await get_git_bug_history()
-        change_freq = await get_file_change_frequency()
-
-        files_to_analyze = await asyncio.to_thread(
-            _find_files_sync, path, include_pattern, limit
+        # Issue #664: Parallelize independent data fetches
+        bug_history, change_freq, files_to_analyze = await asyncio.gather(
+            get_git_bug_history(),
+            get_file_change_frequency(),
+            asyncio.to_thread(_find_files_sync, path, include_pattern, limit),
         )
 
         if not files_to_analyze:

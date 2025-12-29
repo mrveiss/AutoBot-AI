@@ -772,11 +772,17 @@ async def _check_analytics_redis_connectivity() -> Dict[str, str]:
 async def get_analytics_status():
     """Get comprehensive analytics system status (Issue #398: refactored)."""
     status = _build_analytics_status_base(analytics_controller.metrics_collector)
+    # Issue #664: Parallelize independent async operations
+    code_analysis_exists, code_index_exists, redis_connectivity = await asyncio.gather(
+        asyncio.to_thread(analytics_controller.code_analysis_path.exists),
+        asyncio.to_thread(analytics_controller.code_index_path.exists),
+        _check_analytics_redis_connectivity(),
+    )
     status["integration_status"]["code_analysis_tools"] = {
-        "code_analysis_suite": await asyncio.to_thread(analytics_controller.code_analysis_path.exists),
-        "code_index_mcp": await asyncio.to_thread(analytics_controller.code_index_path.exists),
+        "code_analysis_suite": code_analysis_exists,
+        "code_index_mcp": code_index_exists,
     }
-    status["integration_status"]["redis_connectivity"] = await _check_analytics_redis_connectivity()
+    status["integration_status"]["redis_connectivity"] = redis_connectivity
     return status
 
 
