@@ -5599,24 +5599,35 @@ const runFullAnalysis = async () => {
   // 2. Call loadCodebaseAnalyticsData() when complete (loads stats, problems, etc.)
   await indexCodebase()
 
-  // Issue #208: Also trigger pattern analysis after indexing starts
-  // The PatternAnalysis component handles its own async state
+  // Issue #661: Run pattern analysis and cross-language analysis in parallel (2-3x speedup)
+  // These are independent operations that can run concurrently.
+  // Error handling: Each analysis catches its own errors to prevent one failure from
+  // blocking others. Failures are logged but don't fail the overall function (partial success OK).
+  const analysisPromises: Promise<void>[] = []
+
+  // Issue #208: Pattern analysis
   if (patternAnalysisRef.value?.runAnalysis) {
     logger.info('Triggering pattern analysis as part of full analysis')
-    try {
-      await patternAnalysisRef.value.runAnalysis()
-    } catch (e) {
-      logger.error('Pattern analysis trigger failed:', e)
-    }
+    analysisPromises.push(
+      patternAnalysisRef.value.runAnalysis().catch((e: unknown) => {
+        logger.error('Pattern analysis trigger failed:', e)
+        return  // Explicit void return
+      })
+    )
   }
 
-  // Issue #244: Trigger cross-language analysis as part of full analysis
+  // Issue #244: Cross-language analysis
   logger.info('Triggering cross-language analysis as part of full analysis')
-  try {
-    await runCrossLanguageAnalysis()
-  } catch (e) {
-    logger.error('Cross-language analysis trigger failed:', e)
-  }
+  analysisPromises.push(
+    runCrossLanguageAnalysis().catch((e: unknown) => {
+      logger.error('Cross-language analysis trigger failed:', e)
+      return  // Explicit void return
+    })
+  )
+
+  // Wait for all analyses to complete in parallel
+  // Note: analysisPromises always has at least cross-language analysis
+  await Promise.all(analysisPromises)
 }
 
 // Enhanced Analytics Methods - Connected to real backend endpoints
