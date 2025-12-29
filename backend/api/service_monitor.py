@@ -788,11 +788,16 @@ class ServiceMonitor:
                 logger.error("Service check failed: %s", r)
 
         # Add sync checks
-        all_services.append(self.check_redis())
-        all_services.extend(self.check_distributed_services())
+        # Issue #666: Wrap blocking sync checks in asyncio.to_thread
+        redis_status = await asyncio.to_thread(self.check_redis)
+        all_services.append(redis_status)
+        distributed_services = await asyncio.to_thread(self.check_distributed_services)
+        all_services.extend(distributed_services)
         all_services.extend(await self.check_llm_services())
 
         vm_statuses = await self.check_all_vms()
+        # Issue #666: Wrap blocking system resource check in asyncio.to_thread
+        system_resources = await asyncio.to_thread(self.check_system_resources)
         total_time = int((time.time() - start_time) * 1000)
 
         return {
@@ -800,7 +805,7 @@ class ServiceMonitor:
             "check_duration_ms": total_time,
             "services": [s.dict() for s in all_services],
             "vms": [vm.dict() for vm in vm_statuses],
-            "system_resources": self.check_system_resources(),
+            "system_resources": system_resources,
             "categories": self._build_category_map(all_services),
             "summary": self._build_status_summary(all_services),
             "vm_summary": self._build_status_summary(vm_statuses),
