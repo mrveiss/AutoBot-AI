@@ -3652,7 +3652,8 @@ const loadCodebaseAnalyticsData = async () => {
       loadPerformanceScore(),   // Issue #538: Performance score
       loadRedisHealth(),        // Issue #538: Redis health score
       loadEnvironmentAnalysis(), // Issue #538: Environment analysis
-      loadOwnershipAnalysis()   // Issue #248: Code ownership analysis
+      loadOwnershipAnalysis(),  // Issue #248: Code ownership analysis
+      getCrossLanguageAnalysis() // Issue #244: Cross-language pattern analysis (loads cached or empty)
     ])
 
   } catch (error: unknown) {
@@ -5607,6 +5608,14 @@ const runFullAnalysis = async () => {
     } catch (e) {
       logger.error('Pattern analysis trigger failed:', e)
     }
+  }
+
+  // Issue #244: Trigger cross-language analysis as part of full analysis
+  logger.info('Triggering cross-language analysis as part of full analysis')
+  try {
+    await runCrossLanguageAnalysis()
+  } catch (e) {
+    logger.error('Cross-language analysis trigger failed:', e)
   }
 }
 
