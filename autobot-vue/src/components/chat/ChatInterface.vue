@@ -530,6 +530,13 @@ const startMessagePolling = () => {
   // Poll for new messages every 10 seconds (reduced from 3s to prevent flicker)
   // This still picks up LLM interpretations and new messages, just less aggressively
   messagePollingInterval.value = setInterval(async () => {
+    // CRITICAL FIX: Skip polling while AI is typing to prevent message flickering
+    // The streaming/real-time updates handle messages during active conversation
+    if (store.isTyping) {
+      logger.debug('Skipping message poll - AI is typing')
+      return
+    }
+
     if (store.currentSessionId) {
       try {
         // Silently reload messages for current session

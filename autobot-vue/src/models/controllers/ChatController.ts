@@ -536,13 +536,26 @@ export class ChatController {
       // Update session with loaded messages
       const session = this.chatStore.sessions.find(s => s.id === sessionId)
       if (session) {
-        logger.debug(`Found session in store, updating messages (before: ${session.messages.length}, after: ${messages.length})`)
-        session.messages = messages as any // Type assertion: repository transforms messages to match store format
-        this.chatStore.switchToSession(sessionId)
-        logger.debug(`Loaded ${messages.length} messages for session ${sessionId}`)
-        logger.debug(`Store currentMessages count: ${this.chatStore.currentMessages.length}`)
+        // CRITICAL FIX: Only update if message count or last message ID changed
+        // This prevents UI flickering during polling when nothing changed
+        const lastExisting = session.messages[session.messages.length - 1]
+        const lastNew = messages[messages.length - 1]
+        const hasChanges = session.messages.length !== messages.length ||
+          lastExisting?.id !== lastNew?.id
+
+        if (hasChanges) {
+          logger.debug(`Updating messages (${session.messages.length} → ${messages.length})`)
+          session.messages = messages as any
+        } else {
+          logger.debug(`No message changes, skipping update`)
+        }
+
+        // Only switch session if not already current
+        if (this.chatStore.currentSessionId !== sessionId) {
+          this.chatStore.switchToSession(sessionId)
+        }
       } else {
-        logger.error(`Session ${sessionId} not found in store! Store has ${this.chatStore.sessions.length} sessions:`, this.chatStore.sessions.map(s => s.id))
+        logger.error(`Session ${sessionId} not found in store`)
       }
 
     } catch (error: any) {

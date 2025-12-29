@@ -10,7 +10,7 @@
     </div>
 
     <EmptyState
-      v-if="store.currentMessages.length === 0"
+      v-if="showEmptyState"
       icon="fas fa-comments"
       title="Start a conversation"
       message="Send a message to begin chatting with the AI assistant."
@@ -544,6 +544,30 @@ const pendingApprovalDecision = ref<boolean | null>(null)
 
 // Auto-approve functionality state
 const autoApproveFuture = ref(false)
+
+// CRITICAL FIX: Prevent EmptyState from flashing during polling/reactivity updates
+// Once messages have been loaded, never show EmptyState again (prevents flicker)
+const hasEverHadMessages = ref(false)
+
+// Track when we've had messages to prevent empty state flash
+watch(() => store.currentMessages.length, (newLen) => {
+  if (newLen > 0) {
+    hasEverHadMessages.value = true
+  }
+}, { immediate: true })
+
+// Reset when session changes (new chat should show empty state)
+watch(() => store.currentSessionId, () => {
+  // Only reset if the new session has no messages
+  if (store.currentMessages.length === 0) {
+    hasEverHadMessages.value = false
+  }
+})
+
+// Computed: Show empty state only if truly empty (never had messages in this session)
+const showEmptyState = computed(() => {
+  return store.currentMessages.length === 0 && !hasEverHadMessages.value && !store.isTyping
+})
 
 // Computed
 const filteredMessages = computed(() => {
