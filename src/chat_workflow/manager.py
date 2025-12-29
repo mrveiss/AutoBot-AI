@@ -559,19 +559,32 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         even if execution failed or was denied. Only break on actual errors
         in the tool processing itself.
 
+        Issue #654: Added support for 'respond' tool with break_loop pattern.
+        When LLM uses respond tool, it explicitly signals task completion.
+
         Yields:
             WorkflowMessage items
 
         Returns:
-            Tuple of (new_execution_results, has_pending_approval, should_break)
+            Tuple of (new_execution_results, has_pending_approval, should_break, break_loop_requested)
         """
         new_execution_results = []
         has_pending_approval = False
         processed_any_command = False
+        break_loop_requested = False  # Issue #654: Track explicit completion signal
 
         async for tool_msg in self._process_tool_calls(
             tool_calls, session_id, terminal_session_id, ollama_endpoint, selected_model
         ):
+            # Issue #654: Handle break_loop tuple from _process_tool_calls
+            if isinstance(tool_msg, tuple) and len(tool_msg) == 2:
+                break_loop_requested, respond_content = tool_msg
+                if break_loop_requested:
+                    logger.info(
+                        "[Issue #654] break_loop=True signal received from respond tool"
+                    )
+                continue
+
             if tool_msg.type == "execution_summary":
                 new_results = tool_msg.metadata.get("execution_results", [])
                 new_execution_results.extend(new_results)
@@ -605,14 +618,17 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
 
         # Issue #651: Never break the loop prematurely - always let LLM decide next action
         # The LLM will either generate more TOOL_CALLs or provide a final summary
+        # Issue #654: UNLESS the respond tool was used with break_loop=True
         should_break = False
 
         logger.info(
-            "[Issue #651] Tool results: exec_results=%d, pending_approval=%s, should_break=%s",
-            len(new_execution_results), has_pending_approval, should_break
+            "[Issue #654] Tool results: exec_results=%d, pending_approval=%s, "
+            "should_break=%s, break_loop_requested=%s",
+            len(new_execution_results), has_pending_approval, should_break, break_loop_requested
         )
 
-        yield (new_execution_results, has_pending_approval, should_break)
+        # Issue #654: Return 4-tuple including break_loop_requested
+        yield (new_execution_results, has_pending_approval, should_break, break_loop_requested)
 
     async def _collect_llm_iteration_response(
         self,
@@ -660,6 +676,7 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
 
         Issue #375: Uses LLMIterationContext to reduce parameter count from 12 to 4.
         Issue #651: Fixed premature loop termination by allowing continuation even with empty results.
+        Issue #654: Added support for 'respond' tool with break_loop pattern.
         """
         llm_response = None
         tool_calls = None
@@ -698,14 +715,18 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         new_results = []
         has_pending_approval = False
         should_break = False
+        break_loop_requested = False  # Issue #654: Track explicit completion signal
 
         async for item in self._process_tool_results(
             tool_calls, ctx.session_id, ctx.terminal_session_id, ctx.ollama_endpoint,
             ctx.selected_model, ctx.execution_history, ctx.workflow_messages
         ):
             if isinstance(item, tuple):
-                # Issue #651: Now returns 3-tuple (results, has_pending_approval, should_break)
-                if len(item) == 3:
+                # Issue #654: Now returns 4-tuple (results, has_pending_approval, should_break, break_loop_requested)
+                if len(item) == 4:
+                    new_results, has_pending_approval, should_break, break_loop_requested = item
+                elif len(item) == 3:
+                    # Backwards compatibility for 3-tuple
                     new_results, has_pending_approval, should_break = item
                 else:
                     # Backwards compatibility for 2-tuple
@@ -714,6 +735,15 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
                         new_results = new_results_or_empty
             else:
                 yield item
+
+        # Issue #654: If respond tool was used with break_loop=True, stop the loop
+        if break_loop_requested:
+            logger.info(
+                "[Issue #654] Iteration %d: Respond tool signaled task completion (break_loop=True)",
+                iteration
+            )
+            yield (llm_response, tool_calls, False)
+            return
 
         # Issue #651: Only break if there was a catastrophic failure, not just empty results
         if should_break:

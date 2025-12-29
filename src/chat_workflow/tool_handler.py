@@ -597,16 +597,44 @@ class ToolHandlerMixin:
         """Process all tool calls from LLM response.
 
         Issue #315: Refactored to use helper methods for reduced nesting.
+        Issue #654: Added support for 'respond' tool with break_loop pattern.
 
         Yields:
             WorkflowMessage for each stage of execution
             Also yields execution_summary at end for Issue #352 continuation loop
+            Finally yields (break_loop, response_content) tuple if respond tool used
         """
         execution_results = []
         additional_response_parts = []
+        break_loop_requested = False
+        respond_content = None
 
         for tool_call in tool_calls:
-            if tool_call["name"] != "execute_command":
+            tool_name = tool_call["name"]
+
+            # Issue #654: Handle 'respond' tool for explicit task completion
+            if tool_name == "respond":
+                params = tool_call.get("params", {})
+                respond_content = params.get("text", params.get("content", ""))
+                break_loop_requested = params.get("break_loop", True)
+                logger.info(
+                    "[Issue #654] Respond tool invoked: break_loop=%s, content_len=%d",
+                    break_loop_requested, len(respond_content)
+                )
+                # Yield the final response message
+                yield WorkflowMessage(
+                    type="response",
+                    content=respond_content,
+                    metadata={
+                        "message_type": "respond_tool",
+                        "break_loop": break_loop_requested,
+                        "explicit_completion": True,
+                    },
+                )
+                continue
+
+            if tool_name != "execute_command":
+                logger.debug("[_process_tool_calls] Skipping unknown tool: %s", tool_name)
                 continue
 
             async for msg in self._process_single_command(
@@ -628,3 +656,6 @@ class ToolHandlerMixin:
                     ),
                 },
             )
+
+        # Issue #654: Yield break_loop signal as final item
+        yield (break_loop_requested, respond_content)
