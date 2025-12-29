@@ -16,6 +16,7 @@ import re
 from typing import Any, Dict, List
 
 from src.async_chat_workflow import WorkflowMessage
+from src.utils.errors import RepairableException, wrap_as_repairable
 
 logger = logging.getLogger(__name__)
 
@@ -536,6 +537,9 @@ class ToolHandlerMixin:
     ):
         """Process a single execute_command tool call (Issue #315: extracted).
 
+        Issue #655: Now wraps common errors as RepairableException to allow
+        LLM to retry with a different approach.
+
         Yields:
             WorkflowMessage items
         """
@@ -579,12 +583,125 @@ class ToolHandlerMixin:
 
         elif result.get("status") == "error":
             error = result.get("error", "Unknown error")
-            additional_response_parts.append(f"\n\n❌ Command execution failed: {error}")
-            yield WorkflowMessage(
-                type="error",
-                content=f"Command failed: {error}",
-                metadata={"command": command, "error": True},
+            stderr = result.get("stderr", "")
+
+            # Issue #655: Classify error as repairable or critical
+            repairable_error = self._classify_command_error(command, error, stderr)
+
+            if repairable_error:
+                # Forward to LLM as recoverable error context
+                logger.info(
+                    "[Issue #655] Repairable error for command '%s': %s",
+                    command, repairable_error.message
+                )
+                additional_response_parts.append(f"\n\n{repairable_error.to_llm_context()}")
+                yield WorkflowMessage(
+                    type="error",
+                    content=repairable_error.to_llm_context(),
+                    metadata={
+                        "command": command,
+                        "error": True,
+                        "repairable": True,
+                        "suggestion": repairable_error.suggestion,
+                    },
+                )
+            else:
+                # Non-repairable error
+                additional_response_parts.append(f"\n\n❌ Command execution failed: {error}")
+                yield WorkflowMessage(
+                    type="error",
+                    content=f"Command failed: {error}",
+                    metadata={"command": command, "error": True, "repairable": False},
+                )
+
+    def _classify_command_error(
+        self, command: str, error: str, stderr: str
+    ) -> RepairableException | None:
+        """
+        Classify command execution error as repairable or critical.
+
+        Issue #655: Analyzes error message and stderr to determine if LLM
+        can potentially fix the issue by trying a different approach.
+
+        Args:
+            command: The command that failed
+            error: Error message
+            stderr: Standard error output
+
+        Returns:
+            RepairableException if error is recoverable, None if critical
+        """
+        error_lower = error.lower()
+        stderr_lower = stderr.lower()
+        combined = f"{error_lower} {stderr_lower}"
+
+        # File not found errors
+        if "no such file or directory" in combined or "file not found" in combined:
+            return RepairableException(
+                message=f"File not found: {error}",
+                suggestion="Create the file first, or check if the path exists using 'ls'",
             )
+
+        # Permission errors
+        if "permission denied" in combined or "access denied" in combined:
+            return RepairableException(
+                message=f"Permission denied: {error}",
+                suggestion="Try using sudo, or execute from a different directory with proper permissions",
+            )
+
+        # Command not found
+        if "command not found" in combined or "not recognized" in combined:
+            cmd_name = command.split()[0] if command else "command"
+            return RepairableException(
+                message=f"Command not found: {cmd_name}",
+                suggestion=f"Install the package that provides '{cmd_name}', or use an alternative command",
+            )
+
+        # Timeout errors
+        if "timeout" in combined or "timed out" in combined:
+            return RepairableException(
+                message=f"Command timed out: {command}",
+                suggestion="Break the operation into smaller steps, or increase the timeout",
+            )
+
+        # Connection errors
+        if "connection refused" in combined or "network unreachable" in combined:
+            return RepairableException(
+                message=f"Connection error: {error}",
+                suggestion="Check network connectivity, verify the target host is running, and retry",
+            )
+
+        # Syntax errors in command
+        if "syntax error" in combined or "unexpected token" in combined:
+            return RepairableException(
+                message=f"Syntax error in command: {error}",
+                suggestion="Check the command syntax and escape special characters properly",
+            )
+
+        # Directory errors
+        if "is a directory" in combined or "not a directory" in combined:
+            return RepairableException(
+                message=f"Directory error: {error}",
+                suggestion="Use the correct path type (file vs directory) for this operation",
+            )
+
+        # Disk space errors
+        if "no space left" in combined or "disk full" in combined:
+            return RepairableException(
+                message=f"Disk space error: {error}",
+                suggestion="Free up disk space by removing unnecessary files, then retry",
+            )
+
+        # Memory errors - these are critical, not repairable
+        if "out of memory" in combined or "cannot allocate" in combined:
+            logger.warning("[Issue #655] Critical error (out of memory): %s", error)
+            return None  # Critical - not repairable
+
+        # Default: treat as repairable with generic suggestion
+        return RepairableException(
+            message=f"Command failed: {error}",
+            suggestion="Check the error details and try an alternative approach",
+        )
 
     async def _process_tool_calls(
         self,
