@@ -24,6 +24,46 @@ logger = logging.getLogger(__name__)
 APPROVAL_RESPONSE_KEYWORDS = {"approved", "denied", "executed", "rejected"}
 
 
+def _find_latest_approval_request(messages: List[Dict]) -> Optional[Dict]:
+    """
+    Find the most recent command_approval_request message (Issue #665: extracted helper).
+
+    Args:
+        messages: List of chat messages to search
+
+    Returns:
+        Most recent approval request message or None
+    """
+    for msg in reversed(messages):  # Search newest first
+        if msg.get("message_type") == "command_approval_request":
+            return msg
+    return None
+
+
+def _is_approval_already_responded(
+    messages: List[Dict], request_timestamp: float
+) -> bool:
+    """
+    Check if approval request was already responded to (Issue #665: extracted helper).
+
+    Searches for approval/denial response messages after the request timestamp.
+
+    Args:
+        messages: List of chat messages to search
+        request_timestamp: Timestamp of the approval request
+
+    Returns:
+        True if approval was already handled, False if still pending
+    """
+    for msg in reversed(messages):
+        msg_time = msg.get("timestamp", 0)
+        if msg_time > request_timestamp:
+            content = msg.get("text", "").lower()
+            if any(keyword in content for keyword in APPROVAL_RESPONSE_KEYWORDS):
+                return True
+    return False
+
+
 class SessionManager:
     """Manages agent terminal session lifecycle"""
 
@@ -328,6 +368,9 @@ class SessionManager:
         """
         Restore pending approval from chat history (survives backend restarts).
 
+        Issue #665: Refactored to use extracted helper functions for
+        finding approval requests and checking response status.
+
         Scans recent chat messages for unapproved command_approval_request messages
         and restores the pending_approval state so users can approve after restart.
 
@@ -351,12 +394,8 @@ class SessionManager:
                 )
                 return
 
-            # Search for most recent command_approval_request
-            approval_request = None
-            for msg in reversed(messages):  # Search newest first
-                if msg.get("message_type") == "command_approval_request":
-                    approval_request = msg
-                    break
+            # Search for most recent command_approval_request (Issue #665: uses helper)
+            approval_request = _find_latest_approval_request(messages)
 
             if not approval_request:
                 logger.debug(
@@ -364,25 +403,14 @@ class SessionManager:
                 )
                 return
 
-            # Check if this approval was already responded to
-            # Look for approval/denial messages AFTER the request
+            # Check if this approval was already responded to (Issue #665: uses helper)
             request_timestamp = approval_request.get("timestamp", 0)
-
-            for msg in reversed(messages):
-                msg_time = msg.get("timestamp", 0)
-                if msg_time > request_timestamp:
-                    # Check if this is an approval or denial response
-                    content = msg.get("text", "").lower()
-                    if any(
-                        keyword in content
-                        for keyword in APPROVAL_RESPONSE_KEYWORDS  # O(1) lookup (Issue #326)
-                    ):
-                        logger.info(
-                            f"Approval request already responded to in "
-                            f"conversation {conversation_id}, "
-                            f"skipping restoration"
-                        )
-                        return
+            if _is_approval_already_responded(messages, request_timestamp):
+                logger.info(
+                    f"Approval request already responded to in "
+                    f"conversation {conversation_id}, skipping restoration"
+                )
+                return
 
             # Approval is still pending! Restore state from metadata
             metadata = approval_request.get("metadata", {})

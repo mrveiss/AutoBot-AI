@@ -98,6 +98,68 @@ class TracingService:
 
         TracingService._initialized = True
 
+    def _resolve_service_name(self, service_name: Optional[str]) -> str:
+        """
+        Resolve service name from hostname if not provided (Issue #665: extracted helper).
+
+        Args:
+            service_name: Explicit service name or None for auto-detect
+
+        Returns:
+            Resolved service name string
+        """
+        if service_name is not None:
+            return service_name
+
+        import socket
+        try:
+            hostname = socket.gethostbyname(socket.gethostname())
+            return SERVICE_INSTANCES.get(hostname, "autobot-unknown")
+        except Exception:
+            return "autobot-backend"
+
+    def _create_resource(self) -> Resource:
+        """
+        Create OpenTelemetry resource with service information (Issue #665: extracted helper).
+
+        Returns:
+            Resource with service name, version, and namespace
+        """
+        return Resource.create({
+            SERVICE_NAME: self._service_name,
+            SERVICE_VERSION: self._service_version,
+            "deployment.environment": os.getenv("AUTOBOT_ENV", "development"),
+            "service.namespace": "autobot",
+        })
+
+    def _setup_exporters(self, enable_console_export: bool) -> None:
+        """
+        Configure OTLP and console span exporters (Issue #665: extracted helper).
+
+        Args:
+            enable_console_export: Whether to add console exporter for debugging
+        """
+        # Add OTLP exporter for Jaeger
+        try:
+            otlp_exporter = OTLPSpanExporter(
+                endpoint=self._jaeger_endpoint,
+                insecure=True,  # Use insecure for internal network
+            )
+            self._provider.add_span_processor(
+                BatchSpanProcessor(otlp_exporter)
+            )
+            logger.info("OTLP exporter configured for %s", self._jaeger_endpoint)
+        except Exception as e:
+            logger.warning("Failed to configure OTLP exporter: %s", e)
+            # Continue without OTLP - tracing still works locally
+
+        # Optionally add console exporter for debugging
+        if enable_console_export or self._console_export:
+            self._provider.add_span_processor(
+                BatchSpanProcessor(ConsoleSpanExporter())
+            )
+            logger.info("Console span exporter enabled for debugging")
+
     def initialize(
         self,
         service_name: Optional[str] = None,
@@ -107,6 +169,9 @@ class TracingService:
     ) -> bool:
         """
         Initialize the OpenTelemetry tracing provider.
+
+        Issue #665: Refactored to use extracted helper methods for
+        service name resolution, resource creation, and exporter setup.
 
         Args:
             service_name: Name of this service for trace attribution
@@ -118,52 +183,21 @@ class TracingService:
             True if initialization succeeded, False otherwise
         """
         try:
-            # Determine service name from IP if not provided
-            if service_name is None:
-                import socket
-                try:
-                    hostname = socket.gethostbyname(socket.gethostname())
-                    service_name = SERVICE_INSTANCES.get(hostname, "autobot-unknown")
-                except Exception:
-                    service_name = "autobot-backend"
-
-            self._service_name = service_name
+            # Determine service name from IP if not provided (Issue #665: uses helper)
+            self._service_name = self._resolve_service_name(service_name)
             self._service_version = service_version
 
             if jaeger_endpoint:
                 self._jaeger_endpoint = jaeger_endpoint
 
-            # Create resource with service information
-            resource = Resource.create({
-                SERVICE_NAME: self._service_name,
-                SERVICE_VERSION: self._service_version,
-                "deployment.environment": os.getenv("AUTOBOT_ENV", "development"),
-                "service.namespace": "autobot",
-            })
+            # Create resource with service information (Issue #665: uses helper)
+            resource = self._create_resource()
 
             # Create tracer provider
             self._provider = TracerProvider(resource=resource)
 
-            # Add OTLP exporter for Jaeger
-            try:
-                otlp_exporter = OTLPSpanExporter(
-                    endpoint=self._jaeger_endpoint,
-                    insecure=True,  # Use insecure for internal network
-                )
-                self._provider.add_span_processor(
-                    BatchSpanProcessor(otlp_exporter)
-                )
-                logger.info("OTLP exporter configured for %s", self._jaeger_endpoint)
-            except Exception as e:
-                logger.warning("Failed to configure OTLP exporter: %s", e)
-                # Continue without OTLP - tracing still works locally
-
-            # Optionally add console exporter for debugging
-            if enable_console_export or self._console_export:
-                self._provider.add_span_processor(
-                    BatchSpanProcessor(ConsoleSpanExporter())
-                )
-                logger.info("Console span exporter enabled for debugging")
+            # Configure exporters (Issue #665: uses helper)
+            self._setup_exporters(enable_console_export)
 
             # Set as global tracer provider
             trace.set_tracer_provider(self._provider)
