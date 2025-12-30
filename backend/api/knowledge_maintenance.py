@@ -919,6 +919,43 @@ async def find_session_orphan_facts(req: Request):
     }
 
 
+async def _delete_orphan_facts(
+    kb, orphaned_facts: list, preserve_important: bool
+) -> tuple:
+    """
+    Delete orphan facts with optional preservation (Issue #665: extracted helper).
+
+    Returns:
+        Tuple of (deleted_count, preserved_count, preserved_facts_list)
+    """
+    deleted_count = 0
+    preserved_count = 0
+    preserved_facts = []
+
+    for fact in orphaned_facts:
+        if preserve_important and (fact.get("important") or fact.get("preserve")):
+            preserved_count += 1
+            preserved_facts.append({
+                "fact_id": fact["fact_id"],
+                "reason": "marked as important/preserve"
+            })
+            continue
+
+        try:
+            result = await kb.delete_fact(fact["fact_id"])
+            if result.get("status") == "success":
+                deleted_count += 1
+            else:
+                logger.warning(
+                    "Failed to delete fact %s: %s",
+                    fact["fact_id"], result.get("message")
+                )
+        except Exception as e:
+            logger.error("Error deleting fact %s: %s", fact["fact_id"], e)
+
+    return deleted_count, preserved_count, preserved_facts
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cleanup_session_orphans",
@@ -934,15 +971,12 @@ async def cleanup_session_orphan_facts(
     Remove facts from deleted chat sessions.
 
     Issue #547: Cleans up orphaned KB data from deleted conversations.
+    Issue #665: Refactored to use extracted helper.
 
     Args:
         dry_run: If True, only report orphans without deleting (default: True)
         preserve_important: If True, keep facts marked as important/preserve (default: True)
-
-    Returns:
-        Report of orphans found and removed
     """
-    # First find orphans
     orphans_response = await find_session_orphan_facts(req)
     orphaned_facts = orphans_response.get("orphaned_facts", [])
 
@@ -954,8 +988,6 @@ async def cleanup_session_orphan_facts(
             "preserved_count": 0,
         }
 
-    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-
     deleted_count = 0
     preserved_count = 0
     preserved_facts = []
@@ -965,30 +997,10 @@ async def cleanup_session_orphan_facts(
             "Cleaning up %d session-orphan facts (preserve_important=%s)",
             len(orphaned_facts), preserve_important
         )
-
-        for fact in orphaned_facts:
-            # Check if should preserve
-            if preserve_important and (fact.get("important") or fact.get("preserve")):
-                preserved_count += 1
-                preserved_facts.append({
-                    "fact_id": fact["fact_id"],
-                    "reason": "marked as important/preserve"
-                })
-                continue
-
-            # Delete the fact using KB method
-            try:
-                result = await kb.delete_fact(fact["fact_id"])
-                if result.get("status") == "success":
-                    deleted_count += 1
-                else:
-                    logger.warning(
-                        "Failed to delete fact %s: %s",
-                        fact["fact_id"], result.get("message")
-                    )
-            except Exception as e:
-                logger.error("Error deleting fact %s: %s", fact["fact_id"], e)
-
+        kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+        deleted_count, preserved_count, preserved_facts = await _delete_orphan_facts(
+            kb, orphaned_facts, preserve_important
+        )
         logger.info(
             "Session-orphan cleanup: deleted=%d, preserved=%d",
             deleted_count, preserved_count

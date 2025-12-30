@@ -990,26 +990,63 @@ _suggestion_generator = QuerySuggestionGenerator()
 _code_explainer = CodeExplainer()
 
 
+def _convert_search_result_to_dict(result) -> dict:
+    """Convert a search result to dictionary format (Issue #665: extracted helper)."""
+    return {
+        "file_path": result.file_path if hasattr(result, "file_path") else str(result.get("file_path", "")),
+        "line_number": result.line_number if hasattr(result, "line_number") else result.get("line_number", 0),
+        "content": result.content[:500] if hasattr(result, "content") else str(result.get("content", ""))[:500],
+        "confidence": result.confidence if hasattr(result, "confidence") else result.get("confidence", 0.0),
+    }
+
+
+def _build_parsed_query_response(parsed) -> ParsedQueryResponse:
+    """Build ParsedQueryResponse from parsed query (Issue #665: extracted helper)."""
+    return ParsedQueryResponse(
+        original_query=parsed.original_query,
+        normalized_query=parsed.normalized_query,
+        intent=parsed.intent.value,
+        domain=parsed.domain.value,
+        entities=parsed.entities,
+        keywords=parsed.keywords,
+        search_terms=parsed.search_terms,
+        confidence=parsed.confidence,
+        question_type=parsed.question_type,
+    )
+
+
+def _convert_suggestions_to_dicts(suggestions: list) -> list:
+    """Convert suggestion objects to dictionaries (Issue #665: extracted helper)."""
+    return [
+        {
+            "suggestion": s.suggestion,
+            "reason": s.reason,
+            "intent": s.intent.value,
+            "relevance_score": s.relevance_score,
+        }
+        for s in suggestions
+    ]
+
+
 @router.post("/search", response_model=NLSearchResponse)
 async def natural_language_search(request: NLSearchRequest):
     """
     Search codebase using natural language queries.
 
+    Issue #665: Refactored to use extracted helper functions.
+
     Examples:
     - "Where do we handle user authentication?"
     - "Show me all Redis cache invalidation logic"
-    - "How is the conversation flow initialized?"
-    - "Find error handling for database connections"
     """
     import time
 
     start_time = time.time()
 
     try:
-        # Parse the query
         parsed = _parser.parse(request.query)
 
-        # Perform semantic search using existing code search
+        # Perform semantic search
         try:
             from backend.api.code_search import search_codebase
 
@@ -1020,52 +1057,23 @@ async def natural_language_search(request: NLSearchRequest):
                 max_results=request.max_results,
             )
         except ImportError:
-            # Fallback if code_search not available
             search_results = []
 
-        # Generate explanations if requested
+        # Convert results and add explanations
         results_with_explanations = []
         for result in search_results:
-            result_dict = {
-                "file_path": result.file_path if hasattr(result, "file_path") else str(result.get("file_path", "")),
-                "line_number": result.line_number if hasattr(result, "line_number") else result.get("line_number", 0),
-                "content": result.content[:500] if hasattr(result, "content") else str(result.get("content", ""))[:500],
-                "confidence": result.confidence if hasattr(result, "confidence") else result.get("confidence", 0.0),
-            }
-
-            # Issue #315: Use helper for explanation generation
+            result_dict = _convert_search_result_to_dict(result)
             if request.include_explanations:
                 await _add_explanation_to_result(result_dict, _code_explainer)
-
             results_with_explanations.append(SearchResultWithExplanation(**result_dict))
 
-        # Generate suggestions
         suggestions = _suggestion_generator.generate_suggestions(parsed, search_results)
-
         search_time = (time.time() - start_time) * 1000
 
         return NLSearchResponse(
-            query=ParsedQueryResponse(
-                original_query=parsed.original_query,
-                normalized_query=parsed.normalized_query,
-                intent=parsed.intent.value,
-                domain=parsed.domain.value,
-                entities=parsed.entities,
-                keywords=parsed.keywords,
-                search_terms=parsed.search_terms,
-                confidence=parsed.confidence,
-                question_type=parsed.question_type,
-            ),
+            query=_build_parsed_query_response(parsed),
             results=results_with_explanations,
-            suggestions=[
-                {
-                    "suggestion": s.suggestion,
-                    "reason": s.reason,
-                    "intent": s.intent.value,
-                    "relevance_score": s.relevance_score,
-                }
-                for s in suggestions
-            ],
+            suggestions=_convert_suggestions_to_dicts(suggestions),
             total_results=len(results_with_explanations),
             search_time_ms=search_time,
         )
