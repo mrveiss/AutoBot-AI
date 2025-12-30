@@ -681,16 +681,62 @@ class CFGBuilder(ast.NodeVisitor):
                 names.update(self._extract_modified_names_from_node(node))
         return names
 
+    def _create_except_issue(
+        self, handler: ast.ExceptHandler, issue_type: IssueType, message: str, suggestion: str
+    ) -> CFGIssue:
+        """
+        Create a CFGIssue for an exception handler.
+
+        Issue #665: Extracted from _process_try for clarity.
+        """
+        return CFGIssue(
+            issue_type=issue_type,
+            severity=IssueSeverity.MEDIUM,
+            line_start=handler.lineno,
+            line_end=getattr(handler, "end_lineno", handler.lineno),
+            message=message,
+            suggestion=suggestion,
+            code_snippet=self._get_source_segment(handler),
+        )
+
+    def _check_exception_handler_issues(self, handler: ast.ExceptHandler) -> None:
+        """
+        Check exception handler for bare except or empty except issues.
+
+        Issue #665: Extracted from _process_try for clarity.
+        """
+        if handler.type is None:
+            issue = self._create_except_issue(
+                handler,
+                IssueType.BARE_EXCEPT,
+                "Bare except clause catches all exceptions including SystemExit",
+                "Specify exception types or use 'except Exception:'",
+            )
+            if self._current_graph:
+                self._current_graph.issues.append(issue)
+
+        if len(handler.body) == 1 and isinstance(handler.body[0], ast.Pass):
+            issue = self._create_except_issue(
+                handler,
+                IssueType.EMPTY_EXCEPT,
+                "Empty except block silently swallows exceptions",
+                "Log the exception or handle it appropriately",
+            )
+            if self._current_graph:
+                self._current_graph.issues.append(issue)
+
     def _process_try(self, stmt: ast.Try) -> List[str]:
-        """Process a try statement."""
-        # Create try block entry
+        """
+        Process a try statement.
+
+        Issue #665: Refactored to use helper methods for issue detection.
+        """
         try_node = self._add_node(NodeType.TRY_BLOCK, stmt, "try:")
 
         if self._current_node_id:
             self._add_edge(self._current_node_id, try_node.id, EdgeType.SEQUENTIAL)
 
         self._try_stack.append(try_node.id)
-
         exit_nodes: List[str] = []
 
         # Process try body
@@ -698,7 +744,7 @@ class CFGBuilder(ast.NodeVisitor):
         try_exits = self._process_block(stmt.body)
         exit_nodes.extend(try_exits)
 
-        # Process except handlers
+        # Issue #665: Process except handlers using helper for issue checks
         for handler in stmt.handlers:
             handler_node = self._add_node(
                 NodeType.EXCEPT_HANDLER,
@@ -706,34 +752,7 @@ class CFGBuilder(ast.NodeVisitor):
                 f"except {handler.type.id if handler.type and hasattr(handler.type, 'id') else 'Exception'}:",
             )
             self._add_edge(try_node.id, handler_node.id, EdgeType.EXCEPTION)
-
-            # Check for bare except
-            if handler.type is None:
-                issue = CFGIssue(
-                    issue_type=IssueType.BARE_EXCEPT,
-                    severity=IssueSeverity.MEDIUM,
-                    line_start=handler.lineno,
-                    line_end=getattr(handler, "end_lineno", handler.lineno),
-                    message="Bare except clause catches all exceptions including SystemExit",
-                    suggestion="Specify exception types or use 'except Exception:'",
-                    code_snippet=self._get_source_segment(handler),
-                )
-                if self._current_graph:
-                    self._current_graph.issues.append(issue)
-
-            # Check for empty except
-            if len(handler.body) == 1 and isinstance(handler.body[0], ast.Pass):
-                issue = CFGIssue(
-                    issue_type=IssueType.EMPTY_EXCEPT,
-                    severity=IssueSeverity.MEDIUM,
-                    line_start=handler.lineno,
-                    line_end=getattr(handler, "end_lineno", handler.lineno),
-                    message="Empty except block silently swallows exceptions",
-                    suggestion="Log the exception or handle it appropriately",
-                    code_snippet=self._get_source_segment(handler),
-                )
-                if self._current_graph:
-                    self._current_graph.issues.append(issue)
+            self._check_exception_handler_issues(handler)
 
             self._current_node_id = handler_node.id
             handler_exits = self._process_block(handler.body)
@@ -758,7 +777,6 @@ class CFGBuilder(ast.NodeVisitor):
             exit_nodes = finally_exits
 
         self._try_stack.pop()
-
         return exit_nodes
 
     def _process_with(self, stmt: ast.With) -> List[str]:
@@ -833,61 +851,31 @@ class CFGBuilder(ast.NodeVisitor):
 
         return []  # Continue terminates normal flow
 
-    def _calculate_metrics(self) -> None:
-        """Calculate CFG metrics."""
-        if not self._current_graph:
-            return
+    def _check_high_complexity(self, graph: "ControlFlowGraph", complexity: int) -> None:
+        """
+        Check and add issue for high cyclomatic complexity.
 
-        graph = self._current_graph
-
-        # Cyclomatic complexity: E - N + 2P
-        # Where E = edges, N = nodes, P = connected components (1 for function)
-        num_edges = len(graph.edges)
-        num_nodes = len(graph.nodes)
-        cyclomatic_complexity = num_edges - num_nodes + 2
-
-        # Count condition nodes (decision points)
-        decision_points = sum(
-            1 for node in graph.nodes if node.node_type == NodeType.CONDITION
-        )
-
-        # Count loop nodes
-        loop_count = sum(
-            1 for node in graph.nodes if node.node_type == NodeType.LOOP_HEADER
-        )
-
-        # Calculate max nesting depth
-        max_depth = self._calculate_nesting_depth()
-
-        graph.metrics = {
-            "cyclomatic_complexity": cyclomatic_complexity,
-            "node_count": num_nodes,
-            "edge_count": num_edges,
-            "decision_points": decision_points,
-            "loop_count": loop_count,
-            "max_nesting_depth": max_depth,
-            "complexity_rating": self._rate_complexity(cyclomatic_complexity),
-        }
-
-        # Check for high complexity
-        if cyclomatic_complexity > 10:
-            severity = (
-                IssueSeverity.CRITICAL
-                if cyclomatic_complexity > 20
-                else IssueSeverity.HIGH
-            )
+        Issue #665: Extracted from _calculate_metrics for clarity.
+        """
+        if complexity > 10:
+            severity = IssueSeverity.CRITICAL if complexity > 20 else IssueSeverity.HIGH
             issue = CFGIssue(
                 issue_type=IssueType.HIGH_CYCLOMATIC_COMPLEXITY,
                 severity=severity,
                 line_start=graph.nodes[0].line_start if graph.nodes else 1,
                 line_end=graph.nodes[-1].line_end if graph.nodes else 1,
-                message=f"High cyclomatic complexity: {cyclomatic_complexity}",
+                message=f"High cyclomatic complexity: {complexity}",
                 suggestion="Consider breaking function into smaller functions",
-                metadata={"complexity": cyclomatic_complexity},
+                metadata={"complexity": complexity},
             )
             graph.issues.append(issue)
 
-        # Check for deep nesting
+    def _check_deep_nesting(self, graph: "ControlFlowGraph", max_depth: int) -> None:
+        """
+        Check and add issue for deep nesting.
+
+        Issue #665: Extracted from _calculate_metrics for clarity.
+        """
         if max_depth > 4:
             severity = IssueSeverity.HIGH if max_depth > 6 else IssueSeverity.MEDIUM
             issue = CFGIssue(
@@ -900,6 +888,45 @@ class CFGBuilder(ast.NodeVisitor):
                 metadata={"depth": max_depth},
             )
             graph.issues.append(issue)
+
+    def _calculate_metrics(self) -> None:
+        """
+        Calculate CFG metrics.
+
+        Issue #665: Refactored to use helper methods for issue checks.
+        """
+        if not self._current_graph:
+            return
+
+        graph = self._current_graph
+
+        # Cyclomatic complexity: E - N + 2P
+        num_edges = len(graph.edges)
+        num_nodes = len(graph.nodes)
+        cyclomatic_complexity = num_edges - num_nodes + 2
+
+        # Count decision and loop nodes
+        decision_points = sum(
+            1 for node in graph.nodes if node.node_type == NodeType.CONDITION
+        )
+        loop_count = sum(
+            1 for node in graph.nodes if node.node_type == NodeType.LOOP_HEADER
+        )
+        max_depth = self._calculate_nesting_depth()
+
+        graph.metrics = {
+            "cyclomatic_complexity": cyclomatic_complexity,
+            "node_count": num_nodes,
+            "edge_count": num_edges,
+            "decision_points": decision_points,
+            "loop_count": loop_count,
+            "max_nesting_depth": max_depth,
+            "complexity_rating": self._rate_complexity(cyclomatic_complexity),
+        }
+
+        # Issue #665: Use extracted helper methods for issue detection
+        self._check_high_complexity(graph, cyclomatic_complexity)
+        self._check_deep_nesting(graph, max_depth)
 
     def _calculate_nesting_depth(self) -> int:
         """Calculate maximum nesting depth."""
