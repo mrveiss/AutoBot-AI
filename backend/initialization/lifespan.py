@@ -77,9 +77,88 @@ def configure_logging():
     logger.info("📊 Logging level set to: %s (%s)", LOG_LEVEL, LOG_LEVEL_VALUE)
 
 
+async def _init_chat_history_manager(app: FastAPI) -> None:
+    """Initialize chat history manager (Issue #665: extracted helper).
+
+    Args:
+        app: FastAPI application instance
+
+    Raises:
+        RuntimeError: If initialization fails
+    """
+    logger.info("✅ [ 30%] Chat History: Initializing chat history manager...")
+    try:
+        chat_history_manager = ChatHistoryManager()
+        app.state.chat_history_manager = chat_history_manager
+        await update_app_state("chat_history_manager", chat_history_manager)
+        logger.info("✅ [ 30%] Chat History: Manager initialized successfully")
+    except Exception as chat_history_error:
+        logger.error(
+            f"❌ CRITICAL: Chat history manager initialization failed: {chat_history_error}"
+        )
+        raise RuntimeError(
+            f"Chat history manager initialization failed: {chat_history_error}"
+        )
+
+
+async def _init_conversation_file_manager(app: FastAPI) -> None:
+    """Initialize conversation file manager database (Issue #665: extracted helper).
+
+    Args:
+        app: FastAPI application instance
+
+    Raises:
+        RuntimeError: If initialization fails
+    """
+    logger.info("✅ [ 40%] Conversation Files DB: Initializing database schema...")
+    try:
+        from src.conversation_file_manager import get_conversation_file_manager
+
+        conversation_file_manager = await get_conversation_file_manager()
+        await conversation_file_manager.initialize()
+        app.state.conversation_file_manager = conversation_file_manager
+        await update_app_state("conversation_file_manager", conversation_file_manager)
+        logger.info(
+            "✅ [ 40%] Conversation Files DB: Database initialized and verified"
+        )
+    except Exception as conv_file_error:
+        logger.error(
+            f"❌ CRITICAL: Conversation files database initialization failed: {conv_file_error}"
+        )
+        logger.error("Backend startup ABORTED - database must be operational")
+        raise RuntimeError(f"Database initialization failed: {conv_file_error}")
+
+
+async def _init_chat_workflow_manager(app: FastAPI) -> None:
+    """Initialize chat workflow manager (Issue #665: extracted helper).
+
+    Args:
+        app: FastAPI application instance
+
+    Raises:
+        RuntimeError: If initialization fails
+    """
+    logger.info("✅ [ 50%] Chat Workflow: Initializing workflow manager...")
+    try:
+        chat_workflow_manager = ChatWorkflowManager()
+        await chat_workflow_manager.initialize()
+        app.state.chat_workflow_manager = chat_workflow_manager
+        await update_app_state("chat_workflow_manager", chat_workflow_manager)
+        logger.info("✅ [ 50%] Chat Workflow: Manager initialized with async Redis")
+    except Exception as chat_error:
+        logger.error(
+            f"❌ CRITICAL: Chat workflow manager initialization failed: {chat_error}"
+        )
+        raise RuntimeError(
+            f"Chat workflow manager initialization failed: {chat_error}"
+        )
+
+
 async def initialize_critical_services(app: FastAPI):
     """
-    Phase 1: Initialize critical services (BLOCKING)
+    Phase 1: Initialize critical services (BLOCKING).
+
+    Issue #665: Refactored to use extracted helper methods for each service.
 
     These services MUST be operational before serving requests.
     Failure in this phase will prevent app startup.
@@ -116,55 +195,10 @@ async def initialize_critical_services(app: FastAPI):
             "✅ [ 20%] Redis: Using centralized Redis client management (src.utils.redis_client)"
         )
 
-        # Initialize Chat History Manager - CRITICAL
-        logger.info("✅ [ 30%] Chat History: Initializing chat history manager...")
-        try:
-            chat_history_manager = ChatHistoryManager()
-            app.state.chat_history_manager = chat_history_manager
-            await update_app_state("chat_history_manager", chat_history_manager)
-            logger.info("✅ [ 30%] Chat History: Manager initialized successfully")
-        except Exception as chat_history_error:
-            logger.error(
-                f"❌ CRITICAL: Chat history manager initialization failed: {chat_history_error}"
-            )
-            raise RuntimeError(
-                f"Chat history manager initialization failed: {chat_history_error}"
-            )
-
-        # Initialize Conversation File Manager Database - CRITICAL
-        logger.info("✅ [ 40%] Conversation Files DB: Initializing database schema...")
-        try:
-            from src.conversation_file_manager import get_conversation_file_manager
-
-            conversation_file_manager = await get_conversation_file_manager()
-            await conversation_file_manager.initialize()
-            app.state.conversation_file_manager = conversation_file_manager
-            await update_app_state("conversation_file_manager", conversation_file_manager)
-            logger.info(
-                "✅ [ 40%] Conversation Files DB: Database initialized and verified"
-            )
-        except Exception as conv_file_error:
-            logger.error(
-                f"❌ CRITICAL: Conversation files database initialization failed: {conv_file_error}"
-            )
-            logger.error("Backend startup ABORTED - database must be operational")
-            raise RuntimeError(f"Database initialization failed: {conv_file_error}")
-
-        # Initialize Chat Workflow Manager - CRITICAL
-        logger.info("✅ [ 50%] Chat Workflow: Initializing workflow manager...")
-        try:
-            chat_workflow_manager = ChatWorkflowManager()
-            await chat_workflow_manager.initialize()
-            app.state.chat_workflow_manager = chat_workflow_manager
-            await update_app_state("chat_workflow_manager", chat_workflow_manager)
-            logger.info("✅ [ 50%] Chat Workflow: Manager initialized with async Redis")
-        except Exception as chat_error:
-            logger.error(
-                f"❌ CRITICAL: Chat workflow manager initialization failed: {chat_error}"
-            )
-            raise RuntimeError(
-                f"Chat workflow manager initialization failed: {chat_error}"
-            )
+        # Initialize critical services (Issue #665: uses helpers)
+        await _init_chat_history_manager(app)
+        await _init_conversation_file_manager(app)
+        await _init_chat_workflow_manager(app)
 
         logger.info("✅ [ 60%] PHASE 1 COMPLETE: All critical services operational")
 

@@ -81,100 +81,116 @@ class EnhancedMemoryManager:
             f"Enhanced Memory Manager initialized with database: {self.db_path}"
         )
 
+    def _create_tables(self, conn: sqlite3.Connection) -> None:
+        """Create all database tables (Issue #665: extracted helper).
+
+        Args:
+            conn: SQLite connection
+        """
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS task_execution_history (
+                task_id TEXT PRIMARY KEY,
+                task_name TEXT NOT NULL,
+                description TEXT,
+                status TEXT NOT NULL,
+                priority TEXT NOT NULL,
+                created_at TIMESTAMP NOT NULL,
+                started_at TIMESTAMP,
+                completed_at TIMESTAMP,
+                duration_seconds REAL,
+                agent_type TEXT,
+                inputs_json TEXT,
+                outputs_json TEXT,
+                error_message TEXT,
+                retry_count INTEGER DEFAULT 0,
+                parent_task_id TEXT,
+                metadata_json TEXT,
+                FOREIGN KEY (parent_task_id) REFERENCES task_execution_history(task_id)
+            )
+        """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS markdown_references (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id TEXT NOT NULL,
+                markdown_file_path TEXT NOT NULL,
+                content_hash TEXT NOT NULL,
+                reference_type TEXT NOT NULL,
+                created_at TIMESTAMP NOT NULL,
+                FOREIGN KEY (task_id) REFERENCES task_execution_history(task_id)
+            )
+        """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS embedding_cache (
+                content_hash TEXT PRIMARY KEY,
+                content_type TEXT NOT NULL,
+                embedding_model TEXT NOT NULL,
+                embedding_data BLOB NOT NULL,
+                created_at TIMESTAMP NOT NULL,
+                last_accessed TIMESTAMP NOT NULL
+            )
+        """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS subtask_relationships (
+                parent_task_id TEXT NOT NULL,
+                subtask_id TEXT NOT NULL,
+                created_at TIMESTAMP NOT NULL,
+                PRIMARY KEY (parent_task_id, subtask_id),
+                FOREIGN KEY (parent_task_id) REFERENCES task_execution_history(task_id),
+                FOREIGN KEY (subtask_id) REFERENCES task_execution_history(task_id)
+            )
+        """
+        )
+
+    def _create_indexes(self, conn: sqlite3.Connection) -> None:
+        """Create performance indexes (Issue #665: extracted helper).
+
+        Args:
+            conn: SQLite connection
+        """
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_task_status ON task_execution_history(status)
+        """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_task_created_at ON task_execution_history(created_at)
+        """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_task_agent_type ON task_execution_history(agent_type)
+        """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_markdown_task_id ON markdown_references(task_id)
+        """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_embedding_model ON embedding_cache(embedding_model)
+        """
+        )
+
     def _init_database(self):
-        """Initialize SQLite database with comprehensive schema"""
+        """Initialize SQLite database with comprehensive schema.
+
+        Issue #665: Refactored to use _create_tables and _create_indexes helpers.
+        """
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS task_execution_history (
-                    task_id TEXT PRIMARY KEY,
-                    task_name TEXT NOT NULL,
-                    description TEXT,
-                    status TEXT NOT NULL,
-                    priority TEXT NOT NULL,
-                    created_at TIMESTAMP NOT NULL,
-                    started_at TIMESTAMP,
-                    completed_at TIMESTAMP,
-                    duration_seconds REAL,
-                    agent_type TEXT,
-                    inputs_json TEXT,
-                    outputs_json TEXT,
-                    error_message TEXT,
-                    retry_count INTEGER DEFAULT 0,
-                    parent_task_id TEXT,
-                    metadata_json TEXT,
-                    FOREIGN KEY (parent_task_id) REFERENCES task_execution_history(task_id)
-                )
-            """
-            )
-
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS markdown_references (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    task_id TEXT NOT NULL,
-                    markdown_file_path TEXT NOT NULL,
-                    content_hash TEXT NOT NULL,
-                    reference_type TEXT NOT NULL,
-                    created_at TIMESTAMP NOT NULL,
-                    FOREIGN KEY (task_id) REFERENCES task_execution_history(task_id)
-                )
-            """
-            )
-
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS embedding_cache (
-                    content_hash TEXT PRIMARY KEY,
-                    content_type TEXT NOT NULL,
-                    embedding_model TEXT NOT NULL,
-                    embedding_data BLOB NOT NULL,
-                    created_at TIMESTAMP NOT NULL,
-                    last_accessed TIMESTAMP NOT NULL
-                )
-            """
-            )
-
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS subtask_relationships (
-                    parent_task_id TEXT NOT NULL,
-                    subtask_id TEXT NOT NULL,
-                    created_at TIMESTAMP NOT NULL,
-                    PRIMARY KEY (parent_task_id, subtask_id),
-                    FOREIGN KEY (parent_task_id) REFERENCES task_execution_history(task_id),
-                    FOREIGN KEY (subtask_id) REFERENCES task_execution_history(task_id)
-                )
-            """
-            )
-
-            # Create indexes for performance
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_task_status ON task_execution_history(status)
-            """
-            )
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_task_created_at ON task_execution_history(created_at)
-            """
-            )
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_task_agent_type ON task_execution_history(agent_type)
-            """
-            )
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_markdown_task_id ON markdown_references(task_id)
-            """
-            )
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_embedding_model ON embedding_cache(embedding_model)
-            """
-            )
-
+            self._create_tables(conn)
+            self._create_indexes(conn)
             conn.commit()
 
     def create_task_record(
