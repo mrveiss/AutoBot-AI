@@ -141,6 +141,94 @@ class ClearHistoryRequest(BaseModel):
     session_id: Optional[str] = Field("default", description="Session to clear")
 
 
+# =============================================================================
+# Helper Functions (Issue #665)
+# =============================================================================
+
+
+def _calculate_stage_distribution(session_thoughts: List[Metadata]) -> Dict[str, int]:
+    """Calculate the distribution of thoughts across cognitive stages (Issue #665: extracted helper)."""
+    stage_counts = {}
+    for stage in ThinkingStage:
+        stage_counts[stage.value] = sum(
+            1 for t in session_thoughts if t["stage"] == stage.value
+        )
+    return stage_counts
+
+
+def _collect_thought_metadata(session_thoughts: List[Metadata]) -> Dict[str, set]:
+    """Collect all metadata (tags, axioms, assumptions) from thoughts (Issue #665: extracted helper)."""
+    all_tags = set()
+    all_axioms = set()
+    all_assumptions = set()
+
+    for t in session_thoughts:
+        all_tags.update(t.get("tags", []))
+        all_axioms.update(t.get("axioms_used", []))
+        all_assumptions.update(t.get("assumptions_challenged", []))
+
+    return {
+        "tags": all_tags,
+        "axioms": all_axioms,
+        "assumptions": all_assumptions,
+    }
+
+
+def _find_related_thoughts(
+    request_tags: List[str], session_thoughts: List[Metadata]
+) -> List[Metadata]:
+    """Find thoughts with matching tags (Issue #665: extracted helper)."""
+    related_thoughts = []
+    for t in session_thoughts[:-1]:  # Exclude current thought
+        if any(tag in t.get("tags", []) for tag in request_tags):
+            related_thoughts.append(
+                {
+                    "thought_number": t["thought_number"],
+                    "stage": t["stage"],
+                    "common_tags": [
+                        tag for tag in request_tags if tag in t.get("tags", [])
+                    ],
+                }
+            )
+    return related_thoughts
+
+
+def _build_completion_summary(
+    session_thoughts: List[Metadata], stage_counts: Dict[str, int]
+) -> Metadata:
+    """Build completion summary when thinking is complete (Issue #665: extracted helper)."""
+    metadata = _collect_thought_metadata(session_thoughts)
+    return {
+        "total_thoughts": len(session_thoughts),
+        "stages_used": [stage for stage, count in stage_counts.items() if count > 0],
+        "unique_tags": list(metadata["tags"]),
+        "axioms_applied": list(metadata["axioms"]),
+        "assumptions_challenged": list(metadata["assumptions"]),
+    }
+
+
+def _build_stage_progression(
+    session_thoughts: List[Metadata],
+) -> Dict[str, List[Metadata]]:
+    """Build stage progression with summarized thoughts (Issue #665: extracted helper)."""
+    stage_thoughts = {}
+    for stage in ThinkingStage:
+        thoughts_in_stage = [t for t in session_thoughts if t["stage"] == stage.value]
+        if thoughts_in_stage:
+            stage_thoughts[stage.value] = [
+                {
+                    "thought_number": t["thought_number"],
+                    "thought": (
+                        t["thought"][:100] + "..."
+                        if len(t["thought"]) > 100
+                        else t["thought"]
+                    ),
+                }
+                for t in thoughts_in_stage
+            ]
+    return stage_thoughts
+
+
 # Issue #281: MCP tool definitions extracted from get_structured_thinking_mcp_tools
 STRUCTURED_THINKING_MCP_TOOL_DEFINITIONS = (
     (
@@ -219,7 +307,10 @@ async def get_structured_thinking_mcp_tools() -> List[MCPTool]:
 @router.post("/mcp/process_thought")
 async def process_thought_mcp(request: ProcessThoughtRequest) -> Metadata:
     """
-    Process and record a thought within the structured cognitive framework
+    Process and record a thought within the structured cognitive framework.
+
+    Issue #665: Refactored to use extracted helpers for stage distribution,
+    related thoughts, and completion summary.
 
     Tracks thoughts through five stages: Problem Definition, Research, Analysis,
     Synthesis, and Conclusion. Stores metadata for comprehensive analysis.
@@ -228,7 +319,6 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Metadata:
     session_id = request.get_session_key()
 
     async with _structured_sessions_lock:
-        # Initialize session if doesn't exist
         if session_id not in structured_sessions:
             structured_sessions[session_id] = []
 
@@ -238,17 +328,12 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Metadata:
     # Store thought (thread-safe)
     async with _structured_sessions_lock:
         structured_sessions[session_id].append(thought_record)
-        # Create a copy of session thoughts for processing outside the lock
         session_thoughts = list(structured_sessions[session_id])
 
-    stage_counts = {}
-    for stage in ThinkingStage:
-        stage_counts[stage.value] = sum(
-            1 for t in session_thoughts if t["stage"] == stage.value
-        )
+    # Issue #665: Use extracted helper for stage distribution
+    stage_counts = _calculate_stage_distribution(session_thoughts)
 
     # Issue #372: Use model methods for computed values
-    progress_percentage = request.get_progress_percentage()
     thinking_complete = request.is_thinking_complete()
 
     # Build response
@@ -257,7 +342,7 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Metadata:
         "session_id": session_id,
         "thought_number": request.thought_number,
         "total_thoughts": request.total_thoughts,
-        "progress_percentage": round(progress_percentage, 1),
+        "progress_percentage": round(request.get_progress_percentage(), 1),
         "current_stage": request.stage.value,
         "thinking_complete": thinking_complete,
         "stage_distribution": stage_counts,
@@ -265,46 +350,21 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Metadata:
         "message": request.get_progress_message(),
     }
 
-    # Identify related thoughts (same tags)
+    # Issue #665: Use extracted helper for related thoughts
     if request.tags:
-        related_thoughts = []
-        for idx, t in enumerate(session_thoughts[:-1]):  # Exclude current thought
-            if any(tag in t.get("tags", []) for tag in request.tags):
-                related_thoughts.append(
-                    {
-                        "thought_number": t["thought_number"],
-                        "stage": t["stage"],
-                        "common_tags": [
-                            tag for tag in request.tags if tag in t.get("tags", [])
-                        ],
-                    }
-                )
-
+        related_thoughts = _find_related_thoughts(request.tags, session_thoughts)
         if related_thoughts:
             response["related_thoughts"] = related_thoughts
 
-    # If thinking is complete, provide completion summary
+    # Issue #665: Use extracted helper for completion summary
     if thinking_complete:
-        all_tags = set()
-        all_axioms = set()
-        all_assumptions = set()
-
-        for t in session_thoughts:
-            all_tags.update(t.get("tags", []))
-            all_axioms.update(t.get("axioms_used", []))
-            all_assumptions.update(t.get("assumptions_challenged", []))
-
-        response["completion_summary"] = {
-            "total_thoughts": len(session_thoughts),
-            "stages_used": [
-                stage for stage, count in stage_counts.items() if count > 0
-            ],
-            "unique_tags": list(all_tags),
-            "axioms_applied": list(all_axioms),
-            "assumptions_challenged": list(all_assumptions),
-        }
+        response["completion_summary"] = _build_completion_summary(
+            session_thoughts, stage_counts
+        )
         logger.info(
-            f"Structured thinking session '{session_id}' completed with {len(session_thoughts)} thoughts"
+            "Structured thinking session '%s' completed with %d thoughts",
+            session_id,
+            len(session_thoughts),
         )
 
     return response
@@ -318,7 +378,10 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Metadata:
 @router.post("/mcp/generate_summary")
 async def generate_summary_mcp(request: GenerateSummaryRequest) -> Metadata:
     """
-    Generate a comprehensive summary of the thinking process
+    Generate a comprehensive summary of the thinking process.
+
+    Issue #665: Refactored to use extracted helpers for stage distribution,
+    stage progression, and metadata collection.
 
     Provides stage distribution, timeline, tags, axioms, and key insights.
     """
@@ -327,8 +390,6 @@ async def generate_summary_mcp(request: GenerateSummaryRequest) -> Metadata:
     async with _structured_sessions_lock:
         if session_id not in structured_sessions:
             raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
-
-        # Create a copy of session thoughts for processing outside the lock
         session_thoughts = list(structured_sessions[session_id])
 
     if not session_thoughts:
@@ -339,37 +400,12 @@ async def generate_summary_mcp(request: GenerateSummaryRequest) -> Metadata:
             "thought_count": 0,
         }
 
-    # Calculate stage distribution
-    stage_counts = {}
-    stage_thoughts = {}
-    for stage in ThinkingStage:
-        thoughts_in_stage = [t for t in session_thoughts if t["stage"] == stage.value]
-        stage_counts[stage.value] = len(thoughts_in_stage)
-        if thoughts_in_stage:
-            stage_thoughts[stage.value] = [
-                {
-                    "thought_number": t["thought_number"],
-                    "thought": (
-                        t["thought"][:100] + "..."
-                        if len(t["thought"]) > 100
-                        else t["thought"]
-                    ),
-                }
-                for t in thoughts_in_stage
-            ]
+    # Issue #665: Use extracted helpers
+    stage_counts = _calculate_stage_distribution(session_thoughts)
+    stage_progression = _build_stage_progression(session_thoughts)
+    metadata = _collect_thought_metadata(session_thoughts)
 
-    # Collect all metadata
-    all_tags = set()
-    all_axioms = set()
-    all_assumptions = set()
-
-    for t in session_thoughts:
-        all_tags.update(t.get("tags", []))
-        all_axioms.update(t.get("axioms_used", []))
-        all_assumptions.update(t.get("assumptions_challenged", []))
-
-    # Build summary
-    summary = {
+    return {
         "success": True,
         "session_id": session_id,
         "overview": {
@@ -379,14 +415,14 @@ async def generate_summary_mcp(request: GenerateSummaryRequest) -> Metadata:
             "complete": not session_thoughts[-1].get("next_thought_needed", True),
         },
         "stage_distribution": stage_counts,
-        "stage_progression": stage_thoughts,
+        "stage_progression": stage_progression,
         "metadata_analysis": {
-            "unique_tags": list(all_tags),
-            "tag_count": len(all_tags),
-            "axioms_applied": list(all_axioms),
-            "axioms_count": len(all_axioms),
-            "assumptions_challenged": list(all_assumptions),
-            "assumptions_count": len(all_assumptions),
+            "unique_tags": list(metadata["tags"]),
+            "tag_count": len(metadata["tags"]),
+            "axioms_applied": list(metadata["axioms"]),
+            "axioms_count": len(metadata["axioms"]),
+            "assumptions_challenged": list(metadata["assumptions"]),
+            "assumptions_count": len(metadata["assumptions"]),
         },
         "cognitive_flow": [
             {
@@ -397,8 +433,6 @@ async def generate_summary_mcp(request: GenerateSummaryRequest) -> Metadata:
             for t in session_thoughts
         ],
     }
-
-    return summary
 
 
 @with_error_handling(
