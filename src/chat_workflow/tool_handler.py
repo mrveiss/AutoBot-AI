@@ -658,37 +658,56 @@ class ToolHandlerMixin:
                 yield msg
 
         elif result.get("status") == "error":
-            error = result.get("error", "Unknown error")
-            stderr = result.get("stderr", "")
+            async for msg in self._handle_command_error(
+                command, result, additional_response_parts
+            ):
+                yield msg
 
-            # Issue #655: Classify error as repairable or critical
-            repairable_error = self._classify_command_error(command, error, stderr)
+    async def _handle_command_error(
+        self,
+        command: str,
+        result: Dict[str, Any],
+        additional_response_parts: List,
+    ):
+        """Handle command execution error (Issue #665: extracted helper).
 
-            if repairable_error:
-                # Forward to LLM as recoverable error context
-                logger.info(
-                    "[Issue #655] Repairable error for command '%s': %s",
-                    command, repairable_error.message
-                )
-                additional_response_parts.append(f"\n\n{repairable_error.to_llm_context()}")
-                yield WorkflowMessage(
-                    type="error",
-                    content=repairable_error.to_llm_context(),
-                    metadata={
-                        "command": command,
-                        "error": True,
-                        "repairable": True,
-                        "suggestion": repairable_error.suggestion,
-                    },
-                )
-            else:
-                # Non-repairable error
-                additional_response_parts.append(f"\n\n❌ Command execution failed: {error}")
-                yield WorkflowMessage(
-                    type="error",
-                    content=f"Command failed: {error}",
-                    metadata={"command": command, "error": True, "repairable": False},
-                )
+        Classifies error as repairable or critical and yields appropriate message.
+
+        Args:
+            command: The command that failed
+            result: Execution result dict with error/stderr
+            additional_response_parts: List to append context to
+
+        Yields:
+            WorkflowMessage with error details
+        """
+        error = result.get("error", "Unknown error")
+        stderr = result.get("stderr", "")
+        repairable_error = self._classify_command_error(command, error, stderr)
+
+        if repairable_error:
+            logger.info(
+                "[Issue #655] Repairable error for command '%s': %s",
+                command, repairable_error.message
+            )
+            additional_response_parts.append(f"\n\n{repairable_error.to_llm_context()}")
+            yield WorkflowMessage(
+                type="error",
+                content=repairable_error.to_llm_context(),
+                metadata={
+                    "command": command,
+                    "error": True,
+                    "repairable": True,
+                    "suggestion": repairable_error.suggestion,
+                },
+            )
+        else:
+            additional_response_parts.append(f"\n\n❌ Command execution failed: {error}")
+            yield WorkflowMessage(
+                type="error",
+                content=f"Command failed: {error}",
+                metadata={"command": command, "error": True, "repairable": False},
+            )
 
     def _classify_command_error(
         self, command: str, error: str, stderr: str

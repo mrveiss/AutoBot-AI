@@ -105,35 +105,13 @@ class AccessControlMetrics:
             await redis.set(
                 violation_key,
                 json.dumps(violation_data),
-                ex=self.retention_days * 86400,  # Expire after retention period
+                ex=self.retention_days * 86400,
             )
 
-            # Update aggregated counters
-            async with redis.pipeline() as pipe:
-                # Total count for the day
-                await pipe.hincrby(f"violations:daily:{date_str}", "total", 1)
-
-                # Count by endpoint
-                await pipe.hincrby(f"violations:by_endpoint:{date_str}", endpoint, 1)
-
-                # Count by user
-                await pipe.hincrby(f"violations:by_user:{date_str}", username, 1)
-
-                # Add to time-series sorted set
-                await pipe.zadd(
-                    f"violations:timeline:{date_str}", {violation_id: timestamp}
-                )
-
-                # Set expiration on daily keys
-                retention_seconds = (self.retention_days + 1) * 86400
-                await pipe.expire(f"violations:daily:{date_str}", retention_seconds)
-                await pipe.expire(
-                    f"violations:by_endpoint:{date_str}", retention_seconds
-                )
-                await pipe.expire(f"violations:by_user:{date_str}", retention_seconds)
-                await pipe.expire(f"violations:timeline:{date_str}", retention_seconds)
-
-                await pipe.execute()
+            # Update aggregated counters using helper
+            await self._update_violation_counters(
+                redis, date_str, violation_id, timestamp, endpoint, username
+            )
 
             logger.debug(
                 f"Recorded violation: {username} -> {endpoint} "
@@ -144,6 +122,42 @@ class AccessControlMetrics:
         except Exception as e:
             logger.error("Failed to record violation: %s", e)
             return False
+
+    async def _update_violation_counters(
+        self,
+        redis,
+        date_str: str,
+        violation_id: str,
+        timestamp: float,
+        endpoint: str,
+        username: str,
+    ) -> None:
+        """Update aggregated violation counters in Redis (Issue #665: extracted helper).
+
+        Args:
+            redis: Redis client
+            date_str: Date string for key prefix
+            violation_id: Unique violation ID
+            timestamp: Violation timestamp
+            endpoint: API endpoint
+            username: Username who violated
+        """
+        retention_seconds = (self.retention_days + 1) * 86400
+
+        async with redis.pipeline() as pipe:
+            # Update daily counters
+            await pipe.hincrby(f"violations:daily:{date_str}", "total", 1)
+            await pipe.hincrby(f"violations:by_endpoint:{date_str}", endpoint, 1)
+            await pipe.hincrby(f"violations:by_user:{date_str}", username, 1)
+            await pipe.zadd(f"violations:timeline:{date_str}", {violation_id: timestamp})
+
+            # Set expirations
+            await pipe.expire(f"violations:daily:{date_str}", retention_seconds)
+            await pipe.expire(f"violations:by_endpoint:{date_str}", retention_seconds)
+            await pipe.expire(f"violations:by_user:{date_str}", retention_seconds)
+            await pipe.expire(f"violations:timeline:{date_str}", retention_seconds)
+
+            await pipe.execute()
 
     def _aggregate_redis_counts(
         self,
