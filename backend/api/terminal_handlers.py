@@ -52,6 +52,15 @@ from src.constants.threshold_constants import TimingConstants
 # Issue #380: Module-level frozenset for terminal close event types
 _TERMINAL_CLOSE_EVENTS = frozenset({"eo", "close"})
 
+# Issue #665: Module-level signal mapping for _handle_signal_message
+import signal as _signal_module
+_SIGNAL_MAP = {
+    "SIGINT": _signal_module.SIGINT,
+    "SIGTERM": _signal_module.SIGTERM,
+    "SIGKILL": _signal_module.SIGKILL,
+    "SIGHUP": _signal_module.SIGHUP,
+}
+
 logger = logging.getLogger(__name__)
 
 
@@ -849,63 +858,55 @@ class ConsolidatedTerminalWebSocket:
         except Exception as e:
             logger.error("Error resizing terminal: %s", e)
 
+    async def _send_signal_error(self, message: str) -> None:
+        """Send signal error message to client (Issue #665: extracted helper)."""
+        await self.send_message({
+            "type": "error",
+            "content": message,
+            "timestamp": time.time(),
+        })
+
+    async def _send_signal_to_pty(self, signal_name: str, sig: int) -> bool:
+        """
+        Send signal to PTY process and notify client (Issue #665: extracted helper).
+
+        Returns True if signal was sent successfully.
+        """
+        if not self.pty_process:
+            logger.warning("No PTY process to send signal to")
+            await self._send_signal_error("No active process to interrupt")
+            return False
+
+        success = self.pty_process.send_signal(sig)
+        if success:
+            logger.info("Sent %s to PTY process", signal_name)
+            await self.send_message({
+                "type": "signal_sent",
+                "signal": signal_name,
+                "timestamp": time.time(),
+            })
+        else:
+            logger.error("Failed to send %s", signal_name)
+            await self._send_signal_error(f"Failed to send signal: {signal_name}")
+
+        return success
+
     async def _handle_signal_message(self, message: dict):
-        """Handle signal requests (SIGINT, SIGTERM, etc.)"""
+        """
+        Handle signal requests (SIGINT, SIGTERM, etc.).
+
+        Issue #665: Refactored to use module-level _SIGNAL_MAP and helper methods.
+        """
         signal_name = message.get("signal", "SIGINT")
 
         try:
-            # Map signal names to signal numbers
-            import signal
-
-            signal_map = {
-                "SIGINT": signal.SIGINT,
-                "SIGTERM": signal.SIGTERM,
-                "SIGKILL": signal.SIGKILL,
-                "SIGHUP": signal.SIGHUP,
-            }
-
-            sig = signal_map.get(signal_name)
+            sig = _SIGNAL_MAP.get(signal_name)
             if not sig:
                 logger.warning("Unknown signal: %s", signal_name)
-                await self.send_message(
-                    {
-                        "type": "error",
-                        "content": f"Unknown signal: {signal_name}",
-                        "timestamp": time.time(),
-                    }
-                )
+                await self._send_signal_error(f"Unknown signal: {signal_name}")
                 return
 
-            # Send signal to PTY process
-            if self.pty_process:
-                success = self.pty_process.send_signal(sig)
-                if success:
-                    logger.info("Sent %s to PTY process", signal_name)
-                    await self.send_message(
-                        {
-                            "type": "signal_sent",
-                            "signal": signal_name,
-                            "timestamp": time.time(),
-                        }
-                    )
-                else:
-                    logger.error("Failed to send %s", signal_name)
-                    await self.send_message(
-                        {
-                            "type": "error",
-                            "content": f"Failed to send signal: {signal_name}",
-                            "timestamp": time.time(),
-                        }
-                    )
-            else:
-                logger.warning("No PTY process to send signal to")
-                await self.send_message(
-                    {
-                        "type": "error",
-                        "content": "No active process to interrupt",
-                        "timestamp": time.time(),
-                    }
-                )
+            success = await self._send_signal_to_pty(signal_name, sig)
 
             if self.enable_logging:
                 self._log_command_activity(
@@ -913,19 +914,13 @@ class ConsolidatedTerminalWebSocket:
                     {
                         "signal": signal_name,
                         "timestamp": datetime.now().isoformat(),
-                        "success": success if self.pty_process else False,
+                        "success": success,
                     },
                 )
 
         except Exception as e:
             logger.error("Error sending signal: %s", e)
-            await self.send_message(
-                {
-                    "type": "error",
-                    "content": f"Error sending signal: {str(e)}",
-                    "timestamp": time.time(),
-                }
-            )
+            await self._send_signal_error(f"Error sending signal: {str(e)}")
 
     def _assess_command_risk(self, command: str) -> CommandRiskLevel:
         """Assess the security risk level of a command"""
@@ -1286,74 +1281,74 @@ class ConsolidatedTerminalManager:
                 logger.error("Failed to send output to terminal %s: %s", session_id, e)
         return count
 
+    def _get_single_session_stats(self, session_id: str) -> dict:
+        """
+        Build stats for a single session (Issue #665: extracted helper).
+
+        Must be called under self._lock.
+        """
+        pty_session = simple_pty_manager.get_session(session_id)
+        if not pty_session and session_id not in self.active_connections:
+            return {"error": f"Session {session_id} not found"}
+
+        session_stats = self.session_stats.get(session_id, {})
+        uptime = 0
+        if "connected_at" in session_stats:
+            uptime = (datetime.now() - session_stats["connected_at"]).total_seconds()
+
+        return {
+            "session_id": session_id,
+            "config": self.session_configs.get(session_id, {}),
+            "is_connected": session_id in self.active_connections,
+            "pty_alive": pty_session.is_alive() if pty_session else False,
+            "uptime_seconds": uptime,
+            "statistics": session_stats,
+        }
+
+    def _get_all_sessions_stats(self) -> dict:
+        """
+        Build stats for all sessions (Issue #665: extracted helper).
+
+        Must be called under self._lock.
+        """
+        with simple_pty_manager._lock:
+            pty_sessions = dict(simple_pty_manager.sessions)
+
+        total_commands = sum(
+            stats.get("commands_executed", 0) for stats in self.session_stats.values()
+        )
+
+        return {
+            "total_sessions": len(pty_sessions),
+            "active_connections": len(self.active_connections),
+            "total_commands_executed": total_commands,
+            "sessions": {
+                sid: {
+                    "is_connected": sid in self.active_connections,
+                    "commands_executed": self.session_stats.get(sid, {}).get(
+                        "commands_executed", 0
+                    ),
+                }
+                for sid in pty_sessions.keys()
+            },
+        }
+
     async def get_terminal_stats(self, session_id: str = None) -> dict:
-        """Get terminal statistics for a specific session or all sessions
+        """Get terminal statistics for a specific session or all sessions.
+
+        Issue #665: Refactored to use _get_single_session_stats and _get_all_sessions_stats.
 
         Args:
             session_id: Optional session ID. If provided, returns stats for that session.
                        If None, returns overall system statistics.
 
         Returns:
-            Dictionary containing terminal statistics including:
-            - Session counts (total, active)
-            - Per-session statistics (if session_id provided)
-            - Overall system metrics
+            Dictionary containing terminal statistics.
         """
-        # CRITICAL: Access all dictionaries under lock to prevent race conditions
         async with self._lock:
             if session_id:
-                # Return stats for specific session
-                # Use simple_pty_manager instead of non-existent self.sessions
-                pty_session = simple_pty_manager.get_session(session_id)
-                if not pty_session and session_id not in self.active_connections:
-                    return {"error": f"Session {session_id} not found"}
-
-                session_stats = self.session_stats.get(session_id, {})
-
-                # Calculate uptime
-                uptime = 0
-                if "connected_at" in session_stats:
-                    uptime = (
-                        datetime.now() - session_stats["connected_at"]
-                    ).total_seconds()
-
-                return {
-                    "session_id": session_id,
-                    "config": self.session_configs.get(session_id, {}),
-                    "is_connected": session_id in self.active_connections,
-                    "pty_alive": pty_session.is_alive() if pty_session else False,
-                    "uptime_seconds": uptime,
-                    "statistics": session_stats,
-                }
-            else:
-                # Return overall system statistics
-                # Use simple_pty_manager.sessions with its lock
-                with simple_pty_manager._lock:
-                    pty_sessions = dict(simple_pty_manager.sessions)
-
-                total_sessions = len(pty_sessions)
-                active_connections = len(self.active_connections)
-                total_commands = sum(
-                    stats.get("commands_executed", 0)
-                    for stats in self.session_stats.values()
-                )
-
-                return {
-                    "total_sessions": total_sessions,
-                    "active_connections": active_connections,
-                    "total_commands_executed": total_commands,
-                    "sessions": {
-                        sid: {
-                            "is_connected": sid in self.active_connections,
-                            "commands_executed": (
-                                self.session_stats.get(sid, {}).get(
-                                    "commands_executed", 0
-                                )
-                            ),
-                        }
-                        for sid in pty_sessions.keys()
-                    },
-                }
+                return self._get_single_session_stats(session_id)
+            return self._get_all_sessions_stats()
 
 
 # Global session manager
