@@ -70,86 +70,99 @@ class SystemMetricsCollector:
             "llm": ["ollama_requests", "model_switches", "token_usage"],
         }
 
+    def _collect_cpu_metric(self, timestamp: float) -> tuple:
+        """Collect CPU metric (Issue #665: extracted helper)."""
+        cpu_percent = psutil.cpu_percent(interval=None)
+        metric = SystemMetric(
+            timestamp=timestamp,
+            name="cpu_percent",
+            value=cpu_percent,
+            unit="percent",
+            category="system",
+            metadata={"cores": psutil.cpu_count()},
+        )
+        if self.prometheus:
+            self.prometheus.update_system_cpu(cpu_percent)
+        return "cpu_percent", metric
+
+    def _collect_memory_metric(self, timestamp: float) -> tuple:
+        """Collect memory metric (Issue #665: extracted helper)."""
+        memory = psutil.virtual_memory()
+        metric = SystemMetric(
+            timestamp=timestamp,
+            name="memory_percent",
+            value=memory.percent,
+            unit="percent",
+            category="system",
+            metadata={
+                "total_gb": round(memory.total / (1024**3), 2),
+                "available_gb": round(memory.available / (1024**3), 2),
+            },
+        )
+        if self.prometheus:
+            self.prometheus.update_system_memory(memory.percent)
+        return "memory_percent", metric
+
+    def _collect_disk_metric(self, timestamp: float) -> tuple:
+        """Collect disk usage metric (Issue #665: extracted helper)."""
+        disk = psutil.disk_usage("/")
+        disk_percent = (disk.used / disk.total) * 100
+        metric = SystemMetric(
+            timestamp=timestamp,
+            name="disk_usage",
+            value=disk_percent,
+            unit="percent",
+            category="system",
+            metadata={
+                "total_gb": round(disk.total / (1024**3), 2),
+                "free_gb": round(disk.free / (1024**3), 2),
+            },
+        )
+        if self.prometheus:
+            self.prometheus.update_system_disk("/", disk_percent)
+        return "disk_usage", metric
+
+    def _collect_network_metrics(self, timestamp: float) -> Dict[str, SystemMetric]:
+        """Collect network I/O metrics (Issue #665: extracted helper)."""
+        metrics = {}
+        network = psutil.net_io_counters()
+        if network:
+            metrics["network_bytes_sent"] = SystemMetric(
+                timestamp=timestamp,
+                name="network_bytes_sent",
+                value=network.bytes_sent,
+                unit="bytes",
+                category="system",
+            )
+            metrics["network_bytes_recv"] = SystemMetric(
+                timestamp=timestamp,
+                name="network_bytes_recv",
+                value=network.bytes_recv,
+                unit="bytes",
+                category="system",
+            )
+            if self.prometheus:
+                self.prometheus.record_network_bytes("sent", network.bytes_sent)
+                self.prometheus.record_network_bytes("recv", network.bytes_recv)
+        return metrics
+
     async def collect_system_metrics(self) -> Dict[str, SystemMetric]:
         """Collect system-level metrics (CPU, memory, disk, network)"""
         metrics = {}
         timestamp = time.time()
 
         try:
-            # CPU metrics
-            cpu_percent = psutil.cpu_percent(interval=None)
-            metrics["cpu_percent"] = SystemMetric(
-                timestamp=timestamp,
-                name="cpu_percent",
-                value=cpu_percent,
-                unit="percent",
-                category="system",
-                metadata={"cores": psutil.cpu_count()},
-            )
+            # Collect all metrics using helpers
+            for collector in [
+                self._collect_cpu_metric,
+                self._collect_memory_metric,
+                self._collect_disk_metric,
+            ]:
+                key, metric = collector(timestamp)
+                metrics[key] = metric
 
-            # Phase 2 (Issue #345): Push to Prometheus
-            if self.prometheus:
-                self.prometheus.update_system_cpu(cpu_percent)
-
-            # Memory metrics
-            memory = psutil.virtual_memory()
-            metrics["memory_percent"] = SystemMetric(
-                timestamp=timestamp,
-                name="memory_percent",
-                value=memory.percent,
-                unit="percent",
-                category="system",
-                metadata={
-                    "total_gb": round(memory.total / (1024**3), 2),
-                    "available_gb": round(memory.available / (1024**3), 2),
-                },
-            )
-
-            # Phase 2 (Issue #345): Push to Prometheus
-            if self.prometheus:
-                self.prometheus.update_system_memory(memory.percent)
-
-            # Disk usage
-            disk = psutil.disk_usage("/")
-            disk_percent = (disk.used / disk.total) * 100
-            metrics["disk_usage"] = SystemMetric(
-                timestamp=timestamp,
-                name="disk_usage",
-                value=disk_percent,
-                unit="percent",
-                category="system",
-                metadata={
-                    "total_gb": round(disk.total / (1024**3), 2),
-                    "free_gb": round(disk.free / (1024**3), 2),
-                },
-            )
-
-            # Phase 2 (Issue #345): Push to Prometheus
-            if self.prometheus:
-                self.prometheus.update_system_disk("/", disk_percent)
-
-            # Network I/O
-            network = psutil.net_io_counters()
-            if network:
-                metrics["network_bytes_sent"] = SystemMetric(
-                    timestamp=timestamp,
-                    name="network_bytes_sent",
-                    value=network.bytes_sent,
-                    unit="bytes",
-                    category="system",
-                )
-                metrics["network_bytes_recv"] = SystemMetric(
-                    timestamp=timestamp,
-                    name="network_bytes_recv",
-                    value=network.bytes_recv,
-                    unit="bytes",
-                    category="system",
-                )
-
-                # Phase 2 (Issue #345): Push to Prometheus
-                if self.prometheus:
-                    self.prometheus.record_network_bytes("sent", network.bytes_sent)
-                    self.prometheus.record_network_bytes("recv", network.bytes_recv)
+            # Network metrics return multiple entries
+            metrics.update(self._collect_network_metrics(timestamp))
 
         except Exception as e:
             self.logger.error("Error collecting system metrics: %s", e)

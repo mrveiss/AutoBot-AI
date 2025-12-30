@@ -320,13 +320,50 @@ class Conversation:
                 context_analysis={"error": str(e)},
             )
 
+    def _process_kb_results(self, results: List[Dict[str, Any]]) -> None:
+        """Process KB results and track sources (Issue #665: extracted helper)."""
+        self.state.kb_context = results
+
+        for i, doc in enumerate(results):
+            source_manager.add_kb_source(
+                content=doc.get("content", "")[:200] + "...",
+                entry_id=str(doc.get("id", f"kb_{i}")),
+                confidence=doc.get("score", 0.5),
+                metadata={
+                    "title": doc.get("title", "Knowledge Base Entry"),
+                    "source_file": doc.get("source_file", "unknown"),
+                },
+            )
+
+        utility_msg = ConversationMessage(
+            message_id=str(uuid.uuid4()),
+            role="system",
+            content=f"Found {len(results)} relevant knowledge base entries",
+            timestamp=datetime.now(),
+            message_type="utility",
+            metadata={"kb_results": len(results)},
+        )
+        self.messages.append(utility_msg)
+
+    def _add_kb_error_message(self, error_type: str, error_detail: str) -> None:
+        """Add KB error/timeout message to conversation (Issue #665: extracted helper)."""
+        msg_type = "utility" if error_type == "timeout" else "debug"
+        error_msg = ConversationMessage(
+            message_id=str(uuid.uuid4()),
+            role="system",
+            content=error_detail,
+            timestamp=datetime.now(),
+            message_type=msg_type,
+            metadata={error_type: True},
+        )
+        self.messages.append(error_msg)
+
     async def _search_knowledge_base(self, query: str) -> List[Dict[str, Any]]:
         """Search Knowledge Base with timeout protection"""
         try:
             if self.kb_librarian is None:
                 self.kb_librarian = get_kb_librarian()
 
-            # Add planning message
             planning_msg = ConversationMessage(
                 message_id=str(uuid.uuid4()),
                 role="system",
@@ -336,7 +373,6 @@ class Conversation:
             )
             self.messages.append(planning_msg)
 
-            # Search with timeout protection
             search_task = asyncio.create_task(
                 self.kb_librarian.search_knowledge_base(query)
             )
@@ -344,65 +380,24 @@ class Conversation:
             kb_result = await asyncio.wait_for(search_task, timeout=self.kb_timeout)
 
             if kb_result:
-                # KB librarian returns a list directly
-                results = kb_result
-                self.state.kb_context = results
-
-                # Track KB sources
-                for i, doc in enumerate(results):
-                    source_manager.add_kb_source(
-                        content=doc.get("content", "")[:200] + "...",
-                        entry_id=str(doc.get("id", f"kb_{i}")),
-                        confidence=doc.get("score", 0.5),
-                        metadata={
-                            "title": doc.get("title", "Knowledge Base Entry"),
-                            "source_file": doc.get("source_file", "unknown"),
-                        },
-                    )
-
-                # Add utility message about KB results
-                utility_msg = ConversationMessage(
-                    message_id=str(uuid.uuid4()),
-                    role="system",
-                    content=f"Found {len(results)} relevant knowledge base entries",
-                    timestamp=datetime.now(),
-                    message_type="utility",
-                    metadata={"kb_results": len(results)},
-                )
-                self.messages.append(utility_msg)
-
-                logger.info("KB search found %s results", len(results))
-                return results
+                self._process_kb_results(kb_result)
+                logger.info("KB search found %s results", len(kb_result))
+                return kb_result
             else:
                 logger.info("No KB results found")
                 return []
 
         except asyncio.TimeoutError:
             logger.warning("KB search timed out after %ss", self.kb_timeout)
-
-            timeout_msg = ConversationMessage(
-                message_id=str(uuid.uuid4()),
-                role="system",
-                content="Knowledge base search timed out, proceeding without KB context",
-                timestamp=datetime.now(),
-                message_type="utility",
-                metadata={"timeout": True},
+            self._add_kb_error_message(
+                "timeout",
+                "Knowledge base search timed out, proceeding without KB context"
             )
-            self.messages.append(timeout_msg)
             return []
 
         except Exception as e:
             logger.error("KB search failed: %s", e)
-
-            error_msg = ConversationMessage(
-                message_id=str(uuid.uuid4()),
-                role="system",
-                content=f"Knowledge base search failed: {str(e)}",
-                timestamp=datetime.now(),
-                message_type="debug",
-                metadata={"error": True},
-            )
-            self.messages.append(error_msg)
+            self._add_kb_error_message("error", f"Knowledge base search failed: {str(e)}")
             return []
 
     def _build_kb_context(self, kb_results: List[Dict[str, Any]]) -> str:
