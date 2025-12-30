@@ -280,6 +280,34 @@ async def get_services_health():
         )
 
 
+def _build_vm_definitions() -> list:
+    """
+    Build VM definitions from NetworkConstants (Issue #665: extracted helper).
+
+    Returns list of (name, ip_attr, services) tuples.
+    """
+    from src.constants.network_constants import NetworkConstants
+
+    return [
+        ("Frontend VM", str(NetworkConstants.FRONTEND_HOST), ["frontend", "web-interface"]),
+        ("NPU Worker VM", str(NetworkConstants.NPU_WORKER_HOST), ["npu-worker", "hardware-acceleration"]),
+        ("Redis VM", str(NetworkConstants.REDIS_HOST), ["redis", "database", "cache"]),
+        ("AI Stack VM", str(NetworkConstants.AI_STACK_HOST), ["ai-processing", "llm", "inference"]),
+        ("Browser VM", str(NetworkConstants.BROWSER_VM_IP), ["browser-automation", "playwright"]),
+    ]
+
+
+def _build_vm_status_list(vm_definitions: list) -> list:
+    """
+    Build VMStatus list from definitions (Issue #665: extracted helper).
+    """
+    now = datetime.now()
+    return [
+        VMStatus(name=name, ip=ip, status="online", services=services, last_check=now)
+        for name, ip, services in vm_definitions
+    ]
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_vms_status",
@@ -287,70 +315,15 @@ async def get_services_health():
 )
 @router.get("/vms/status")
 async def get_vms_status():
-    """Get VM status for distributed infrastructure"""
+    """
+    Get VM status for distributed infrastructure.
+
+    Issue #665: Refactored to use data-driven helper functions.
+    """
     try:
-        # Get VM infrastructure from NetworkConstants
-        from src.constants.network_constants import NetworkConstants
+        vm_definitions = _build_vm_definitions()
+        vms = _build_vm_status_list(vm_definitions)
 
-        # Build VM status from NetworkConstants
-        vms = []
-
-        # Frontend VM
-        vms.append(
-            VMStatus(
-                name="Frontend VM",
-                ip=str(NetworkConstants.FRONTEND_HOST),
-                status="online",
-                services=["frontend", "web-interface"],
-                last_check=datetime.now(),
-            )
-        )
-
-        # NPU Worker VM
-        vms.append(
-            VMStatus(
-                name="NPU Worker VM",
-                ip=str(NetworkConstants.NPU_WORKER_HOST),
-                status="online",
-                services=["npu-worker", "hardware-acceleration"],
-                last_check=datetime.now(),
-            )
-        )
-
-        # Redis VM
-        vms.append(
-            VMStatus(
-                name="Redis VM",
-                ip=str(NetworkConstants.REDIS_HOST),
-                status="online",
-                services=["redis", "database", "cache"],
-                last_check=datetime.now(),
-            )
-        )
-
-        # AI Stack VM
-        vms.append(
-            VMStatus(
-                name="AI Stack VM",
-                ip=str(NetworkConstants.AI_STACK_HOST),
-                status="online",
-                services=["ai-processing", "llm", "inference"],
-                last_check=datetime.now(),
-            )
-        )
-
-        # Browser VM
-        vms.append(
-            VMStatus(
-                name="Browser VM",
-                ip=str(NetworkConstants.BROWSER_VM_IP),
-                status="online",
-                services=["browser-automation", "playwright"],
-                last_check=datetime.now(),
-            )
-        )
-
-        # Count statuses
         online_count = sum(1 for vm in vms if vm.status == "online")
         total_count = len(vms)
 

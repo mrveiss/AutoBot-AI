@@ -628,73 +628,77 @@ class LLMPatternAnalyzer:
             logger.error("Failed to identify cache opportunities: %s", e)
             raise RuntimeError(f"Failed to identify cache opportunities: {e}")
 
-    async def get_optimization_recommendations(self) -> List[Dict[str, Any]]:
-        """Generate optimization recommendations based on usage patterns"""
-        recommendations = []
+    def _build_caching_recommendation(
+        self, cache_opportunities: List[Dict]
+    ) -> Optional[Dict[str, Any]]:
+        """Build caching recommendation if applicable (Issue #665: extracted helper)."""
+        if not cache_opportunities:
+            return None
+        total_savings = sum(o["potential_savings"] for o in cache_opportunities)
+        return {
+            "type": OptimizationType.CACHE_PROMPT.value,
+            "title": "Implement Prompt Caching",
+            "description": f"Found {len(cache_opportunities)} frequently repeated prompts",
+            "potential_savings": round(total_savings, 2),
+            "priority": 1,
+            "affected_prompts": len(cache_opportunities),
+            "implementation_steps": [
+                "Identify prompt patterns that produce consistent outputs",
+                "Implement Redis-based response caching",
+                "Set appropriate TTL based on data freshness needs",
+                "Monitor cache hit rates",
+            ],
+        }
 
-        # Issue #619: Parallelize independent data fetches
-        stats, cache_opportunities = await asyncio.gather(
-            self.get_usage_stats(days=7),
-            self.identify_cache_opportunities(min_occurrences=2),
-        )
+    def _build_model_downgrade_recommendation(
+        self, stats: Dict, model_usage: Dict
+    ) -> Optional[Dict[str, Any]]:
+        """Build model downgrade recommendation if applicable (Issue #665: extracted helper)."""
+        expensive_models = [
+            m for m in model_usage
+            if any(keyword in m.lower() for keyword in EXPENSIVE_MODELS)
+        ]
+        if not expensive_models:
+            return None
+        return {
+            "type": OptimizationType.USE_SMALLER_MODEL.value,
+            "title": "Consider Smaller Models for Simple Tasks",
+            "description": f"High usage of expensive models: {', '.join(expensive_models)}",
+            "potential_savings": stats["total_cost"] * 0.3,
+            "priority": 2,
+            "affected_prompts": sum(model_usage.get(m, 0) for m in expensive_models),
+            "implementation_steps": [
+                "Categorize prompts by complexity",
+                "Route simple tasks to Haiku/GPT-3.5-turbo",
+                "Reserve powerful models for complex reasoning",
+                "A/B test quality vs cost tradeoffs",
+            ],
+        }
 
-        # Recommendation 1: Caching
-        if cache_opportunities:
-            total_savings = sum(o["potential_savings"] for o in cache_opportunities)
-            recommendations.append({
-                "type": OptimizationType.CACHE_PROMPT.value,
-                "title": "Implement Prompt Caching",
-                "description": f"Found {len(cache_opportunities)} frequently repeated prompts",
-                "potential_savings": round(total_savings, 2),
-                "priority": 1,
-                "affected_prompts": len(cache_opportunities),
-                "implementation_steps": [
-                    "Identify prompt patterns that produce consistent outputs",
-                    "Implement Redis-based response caching",
-                    "Set appropriate TTL based on data freshness needs",
-                    "Monitor cache hit rates"
-                ]
-            })
+    def _build_batch_processing_recommendation(
+        self, stats: Dict
+    ) -> Optional[Dict[str, Any]]:
+        """Build batch processing recommendation if applicable (Issue #665: extracted helper)."""
+        if stats["total_requests"] <= 100:
+            return None
+        return {
+            "type": OptimizationType.BATCH_REQUESTS.value,
+            "title": "Implement Request Batching",
+            "description": "High request volume could benefit from batching",
+            "potential_savings": stats["total_cost"] * 0.1,
+            "priority": 3,
+            "affected_prompts": stats["total_requests"],
+            "implementation_steps": [
+                "Identify requests that can be grouped",
+                "Implement async batch processing",
+                "Reduce per-request overhead",
+                "Monitor latency vs throughput tradeoffs",
+            ],
+        }
 
-        # Recommendation 2: Model downgrades
-        model_usage = stats.get("by_model", {})
-        expensive_models = [m for m in model_usage if any(keyword in m.lower() for keyword in EXPENSIVE_MODELS)]  # O(1) lookup (Issue #326)
-
-        if expensive_models:
-            recommendations.append({
-                "type": OptimizationType.USE_SMALLER_MODEL.value,
-                "title": "Consider Smaller Models for Simple Tasks",
-                "description": f"High usage of expensive models: {', '.join(expensive_models)}",
-                "potential_savings": stats["total_cost"] * 0.3,  # Estimate 30% savings
-                "priority": 2,
-                "affected_prompts": sum(model_usage.get(m, 0) for m in expensive_models),
-                "implementation_steps": [
-                    "Categorize prompts by complexity",
-                    "Route simple tasks to Haiku/GPT-3.5-turbo",
-                    "Reserve powerful models for complex reasoning",
-                    "A/B test quality vs cost tradeoffs"
-                ]
-            })
-
-        # Recommendation 3: Batch processing
-        if stats["total_requests"] > 100:
-            recommendations.append({
-                "type": OptimizationType.BATCH_REQUESTS.value,
-                "title": "Implement Request Batching",
-                "description": "High request volume could benefit from batching",
-                "potential_savings": stats["total_cost"] * 0.1,
-                "priority": 3,
-                "affected_prompts": stats["total_requests"],
-                "implementation_steps": [
-                    "Identify requests that can be grouped",
-                    "Implement async batch processing",
-                    "Reduce per-request overhead",
-                    "Monitor latency vs throughput tradeoffs"
-                ]
-            })
-
-        # Recommendation 4: Context reduction
-        recommendations.append({
+    def _build_context_reduction_recommendation(self, stats: Dict) -> Dict[str, Any]:
+        """Build context reduction recommendation (Issue #665: extracted helper)."""
+        return {
             "type": OptimizationType.REDUCE_CONTEXT.value,
             "title": "Optimize Context Length",
             "description": "Review prompts for unnecessary context",
@@ -705,9 +709,38 @@ class LLMPatternAnalyzer:
                 "Analyze prompt lengths and identify outliers",
                 "Extract only relevant code sections",
                 "Use summarization for long documents",
-                "Implement context window management"
-            ]
-        })
+                "Implement context window management",
+            ],
+        }
+
+    async def get_optimization_recommendations(self) -> List[Dict[str, Any]]:
+        """
+        Generate optimization recommendations based on usage patterns.
+
+        Issue #665: Refactored to use extracted helper methods.
+        """
+        stats, cache_opportunities = await asyncio.gather(
+            self.get_usage_stats(days=7),
+            self.identify_cache_opportunities(min_occurrences=2),
+        )
+
+        recommendations = []
+        model_usage = stats.get("by_model", {})
+
+        # Build recommendations using helpers - append if not None
+        caching_rec = self._build_caching_recommendation(cache_opportunities)
+        if caching_rec:
+            recommendations.append(caching_rec)
+
+        model_rec = self._build_model_downgrade_recommendation(stats, model_usage)
+        if model_rec:
+            recommendations.append(model_rec)
+
+        batch_rec = self._build_batch_processing_recommendation(stats)
+        if batch_rec:
+            recommendations.append(batch_rec)
+
+        recommendations.append(self._build_context_reduction_recommendation(stats))
 
         return recommendations
 
