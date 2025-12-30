@@ -365,73 +365,24 @@ async def dynamic_import(request: Request, module_name: str = Form(...)):
 @router.get("/health/detailed")
 @cache_response(cache_key="system_health_detailed", ttl=30)  # Cache for 30 seconds
 async def get_detailed_health(request: Request):
-    """Get detailed system health status including all components"""
+    """Get detailed system health status including all components (Issue #665: refactored)."""
     try:
-        # Get basic health status first
         basic_health = await get_system_health()
-
-        # Add detailed component checks
         detailed_components = {}
 
-        # Check Redis connection
-        try:
-            # cache_manager already imported at top
-
-            await cache_manager._ensure_redis_client()
-            if cache_manager._redis_client:
-                detailed_components["redis"] = "healthy"
-            else:
-                detailed_components["redis"] = "unavailable"
-        except Exception as e:
-            detailed_components["redis"] = f"error: {str(e)}"
-
-        # Check LLM interface
-        try:
-            pass
-
-            detailed_components["llm"] = "available"
-        except Exception as e:
-            detailed_components["llm"] = f"import_error: {str(e)}"
-
-        # Check knowledge base
-        try:
-            pass
-
-            detailed_components["knowledge_base"] = "available"
-        except Exception as e:
-            detailed_components["knowledge_base"] = f"import_error: {str(e)}"
-
-        # Check Conversation Files Database (Issue #315 - use helper)
+        # Check components
+        await _check_redis_health(detailed_components)
+        _check_llm_availability(detailed_components)
+        _check_knowledge_base_availability(detailed_components)
         await _check_detailed_conversation_db(request, detailed_components)
+        _check_system_resources(detailed_components)
 
-        # Add system resource info
-        try:
-            import psutil
-
-            detailed_components["cpu_usage"] = f"{psutil.cpu_percent(interval=0.1)}%"
-            memory = psutil.virtual_memory()
-            detailed_components["memory_usage"] = f"{memory.percent}%"
-            disk = psutil.disk_usage("/")
-            detailed_components["disk_usage"] = f"{(disk.used / disk.total) * 100:.1f}%"
-        except ImportError:
-            detailed_components["system_monitoring"] = "psutil_unavailable"
-        except Exception as e:
-            detailed_components["system_monitoring"] = f"error: {str(e)}"
-
-        # Combine basic and detailed status
+        # Build final status
         health_status = basic_health.copy()
         health_status["components"].update(detailed_components)
         health_status["detailed"] = True
 
-        # Determine overall status
-        error_components = [
-            comp
-            for comp, status in health_status["components"].items()
-            if "error" in str(status).lower()
-        ]
-        if error_components:
-            health_status["status"] = "degraded"
-            health_status["errors"] = error_components
+        _determine_overall_health_status(health_status)
 
         return health_status
 
@@ -443,6 +394,64 @@ async def get_detailed_health(request: Request):
             "error": str(e),
             "detailed": True,
         }
+
+
+async def _check_redis_health(components: dict) -> None:
+    """Check Redis connection health (Issue #665: extracted helper)."""
+    try:
+        await cache_manager._ensure_redis_client()
+        if cache_manager._redis_client:
+            components["redis"] = "healthy"
+        else:
+            components["redis"] = "unavailable"
+    except Exception as e:
+        components["redis"] = f"error: {str(e)}"
+
+
+def _check_llm_availability(components: dict) -> None:
+    """Check LLM interface availability (Issue #665: extracted helper)."""
+    try:
+        pass  # Import check placeholder
+        components["llm"] = "available"
+    except Exception as e:
+        components["llm"] = f"import_error: {str(e)}"
+
+
+def _check_knowledge_base_availability(components: dict) -> None:
+    """Check knowledge base availability (Issue #665: extracted helper)."""
+    try:
+        pass  # Import check placeholder
+        components["knowledge_base"] = "available"
+    except Exception as e:
+        components["knowledge_base"] = f"import_error: {str(e)}"
+
+
+def _check_system_resources(components: dict) -> None:
+    """Check system resources via psutil (Issue #665: extracted helper)."""
+    try:
+        import psutil
+
+        components["cpu_usage"] = f"{psutil.cpu_percent(interval=0.1)}%"
+        memory = psutil.virtual_memory()
+        components["memory_usage"] = f"{memory.percent}%"
+        disk = psutil.disk_usage("/")
+        components["disk_usage"] = f"{(disk.used / disk.total) * 100:.1f}%"
+    except ImportError:
+        components["system_monitoring"] = "psutil_unavailable"
+    except Exception as e:
+        components["system_monitoring"] = f"error: {str(e)}"
+
+
+def _determine_overall_health_status(health_status: dict) -> None:
+    """Determine overall health status from components (Issue #665: extracted helper)."""
+    error_components = [
+        comp
+        for comp, status in health_status["components"].items()
+        if "error" in str(status).lower()
+    ]
+    if error_components:
+        health_status["status"] = "degraded"
+        health_status["errors"] = error_components
 
 
 @with_error_handling(

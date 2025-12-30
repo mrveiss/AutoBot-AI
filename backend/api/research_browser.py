@@ -278,50 +278,13 @@ async def navigate_session(session_id: str, request: NavigationRequest):
 )
 @router.get("/browser/{session_id}")
 async def get_browser_info(session_id: str):
-    """Get browser information for frontend integration"""
-    session = research_browser_manager.get_session(session_id)
-
-    # Special handling for chat-browser - create default session if needed
-    if not session and session_id == "chat-browser":
-        logger.info("Creating default chat-browser session for frontend integration")
-        # Create a default research session for chat integration
-        session = research_browser_manager.create_session(
-            conversation_id="default-chat",
-            interaction_settings={
-                "captcha": False,
-                "cloudflare": False,
-                "cookies": False,
-                "js": False,
-            },
-        )
+    """Get browser information for frontend integration (Issue #665: refactored)."""
+    session = _get_or_create_browser_session(session_id)
 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Check if we have a Docker browser container available
-    docker_browser_info = None
-    try:
-        # Try to detect Playwright container
-        # Import centralized configuration with intelligent port detection
-        from src.unified_config_manager import (
-            PLAYWRIGHT_VNC_URL,
-            get_vnc_direct_url,
-        )
-
-        # This would integrate with your existing browser setup
-        docker_browser_info = {
-            "available": True,
-            "vnc_url": PLAYWRIGHT_VNC_URL.replace(
-                "vnc.html", ""
-            ),  # NoVNC web interface
-            "direct_url": (
-                get_vnc_direct_url()
-            ),  # Intelligent VNC connection (5900 or 5901)
-            "session_active": session.status == "active",
-            "environment": "container" if await asyncio.to_thread(os.path.exists, "/.dockerenv") else "host",
-        }
-    except Exception:
-        docker_browser_info = {"available": False}
+    docker_browser_info = await _get_docker_browser_info(session)
 
     return JSONResponse(
         status_code=200,
@@ -333,30 +296,74 @@ async def get_browser_info(session_id: str):
             "interaction_required": session.interaction_required,
             "interaction_message": session.interaction_message,
             "docker_browser": docker_browser_info,
-            "actions": [
-                {
-                    "action": "wait",
-                    "label": "Wait for Interaction",
-                    "description": "Wait for user to complete interaction",
-                },
-                {
-                    "action": "manual_intervention",
-                    "label": "Manual Control",
-                    "description": "Take manual control of browser",
-                },
-                {
-                    "action": "save_mhtml",
-                    "label": "Save Page",
-                    "description": "Save current page as MHTML backup",
-                },
-                {
-                    "action": "extract_content",
-                    "label": "Extract Content",
-                    "description": "Extract text content from current page",
-                },
-            ],
+            "actions": _get_browser_actions(),
         },
     )
+
+
+def _get_or_create_browser_session(session_id: str):
+    """Get existing session or create default for chat-browser (Issue #665: extracted helper)."""
+    session = research_browser_manager.get_session(session_id)
+
+    # Special handling for chat-browser - create default session if needed
+    if not session and session_id == "chat-browser":
+        logger.info("Creating default chat-browser session for frontend integration")
+        session = research_browser_manager.create_session(
+            conversation_id="default-chat",
+            interaction_settings={
+                "captcha": False,
+                "cloudflare": False,
+                "cookies": False,
+                "js": False,
+            },
+        )
+
+    return session
+
+
+async def _get_docker_browser_info(session) -> dict:
+    """Get Docker browser container info (Issue #665: extracted helper)."""
+    try:
+        from src.unified_config_manager import (
+            PLAYWRIGHT_VNC_URL,
+            get_vnc_direct_url,
+        )
+
+        return {
+            "available": True,
+            "vnc_url": PLAYWRIGHT_VNC_URL.replace("vnc.html", ""),
+            "direct_url": get_vnc_direct_url(),
+            "session_active": session.status == "active",
+            "environment": "container" if await asyncio.to_thread(os.path.exists, "/.dockerenv") else "host",
+        }
+    except Exception:
+        return {"available": False}
+
+
+def _get_browser_actions() -> list:
+    """Get available browser actions list (Issue #665: extracted helper)."""
+    return [
+        {
+            "action": "wait",
+            "label": "Wait for Interaction",
+            "description": "Wait for user to complete interaction",
+        },
+        {
+            "action": "manual_intervention",
+            "label": "Manual Control",
+            "description": "Take manual control of browser",
+        },
+        {
+            "action": "save_mhtml",
+            "label": "Save Page",
+            "description": "Save current page as MHTML backup",
+        },
+        {
+            "action": "extract_content",
+            "label": "Extract Content",
+            "description": "Extract text content from current page",
+        },
+    ]
 
 
 # Chat Browser Session Management (Issue #73)
