@@ -933,7 +933,7 @@ Examples:
     parser.add_argument(
         "--incremental",
         action="store_true",
-        help="Only index changed files (not yet implemented)",
+        help="Only index changed files (implies --full)",
     )
     parser.add_argument(
         "--dry-run",
@@ -976,9 +976,13 @@ Examples:
         return
 
     # Validate arguments for indexing mode
+    # --incremental implies --full
+    if args.incremental:
+        args.full = True
+
     if not any([args.full, args.tier, args.file]):
         parser.print_help()
-        print("\nError: Must specify --full, --tier, --file, --search, or --stats")
+        print("\nError: Must specify --full, --tier, --file, --incremental, --search, or --stats")
         sys.exit(1)
 
     # Run indexing
