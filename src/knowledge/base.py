@@ -107,6 +107,10 @@ class KnowledgeBaseCore:
 
     def __init__(self):
         """Initialize instance variables only (Issue #398: refactored)."""
+        # Call super().__init__() to ensure mixin __init__ methods are called
+        # This is critical for SearchMixin to initialize _query_processor
+        super().__init__()
+
         self.initialized = False
         self.initialization_lock = asyncio.Lock()
         self.error_manager = get_error_boundary_manager()
