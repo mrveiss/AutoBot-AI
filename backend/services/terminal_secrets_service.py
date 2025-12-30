@@ -97,6 +97,52 @@ class TerminalSecretsService:
             self._agent_secrets = get_agent_secrets_integration()
         return self._agent_secrets
 
+    def _filter_keys_by_name(
+        self, ssh_keys: List[Dict], specific_key_names: Optional[List[str]]
+    ) -> List[Dict]:
+        """
+        Filter SSH keys by specific names if provided.
+
+        Issue #665: Extracted from setup_ssh_keys.
+        """
+        if specific_key_names:
+            return [k for k in ssh_keys if k["name"] in specific_key_names]
+        return ssh_keys
+
+    async def _prepare_session_keys(
+        self,
+        session_state: SessionKeyState,
+        ssh_keys: List[Dict],
+        result: Dict,
+    ) -> None:
+        """
+        Prepare all SSH keys for a session, updating result dict.
+
+        Issue #665: Extracted from setup_ssh_keys.
+
+        Args:
+            session_state: Session state to add keys to
+            ssh_keys: List of key data dictionaries
+            result: Result dict to update with key names and errors
+        """
+        for key_data in ssh_keys:
+            try:
+                key_info = await self._prepare_ssh_key(
+                    key_data, session_state.temp_dir
+                )
+                session_state.keys.append(key_info)
+                result["keys_available"].append(key_data["name"])
+                result["keys_loaded"] += 1
+                logger.info(
+                    "Prepared SSH key '%s' for session %s",
+                    key_data["name"],
+                    session_state.session_id,
+                )
+            except Exception as e:
+                error_msg = f"Failed to prepare key '{key_data['name']}': {e}"
+                result["errors"].append(error_msg)
+                logger.error(error_msg)
+
     async def setup_ssh_keys(
         self,
         session_id: str,
@@ -105,6 +151,8 @@ class TerminalSecretsService:
         specific_key_names: Optional[List[str]] = None,
     ) -> Dict[str, any]:
         """Setup SSH keys for a terminal session.
+
+        Issue #665: Refactored from 90 lines to use extracted helper methods.
 
         Retrieves SSH keys from secrets storage and prepares them for use
         in the terminal session. Keys are written to temporary files with
@@ -132,44 +180,22 @@ class TerminalSecretsService:
         try:
             # Get SSH keys from secrets
             ssh_keys = await self.agent_secrets.get_ssh_keys_for_terminal(
-                chat_id=chat_id,
-                include_general=include_general,
+                chat_id=chat_id, include_general=include_general
             )
 
             if not ssh_keys:
                 logger.debug("No SSH keys available for session %s", session_id)
                 return result
 
-            # Filter by specific names if provided
-            if specific_key_names:
-                ssh_keys = [k for k in ssh_keys if k["name"] in specific_key_names]
+            # Filter by specific names (Issue #665: uses helper)
+            ssh_keys = self._filter_keys_by_name(ssh_keys, specific_key_names)
 
-            # Create session state
-            session_state = SessionKeyState(
-                session_id=session_id,
-                chat_id=chat_id,
-            )
-
-            # Create temporary directory for keys
+            # Create session state with temp directory
+            session_state = SessionKeyState(session_id=session_id, chat_id=chat_id)
             session_state.temp_dir = tempfile.mkdtemp(prefix=f"autobot_ssh_{session_id}_")
 
-            for key_data in ssh_keys:
-                try:
-                    key_info = await self._prepare_ssh_key(
-                        key_data, session_state.temp_dir
-                    )
-                    session_state.keys.append(key_info)
-                    result["keys_available"].append(key_data["name"])
-                    result["keys_loaded"] += 1
-                    logger.info(
-                        "Prepared SSH key '%s' for session %s",
-                        key_data["name"],
-                        session_id,
-                    )
-                except Exception as e:
-                    error_msg = f"Failed to prepare key '{key_data['name']}': {e}"
-                    result["errors"].append(error_msg)
-                    logger.error(error_msg)
+            # Prepare all keys (Issue #665: uses helper)
+            await self._prepare_session_keys(session_state, ssh_keys, result)
 
             # Store session state
             with self._sessions_lock:
@@ -177,8 +203,7 @@ class TerminalSecretsService:
 
             logger.info(
                 "SSH key setup complete for session %s: %d keys loaded",
-                session_id,
-                result["keys_loaded"],
+                session_id, result["keys_loaded"]
             )
 
         except Exception as e:

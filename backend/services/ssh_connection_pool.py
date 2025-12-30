@@ -191,6 +191,84 @@ class SSHConnectionPool:
         """Generate unique key for host connection pool"""
         return f"{username}@{host}:{port}"
 
+    async def _find_idle_connection(
+        self, pool: List[SSHConnection], pool_key: str
+    ) -> Optional[paramiko.SSHClient]:
+        """
+        Find an idle, healthy connection from the pool.
+
+        Issue #665: Extracted from get_connection.
+
+        Args:
+            pool: List of connections for this host
+            pool_key: Pool key for logging
+
+        Returns:
+            Healthy client if found, None otherwise
+        """
+        for conn in pool:
+            if conn.state == ConnectionState.IDLE:
+                if await self._check_connection_health(conn):
+                    conn.state = ConnectionState.ACTIVE
+                    conn.last_used = datetime.now()
+                    conn.use_count += 1
+                    logger.debug(
+                        f"Reusing connection to {pool_key} (use_count={conn.use_count})"
+                    )
+                    return conn.client
+                else:
+                    conn.state = ConnectionState.UNHEALTHY
+        return None
+
+    async def _create_pooled_connection(
+        self,
+        pool: List[SSHConnection],
+        host: str,
+        port: int,
+        username: str,
+        key_path: str,
+        passphrase: Optional[str],
+        pool_key: str,
+    ) -> paramiko.SSHClient:
+        """
+        Create a new connection and add it to the pool.
+
+        Issue #665: Extracted from get_connection.
+
+        Args:
+            pool: Connection pool to add to
+            host: Target host
+            port: SSH port
+            username: SSH username
+            key_path: Path to SSH key
+            passphrase: Key passphrase if needed
+            pool_key: Pool key for logging
+
+        Returns:
+            Newly created SSH client
+        """
+        client = await self._create_connection(
+            host, port, username, key_path, passphrase
+        )
+
+        conn = SSHConnection(
+            client=client,
+            host=host,
+            port=port,
+            username=username,
+            state=ConnectionState.ACTIVE,
+            created_at=datetime.now(),
+            last_used=datetime.now(),
+            last_health_check=datetime.now(),
+            use_count=1,
+        )
+        pool.append(conn)
+
+        logger.info(
+            f"Created new SSH connection to {pool_key} (pool_size={len(pool)})"
+        )
+        return client
+
     async def get_connection(
         self,
         host: str,
@@ -200,7 +278,9 @@ class SSHConnectionPool:
         passphrase: Optional[str] = None,
     ) -> paramiko.SSHClient:
         """
-        Get an SSH connection from the pool
+        Get an SSH connection from the pool.
+
+        Issue #665: Refactored from 87 lines to use extracted helper methods.
 
         Args:
             host: Target host IP or hostname
@@ -224,52 +304,19 @@ class SSHConnectionPool:
 
             pool = self.pools[pool_key]
 
-            # Try to find an idle, healthy connection
-            for conn in pool:
-                if conn.state == ConnectionState.IDLE:
-                    # Check if connection is still healthy
-                    if await self._check_connection_health(conn):
-                        conn.state = ConnectionState.ACTIVE
-                        conn.last_used = datetime.now()
-                        conn.use_count += 1
-                        logger.debug(
-                            f"Reusing connection to {pool_key} "
-                            f"(use_count={conn.use_count})"
-                        )
-                        return conn.client
-                    else:
-                        # Connection unhealthy, mark for cleanup
-                        conn.state = ConnectionState.UNHEALTHY
-
-            # No idle connection available, create new if under limit
-            if (
-                len([c for c in pool if c.state != ConnectionState.CLOSED])
-                < self.max_connections_per_host
-            ):
-                client = await self._create_connection(
-                    host, port, username, key_path, passphrase
-                )
-
-                conn = SSHConnection(
-                    client=client,
-                    host=host,
-                    port=port,
-                    username=username,
-                    state=ConnectionState.ACTIVE,
-                    created_at=datetime.now(),
-                    last_used=datetime.now(),
-                    last_health_check=datetime.now(),
-                    use_count=1,
-                )
-                pool.append(conn)
-
-                logger.info(
-                    f"Created new SSH connection to {pool_key} "
-                    f"(pool_size={len(pool)})"
-                )
+            # Try to find idle connection (Issue #665: uses helper)
+            client = await self._find_idle_connection(pool, pool_key)
+            if client:
                 return client
 
-            # Pool exhausted, wait and retry
+            # Create new connection if under limit (Issue #665: uses helper)
+            active_count = len([c for c in pool if c.state != ConnectionState.CLOSED])
+            if active_count < self.max_connections_per_host:
+                return await self._create_pooled_connection(
+                    pool, host, port, username, key_path, passphrase, pool_key
+                )
+
+            # Pool exhausted
             logger.warning(
                 f"Connection pool exhausted for {pool_key}, "
                 f"max={self.max_connections_per_host}"

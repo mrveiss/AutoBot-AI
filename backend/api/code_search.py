@@ -577,6 +577,76 @@ def _build_similar_block_entry(result) -> dict:
     }
 
 
+# Issue #380: Module-level tuple for common duplicate detection patterns
+_DUPLICATE_DETECTION_PATTERNS = (
+    "error handling",
+    "validation logic",
+    "database connection",
+    "api request",
+    "file processing",
+    "configuration loading",
+    "logging setup",
+    "authentication",
+    "data transformation",
+    "utility function",
+)
+
+
+async def _search_pattern_for_duplicates(pattern: str) -> Optional[dict]:
+    """
+    Search for duplicates matching a pattern.
+
+    Issue #665: Extracted from find_code_duplicates.
+
+    Args:
+        pattern: Pattern to search for
+
+    Returns:
+        Duplicate candidate dict if multiple similar blocks found, None otherwise
+    """
+    results = await search_codebase(query=pattern, search_type="semantic", max_results=20)
+
+    if len(results) <= 1:
+        return None
+
+    similar_blocks = [_build_similar_block_entry(result) for result in results]
+
+    if len(similar_blocks) > 1:
+        return _build_duplicate_candidate(pattern, similar_blocks)
+
+    return None
+
+
+def _build_duplicates_response(
+    patterns_count: int, duplicate_candidates: list
+) -> dict:
+    """
+    Build the response dictionary for duplicate detection.
+
+    Issue #665: Extracted from find_code_duplicates.
+    """
+    return {
+        "summary": {
+            "patterns_analyzed": patterns_count,
+            "duplicate_candidates_found": len(duplicate_candidates),
+            "total_similar_blocks": sum(
+                len(c["similar_blocks"]) for c in duplicate_candidates
+            ),
+            "highest_priority_pattern": (
+                duplicate_candidates[0]["pattern"] if duplicate_candidates else None
+            ),
+        },
+        "duplicate_candidates": duplicate_candidates[:10],
+        "recommendations": [
+            "Consider extracting common patterns into utility functions",
+            "Look for opportunities to create base classes or mixins",
+            "Evaluate if similar error handling can be centralized",
+            "Check if configuration loading can be standardized",
+            "Consider creating shared validation utilities",
+        ],
+    }
+
+
 def _build_duplicate_candidate(pattern: str, similar_blocks: list) -> dict:
     """
     Build a duplicate candidate entry from similar blocks.
@@ -692,6 +762,9 @@ async def find_code_duplicates(request: AnalyticsRequest):
     """
     Find potential code duplicates and similar patterns for refactoring opportunities.
 
+    Issue #665: Refactored from 85 lines to use extracted helper methods.
+    Issue #380: Uses module-level constant for patterns.
+
     Uses semantic search to identify similar code blocks that could be refactored
     into reusable functions or modules.
     """
@@ -703,69 +776,22 @@ async def find_code_duplicates(request: AnalyticsRequest):
         if index_result["status"] not in SUCCESSFUL_INDEX_STATUSES:
             raise HTTPException(status_code=500, detail="Failed to index codebase")
 
-        # Search for common code patterns that might indicate duplication
-        duplicate_patterns = [
-            "error handling",
-            "validation logic",
-            "database connection",
-            "api request",
-            "file processing",
-            "configuration loading",
-            "logging setup",
-            "authentication",
-            "data transformation",
-            "utility function",
-        ]
-
+        # Search patterns for duplicates (Issue #665: uses helper)
         duplicate_candidates = []
-
-        # Issue #281: Use extracted helpers for cleaner loop
-        for pattern in duplicate_patterns:
-            # Use semantic search to find similar code blocks
-            results = await search_codebase(
-                query=pattern, search_type="semantic", max_results=20
-            )
-
-            if len(results) > 1:  # Found potential duplicates
-                # Group by similarity using extracted helper
-                similar_blocks = [
-                    _build_similar_block_entry(result) for result in results
-                ]
-
-                if len(similar_blocks) > 1:
-                    # Build candidate using extracted helper
-                    duplicate_candidates.append(
-                        _build_duplicate_candidate(pattern, similar_blocks)
-                    )
+        for pattern in _DUPLICATE_DETECTION_PATTERNS:
+            candidate = await _search_pattern_for_duplicates(pattern)
+            if candidate:
+                duplicate_candidates.append(candidate)
 
         # Sort by refactor priority
         duplicate_candidates.sort(key=lambda x: x["refactor_priority"], reverse=True)
 
+        # Build response (Issue #665: uses helper)
         return JSONResponse(
             status_code=200,
-            content={
-                "summary": {
-                    "patterns_analyzed": len(duplicate_patterns),
-                    "duplicate_candidates_found": len(duplicate_candidates),
-                    "total_similar_blocks": sum(
-                        len(candidate["similar_blocks"])
-                        for candidate in duplicate_candidates
-                    ),
-                    "highest_priority_pattern": (
-                        duplicate_candidates[0]["pattern"]
-                        if duplicate_candidates
-                        else None
-                    ),
-                },
-                "duplicate_candidates": duplicate_candidates[:10],  # Top 10 candidates
-                "recommendations": [
-                    "Consider extracting common patterns into utility functions",
-                    "Look for opportunities to create base classes or mixins",
-                    "Evaluate if similar error handling can be centralized",
-                    "Check if configuration loading can be standardized",
-                    "Consider creating shared validation utilities",
-                ],
-            },
+            content=_build_duplicates_response(
+                len(_DUPLICATE_DETECTION_PATTERNS), duplicate_candidates
+            ),
         )
 
     except Exception as e:
