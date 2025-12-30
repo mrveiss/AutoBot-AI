@@ -809,24 +809,22 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
 
         return findings
 
-    def _regex_analysis(
+    def _check_hardcoded_secrets(
         self, file_path: str, content: str, lines: List[str]
     ) -> List[SecurityFinding]:
-        """Perform regex-based security analysis."""
+        """Check for hardcoded secrets (Issue #665: extracted helper)."""
         findings: List[SecurityFinding] = []
 
-        # Check for hardcoded secrets
         for pattern, vuln_type, cwe_id in SECRET_PATTERNS:
             for match in re.finditer(pattern, content):
-                # Get line number
                 line_num = content[: match.start()].count("\n") + 1
                 code = lines[line_num - 1] if line_num <= len(lines) else ""
 
-                # Skip if it's an environment variable lookup
+                # Skip environment variable lookups
                 if "os.getenv" in code or "os.environ" in code:
                     continue
-                # Skip if it's a placeholder/example
-                if any(placeholder in match.group().lower() for placeholder in PLACEHOLDER_PATTERNS):  # O(1) lookup (Issue #326)
+                # Skip placeholders/examples (O(1) lookup - Issue #326)
+                if any(p in match.group().lower() for p in PLACEHOLDER_PATTERNS):
                     continue
 
                 findings.append(
@@ -847,7 +845,14 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
                     )
                 )
 
-        # Check for SQL injection patterns
+        return findings
+
+    def _check_sql_injection(
+        self, file_path: str, content: str, lines: List[str]
+    ) -> List[SecurityFinding]:
+        """Check for SQL injection patterns (Issue #665: extracted helper)."""
+        findings: List[SecurityFinding] = []
+
         for pattern, description in SQL_INJECTION_PATTERNS:
             for match in re.finditer(pattern, content, re.IGNORECASE):
                 line_num = content[: match.start()].count("\n") + 1
@@ -870,13 +875,20 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
                     )
                 )
 
-        # Check for path traversal
+        return findings
+
+    def _check_path_traversal(
+        self, file_path: str, content: str, lines: List[str]
+    ) -> List[SecurityFinding]:
+        """Check for path traversal vulnerabilities (Issue #665: extracted helper)."""
+        findings: List[SecurityFinding] = []
         path_traversal_pattern = r'open\s*\(\s*[^)]*\+[^)]*\)|open\s*\(\s*f["\']'
+
         for match in re.finditer(path_traversal_pattern, content):
             line_num = content[: match.start()].count("\n") + 1
             code = lines[line_num - 1] if line_num <= len(lines) else ""
 
-            # Skip if there's path validation nearby
+            # Skip if path validation nearby
             context_start = max(0, line_num - 3)
             context_end = min(len(lines), line_num + 1)
             context = "\n".join(lines[context_start:context_end])
@@ -900,6 +912,27 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
                     false_positive_risk="medium",
                 )
             )
+
+        return findings
+
+    def _regex_analysis(
+        self, file_path: str, content: str, lines: List[str]
+    ) -> List[SecurityFinding]:
+        """
+        Perform regex-based security analysis.
+
+        Issue #665: Refactored to use extracted helper methods for each pattern type.
+        """
+        findings: List[SecurityFinding] = []
+
+        # Check for hardcoded secrets (Issue #665: uses helper)
+        findings.extend(self._check_hardcoded_secrets(file_path, content, lines))
+
+        # Check for SQL injection patterns (Issue #665: uses helper)
+        findings.extend(self._check_sql_injection(file_path, content, lines))
+
+        # Check for path traversal (Issue #665: uses helper)
+        findings.extend(self._check_path_traversal(file_path, content, lines))
 
         return findings
 
