@@ -142,33 +142,29 @@ class EnhancedMultiAgentOrchestrator:
             )
         return self._strategy_handler
 
-    async def create_workflow_plan(
-        self, goal: str, context: Optional[Dict[str, Any]] = None
-    ) -> WorkflowPlan:
+    def _build_planning_prompt(self, goal: str) -> str:
         """
-        Create an intelligent workflow plan for a goal.
+        Build the LLM prompt for workflow planning (Issue #665: extracted helper).
 
         Args:
-            goal: The user's goal
-            context: Optional context information
+            goal: The user's goal to plan for
 
         Returns:
-            Optimized workflow plan
+            Formatted planning prompt string
         """
-        self.logger.info("Creating workflow plan for: %s", goal)
+        capabilities_json = json.dumps(
+            {agent: [cap.value for cap in caps]
+             for agent, caps in self.agent_capabilities.items()},
+            indent=2
+        )
 
-        # Use LLM to analyze the goal and create a plan
-        planning_prompt = f"""
+        return f"""
         You are an expert workflow planner. Analyze this goal and create an execution plan.
 
         Goal: {goal}
 
         Available agents and their capabilities:
-        {json.dumps(
-            {agent: [cap.value for cap in caps]
-             for agent, caps in self.agent_capabilities.items()},
-            indent=2
-        )}
+        {capabilities_json}
 
         Create a workflow plan with:
         1. Required agents and their specific tasks
@@ -196,24 +192,53 @@ class EnhancedMultiAgentOrchestrator:
         }}
         """
 
+    def _parse_planning_response(self, response, goal: str) -> Dict[str, Any]:
+        """
+        Parse LLM planning response with fallback (Issue #665: extracted helper).
+
+        Args:
+            response: LLM response object
+            goal: Original goal for fallback
+
+        Returns:
+            Parsed plan data dict
+        """
+        if response.tier_used.value in FALLBACK_TIERS:
+            return self._planner.create_fallback_plan(goal)
+
+        from src.agents.json_formatter_agent import json_formatter
+
+        parse_result = json_formatter.parse_llm_response(response.content)
+
+        if parse_result.success:
+            return parse_result.data
+        return self._planner.create_fallback_plan(goal)
+
+    async def create_workflow_plan(
+        self, goal: str, context: Optional[Dict[str, Any]] = None
+    ) -> WorkflowPlan:
+        """
+        Create an intelligent workflow plan for a goal.
+
+        Issue #665: Refactored to use extracted helpers for prompt building
+        and response parsing.
+
+        Args:
+            goal: The user's goal
+            context: Optional context information
+
+        Returns:
+            Optimized workflow plan
+        """
+        self.logger.info("Creating workflow plan for: %s", goal)
+
         try:
-            # Get robust LLM response
+            # Build prompt and get LLM response (Issue #665: uses helper)
+            planning_prompt = self._build_planning_prompt(goal)
             response = await get_robust_llm_response(planning_prompt, context)
 
-            # Parse the plan
-            if response.tier_used.value in FALLBACK_TIERS:
-                # Fallback to simple sequential plan
-                plan_data = self._planner.create_fallback_plan(goal)
-            else:
-                # Parse LLM response
-                from src.agents.json_formatter_agent import json_formatter
-
-                parse_result = json_formatter.parse_llm_response(response.content)
-
-                if parse_result.success:
-                    plan_data = parse_result.data
-                else:
-                    plan_data = self._planner.create_fallback_plan(goal)
+            # Parse the plan (Issue #665: uses helper)
+            plan_data = self._parse_planning_response(response, goal)
 
             # Create workflow plan
             plan = self._planner.build_workflow_plan(goal, plan_data)
@@ -225,7 +250,6 @@ class EnhancedMultiAgentOrchestrator:
 
         except Exception as e:
             self.logger.error("Failed to create workflow plan: %s", e)
-            # Return simple fallback plan
             return self._planner.create_simple_workflow_plan(goal)
 
     async def execute_workflow(self, plan: WorkflowPlan) -> Dict[str, Any]:

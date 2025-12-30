@@ -382,6 +382,52 @@ class PhaseValidator:
         self.validation_results = validation_results
         return validation_results
 
+    def _determine_phase_status(self, completion_percentage: float) -> str:
+        """Determine phase status from completion percentage (Issue #665: extracted helper)."""
+        if completion_percentage >= 95:
+            return "complete"
+        elif completion_percentage >= 75:
+            return "mostly_complete"
+        elif completion_percentage >= 50:
+            return "in_progress"
+        else:
+            return "incomplete"
+
+    async def _validate_phase_features(
+        self, criteria: Dict[str, Any], results: Dict[str, Any]
+    ) -> tuple:
+        """Validate all feature types in criteria (Issue #665: extracted helper)."""
+        feature_types = [
+            "security_features",
+            "performance_metrics",
+            "monitoring_features",
+            "ui_features",
+            "orchestration_features",
+            "ai_features",
+            "production_features",
+            "testing_features",
+        ]
+
+        total_checks = 0
+        passed_checks = 0
+
+        for feature_type in feature_types:
+            if feature_type in criteria:
+                feature_results = await self._validate_features(
+                    feature_type, criteria[feature_type]
+                )
+                results["validations"]["features"]["passed"] += feature_results[
+                    "passed"
+                ]
+                results["validations"]["features"]["total"] += feature_results["total"]
+                results["validations"]["features"]["details"].extend(
+                    feature_results["details"]
+                )
+                total_checks += feature_results["total"]
+                passed_checks += feature_results["passed"]
+
+        return total_checks, passed_checks
+
     async def _validate_phase(
         self, phase_name: str, criteria: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -433,31 +479,11 @@ class PhaseValidator:
             passed_checks += service_results["passed"]
 
         # Validate features
-        feature_types = [
-            "security_features",
-            "performance_metrics",
-            "monitoring_features",
-            "ui_features",
-            "orchestration_features",
-            "ai_features",
-            "production_features",
-            "testing_features",
-        ]
-
-        for feature_type in feature_types:
-            if feature_type in criteria:
-                feature_results = await self._validate_features(
-                    feature_type, criteria[feature_type]
-                )
-                results["validations"]["features"]["passed"] += feature_results[
-                    "passed"
-                ]
-                results["validations"]["features"]["total"] += feature_results["total"]
-                results["validations"]["features"]["details"].extend(
-                    feature_results["details"]
-                )
-                total_checks += feature_results["total"]
-                passed_checks += feature_results["passed"]
+        feature_total, feature_passed = await self._validate_phase_features(
+            criteria, results
+        )
+        total_checks += feature_total
+        passed_checks += feature_passed
 
         # Calculate completion percentage
         if total_checks > 0:
@@ -465,15 +491,7 @@ class PhaseValidator:
                 (passed_checks / total_checks) * 100, 2
             )
 
-        # Determine status
-        if results["completion_percentage"] >= 95:
-            results["status"] = "complete"
-        elif results["completion_percentage"] >= 75:
-            results["status"] = "mostly_complete"
-        elif results["completion_percentage"] >= 50:
-            results["status"] = "in_progress"
-        else:
-            results["status"] = "incomplete"
+        results["status"] = self._determine_phase_status(results["completion_percentage"])
 
         return results
 

@@ -699,6 +699,88 @@ class NPUSemanticSearch:
         logger.info("✅ Batch search completed: %s results", len(processed_results))
         return processed_results
 
+    def _calculate_device_summary(
+        self, device_results: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Calculate summary statistics for a device's benchmark results (Issue #665: extracted helper)."""
+        successful_runs = [r for r in device_results if "error" not in r]
+
+        if not successful_runs:
+            return {
+                "success_rate": 0,
+                "total_runs": len(device_results),
+                "error": "All runs failed",
+            }
+
+        avg_time = sum(r["total_time_ms"] for r in successful_runs) / len(
+            successful_runs
+        )
+        avg_embedding_time = sum(
+            r["embedding_time_ms"] for r in successful_runs
+        ) / len(successful_runs)
+        avg_search_time = sum(
+            r["search_time_ms"] for r in successful_runs
+        ) / len(successful_runs)
+
+        return {
+            "average_total_time_ms": avg_time,
+            "average_embedding_time_ms": avg_embedding_time,
+            "average_search_time_ms": avg_search_time,
+            "success_rate": len(successful_runs) / len(device_results) * 100,
+            "total_runs": len(device_results),
+        }
+
+    async def _benchmark_single_device(
+        self,
+        device: HardwareDevice,
+        test_queries: List[str],
+        iterations: int,
+    ) -> List[Dict[str, Any]]:
+        """Benchmark a single device with all queries and iterations (Issue #665: extracted helper)."""
+        device_results = []
+
+        logger.info("🔧 Testing device: %s", device.value)
+
+        # Issue #509, #616: O(n²) nested loops here are INTENTIONAL for benchmarking.
+        # queries (n) × iterations (m) = complete benchmark matrix per device.
+        for query in test_queries:
+            for iteration in range(iterations):
+                try:
+                    start_time = time.time()
+
+                    search_results, metrics = await self.enhanced_search(
+                        query=query,
+                        similarity_top_k=5,
+                        enable_npu_acceleration=True,
+                        force_device=device,
+                    )
+
+                    end_time = time.time()
+
+                    device_results.append(
+                        {
+                            "query": query,
+                            "iteration": iteration,
+                            "total_time_ms": (end_time - start_time) * 1000,
+                            "results_count": len(search_results),
+                            "embedding_time_ms": (
+                                metrics.embedding_generation_time_ms
+                            ),
+                            "search_time_ms": (
+                                metrics.similarity_computation_time_ms
+                            ),
+                            "device_used": metrics.device_used,
+                        }
+                    )
+
+                except Exception as e:
+                    logger.error("❌ Benchmark failed for %s: %s", device.value, e)
+                    device_results.append(
+                        {"query": query, "iteration": iteration, "error": str(e)}
+                    )
+
+        return device_results
+
     async def benchmark_search_performance(
         self, test_queries: List[str], iterations: int = 3
     ) -> Dict[str, Any]:
@@ -716,80 +798,15 @@ class NPUSemanticSearch:
 
         devices_to_test = [HardwareDevice.NPU, HardwareDevice.GPU, HardwareDevice.CPU]
 
-        # Issue #509, #616: O(n³) nested loops here are INTENTIONAL for benchmarking.
-        # devices (3) × queries (n) × iterations (m) = complete benchmark matrix.
-        # This is not optimizable - we need all combinations for valid benchmarks.
         for device in devices_to_test:
-            device_results = []
-
-            logger.info("🔧 Testing device: %s", device.value)
-
-            for query in test_queries:
-                for iteration in range(iterations):
-                    try:
-                        start_time = time.time()
-
-                        search_results, metrics = await self.enhanced_search(
-                            query=query,
-                            similarity_top_k=5,
-                            enable_npu_acceleration=True,
-                            force_device=device,
-                        )
-
-                        end_time = time.time()
-
-                        device_results.append(
-                            {
-                                "query": query,
-                                "iteration": iteration,
-                                "total_time_ms": (end_time - start_time) * 1000,
-                                "results_count": len(search_results),
-                                "embedding_time_ms": (
-                                    metrics.embedding_generation_time_ms
-                                ),
-                                "search_time_ms": (
-                                    metrics.similarity_computation_time_ms
-                                ),
-                                "device_used": metrics.device_used,
-                            }
-                        )
-
-                    except Exception as e:
-                        logger.error("❌ Benchmark failed for %s: %s", device.value, e)
-                        device_results.append(
-                            {"query": query, "iteration": iteration, "error": str(e)}
-                        )
-
+            device_results = await self._benchmark_single_device(
+                device, test_queries, iterations
+            )
             results["device_performance"][device.value] = device_results
 
         # Calculate summary statistics
         for device, device_results in results["device_performance"].items():
-            successful_runs = [r for r in device_results if "error" not in r]
-
-            if successful_runs:
-                avg_time = sum(r["total_time_ms"] for r in successful_runs) / len(
-                    successful_runs
-                )
-                avg_embedding_time = sum(
-                    r["embedding_time_ms"] for r in successful_runs
-                ) / len(successful_runs)
-                avg_search_time = sum(
-                    r["search_time_ms"] for r in successful_runs
-                ) / len(successful_runs)
-
-                results["summary"][device] = {
-                    "average_total_time_ms": avg_time,
-                    "average_embedding_time_ms": avg_embedding_time,
-                    "average_search_time_ms": avg_search_time,
-                    "success_rate": len(successful_runs) / len(device_results) * 100,
-                    "total_runs": len(device_results),
-                }
-            else:
-                results["summary"][device] = {
-                    "success_rate": 0,
-                    "total_runs": len(device_results),
-                    "error": "All runs failed",
-                }
+            results["summary"][device] = self._calculate_device_summary(device_results)
 
         logger.info("✅ Search performance benchmark completed")
         return results
