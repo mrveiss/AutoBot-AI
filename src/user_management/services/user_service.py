@@ -307,6 +307,26 @@ class UserService(BaseService):
 
         return users, total
 
+    async def _update_unique_field(
+        self,
+        user: User,
+        user_id: uuid.UUID,
+        field_name: str,
+        new_value: str,
+        lookup_func,
+        changes: dict,
+    ) -> None:
+        """Update a unique field with duplicate check (Issue #665: extracted helper)."""
+        new_value_lower = new_value.lower()
+        current_value = getattr(user, field_name)
+
+        if new_value_lower != current_value.lower():
+            existing = await lookup_func(new_value)
+            if existing and existing.id != user_id:
+                raise DuplicateUserError(f"{field_name.title()} '{new_value}' already in use")
+            changes[field_name] = {"old": current_value, "new": new_value_lower}
+            setattr(user, field_name, new_value_lower)
+
     async def update_user(
         self,
         user_id: uuid.UUID,
@@ -342,24 +362,15 @@ class UserService(BaseService):
 
         changes = {}
 
-        # Cache lower() values to avoid repeated calls
         if email:
-            email_lower = email.lower()
-            if email_lower != user.email.lower():
-                existing = await self.get_user_by_email(email)
-                if existing and existing.id != user_id:
-                    raise DuplicateUserError(f"Email '{email}' already in use")
-                changes["email"] = {"old": user.email, "new": email_lower}
-                user.email = email_lower
+            await self._update_unique_field(
+                user, user_id, "email", email, self.get_user_by_email, changes
+            )
 
         if username:
-            username_lower = username.lower()
-            if username_lower != user.username.lower():
-                existing = await self.get_user_by_username(username)
-                if existing and existing.id != user_id:
-                    raise DuplicateUserError(f"Username '{username}' already in use")
-                changes["username"] = {"old": user.username, "new": username_lower}
-                user.username = username_lower
+            await self._update_unique_field(
+                user, user_id, "username", username, self.get_user_by_username, changes
+            )
 
         if display_name is not None:
             changes["display_name"] = {"old": user.display_name, "new": display_name}

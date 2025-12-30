@@ -107,6 +107,45 @@ class EntityResolver:
 
         return self.embedding_model
 
+    async def _process_entity_batches(
+        self,
+        unique_entities: List[str],
+        existing_mappings: Dict[str, "EntityMapping"],
+    ) -> tuple:
+        """Process entities in batches and collect results (Issue #665: extracted helper)."""
+        resolved_mappings = {}
+        canonical_entities = []
+
+        batch_size = config_manager.get("entity_resolution.batch_size", 50)
+
+        for i in range(0, len(unique_entities), batch_size):
+            batch = unique_entities[i : i + batch_size]
+            batch_results = await self._resolve_entity_batch(
+                batch, existing_mappings
+            )
+
+            for original, mapping in batch_results.items():
+                resolved_mappings[original] = mapping.canonical_id
+
+                if not any(
+                    c.canonical_id == mapping.canonical_id
+                    for c in canonical_entities
+                ):
+                    canonical_entities.append(mapping)
+
+        return resolved_mappings, canonical_entities
+
+    def _create_fallback_result(
+        self, entity_names: List[str], start_time: datetime
+    ) -> "EntityResolutionResult":
+        """Create fallback result when resolution fails (Issue #665: extracted helper)."""
+        return EntityResolutionResult(
+            original_entities=entity_names,
+            resolved_mappings={name: name for name in entity_names},
+            canonical_entities=[],
+            processing_time=(datetime.now() - start_time).total_seconds(),
+        )
+
     async def resolve_entities(
         self, entity_names: List[str], context: Optional[Dict[str, Any]] = None
     ) -> EntityResolutionResult:
@@ -124,37 +163,13 @@ class EntityResolver:
         logger.info("Starting entity resolution for %s entities", len(entity_names))
 
         try:
-            # Remove duplicates while preserving order
             unique_entities = list(dict.fromkeys(entity_names))
-
-            # Load existing entity mappings
             existing_mappings = await self._load_entity_mappings()
 
-            # Resolve entities
-            resolved_mappings = {}
-            canonical_entities = []
-            similarity_method = SimilarityMethod.HYBRID
+            resolved_mappings, canonical_entities = await self._process_entity_batches(
+                unique_entities, existing_mappings
+            )
 
-            # Process entities in batches for efficiency
-            batch_size = config_manager.get("entity_resolution.batch_size", 50)
-
-            for i in range(0, len(unique_entities), batch_size):
-                batch = unique_entities[i : i + batch_size]
-                batch_results = await self._resolve_entity_batch(
-                    batch, existing_mappings
-                )
-
-                for original, mapping in batch_results.items():
-                    resolved_mappings[original] = mapping.canonical_id
-
-                    # Add to canonical list if not already present
-                    if not any(
-                        c.canonical_id == mapping.canonical_id
-                        for c in canonical_entities
-                    ):
-                        canonical_entities.append(mapping)
-
-            # Calculate statistics
             processing_time = (datetime.now() - start_time).total_seconds()
 
             result = EntityResolutionResult(
@@ -162,14 +177,11 @@ class EntityResolver:
                 resolved_mappings=resolved_mappings,
                 canonical_entities=canonical_entities,
                 processing_time=processing_time,
-                similarity_method=similarity_method,
+                similarity_method=SimilarityMethod.HYBRID,
                 confidence_threshold=self.similarity_threshold,
             )
 
-            # Store updated mappings
             await self._store_entity_mappings(canonical_entities)
-
-            # Record resolution history
             await self._record_resolution_history(result, context)
 
             logger.info(
@@ -179,13 +191,7 @@ class EntityResolver:
 
         except Exception as e:
             logger.error("Error in entity resolution: %s", e)
-            # Return fallback result
-            return EntityResolutionResult(
-                original_entities=entity_names,
-                resolved_mappings={name: name for name in entity_names},
-                canonical_entities=[],
-                processing_time=(datetime.now() - start_time).total_seconds(),
-            )
+            return self._create_fallback_result(entity_names, start_time)
 
     async def _resolve_entity_batch(
         self, entity_names: List[str], existing_mappings: Dict[str, EntityMapping]
