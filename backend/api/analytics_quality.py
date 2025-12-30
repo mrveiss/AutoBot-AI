@@ -617,6 +617,167 @@ def _no_data_response(message: str = "No analysis data. Run codebase indexing fi
     }
 
 
+# Issue #665: Category type mapping for drill-down filtering
+_CATEGORY_TYPE_MAP: dict[str, set[str]] = {
+    "maintainability": {"code_smell", "long_function", "complexity", "technical_debt"},
+    "reliability": {"race_condition", "bug_prediction", "error_handling"},
+    "security": {"hardcode", "ip", "port", "url", "security", "vulnerability"},
+    "performance": {"performance", "optimization", "loop"},
+    "testability": {"test_coverage", "complexity"},
+    "documentation": {"missing_docstring", "documentation"},
+}
+
+
+def _filter_problems_by_category(
+    problems: list[dict], category: str, severity: Optional[str]
+) -> list[dict]:
+    """
+    Filter problems by category type and optional severity.
+
+    Issue #665: Extracted from drill_down_category for clarity.
+
+    Args:
+        problems: List of problem dictionaries
+        category: Quality category to filter by
+        severity: Optional severity level filter
+
+    Returns:
+        Filtered list of problems matching criteria
+    """
+    target_types = _CATEGORY_TYPE_MAP.get(category.lower(), set())
+    category_problems = [
+        p for p in problems
+        if any(t in p.get("type", "").lower() for t in target_types)
+    ]
+
+    if severity:
+        category_problems = [p for p in category_problems if p.get("severity") == severity]
+
+    return category_problems
+
+
+def _group_problems_by_file(
+    problems: list[dict], file_filter: Optional[str]
+) -> dict[str, list[dict]]:
+    """
+    Group problems by file path with optional filtering.
+
+    Issue #665: Extracted from drill_down_category for clarity.
+
+    Args:
+        problems: List of problem dictionaries
+        file_filter: Optional file path substring filter
+
+    Returns:
+        Dictionary mapping file paths to their problems
+    """
+    file_issues: dict[str, list] = {}
+    for problem in problems:
+        file_path = problem.get("file_path", "unknown")
+        if file_filter and file_filter.lower() not in file_path.lower():
+            continue
+        if file_path not in file_issues:
+            file_issues[file_path] = []
+        file_issues[file_path].append(problem)
+    return file_issues
+
+
+def _build_drill_down_file_results(file_issues: dict[str, list[dict]]) -> list[dict]:
+    """
+    Build result file list with calculated scores.
+
+    Issue #665: Extracted from drill_down_category for clarity.
+
+    Args:
+        file_issues: Dictionary mapping file paths to their issues
+
+    Returns:
+        List of file result dictionaries with scores
+    """
+    result_files = []
+    for file_path, issues in file_issues.items():
+        issue_count = len(issues)
+        high_count = sum(1 for i in issues if i.get("severity") == "high")
+        score = max(0, 100 - (issue_count * 5) - (high_count * 10))
+
+        top_issue = issues[0].get("description", "Quality issue") if issues else ""
+
+        result_files.append({
+            "path": file_path,
+            "issues": issue_count,
+            "score": score,
+            "top_issue": top_issue[:100],
+        })
+
+    result_files.sort(key=lambda x: x["issues"], reverse=True)
+    return result_files
+
+
+def _build_quality_export_report(
+    format_type: str, health: Any, metrics: dict, data: dict
+) -> dict:
+    """
+    Build quality export report dictionary.
+
+    Issue #665: Extracted from export_quality_report for clarity.
+
+    Args:
+        format_type: Export format (json, csv, pdf)
+        health: HealthScore object with overall score and recommendations
+        metrics: Quality metrics dictionary
+        data: Full data dictionary with patterns, complexity, stats
+
+    Returns:
+        Report dictionary with all quality data
+    """
+    return {
+        "generated_at": datetime.now().isoformat(),
+        "format": format_type,
+        "health_score": {
+            "overall": health.overall,
+            "grade": health.grade.value,
+            "breakdown": health.breakdown,
+        },
+        "metrics": metrics,
+        "patterns": data.get("patterns", []),
+        "complexity": data.get("complexity", {}),
+        "stats": data.get("stats", {}),
+        "recommendations": health.recommendations,
+    }
+
+
+def _export_quality_as_csv(health: Any, metrics: dict) -> str:
+    """
+    Generate CSV content for quality report export.
+
+    Issue #665: Extracted from export_quality_report for clarity.
+
+    Args:
+        health: HealthScore object with overall score
+        metrics: Quality metrics dictionary
+
+    Returns:
+        CSV content as string
+    """
+    import csv
+    import io
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow(["Section", "Metric", "Value", "Grade"])
+    writer.writerow(
+        ["Health", "Overall Score", f"{health.overall:.1f}", health.grade.value]
+    )
+
+    for cat, val in metrics.items():
+        writer.writerow(
+            ["Metrics", cat.replace("_", " ").title(), f"{val:.1f}", get_grade(val).value]
+        )
+
+    return output.getvalue()
+
+
 # ============================================================================
 # WebSocket Connection Manager
 # ============================================================================
@@ -998,63 +1159,17 @@ async def drill_down_category(
 
     Returns detailed issues and files for the category.
     Issue #543: Now queries real ChromaDB data instead of demo data.
+    Issue #665: Refactored using helper functions for clarity.
     """
-    # Issue #543: Query real data from ChromaDB
     problems, stats = await _get_problems_from_chromadb()
 
     if not problems:
         return _no_data_response("No analysis data for category drill-down.")
 
-    # Map category to problem types
-    category_type_map = {
-        "maintainability": {"code_smell", "long_function", "complexity", "technical_debt"},
-        "reliability": {"race_condition", "bug_prediction", "error_handling"},
-        "security": {"hardcode", "ip", "port", "url", "security", "vulnerability"},
-        "performance": {"performance", "optimization", "loop"},
-        "testability": {"test_coverage", "complexity"},
-        "documentation": {"missing_docstring", "documentation"},
-    }
-
-    # Filter problems by category
-    target_types = category_type_map.get(category.lower(), set())
-    category_problems = [
-        p for p in problems
-        if any(t in p.get("type", "").lower() for t in target_types)
-    ]
-
-    # Filter by severity if provided
-    if severity:
-        category_problems = [p for p in category_problems if p.get("severity") == severity]
-
-    # Group problems by file
-    file_issues: dict[str, list] = {}
-    for problem in category_problems:
-        file_path = problem.get("file_path", "unknown")
-        if file_filter and file_filter.lower() not in file_path.lower():
-            continue
-        if file_path not in file_issues:
-            file_issues[file_path] = []
-        file_issues[file_path].append(problem)
-
-    # Build result files list
-    result_files = []
-    for file_path, issues in file_issues.items():
-        # Calculate score: fewer issues = higher score
-        issue_count = len(issues)
-        high_count = sum(1 for i in issues if i.get("severity") == "high")
-        score = max(0, 100 - (issue_count * 5) - (high_count * 10))
-
-        top_issue = issues[0].get("description", "Quality issue") if issues else ""
-
-        result_files.append({
-            "path": file_path,
-            "issues": issue_count,
-            "score": score,
-            "top_issue": top_issue[:100],  # Truncate long descriptions
-        })
-
-    # Sort by issues descending
-    result_files.sort(key=lambda x: x["issues"], reverse=True)
+    # Issue #665: Use extracted helper functions
+    category_problems = _filter_problems_by_category(problems, category, severity)
+    file_issues = _group_problems_by_file(category_problems, file_filter)
+    result_files = _build_drill_down_file_results(file_issues)
 
     return {
         "status": "success",
@@ -1082,10 +1197,10 @@ async def export_quality_report(
 
     Supports JSON, CSV, and PDF formats.
     Issue #543: Returns no_data status when no analysis data available.
+    Issue #665: Refactored using helper functions for clarity.
     """
     data = await get_quality_data_from_storage()
 
-    # Issue #543: Handle no data case
     if data is None:
         return JSONResponse(content=_no_data_response())
 
@@ -1095,54 +1210,17 @@ async def export_quality_report(
 
     health = calculate_health_score(metrics)
 
-    report = {
-        "generated_at": datetime.now().isoformat(),
-        "format": format,
-        "health_score": {
-            "overall": health.overall,
-            "grade": health.grade.value,
-            "breakdown": health.breakdown,
-        },
-        "metrics": metrics,
-        "patterns": data.get("patterns", []),
-        "complexity": data.get("complexity", {}),
-        "stats": data.get("stats", {}),
-        "recommendations": health.recommendations,
-    }
-
+    # Issue #665: Use extracted helper functions
     if format == "json":
+        report = _build_quality_export_report(format, health, metrics, data)
         return JSONResponse(content=report)
     elif format == "csv":
-        # Generate CSV content
-        import io
-        import csv
-
-        output = io.StringIO()
-        writer = csv.writer(output)
-
-        # Health score section
-        writer.writerow(["Section", "Metric", "Value", "Grade"])
-        writer.writerow(
-            [
-                "Health",
-                "Overall Score",
-                f"{health.overall:.1f}",
-                health.grade.value,
-            ]
-        )
-
-        for cat, val in metrics.items():
-            writer.writerow(
-                ["Metrics", cat.replace("_", " ").title(), f"{val:.1f}", get_grade(val).value]
-            )
-
-        csv_content = output.getvalue()
+        csv_content = _export_quality_as_csv(health, metrics)
         return JSONResponse(
             content={"format": "csv", "content": csv_content},
             media_type="application/json",
         )
     else:
-        # PDF would require additional library
         return JSONResponse(
             content={"error": "PDF export not yet implemented", "format": format},
             status_code=501,
