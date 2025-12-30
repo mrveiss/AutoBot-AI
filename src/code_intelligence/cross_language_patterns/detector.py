@@ -378,7 +378,7 @@ class CrossLanguagePatternDetector:
         python_patterns: List[Dict],
         typescript_patterns: List[Dict],
     ) -> List[DTOMismatch]:
-        """Find mismatches between Python and TypeScript DTOs."""
+        """Find mismatches between Python and TypeScript DTOs (Issue #665: refactored)."""
         mismatches = []
 
         # Get all DTOs
@@ -397,65 +397,82 @@ class CrossLanguagePatternDetector:
         for name in common_names:
             py_dto = python_dtos[name]
             ts_dto = ts_dtos[name]
-
-            py_fields = {f["name"]: f for f in py_dto.get("fields", [])}
-            ts_fields = {f["name"]: f for f in ts_dto.get("fields", [])}
-
-            # Check for missing fields
-            py_only = set(py_fields.keys()) - set(ts_fields.keys())
-            ts_only = set(ts_fields.keys()) - set(py_fields.keys())
-
-            for field_name in py_only:
-                mismatches.append(DTOMismatch(
-                    mismatch_id=f"dto_{name}_{field_name}_{uuid.uuid4().hex[:8]}",
-                    backend_type=name,
-                    frontend_type=name,
-                    backend_location=py_dto.get("location"),
-                    frontend_location=ts_dto.get("location"),
-                    field_name=field_name,
-                    mismatch_type="missing_in_frontend",
-                    backend_definition=str(py_fields[field_name]),
-                    severity=PatternSeverity.HIGH,
-                    recommendation=f"Add field '{field_name}' to frontend interface '{name}'",
-                ))
-
-            for field_name in ts_only:
-                mismatches.append(DTOMismatch(
-                    mismatch_id=f"dto_{name}_{field_name}_{uuid.uuid4().hex[:8]}",
-                    backend_type=name,
-                    frontend_type=name,
-                    backend_location=py_dto.get("location"),
-                    frontend_location=ts_dto.get("location"),
-                    field_name=field_name,
-                    mismatch_type="missing_in_backend",
-                    frontend_definition=str(ts_fields[field_name]),
-                    severity=PatternSeverity.MEDIUM,
-                    recommendation=f"Consider adding field '{field_name}' to backend model '{name}' or remove from frontend",
-                ))
-
-            # Check for type mismatches in common fields
-            common_fields = set(py_fields.keys()) & set(ts_fields.keys())
-            for field_name in common_fields:
-                py_field = py_fields[field_name]
-                ts_field = ts_fields[field_name]
-
-                # Check optional mismatch
-                if py_field.get("optional") != ts_field.get("optional"):
-                    mismatches.append(DTOMismatch(
-                        mismatch_id=f"dto_{name}_{field_name}_opt_{uuid.uuid4().hex[:8]}",
-                        backend_type=name,
-                        frontend_type=name,
-                        backend_location=py_dto.get("location"),
-                        frontend_location=ts_dto.get("location"),
-                        field_name=field_name,
-                        mismatch_type="optional_mismatch",
-                        backend_definition=f"optional={py_field.get('optional')}",
-                        frontend_definition=f"optional={ts_field.get('optional')}",
-                        severity=PatternSeverity.MEDIUM,
-                        recommendation=f"Align optional status of field '{field_name}' between backend and frontend",
-                    ))
+            mismatches.extend(self._compare_dto_fields(name, py_dto, ts_dto))
 
         return mismatches
+
+    def _compare_dto_fields(
+        self, name: str, py_dto: Dict, ts_dto: Dict
+    ) -> List[DTOMismatch]:
+        """Compare DTO fields and find mismatches (Issue #665: extracted helper)."""
+        mismatches = []
+
+        py_fields = {f["name"]: f for f in py_dto.get("fields", [])}
+        ts_fields = {f["name"]: f for f in ts_dto.get("fields", [])}
+
+        # Check for missing fields
+        py_only = set(py_fields.keys()) - set(ts_fields.keys())
+        ts_only = set(ts_fields.keys()) - set(py_fields.keys())
+
+        for field_name in py_only:
+            mismatches.append(self._create_dto_mismatch(
+                name, py_dto, ts_dto, field_name, "missing_in_frontend",
+                backend_definition=str(py_fields[field_name]),
+                severity=PatternSeverity.HIGH,
+                recommendation=f"Add field '{field_name}' to frontend interface '{name}'",
+            ))
+
+        for field_name in ts_only:
+            mismatches.append(self._create_dto_mismatch(
+                name, py_dto, ts_dto, field_name, "missing_in_backend",
+                frontend_definition=str(ts_fields[field_name]),
+                severity=PatternSeverity.MEDIUM,
+                recommendation=f"Consider adding field '{field_name}' to backend model '{name}' or remove from frontend",
+            ))
+
+        # Check for type mismatches in common fields
+        common_fields = set(py_fields.keys()) & set(ts_fields.keys())
+        for field_name in common_fields:
+            py_field = py_fields[field_name]
+            ts_field = ts_fields[field_name]
+
+            if py_field.get("optional") != ts_field.get("optional"):
+                mismatches.append(self._create_dto_mismatch(
+                    name, py_dto, ts_dto, field_name, "optional_mismatch",
+                    backend_definition=f"optional={py_field.get('optional')}",
+                    frontend_definition=f"optional={ts_field.get('optional')}",
+                    severity=PatternSeverity.MEDIUM,
+                    recommendation=f"Align optional status of field '{field_name}' between backend and frontend",
+                ))
+
+        return mismatches
+
+    def _create_dto_mismatch(
+        self,
+        name: str,
+        py_dto: Dict,
+        ts_dto: Dict,
+        field_name: str,
+        mismatch_type: str,
+        backend_definition: str = None,
+        frontend_definition: str = None,
+        severity: PatternSeverity = PatternSeverity.MEDIUM,
+        recommendation: str = "",
+    ) -> DTOMismatch:
+        """Create a DTOMismatch object (Issue #665: extracted helper)."""
+        return DTOMismatch(
+            mismatch_id=f"dto_{name}_{field_name}_{uuid.uuid4().hex[:8]}",
+            backend_type=name,
+            frontend_type=name,
+            backend_location=py_dto.get("location"),
+            frontend_location=ts_dto.get("location"),
+            field_name=field_name,
+            mismatch_type=mismatch_type,
+            backend_definition=backend_definition,
+            frontend_definition=frontend_definition,
+            severity=severity,
+            recommendation=recommendation,
+        )
 
     async def _find_validation_duplications(
         self,

@@ -182,7 +182,24 @@ class LogPatternMiner:
         log_lines: List[Tuple[str, str, str]],  # (line, source, raw_timestamp)
         min_occurrences: int = 2,
     ) -> List[LogPattern]:
-        """Mine patterns from log lines"""
+        """Mine patterns from log lines (Issue #665: refactored with helpers)."""
+        pattern_data = self._collect_pattern_data(log_lines)
+
+        # Convert to LogPattern objects
+        patterns = [
+            self._build_log_pattern(pattern_id, data)
+            for pattern_id, data in pattern_data.items()
+            if data["occurrences"] >= min_occurrences
+        ]
+
+        # Sort by occurrences
+        patterns.sort(key=lambda p: p.occurrences, reverse=True)
+        return patterns
+
+    def _collect_pattern_data(
+        self, log_lines: List[Tuple[str, str, str]]
+    ) -> Dict[str, Dict]:
+        """Collect pattern data from log lines (Issue #665: extracted helper)."""
         pattern_data: Dict[str, Dict] = defaultdict(
             lambda: {
                 "occurrences": 0,
@@ -218,48 +235,40 @@ class LogPatternMiner:
             if len(data["samples"]) < 5:
                 data["samples"].append(line[:300])
 
-        # Convert to LogPattern objects
-        patterns = []
-        for pattern_id, data in pattern_data.items():
-            if data["occurrences"] < min_occurrences:
-                continue
+        return pattern_data
 
-            # Calculate frequency per hour
-            freq_per_hour = 0.0
-            if data["first_seen"] and data["last_seen"]:
-                duration = (data["last_seen"] - data["first_seen"]).total_seconds()
-                if duration > 0:
-                    freq_per_hour = data["occurrences"] / (duration / 3600)
+    def _build_log_pattern(self, pattern_id: str, data: Dict) -> LogPattern:
+        """Build LogPattern from collected data (Issue #665: extracted helper)."""
+        # Calculate frequency per hour
+        freq_per_hour = 0.0
+        if data["first_seen"] and data["last_seen"]:
+            duration = (data["last_seen"] - data["first_seen"]).total_seconds()
+            if duration > 0:
+                freq_per_hour = data["occurrences"] / (duration / 3600)
 
-            is_error = any(level in ERROR_LEVELS for level in data["levels"])  # Issue #326
+        is_error = any(level in ERROR_LEVELS for level in data["levels"])  # Issue #326
 
-            patterns.append(
-                LogPattern(
-                    pattern_id=pattern_id,
-                    pattern_template=data.get("template", "Unknown"),
-                    occurrences=data["occurrences"],
-                    first_seen=(
-                        data["first_seen"].isoformat()
-                        if data["first_seen"]
-                        else datetime.now().isoformat()
-                    ),
-                    last_seen=(
-                        data["last_seen"].isoformat()
-                        if data["last_seen"]
-                        else datetime.now().isoformat()
-                    ),
-                    log_levels=list(data["levels"]),
-                    sources=list(data["sources"]),
-                    sample_messages=data["samples"],
-                    frequency_per_hour=round(freq_per_hour, 2),
-                    is_error_pattern=is_error,
-                    is_anomaly=False,
-                )
-            )
-
-        # Sort by occurrences
-        patterns.sort(key=lambda p: p.occurrences, reverse=True)
-        return patterns
+        return LogPattern(
+            pattern_id=pattern_id,
+            pattern_template=data.get("template", "Unknown"),
+            occurrences=data["occurrences"],
+            first_seen=(
+                data["first_seen"].isoformat()
+                if data["first_seen"]
+                else datetime.now().isoformat()
+            ),
+            last_seen=(
+                data["last_seen"].isoformat()
+                if data["last_seen"]
+                else datetime.now().isoformat()
+            ),
+            log_levels=list(data["levels"]),
+            sources=list(data["sources"]),
+            sample_messages=data["samples"],
+            frequency_per_hour=round(freq_per_hour, 2),
+            is_error_pattern=is_error,
+            is_anomaly=False,
+        )
 
     def _create_anomaly(
         self,
