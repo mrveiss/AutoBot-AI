@@ -339,9 +339,28 @@
       </div>
     </BasePanel>
 
-    <!-- Man Pages Section -->
-    <BasePanel variant="bordered" size="medium">
-      <ManPageManager />
+    <!-- System Knowledge Navigation Card (Issue #678: Consolidated ManPageManager to Manage → Advanced) -->
+    <BasePanel variant="bordered" size="medium" class="system-knowledge-nav">
+      <div class="nav-card-content">
+        <div class="nav-card-icon">
+          <i class="fas fa-terminal"></i>
+        </div>
+        <div class="nav-card-info">
+          <h4>System Knowledge Management</h4>
+          <p>Initialize machine knowledge, integrate man pages, and manage system-level documentation.</p>
+          <div class="nav-card-features">
+            <span class="feature-tag"><i class="fas fa-desktop"></i> Machine Profile</span>
+            <span class="feature-tag"><i class="fas fa-book"></i> Man Pages</span>
+            <span class="feature-tag"><i class="fas fa-search"></i> Search</span>
+          </div>
+        </div>
+        <router-link to="/knowledge/manage" class="nav-card-action">
+          <BaseButton variant="primary" size="sm">
+            <i class="fas fa-arrow-right"></i>
+            Go to Manage → Advanced
+          </BaseButton>
+        </router-link>
+      </div>
     </BasePanel>
 
     <!-- Actions -->
@@ -366,10 +385,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers/index'
-import type { KnowledgeCategory } from '@/stores/useKnowledgeStore'
-// @ts-ignore - Component lacks TypeScript declaration file
-import ManPageManager from '@/components/ManPageManager.vue'
+// ManPageManager removed - consolidated to Manage → Advanced (Issue #678)
 import DocumentChangeFeed from '@/components/knowledge/DocumentChangeFeed.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import {
@@ -1561,6 +1579,82 @@ onMounted(() => {
   border-color: #2563eb;
 }
 
+/* System Knowledge Navigation Card (Issue #678) */
+.system-knowledge-nav {
+  margin-bottom: 2rem;
+}
+
+.nav-card-content {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.5rem;
+}
+
+.nav-card-icon {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.nav-card-icon i {
+  font-size: 1.75rem;
+  color: white;
+}
+
+.nav-card-info {
+  flex: 1;
+}
+
+.nav-card-info h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 0.5rem;
+}
+
+.nav-card-info p {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 0.75rem;
+  line-height: 1.5;
+}
+
+.nav-card-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.feature-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  background: #f3f4f6;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  color: #4b5563;
+}
+
+.feature-tag i {
+  font-size: 0.625rem;
+  color: #9ca3af;
+}
+
+.nav-card-action {
+  flex-shrink: 0;
+}
+
+.nav-card-action a {
+  text-decoration: none;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .stats-overview {
@@ -1582,6 +1676,15 @@ onMounted(() => {
 
   .action-btn {
     width: 100%;
+    justify-content: center;
+  }
+
+  .nav-card-content {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .nav-card-features {
     justify-content: center;
   }
 }
