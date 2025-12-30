@@ -24,6 +24,9 @@ export interface DocumentVectorizationState {
   progress?: number
   error?: string
   lastUpdated?: Date
+  // Issue #165: Track document changes - indicates content changed since last vectorization
+  needsReindex?: boolean
+  contentHash?: string
 }
 
 export interface VectorizationProgress {
@@ -108,8 +111,14 @@ export function useKnowledgeVectorization() {
   /**
    * Fetch vectorization status for multiple documents in batch
    * More efficient than calling fetchDocumentStatus individually
+   *
+   * @param documentIds - List of document IDs to check
+   * @param documentNames - Optional map of document ID to display name (Issue #165)
    */
-  const fetchBatchStatus = async (documentIds: string[]): Promise<void> => {
+  const fetchBatchStatus = async (
+    documentIds: string[],
+    documentNames?: Map<string, string>
+  ): Promise<void> => {
     if (documentIds.length === 0) return
 
     try {
@@ -125,33 +134,42 @@ export function useKnowledgeVectorization() {
         const data = await parseApiResponse(response)
 
         if (data?.statuses) {
-          // Update cache with all statuses
+          // Update cache with all statuses, including document names if provided (Issue #165)
           Object.entries(data.statuses).forEach(([docId, statusData]: [string, any]) => {
             const status: VectorizationStatus = statusData.vectorized ? 'vectorized' : 'pending'
-            setDocumentStatus(docId, status)
+            const name = documentNames?.get(docId)
+            setDocumentStatus(docId, status, undefined, undefined, name)
           })
         }
       }
     } catch (error) {
       logger.error('Failed to fetch batch vectorization status:', error)
-      // Mark all as unknown on error
-      documentIds.forEach(id => setDocumentStatus(id, 'unknown'))
+      // Mark all as unknown on error, preserving names if provided (Issue #165)
+      documentIds.forEach(id => {
+        const name = documentNames?.get(id)
+        setDocumentStatus(id, 'unknown', undefined, undefined, name)
+      })
     }
   }
 
   /**
    * Set vectorization status for a document
+   * Issue #165: Added needsReindex and contentHash parameters for change tracking
    */
   const setDocumentStatus = (
     documentId: string,
     status: VectorizationStatus,
     progress?: number,
     error?: string,
-    name?: string
+    name?: string,
+    needsReindex?: boolean,
+    contentHash?: string
   ) => {
-    // Preserve existing name if not provided
+    // Preserve existing values if not provided
     const existingState = documentStates.value.get(documentId)
     const documentName = name || existingState?.name
+    const documentNeedsReindex = needsReindex ?? existingState?.needsReindex
+    const documentContentHash = contentHash || existingState?.contentHash
 
     documentStates.value.set(documentId, {
       documentId,
@@ -159,8 +177,29 @@ export function useKnowledgeVectorization() {
       status,
       progress,
       error,
-      lastUpdated: new Date()
+      lastUpdated: new Date(),
+      needsReindex: documentNeedsReindex,
+      contentHash: documentContentHash
     })
+  }
+
+  /**
+   * Mark a document as needing reindexing (content changed)
+   * Issue #165: Allows UI to indicate which documents have changed
+   */
+  const markDocumentChanged = (documentId: string, newContentHash?: string) => {
+    const existingState = documentStates.value.get(documentId)
+    if (existingState) {
+      documentStates.value.set(documentId, {
+        ...existingState,
+        needsReindex: true,
+        contentHash: newContentHash,
+        lastUpdated: new Date()
+      })
+    } else {
+      // Create new state with pending status
+      setDocumentStatus(documentId, 'pending', undefined, undefined, undefined, true, newContentHash)
+    }
   }
 
   /**
@@ -454,6 +493,7 @@ export function useKnowledgeVectorization() {
     setDocumentStatus,
     clearDocumentStatus,
     clearAllStatuses,
+    markDocumentChanged,  // Issue #165: Track document changes
 
     // Document status fetching (async - loads from backend)
     fetchDocumentStatus,

@@ -714,28 +714,32 @@ const loadMainCategories = async () => {
 }
 
 
-// Helper function to extract all file IDs from tree (Issue #162: Vectorization status tracking)
-const extractFileIds = (nodes: TreeNode[]): string[] => {
+// Helper function to extract all file IDs and names from tree (Issue #162, #165)
+const extractFileIdsAndNames = (nodes: TreeNode[]): { ids: string[], names: Map<string, string> } => {
   const ids: string[] = []
+  const names = new Map<string, string>()
   const traverse = (nodeList: TreeNode[]) => {
     for (const node of nodeList) {
       if (node.type === 'file') {
         ids.push(node.id)
+        // Issue #165: Store document name for display in vectorization modal
+        names.set(node.id, node.name)
       } else if (node.children) {
         traverse(node.children)
       }
     }
   }
   traverse(nodes)
-  return ids
+  return { ids, names }
 }
 
-// Fetch vectorization status for all files in tree (Issue #162)
+// Fetch vectorization status for all files in tree (Issue #162, #165)
 const fetchVectorizationStatuses = async (tree: TreeNode[]) => {
-  const fileIds = extractFileIds(tree)
+  const { ids: fileIds, names: documentNames } = extractFileIdsAndNames(tree)
   if (fileIds.length > 0) {
     logger.info(`Fetching vectorization status for ${fileIds.length} documents`)
-    await fetchBatchStatus(fileIds)
+    // Issue #165: Pass document names to fetchBatchStatus for display
+    await fetchBatchStatus(fileIds, documentNames)
   }
 }
 
