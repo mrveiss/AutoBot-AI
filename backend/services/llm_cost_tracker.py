@@ -368,6 +368,79 @@ class LLMCostTracker:
         # Implementation for budget alerts - can be extended
         pass
 
+    async def _fetch_daily_costs(
+        self, redis, start_date: datetime, end_date: datetime
+    ) -> Dict[str, float]:
+        """
+        Fetch daily costs from Redis using pipeline (Issue #665: extracted helper).
+
+        Args:
+            redis: Redis client
+            start_date: Start of date range
+            end_date: End of date range
+
+        Returns:
+            Dict mapping date strings to cost values
+        """
+        date_strs = []
+        daily_keys = []
+        current = start_date
+        while current <= end_date:
+            date_str = current.strftime("%Y-%m-%d")
+            date_strs.append(date_str)
+            daily_keys.append(f"{self.DAILY_TOTALS_KEY}:{date_str}")
+            current += timedelta(days=1)
+
+        daily_costs = {}
+        if daily_keys:
+            pipe = redis.pipeline()
+            for key in daily_keys:
+                pipe.get(key)
+            results = await pipe.execute()
+
+            for date_str, cost in zip(date_strs, results):
+                if cost:
+                    daily_costs[date_str] = float(cost)
+
+        return daily_costs
+
+    async def _fetch_model_costs(self, redis) -> Dict[str, Dict[str, Any]]:
+        """
+        Fetch model cost breakdown from Redis (Issue #665: extracted helper).
+
+        Args:
+            redis: Redis client
+
+        Returns:
+            Dict mapping model names to cost/usage data
+        """
+        model_costs = {}
+        model_keys = await redis.keys(f"{self.MODEL_TOTALS_KEY}:*")
+
+        if not model_keys:
+            return model_costs
+
+        pipe = redis.pipeline()
+        for key in model_keys:
+            pipe.hgetall(key)
+        model_data_list = await pipe.execute()
+
+        for key, model_data in zip(model_keys, model_data_list):
+            if not model_data:
+                continue
+
+            key_str = key if isinstance(key, str) else key.decode("utf-8")
+            model_name = key_str.split(":")[-1]
+
+            model_costs[model_name] = {
+                "cost_usd": float(model_data.get(b"cost_usd", 0) or model_data.get("cost_usd", 0)),
+                "input_tokens": int(model_data.get(b"input_tokens", 0) or model_data.get("input_tokens", 0)),
+                "output_tokens": int(model_data.get(b"output_tokens", 0) or model_data.get("output_tokens", 0)),
+                "call_count": int(model_data.get(b"call_count", 0) or model_data.get("call_count", 0)),
+            }
+
+        return model_costs
+
     async def get_cost_summary(
         self,
         start_date: Optional[datetime] = None,
@@ -375,6 +448,8 @@ class LLMCostTracker:
     ) -> Dict[str, Any]:
         """
         Get cost summary for a time period.
+
+        Issue #665: Refactored to use extracted helper methods.
 
         Args:
             start_date: Start of period (default: 30 days ago)
@@ -391,56 +466,11 @@ class LLMCostTracker:
         try:
             redis = await self.get_redis()
 
-            # Issue #480: Use pipeline to batch fetch daily totals (fix N+1 query)
-            # Build list of dates and keys first
-            date_strs = []
-            daily_keys = []
-            current = start_date
-            while current <= end_date:
-                date_str = current.strftime("%Y-%m-%d")
-                date_strs.append(date_str)
-                daily_keys.append(f"{self.DAILY_TOTALS_KEY}:{date_str}")
-                current += timedelta(days=1)
-
-            # Batch fetch all daily costs using pipeline
-            daily_costs = {}
-            if daily_keys:
-                pipe = redis.pipeline()
-                for key in daily_keys:
-                    pipe.get(key)
-                results = await pipe.execute()
-
-                for date_str, cost in zip(date_strs, results):
-                    if cost:
-                        daily_costs[date_str] = float(cost)
+            # Fetch costs using helpers (Issue #665)
+            daily_costs = await self._fetch_daily_costs(redis, start_date, end_date)
+            model_costs = await self._fetch_model_costs(redis)
 
             total_cost = sum(daily_costs.values())
-
-            # Get model breakdown using pipeline (fix N+1 query)
-            model_costs = {}
-            model_keys = await redis.keys(f"{self.MODEL_TOTALS_KEY}:*")
-
-            if model_keys:
-                # Batch fetch all model data
-                pipe = redis.pipeline()
-                for key in model_keys:
-                    pipe.hgetall(key)
-                model_data_list = await pipe.execute()
-
-                # Process results
-                for key, model_data in zip(model_keys, model_data_list):
-                    if not model_data:
-                        continue
-
-                    key_str = key if isinstance(key, str) else key.decode("utf-8")
-                    model_name = key_str.split(":")[-1]
-
-                    model_costs[model_name] = {
-                        "cost_usd": float(model_data.get(b"cost_usd", 0) or model_data.get("cost_usd", 0)),
-                        "input_tokens": int(model_data.get(b"input_tokens", 0) or model_data.get("input_tokens", 0)),
-                        "output_tokens": int(model_data.get(b"output_tokens", 0) or model_data.get("output_tokens", 0)),
-                        "call_count": int(model_data.get(b"call_count", 0) or model_data.get("call_count", 0)),
-                    }
 
             return {
                 "period": {

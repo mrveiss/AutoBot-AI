@@ -398,6 +398,101 @@ class WorkflowExecutor:
     # Issue #390: Currently only FULL_PLAN_APPROVAL is implemented
     _SUPPORTED_APPROVAL_MODES = frozenset({PlanApprovalMode.FULL_PLAN_APPROVAL})
 
+    def _validate_approval_params(
+        self, approval_mode: PlanApprovalMode, timeout_seconds: int
+    ) -> int:
+        """
+        Validate approval mode and timeout parameters (Issue #665: extracted helper).
+
+        Args:
+            approval_mode: The requested approval mode
+            timeout_seconds: Requested timeout in seconds
+
+        Returns:
+            Validated (possibly capped) timeout value
+
+        Raises:
+            ValueError: If approval mode unsupported or timeout invalid
+        """
+        if approval_mode not in self._SUPPORTED_APPROVAL_MODES:
+            supported = [m.value for m in self._SUPPORTED_APPROVAL_MODES]
+            raise ValueError(
+                f"Approval mode '{approval_mode.value}' is not yet implemented. "
+                f"Supported modes: {supported}"
+            )
+
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
+
+        if timeout_seconds > 3600:
+            logger.warning(
+                f"Timeout {timeout_seconds}s exceeds max 3600s, capping at 3600s"
+            )
+            return 3600
+
+        return timeout_seconds
+
+    def _check_existing_approval(
+        self, workflow_id: str
+    ) -> PlanApprovalRequest | None:
+        """
+        Check for existing pending approval (Issue #665: extracted helper).
+
+        Args:
+            workflow_id: The workflow ID to check
+
+        Returns:
+            Existing PlanApprovalRequest if still pending, None otherwise
+        """
+        if workflow_id not in self._pending_plan_approvals:
+            return None
+
+        existing = self._pending_plan_approvals[workflow_id]
+        if existing.status in [
+            PlanApprovalStatus.AWAITING_APPROVAL,
+            PlanApprovalStatus.PRESENTED,
+        ]:
+            logger.warning(
+                f"Approval already pending for {workflow_id}, returning existing"
+            )
+            return existing
+
+        # If resolved, cleanup first
+        self.clear_pending_approval(workflow_id)
+        return None
+
+    def _create_approval_request(
+        self,
+        workflow: ActiveWorkflow,
+        approval_mode: PlanApprovalMode,
+        timeout_seconds: int,
+    ) -> PlanApprovalRequest:
+        """
+        Create a new plan approval request (Issue #665: extracted helper).
+
+        Args:
+            workflow: The workflow to create approval for
+            approval_mode: The approval mode
+            timeout_seconds: Timeout for approval
+
+        Returns:
+            New PlanApprovalRequest instance
+        """
+        risk_assessment = self._assess_plan_risk(workflow)
+        total_duration = sum(step.estimated_duration for step in workflow.steps)
+
+        return PlanApprovalRequest(
+            workflow_id=workflow.workflow_id,
+            plan_summary=f"Execute {len(workflow.steps)} steps: {workflow.description}",
+            total_steps=len(workflow.steps),
+            steps_preview=workflow.steps,
+            approval_mode=approval_mode,
+            status=PlanApprovalStatus.PENDING,
+            risk_assessment=risk_assessment,
+            estimated_total_duration=total_duration,
+            timeout_seconds=timeout_seconds,
+        )
+
     async def present_plan_for_approval(
         self,
         workflow: ActiveWorkflow,
@@ -408,6 +503,7 @@ class WorkflowExecutor:
         Present workflow plan to user and wait for approval before execution.
 
         Issue #390: Multi-step tasks should present plan before execution.
+        Issue #665: Refactored to use extracted helper methods.
 
         Args:
             workflow: The workflow to present for approval
@@ -420,54 +516,17 @@ class WorkflowExecutor:
         Raises:
             ValueError: If unsupported approval_mode is requested
         """
-        # Issue #390: Validate supported modes
-        if approval_mode not in self._SUPPORTED_APPROVAL_MODES:
-            supported = [m.value for m in self._SUPPORTED_APPROVAL_MODES]
-            raise ValueError(
-                f"Approval mode '{approval_mode.value}' is not yet implemented. "
-                f"Supported modes: {supported}"
-            )
+        # Validate parameters (Issue #665: uses helper)
+        timeout_seconds = self._validate_approval_params(approval_mode, timeout_seconds)
 
-        # Validate timeout
-        if timeout_seconds <= 0:
-            raise ValueError("timeout_seconds must be positive")
-        if timeout_seconds > 3600:
-            logger.warning(
-                f"Timeout {timeout_seconds}s exceeds max 3600s, capping at 3600s"
-            )
-            timeout_seconds = 3600
+        # Check for existing pending approval (Issue #665: uses helper)
+        existing = self._check_existing_approval(workflow.workflow_id)
+        if existing:
+            return existing
 
-        # Check if approval already pending for this workflow
-        if workflow.workflow_id in self._pending_plan_approvals:
-            existing = self._pending_plan_approvals[workflow.workflow_id]
-            if existing.status in [
-                PlanApprovalStatus.AWAITING_APPROVAL,
-                PlanApprovalStatus.PRESENTED,
-            ]:
-                logger.warning(
-                    f"Approval already pending for {workflow.workflow_id}, returning existing"
-                )
-                return existing
-            # If resolved, cleanup first
-            self.clear_pending_approval(workflow.workflow_id)
-
-        # Calculate risk assessment
-        risk_assessment = self._assess_plan_risk(workflow)
-
-        # Calculate total estimated duration
-        total_duration = sum(step.estimated_duration for step in workflow.steps)
-
-        # Create approval request
-        approval_request = PlanApprovalRequest(
-            workflow_id=workflow.workflow_id,
-            plan_summary=f"Execute {len(workflow.steps)} steps: {workflow.description}",
-            total_steps=len(workflow.steps),
-            steps_preview=workflow.steps,
-            approval_mode=approval_mode,
-            status=PlanApprovalStatus.PENDING,
-            risk_assessment=risk_assessment,
-            estimated_total_duration=total_duration,
-            timeout_seconds=timeout_seconds,
+        # Create approval request (Issue #665: uses helper)
+        approval_request = self._create_approval_request(
+            workflow, approval_mode, timeout_seconds
         )
 
         # Store pending approval
