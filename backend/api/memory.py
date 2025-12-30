@@ -395,95 +395,54 @@ async def find_orphaned_conversation_entities(
 
     Issue #547: Detects memory entities of type 'conversation' that have
     session_id metadata pointing to sessions that no longer exist.
-
-    Returns:
-        List of orphaned conversation entities with their details
+    Issue #665: Refactored to use extracted helpers.
     """
     request_id = generate_request_id()
 
     try:
         logger.info("[%s] Scanning for orphaned conversation entities", request_id)
 
-        # Get all conversation entities using search_entities with type filter
         all_entities = await memory_graph.search_entities(
-            query="*",
-            entity_type="conversation",
-            limit=1000,
+            query="*", entity_type="conversation", limit=1000
         )
 
         if not all_entities:
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "success": True,
-                    "data": {
-                        "total_conversation_entities": 0,
-                        "orphaned_count": 0,
-                        "orphaned_entities": [],
-                    },
-                    "message": "No conversation entities found",
-                    "request_id": request_id,
-                },
-            )
+            return JSONResponse(status_code=200, content={
+                "success": True,
+                "data": {"total_conversation_entities": 0, "orphaned_count": 0, "orphaned_entities": []},
+                "message": "No conversation entities found", "request_id": request_id,
+            })
 
-        # Get existing session IDs
-        from backend.utils.chat_utils import get_chat_history_manager
-
-        chat_manager = get_chat_history_manager(request)
-        if chat_manager is None:
-            raise HTTPException(
-                status_code=500, detail="Chat history manager not available"
-            )
-
-        existing_sessions = await chat_manager.list_sessions_fast()
-        existing_session_ids = {s["id"] for s in existing_sessions}
+        # Issue #665: Use extracted helpers
+        existing_session_ids = await _get_existing_session_ids(request)
+        orphaned_raw = _find_orphaned_entities(all_entities, existing_session_ids)
 
         logger.info(
             "[%s] Found %d conversation entities, %d active sessions",
             request_id, len(all_entities), len(existing_session_ids)
         )
 
-        # Find orphaned entities
-        orphaned_entities = []
-        for entity in all_entities:
-            metadata = entity.get("metadata", {})
-            session_id = metadata.get("session_id")
+        # Issue #665: Format orphaned entities for response
+        orphaned_entities = _format_orphaned_for_response(orphaned_raw)
 
-            if session_id and session_id not in existing_session_ids:
-                orphaned_entities.append({
-                    "id": entity.get("id"),
-                    "name": entity.get("name"),
-                    "session_id": session_id,
-                    "created_at": entity.get("created_at"),
-                    "observations": entity.get("observations", [])[:3],  # First 3
-                })
+        logger.info("[%s] Found %d orphaned conversation entities", request_id, len(orphaned_entities))
 
-        logger.info(
-            "[%s] Found %d orphaned conversation entities",
-            request_id, len(orphaned_entities)
-        )
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "data": {
-                    "total_conversation_entities": len(all_entities),
-                    "active_sessions": len(existing_session_ids),
-                    "orphaned_count": len(orphaned_entities),
-                    "orphaned_entities": orphaned_entities,
-                },
-                "request_id": request_id,
+        return JSONResponse(status_code=200, content={
+            "success": True,
+            "data": {
+                "total_conversation_entities": len(all_entities),
+                "active_sessions": len(existing_session_ids),
+                "orphaned_count": len(orphaned_entities),
+                "orphaned_entities": orphaned_entities,
             },
-        )
+            "request_id": request_id,
+        })
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error("[%s] Error finding orphaned entities: %s", request_id, e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to find orphaned entities: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to find orphaned entities: {str(e)}")
 
 
 # =============================================================================
@@ -536,6 +495,30 @@ def _find_orphaned_entities(entities: List[Dict], existing_session_ids: set) -> 
             orphaned.append(entity)
 
     return orphaned
+
+
+def _format_orphaned_for_response(orphaned_entities: List[Dict]) -> List[Dict]:
+    """
+    Format orphaned entities for API response.
+
+    Issue #665: Extracted helper for response formatting.
+
+    Args:
+        orphaned_entities: Raw orphaned entities
+
+    Returns:
+        List of formatted entity dicts for response
+    """
+    return [
+        {
+            "id": entity.get("id"),
+            "name": entity.get("name"),
+            "session_id": entity.get("metadata", {}).get("session_id"),
+            "created_at": entity.get("created_at"),
+            "observations": entity.get("observations", [])[:3],  # First 3
+        }
+        for entity in orphaned_entities
+    ]
 
 
 async def _delete_entities(
