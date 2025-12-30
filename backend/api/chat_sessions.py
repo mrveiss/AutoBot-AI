@@ -26,6 +26,7 @@ from backend.utils.chat_utils import (
 from backend.utils.chat_exceptions import get_exceptions_lazy
 from pydantic import BaseModel, Field
 from src.auth_middleware import auth_middleware
+from src.autobot_memory_graph import AutoBotMemoryGraph
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 
@@ -299,6 +300,45 @@ async def create_session(session_data: SessionCreate, request: Request):
         session_id,
         {"title": session_title, "request_id": request_id},
     )
+
+    # Issue #608: Create user and session entities in memory graph for tracking
+    memory_graph: Optional[AutoBotMemoryGraph] = getattr(
+        request.app.state, "memory_graph", None
+    )
+    if memory_graph and user_data:
+        try:
+            user_id = user_data.get("user_id") or user_data.get("username", "anonymous")
+            username = user_data.get("username", "anonymous")
+
+            # Create user entity (idempotent - returns existing if found)
+            await memory_graph.create_user_entity(
+                user_id=user_id,
+                username=username,
+                metadata={"source": "session_creation"},
+            )
+
+            # Create chat session entity linked to user
+            await memory_graph.create_chat_session_entity(
+                session_id=session_id,
+                owner_id=user_id,
+                title=session_title,
+                metadata={
+                    "created_via": "api",
+                    "request_id": request_id,
+                },
+            )
+            logger.debug(
+                "Memory graph entities created for session %s, user %s",
+                session_id,
+                username,
+            )
+        except Exception as graph_error:
+            # Non-critical: log warning but don't fail session creation
+            logger.warning(
+                "Failed to create memory graph entities for session %s: %s",
+                session_id,
+                graph_error,
+            )
 
     return create_success_response(
         data=session,
