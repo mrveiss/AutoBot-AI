@@ -939,13 +939,24 @@ async def export_metrics(
     format: str = Query("json", pattern="^(json|csv)$"),
     time_range_hours: int = Query(1, ge=1, le=168),  # Max 1 week
 ):
-    """Export performance metrics in JSON or CSV format"""
-    # Calculate time range
+    """Export performance metrics in JSON or CSV format (Issue #665: refactored)."""
     end_time = time.time()
     start_time = end_time - (time_range_hours * 3600)
 
-    # Collect all metrics within time range
-    export_data = {
+    export_data = _build_export_data(start_time, end_time, time_range_hours, format)
+    _filter_all_metrics(export_data, start_time, end_time)
+
+    if format == "json":
+        return _build_json_export_response(export_data, end_time)
+    elif format == "csv":
+        return _build_csv_export_response(export_data, end_time)
+
+
+def _build_export_data(
+    start_time: float, end_time: float, time_range_hours: int, format: str
+) -> dict:
+    """Build initial export data structure (Issue #665: extracted helper)."""
+    return {
         "export_info": {
             "timestamp": end_time,
             "time_range_hours": time_range_hours,
@@ -959,6 +970,9 @@ async def export_metrics(
         "service_metrics": {},
     }
 
+
+def _filter_all_metrics(export_data: dict, start_time: float, end_time: float) -> None:
+    """Filter all metric types by time range (Issue #665: extracted helper)."""
     # Filter GPU metrics
     for metric in performance_monitor.gpu_metrics_buffer:
         if start_time <= metric.timestamp <= end_time:
@@ -975,44 +989,43 @@ async def export_metrics(
             export_data["system_metrics"].append(metric.__dict__)
 
     # Filter service metrics
-    for (
-        service_name,
-        metrics_buffer,
-    ) in performance_monitor.service_metrics_buffer.items():
+    for service_name, metrics_buffer in performance_monitor.service_metrics_buffer.items():
         filtered_metrics = [
             m.__dict__ for m in metrics_buffer if start_time <= m.timestamp <= end_time
         ]
         if filtered_metrics:
             export_data["service_metrics"][service_name] = filtered_metrics
 
-    if format == "json":
-        # Return JSON response
-        return JSONResponse(
-            content=export_data,
-            headers={
-                "Content-Disposition": (
-                    f"attachment; filename=autobot_metrics_{int(end_time)}.json"
-                )
-            },
-        )
 
-    elif format == "csv":
-        # Convert to CSV and return as streaming response
-        csv_content = _convert_metrics_to_csv(export_data)
+def _build_json_export_response(export_data: dict, end_time: float) -> JSONResponse:
+    """Build JSON export response (Issue #665: extracted helper)."""
+    return JSONResponse(
+        content=export_data,
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename=autobot_metrics_{int(end_time)}.json"
+            )
+        },
+    )
 
-        async def generate():
-            """Yield CSV content as encoded bytes."""
-            yield csv_content.encode()
 
-        return StreamingResponse(
-            generate(),
-            media_type="text/csv",
-            headers={
-                "Content-Disposition": (
-                    f"attachment; filename=autobot_metrics_{int(end_time)}.csv"
-                )
-            },
-        )
+def _build_csv_export_response(export_data: dict, end_time: float) -> StreamingResponse:
+    """Build CSV export response (Issue #665: extracted helper)."""
+    csv_content = _convert_metrics_to_csv(export_data)
+
+    async def generate():
+        """Yield CSV content as encoded bytes."""
+        yield csv_content.encode()
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename=autobot_metrics_{int(end_time)}.csv"
+            )
+        },
+    )
 
 
 async def _handle_get_current_metrics(websocket: WebSocket, command: dict) -> None:

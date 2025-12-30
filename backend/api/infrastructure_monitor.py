@@ -613,12 +613,32 @@ class InfrastructureMonitor:
         return await self._stats_collector.collect_remote_stats(host)
 
     async def monitor_vm0(self) -> MachineInfo:
-        """Monitor VM0 (Main backend/frontend)"""
+        """Monitor VM0 (Main backend/frontend) (Issue #665: refactored)."""
         services = MachineServices()
         backend_host = config.get_host("backend")
         backend_port = config.get_port("backend")
 
-        # Core services
+        # Check all service groups
+        await self._check_vm0_core_services(services, backend_host, backend_port)
+        await self._check_vm0_database_services(services, backend_host, backend_port)
+        await self._check_vm0_application_services(services, backend_host, backend_port)
+        self._add_vm0_support_services(services)
+
+        stats = await self.get_machine_stats(backend_host)
+
+        return MachineInfo.create(
+            machine_id="vm0",
+            name="VM0 - Main",
+            ip=backend_host,
+            services=services,
+            stats=stats,
+            icon="fas fa-server",
+        )
+
+    async def _check_vm0_core_services(
+        self, services: MachineServices, backend_host: str, backend_port: int
+    ) -> None:
+        """Check VM0 core services (Issue #665: extracted helper)."""
         services.core.append(
             await self._service_collector.check_http_health(
                 f"http://{backend_host}:{backend_port}/api/health", "Backend API"
@@ -630,11 +650,13 @@ class InfrastructureMonitor:
             )
         )
 
-        # Database services
+    async def _check_vm0_database_services(
+        self, services: MachineServices, backend_host: str, backend_port: int
+    ) -> None:
+        """Check VM0 database services (Issue #665: extracted helper)."""
         redis_host = config.get_host("redis")
         if self.redis_client:
             try:
-                # Issue #361 - avoid blocking
                 await asyncio.to_thread(self.redis_client.ping)
                 services.database.append(
                     ServiceInfo.online(f"Redis ({redis_host})", "3ms")
@@ -653,7 +675,10 @@ class InfrastructureMonitor:
         )
         services.database.append(ServiceInfo.online("ChromaDB", "85ms"))
 
-        # Application services
+    async def _check_vm0_application_services(
+        self, services: MachineServices, backend_host: str, backend_port: int
+    ) -> None:
+        """Check VM0 application services (Issue #665: extracted helper)."""
         services.application.append(
             await self._service_collector.check_http_health(
                 f"http://{backend_host}:{backend_port}/api/chat/health", "Chat Service"
@@ -672,24 +697,14 @@ class InfrastructureMonitor:
         )
         services.application.append(ServiceInfo.online("Workflow Engine", "45ms"))
 
-        # Support services
+    def _add_vm0_support_services(self, services: MachineServices) -> None:
+        """Add VM0 support services (Issue #665: extracted helper)."""
         services.support.extend([
             ServiceInfo.online("Service Monitor", "15ms"),
             ServiceInfo.online("Prompts API", "10ms"),
             ServiceInfo.online("File Manager", "8ms"),
             ServiceInfo.online("Terminal Service", "12ms"),
         ])
-
-        stats = await self.get_machine_stats(backend_host)
-
-        return MachineInfo.create(
-            machine_id="vm0",
-            name="VM0 - Main",
-            ip=backend_host,
-            services=services,
-            stats=stats,
-            icon="fas fa-server",
-        )
 
     async def monitor_vm1(self) -> MachineInfo:
         """Monitor VM1 (Frontend development)"""
