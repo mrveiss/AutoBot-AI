@@ -70,6 +70,21 @@ export type DesktopActivitySubtype =
   | 'screenshot'
 
 /**
+ * Secret usage action types
+ * Issue #608: Phase 4 - Secrets vault integration
+ */
+export type SecretUsageAction =
+  | 'access'
+  | 'inject'
+  | 'copy'
+  | 'reveal'
+
+/**
+ * Secret type matching backend enum
+ */
+export type SecretType = 'ssh_key' | 'password' | 'api_key' | 'token' | 'certificate' | 'database_url' | 'other'
+
+/**
  * Options for activity logging
  */
 export interface ActivityLogOptions {
@@ -122,6 +137,29 @@ export interface UseSessionActivityLoggerReturn {
     metadata?: Record<string, unknown>,
     options?: ActivityLogOptions
   ) => string | null
+
+  /**
+   * Log secret usage within a session
+   * Issue #608: Phase 4 - Secrets vault integration
+   */
+  logSecretUsage: (
+    action: SecretUsageAction,
+    secretId: string,
+    secretName: string,
+    secretType: SecretType,
+    metadata?: Record<string, unknown>
+  ) => string | null
+
+  /**
+   * Link a secret to the current session
+   * Issue #608: Phase 4 - Secrets vault integration
+   */
+  linkSecretToSession: (
+    secretId: string,
+    secretName: string,
+    secretType: SecretType,
+    scope: 'user' | 'session' | 'shared'
+  ) => boolean
 
   /**
    * Get activities for the current session
@@ -301,6 +339,76 @@ export function useSessionActivityLogger(): UseSessionActivityLoggerReturn {
   }
 
   /**
+   * Log secret usage within a session
+   * Issue #608: Phase 4 - Secrets vault integration
+   */
+  const logSecretUsage = (
+    action: SecretUsageAction,
+    secretId: string,
+    secretName: string,
+    secretType: SecretType,
+    metadata?: Record<string, unknown>
+  ): string | null => {
+    const sessionId = getCurrentSessionId()
+    if (!sessionId) {
+      logger.warn('[Issue #608] Cannot log secret usage: no active session')
+      return null
+    }
+
+    const content = `Secret ${action}: ${secretName} (${secretType})`
+
+    // Increment usage count in the store
+    chatStore.incrementSecretUsage(sessionId, secretId)
+
+    // Log as terminal activity with secret reference
+    return logActivity('terminal', content, {
+      ...metadata,
+      subtype: 'secret_usage',
+      action,
+      secretId,
+      secretName,
+      secretType
+    }, {
+      secretsUsed: [secretId],
+      syncImmediately: true // Secret usage is important, sync immediately
+    })
+  }
+
+  /**
+   * Link a secret to the current session
+   * Issue #608: Phase 4 - Secrets vault integration
+   */
+  const linkSecretToSession = (
+    secretId: string,
+    secretName: string,
+    secretType: SecretType,
+    scope: 'user' | 'session' | 'shared'
+  ): boolean => {
+    const sessionId = getCurrentSessionId()
+    if (!sessionId) {
+      logger.warn('[Issue #608] Cannot link secret: no active session')
+      return false
+    }
+
+    const userId = getCurrentUserId()
+
+    // Map SecretType to SessionSecret type
+    const sessionSecretType = secretType === 'ssh_key' ? 'ssh_key' :
+                              secretType === 'api_key' ? 'api_key' :
+                              secretType === 'token' ? 'token' :
+                              secretType === 'password' ? 'password' :
+                              secretType === 'certificate' ? 'certificate' : 'api_key'
+
+    return chatStore.addSessionSecret(sessionId, {
+      id: secretId,
+      name: secretName,
+      type: sessionSecretType,
+      scope,
+      ownerId: userId
+    })
+  }
+
+  /**
    * Get activities for the current session
    */
   const getActivities = (filters?: {
@@ -367,6 +475,8 @@ export function useSessionActivityLogger(): UseSessionActivityLoggerReturn {
     logFileActivity,
     logDesktopActivity,
     logBrowserActivity,
+    logSecretUsage,
+    linkSecretToSession,
     getActivities,
     syncActivitiesToBackend
   }

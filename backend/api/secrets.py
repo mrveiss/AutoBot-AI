@@ -13,6 +13,7 @@ Provides comprehensive secrets management with dual scope:
 - Cleanup management: Handle secrets on chat deletion
 """
 
+import asyncio
 import base64
 import json
 import logging
@@ -35,6 +36,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.autobot_memory_graph import AutoBotMemoryGraph
 
 logger = logging.getLogger(__name__)
 
@@ -835,6 +837,35 @@ async def get_secret(
         if not secret:
             audit_log("ACCESS", secret_id, http_request, success=False, details="not_found")
             raise HTTPException(status_code=404, detail="Secret not found")
+
+        # Issue #608: Track secret usage in memory graph when accessed within a chat
+        if chat_id:
+            memory_graph: Optional[AutoBotMemoryGraph] = getattr(
+                http_request.app.state, "memory_graph", None
+            )
+            if memory_graph:
+                try:
+                    await memory_graph.create_secret_entity(
+                        name=secret.get("name", secret_id),
+                        secret_type=secret.get("type", "other"),
+                        owner_id=secret.get("chat_id") or "system",
+                        scope="session" if secret.get("scope") == "chat" else "user",
+                        session_id=chat_id,
+                        metadata={
+                            "secret_id": secret_id,
+                            "accessed_via": "api",
+                            "original_scope": secret.get("scope"),
+                        },
+                    )
+                    logger.debug(
+                        "[Issue #608] Created secret entity for %s in session %s",
+                        secret_id,
+                        chat_id,
+                    )
+                except Exception as graph_err:
+                    logger.warning(
+                        "[Issue #608] Failed to create secret entity: %s", graph_err
+                    )
 
         audit_log("ACCESS", secret_id, http_request, details="value_retrieved")
         return JSONResponse(status_code=200, content=secret)

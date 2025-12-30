@@ -256,32 +256,74 @@ class PerformanceOptimizedDiagnostics:
             logger.error("Error checking system resources: %s", e)
             return {"error": str(e)}
 
+    def _analyze_cpu_bottleneck(self, analysis: Dict[str, Any]) -> None:
+        """Analyze CPU usage for bottlenecks (Issue #665: extracted helper)."""
+        cpu_usage = self.system_info.get("cpu", {}).get("usage_percent", 0)
+        cpu_high_pct = ResourceThresholds.CPU_HIGH_THRESHOLD * 100
+        cpu_optimal_pct = ResourceThresholds.CPU_OPTIMAL_MAX * 100
+        if cpu_usage > cpu_high_pct:
+            analysis["bottlenecks"].append(
+                {
+                    "type": "cpu",
+                    "severity": "high",
+                    "message": f"CPU usage at {cpu_usage}% - potential bottleneck",
+                }
+            )
+        elif cpu_usage < cpu_optimal_pct:
+            analysis["optimal_areas"].append(
+                {
+                    "type": "cpu",
+                    "message": (
+                        f"CPU usage low at {cpu_usage}% - good performance headroom"
+                    ),
+                }
+            )
+
+    def _analyze_gpu_bottleneck(self, analysis: Dict[str, Any]) -> None:
+        """Analyze GPU utilization for bottlenecks (Issue #665: extracted helper)."""
+        gpu_info = self.system_info.get("gpu", {})
+        gpu_util = gpu_info.get("utilization_percent")
+        gpu_low_pct = ResourceThresholds.GPU_LOW_UTILIZATION * 100
+        gpu_saturated_pct = ResourceThresholds.GPU_SATURATED * 100
+        if gpu_util is not None:
+            if gpu_util < gpu_low_pct:
+                analysis["warnings"].append(
+                    {
+                        "type": "gpu",
+                        "severity": "medium",
+                        "message": (
+                            f"GPU utilization low at {gpu_util}% - "
+                            f"AI workloads may not be GPU-accelerated"
+                        ),
+                    }
+                )
+            elif gpu_util > gpu_saturated_pct:
+                analysis["bottlenecks"].append(
+                    {
+                        "type": "gpu",
+                        "severity": "medium",
+                        "message": (
+                            f"GPU utilization at {gpu_util}% - may be saturated"
+                        ),
+                    }
+                )
+            else:
+                analysis["optimal_areas"].append(
+                    {
+                        "type": "gpu",
+                        "message": (
+                            f"GPU utilization at {gpu_util}% - good performance"
+                        ),
+                    }
+                )
+
     def _analyze_performance_bottlenecks(self) -> Dict[str, Any]:
-        """Analyze current performance bottlenecks"""
+        """Analyze current performance bottlenecks (Issue #665: uses extracted helpers)."""
         analysis = {"bottlenecks": [], "optimal_areas": [], "warnings": []}
 
         try:
             # CPU Analysis (Issue #376 - use named constants)
-            cpu_usage = self.system_info.get("cpu", {}).get("usage_percent", 0)
-            cpu_high_pct = ResourceThresholds.CPU_HIGH_THRESHOLD * 100
-            cpu_optimal_pct = ResourceThresholds.CPU_OPTIMAL_MAX * 100
-            if cpu_usage > cpu_high_pct:
-                analysis["bottlenecks"].append(
-                    {
-                        "type": "cpu",
-                        "severity": "high",
-                        "message": f"CPU usage at {cpu_usage}% - potential bottleneck",
-                    }
-                )
-            elif cpu_usage < cpu_optimal_pct:
-                analysis["optimal_areas"].append(
-                    {
-                        "type": "cpu",
-                        "message": (
-                            f"CPU usage low at {cpu_usage}% - good performance headroom"
-                        ),
-                    }
-                )
+            self._analyze_cpu_bottleneck(analysis)
 
             # Memory Analysis
             memory_info = self.system_info.get("memory", {})
@@ -298,41 +340,7 @@ class PerformanceOptimizedDiagnostics:
                 )
 
             # GPU Analysis (Issue #376 - use named constants)
-            gpu_info = self.system_info.get("gpu", {})
-            gpu_util = gpu_info.get("utilization_percent")
-            gpu_low_pct = ResourceThresholds.GPU_LOW_UTILIZATION * 100
-            gpu_saturated_pct = ResourceThresholds.GPU_SATURATED * 100
-            if gpu_util is not None:
-                if gpu_util < gpu_low_pct:
-                    analysis["warnings"].append(
-                        {
-                            "type": "gpu",
-                            "severity": "medium",
-                            "message": (
-                                f"GPU utilization low at {gpu_util}% - "
-                                f"AI workloads may not be GPU-accelerated"
-                            ),
-                        }
-                    )
-                elif gpu_util > gpu_saturated_pct:
-                    analysis["bottlenecks"].append(
-                        {
-                            "type": "gpu",
-                            "severity": "medium",
-                            "message": (
-                                f"GPU utilization at {gpu_util}% - may be saturated"
-                            ),
-                        }
-                    )
-                else:
-                    analysis["optimal_areas"].append(
-                        {
-                            "type": "gpu",
-                            "message": (
-                                f"GPU utilization at {gpu_util}% - good performance"
-                            ),
-                        }
-                    )
+            self._analyze_gpu_bottleneck(analysis)
 
             return analysis
 

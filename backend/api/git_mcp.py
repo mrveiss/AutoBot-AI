@@ -250,11 +250,78 @@ async def check_rate_limit() -> bool:
         return True
 
 
+def _validate_git_command(git_args: List[str]) -> None:
+    """Validate git command is safe and allowed (Issue #665: extracted helper)."""
+    if not git_args:
+        raise HTTPException(status_code=400, detail="No git command specified")
+
+    git_subcommand = git_args[0]
+
+    # Check against blocked commands first
+    if git_subcommand in BLOCKED_GIT_COMMANDS:
+        logger.warning("Blocked dangerous git command: %s", git_subcommand)
+        raise HTTPException(
+            status_code=403, detail=f"Git command '{git_subcommand}' is blocked"
+        )
+
+    # Verify command is in safe list
+    if git_subcommand not in SAFE_GIT_COMMANDS:
+        logger.warning("Blocked unsafe git command: %s", git_subcommand)
+        raise HTTPException(
+            status_code=403, detail=f"Git command '{git_subcommand}' is not allowed"
+        )
+
+    # Validate ALL arguments for dangerous patterns
+    if not sanitize_git_args(git_args):
+        raise HTTPException(
+            status_code=400, detail="Git command contains unsafe arguments"
+        )
+
+
+async def _run_git_process(
+    cmd: List[str], repo_path: str, timeout: int
+) -> Metadata:
+    """Execute git process and return result (Issue #665: extracted helper)."""
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd=repo_path,
+    )
+
+    try:
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(), timeout=timeout
+        )
+    except asyncio.TimeoutError:
+        process.kill()
+        await process.wait()
+        raise HTTPException(
+            status_code=504,
+            detail=f"Git command timed out after {timeout} seconds",
+        )
+
+    # Decode output with UTF-8
+    stdout_str = stdout.decode("utf-8", errors="replace")
+    stderr_str = stderr.decode("utf-8", errors="replace")
+
+    # Check output size
+    if len(stdout_str) > MAX_OUTPUT_SIZE:
+        stdout_str = stdout_str[:MAX_OUTPUT_SIZE] + "\n... (output truncated)"
+
+    return {
+        "success": process.returncode == 0,
+        "return_code": process.returncode,
+        "stdout": stdout_str,
+        "stderr": stderr_str,
+    }
+
+
 async def execute_git_command(
     repo_path: str, git_args: List[str], timeout: int = 30
 ) -> Metadata:
     """
-    Execute git command safely with output capture
+    Execute git command safely with output capture (Issue #665: uses extracted helpers).
 
     Security controls:
     - Repository whitelist validation
@@ -265,69 +332,15 @@ async def execute_git_command(
     """
     try:
         # Security: Validate git subcommand is in safe list
-        if not git_args:
-            raise HTTPException(status_code=400, detail="No git command specified")
-
-        git_subcommand = git_args[0]
-
-        # Check against blocked commands first
-        if git_subcommand in BLOCKED_GIT_COMMANDS:
-            logger.warning("Blocked dangerous git command: %s", git_subcommand)
-            raise HTTPException(
-                status_code=403, detail=f"Git command '{git_subcommand}' is blocked"
-            )
-
-        # Verify command is in safe list
-        if git_subcommand not in SAFE_GIT_COMMANDS:
-            logger.warning("Blocked unsafe git command: %s", git_subcommand)
-            raise HTTPException(
-                status_code=403, detail=f"Git command '{git_subcommand}' is not allowed"
-            )
-
-        # Validate ALL arguments for dangerous patterns
-        if not sanitize_git_args(git_args):
-            raise HTTPException(
-                status_code=400, detail="Git command contains unsafe arguments"
-            )
+        _validate_git_command(git_args)
 
         # Build full command
         cmd = ["git", "-C", repo_path] + git_args
 
         # Execute with timeout
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=repo_path,
-        )
-
-        try:
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(), timeout=timeout
-            )
-        except asyncio.TimeoutError:
-            process.kill()
-            await process.wait()
-            raise HTTPException(
-                status_code=504,
-                detail=f"Git command timed out after {timeout} seconds",
-            )
-
-        # Decode output with UTF-8
-        stdout_str = stdout.decode("utf-8", errors="replace")
-        stderr_str = stderr.decode("utf-8", errors="replace")
-
-        # Check output size
-        if len(stdout_str) > MAX_OUTPUT_SIZE:
-            stdout_str = stdout_str[:MAX_OUTPUT_SIZE] + "\n... (output truncated)"
-
-        return {
-            "success": process.returncode == 0,
-            "return_code": process.returncode,
-            "stdout": stdout_str,
-            "stderr": stderr_str,
-            "command": " ".join(git_args),
-        }
+        result = await _run_git_process(cmd, repo_path, timeout)
+        result["command"] = " ".join(git_args)
+        return result
 
     except HTTPException:
         raise
