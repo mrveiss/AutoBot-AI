@@ -448,7 +448,8 @@ class RollbackManager:
         self, step: dict, target_version: str, rollback_id: str
     ) -> bool:
         """Handle deployment info update step (Issue #315: extracted helper)."""
-        self._update_deployment_info(target_version, rollback_id)
+        # Issue #666: Wrap blocking I/O in asyncio.to_thread
+        await asyncio.to_thread(self._update_deployment_info, target_version, rollback_id)
         return True
 
     async def execute_rollback(
@@ -468,10 +469,12 @@ class RollbackManager:
         # Create rollback plan
         plan = self.create_rollback_plan(target_version, strategy)
 
-        # Save rollback plan
+        # Save rollback plan - Issue #666: Use asyncio.to_thread to avoid blocking
         plan_file = self.rollback_dir / f"rollback_plan_{rollback_id}.json"
-        with open(plan_file, "w") as f:
-            json.dump(plan, f, indent=2)
+        def _write_plan():
+            with open(plan_file, "w") as f:
+                json.dump(plan, f, indent=2)
+        await asyncio.to_thread(_write_plan)
 
         if dry_run:
             self.print_step(f"Rollback plan saved: {plan_file}", "info")
@@ -505,16 +508,20 @@ class RollbackManager:
                 f"Rollback completed successfully in {duration:.1f}s", "success"
             )
 
-            # Log rollback success
-            self._log_rollback_event(rollback_id, target_version, "success", duration)
+            # Log rollback success - Issue #666: Wrap blocking I/O
+            await asyncio.to_thread(
+                self._log_rollback_event, rollback_id, target_version, "success", duration
+            )
 
             return True
 
         except Exception as e:
             self.print_step(f"Rollback failed: {e}", "error")
 
-            # Log rollback failure
-            self._log_rollback_event(rollback_id, target_version, "failed", 0, str(e))
+            # Log rollback failure - Issue #666: Wrap blocking I/O
+            await asyncio.to_thread(
+                self._log_rollback_event, rollback_id, target_version, "failed", 0, str(e)
+            )
 
             # Attempt recovery if configured
             if self.rollback_config["cleanup_failed_rollback"]:

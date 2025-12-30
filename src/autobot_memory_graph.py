@@ -596,6 +596,9 @@ class AutoBotMemoryGraph:
         """
         Create relationship between two entities.
 
+        Issue #665: Refactored to use _store_outgoing_relation and
+        _store_incoming_relation helpers for maintainability.
+
         Args:
             from_entity: Source entity name
             to_entity: Target entity name
@@ -609,12 +612,11 @@ class AutoBotMemoryGraph:
         """
         self.ensure_initialized()
 
-        # Validation
         if relation_type not in self.RELATION_TYPES:
             raise ValueError(f"Invalid relation_type: {relation_type}")
 
         try:
-            # Get entity IDs - fetch both in parallel for better performance
+            # Get entity IDs in parallel
             from_entity_data, to_entity_data = await asyncio.gather(
                 self.get_entity(entity_name=from_entity),
                 self.get_entity(entity_name=to_entity),
@@ -625,47 +627,24 @@ class AutoBotMemoryGraph:
 
             from_id = from_entity_data["id"]
             to_id = to_entity_data["id"]
+            timestamp = int(datetime.now().timestamp() * 1000)
 
-            # Create relation
+            # Build relation objects
             relation = {
                 "to": to_id,
                 "type": relation_type,
-                "created_at": int(datetime.now().timestamp() * 1000),
+                "created_at": timestamp,
                 "metadata": {"strength": strength, **(metadata or {})},
             }
+            reverse_rel = {"from": from_id, "type": relation_type, "created_at": timestamp}
 
-            # Store outgoing relation
-            out_key = f"memory:relations:out:{from_id}"
-
-            # Initialize if doesn't exist
-            if not await self.redis_client.exists(out_key):
-                await self.redis_client.json().set(
-                    out_key, "$", {"entity_id": from_id, "relations": []}
-                )
-
-            # Append relation
-            await self.redis_client.json().arrappend(out_key, "$.relations", relation)
-
-            # Store incoming relation (reverse index)
-            in_key = f"memory:relations:in:{to_id}"
-
-            if not await self.redis_client.exists(in_key):
-                await self.redis_client.json().set(
-                    in_key, "$", {"entity_id": to_id, "relations": []}
-                )
-
-            reverse_rel = {
-                "from": from_id,
-                "type": relation_type,
-                "created_at": int(datetime.now().timestamp() * 1000),
-            }
-
-            await self.redis_client.json().arrappend(in_key, "$.relations", reverse_rel)
+            # Store both directions using helpers
+            await self._store_outgoing_relation(from_id, relation)
+            await self._store_incoming_relation(to_id, reverse_rel)
 
             logger.info(
                 "Created relation: %s --[%s]--> %s", from_entity, relation_type, to_entity
             )
-
             return relation
 
         except Exception as e:
@@ -837,6 +816,38 @@ class AutoBotMemoryGraph:
         except Exception as e:
             logger.debug("Error getting incoming relations for %s: %s", entity_id, e)
             return []
+
+    async def _store_outgoing_relation(
+        self, from_id: str, relation: Dict[str, Any]
+    ) -> None:
+        """Store outgoing relation for an entity (Issue #665: extracted helper).
+
+        Args:
+            from_id: Source entity ID
+            relation: Relation data to store
+        """
+        out_key = f"memory:relations:out:{from_id}"
+        if not await self.redis_client.exists(out_key):
+            await self.redis_client.json().set(
+                out_key, "$", {"entity_id": from_id, "relations": []}
+            )
+        await self.redis_client.json().arrappend(out_key, "$.relations", relation)
+
+    async def _store_incoming_relation(
+        self, to_id: str, reverse_rel: Dict[str, Any]
+    ) -> None:
+        """Store incoming relation for an entity (Issue #665: extracted helper).
+
+        Args:
+            to_id: Target entity ID
+            reverse_rel: Reverse relation data to store
+        """
+        in_key = f"memory:relations:in:{to_id}"
+        if not await self.redis_client.exists(in_key):
+            await self.redis_client.json().set(
+                in_key, "$", {"entity_id": to_id, "relations": []}
+            )
+        await self.redis_client.json().arrappend(in_key, "$.relations", reverse_rel)
 
     async def _process_direction_relations(
         self,

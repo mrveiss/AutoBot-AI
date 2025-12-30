@@ -626,8 +626,11 @@ async def main():
         report_path = project_root / "tests" / "results" / f"code_analysis_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
         report_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(str(report_path), 'w', encoding='utf-8') as f:
-            f.write(report)
+        # Issue #666: Use asyncio.to_thread to avoid blocking the event loop
+        def _write_report():
+            with open(str(report_path), 'w', encoding='utf-8') as f:
+                f.write(report)
+        await asyncio.to_thread(_write_report)
 
         print(f"✅ Report saved to: {str(report_path)}")
 

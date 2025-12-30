@@ -27,6 +27,82 @@ _TOOL_CALL_PATTERN = re.compile(
     re.IGNORECASE | re.DOTALL
 )
 
+# Issue #665: Error classification patterns for _classify_command_error
+# Format: (pattern_list, message_template, suggestion)
+# pattern_list contains strings to check in combined error/stderr
+_REPAIRABLE_ERROR_PATTERNS = (
+    (
+        ["no such file or directory", "file not found"],
+        "File not found: {error}",
+        "Create the file first, or check if the path exists using 'ls'",
+    ),
+    (
+        ["permission denied", "access denied"],
+        "Permission denied: {error}",
+        "Try using sudo, or execute from a different directory with proper permissions",
+    ),
+    (
+        ["command not found", "not recognized"],
+        "Command not found: {cmd_name}",
+        "Install the package that provides '{cmd_name}', or use an alternative command",
+    ),
+    (
+        ["timeout", "timed out"],
+        "Command timed out: {command}",
+        "Break the operation into smaller steps, or increase the timeout",
+    ),
+    (
+        ["connection refused", "network unreachable"],
+        "Connection error: {error}",
+        "Check network connectivity, verify the target host is running, and retry",
+    ),
+    (
+        ["syntax error", "unexpected token"],
+        "Syntax error in command: {error}",
+        "Check the command syntax and escape special characters properly",
+    ),
+    (
+        ["is a directory", "not a directory"],
+        "Directory error: {error}",
+        "Use the correct path type (file vs directory) for this operation",
+    ),
+    (
+        ["no space left", "disk full"],
+        "Disk space error: {error}",
+        "Free up disk space by removing unnecessary files, then retry",
+    ),
+)
+
+# Critical error patterns that should NOT be repairable
+_CRITICAL_ERROR_PATTERNS = ["out of memory", "cannot allocate"]
+
+
+def _match_repairable_error(
+    combined: str, command: str, error: str
+) -> RepairableException | None:
+    """Match error against repairable patterns (Issue #665: extracted helper).
+
+    Args:
+        combined: Lowercase combined error and stderr text
+        command: The original command that failed
+        error: Original error message
+
+    Returns:
+        RepairableException if a pattern matches, None otherwise
+    """
+    from src.utils.errors import RepairableException
+
+    cmd_name = command.split()[0] if command else "command"
+    format_vars = {"error": error, "cmd_name": cmd_name, "command": command}
+
+    for patterns, message_template, suggestion in _REPAIRABLE_ERROR_PATTERNS:
+        if any(p in combined for p in patterns):
+            return RepairableException(
+                message=message_template.format(**format_vars),
+                suggestion=suggestion.format(**format_vars),
+            )
+    return None
+
 
 def _create_execution_result(
     command: str, host: str, result: Dict[str, Any], approved: bool = False
@@ -622,6 +698,8 @@ class ToolHandlerMixin:
 
         Issue #655: Analyzes error message and stderr to determine if LLM
         can potentially fix the issue by trying a different approach.
+        Issue #665: Refactored to use _match_repairable_error helper and
+        module-level pattern constants for maintainability.
 
         Args:
             command: The command that failed
@@ -631,71 +709,17 @@ class ToolHandlerMixin:
         Returns:
             RepairableException if error is recoverable, None if critical
         """
-        error_lower = error.lower()
-        stderr_lower = stderr.lower()
-        combined = f"{error_lower} {stderr_lower}"
+        combined = f"{error.lower()} {stderr.lower()}"
 
-        # File not found errors
-        if "no such file or directory" in combined or "file not found" in combined:
-            return RepairableException(
-                message=f"File not found: {error}",
-                suggestion="Create the file first, or check if the path exists using 'ls'",
-            )
-
-        # Permission errors
-        if "permission denied" in combined or "access denied" in combined:
-            return RepairableException(
-                message=f"Permission denied: {error}",
-                suggestion="Try using sudo, or execute from a different directory with proper permissions",
-            )
-
-        # Command not found
-        if "command not found" in combined or "not recognized" in combined:
-            cmd_name = command.split()[0] if command else "command"
-            return RepairableException(
-                message=f"Command not found: {cmd_name}",
-                suggestion=f"Install the package that provides '{cmd_name}', or use an alternative command",
-            )
-
-        # Timeout errors
-        if "timeout" in combined or "timed out" in combined:
-            return RepairableException(
-                message=f"Command timed out: {command}",
-                suggestion="Break the operation into smaller steps, or increase the timeout",
-            )
-
-        # Connection errors
-        if "connection refused" in combined or "network unreachable" in combined:
-            return RepairableException(
-                message=f"Connection error: {error}",
-                suggestion="Check network connectivity, verify the target host is running, and retry",
-            )
-
-        # Syntax errors in command
-        if "syntax error" in combined or "unexpected token" in combined:
-            return RepairableException(
-                message=f"Syntax error in command: {error}",
-                suggestion="Check the command syntax and escape special characters properly",
-            )
-
-        # Directory errors
-        if "is a directory" in combined or "not a directory" in combined:
-            return RepairableException(
-                message=f"Directory error: {error}",
-                suggestion="Use the correct path type (file vs directory) for this operation",
-            )
-
-        # Disk space errors
-        if "no space left" in combined or "disk full" in combined:
-            return RepairableException(
-                message=f"Disk space error: {error}",
-                suggestion="Free up disk space by removing unnecessary files, then retry",
-            )
-
-        # Memory errors - these are critical, not repairable
-        if "out of memory" in combined or "cannot allocate" in combined:
+        # Check for critical (non-repairable) errors first
+        if any(p in combined for p in _CRITICAL_ERROR_PATTERNS):
             logger.warning("[Issue #655] Critical error (out of memory): %s", error)
-            return None  # Critical - not repairable
+            return None
+
+        # Check against repairable error patterns
+        result = _match_repairable_error(combined, command, error)
+        if result:
+            return result
 
         # Default: treat as repairable with generic suggestion
         return RepairableException(

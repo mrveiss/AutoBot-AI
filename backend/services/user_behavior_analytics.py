@@ -181,6 +181,8 @@ class UserBehaviorAnalytics:
         """
         Get aggregated metrics for features.
 
+        Issue #665: Refactored to use _process_feature_stats helper.
+
         Args:
             feature: Optional specific feature to get metrics for
 
@@ -191,19 +193,10 @@ class UserBehaviorAnalytics:
             redis = await self.get_redis()
             result = {}
 
-            if feature:
-                features = [feature]
-            else:
-                # Get all known features
-                features = [
-                    "chat",
-                    "knowledge",
-                    "tools",
-                    "monitoring",
-                    "infrastructure",
-                    "secrets",
-                    "settings",
-                ]
+            features = [feature] if feature else [
+                "chat", "knowledge", "tools", "monitoring",
+                "infrastructure", "secrets", "settings",
+            ]
 
             # Batch fetch feature stats using pipeline (fix N+1 query)
             pipe = redis.pipeline()
@@ -213,48 +206,19 @@ class UserBehaviorAnalytics:
                 pipe.scard(f"{feature_key}:users")
                 pipe.scard(f"{feature_key}:sessions")
 
-            # Execute pipeline - results come in order: [stats1, users1, sessions1, stats2, users2, sessions2, ...]
             pipeline_results = await pipe.execute()
 
             # Process results in groups of 3 (stats, users, sessions)
             for i, feat in enumerate(features):
                 idx = i * 3
-                stats = pipeline_results[idx]
-                unique_users = pipeline_results[idx + 1]
-                unique_sessions = pipeline_results[idx + 2]
-
-                if not stats:
-                    continue
-
-                # Decode if bytes
-                decoded_stats = {}
-                for k, v in stats.items():
-                    key = k if isinstance(k, str) else k.decode("utf-8")
-                    val = v if isinstance(v, str) else v.decode("utf-8")
-                    decoded_stats[key] = val
-
-                total_views = int(decoded_stats.get("total_views", 0))
-                total_time = int(decoded_stats.get("total_time_ms", 0))
-
-                # Calculate averages
-                avg_time = total_time / max(total_views, 1)
-
-                # Extract event counts
-                event_counts = {}
-                for key, value in decoded_stats.items():
-                    if key.startswith("events:"):
-                        event_type = key.replace("events:", "")
-                        event_counts[event_type] = int(value)
-
-                result[feat] = {
-                    "feature": feat,
-                    "total_views": total_views,
-                    "unique_users": unique_users,
-                    "unique_sessions": unique_sessions,
-                    "avg_time_spent_ms": round(avg_time, 2),
-                    "total_time_spent_ms": total_time,
-                    "event_breakdown": event_counts,
-                }
+                processed = self._process_feature_stats(
+                    stats=pipeline_results[idx],
+                    unique_users=pipeline_results[idx + 1],
+                    unique_sessions=pipeline_results[idx + 2],
+                    feat=feat,
+                )
+                if processed:
+                    result[feat] = processed
 
             return {
                 "timestamp": datetime.utcnow().isoformat(),
@@ -361,6 +325,51 @@ class UserBehaviorAnalytics:
         except Exception as e:
             logger.error("Failed to get daily stats: %s", e)
             return {"error": str(e), "daily_stats": {}}
+
+    def _process_feature_stats(
+        self, stats: dict, unique_users: int, unique_sessions: int, feat: str
+    ) -> Optional[dict]:
+        """Process feature stats from Redis (Issue #665: extracted helper).
+
+        Args:
+            stats: Raw stats dict from Redis
+            unique_users: Count of unique users
+            unique_sessions: Count of unique sessions
+            feat: Feature name
+
+        Returns:
+            Processed feature metrics dict, or None if no stats
+        """
+        if not stats:
+            return None
+
+        # Decode bytes to strings if needed
+        decoded_stats = {}
+        for k, v in stats.items():
+            key = k if isinstance(k, str) else k.decode("utf-8")
+            val = v if isinstance(v, str) else v.decode("utf-8")
+            decoded_stats[key] = val
+
+        total_views = int(decoded_stats.get("total_views", 0))
+        total_time = int(decoded_stats.get("total_time_ms", 0))
+        avg_time = total_time / max(total_views, 1)
+
+        # Extract event counts
+        event_counts = {
+            key.replace("events:", ""): int(value)
+            for key, value in decoded_stats.items()
+            if key.startswith("events:")
+        }
+
+        return {
+            "feature": feat,
+            "total_views": total_views,
+            "unique_users": unique_users,
+            "unique_sessions": unique_sessions,
+            "avg_time_spent_ms": round(avg_time, 2),
+            "total_time_spent_ms": total_time,
+            "event_breakdown": event_counts,
+        }
 
     def _process_heatmap_data(self, data: dict, heatmap: dict) -> None:
         """Process heatmap data from Redis into heatmap dict. (Issue #315 - extracted)"""
