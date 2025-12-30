@@ -593,24 +593,35 @@ class LocalModelProvider(BaseAIProvider):
                 "AUTOBOT_OLLAMA_PORT environment variables for local model support."
             )
 
+    def _build_ollama_error_response(
+        self, request: AIRequest, error_msg: str, start_time: float, error_key: str
+    ) -> AIResponse:
+        """Build error response for Ollama failures (Issue #665: extracted helper)."""
+        return AIResponse(
+            request_id=request.request_id,
+            provider=self.config.provider,
+            model_name=self.config.model_name,
+            content=error_msg,
+            usage={"prompt_tokens": 0, "completion_tokens": 0},
+            finish_reason="error",
+            tool_calls=None,
+            confidence=0.0,
+            processing_time=time.time() - start_time,
+            metadata={"error": error_key},
+        )
+
     async def generate_text(self, request: AIRequest) -> AIResponse:
-        """Generate text using local Ollama model."""
+        """Generate text using local Ollama model (Issue #665: uses extracted helper)."""
         import aiohttp
 
         start_time = time.time()
 
         if not self._ollama_available:
-            return AIResponse(
-                request_id=request.request_id,
-                provider=self.config.provider,
-                model_name=self.config.model_name,
-                content="Error: Ollama not configured. Set AUTOBOT_OLLAMA_HOST and AUTOBOT_OLLAMA_PORT.",
-                usage={"prompt_tokens": 0, "completion_tokens": 0},
-                finish_reason="error",
-                tool_calls=None,
-                confidence=0.0,
-                processing_time=time.time() - start_time,
-                metadata={"error": "ollama_not_configured"},
+            return self._build_ollama_error_response(
+                request,
+                "Error: Ollama not configured. Set AUTOBOT_OLLAMA_HOST and AUTOBOT_OLLAMA_PORT.",
+                start_time,
+                "ollama_not_configured",
             )
 
         try:
@@ -666,17 +677,11 @@ class LocalModelProvider(BaseAIProvider):
 
         except Exception as e:
             logger.error("Ollama request failed: %s", e)
-            return AIResponse(
-                request_id=request.request_id,
-                provider=self.config.provider,
-                model_name=self.config.model_name,
-                content=f"Error: Local model request failed - {str(e)}",
-                usage={"prompt_tokens": 0, "completion_tokens": 0},
-                finish_reason="error",
-                tool_calls=None,
-                confidence=0.0,
-                processing_time=time.time() - start_time,
-                metadata={"error": str(e)},
+            return self._build_ollama_error_response(
+                request,
+                f"Error: Local model request failed - {str(e)}",
+                start_time,
+                str(e),
             )
 
     async def analyze_image(self, request: AIRequest) -> AIResponse:
@@ -1012,15 +1017,10 @@ class ModernAIIntegration:
                 logger.error("AI processing failed: %s", e)
                 raise
 
-    async def analyze_screen_with_ai(
-        self,
-        screenshot_base64: str,
-        analysis_goal: str,
-        preferred_provider: Optional[AIProvider] = None,
-    ) -> Dict[str, Any]:
-        """Analyze screenshot using AI vision models"""
-
-        # Choose best provider for vision tasks
+    def _select_vision_provider(
+        self, preferred_provider: Optional[AIProvider]
+    ) -> AIProvider:
+        """Select an available vision-capable AI provider (Issue #665: extracted helper)."""
         vision_providers = [
             AIProvider.OPENAI_GPT4V,
             AIProvider.ANTHROPIC_CLAUDE,
@@ -1037,6 +1037,31 @@ class ModernAIIntegration:
 
         if not provider:
             raise RuntimeError("No vision-capable AI providers available")
+
+        return provider
+
+    def _build_fallback_screen_analysis(self, content: str) -> Dict[str, Any]:
+        """Build fallback analysis when JSON parsing fails (Issue #665: extracted helper)."""
+        return {
+            "summary": "AI analysis completed",
+            "raw_response": content,
+            "ui_elements": [],
+            "text_content": [],
+            "suggested_actions": [],
+            "automation_opportunities": [],
+            "context_analysis": (
+                content[:500] + "..." if len(content) > 500 else content
+            ),
+        }
+
+    async def analyze_screen_with_ai(
+        self,
+        screenshot_base64: str,
+        analysis_goal: str,
+        preferred_provider: Optional[AIProvider] = None,
+    ) -> Dict[str, Any]:
+        """Analyze screenshot using AI vision models (Issue #665: uses extracted helpers)."""
+        provider = self._select_vision_provider(preferred_provider)
 
         # Create detailed prompt for screen analysis
         system_message = """You are an expert at analyzing screenshots and user interfaces.
@@ -1073,20 +1098,7 @@ class ModernAIIntegration:
         try:
             analysis = json.loads(response.content)
         except json.JSONDecodeError:
-            # If not valid JSON, create structured response
-            analysis = {
-                "summary": "AI analysis completed",
-                "raw_response": response.content,
-                "ui_elements": [],
-                "text_content": [],
-                "suggested_actions": [],
-                "automation_opportunities": [],
-                "context_analysis": (
-                    response.content[:500] + "..."
-                    if len(response.content) > 500
-                    else response.content
-                ),
-            }
+            analysis = self._build_fallback_screen_analysis(response.content)
 
         # Add metadata
         analysis["ai_metadata"] = {
