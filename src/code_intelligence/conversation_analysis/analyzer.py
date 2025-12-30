@@ -413,8 +413,42 @@ class ConversationFlowAnalyzer:
 
         return sorted(patterns, key=lambda p: p.occurrence_count, reverse=True)
 
+    def _create_bottleneck_if_significant(
+        self,
+        sessions: List[str],
+        bottleneck_type: BottleneckType,
+        description_template: str,
+        severity: str,
+        recommendations: List[str],
+    ) -> Optional[Bottleneck]:
+        """Create a bottleneck entry if session count is significant (Issue #665: extracted helper).
+
+        Args:
+            sessions: List of affected session IDs
+            bottleneck_type: Type of bottleneck
+            description_template: Description with {count} placeholder
+            severity: Severity level (medium, high, critical)
+            recommendations: List of recommendations
+
+        Returns:
+            Bottleneck instance if significant, None otherwise
+        """
+        if len(sessions) >= self.min_pattern_occurrences:
+            return Bottleneck(
+                bottleneck_type=bottleneck_type,
+                description=description_template.format(count=len(sessions)),
+                severity=severity,
+                occurrence_count=len(sessions),
+                affected_sessions=sessions[:10],
+                recommendations=recommendations,
+            )
+        return None
+
     def _detect_bottlenecks(self) -> List[Bottleneck]:
-        """Detect conversation bottlenecks."""
+        """Detect conversation bottlenecks.
+
+        Issue #665: Refactored to use _create_bottleneck_if_significant helper.
+        """
         bottlenecks: List[Bottleneck] = []
 
         # Slow response detection
@@ -423,21 +457,16 @@ class ConversationFlowAnalyzer:
             for f in self._flows
             if f.total_latency_ms > self.slow_response_threshold_ms * f.turn_count
         ]
-        if len(slow_sessions) >= self.min_pattern_occurrences:
-            bottlenecks.append(
-                Bottleneck(
-                    bottleneck_type=BottleneckType.SLOW_RESPONSE,
-                    description=f"High latency detected in {len(slow_sessions)} sessions",
-                    severity="medium" if len(slow_sessions) < 10 else "high",
-                    occurrence_count=len(slow_sessions),
-                    affected_sessions=slow_sessions[:10],
-                    recommendations=[
-                        "Consider caching common responses",
-                        "Optimize LLM prompt length",
-                        "Review tool call latency",
-                    ],
-                )
-            )
+        slow_severity = "medium" if len(slow_sessions) < 10 else "high"
+        bottleneck = self._create_bottleneck_if_significant(
+            slow_sessions,
+            BottleneckType.SLOW_RESPONSE,
+            "High latency detected in {count} sessions",
+            slow_severity,
+            ["Consider caching common responses", "Optimize LLM prompt length", "Review tool call latency"],
+        )
+        if bottleneck:
+            bottlenecks.append(bottleneck)
 
         # Repeated clarification detection
         confused_sessions = [
@@ -445,39 +474,27 @@ class ConversationFlowAnalyzer:
             for f in self._flows
             if f.clarification_count >= self.clarification_threshold
         ]
-        if len(confused_sessions) >= self.min_pattern_occurrences:
-            bottlenecks.append(
-                Bottleneck(
-                    bottleneck_type=BottleneckType.REPEATED_CLARIFICATION,
-                    description=f"Excessive clarifications in {len(confused_sessions)} sessions",
-                    severity="high",
-                    occurrence_count=len(confused_sessions),
-                    affected_sessions=confused_sessions[:10],
-                    recommendations=[
-                        "Improve initial intent classification",
-                        "Add disambiguation prompts",
-                        "Enhance context gathering",
-                    ],
-                )
-            )
+        bottleneck = self._create_bottleneck_if_significant(
+            confused_sessions,
+            BottleneckType.REPEATED_CLARIFICATION,
+            "Excessive clarifications in {count} sessions",
+            "high",
+            ["Improve initial intent classification", "Add disambiguation prompts", "Enhance context gathering"],
+        )
+        if bottleneck:
+            bottlenecks.append(bottleneck)
 
         # Error loop detection
         error_sessions = [f.session_id for f in self._flows if f.error_count > 2]
-        if len(error_sessions) >= self.min_pattern_occurrences:
-            bottlenecks.append(
-                Bottleneck(
-                    bottleneck_type=BottleneckType.ERROR_LOOP,
-                    description=f"Multiple errors in {len(error_sessions)} sessions",
-                    severity="critical",
-                    occurrence_count=len(error_sessions),
-                    affected_sessions=error_sessions[:10],
-                    recommendations=[
-                        "Improve error handling and recovery",
-                        "Add fallback responses",
-                        "Implement graceful degradation",
-                    ],
-                )
-            )
+        bottleneck = self._create_bottleneck_if_significant(
+            error_sessions,
+            BottleneckType.ERROR_LOOP,
+            "Multiple errors in {count} sessions",
+            "critical",
+            ["Improve error handling and recovery", "Add fallback responses", "Implement graceful degradation"],
+        )
+        if bottleneck:
+            bottlenecks.append(bottleneck)
 
         # Excessive turns detection
         long_sessions = [
@@ -485,21 +502,15 @@ class ConversationFlowAnalyzer:
             for f in self._flows
             if f.turn_count > self.max_turns_threshold
         ]
-        if len(long_sessions) >= self.min_pattern_occurrences:
-            bottlenecks.append(
-                Bottleneck(
-                    bottleneck_type=BottleneckType.EXCESSIVE_TURNS,
-                    description=f"Excessive turns in {len(long_sessions)} sessions",
-                    severity="medium",
-                    occurrence_count=len(long_sessions),
-                    affected_sessions=long_sessions[:10],
-                    recommendations=[
-                        "Add workflow shortcuts",
-                        "Improve single-turn completions",
-                        "Reduce back-and-forth",
-                    ],
-                )
-            )
+        bottleneck = self._create_bottleneck_if_significant(
+            long_sessions,
+            BottleneckType.EXCESSIVE_TURNS,
+            "Excessive turns in {count} sessions",
+            "medium",
+            ["Add workflow shortcuts", "Improve single-turn completions", "Reduce back-and-forth"],
+        )
+        if bottleneck:
+            bottlenecks.append(bottleneck)
 
         return bottlenecks
 
