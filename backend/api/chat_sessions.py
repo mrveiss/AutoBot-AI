@@ -8,6 +8,7 @@ from typing import Dict, List, Optional
 
 from backend.type_defs.common import Metadata
 from fastapi import APIRouter, Depends, Request, Response
+from fastapi.responses import JSONResponse
 
 # CRITICAL SECURITY FIX: Import session ownership validation
 from backend.security.session_ownership import validate_session_ownership
