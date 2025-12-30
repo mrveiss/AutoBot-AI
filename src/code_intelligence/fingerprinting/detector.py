@@ -435,6 +435,46 @@ class CloneDetector:
 
         return clone_groups
 
+    def _collect_type1_fragment_keys(
+        self, type1_groups: List[CloneGroup]
+    ) -> Set[Tuple[str, int, int]]:
+        """Collect fragment keys from Type 1 groups for exclusion (Issue #665: extracted helper)."""
+        type1_fragments: Set[Tuple[str, int, int]] = set()
+        for group in type1_groups:
+            for instance in group.instances:
+                type1_fragments.add(
+                    (
+                        instance.fragment.file_path,
+                        instance.fragment.start_line,
+                        instance.fragment.end_line,
+                    )
+                )
+        return type1_fragments
+
+    def _create_type2_clone_group(
+        self, hash_value: str, valid_fps: List[Fingerprint]
+    ) -> CloneGroup:
+        """Create a Type 2 clone group from fingerprints (Issue #665: extracted helper)."""
+        instances = [
+            CloneInstance(
+                fragment=fp.fragment,
+                fingerprint=fp,
+                similarity_score=1.0,
+            )
+            for fp in valid_fps
+        ]
+        total_lines = sum(i.fragment.line_count for i in instances)
+        severity = self._calculate_severity(len(instances), total_lines)
+
+        return CloneGroup(
+            clone_type=CloneType.TYPE_2,
+            severity=severity,
+            instances=instances,
+            canonical_fingerprint=hash_value,
+            similarity_range=(1.0, 1.0),
+            total_duplicated_lines=total_lines,
+        )
+
     def _detect_type2_clones(
         self, type1_groups: List[CloneGroup]
     ) -> List[CloneGroup]:
@@ -447,71 +487,33 @@ class CloneDetector:
         Returns:
             List of CloneGroup objects for Type 2 clones
         """
-        # Get all fragments already in Type 1 groups
-        type1_fragments: Set[Tuple[str, int, int]] = set()
-        for group in type1_groups:
-            for instance in group.instances:
-                type1_fragments.add(
-                    (
-                        instance.fragment.file_path,
-                        instance.fragment.start_line,
-                        instance.fragment.end_line,
-                    )
-                )
-
+        type1_fragments = self._collect_type1_fragment_keys(type1_groups)
         clone_groups: List[CloneGroup] = []
 
         for hash_value, fingerprints in self._normalized_fingerprints.items():
-            if len(fingerprints) >= 2:
-                # Filter out fragments already in Type 1 groups
-                valid_fps = [
-                    fp
-                    for fp in fingerprints
-                    if (
-                        fp.fragment.file_path,
-                        fp.fragment.start_line,
-                        fp.fragment.end_line,
-                    )
-                    not in type1_fragments
-                ]
+            if len(fingerprints) < 2:
+                continue
 
-                # Check if this would be a duplicate of Type 1
-                all_in_type1 = all(
-                    (
-                        fp.fragment.file_path,
-                        fp.fragment.start_line,
-                        fp.fragment.end_line,
-                    )
-                    in type1_fragments
-                    for fp in fingerprints
-                )
+            # Filter out fragments already in Type 1 groups
+            valid_fps = [
+                fp for fp in fingerprints
+                if (fp.fragment.file_path, fp.fragment.start_line, fp.fragment.end_line)
+                not in type1_fragments
+            ]
 
-                if all_in_type1:
-                    continue  # Skip, this is already captured as Type 1
+            # Check if all fragments are already in Type 1
+            all_in_type1 = all(
+                (fp.fragment.file_path, fp.fragment.start_line, fp.fragment.end_line)
+                in type1_fragments
+                for fp in fingerprints
+            )
 
-                # Use valid_fps (excluding Type 1 clones) to avoid duplicates
-                if len(valid_fps) >= 2:
-                    instances = [
-                        CloneInstance(
-                            fragment=fp.fragment,
-                            fingerprint=fp,
-                            similarity_score=1.0,
-                        )
-                        for fp in valid_fps
-                    ]
+            if all_in_type1:
+                continue  # Skip, this is already captured as Type 1
 
-                    total_lines = sum(i.fragment.line_count for i in instances)
-                    severity = self._calculate_severity(len(instances), total_lines)
-
-                    group = CloneGroup(
-                        clone_type=CloneType.TYPE_2,
-                        severity=severity,
-                        instances=instances,
-                        canonical_fingerprint=hash_value,
-                        similarity_range=(1.0, 1.0),
-                        total_duplicated_lines=total_lines,
-                    )
-                    clone_groups.append(group)
+            # Create group if we have enough valid fingerprints
+            if len(valid_fps) >= 2:
+                clone_groups.append(self._create_type2_clone_group(hash_value, valid_fps))
 
         return clone_groups
 

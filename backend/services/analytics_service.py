@@ -178,6 +178,37 @@ class AnalyticsService:
     # UNIFIED DASHBOARD
     # =========================================================================
 
+    def _build_agents_section(self, agent_metrics: List[Any]) -> Dict[str, Any]:
+        """Build agents section for unified dashboard (Issue #665: extracted helper)."""
+        return {
+            "total_agents": len(agent_metrics),
+            "total_tasks": sum(m.total_tasks for m in agent_metrics),
+            "avg_success_rate": (
+                sum(m.success_rate for m in agent_metrics) / len(agent_metrics)
+                if agent_metrics
+                else 0
+            ),
+            "top_performers": [
+                m.agent_id
+                for m in sorted(agent_metrics, key=lambda x: x.success_rate, reverse=True)[:3]
+            ],
+        }
+
+    def _build_maintenance_section(
+        self, maintenance_recs: List[Any]
+    ) -> Dict[str, Any]:
+        """Build maintenance section for unified dashboard (Issue #665: extracted helper)."""
+        return {
+            "total_recommendations": len(maintenance_recs),
+            "critical_count": sum(
+                1 for r in maintenance_recs if r.priority == MaintenancePriority.CRITICAL
+            ),
+            "high_priority": [
+                r.to_dict() for r in maintenance_recs
+                if r.priority in [MaintenancePriority.CRITICAL, MaintenancePriority.HIGH]
+            ][:5],
+        }
+
     async def get_unified_dashboard(self, days: int = 30) -> Dict[str, Any]:
         """
         Get unified dashboard data aggregating all analytics sources.
@@ -227,31 +258,13 @@ class AnalyticsService:
                 "trend": cost_trends.get("trend", "stable"),
                 "growth_rate": cost_trends.get("growth_rate_percent", 0),
             },
-            "agents": {
-                "total_agents": len(agent_metrics),
-                "total_tasks": sum(m.total_tasks for m in agent_metrics),
-                "avg_success_rate": (
-                    sum(m.success_rate for m in agent_metrics) / len(agent_metrics)
-                    if agent_metrics
-                    else 0
-                ),
-                "top_performers": [
-                    m.agent_id
-                    for m in sorted(agent_metrics, key=lambda x: x.success_rate, reverse=True)[:3]
-                ],
-            },
+            "agents": self._build_agents_section(agent_metrics),
             "engagement": {
                 "total_sessions": engagement.get("metrics", {}).get("total_sessions", 0),
                 "page_views": engagement.get("metrics", {}).get("total_page_views", 0),
                 "most_popular": engagement.get("most_popular_feature"),
             },
-            "maintenance": {
-                "total_recommendations": len(maintenance_recs),
-                "critical_count": sum(
-                    1 for r in maintenance_recs if r.priority == MaintenancePriority.CRITICAL
-                ),
-                "high_priority": [r.to_dict() for r in maintenance_recs if r.priority in [MaintenancePriority.CRITICAL, MaintenancePriority.HIGH]][:5],
-            },
+            "maintenance": self._build_maintenance_section(maintenance_recs),
             "optimization": {
                 "total_recommendations": len(optimization_recs),
                 "estimated_savings": self._sum_savings(optimization_recs),
