@@ -1679,6 +1679,283 @@ async def get_import_statistics(req: Request):
     return {"status": "success", "statistics": stats}
 
 
+# =============================================================================
+# Issue #165: Documentation Browser API - Browse and filter indexed documentation
+# =============================================================================
+
+
+class DocsBrowseRequest(BaseModel):
+    """Request model for browsing indexed documentation."""
+
+    category: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        description="Filter by category (e.g., 'developer', 'api', 'troubleshooting')"
+    )
+    doc_type: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        description="Filter by document type (e.g., 'markdown', 'code')"
+    )
+    file_path_pattern: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="Filter by file path pattern (e.g., 'docs/api/')"
+    )
+    search_query: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="Optional text search within documents"
+    )
+    page: int = Field(default=1, ge=1, le=1000, description="Page number")
+    page_size: int = Field(default=20, ge=1, le=100, description="Results per page")
+    sort_by: str = Field(
+        default="indexed_at",
+        pattern="^(indexed_at|title|category|file_path)$",
+        description="Sort field"
+    )
+    sort_order: str = Field(
+        default="desc",
+        pattern="^(asc|desc)$",
+        description="Sort order"
+    )
+
+
+async def _get_indexed_docs_from_redis(kb) -> list:
+    """
+    Get all indexed documentation metadata from Redis doc_hash keys.
+
+    Issue #165: Scans doc_hash:* keys to get document metadata for browsing.
+    """
+    docs = []
+    cursor = 0
+    while True:
+        cursor, keys = await asyncio.to_thread(
+            kb.redis_client.scan, cursor, match="doc_hash:*", count=500
+        )
+        if keys:
+            # Batch fetch document data
+            values = await asyncio.to_thread(kb.redis_client.mget, keys)
+            for key, value in zip(keys, values):
+                if value:
+                    try:
+                        doc_data = json.loads(value)
+                        doc_data["content_hash"] = key.replace("doc_hash:", "")
+                        docs.append(doc_data)
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+        if cursor == 0:
+            break
+    return docs
+
+
+def _filter_docs(docs: list, request: DocsBrowseRequest) -> list:
+    """
+    Apply filters to document list.
+
+    Issue #165: Filters by category, doc_type, and file_path_pattern.
+    """
+    filtered = docs
+
+    # Filter by category (from file path detection)
+    if request.category:
+        category_lower = request.category.lower()
+        filtered = [
+            d for d in filtered
+            if category_lower in d.get("file_path", "").lower()
+            or d.get("category", "").lower() == category_lower
+        ]
+
+    # Filter by doc_type
+    if request.doc_type:
+        doc_type_lower = request.doc_type.lower()
+        filtered = [
+            d for d in filtered
+            if d.get("doc_type", "").lower() == doc_type_lower
+            or d.get("file_path", "").lower().endswith(f".{doc_type_lower}")
+        ]
+
+    # Filter by file path pattern
+    if request.file_path_pattern:
+        pattern = request.file_path_pattern.lower()
+        filtered = [d for d in filtered if pattern in d.get("file_path", "").lower()]
+
+    # Filter by search query (title match)
+    if request.search_query:
+        query_lower = request.search_query.lower()
+        filtered = [
+            d for d in filtered
+            if query_lower in d.get("title", "").lower()
+            or query_lower in d.get("file_path", "").lower()
+        ]
+
+    return filtered
+
+
+def _sort_docs(docs: list, sort_by: str, sort_order: str) -> list:
+    """Sort documents by specified field and order."""
+    reverse = sort_order == "desc"
+    return sorted(docs, key=lambda d: d.get(sort_by, ""), reverse=reverse)
+
+
+def _paginate_docs(docs: list, page: int, page_size: int) -> tuple:
+    """Paginate document list. Returns (paginated_docs, total_count, total_pages)."""
+    total = len(docs)
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 1
+    start = (page - 1) * page_size
+    end = start + page_size
+    return docs[start:end], total, total_pages
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="browse_documentation",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.post("/docs/browse")
+async def browse_documentation(request: DocsBrowseRequest, req: Request):
+    """
+    Browse indexed documentation with filtering and pagination.
+
+    Issue #165: Provides frontend with filterable documentation browsing.
+    Supports category, doc_type, file_path, and search filters.
+    """
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(status_code=503, detail="Knowledge base unavailable")
+
+    # Get all indexed documents
+    all_docs = await _get_indexed_docs_from_redis(kb)
+
+    # Apply filters
+    filtered_docs = _filter_docs(all_docs, request)
+
+    # Sort
+    sorted_docs = _sort_docs(filtered_docs, request.sort_by, request.sort_order)
+
+    # Paginate
+    paginated, total, total_pages = _paginate_docs(
+        sorted_docs, request.page, request.page_size
+    )
+
+    return {
+        "success": True,
+        "documents": paginated,
+        "pagination": {
+            "page": request.page,
+            "page_size": request.page_size,
+            "total_documents": total,
+            "total_pages": total_pages,
+        },
+        "filters_applied": {
+            "category": request.category,
+            "doc_type": request.doc_type,
+            "file_path_pattern": request.file_path_pattern,
+            "search_query": request.search_query,
+        },
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_doc_categories",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.get("/docs/categories")
+async def get_documentation_categories(req: Request):
+    """
+    Get list of documentation categories with counts.
+
+    Issue #165: Provides category filter options for documentation browser.
+    Categories are detected from file paths using CATEGORY_TAXONOMY.
+    """
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(status_code=503, detail="Knowledge base unavailable")
+
+    # Get all indexed documents
+    all_docs = await _get_indexed_docs_from_redis(kb)
+
+    # Count by category (detected from file path)
+    from scripts.utilities.index_documentation import CATEGORY_TAXONOMY, detect_category
+    from pathlib import Path
+
+    category_counts: dict = {}
+    for doc in all_docs:
+        file_path = doc.get("file_path", "")
+        if file_path:
+            try:
+                category = detect_category(Path(file_path))
+            except Exception:
+                category = "general"
+        else:
+            category = "general"
+
+        category_counts[category] = category_counts.get(category, 0) + 1
+
+    # Build category list with metadata
+    categories = []
+    for cat_id, count in sorted(category_counts.items(), key=lambda x: -x[1]):
+        cat_meta = CATEGORY_TAXONOMY.get(cat_id, {})
+        categories.append({
+            "id": cat_id,
+            "name": cat_meta.get("name", cat_id.title()),
+            "description": cat_meta.get("description", ""),
+            "count": count,
+        })
+
+    return {
+        "success": True,
+        "categories": categories,
+        "total_documents": len(all_docs),
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_doc_stats",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.get("/docs/stats")
+async def get_documentation_stats(req: Request):
+    """
+    Get documentation indexing statistics.
+
+    Issue #165: Provides overview stats for documentation health dashboard.
+    """
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(status_code=503, detail="Knowledge base unavailable")
+
+    all_docs = await _get_indexed_docs_from_redis(kb)
+
+    # Calculate stats
+    total_chunks = sum(doc.get("chunks", 0) for doc in all_docs)
+
+    # Get unique file paths for doc count
+    unique_files = set(doc.get("file_path", "") for doc in all_docs)
+
+    # Get latest indexed timestamp
+    latest_indexed = None
+    for doc in all_docs:
+        indexed_at = doc.get("indexed_at")
+        if indexed_at and (latest_indexed is None or indexed_at > latest_indexed):
+            latest_indexed = indexed_at
+
+    return {
+        "success": True,
+        "stats": {
+            "total_documents": len(unique_files),
+            "total_indexed_entries": len(all_docs),
+            "total_chunks": total_chunks,
+            "latest_indexed": latest_indexed,
+            "categories_count": len(set(
+                doc.get("category", "general") for doc in all_docs
+            )),
+        },
+    }
+
+
 # ===== MAINTENANCE ENDPOINTS =====
 # NOTE: Maintenance and bulk operation endpoints moved to knowledge_maintenance.py (Issue #185)
 # Includes: deduplication, bulk operations, orphaned facts, export/import, cleanup, host scanning
