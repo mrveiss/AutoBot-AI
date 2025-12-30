@@ -395,6 +395,51 @@ class BugPredictor(_BaseClass):
         ]
         return scores, bug_data
 
+    def _compute_prediction_stats(
+        self, assessments: list[FileRiskAssessment]
+    ) -> dict[str, Any]:
+        """
+        Compute prediction statistics from assessments (Issue #665: extracted).
+
+        Args:
+            assessments: List of file risk assessments (should be pre-sorted)
+
+        Returns:
+            Dict with high_risk_count, risk_distribution, top_factors, predicted_bugs
+        """
+        # High risk count
+        high_risk_count = sum(
+            1
+            for a in assessments
+            if a.risk_level in (RiskLevel.CRITICAL, RiskLevel.HIGH)
+        )
+
+        # Risk distribution
+        risk_dist = {level.value: 0 for level in RiskLevel}
+        for a in assessments:
+            risk_dist[a.risk_level.value] += 1
+
+        # Top risk factors
+        factor_totals: dict[str, float] = {}
+        for a in assessments:
+            for fs in a.factor_scores:
+                factor_totals[fs.factor.value] = (
+                    factor_totals.get(fs.factor.value, 0) + fs.score
+                )
+        top_factors = sorted(factor_totals.items(), key=lambda x: x[1], reverse=True)[
+            :5
+        ]
+
+        # Estimate predicted bugs (based on high risk file count)
+        predicted_bugs = int(high_risk_count * 0.7)  # 70% of high risk files
+
+        return {
+            "high_risk_count": high_risk_count,
+            "risk_distribution": risk_dist,
+            "top_factors": top_factors,
+            "predicted_bugs": predicted_bugs,
+        }
+
     def _collect_structure_factors(self, path: Path) -> list[RiskFactorScore]:
         """Collect file structure risk factors (Issue #281 - extracted helper)."""
         size_score = self._calculate_file_size_score(path)
@@ -496,47 +541,22 @@ class BugPredictor(_BaseClass):
             except Exception as e:
                 logger.warning("Failed to analyze %s: %s", file_path, e)
 
-        # Sort by risk score
+        # Sort and compute statistics (Issue #665: uses shared helper)
         assessments.sort(key=lambda x: x.risk_score, reverse=True)
-
-        # Calculate statistics
-        high_risk_count = sum(
-            1
-            for a in assessments
-            if a.risk_level in (RiskLevel.CRITICAL, RiskLevel.HIGH)
-        )
-
-        # Risk distribution
-        risk_dist = {level.value: 0 for level in RiskLevel}
-        for a in assessments:
-            risk_dist[a.risk_level.value] += 1
-
-        # Top risk factors
-        factor_totals: dict[str, float] = {}
-        for a in assessments:
-            for fs in a.factor_scores:
-                factor_totals[fs.factor.value] = (
-                    factor_totals.get(fs.factor.value, 0) + fs.score
-                )
-        top_factors = sorted(factor_totals.items(), key=lambda x: x[1], reverse=True)[
-            :5
-        ]
-
-        # Estimate predicted bugs (based on high risk file count)
-        predicted_bugs = int(high_risk_count * 0.7)  # 70% of high risk files
+        stats = self._compute_prediction_stats(assessments)
 
         return PredictionResult(
             timestamp=datetime.now(),
             total_files=total_files,
             analyzed_files=len(assessments),
-            high_risk_count=high_risk_count,
-            predicted_bugs=predicted_bugs,
+            high_risk_count=stats["high_risk_count"],
+            predicted_bugs=stats["predicted_bugs"],
             # Issue #468: Return None - historical accuracy tracking not yet implemented
             # To get real accuracy: store predictions, track outcomes, calculate metrics
             accuracy_score=None,
-            risk_distribution=risk_dist,
+            risk_distribution=stats["risk_distribution"],
             file_assessments=assessments,
-            top_risk_factors=top_factors,
+            top_risk_factors=stats["top_factors"],
         )
 
     def get_high_risk_files(
@@ -1185,45 +1205,20 @@ class BugPredictor(_BaseClass):
             except Exception as e:
                 logger.warning("Failed to analyze %s: %s", file_path, e)
 
-        # Sort by risk score
+        # Sort and compute statistics (Issue #665: uses shared helper)
         assessments.sort(key=lambda x: x.risk_score, reverse=True)
-
-        # Calculate statistics
-        high_risk_count = sum(
-            1
-            for a in assessments
-            if a.risk_level in (RiskLevel.CRITICAL, RiskLevel.HIGH)
-        )
-
-        # Risk distribution
-        risk_dist = {level.value: 0 for level in RiskLevel}
-        for a in assessments:
-            risk_dist[a.risk_level.value] += 1
-
-        # Top risk factors
-        factor_totals: dict[str, float] = {}
-        for a in assessments:
-            for fs in a.factor_scores:
-                factor_totals[fs.factor.value] = (
-                    factor_totals.get(fs.factor.value, 0) + fs.score
-                )
-        top_factors = sorted(factor_totals.items(), key=lambda x: x[1], reverse=True)[
-            :5
-        ]
-
-        # Estimate predicted bugs
-        predicted_bugs = int(high_risk_count * 0.7)
+        stats = self._compute_prediction_stats(assessments)
 
         result = PredictionResult(
             timestamp=datetime.now(),
             total_files=total_files,
             analyzed_files=len(assessments),
-            high_risk_count=high_risk_count,
-            predicted_bugs=predicted_bugs,
+            high_risk_count=stats["high_risk_count"],
+            predicted_bugs=stats["predicted_bugs"],
             accuracy_score=None,
-            risk_distribution=risk_dist,
+            risk_distribution=stats["risk_distribution"],
             file_assessments=assessments,
-            top_risk_factors=top_factors,
+            top_risk_factors=stats["top_factors"],
         )
 
         # Cache results
