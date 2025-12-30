@@ -8,7 +8,7 @@ API endpoints for executing commands in the secure Docker sandbox environment.
 """
 
 import logging
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
