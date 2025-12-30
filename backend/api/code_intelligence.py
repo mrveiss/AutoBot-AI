@@ -400,6 +400,60 @@ def _calculate_redis_health_score(results: list) -> float:
     return max(0, min(100, score))
 
 
+async def _validate_analysis_path(path: str) -> None:
+    """
+    Validate that a path exists and is a directory.
+
+    Issue #665: Extracted from security_analyze and performance_analyze.
+
+    Args:
+        path: Path to validate
+
+    Raises:
+        HTTPException: If path doesn't exist or isn't a directory
+    """
+    path_exists = await asyncio.to_thread(os.path.exists, path)
+    if not path_exists:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Path does not exist: {path}",
+        )
+
+    is_dir = await asyncio.to_thread(os.path.isdir, path)
+    if not is_dir:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Path is not a directory: {path}",
+        )
+
+
+def _filter_results_by_severity(results: list, min_severity: Optional[str]) -> list:
+    """
+    Filter analysis results by minimum severity level.
+
+    Issue #665: Extracted from security_analyze and performance_analyze.
+
+    Args:
+        results: List of analysis result objects with severity attribute
+        min_severity: Minimum severity level to include
+
+    Returns:
+        Filtered list of results
+    """
+    if not min_severity:
+        return results
+
+    try:
+        min_idx = _SEVERITY_ORDER.index(min_severity.lower())
+        return [
+            r for r in results
+            if _SEVERITY_ORDER.index(r.severity.value) >= min_idx
+        ]
+    except ValueError as e:
+        logger.debug("Value parsing failed during severity filtering: %s", e)
+        return results
+
+
 class AnalysisRequest(BaseModel):
     """Request model for code analysis."""
 
@@ -900,6 +954,8 @@ async def security_analyze(request: SecurityAnalysisRequest):
     """
     Analyze a codebase for security vulnerabilities.
 
+    Issue #665: Refactored to use helper functions.
+
     Scans all Python files in the specified directory for:
     - SQL injection patterns
     - Hardcoded secrets and credentials
@@ -909,19 +965,7 @@ async def security_analyze(request: SecurityAnalysisRequest):
     - Missing input validation
     - And more (OWASP Top 10 mapping)
     """
-    path_exists = await asyncio.to_thread(os.path.exists, request.path)
-    if not path_exists:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Path does not exist: {request.path}",
-        )
-
-    is_dir = await asyncio.to_thread(os.path.isdir, request.path)
-    if not is_dir:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Path is not a directory: {request.path}",
-        )
+    await _validate_analysis_path(request.path)
 
     try:
         analyzer = SecurityAnalyzer(
@@ -929,19 +973,7 @@ async def security_analyze(request: SecurityAnalysisRequest):
             exclude_patterns=request.exclude_patterns,
         )
         results = await asyncio.to_thread(analyzer.analyze_directory)
-
-        # Filter by severity if specified (Issue #380: use module-level constant)
-        if request.min_severity:
-            try:
-                min_idx = _SEVERITY_ORDER.index(request.min_severity.lower())
-                results = [
-                    r
-                    for r in results
-                    if _SEVERITY_ORDER.index(r.severity.value) >= min_idx
-                ]
-            except ValueError as e:
-                logger.debug("Value parsing failed during severity filtering: %s", e)
-
+        results = _filter_results_by_severity(results, request.min_severity)
         summary = analyzer.get_summary()
 
         return JSONResponse(
@@ -1222,6 +1254,8 @@ async def performance_analyze(request: PerformanceAnalysisRequest):
     """
     Analyze a codebase for performance issues.
 
+    Issue #665: Refactored to use helper functions.
+
     Detects:
     - N+1 query patterns
     - Nested loop complexity
@@ -1230,19 +1264,7 @@ async def performance_analyze(request: PerformanceAnalysisRequest):
     - String concatenation in loops
     - Inefficient data structures
     """
-    path_exists = await asyncio.to_thread(os.path.exists, request.path)
-    if not path_exists:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Path does not exist: {request.path}",
-        )
-
-    is_dir = await asyncio.to_thread(os.path.isdir, request.path)
-    if not is_dir:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Path is not a directory: {request.path}",
-        )
+    await _validate_analysis_path(request.path)
 
     try:
         analyzer = PerformanceAnalyzer(
@@ -1250,19 +1272,7 @@ async def performance_analyze(request: PerformanceAnalysisRequest):
             exclude_patterns=request.exclude_patterns,
         )
         results = await asyncio.to_thread(analyzer.analyze_directory)
-
-        # Filter by severity if specified (Issue #380: use module-level constant)
-        if request.min_severity:
-            try:
-                min_idx = _SEVERITY_ORDER.index(request.min_severity.lower())
-                results = [
-                    r
-                    for r in results
-                    if _SEVERITY_ORDER.index(r.severity.value) >= min_idx
-                ]
-            except ValueError as e:
-                logger.debug("Value parsing failed during severity filtering: %s", e)
-
+        results = _filter_results_by_severity(results, request.min_severity)
         summary = analyzer.get_summary()
 
         return JSONResponse(
