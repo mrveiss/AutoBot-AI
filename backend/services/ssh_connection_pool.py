@@ -314,6 +314,53 @@ class SSHConnectionPool:
 
             logger.warning("Connection not found in pool %s", pool_key)
 
+    async def _attempt_single_connection(
+        self,
+        host: str,
+        port: int,
+        username: str,
+        key_path: str,
+        passphrase: Optional[str],
+        attempt: int,
+    ) -> paramiko.SSHClient:
+        """Attempt a single SSH connection (Issue #665: extracted helper)."""
+        client = paramiko.SSHClient()
+
+        # Load host keys for security
+        client.load_system_host_keys()
+        # Auto-add new hosts for internal VMs (keys change on reprovision)
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # nosec B507
+
+        # Load private key
+        # Issue #358 - avoid blocking
+        key_path_expanded = await asyncio.to_thread(os.path.expanduser, key_path)
+        key_exists = await asyncio.to_thread(os.path.exists, key_path_expanded)
+        if not key_exists:
+            raise FileNotFoundError(f"SSH key not found: {key_path_expanded}")
+
+        private_key = paramiko.RSAKey.from_private_key_file(
+            key_path_expanded, password=passphrase
+        )
+
+        # Connect with timeout
+        logger.debug(
+            f"Connecting to {username}@{host}:{port} "
+            f"(attempt {attempt + 1}/{self.retry_max_attempts})"
+        )
+
+        client.connect(
+            hostname=host,
+            port=port,
+            username=username,
+            pkey=private_key,
+            timeout=self.connect_timeout,
+            allow_agent=False,
+            look_for_keys=False,
+        )
+
+        logger.info("SSH connection established to %s@%s:%s", username, host, port)
+        return client
+
     async def _create_connection(
         self,
         host: str,
@@ -323,7 +370,7 @@ class SSHConnectionPool:
         passphrase: Optional[str],
     ) -> paramiko.SSHClient:
         """
-        Create a new SSH connection with retry logic
+        Create a new SSH connection with retry logic (Issue #665: uses extracted helper).
 
         Args:
             host: Target host
@@ -342,43 +389,9 @@ class SSHConnectionPool:
 
         for attempt in range(self.retry_max_attempts):
             try:
-                client = paramiko.SSHClient()
-
-                # Load host keys for security
-                client.load_system_host_keys()
-                # Auto-add new hosts for internal VMs (keys change on reprovision)
-                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # nosec B507
-
-                # Load private key
-                # Issue #358 - avoid blocking
-                key_path_expanded = await asyncio.to_thread(os.path.expanduser, key_path)
-                key_exists = await asyncio.to_thread(os.path.exists, key_path_expanded)
-                if not key_exists:
-                    raise FileNotFoundError(f"SSH key not found: {key_path_expanded}")
-
-                private_key = paramiko.RSAKey.from_private_key_file(
-                    key_path_expanded, password=passphrase
+                return await self._attempt_single_connection(
+                    host, port, username, key_path, passphrase, attempt
                 )
-
-                # Connect with timeout
-                logger.debug(
-                    f"Connecting to {username}@{host}:{port} "
-                    f"(attempt {attempt + 1}/{self.retry_max_attempts})"
-                )
-
-                client.connect(
-                    hostname=host,
-                    port=port,
-                    username=username,
-                    pkey=private_key,
-                    timeout=self.connect_timeout,
-                    allow_agent=False,
-                    look_for_keys=False,
-                )
-
-                logger.info("SSH connection established to %s@%s:%s", username, host, port)
-                return client
-
             except Exception as e:
                 last_error = e
                 logger.warning(

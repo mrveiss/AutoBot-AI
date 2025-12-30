@@ -96,17 +96,10 @@ def calculate_power_efficiency(
     return 0.0
 
 
-def identify_optimization_opportunities(
-    gpu_metrics: Any,
-    capabilities: GPUCapabilities,
-    current_optimizations: set,
-) -> List[Dict[str, Any]]:
-    """Identify potential optimization opportunities."""
-    opportunities = []
-
-    if not gpu_metrics:
-        return opportunities
-
+def _check_metrics_opportunities(
+    gpu_metrics: Any, opportunities: List[Dict[str, Any]]
+) -> None:
+    """Check GPU metrics for optimization opportunities (Issue #665: extracted helper)."""
     # Low utilization opportunity
     if gpu_metrics.utilization_percent < 50:
         opportunities.append({
@@ -147,6 +140,13 @@ def identify_optimization_opportunities(
             ],
         })
 
+
+def _check_capability_opportunities(
+    capabilities: GPUCapabilities,
+    current_optimizations: set,
+    opportunities: List[Dict[str, Any]],
+) -> None:
+    """Check GPU capabilities for optimization opportunities (Issue #665: extracted helper)."""
     # Mixed precision opportunity
     if (
         capabilities.mixed_precision
@@ -178,6 +178,21 @@ def identify_optimization_opportunities(
                 "Enable Tensor Core acceleration in framework",
             ],
         })
+
+
+def identify_optimization_opportunities(
+    gpu_metrics: Any,
+    capabilities: GPUCapabilities,
+    current_optimizations: set,
+) -> List[Dict[str, Any]]:
+    """Identify potential optimization opportunities (Issue #665: uses extracted helpers)."""
+    opportunities = []
+
+    if not gpu_metrics:
+        return opportunities
+
+    _check_metrics_opportunities(gpu_metrics, opportunities)
+    _check_capability_opportunities(capabilities, current_optimizations, opportunities)
 
     return opportunities
 
