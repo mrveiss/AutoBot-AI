@@ -695,8 +695,24 @@ class UnifiedMultiModalProcessor:
         return results
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get processing statistics"""
-        return self.stats.copy()
+        """Get processing statistics including model availability"""
+        stats = self.stats.copy()
+        # Issue #675: Add model availability status for frontend display
+        stats["model_availability"] = {
+            "vision": {
+                "clip_available": self.vision_processor.clip_model is not None,
+                "blip_available": self.vision_processor.blip_model is not None,
+                "enabled": self.vision_processor.enabled,
+            },
+            "voice": {
+                "whisper_available": self.voice_processor.whisper_model is not None,
+                "wav2vec_available": self.voice_processor.wav2vec_model is not None
+                if hasattr(self.voice_processor, "wav2vec_model")
+                else False,
+                "enabled": self.voice_processor.enabled,
+            },
+        }
+        return stats
 
     def reset_stats(self):
         """Reset processing statistics"""

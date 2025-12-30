@@ -445,6 +445,15 @@ async def get_multimodal_stats():
         except Exception as e:
             search_engine_status = {"error": str(e), "status": "unavailable"}
 
+        # Issue #675: Extract model availability for top-level access
+        model_availability = processor_stats.get("model_availability", {})
+        vision_available = model_availability.get("vision", {}).get(
+            "clip_available", False
+        ) or model_availability.get("vision", {}).get("blip_available", False)
+        voice_available = model_availability.get("voice", {}).get(
+            "whisper_available", False
+        )
+
         return {
             "success": True,
             "timestamp": time.time(),
@@ -452,6 +461,10 @@ async def get_multimodal_stats():
             "gpu_available": gpu_available,
             "gpu_stats": gpu_stats,
             "search_engine_status": search_engine_status,
+            # Issue #675: Add top-level model availability flags for easy frontend access
+            "vision_models_available": vision_available,
+            "audio_models_available": voice_available,
+            "model_availability": model_availability,
             "system_status": "healthy",
         }
 
@@ -461,6 +474,9 @@ async def get_multimodal_stats():
             "success": False,
             "error": str(e),
             "timestamp": time.time(),
+            # Issue #675: Include model unavailable status in error response
+            "vision_models_available": False,
+            "audio_models_available": False,
             "system_status": "error",
         }
 
