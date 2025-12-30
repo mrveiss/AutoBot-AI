@@ -350,6 +350,56 @@ async def get_env_recommendations(
         })
 
 
+# =============================================================================
+# Export Helpers (Issue #665)
+# =============================================================================
+
+# Module-level constant for severity ordering (Issue #380 pattern)
+_SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
+_VALID_SEVERITIES = {"high", "medium", "low"}
+
+
+def _filter_hardcoded_values(
+    values: list, category: Optional[str], severity: Optional[str]
+) -> list:
+    """
+    Filter hardcoded values by category and/or severity.
+
+    Issue #665: Extracted helper for filtering logic.
+    """
+    result = values
+    if category:
+        result = [v for v in result if v.get("type", "").lower() == category.lower()]
+    if severity:
+        result = [v for v in result if v.get("severity", "").lower() == severity.lower()]
+    return result
+
+
+def _sort_by_severity(values: list) -> list:
+    """
+    Sort values by severity (high first).
+
+    Issue #665: Extracted helper for severity sorting.
+    """
+    return sorted(
+        values,
+        key=lambda v: _SEVERITY_ORDER.get(v.get("severity", "low").lower(), 3)
+    )
+
+
+def _calculate_category_breakdown(values: list) -> dict:
+    """
+    Calculate count breakdown by category.
+
+    Issue #665: Extracted helper for category counting.
+    """
+    counts = {}
+    for v in values:
+        cat = v.get("type", "unknown")
+        counts[cat] = counts.get(cat, 0) + 1
+    return counts
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_env_analysis",
@@ -364,109 +414,55 @@ async def export_env_analysis(
 ):
     """
     Export full environment analysis results without truncation (Issue #631).
-
-    Unlike the display endpoint which limits results to 50 items for UI performance,
-    this endpoint returns all hardcoded values for export/download purposes.
-
-    Supports filtering by:
-    - category: Only include items of specific type (security, port, hostname, etc.)
-    - severity: Only include items of specific severity (high, medium, low)
-    - limit: Cap number of results if needed for large exports
-
-    Security-sensitive items (severity=high, category=security) are always prioritized.
-
-    Args:
-        category: Filter by hardcoded value category
-        severity: Filter by severity level
-        limit: Maximum number of items to return
-        include_recommendations: Whether to include recommendations
-
-    Returns:
-        JSON with complete hardcoded values list and metadata
+    Issue #665: Refactored to use extracted helpers for filtering and sorting.
     """
     global _env_analysis_full_cache
 
-    # Check cache first
+    # Check cache (thread-safe, Issue #559)
     async with _env_analysis_cache_lock:
         if not _env_analysis_full_cache:
             return JSONResponse({
                 "status": "error",
                 "message": "No cached analysis available. Run environment analysis first.",
-                "hardcoded_values": [],
-                "recommendations": [],
-                "total": 0,
+                "hardcoded_values": [], "recommendations": [], "total": 0,
             }, status_code=404)
-
-        # Get full data from cache
         full_data = _env_analysis_full_cache.copy()
 
-    # Issue #631: Make a copy of the list to avoid mutating cached data during sort
-    hardcoded_values = list(full_data.get("hardcoded_values", []))
-    recommendations = full_data.get("recommendations", [])
-
-    # Validate severity if provided
-    valid_severities = {"high", "medium", "low"}
-    if severity and severity.lower() not in valid_severities:
+    # Validate severity (Issue #665: use module constant)
+    if severity and severity.lower() not in _VALID_SEVERITIES:
         return JSONResponse({
             "status": "error",
-            "message": f"Invalid severity '{severity}'. Must be one of: {', '.join(sorted(valid_severities))}",
-            "hardcoded_values": [],
-            "recommendations": [],
-            "total": 0,
+            "message": f"Invalid severity '{severity}'. Must be one of: {', '.join(sorted(_VALID_SEVERITIES))}",
+            "hardcoded_values": [], "recommendations": [], "total": 0,
         }, status_code=400)
 
-    # Apply filters
-    if category:
-        hardcoded_values = [
-            v for v in hardcoded_values
-            if v.get("type", "").lower() == category.lower()
-        ]
+    # Issue #631: Copy to avoid mutating cache; Issue #665: use helpers
+    hardcoded_values = list(full_data.get("hardcoded_values", []))
+    hardcoded_values = _filter_hardcoded_values(hardcoded_values, category, severity)
+    hardcoded_values = _sort_by_severity(hardcoded_values)
 
-    if severity:
-        hardcoded_values = [
-            v for v in hardcoded_values
-            if v.get("severity", "").lower() == severity.lower()
-        ]
-
-    # Sort by severity (high first) for prioritization
-    severity_order = {"high": 0, "medium": 1, "low": 2}
-    hardcoded_values.sort(
-        key=lambda v: severity_order.get(v.get("severity", "low").lower(), 3)
-    )
-
-    # Apply limit after sorting (so high severity items come first)
+    # Apply limit after sorting (high severity first)
     if limit and limit > 0:
         hardcoded_values = hardcoded_values[:limit]
 
-    # Calculate category breakdown for filtered results
-    category_counts = {}
-    for v in hardcoded_values:
-        cat = v.get("type", "unknown")
-        category_counts[cat] = category_counts.get(cat, 0) + 1
+    recommendations = full_data.get("recommendations", [])
+    category_counts = _calculate_category_breakdown(hardcoded_values)
 
-    result = {
+    logger.info(
+        "Environment analysis export: %d/%d items (category=%s, severity=%s)",
+        len(hardcoded_values), full_data.get("total_hardcoded_values", 0),
+        category or "all", severity or "all",
+    )
+
+    return JSONResponse({
         "status": "success",
         "path": full_data.get("path", ""),
         "export_timestamp": full_data.get("analysis_time_seconds", 0),
         "total_in_export": len(hardcoded_values),
         "total_in_analysis": full_data.get("total_hardcoded_values", 0),
         "categories": category_counts,
-        "filters_applied": {
-            "category": category,
-            "severity": severity,
-            "limit": limit,
-        },
+        "filters_applied": {"category": category, "severity": severity, "limit": limit},
         "hardcoded_values": hardcoded_values,
         "recommendations": recommendations if include_recommendations else [],
         "recommendations_count": len(recommendations) if include_recommendations else 0,
-    }
-
-    logger.info(
-        "Environment analysis export: %d/%d items (category=%s, severity=%s)",
-        len(hardcoded_values),
-        full_data.get("total_hardcoded_values", 0),
-        category or "all",
-        severity or "all",
-    )
-
-    return JSONResponse(result)
+    })
