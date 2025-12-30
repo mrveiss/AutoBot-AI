@@ -218,7 +218,7 @@ async def execute_script(request: SandboxScriptRequest):
 @router.post("/execute/batch")
 async def execute_batch(request: SandboxBatchRequest):
     """
-    Execute multiple commands in sequence within a single sandbox.
+    Execute multiple commands in sequence within a single sandbox (Issue #665: refactored).
 
     Features:
     - Sequential command execution
@@ -229,26 +229,10 @@ async def execute_batch(request: SandboxBatchRequest):
         logger.info("Batch execution: %s commands", len(request.commands))
 
         # Validate security level
-        try:
-            security_level = SandboxSecurityLevel(request.security_level)
-        except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid security level. Must be one of: {[level.value for level in SandboxSecurityLevel]}"
-            )
+        security_level = _validate_batch_security_level(request.security_level)
 
         # Create batch script
-        script_lines = ["#!/bin/bash", "set -e" if request.stop_on_error else ""]
-
-        for i, command in enumerate(request.commands):
-            script_lines.append(
-                f"echo '=== Executing command {i+1}/{len(request.commands)} ==='"
-            )
-            script_lines.append(command)
-            script_lines.append("echo '=== Command completed ==='")
-            script_lines.append("")
-
-        script_content = "\n".join(script_lines)
+        script_content = _build_batch_script(request.commands, request.stop_on_error)
 
         # Create sandbox configuration
         config = SandboxConfig(
@@ -269,17 +253,7 @@ async def execute_batch(request: SandboxBatchRequest):
         # Execute as script
         result = await sandbox.execute_script(script_content, "bash", config)
 
-        data = {
-            "commands_count": len(request.commands),
-            "exit_code": result.exit_code,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "execution_time": result.execution_time,
-            "container_id": result.container_id,
-            "security_events": result.security_events,
-            "resource_usage": result.resource_usage,
-            "metadata": result.metadata,
-        }
+        data = _build_batch_result_data(request.commands, result)
         if result.success:
             return success_response(data=data, message="Batch executed successfully")
         return error_response(
@@ -296,6 +270,45 @@ async def execute_batch(request: SandboxBatchRequest):
             status_code=500,
             error_code="SANDBOX_ERROR",
         )
+
+
+def _validate_batch_security_level(security_level_str: str) -> SandboxSecurityLevel:
+    """Validate and parse security level (Issue #665: extracted helper)."""
+    try:
+        return SandboxSecurityLevel(security_level_str)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid security level. Must be one of: {[level.value for level in SandboxSecurityLevel]}"
+        )
+
+
+def _build_batch_script(commands: List[str], stop_on_error: bool) -> str:
+    """Build batch script from commands (Issue #665: extracted helper)."""
+    script_lines = ["#!/bin/bash", "set -e" if stop_on_error else ""]
+
+    for i, command in enumerate(commands):
+        script_lines.append(f"echo '=== Executing command {i+1}/{len(commands)} ==='")
+        script_lines.append(command)
+        script_lines.append("echo '=== Command completed ==='")
+        script_lines.append("")
+
+    return "\n".join(script_lines)
+
+
+def _build_batch_result_data(commands: List[str], result: Any) -> Dict[str, Any]:
+    """Build batch result data (Issue #665: extracted helper)."""
+    return {
+        "commands_count": len(commands),
+        "exit_code": result.exit_code,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "execution_time": result.execution_time,
+        "container_id": result.container_id,
+        "security_events": result.security_events,
+        "resource_usage": result.resource_usage,
+        "metadata": result.metadata,
+    }
 
 
 @with_error_handling(

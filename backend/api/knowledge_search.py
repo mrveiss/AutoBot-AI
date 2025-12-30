@@ -753,17 +753,12 @@ async def rag_enhanced_search(request: dict, req: Request):
 @router.post("/similarity_search", deprecated=True)
 async def similarity_search(request: dict, req: Request):
     """
-    **[DEPRECATED]** Use POST /search with `mode=semantic` instead.
+    **[DEPRECATED]** Use POST /search with `mode=semantic` instead (Issue #665: refactored).
 
     Migration: Use `/search` with these parameters:
     - `mode`: "semantic" (for pure vector search)
     - `min_score`: for threshold filtering (e.g., 0.7)
     - `enable_rag`: for RAG enhancement
-
-    ---
-
-    Perform similarity search with optional RAG enhancement.
-    FIXED parameter mismatch between KnowledgeBase and KnowledgeBaseV2.
     """
     # Issue #555: Log deprecation warning
     logger.warning(
@@ -788,34 +783,62 @@ async def similarity_search(request: dict, req: Request):
         f"(top_k={top_k}, threshold={threshold}, use_rag={use_rag})"
     )
 
-    # FIXED: Check which knowledge base implementation we're using and call with correct parameters
+    # Execute search with appropriate parameters
     kb_class_name = kb_to_use.__class__.__name__
-
-    if kb_class_name == "KnowledgeBaseV2":
-        # KnowledgeBaseV2 uses 'top_k' parameter
-        results = await kb_to_use.search(query=query, top_k=top_k)
-    else:
-        # Original KnowledgeBase uses 'similarity_top_k' parameter
-        results = await kb_to_use.search(query=query, similarity_top_k=top_k)
+    results = await _execute_kb_search(kb_to_use, kb_class_name, query, top_k)
 
     # Filter by threshold if specified
-    if threshold > 0:
-        filtered_results = []
-        for result in results:
-            if result.get("score", 0) >= threshold:
-                filtered_results.append(result)
-        results = filtered_results
+    results = _filter_by_threshold(results, threshold)
+
+    # Build response with optional RAG enhancement
+    return await _build_similarity_response(
+        query, results, threshold, kb_class_name, use_rag
+    )
+
+
+async def _execute_kb_search(
+    kb_to_use: Any, kb_class_name: str, query: str, top_k: int
+) -> List[Dict[str, Any]]:
+    """Execute search with appropriate KB parameters (Issue #665: extracted helper)."""
+    if kb_class_name == "KnowledgeBaseV2":
+        # KnowledgeBaseV2 uses 'top_k' parameter
+        return await kb_to_use.search(query=query, top_k=top_k)
+    else:
+        # Original KnowledgeBase uses 'similarity_top_k' parameter
+        return await kb_to_use.search(query=query, similarity_top_k=top_k)
+
+
+def _filter_by_threshold(
+    results: List[Dict[str, Any]], threshold: float
+) -> List[Dict[str, Any]]:
+    """Filter results by score threshold (Issue #665: extracted helper)."""
+    if threshold <= 0:
+        return results
+    return [r for r in results if r.get("score", 0) >= threshold]
+
+
+async def _build_similarity_response(
+    query: str,
+    results: List[Dict[str, Any]],
+    threshold: float,
+    kb_class_name: str,
+    use_rag: bool,
+) -> Dict[str, Any]:
+    """Build similarity search response (Issue #665: extracted helper)."""
+    base_response = {
+        "results": results,
+        "total_results": len(results),
+        "query": query,
+        "threshold": threshold,
+        "kb_implementation": kb_class_name,
+    }
 
     # Enhanced search with RAG if requested and available
     if use_rag and RAG_AVAILABLE and results:
         try:
             rag_enhancement = await _enhance_search_with_rag(query, results)
             return {
-                "results": results,
-                "total_results": len(results),
-                "query": query,
-                "threshold": threshold,
-                "kb_implementation": kb_class_name,
+                **base_response,
                 "rag_enhanced": True,
                 "rag_analysis": rag_enhancement,
             }
@@ -823,14 +846,7 @@ async def similarity_search(request: dict, req: Request):
             logger.error("RAG enhancement failed: %s", e)
             # Continue with regular results if RAG fails
 
-    return {
-        "results": results,
-        "total_results": len(results),
-        "query": query,
-        "threshold": threshold,
-        "kb_implementation": kb_class_name,
-        "rag_enhanced": False,
-    }
+    return {**base_response, "rag_enhanced": False}
 
 
 # =============================================================================
