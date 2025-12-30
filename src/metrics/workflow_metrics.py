@@ -257,8 +257,58 @@ class WorkflowMetricsCollector:
         except Exception as e:
             logger.error("Failed to record resource usage: %s", e)
 
+    def _build_workflow_stats(
+        self,
+        workflow_id: str,
+        workflow: Dict[str, Any],
+        end_time: datetime,
+        final_status: str,
+    ) -> WorkflowExecutionStats:
+        """Build workflow execution stats (Issue #665: extracted helper).
+
+        Args:
+            workflow_id: Workflow identifier
+            workflow: Workflow data dict
+            end_time: Workflow end timestamp
+            final_status: Final status string
+
+        Returns:
+            WorkflowExecutionStats instance
+        """
+        total_duration_ms = (end_time - workflow["start_time"]).total_seconds() * 1000
+        step_durations = list(workflow["step_timings"].values())
+        avg_step_duration = sum(step_durations) / len(step_durations) if step_durations else 0
+        total_approval_wait = sum(workflow["approval_wait_times"]) if workflow["approval_wait_times"] else 0
+        success_rate = (
+            workflow["completed_steps"]
+            / max(workflow["completed_steps"] + workflow["failed_steps"], 1)
+        ) * 100
+
+        return WorkflowExecutionStats(
+            workflow_id=workflow_id,
+            user_message=workflow["user_message"],
+            complexity=workflow["complexity"],
+            total_steps=workflow["total_steps"],
+            completed_steps=workflow["completed_steps"],
+            failed_steps=workflow["failed_steps"],
+            agents_involved=workflow["agents_involved"],
+            start_time=workflow["start_time"],
+            end_time=end_time,
+            total_duration_ms=total_duration_ms,
+            avg_step_duration_ms=avg_step_duration,
+            step_timings=workflow["step_timings"],
+            approval_wait_time_ms=total_approval_wait,
+            error_count=len(workflow["errors"]),
+            success_rate=success_rate,
+            resource_usage=self._aggregate_resource_usage(workflow["resource_snapshots"]),
+            status=final_status,
+        )
+
     def end_workflow_tracking(self, workflow_id: str, final_status: str):
-        """Complete workflow tracking and generate final statistics"""
+        """Complete workflow tracking and generate final statistics.
+
+        Issue #665: Refactored to use _build_workflow_stats helper.
+        """
         try:
             if workflow_id not in self.active_workflows:
                 logger.warning("No active workflow found: %s", workflow_id)
@@ -266,75 +316,31 @@ class WorkflowMetricsCollector:
 
             workflow = self.active_workflows[workflow_id]
             end_time = datetime.now()
-            total_duration_ms = (
-                end_time - workflow["start_time"]
-            ).total_seconds() * 1000
 
-            # Calculate statistics
-            step_durations = list(workflow["step_timings"].values())
-            avg_step_duration = (
-                sum(step_durations) / len(step_durations) if step_durations else 0
-            )
-
-            approval_wait_times = workflow["approval_wait_times"]
-            total_approval_wait = sum(approval_wait_times) if approval_wait_times else 0
-
-            success_rate = (
-                workflow["completed_steps"]
-                / max(workflow["completed_steps"] + workflow["failed_steps"], 1)
-            ) * 100
-
-            # Create final stats
-            stats = WorkflowExecutionStats(
-                workflow_id=workflow_id,
-                user_message=workflow["user_message"],
-                complexity=workflow["complexity"],
-                total_steps=workflow["total_steps"],
-                completed_steps=workflow["completed_steps"],
-                failed_steps=workflow["failed_steps"],
-                agents_involved=workflow["agents_involved"],
-                start_time=workflow["start_time"],
-                end_time=end_time,
-                total_duration_ms=total_duration_ms,
-                avg_step_duration_ms=avg_step_duration,
-                step_timings=workflow["step_timings"],
-                approval_wait_time_ms=total_approval_wait,
-                error_count=len(workflow["errors"]),
-                success_rate=success_rate,
-                resource_usage=self._aggregate_resource_usage(
-                    workflow["resource_snapshots"]
-                ),
-                status=final_status,
-            )
+            # Build stats using helper
+            stats = self._build_workflow_stats(workflow_id, workflow, end_time, final_status)
 
             # Record final metrics
             self._record_metric(
                 workflow_id=workflow_id,
                 metric_type=MetricType.TIMER.value,
                 metric_name="workflow_total_duration_ms",
-                value=total_duration_ms,
+                value=stats.total_duration_ms,
                 labels={
                     "complexity": workflow["complexity"],
                     "status": final_status,
                     "step_count": str(workflow["total_steps"]),
                 },
             )
-
             self._record_metric(
                 workflow_id=workflow_id,
                 metric_type=MetricType.GAUGE.value,
                 metric_name="workflow_success_rate",
-                value=success_rate,
-                labels={
-                    "complexity": workflow["complexity"],
-                    "workflow_id": workflow_id,
-                },
+                value=stats.success_rate,
+                labels={"complexity": workflow["complexity"], "workflow_id": workflow_id},
             )
 
-            # Update aggregated statistics
             self._update_aggregated_stats(stats)
-
-            # Clean up active workflow
             del self.active_workflows[workflow_id]
 
             logger.info("Completed tracking workflow %s: %s", workflow_id, final_status)

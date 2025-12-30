@@ -186,11 +186,63 @@ class SecureLLMCommandParser:
 
         return commands
 
+    def _check_and_block_command(
+        self,
+        command: str,
+        user_goal: str,
+        event_type: str,
+        check_result: Any,
+        block_reason: str,
+    ) -> bool:
+        """Check if command should be blocked and log if so (Issue #665: extracted helper).
+
+        Args:
+            command: Command being validated
+            user_goal: User's original goal
+            event_type: Type of security event for logging
+            check_result: Validation result (InjectionDetectionResult or dict)
+            block_reason: Human-readable block reason
+
+        Returns:
+            True if command should be blocked, False otherwise
+        """
+        # Handle InjectionDetectionResult
+        if hasattr(check_result, "blocked") and check_result.blocked:
+            logger.warning("🚨 BLOCKED: %s", block_reason)
+            logger.warning("Command: %s", command)
+            logger.warning("Patterns: %s", check_result.detected_patterns)
+            self._log_security_event(
+                event_type=event_type,
+                user_goal=user_goal,
+                command=command,
+                risk_level=check_result.risk_level.value,
+                patterns=check_result.detected_patterns,
+            )
+            return True
+
+        # Handle CommandValidator dict result
+        if isinstance(check_result, dict) and not check_result.get("valid", False):
+            logger.warning("🚨 BLOCKED: %s", block_reason)
+            logger.warning("Command: %s", command)
+            logger.warning("Reason: %s", check_result.get("reason", "Unknown"))
+            self._log_security_event(
+                event_type=event_type,
+                user_goal=user_goal,
+                command=command,
+                risk_level="high",
+                patterns=[check_result.get("reason", "Validation failed")],
+            )
+            return True
+
+        return False
+
     def _validate_single_command(
         self, command_dict: Dict[str, str], user_goal: str
     ) -> Optional[ValidatedCommand]:
         """
-        Validate a single command for security
+        Validate a single command for security.
+
+        Issue #665: Refactored to use _check_and_block_command helper.
 
         Args:
             command_dict: Command dictionary with 'command', 'explanation', 'next' keys
@@ -210,39 +262,18 @@ class SecureLLMCommandParser:
         command_validation = self.injection_detector.detect_injection(
             command, context="extracted_command"
         )
-
-        if command_validation.blocked:
-            logger.warning("🚨 BLOCKED: Command contains injection patterns")
-            logger.warning("Command: %s", command)
-            logger.warning("Patterns: %s", command_validation.detected_patterns)
-
-            self._log_security_event(
-                event_type="command_blocked",
-                user_goal=user_goal,
-                command=command,
-                risk_level=command_validation.risk_level.value,
-                patterns=command_validation.detected_patterns,
-            )
-
+        if self._check_and_block_command(
+            command, user_goal, "command_blocked",
+            command_validation, "Command contains injection patterns"
+        ):
             return None
 
         # Step 2: Validate with existing CommandValidator
         validator_result = self.command_validator.validate_command(command)
-        if not validator_result.get("valid", False):
-            logger.warning("🚨 BLOCKED: Command failed CommandValidator")
-            logger.warning("Command: %s", command)
-            logger.warning("Reason: %s", validator_result.get('reason', 'Unknown'))
-
-            self._log_security_event(
-                event_type="command_validator_blocked",
-                user_goal=user_goal,
-                command=command,
-                risk_level="high",
-                patterns=[
-                    validator_result.get("reason", "CommandValidator validation failed")
-                ],
-            )
-
+        if self._check_and_block_command(
+            command, user_goal, "command_validator_blocked",
+            validator_result, "Command failed CommandValidator"
+        ):
             return None
 
         # Step 3: Check explanation for injection patterns (informational)
@@ -250,15 +281,11 @@ class SecureLLMCommandParser:
             explanation_validation = self.injection_detector.detect_injection(
                 explanation, context="command_explanation"
             )
-
-            if explanation_validation.risk_level in {
-                InjectionRisk.HIGH,
-                InjectionRisk.CRITICAL,
-            }:
+            if explanation_validation.risk_level in {InjectionRisk.HIGH, InjectionRisk.CRITICAL}:
                 logger.warning("⚠️ Suspicious explanation detected for command: %s", command)
                 logger.warning("Explanation patterns: %s", explanation_validation.detected_patterns)
 
-        # Command passed all validation - create ValidatedCommand
+        # Command passed all validation
         return ValidatedCommand(
             command=command,
             explanation=explanation,

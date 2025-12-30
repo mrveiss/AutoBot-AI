@@ -91,51 +91,60 @@ export class BatchApiService {
   }
 
   /**
-   * Fallback chat initialization using individual API calls with graceful error handling
+   * Fallback chat initialization using PARALLEL API calls with graceful error handling
+   * Issue #671: Changed from sequential to parallel calls to reduce load time
    */
   async fallbackChatInitialization(): Promise<FallbackResults> {
-    logger.info('Using fallback chat initialization with individual API calls');
+    logger.info('Using parallel chat initialization with individual API calls');
 
+    // Issue #671: Run all API calls in parallel using Promise.allSettled
+    // This reduces worst-case load time from 4x timeout to 1x timeout
+    const [
+      chatSessionsResult,
+      systemHealthResult,
+      serviceHealthResult,
+      settingsResult
+    ] = await Promise.allSettled([
+      this.apiClient.getChatList(),
+      this.apiClient.getSystemHealth(),
+      this.apiClient.getServiceHealth(),
+      this.apiClient.getSettings()
+    ]);
+
+    // Process results with graceful error handling
     const results: FallbackResults = {
-      chat_sessions: { sessions: [] },
-      system_health: { status: 'unknown' },
-      service_health: { services: [] },
-      settings: {}
+      chat_sessions: chatSessionsResult.status === 'fulfilled'
+        ? chatSessionsResult.value
+        : { error: (chatSessionsResult as PromiseRejectedResult).reason?.message || 'Failed to load', sessions: [] },
+
+      system_health: systemHealthResult.status === 'fulfilled'
+        ? systemHealthResult.value
+        : { error: (systemHealthResult as PromiseRejectedResult).reason?.message || 'Failed to load', status: 'unknown' },
+
+      service_health: serviceHealthResult.status === 'fulfilled'
+        ? serviceHealthResult.value
+        : { error: (serviceHealthResult as PromiseRejectedResult).reason?.message || 'Failed to load', services: [] },
+
+      settings: settingsResult.status === 'fulfilled'
+        ? settingsResult.value
+        : { error: (settingsResult as PromiseRejectedResult).reason?.message || 'Failed to load' }
     };
 
-    // Load chat sessions using correct endpoint with error handling
-    try {
-      results.chat_sessions = await this.apiClient.getChatList();
-    } catch (error: any) {
-      logger.warn('Failed to load chat sessions:', error.message);
-      results.chat_sessions = { error: error.message, sessions: [] };
+    // Log any failures
+    if (chatSessionsResult.status === 'rejected') {
+      logger.warn('Failed to load chat sessions:', (chatSessionsResult as PromiseRejectedResult).reason?.message);
+    }
+    if (systemHealthResult.status === 'rejected') {
+      logger.warn('Failed to load system health:', (systemHealthResult as PromiseRejectedResult).reason?.message);
+    }
+    if (serviceHealthResult.status === 'rejected') {
+      logger.warn('Failed to load service health:', (serviceHealthResult as PromiseRejectedResult).reason?.message);
+    }
+    if (settingsResult.status === 'rejected') {
+      logger.warn('Failed to load settings:', (settingsResult as PromiseRejectedResult).reason?.message);
     }
 
-    // Load system health with error handling
-    try {
-      results.system_health = await this.apiClient.getSystemHealth();
-    } catch (error: any) {
-      logger.warn('Failed to load system health:', error.message);
-      results.system_health = { error: error.message, status: 'unknown' };
-    }
-
-    // Load service health with error handling
-    try {
-      results.service_health = await this.apiClient.getServiceHealth();
-    } catch (error: any) {
-      logger.warn('Failed to load service health:', error.message);
-      results.service_health = { error: error.message, services: [] };
-    }
-
-    // Load settings with error handling
-    try {
-      results.settings = await this.apiClient.getSettings();
-    } catch (error: any) {
-      logger.warn('Failed to load settings:', error.message);
-      results.settings = { error: error.message };
-    }
-
-    logger.info('Fallback chat initialization completed');
+    logger.info('Parallel chat initialization completed');
     return results;
   }
 
