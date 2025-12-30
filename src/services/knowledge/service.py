@@ -402,6 +402,42 @@ class ChatKnowledgeService:
         """
         return self.intent_detector.detect_intent(query)
 
+    def _enhance_query_with_context(
+        self,
+        query: str,
+        conversation_history: List[Dict[str, str]],
+    ) -> EnhancedQuery:
+        """
+        Enhance query with conversation context (Issue #665: extracted).
+
+        Args:
+            query: Original query
+            conversation_history: Previous exchanges
+
+        Returns:
+            EnhancedQuery with context entities
+        """
+        enhanced_query = self.context_enhancer.enhance_query(
+            query=query,
+            conversation_history=conversation_history,
+            max_history_items=3,
+        )
+
+        if enhanced_query.enhancement_applied:
+            logger.info(
+                "[Conversation RAG] Query enhanced: '%s...' → '%s...' (entities: %s)",
+                query[:50],
+                enhanced_query.enhanced_query[:80],
+                enhanced_query.context_entities
+            )
+        else:
+            logger.debug(
+                "[Conversation RAG] No enhancement needed for query: '%s...'",
+                query[:50]
+            )
+
+        return enhanced_query
+
     async def conversation_aware_retrieve(
         self,
         query: str,
@@ -420,6 +456,7 @@ class ChatKnowledgeService:
         with context enhancement for optimal results.
 
         Issue #556: Added categories parameter and smart category selection.
+        Issue #665: Extracted _enhance_query_with_context helper.
 
         Args:
             query: User's chat message/query
@@ -453,35 +490,17 @@ class ChatKnowledgeService:
             )
             return "", [], intent_result, None
 
-        # Step 3: Enhance query with conversation context
-        enhanced_query = self.context_enhancer.enhance_query(
-            query=query,
-            conversation_history=conversation_history,
-            max_history_items=3,
-        )
+        # Step 3: Enhance query with context (Issue #665: uses helper)
+        enhanced_query = self._enhance_query_with_context(query, conversation_history)
 
-        # Log enhancement if applied
-        if enhanced_query.enhancement_applied:
-            logger.info(
-                "[Conversation RAG] Query enhanced: '%s...' → '%s...' (entities: %s)",
-                query[:50],
-                enhanced_query.enhanced_query[:80],
-                enhanced_query.context_entities
-            )
-        else:
-            logger.debug(
-                "[Conversation RAG] No enhancement needed for query: '%s...'",
-                query[:50]
-            )
-
-        # Issue #556: Smart category selection if not explicitly provided
+        # Step 4: Smart category selection if not explicitly provided
         effective_categories = categories
         if effective_categories is None and enable_smart_categories:
             effective_categories = self._select_categories_for_intent(
                 intent_result, query
             )
 
-        # Step 4: Perform retrieval with enhanced query
+        # Step 5: Perform retrieval with enhanced query
         search_query = (
             enhanced_query.enhanced_query
             if enhanced_query.enhancement_applied

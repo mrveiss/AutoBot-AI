@@ -399,6 +399,115 @@ async def analyze_communication_chains_detailed():
     return results
 
 
+def _calculate_security_score(cached_analysis: dict) -> float:
+    """
+    Calculate security score from ChromaDB problems (Issue #665: extracted).
+
+    Issue #543: Calculate security score from actual problems.
+
+    Args:
+        cached_analysis: Cached code analysis data
+
+    Returns:
+        Security score (0-100)
+    """
+    try:
+        from backend.api.codebase_analytics.storage import get_code_collection
+
+        code_collection = get_code_collection()
+        if not code_collection:
+            return 0.0  # No data available
+
+        security_results = code_collection.get(
+            where={
+                "type": "problem",
+                "problem_type": {
+                    "$in": ["security", "hardcode", "vulnerability"]
+                },
+            },
+            include=["metadatas"],
+        )
+        security_issue_count = len(security_results.get("metadatas", []))
+
+        # Get total files from codebase_metrics
+        total_files = cached_analysis.get("codebase_metrics", {}).get(
+            "total_files", 100
+        )
+
+        # Score: 100 - (issues per file * 100), min 0
+        if total_files > 0:
+            return round(max(0, 100 - (security_issue_count / total_files * 100)), 1)
+        return 0.0  # No files analyzed
+
+    except Exception as e:
+        logger.warning("Failed to calculate security score: %s", e)
+        return 0.0  # Unknown when can't calculate
+
+
+def _calculate_quality_factors(cached_analysis: dict) -> dict:
+    """
+    Calculate quality factors from cached analysis (Issue #665: extracted).
+
+    Args:
+        cached_analysis: Cached code analysis data
+
+    Returns:
+        Dict of quality factor scores
+    """
+    quality_factors = {
+        "complexity": 0,
+        "maintainability": 0,
+        "test_coverage": 0,
+        "documentation": 0,
+        "security": 0,
+    }
+
+    if "code_analysis" not in cached_analysis:
+        return quality_factors
+
+    code_data = cached_analysis["code_analysis"]
+
+    # Complexity score (inverted - lower complexity is better)
+    complexity = code_data.get("complexity", 10)
+    quality_factors["complexity"] = max(0, (10 - complexity) * 10)
+
+    # Test coverage
+    quality_factors["test_coverage"] = code_data.get("test_coverage", 0)
+
+    # Documentation coverage
+    quality_factors["documentation"] = code_data.get("doc_coverage", 0)
+
+    # Maintainability (convert to numeric)
+    maintainability = code_data.get("maintainability", "poor")
+    maintainability_scores = {
+        "excellent": 95,
+        "good": 80,
+        "fair": 65,
+        "poor": 40,
+    }
+    quality_factors["maintainability"] = maintainability_scores.get(
+        maintainability, 40
+    )
+
+    # Security score
+    quality_factors["security"] = _calculate_security_score(cached_analysis)
+
+    return quality_factors
+
+
+def _score_to_grade(score: float) -> str:
+    """Convert numeric score to letter grade (Issue #665: extracted)."""
+    if score >= 90:
+        return "A"
+    if score >= 80:
+        return "B"
+    if score >= 70:
+        return "C"
+    if score >= 60:
+        return "D"
+    return "F"
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_quality_score",
@@ -406,7 +515,11 @@ async def analyze_communication_chains_detailed():
 )
 @router.get("/code/metrics/quality-score")
 async def get_code_quality_score():
-    """Get comprehensive code quality score"""
+    """
+    Get comprehensive code quality score.
+
+    Issue #665: Refactored with extracted helper functions.
+    """
     cached_analysis = analytics_state.get("code_analysis_cache")
 
     if not cached_analysis:
@@ -416,93 +529,15 @@ async def get_code_quality_score():
             analysis_request
         )
 
-    # Calculate quality score
-    quality_factors = {
-        "complexity": 0,
-        "maintainability": 0,
-        "test_coverage": 0,
-        "documentation": 0,
-        "security": 0,
-    }
-
-    if "code_analysis" in cached_analysis:
-        code_data = cached_analysis["code_analysis"]
-
-        # Complexity score (inverted - lower complexity is better)
-        complexity = code_data.get("complexity", 10)
-        quality_factors["complexity"] = max(0, (10 - complexity) * 10)
-
-        # Test coverage
-        quality_factors["test_coverage"] = code_data.get("test_coverage", 0)
-
-        # Documentation coverage
-        quality_factors["documentation"] = code_data.get("doc_coverage", 0)
-
-        # Maintainability (convert to numeric)
-        maintainability = code_data.get("maintainability", "poor")
-        maintainability_scores = {
-            "excellent": 95,
-            "good": 80,
-            "fair": 65,
-            "poor": 40,
-        }
-        quality_factors["maintainability"] = maintainability_scores.get(
-            maintainability, 40
-        )
-
-        # Issue #543: Calculate security score from actual problems
-        try:
-            from backend.api.codebase_analytics.storage import get_code_collection
-
-            code_collection = get_code_collection()
-            if code_collection:
-                security_results = code_collection.get(
-                    where={
-                        "type": "problem",
-                        "problem_type": {
-                            "$in": ["security", "hardcode", "vulnerability"]
-                        },
-                    },
-                    include=["metadatas"],
-                )
-                security_issue_count = len(security_results.get("metadatas", []))
-
-                # Get total files from codebase_metrics
-                total_files = cached_analysis.get("codebase_metrics", {}).get(
-                    "total_files", 100
-                )
-
-                # Score: 100 - (issues per file * 100), min 0
-                if total_files > 0:
-                    security_score = max(
-                        0, 100 - (security_issue_count / total_files * 100)
-                    )
-                else:
-                    security_score = 0  # No files analyzed
-
-                quality_factors["security"] = round(security_score, 1)
-            else:
-                quality_factors["security"] = 0  # No data available
-        except Exception as e:
-            logger.warning("Failed to calculate security score: %s", e)
-            quality_factors["security"] = 0  # Unknown when can't calculate
+    # Calculate quality factors (Issue #665: uses helper)
+    quality_factors = _calculate_quality_factors(cached_analysis)
 
     # Calculate overall score
     overall_score = sum(quality_factors.values()) / len(quality_factors)
 
     return {
         "overall_score": round(overall_score, 1),
-        "grade": (
-            "A"
-            if overall_score >= 90
-            else (
-                "B"
-                if overall_score >= 80
-                else (
-                    "C" if overall_score >= 70 else "D" if overall_score >= 60 else "F"
-                )
-            )
-        ),
+        "grade": _score_to_grade(overall_score),
         "quality_factors": quality_factors,
         "recommendations": [],
         "last_analysis": cached_analysis.get("timestamp"),

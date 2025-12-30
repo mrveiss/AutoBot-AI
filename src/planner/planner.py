@@ -177,24 +177,72 @@ Output ONLY valid JSON in this format:
         self.config = config or PlannerConfig()
         self._plans: dict[str, ExecutionPlan] = {}
 
+    def _format_context_for_prompt(self, context: dict) -> str:
+        """
+        Format context dict for LLM prompt (Issue #665: extracted).
+
+        Args:
+            context: Context dictionary
+
+        Returns:
+            Formatted context string
+        """
+        if not context:
+            return "No additional context provided."
+
+        context_items = []
+        for k, v in context.items():
+            if k not in ("task_id",):  # Skip internal keys
+                context_items.append(f"- {k}: {v}")
+
+        return "\n".join(context_items) if context_items else "No additional context provided."
+
+    def _populate_plan_steps(self, plan: ExecutionPlan, plan_data: dict) -> None:
+        """
+        Populate plan with steps and resolve dependencies (Issue #665: extracted).
+
+        Args:
+            plan: ExecutionPlan to populate
+            plan_data: Parsed plan data from LLM
+        """
+        step_id_map: dict[int, str] = {}  # step_number -> step_id
+
+        # Create steps with proper IDs
+        for step_data in plan_data.get("steps", []):
+            step = PlanStep(
+                step_number=step_data.get("step_number", len(plan.steps) + 1),
+                description=step_data.get("description", ""),
+                pseudocode=step_data.get("pseudocode", ""),
+                estimated_complexity=step_data.get("estimated_complexity", "medium"),
+            )
+            step_id_map[step.step_number] = step.step_id
+            plan.steps.append(step)
+
+        # Resolve dependencies from step numbers to step IDs
+        for step_data in plan_data.get("steps", []):
+            step_num = step_data.get("step_number", 0)
+            step = plan.get_step_by_number(step_num)
+            if step:
+                step.depends_on = [
+                    step_id_map[dep_num]
+                    for dep_num in step_data.get("depends_on", [])
+                    if dep_num in step_id_map
+                ]
+
     async def create_plan(
         self,
         task_description: str,
         context: Optional[dict] = None,
     ) -> ExecutionPlan:
-        """Create a new execution plan using LLM"""
+        """
+        Create a new execution plan using LLM.
+
+        Issue #665: Refactored with extracted helper methods.
+        """
         context = context or {}
 
-        # Format context for prompt
-        context_str = ""
-        if context:
-            context_items = []
-            for k, v in context.items():
-                if k not in ("task_id",):  # Skip internal keys
-                    context_items.append(f"- {k}: {v}")
-            context_str = "\n".join(context_items) if context_items else "No additional context provided."
-        else:
-            context_str = "No additional context provided."
+        # Format context for prompt (Issue #665: uses helper)
+        context_str = self._format_context_for_prompt(context)
 
         prompt = self.PLAN_GENERATION_PROMPT.format(
             task_description=task_description,
@@ -229,29 +277,8 @@ Output ONLY valid JSON in this format:
             task_id=context.get("task_id", ""),
         )
 
-        # Create steps with proper IDs
-        step_id_map: dict[int, str] = {}  # step_number -> step_id
-
-        for step_data in plan_data.get("steps", []):
-            step = PlanStep(
-                step_number=step_data.get("step_number", len(plan.steps) + 1),
-                description=step_data.get("description", ""),
-                pseudocode=step_data.get("pseudocode", ""),
-                estimated_complexity=step_data.get("estimated_complexity", "medium"),
-            )
-            step_id_map[step.step_number] = step.step_id
-            plan.steps.append(step)
-
-        # Resolve dependencies from step numbers to step IDs
-        for step_data in plan_data.get("steps", []):
-            step_num = step_data.get("step_number", 0)
-            step = plan.get_step_by_number(step_num)
-            if step:
-                step.depends_on = [
-                    step_id_map[dep_num]
-                    for dep_num in step_data.get("depends_on", [])
-                    if dep_num in step_id_map
-                ]
+        # Populate steps and resolve dependencies (Issue #665: uses helper)
+        self._populate_plan_steps(plan, plan_data)
 
         plan.status = PlanStatus.READY
         plan.update_metrics()
