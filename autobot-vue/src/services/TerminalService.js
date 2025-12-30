@@ -668,9 +668,7 @@ export function useTerminalService() {
     sendStdin: terminalService.sendStdin.bind(terminalService),  // Issue #33
     sendSignal: terminalService.sendSignal.bind(terminalService),
     resize: terminalService.resize.bind(terminalService),
-    connect: terminalService.connect.bind(terminalService),
-    disconnect: terminalService.disconnect.bind(terminalService),
-    closeSession: terminalService.closeSession.bind(terminalService),
+    // Note: connect, disconnect, closeSession are defined below with reactive updates
     isConnected: terminalService.isConnected.bind(terminalService),
 
     // Reactive state

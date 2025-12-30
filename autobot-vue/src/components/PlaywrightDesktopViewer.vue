@@ -98,7 +98,10 @@ export default {
 
     const refreshVNC = () => {
       if (vncFrame.value) {
-        vncFrame.value.src = vncFrame.value.src;
+        // Issue #672: Force iframe refresh by appending cache-bust query param
+        const currentSrc = vncFrame.value.src;
+        const separator = currentSrc.includes('?') ? '&' : '?';
+        vncFrame.value.src = `${currentSrc.split('&_refresh=')[0]}${separator}_refresh=${Date.now()}`;
       }
     };
 

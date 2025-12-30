@@ -11,7 +11,8 @@ Contains workflow planning, step estimation, and capability determination.
 import logging
 from typing import Any, Dict, List, Optional, Set
 
-from src.orchestrator import TaskComplexity
+# Issue #673: Import from autobot_types to avoid circular import with src.orchestrator
+from src.autobot_types import TaskComplexity
 
 from .types import AgentCapability, AgentProfile
 

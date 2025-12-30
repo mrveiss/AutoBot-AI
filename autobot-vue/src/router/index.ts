@@ -1,5 +1,4 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
-import type { Component } from 'vue'
 import { useAppStore } from '@/stores/useAppStore'
 import { useUserStore } from '@/stores/useUserStore'
 import { setupAsyncComponentErrorHandler } from '@/utils/asyncComponentHelpers'

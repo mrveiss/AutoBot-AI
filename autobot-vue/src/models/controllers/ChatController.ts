@@ -2,7 +2,7 @@ import { useChatStore } from '@/stores/useChatStore'
 import { useAppStore } from '@/stores/useAppStore'
 import { chatRepository } from '@/models/repositories'
 import apiClient from '@/utils/ApiClient'
-import type { ChatMessage, ChatSession } from '@/stores/useChatStore'
+import type { ChatSession } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('ChatController')

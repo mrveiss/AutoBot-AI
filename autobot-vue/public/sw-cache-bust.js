@@ -1,7 +1,7 @@
 // AutoBot Service Worker for Cache Management
 // Aggressive cache invalidation to prevent API configuration issues
 
-const CACHE_NAME = 'autobot-v1';
+const _CACHE_NAME = 'autobot-v1'; // Prefixed with _ to indicate intentionally unused (reserved for future use)
 const CACHE_VERSION = Date.now();
 const DYNAMIC_CACHE = `autobot-dynamic-${CACHE_VERSION}`;
 
@@ -80,7 +80,8 @@ self.addEventListener('fetch', (event) => {
     console.log('[AutoBot SW] Never cache:', url.pathname);
     
     // Force fresh request with cache-busting headers
-    const freshRequest = new Request(event.request.url, {
+    // Issue #674: Only include body for methods that support it (not GET/HEAD)
+    const requestInit = {
       method: event.request.method,
       headers: new Headers({
         ...event.request.headers,
@@ -88,11 +89,17 @@ self.addEventListener('fetch', (event) => {
         'Pragma': 'no-cache',
         'X-Cache-Bust': Date.now().toString()
       }),
-      body: event.request.body,
       mode: event.request.mode,
       credentials: event.request.credentials,
       cache: 'no-store'
-    });
+    };
+
+    // Only add body for methods that support it (POST, PUT, PATCH, DELETE)
+    if (!['GET', 'HEAD'].includes(event.request.method)) {
+      requestInit.body = event.request.body;
+    }
+
+    const freshRequest = new Request(event.request.url, requestInit);
     
     event.respondWith(
       fetch(freshRequest).then(response => {
