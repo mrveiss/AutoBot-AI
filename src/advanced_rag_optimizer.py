@@ -486,7 +486,7 @@ class AdvancedRAGOptimizer:
         self, query: str, max_results: int = 5, enable_reranking: bool = True
     ) -> Tuple[List[SearchResult], RAGMetrics]:
         """
-        Perform advanced RAG search with all optimizations.
+        Perform advanced RAG search with all optimizations (Issue #665: refactored).
 
         Returns:
             (search_results, performance_metrics)
@@ -503,57 +503,23 @@ class AdvancedRAGOptimizer:
             metrics.query_processing_time = time.time() - query_start
 
             # Step 2: Multi-strategy retrieval
-            retrieval_start = time.time()
+            hybrid_results = await self._retrieve_hybrid_results(query, metrics)
 
-            # Issue #619: Parallelize semantic search and facts retrieval
-            semantic_results, all_facts = await asyncio.gather(
-                self._perform_semantic_search(query, limit=self.max_results_per_stage),
-                self.kb.get_all_facts(),
+            # Step 3: Result diversification and reranking
+            final_results = await self._diversify_and_rerank(
+                query, hybrid_results, enable_reranking, metrics
             )
 
-            # Keyword search (needs all_facts from above)
-            keyword_results = self._perform_keyword_search(query, all_facts)
-
-            # Combine with hybrid scoring
-            hybrid_results = self._combine_hybrid_results(
-                semantic_results, keyword_results
+            # Step 4: Apply context optimization and limit results
+            optimized_results = self._optimize_result_count(
+                final_results, max_results, context
             )
-
-            metrics.retrieval_time = time.time() - retrieval_start
-            metrics.documents_considered = len(hybrid_results)
-            metrics.hybrid_search_enabled = True
-
-            # Step 3: Result diversification
-            diversified_results = self._diversify_results(hybrid_results)
-
-            # Step 4: Cross-encoder reranking (if enabled)
-            final_results = diversified_results
-            if enable_reranking and len(diversified_results) > 1:
-                rerank_start = time.time()
-                final_results = await self._rerank_with_cross_encoder(
-                    query, diversified_results
-                )
-                metrics.reranking_time = time.time() - rerank_start
-
-            # Step 5: Apply context optimization and limit results
-            optimized_results = final_results[:max_results]
-
-            # Adjust chunk count based on query context
-            if (
-                len(optimized_results) < context.suggested_chunk_count
-                and len(final_results) > max_results
-            ):
-                optimized_results = final_results[: context.suggested_chunk_count]
 
             metrics.final_results_count = len(optimized_results)
             metrics.total_time = time.time() - start_time
             metrics.gpu_acceleration_used = True  # Semantic chunker uses GPU
 
-            logger.info("Advanced search completed:")
-            logger.info("  - Total time: %.3fs", metrics.total_time)
-            logger.info("  - Documents considered: %s", metrics.documents_considered)
-            logger.info("  - Final results: %s", metrics.final_results_count)
-            logger.info("  - Query type: %s", context.query_type)
+            self._log_search_completion(metrics, context)
 
             return optimized_results, metrics
 
@@ -561,6 +527,76 @@ class AdvancedRAGOptimizer:
             logger.error("Advanced search failed: %s", e)
             metrics.total_time = time.time() - start_time
             return [], metrics
+
+    async def _retrieve_hybrid_results(
+        self, query: str, metrics: RAGMetrics
+    ) -> List[SearchResult]:
+        """Perform hybrid retrieval (Issue #665: extracted helper)."""
+        retrieval_start = time.time()
+
+        # Issue #619: Parallelize semantic search and facts retrieval
+        semantic_results, all_facts = await asyncio.gather(
+            self._perform_semantic_search(query, limit=self.max_results_per_stage),
+            self.kb.get_all_facts(),
+        )
+
+        # Keyword search (needs all_facts from above)
+        keyword_results = self._perform_keyword_search(query, all_facts)
+
+        # Combine with hybrid scoring
+        hybrid_results = self._combine_hybrid_results(semantic_results, keyword_results)
+
+        metrics.retrieval_time = time.time() - retrieval_start
+        metrics.documents_considered = len(hybrid_results)
+        metrics.hybrid_search_enabled = True
+
+        return hybrid_results
+
+    async def _diversify_and_rerank(
+        self,
+        query: str,
+        results: List[SearchResult],
+        enable_reranking: bool,
+        metrics: RAGMetrics,
+    ) -> List[SearchResult]:
+        """Diversify and optionally rerank results (Issue #665: extracted helper)."""
+        diversified_results = self._diversify_results(results)
+
+        if enable_reranking and len(diversified_results) > 1:
+            rerank_start = time.time()
+            final_results = await self._rerank_with_cross_encoder(
+                query, diversified_results
+            )
+            metrics.reranking_time = time.time() - rerank_start
+            return final_results
+
+        return diversified_results
+
+    def _optimize_result_count(
+        self,
+        results: List[SearchResult],
+        max_results: int,
+        context: Any,
+    ) -> List[SearchResult]:
+        """Optimize result count based on context (Issue #665: extracted helper)."""
+        optimized_results = results[:max_results]
+
+        # Adjust chunk count based on query context
+        if (
+            len(optimized_results) < context.suggested_chunk_count
+            and len(results) > max_results
+        ):
+            optimized_results = results[: context.suggested_chunk_count]
+
+        return optimized_results
+
+    def _log_search_completion(self, metrics: RAGMetrics, context: Any) -> None:
+        """Log search completion metrics (Issue #665: extracted helper)."""
+        logger.info("Advanced search completed:")
+        logger.info("  - Total time: %.3fs", metrics.total_time)
+        logger.info("  - Documents considered: %s", metrics.documents_considered)
+        logger.info("  - Final results: %s", metrics.final_results_count)
+        logger.info("  - Query type: %s", context.query_type)
 
     async def get_optimized_context(
         self, query: str, max_context_length: int = 2000

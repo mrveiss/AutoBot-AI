@@ -17,7 +17,7 @@ Related Issues: #78 (Search Quality), #185 (Split), #209 (Knowledge split), #555
 """
 
 import logging
-from typing import List
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, Request
 
