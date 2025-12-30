@@ -793,6 +793,50 @@ class FactsMixin:
             logger.warning("Failed to batch check important facts: %s", e)
             return set()
 
+    async def _delete_single_fact_for_session(
+        self,
+        fact_id: str,
+        session_id: str,
+        important_ids: set,
+        preserve_important: bool,
+        result: Dict[str, Any],
+    ) -> None:
+        """Delete a single fact during session cleanup (Issue #665: extracted helper).
+
+        Args:
+            fact_id: Fact ID to process
+            session_id: Session ID being cleaned up
+            important_ids: Set of fact IDs to preserve
+            preserve_important: Whether to preserve important facts
+            result: Result dict to update with counts/errors
+        """
+        try:
+            # Check if fact should be preserved
+            if preserve_important and fact_id in important_ids:
+                logger.debug(
+                    "Preserving important fact %s from session %s",
+                    fact_id, session_id
+                )
+                result["preserved_count"] += 1
+                return
+
+            # Delete the fact
+            delete_result = await self.delete_fact(fact_id)
+
+            if delete_result.get("status") == "success":
+                result["deleted_count"] += 1
+            else:
+                result["errors"].append({
+                    "fact_id": fact_id,
+                    "error": delete_result.get("message", "Unknown error")
+                })
+
+        except Exception as e:
+            result["errors"].append({
+                "fact_id": fact_id,
+                "error": str(e)
+            })
+
     async def delete_facts_by_session(
         self, session_id: str, preserve_important: bool = True
     ) -> Dict[str, Any]:
@@ -800,21 +844,18 @@ class FactsMixin:
         Delete all facts created during a specific session.
 
         Issue #547: Called during session deletion for orphan cleanup.
-        Issue #547 code review: Optimized with batch operations.
+        Issue #665: Refactored to use _delete_single_fact_for_session helper.
 
         Args:
             session_id: Chat session ID to cleanup
             preserve_important: If True, preserve facts marked as 'important' in metadata
 
         Returns:
-            Dict with deletion statistics:
-            - deleted_count: Number of facts deleted
-            - preserved_count: Number of facts preserved (if preserve_important=True)
-            - errors: List of any errors encountered
+            Dict with deletion statistics
         """
         self.ensure_initialized()
 
-        result = {
+        result: Dict[str, Any] = {
             "deleted_count": 0,
             "preserved_count": 0,
             "errors": [],
@@ -832,40 +873,18 @@ class FactsMixin:
                 len(fact_ids), session_id, preserve_important
             )
 
-            # Issue #547 code review: Batch check important facts
+            # Batch check important facts
             important_ids = set()
             if preserve_important:
                 important_ids = await self._batch_check_important_facts(fact_ids)
 
+            # Process each fact (Issue #665: uses helper)
             for fact_id in fact_ids:
-                try:
-                    # Check if fact should be preserved (using pre-fetched set)
-                    if preserve_important and fact_id in important_ids:
-                        logger.debug(
-                            "Preserving important fact %s from session %s",
-                            fact_id, session_id
-                        )
-                        result["preserved_count"] += 1
-                        continue
+                await self._delete_single_fact_for_session(
+                    fact_id, session_id, important_ids, preserve_important, result
+                )
 
-                    # Delete the fact
-                    delete_result = await self.delete_fact(fact_id)
-
-                    if delete_result.get("status") == "success":
-                        result["deleted_count"] += 1
-                    else:
-                        result["errors"].append({
-                            "fact_id": fact_id,
-                            "error": delete_result.get("message", "Unknown error")
-                        })
-
-                except Exception as e:
-                    result["errors"].append({
-                        "fact_id": fact_id,
-                        "error": str(e)
-                    })
-
-            # Clean up the session tracking keys
+            # Clean up session tracking keys
             await self._cleanup_session_tracking(session_id, fact_ids)
 
             logger.info(
