@@ -80,7 +80,7 @@ export const API_CONFIG = {
 
         return `http://${vncHost}:${vncPort}/vnc.html?autoconnect=true&password=${vncPassword}&resize=remote&reconnect=true&quality=9&compression=9`;
       });
-    } catch (error) {
+    } catch (_error) {
       // Synchronous fallback for legacy compatibility
       const envUrl = import.meta.env.VITE_DESKTOP_VNC_URL;
       if (envUrl) return envUrl;

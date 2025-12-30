@@ -345,7 +345,7 @@ class ChatManager {
       // If it's an ISO string, format it
       try {
         return new Date(timestamp).toLocaleTimeString();
-      } catch (error) {
+      } catch (_error) {
         return timestamp;
       }
     }

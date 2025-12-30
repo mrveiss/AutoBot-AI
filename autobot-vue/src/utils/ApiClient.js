@@ -5,7 +5,6 @@
 
 // MIGRATED: Using AppConfig.js for centralized configuration
 import appConfig from '@/config/AppConfig.js';
-import errorHandler from '@/utils/ErrorHandler.js';
 import { EnhancedFetch } from '@/utils/ApiCircuitBreaker.js';
 import { NetworkConstants } from '@/constants/network';
 import { createLogger } from '@/utils/debugUtils';
@@ -205,9 +204,6 @@ class ApiClient {
   // GET request with enhanced error handling and retries
   // Issue #671: Added configurable maxRetries option (default: 3)
   async get(endpoint, options = {}) {
-
-    // Log the full URL being accessed for debugging
-    const fullUrl = await this.getApiUrl(endpoint, options);
 
     let lastError;
     // Issue #671: Allow caller to reduce retries for faster failure on init calls

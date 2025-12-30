@@ -62,7 +62,7 @@ export class ApiClient {
   private async initializeBaseUrl(): Promise<void> {
     try {
       this.baseUrl = await appConfig.getApiUrl('');
-    } catch (error) {
+    } catch (_error) {
       logger.warn('[ApiClient.ts] AppConfig initialization failed, using NetworkConstants fallback');
       // Use NetworkConstants instead of hardcoded IP
       this.baseUrl = `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`;

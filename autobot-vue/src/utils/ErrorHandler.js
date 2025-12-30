@@ -253,7 +253,7 @@ class ErrorHandler {
           // Fail silently for error reporting errors
         });
       }
-    } catch (e) {
+    } catch (_e) {
       // Fail silently - don't let error reporting break the app
     }
   }

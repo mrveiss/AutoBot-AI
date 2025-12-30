@@ -12,6 +12,6 @@ if (typeof window !== 'undefined') {
   window.chunkTest = {
     runComprehensive,
     quickValidation: quickChunkValidation,
-    testComponents: (components) => Promise.resolve(true)
+    testComponents: (_components) => Promise.resolve(true)
   };
 }

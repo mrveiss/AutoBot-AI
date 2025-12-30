@@ -371,7 +371,7 @@ class OptimizedHealthMonitor {
     /**
      * Event handlers
      */
-    onErrorDetected(event) {
+    onErrorDetected(_event) {
         this.healthStatus.frontend = 'degraded';
         this.updateOverallHealth();
         this.notifyHealthChange();

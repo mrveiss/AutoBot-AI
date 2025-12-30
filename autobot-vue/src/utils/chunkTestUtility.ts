@@ -32,17 +32,17 @@ export async function testComponentChunkLoading(components: string[]): Promise<C
       const startTime = Date.now()
 
       // Test based on component type
-      let module: any
+      let _module: any
 
       if (component.includes('View')) {
         // Test view components
-        module = await import(`@/views/${component}.vue`)
+        _module = await import(`@/views/${component}.vue`)
       } else if (component.includes('Component')) {
         // Test utility components
-        module = await import(`@/components/${component}.vue`)
+        _module = await import(`@/components/${component}.vue`)
       } else {
         // Try dynamic import
-        module = await import(`@/components/${component}.vue`)
+        _module = await import(`@/components/${component}.vue`)
       }
 
       const loadTime = Date.now() - startTime
@@ -94,7 +94,7 @@ export async function testAsyncComponentErrorRecovery(): Promise<boolean> {
     const { AsyncComponentErrorRecovery } = await import('./asyncComponentHelpers')
 
     // Test error recovery statistics
-    const stats = AsyncComponentErrorRecovery.getStats()
+    const _stats = AsyncComponentErrorRecovery.getStats()
 
     // Test marking components as failed and recovering
     AsyncComponentErrorRecovery.markAsFailed('TestComponent')

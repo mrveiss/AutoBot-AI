@@ -119,7 +119,7 @@ class ApiCircuitBreaker {
    */
   getStatus() {
     const now = Date.now();
-    const windowStart = now - this.monitoringWindow;
+    const _windowStart = now - this.monitoringWindow; // Available for future time-windowed metrics
     
     return {
       state: this.state,
