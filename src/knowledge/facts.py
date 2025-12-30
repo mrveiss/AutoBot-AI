@@ -372,7 +372,12 @@ class FactsMixin:
             )
 
             logger.info("Vectorized existing fact %s", fact_id)
-            return {"status": "success", "message": "Fact vectorized successfully"}
+            return {
+                "status": "success",
+                "message": "Fact vectorized successfully",
+                "vector_indexed": True,
+                "fact_id": fact_id,
+            }
 
         except Exception as e:
             logger.error("Failed to vectorize fact %s: %s", fact_id, e)

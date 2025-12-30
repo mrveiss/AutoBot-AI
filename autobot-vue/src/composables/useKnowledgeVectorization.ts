@@ -19,6 +19,7 @@ export type VectorizationStatus = 'vectorized' | 'pending' | 'failed' | 'unknown
 
 export interface DocumentVectorizationState {
   documentId: string
+  name?: string
   status: VectorizationStatus
   progress?: number
   error?: string
@@ -145,10 +146,16 @@ export function useKnowledgeVectorization() {
     documentId: string,
     status: VectorizationStatus,
     progress?: number,
-    error?: string
+    error?: string,
+    name?: string
   ) => {
+    // Preserve existing name if not provided
+    const existingState = documentStates.value.get(documentId)
+    const documentName = name || existingState?.name
+
     documentStates.value.set(documentId, {
       documentId,
+      name: documentName,
       status,
       progress,
       error,
