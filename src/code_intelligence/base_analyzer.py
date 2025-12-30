@@ -369,6 +369,54 @@ class MultiLanguageAnalyzer:
 
         return result
 
+    def _collect_files_to_analyze(
+        self,
+        directory: Path,
+        recursive: bool,
+        exclude_patterns: Optional[List[str]],
+    ) -> List[Path]:
+        """Collect files to analyze after applying exclusion patterns (Issue #665: extracted helper)."""
+        # Default exclusions
+        default_excludes = [
+            "**/node_modules/**",
+            "**/__pycache__/**",
+            "**/.venv/**",
+            "**/venv/**",
+            "**/.git/**",
+            "**/dist/**",
+            "**/build/**",
+            "**/*.min.js",
+            "**/*.min.css",
+        ]
+        all_excludes = set((exclude_patterns or []) + default_excludes)
+
+        pattern = "**/*" if recursive else "*"
+        files_to_analyze = []
+
+        for file_path in directory.glob(pattern):
+            if not file_path.is_file():
+                continue
+
+            # Check exclusions
+            excluded = any(file_path.match(exclude) for exclude in all_excludes)
+            if excluded:
+                continue
+
+            # Check if we have an analyzer for this file
+            if self.get_analyzers_for_file(file_path):
+                files_to_analyze.append(file_path)
+
+        return files_to_analyze
+
+    def _aggregate_file_results(
+        self, result: "AnalysisResult", file_result: "AnalysisResult"
+    ) -> None:
+        """Aggregate file analysis results into overall result (Issue #665: extracted helper)."""
+        result.files_analyzed += file_result.files_analyzed
+        result.errors.extend(file_result.errors)
+        for issue in file_result.issues:
+            result.add_issue(issue)
+
     def analyze_directory(
         self,
         directory: Path,
@@ -389,55 +437,15 @@ class MultiLanguageAnalyzer:
         start_time = time.time()
 
         result = AnalysisResult()
-        exclude_patterns = exclude_patterns or []
-
-        # Default exclusions
-        default_excludes = [
-            "**/node_modules/**",
-            "**/__pycache__/**",
-            "**/.venv/**",
-            "**/venv/**",
-            "**/.git/**",
-            "**/dist/**",
-            "**/build/**",
-            "**/*.min.js",
-            "**/*.min.css",
-        ]
-        all_excludes = set(exclude_patterns + default_excludes)
-
-        # Collect files to analyze
-        pattern = "**/*" if recursive else "*"
-        files_to_analyze = []
-
-        for file_path in directory.glob(pattern):
-            if not file_path.is_file():
-                continue
-
-            # Check exclusions
-            excluded = False
-            for exclude in all_excludes:
-                if file_path.match(exclude):
-                    excluded = True
-                    break
-
-            if excluded:
-                continue
-
-            # Check if we have an analyzer for this file
-            if self.get_analyzers_for_file(file_path):
-                files_to_analyze.append(file_path)
+        files_to_analyze = self._collect_files_to_analyze(
+            directory, recursive, exclude_patterns
+        )
 
         logger.info("Analyzing %d files in %s", len(files_to_analyze), directory)
 
-        # Analyze each file
         for file_path in files_to_analyze:
             file_result = self.analyze_file(file_path)
-
-            result.files_analyzed += file_result.files_analyzed
-            result.errors.extend(file_result.errors)
-
-            for issue in file_result.issues:
-                result.add_issue(issue)
+            self._aggregate_file_results(result, file_result)
 
         result.analysis_time_ms = (time.time() - start_time) * 1000
 
