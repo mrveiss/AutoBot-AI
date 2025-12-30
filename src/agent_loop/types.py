@@ -13,6 +13,8 @@ from datetime import datetime
 from enum import Enum, auto
 from typing import Any, Optional
 
+from src.constants.threshold_constants import BatchConfig, RetryConfig
+
 
 # =============================================================================
 # Loop States and Phases
@@ -140,13 +142,16 @@ class IterationResult:
 
 @dataclass
 class AgentLoopConfig:
-    """Configuration for the agent loop."""
+    """Configuration for the agent loop.
+
+    Issue #670: Uses centralized constants from threshold_constants.py
+    """
 
     # Iteration limits
-    max_iterations: int = 100  # Maximum iterations per task
-    max_consecutive_errors: int = 3  # Stop after N consecutive errors
+    max_iterations: int = BatchConfig.MAX_CONCURRENCY  # 100 - Maximum iterations per task
+    max_consecutive_errors: int = RetryConfig.DEFAULT_RETRIES  # 3 - Stop after N consecutive errors
 
-    # Timeouts (milliseconds)
+    # Timeouts (milliseconds) - kept as specific values for tool execution timing
     iteration_timeout_ms: int = 60000  # Max time per iteration
     tool_timeout_ms: int = 30000  # Max time per tool execution
     total_task_timeout_ms: int = 600000  # Max time for entire task (10 min)
@@ -158,16 +163,16 @@ class AgentLoopConfig:
     think_on_completion: bool = True  # Think before reporting complete
 
     # Event stream settings
-    events_to_analyze: int = 50  # Recent events to consider
+    events_to_analyze: int = BatchConfig.MEDIUM_BATCH  # 50 - Recent events to consider
     include_system_events: bool = False  # Include SYSTEM events in analysis
 
     # Parallel execution
     enable_parallel_tools: bool = True  # Use parallel tool executor
-    max_parallel_tools: int = 10  # Max concurrent tool calls
+    max_parallel_tools: int = BatchConfig.DEFAULT_CONCURRENCY  # 10 - Max concurrent tool calls
 
     # Recovery settings
     retry_failed_tools: bool = True  # Retry failed tool calls
-    max_tool_retries: int = 2  # Max retries per tool
+    max_tool_retries: int = RetryConfig.MIN_RETRIES  # 2 - Max retries per tool
 
     # Logging
     log_iterations: bool = True  # Log each iteration

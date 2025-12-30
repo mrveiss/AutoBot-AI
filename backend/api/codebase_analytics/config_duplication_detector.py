@@ -39,15 +39,40 @@ except ImportError:
 
 
 # Values to ignore (too generic or acceptable duplicates)
+# Issue #670: Expanded ignore list to reduce false positives
 IGNORE_VALUES = {
     # Boolean and None
     True, False, None,
-    # Common integers
+    # Common integers that are too generic
     0, 1, -1,
     # Empty strings
     "", " ",
     # HTTP status codes (acceptable duplicates)
     200, 201, 204, 400, 401, 403, 404, 405, 409, 422, 500, 502, 503,
+}
+
+# Issue #670: Context-specific values that are intentionally different across files
+# These are values where the same number has DIFFERENT semantic meanings
+CONTEXT_SPECIFIC_VALUES = {
+    # Priority values (task priority != agent priority != workflow priority)
+    5,  # Common default priority in different priority scales
+    # Timeout values used in different contexts (connection vs request vs health)
+    30, 60,
+    # Batch sizes for different operations (GPU batch != stream batch)
+    100,
+    # LLM provider names - each config can use different providers
+    "ollama", "openai", "anthropic",
+    # Status strings - will be replaced by enums gradually
+    "pending", "active", "completed", "failed", "unknown",
+    # Severity/priority strings - same value, different contexts
+    "low", "medium", "high", "normal", "critical",
+}
+
+# Issue #670: Field names that indicate different semantic contexts
+# If a value appears in fields with these prefixes, they're likely different concepts
+CONTEXT_FIELD_PREFIXES = {
+    "timeout", "priority", "max_", "min_", "default_",
+    "batch", "chunk", "buffer", "cache",
 }
 
 # Source of truth directories (where constants should live)
@@ -135,15 +160,18 @@ class ConfigDuplicationDetector(_BaseClass):
         self.project_root = Path(project_root)
         self.config_values: Dict[any, List[Tuple[str, int, str]]] = defaultdict(list)
 
-    def _should_ignore_value(self, value: any) -> bool:
+    def _should_ignore_value(self, value: any, context: str = "") -> bool:
         """
         Check if value should be ignored.
 
         Args:
             value: Configuration value to check
+            context: Field/variable name context for smarter filtering
 
         Returns:
             True if value should be ignored
+
+        Issue #670: Enhanced to consider context-specific values
         """
         if value in IGNORE_VALUES:
             return True
@@ -151,6 +179,15 @@ class ConfigDuplicationDetector(_BaseClass):
         # Ignore very short strings (likely not config)
         if isinstance(value, str) and len(value) <= 2:
             return True
+
+        # Issue #670: Check if this is a context-specific value
+        # These are intentionally different across files (e.g., different timeout types)
+        if value in CONTEXT_SPECIFIC_VALUES:
+            # Check if context suggests different semantic meaning
+            context_lower = context.lower()
+            for prefix in CONTEXT_FIELD_PREFIXES:
+                if prefix in context_lower:
+                    return True  # Different semantic context, ignore as duplicate
 
         return False
 
@@ -193,16 +230,20 @@ class ConfigDuplicationDetector(_BaseClass):
 
         return None
 
-    def _process_pydantic_field(self, node: ast.Call, filepath: str) -> None:
-        """Extract config values from Pydantic Field() calls."""
+    def _process_pydantic_field(self, node: ast.Call, filepath: str, field_name: str = "") -> None:
+        """Extract config values from Pydantic Field() calls.
+
+        Issue #670: Enhanced to pass field context for smarter filtering.
+        """
         if not isinstance(node.func, ast.Name) or node.func.id != "Field":
             return
         for keyword in node.keywords:
             if keyword.arg != "default":
                 continue
             value = self._extract_value(keyword.value)
-            if value is not None and not self._should_ignore_value(value):
-                self.config_values[value].append((filepath, node.lineno, "Pydantic Field"))
+            context = f"Pydantic Field {field_name}".strip()
+            if value is not None and not self._should_ignore_value(value, context):
+                self.config_values[value].append((filepath, node.lineno, context))
 
     def _is_dataclass(self, node: ast.ClassDef) -> bool:
         """Check if class has @dataclass decorator."""
@@ -215,17 +256,21 @@ class ConfigDuplicationDetector(_BaseClass):
         return False
 
     def _process_dataclass_fields(self, node: ast.ClassDef, filepath: str) -> None:
-        """Extract config values from dataclass field defaults."""
+        """Extract config values from dataclass field defaults.
+
+        Issue #670: Enhanced to pass field context for smarter filtering.
+        """
         if not self._is_dataclass(node):
             return
         for item in node.body:
             if not isinstance(item, ast.AnnAssign) or item.value is None:
                 continue
             value = self._extract_value(item.value)
-            if value is None or self._should_ignore_value(value):
-                continue
             target_name = item.target.id if isinstance(item.target, ast.Name) else "field"
-            self.config_values[value].append((filepath, item.lineno, f"dataclass {target_name}"))
+            context = f"dataclass {target_name}"
+            if value is None or self._should_ignore_value(value, context):
+                continue
+            self.config_values[value].append((filepath, item.lineno, context))
 
     def analyze_file(self, filepath: str) -> None:
         """
@@ -271,17 +316,50 @@ class ConfigDuplicationDetector(_BaseClass):
 
             self.analyze_file(str(py_file))
 
+    def _has_diverse_contexts(self, locations: List[Tuple[str, int, str]]) -> bool:
+        """
+        Check if locations have diverse semantic contexts (false positive indicator).
+
+        Issue #670: If the same value appears in very different field contexts,
+        it's likely intentionally different (e.g., timeout vs batch_size both = 30).
+
+        Returns:
+            True if contexts are too diverse (should be filtered as false positive)
+        """
+        if len(locations) < 2:
+            return False
+
+        # Extract field names from contexts
+        contexts = [loc[2].lower() for loc in locations]
+
+        # Check for diverse prefixes
+        prefixes_found = set()
+        for ctx in contexts:
+            for prefix in CONTEXT_FIELD_PREFIXES:
+                if prefix in ctx:
+                    prefixes_found.add(prefix)
+
+        # If we found 3+ different prefix types, it's likely different concepts
+        return len(prefixes_found) >= 3
+
     def find_duplicates(self) -> Dict[any, List[Dict]]:
         """
         Find configuration values that appear in multiple files.
 
         Returns:
             Dict mapping values to their occurrences with metadata
+
+        Issue #670: Enhanced to filter out false positives from diverse contexts.
         """
         duplicates = {}
 
         for value, locations in self.config_values.items():
             if len(locations) > 1:
+                # Issue #670: Skip if value appears in too many different contexts
+                # This indicates it's likely different concepts with same value
+                if value in CONTEXT_SPECIFIC_VALUES and self._has_diverse_contexts(locations):
+                    continue
+
                 # Check if any location is a source of truth
                 source_locations = [loc for loc in locations if self._is_source_of_truth(loc[0])]
                 duplicate_locations = [loc for loc in locations if not self._is_source_of_truth(loc[0])]

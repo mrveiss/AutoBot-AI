@@ -14,6 +14,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Optional
 
+from src.constants.status_enums import TaskStatus
+from src.constants.threshold_constants import BatchConfig, RetryConfig
 from src.events.types import create_action_event, create_observation_event
 from src.tools.parallel.analyzer import DependencyAnalyzer
 from src.tools.parallel.types import DependencyType, ExecutionMetrics, ToolCall
@@ -28,13 +30,16 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ParallelExecutorConfig:
-    """Parallel executor configuration"""
+    """Parallel executor configuration.
 
-    max_parallel_calls: int = 10
-    per_call_timeout_ms: int = 30000
-    group_timeout_ms: int = 60000
+    Issue #670: Uses centralized constants from threshold_constants.py
+    """
+
+    max_parallel_calls: int = BatchConfig.DEFAULT_CONCURRENCY  # 10
+    per_call_timeout_ms: int = 30000  # Tool-specific timeout, kept as-is
+    group_timeout_ms: int = 60000  # Group-specific timeout, kept as-is
     retry_failed: bool = True
-    max_retries: int = 2
+    max_retries: int = RetryConfig.MIN_RETRIES  # 2
     collect_metrics: bool = True
 
 
@@ -56,16 +61,19 @@ class ExecutionGraph:
         self.dependencies[call.call_id] = call.depends_on.copy()
 
     def get_ready_calls(self) -> list[ToolCall]:
-        """Get calls that are ready to execute (all dependencies satisfied)"""
+        """Get calls that are ready to execute (all dependencies satisfied).
+
+        Issue #670: Uses TaskStatus enum for status comparisons.
+        """
         completed = {
             call_id
             for call_id, call in self.calls.items()
-            if call.status == "completed"
+            if call.status == TaskStatus.COMPLETED.value
         }
 
         ready = []
         for call_id, call in self.calls.items():
-            if call.status != "pending":
+            if call.status != TaskStatus.PENDING.value:
                 continue
 
             deps = self.dependencies.get(call_id, [])
@@ -77,22 +85,22 @@ class ExecutionGraph:
     def mark_completed(self, call_id: str, result: Any) -> None:
         """Mark a call as completed"""
         if call_id in self.calls:
-            self.calls[call_id].status = "completed"
+            self.calls[call_id].status = TaskStatus.COMPLETED.value
             self.calls[call_id].result = result
 
     def mark_failed(self, call_id: str, error: str) -> None:
         """Mark a call as failed"""
         if call_id in self.calls:
-            self.calls[call_id].status = "failed"
+            self.calls[call_id].status = TaskStatus.FAILED.value
             self.calls[call_id].error = error
 
     def get_failed_calls(self) -> list[ToolCall]:
         """Get all failed calls"""
-        return [c for c in self.calls.values() if c.status == "failed"]
+        return [c for c in self.calls.values() if c.status == TaskStatus.FAILED.value]
 
     def get_completed_calls(self) -> list[ToolCall]:
         """Get all completed calls"""
-        return [c for c in self.calls.values() if c.status == "completed"]
+        return [c for c in self.calls.values() if c.status == TaskStatus.COMPLETED.value]
 
 
 # =============================================================================
@@ -160,8 +168,8 @@ class ParallelToolExecutor:
         except asyncio.TimeoutError:
             logger.error("Group %d timed out", group_idx)
             for call in group:
-                if call.status == "running":
-                    call.status = "failed"
+                if call.status == TaskStatus.RUNNING.value:
+                    call.status = TaskStatus.FAILED.value
                     call.error = "Timeout"
                     results[call.call_id] = {"error": "Timeout"}
             return
@@ -178,7 +186,7 @@ class ParallelToolExecutor:
         """Process results from a group execution."""
         for call, result in zip(group, group_results):
             if isinstance(result, Exception):
-                call.status = "failed"
+                call.status = TaskStatus.FAILED.value
                 call.error = str(result)
                 results[call.call_id] = {"error": str(result)}
 
@@ -187,7 +195,7 @@ class ParallelToolExecutor:
                     if retry_result is not None:
                         results[call.call_id] = retry_result
             else:
-                call.status = "completed"
+                call.status = TaskStatus.COMPLETED.value
                 call.result = result
                 results[call.call_id] = result
 
@@ -275,7 +283,7 @@ class ParallelToolExecutor:
         task_id: Optional[str],
     ) -> Any:
         """Execute a single tool call with event tracking"""
-        call.status = "running"
+        call.status = TaskStatus.RUNNING.value
 
         # Publish ACTION event
         action_event = None
@@ -356,12 +364,12 @@ class ParallelToolExecutor:
         )
 
         # Reset call status
-        call.status = "pending"
+        call.status = TaskStatus.PENDING.value
         call.error = None
 
         try:
             result = await self._execute_single(call, task_id)
-            call.status = "completed"
+            call.status = TaskStatus.COMPLETED.value
             call.result = result
             return result
         except Exception as e:

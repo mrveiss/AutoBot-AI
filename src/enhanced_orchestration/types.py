@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, FrozenSet, List, Optional, Set
 
+from src.constants.status_enums import TaskStatus
 from src.constants.threshold_constants import RetryConfig, TimingConstants
 
 # Module-level frozenset for fallback tier checks
@@ -57,7 +58,7 @@ class AgentTask:
     max_retries: int = RetryConfig.DEFAULT_RETRIES
     capabilities_required: Set[AgentCapability] = field(default_factory=set)
     outputs: Optional[Dict[str, Any]] = None
-    status: str = "pending"  # pending, running, completed, failed
+    status: str = TaskStatus.PENDING.value  # Issue #670: Use centralized enum
     error: Optional[str] = None
     start_time: Optional[float] = None
     end_time: Optional[float] = None
@@ -66,17 +67,17 @@ class AgentTask:
     def start_execution(self) -> None:
         """Mark task as started (Issue #372 - reduces feature envy)."""
         self.start_time = time.time()
-        self.status = "running"
+        self.status = TaskStatus.RUNNING.value
 
     def complete_execution(self, result: Dict[str, Any]) -> None:
         """Mark task as completed with result (Issue #372 - reduces feature envy)."""
         self.end_time = time.time()
-        self.status = "completed"
+        self.status = TaskStatus.COMPLETED.value
         self.outputs = result
 
     def fail_execution(self, error_msg: str) -> None:
         """Mark task as failed with error (Issue #372 - reduces feature envy)."""
-        self.status = "failed"
+        self.status = TaskStatus.FAILED.value
         self.error = error_msg
 
     def get_execution_time(self) -> float:

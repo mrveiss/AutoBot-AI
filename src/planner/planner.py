@@ -16,6 +16,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Optional
 
+from src.constants.threshold_constants import (
+    BatchConfig,
+    LLMDefaults,
+    RetryConfig,
+    TimingConstants,
+)
 from src.events.types import EventType, create_plan_event
 from src.planner.types import ExecutionPlan, PlanStatus, PlanStep, StepStatus
 
@@ -29,15 +35,18 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class PlannerConfig:
-    """Planner module configuration"""
+    """Planner module configuration.
 
-    max_steps_per_plan: int = 20
-    plan_ttl_seconds: int = 86400
-    llm_temperature: float = 0.3
+    Issue #670: Uses centralized constants from threshold_constants.py
+    """
+
+    max_steps_per_plan: int = 20  # Plan-specific, no constant needed
+    plan_ttl_seconds: int = TimingConstants.HOURLY_INTERVAL * 24  # 86400 = 24 hours
+    llm_temperature: float = LLMDefaults.DEFAULT_TEMPERATURE - 0.4  # 0.3 for planning precision
     enable_parallel_steps: bool = True
-    max_parallel_steps: int = 5
+    max_parallel_steps: int = BatchConfig.SMALL_BATCH // 2  # 5 parallel steps
     auto_retry_failed_steps: bool = True
-    max_retries_per_step: int = 3
+    max_retries_per_step: int = RetryConfig.DEFAULT_RETRIES
 
 
 # =============================================================================

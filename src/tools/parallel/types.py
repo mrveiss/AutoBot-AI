@@ -7,10 +7,12 @@ Parallel Execution Type Definitions
 Data structures for tool calls and dependency tracking.
 """
 
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any, Optional
-import uuid
+
+from src.constants.status_enums import TaskStatus
 
 
 class DependencyType(Enum):
@@ -39,8 +41,8 @@ class ToolCall:
     depends_on: list[str] = field(default_factory=list)  # Call IDs
     dependency_types: dict[str, DependencyType] = field(default_factory=dict)
 
-    # Execution state
-    status: str = "pending"  # pending, running, completed, failed
+    # Execution state - Issue #670: Use centralized enum
+    status: str = TaskStatus.PENDING.value
     result: Any = None
     error: Optional[str] = None
     execution_time_ms: float = 0.0
@@ -75,7 +77,7 @@ class ToolCall:
                 k: DependencyType[v]
                 for k, v in data.get("dependency_types", {}).items()
             },
-            status=data.get("status", "pending"),
+            status=data.get("status", TaskStatus.PENDING.value),
             result=data.get("result"),
             error=data.get("error"),
             execution_time_ms=data.get("execution_time_ms", 0.0),

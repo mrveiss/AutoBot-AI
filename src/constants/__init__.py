@@ -21,6 +21,14 @@ from .network_constants import (  # Legacy compatibility exports
     get_network_config,
 )
 from .path_constants import PATH
+from .status_enums import (  # Issue #670: Centralized status enums
+    HealthStatus,
+    LLMProvider,
+    OperationOutcome,
+    Priority,
+    Severity,
+    TaskStatus,
+)
 from .threshold_constants import (  # Issue #318: Threshold and timing constants
     AgentThresholds,
     BatchConfig,
@@ -75,4 +83,11 @@ __all__ = [
     "ServiceDiscoveryConfig",
     "FileWatcherConfig",
     "StringParsingConstants",  # Issue #380
+    # Issue #670: Status enums
+    "TaskStatus",
+    "Severity",
+    "Priority",
+    "LLMProvider",
+    "OperationOutcome",
+    "HealthStatus",
 ]
