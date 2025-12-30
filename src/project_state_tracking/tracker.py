@@ -127,53 +127,84 @@ class EnhancedProjectStateTracker:
         except Exception as e:
             logger.error("Error loading state: %s", e)
 
-    async def capture_state_snapshot(self) -> StateSnapshot:
-        """Capture current system state."""
-        try:
-            # Get phase validation results
-            validation_results = await self.validator.validate_all_phases()
+    def _extract_phase_states(
+        self, validation_results: Dict[str, Any]
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Extract phase states from validation results (Issue #665: extracted helper).
 
-            # Get current capabilities
+        Args:
+            validation_results: Results from validator.validate_all_phases()
+
+        Returns:
+            Dictionary mapping phase names to their state data
+        """
+        phase_states = {}
+        for phase_name, phase_data in validation_results["phases"].items():
+            phase_states[phase_name] = {
+                "completion_percentage": phase_data["completion_percentage"],
+                "status": phase_data["status"],
+                "missing_items": phase_data.get("missing_items", []),
+            }
+        return phase_states
+
+    async def _calculate_snapshot_metrics(
+        self,
+        phase_states: Dict[str, Dict[str, Any]],
+        capabilities: Dict[str, Any],
+        validation_results: Dict[str, Any],
+    ) -> Dict[TrackingMetric, Any]:
+        """
+        Calculate tracking metrics for snapshot (Issue #665: extracted helper).
+
+        Args:
+            phase_states: Extracted phase state data
+            capabilities: System capabilities from progression manager
+            validation_results: Results from validator
+
+        Returns:
+            Dictionary of tracking metrics
+        """
+        return {
+            TrackingMetric.PHASE_COMPLETION: len(
+                [p for p in phase_states.values() if p["completion_percentage"] >= 95.0]
+            ),
+            TrackingMetric.CAPABILITY_COUNT: len(capabilities["active_capabilities"]),
+            TrackingMetric.VALIDATION_SCORE: validation_results["overall_assessment"][
+                "system_maturity_score"
+            ],
+            TrackingMetric.SYSTEM_MATURITY: capabilities["system_maturity"],
+            TrackingMetric.ERROR_RATE: await get_error_rate(
+                self.redis_client, self._error_count
+            ),
+            TrackingMetric.PROGRESSION_VELOCITY: calculate_progression_velocity(
+                self.state_history
+            ),
+            TrackingMetric.USER_INTERACTIONS: await get_user_interactions_count(
+                self.redis_client, self._user_interaction_count
+            ),
+            TrackingMetric.API_CALLS: await get_api_calls_count(
+                self.redis_client, self._api_call_count
+            ),
+        }
+
+    async def capture_state_snapshot(self) -> StateSnapshot:
+        """
+        Capture current system state.
+
+        Issue #665: Refactored to use extracted helpers for phase extraction
+        and metrics calculation.
+        """
+        try:
+            # Get phase validation results and capabilities
+            validation_results = await self.validator.validate_all_phases()
             capabilities = self.progression_manager.get_current_system_capabilities()
 
-            # Get phase states
-            phase_states = {}
-            for phase_name, phase_data in validation_results["phases"].items():
-                phase_states[phase_name] = {
-                    "completion_percentage": phase_data["completion_percentage"],
-                    "status": phase_data["status"],
-                    "missing_items": phase_data.get("missing_items", []),
-                }
-
-            # Calculate metrics
-            metrics = {
-                TrackingMetric.PHASE_COMPLETION: len(
-                    [
-                        p
-                        for p in phase_states.values()
-                        if p["completion_percentage"] >= 95.0
-                    ]
-                ),
-                TrackingMetric.CAPABILITY_COUNT: len(
-                    capabilities["active_capabilities"]
-                ),
-                TrackingMetric.VALIDATION_SCORE: validation_results[
-                    "overall_assessment"
-                ]["system_maturity_score"],
-                TrackingMetric.SYSTEM_MATURITY: capabilities["system_maturity"],
-                TrackingMetric.ERROR_RATE: await get_error_rate(
-                    self.redis_client, self._error_count
-                ),
-                TrackingMetric.PROGRESSION_VELOCITY: calculate_progression_velocity(
-                    self.state_history
-                ),
-                TrackingMetric.USER_INTERACTIONS: await get_user_interactions_count(
-                    self.redis_client, self._user_interaction_count
-                ),
-                TrackingMetric.API_CALLS: await get_api_calls_count(
-                    self.redis_client, self._api_call_count
-                ),
-            }
+            # Extract phase states and calculate metrics (Issue #665: uses helpers)
+            phase_states = self._extract_phase_states(validation_results)
+            metrics = await self._calculate_snapshot_metrics(
+                phase_states, capabilities, validation_results
+            )
 
             # Get configuration
             config = self.progression_manager.config.copy()
