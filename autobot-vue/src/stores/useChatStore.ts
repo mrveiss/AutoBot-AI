@@ -61,6 +61,9 @@ export const useChatStore = defineStore('chat', () => {
   const currentSessionId = ref<string | null>(null)
   const isTyping = ref(false)
   const sidebarCollapsed = ref(false)
+  // Issue #671: Track initialization state for loading indicators
+  const isInitializing = ref(false)
+  const initializationError = ref<string | null>(null)
   const settings = ref<ChatSettings>({
     model: 'gpt-4',
     temperature: 0.7,
@@ -348,6 +351,23 @@ export const useChatStore = defineStore('chat', () => {
     isTyping.value = typing
   }
 
+  // Issue #671: Initialization state management for loading feedback
+  function setInitializing(value: boolean) {
+    isInitializing.value = value
+    if (value) {
+      // Clear any previous error when starting initialization
+      initializationError.value = null
+    }
+  }
+
+  function setInitializationError(error: string | null) {
+    initializationError.value = error
+    if (error) {
+      // Stop initializing when error occurs
+      isInitializing.value = false
+    }
+  }
+
   // Persistence helpers
   function exportSession(sessionId: string): ChatSession | null {
     return sessions.value.find(s => s.id === sessionId) || null
@@ -546,6 +566,9 @@ export const useChatStore = defineStore('chat', () => {
     isTyping,
     sidebarCollapsed,
     settings,
+    // Issue #671: Initialization state for loading indicators
+    isInitializing,
+    initializationError,
 
     // Computed
     currentSession,
@@ -568,6 +591,9 @@ export const useChatStore = defineStore('chat', () => {
     updateSettings,
     toggleSidebar,
     setTyping,
+    // Issue #671: Initialization state management
+    setInitializing,
+    setInitializationError,
     exportSession,
     importSession,
     syncSessionsWithBackend,

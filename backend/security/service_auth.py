@@ -92,26 +92,21 @@ class ServiceAuthManager:
         ).hexdigest()
         return signature
 
-    async def validate_signature(self, request: Request) -> Dict:
+    def _extract_auth_headers(
+        self, request: Request
+    ) -> tuple[str, str, str]:
         """
-        Validate request signature and return service information.
-
-        Security checks:
-        1. All required headers present
-        2. Timestamp within allowed window (prevents replay attacks)
-        3. Service exists in registry
-        4. HMAC signature matches expected value
+        Extract and validate presence of authentication headers (Issue #665: extracted helper).
 
         Args:
             request: FastAPI request object
 
         Returns:
-            Dict with service_id and timestamp
+            Tuple of (service_id, signature, timestamp_str)
 
         Raises:
-            HTTPException: 401 if authentication fails
+            HTTPException: If any required header is missing
         """
-        # Extract authentication headers
         service_id = request.headers.get("X-Service-ID")
         signature = request.headers.get("X-Service-Signature")
         timestamp_str = request.headers.get("X-Service-Timestamp")
@@ -126,7 +121,22 @@ class ServiceAuthManager:
             )
             raise_auth_error("AUTH_0002", "Missing required headers")
 
-        # Validate timestamp (prevent replay attacks)
+        return service_id, signature, timestamp_str
+
+    def _validate_timestamp(self, timestamp_str: str, service_id: str) -> int:
+        """
+        Validate timestamp format and check against replay attack window (Issue #665: extracted helper).
+
+        Args:
+            timestamp_str: Timestamp string from header
+            service_id: Service identifier for logging
+
+        Returns:
+            Validated timestamp as integer
+
+        Raises:
+            HTTPException: If timestamp is invalid or outside allowed window
+        """
         try:
             timestamp = int(timestamp_str)
         except ValueError:
@@ -148,13 +158,41 @@ class ServiceAuthManager:
                 f"Timestamp outside {self.timestamp_window}s window (diff: {time_diff}s)",
             )
 
-        # Get service key from Redis
+        return timestamp
+
+    async def validate_signature(self, request: Request) -> Dict:
+        """
+        Validate request signature and return service information.
+
+        Issue #665: Refactored to use extracted helpers for header extraction
+        and timestamp validation.
+
+        Security checks:
+        1. All required headers present
+        2. Timestamp within allowed window (prevents replay attacks)
+        3. Service exists in registry
+        4. HMAC signature matches expected value
+
+        Args:
+            request: FastAPI request object
+
+        Returns:
+            Dict with service_id and timestamp
+
+        Raises:
+            HTTPException: 401 if authentication fails
+        """
+        # Step 1-2: Extract and validate headers + timestamp (Issue #665: uses helpers)
+        service_id, signature, timestamp_str = self._extract_auth_headers(request)
+        timestamp = self._validate_timestamp(timestamp_str, service_id)
+
+        # Step 3: Get service key from Redis
         service_key = await self.get_service_key(service_id)
         if not service_key:
             logger.warning("Unknown service ID", service_id=service_id)
             raise_auth_error("AUTH_0004", f"Unknown service: {service_id}")
 
-        # Validate HMAC signature
+        # Step 4: Validate HMAC signature
         expected_sig = self.generate_signature(
             service_id, service_key, request.method, request.url.path, timestamp
         )

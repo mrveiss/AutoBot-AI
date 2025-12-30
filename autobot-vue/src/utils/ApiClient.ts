@@ -188,9 +188,12 @@ export class ApiClient {
   /**
    * Get list of chat sessions
    * Backend endpoint: GET /api/chats
+   * Issue #671: Added optional options parameter for timeout control
    */
-  async getChatList(): Promise<any> {
-    const response = await this.get('/api/chats');
+  async getChatList(options: RequestOptions = {}): Promise<any> {
+    // Issue #671: Use short timeout for init calls to prevent UI freezing
+    const timeout = options.timeout || appConfig.getTimeout('short');
+    const response = await this.get('/api/chats', { ...options, timeout });
     return response.json();
   }
 
@@ -287,8 +290,14 @@ export class ApiClient {
   // OTHER API METHODS
   // ==================================================================================
 
-  async getSettings(): Promise<any> {
-    const response = await this.get('/api/settings/');
+  /**
+   * Get user settings
+   * Issue #671: Added optional options parameter for timeout control
+   */
+  async getSettings(options: RequestOptions = {}): Promise<any> {
+    // Issue #671: Use short timeout for init calls
+    const timeout = options.timeout || appConfig.getTimeout('short');
+    const response = await this.get('/api/settings/', { ...options, timeout });
     return response.json();
   }
 

@@ -122,6 +122,26 @@ class CommandExecutor:
                 f"[CANCEL] Failed to log cancellation to chat: {log_error}"
             )
 
+    def _force_close_pty_session(self, pty_session_id: str) -> bool:
+        """
+        Forcefully close PTY session with SIGKILL (Issue #665: extracted helper).
+
+        Args:
+            pty_session_id: PTY session identifier
+
+        Returns:
+            True if closed successfully, False otherwise
+        """
+        from backend.services.simple_pty import simple_pty_manager
+
+        try:
+            simple_pty_manager.close_session(pty_session_id)
+            logger.info(f"[CANCEL] Forcefully closed PTY session {pty_session_id}")
+            return True
+        except Exception as sigkill_error:
+            logger.error(f"[CANCEL] Failed to forcefully close PTY: {sigkill_error}")
+            return False
+
     def _write_to_pty(self, session: AgentTerminalSession, text: str) -> bool:
         """
         Write text to PTY terminal display.
@@ -189,6 +209,8 @@ class CommandExecutor:
         """
         Cancel a running command with graceful shutdown.
 
+        Issue #665: Refactored to use extracted helpers for SIGINT and SIGKILL operations.
+
         CRITICAL FIX (Critical #3): Proper cleanup for timeouts to prevent orphaned processes.
 
         Process:
@@ -232,22 +254,13 @@ class CommandExecutor:
             # Step 2: Wait for graceful shutdown
             await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
 
-            # Step 3: Check if process is still running
+            # Step 3: Check if process is still running (Issue #665: uses helper)
             if pty.is_alive():
                 logger.warning(
                     "[CANCEL] Process still running after SIGINT, "
                     "attempting forceful termination (SIGKILL)"
                 )
-                try:
-                    # Close the PTY session forcefully
-                    simple_pty_manager.close_session(session.pty_session_id)
-                    logger.info(
-                        f"[CANCEL] Forcefully closed PTY session {session.pty_session_id}"
-                    )
-                except Exception as sigkill_error:
-                    logger.error(
-                        f"[CANCEL] Failed to forcefully close PTY: {sigkill_error}"
-                    )
+                if not self._force_close_pty_session(session.pty_session_id):
                     return False
             else:
                 logger.info("[CANCEL] Process terminated gracefully after SIGINT")
@@ -401,6 +414,62 @@ class CommandExecutor:
 
         return 0  # Assume success if no errors detected
 
+    async def _poll_for_current_output(
+        self, session: AgentTerminalSession
+    ) -> str:
+        """
+        Poll chat history for current terminal output (Issue #665: extracted helper).
+
+        Args:
+            session: Agent terminal session
+
+        Returns:
+            Current terminal output or empty string
+        """
+        if not session.conversation_id or not self.chat_history_manager:
+            return ""
+
+        try:
+            messages = await self.chat_history_manager.get_session_messages(
+                session_id=session.conversation_id, limit=5
+            )
+            return _extract_terminal_output(messages)
+        except Exception as e:
+            logger.warning("[PTY_EXEC] Polling error: %s", e)
+            return ""
+
+    async def _handle_poll_timeout(
+        self, session: AgentTerminalSession, elapsed: float, last_output: str
+    ) -> str:
+        """
+        Handle polling timeout with command cancellation (Issue #665: extracted helper).
+
+        CRITICAL FIX (Critical #3): Cancels command to prevent orphaned processes.
+
+        Args:
+            session: Agent terminal session
+            elapsed: Elapsed time in seconds
+            last_output: Last captured output
+
+        Returns:
+            Last captured output
+        """
+        logger.warning(
+            f"[PTY_EXEC] Polling timeout reached ({elapsed:.2f}s), "
+            f"cancelling command to prevent orphaned processes"
+        )
+
+        cancelled = await self.cancel_command(session, reason="timeout")
+        if cancelled:
+            logger.info("[PTY_EXEC] Successfully cancelled command after timeout")
+        else:
+            logger.error(
+                "[PTY_EXEC] Failed to cancel command after timeout - "
+                "may have orphaned process"
+            )
+
+        return last_output
+
     async def _intelligent_poll_output(
         self,
         session: AgentTerminalSession,
@@ -409,6 +478,8 @@ class CommandExecutor:
     ) -> str:
         """
         Intelligent polling system with adaptive timeouts and output stability detection.
+
+        Issue #665: Refactored to use extracted helpers for polling and timeout handling.
 
         CRITICAL FIX (Critical #3): Cancels command on timeout to prevent orphaned processes.
         Phase 2 Implementation: Polls chat history with progressive backoff until
@@ -437,56 +508,30 @@ class CommandExecutor:
         )
 
         while (time.time() - start_time) < timeout:
-            try:
-                current_output = ""
+            # Poll for current output (Issue #665: uses helper)
+            current_output = await self._poll_for_current_output(session)
 
-                if session.conversation_id:
-                    messages = await self.chat_history_manager.get_session_messages(
-                        session_id=session.conversation_id, limit=5
+            # Check output stability
+            if current_output and current_output == last_output:
+                stable_duration = time.time() - last_change_time
+                if stable_duration >= stability_threshold:
+                    logger.info(
+                        f"[PTY_EXEC] Output stabilized after {stable_duration:.2f}s, "
+                        f"total elapsed: {time.time() - start_time:.2f}s"
                     )
-                    # Find most recent terminal output (Issue #315: uses helper)
-                    current_output = _extract_terminal_output(messages)
-
-                # Check output stability
-                if current_output and current_output == last_output:
-                    stable_duration = time.time() - last_change_time
-                    if stable_duration >= stability_threshold:
-                        logger.info(
-                            f"[PTY_EXEC] Output stabilized after {stable_duration:.2f}s, "
-                            f"total elapsed: {time.time() - start_time:.2f}s"
-                        )
-                        return current_output
-                elif current_output != last_output:
-                    last_output = current_output
-                    last_change_time = time.time()
-                    # Reset interval on new output
-                    poll_interval = 0.1
-
-            except Exception as e:
-                logger.warning("[PTY_EXEC] Polling error: %s", e)
+                    return current_output
+            elif current_output != last_output:
+                last_output = current_output
+                last_change_time = time.time()
+                poll_interval = 0.1  # Reset interval on new output
 
             # Progressive backoff
             await asyncio.sleep(poll_interval)
             poll_interval = min(poll_interval * 1.5, max_interval)
 
-        # CRITICAL FIX (Critical #3): Timeout reached - cancel the running command
+        # Timeout reached - handle with cancellation (Issue #665: uses helper)
         elapsed = time.time() - start_time
-        logger.warning(
-            f"[PTY_EXEC] Polling timeout reached ({elapsed:.2f}s), "
-            f"cancelling command to prevent orphaned processes"
-        )
-
-        # Cancel the command to clean up resources
-        cancelled = await self.cancel_command(session, reason="timeout")
-        if cancelled:
-            logger.info("[PTY_EXEC] Successfully cancelled command after timeout")
-        else:
-            logger.error(
-                "[PTY_EXEC] Failed to cancel command after timeout - "
-                "may have orphaned process"
-            )
-
-        return last_output
+        return await self._handle_poll_timeout(session, elapsed, last_output)
 
     async def execute_in_pty(
         self, session: AgentTerminalSession, command: str, timeout: float = 30.0

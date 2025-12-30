@@ -582,14 +582,18 @@ const handleKeyboardShortcuts = (event: KeyboardEvent) => {
 }
 
 // STREAMLINED: Simplified initialization without complex timeout racing
+// Issue #671: Added initialization state tracking for loading feedback
 const initializeChatInterface = async () => {
+  // Issue #671: Set initializing state to show loading indicator
+  store.setInitializing(true)
+
   try {
     logger.debug('🚀 Starting streamlined chat interface initialization')
 
-    // Load data with simple timeout
+    // Issue #671: Reduced timeout from 8s to 5s for faster failure feedback
     const loadPromise = batchApiService.initializeChatInterface()
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Initialization timeout')), 8000)
+      setTimeout(() => reject(new Error('Initialization timeout')), 5000)
     })
 
     try {
@@ -607,18 +611,31 @@ const initializeChatInterface = async () => {
         isConnected.value = data.system_health.status === 'healthy'
         baseConnectionStatus.value = isConnected.value ? 'Connected' : 'Disconnected'
       }
+
+      // Issue #671: Clear initialization state on success
+      store.setInitializing(false)
     } catch (error) {
       logger.warn('⏱️ Initialization failed or timed out, using fallback:', error)
+
       // Fallback to individual loading
       if (store.sessions.length === 0) {
         await controller.loadChatSessions().catch((err) => logger.warn('Failed to load chat sessions:', err))
       }
+
+      // Issue #671: Clear initialization state after fallback attempt
+      store.setInitializing(false)
     }
 
     logger.debug('✅ Chat interface initialization completed')
 
   } catch (error) {
     logger.error('❌ Chat initialization failed:', error)
+
+    // Issue #671: Set error state and show toast notification
+    const errorMessage = error instanceof Error ? error.message : 'Failed to initialize chat interface'
+    store.setInitializationError(errorMessage)
+    notify('Chat initialization failed. Some features may not work correctly.', 'error')
+
     appStore.setGlobalError('Failed to initialize chat interface')
   }
 }
