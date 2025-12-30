@@ -189,10 +189,38 @@ class ContainerizedLibrarianAssistant:
             logger.error("Error extracting content from %s: %s", url, e)
             return None
 
+    def _build_fallback_assessment(
+        self, content_data: Dict[str, Any], error_msg: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Build fallback assessment when LLM fails (Issue #665: extracted helper)."""
+        if error_msg:
+            return {
+                "score": 0.3,
+                "reasoning": f"Error during assessment: {error_msg}",
+                "recommendation": "review",
+                "key_topics": [],
+                "reliability_factors": {
+                    "trusted_domain": False,
+                    "content_quality": "unknown",
+                    "information_density": "unknown",
+                },
+            }
+        return {
+            "score": 0.6 if content_data.get("is_trusted") else 0.4,
+            "reasoning": "Automatic assessment - LLM response could not be parsed",
+            "recommendation": "review",
+            "key_topics": [],
+            "reliability_factors": {
+                "trusted_domain": content_data.get("is_trusted", False),
+                "content_quality": "medium",
+                "information_density": "medium",
+            },
+        }
+
     async def assess_content_quality(
         self, content_data: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Assess the quality of extracted content using LLM.
+        """Assess the quality of extracted content using LLM (Issue #665: uses extracted helper).
 
         Args:
             content_data: Content data with text and metadata
@@ -244,37 +272,14 @@ Respond in JSON format:
                 assessment["score"] = score
                 return assessment
             except json.JSONDecodeError:
-                # Fallback assessment
                 logger.warning(
                     "Could not parse quality assessment JSON, using fallback"
                 )
-                return {
-                    "score": 0.6 if content_data.get("is_trusted") else 0.4,
-                    "reasoning": (
-                        "Automatic assessment - LLM response could not be parsed"
-                    ),
-                    "recommendation": "review",
-                    "key_topics": [],
-                    "reliability_factors": {
-                        "trusted_domain": content_data.get("is_trusted", False),
-                        "content_quality": "medium",
-                        "information_density": "medium",
-                    },
-                }
+                return self._build_fallback_assessment(content_data)
 
         except Exception as e:
             logger.error("Error assessing content quality: %s", e)
-            return {
-                "score": 0.3,
-                "reasoning": f"Error during assessment: {str(e)}",
-                "recommendation": "review",
-                "key_topics": [],
-                "reliability_factors": {
-                    "trusted_domain": False,
-                    "content_quality": "unknown",
-                    "information_density": "unknown",
-                },
-            }
+            return self._build_fallback_assessment(content_data, str(e))
 
     async def store_in_knowledge_base(
         self, content_data: Dict[str, Any], assessment: Dict[str, Any]

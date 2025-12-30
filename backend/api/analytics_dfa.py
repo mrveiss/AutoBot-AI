@@ -975,10 +975,78 @@ class TaintSummary(BaseModel):
 # =============================================================================
 
 
+def _build_analysis_response(
+    graphs: List["DataFlowGraph"], file_path: str
+) -> AnalysisResponse:
+    """Build AnalysisResponse from analyzed graphs (Issue #665: extracted helper)."""
+    graph_responses = []
+    total_defs = 0
+    total_uses = 0
+    total_vulns = 0
+    all_tainted: Set[str] = set()
+
+    for graph in graphs:
+        defs = [
+            VariableDefResponse(
+                name=d.name,
+                line=d.line,
+                column=d.column,
+                scope=d.scope,
+                taint_level=d.taint_level.value,
+                source_type=d.source_type.value if d.source_type else None,
+            )
+            for d in graph.definitions
+        ]
+
+        vulns = [
+            VulnerabilityResponse(
+                vulnerability_type=v.vulnerability_type.value,
+                severity=v.severity.value,
+                line=v.line,
+                column=v.column,
+                description=v.description,
+                tainted_variable=v.tainted_variable,
+                sink_function=v.sink_function,
+                recommendation=v.recommendation,
+            )
+            for v in graph.vulnerabilities
+        ]
+
+        graph_responses.append(
+            DataFlowResponse(
+                name=graph.name,
+                definitions_count=len(graph.definitions),
+                uses_count=len(graph.uses),
+                edges_count=len(graph.edges),
+                vulnerabilities_count=len(graph.vulnerabilities),
+                definitions=defs,
+                vulnerabilities=vulns,
+            )
+        )
+
+        total_defs += len(graph.definitions)
+        total_uses += len(graph.uses)
+        total_vulns += len(graph.vulnerabilities)
+
+        for d in graph.definitions:
+            if d.taint_level in _TAINTED_LEVELS:
+                all_tainted.add(d.name)
+
+    return AnalysisResponse(
+        file_path=file_path,
+        analyzed_at=datetime.now().isoformat(),
+        graphs=graph_responses,
+        total_definitions=total_defs,
+        total_uses=total_uses,
+        total_vulnerabilities=total_vulns,
+        tainted_variables=list(all_tainted),
+    )
+
+
 @router.post("/analyze", response_model=AnalysisResponse)
 async def analyze_code(request: AnalyzeRequest):
     """
-    Analyze Python source code for data flow and security vulnerabilities.
+    Analyze Python source code for data flow and security vulnerabilities (Issue #665: uses helper).
 
     Performs:
     - Variable tracking (definitions and uses)
@@ -988,71 +1056,7 @@ async def analyze_code(request: AnalyzeRequest):
     try:
         analyzer = DataFlowAnalyzer(request.source_code, request.file_path)
         graphs = analyzer.analyze()
-
-        # Build response
-        graph_responses = []
-        total_defs = 0
-        total_uses = 0
-        total_vulns = 0
-        all_tainted = set()
-
-        for graph in graphs:
-            defs = [
-                VariableDefResponse(
-                    name=d.name,
-                    line=d.line,
-                    column=d.column,
-                    scope=d.scope,
-                    taint_level=d.taint_level.value,
-                    source_type=d.source_type.value if d.source_type else None,
-                )
-                for d in graph.definitions
-            ]
-
-            vulns = [
-                VulnerabilityResponse(
-                    vulnerability_type=v.vulnerability_type.value,
-                    severity=v.severity.value,
-                    line=v.line,
-                    column=v.column,
-                    description=v.description,
-                    tainted_variable=v.tainted_variable,
-                    sink_function=v.sink_function,
-                    recommendation=v.recommendation,
-                )
-                for v in graph.vulnerabilities
-            ]
-
-            graph_responses.append(
-                DataFlowResponse(
-                    name=graph.name,
-                    definitions_count=len(graph.definitions),
-                    uses_count=len(graph.uses),
-                    edges_count=len(graph.edges),
-                    vulnerabilities_count=len(graph.vulnerabilities),
-                    definitions=defs,
-                    vulnerabilities=vulns,
-                )
-            )
-
-            total_defs += len(graph.definitions)
-            total_uses += len(graph.uses)
-            total_vulns += len(graph.vulnerabilities)
-
-            # Collect tainted variables
-            for d in graph.definitions:
-                if d.taint_level in _TAINTED_LEVELS:
-                    all_tainted.add(d.name)
-
-        return AnalysisResponse(
-            file_path=request.file_path,
-            analyzed_at=datetime.now().isoformat(),
-            graphs=graph_responses,
-            total_definitions=total_defs,
-            total_uses=total_uses,
-            total_vulnerabilities=total_vulns,
-            tainted_variables=list(all_tainted),
-        )
+        return _build_analysis_response(graphs, request.file_path)
 
     except SyntaxError as e:
         raise HTTPException(status_code=400, detail=f"Syntax error in code: {str(e)}")
@@ -1063,7 +1067,7 @@ async def analyze_code(request: AnalyzeRequest):
 
 @router.post("/analyze-file", response_model=AnalysisResponse)
 async def analyze_file(request: AnalyzeFileRequest):
-    """Analyze a Python file for data flow and security vulnerabilities."""
+    """Analyze a Python file for data flow and security vulnerabilities (Issue #665: uses helper)."""
     import aiofiles
 
     try:
@@ -1072,70 +1076,7 @@ async def analyze_file(request: AnalyzeFileRequest):
 
         analyzer = DataFlowAnalyzer(source_code, request.file_path)
         graphs = analyzer.analyze()
-
-        # Build response (same as analyze_code)
-        graph_responses = []
-        total_defs = 0
-        total_uses = 0
-        total_vulns = 0
-        all_tainted = set()
-
-        for graph in graphs:
-            defs = [
-                VariableDefResponse(
-                    name=d.name,
-                    line=d.line,
-                    column=d.column,
-                    scope=d.scope,
-                    taint_level=d.taint_level.value,
-                    source_type=d.source_type.value if d.source_type else None,
-                )
-                for d in graph.definitions
-            ]
-
-            vulns = [
-                VulnerabilityResponse(
-                    vulnerability_type=v.vulnerability_type.value,
-                    severity=v.severity.value,
-                    line=v.line,
-                    column=v.column,
-                    description=v.description,
-                    tainted_variable=v.tainted_variable,
-                    sink_function=v.sink_function,
-                    recommendation=v.recommendation,
-                )
-                for v in graph.vulnerabilities
-            ]
-
-            graph_responses.append(
-                DataFlowResponse(
-                    name=graph.name,
-                    definitions_count=len(graph.definitions),
-                    uses_count=len(graph.uses),
-                    edges_count=len(graph.edges),
-                    vulnerabilities_count=len(graph.vulnerabilities),
-                    definitions=defs,
-                    vulnerabilities=vulns,
-                )
-            )
-
-            total_defs += len(graph.definitions)
-            total_uses += len(graph.uses)
-            total_vulns += len(graph.vulnerabilities)
-
-            for d in graph.definitions:
-                if d.taint_level in _TAINTED_LEVELS:
-                    all_tainted.add(d.name)
-
-        return AnalysisResponse(
-            file_path=request.file_path,
-            analyzed_at=datetime.now().isoformat(),
-            graphs=graph_responses,
-            total_definitions=total_defs,
-            total_uses=total_uses,
-            total_vulnerabilities=total_vulns,
-            tainted_variables=list(all_tainted),
-        )
+        return _build_analysis_response(graphs, request.file_path)
 
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"File not found: {request.file_path}")
