@@ -87,10 +87,85 @@ class OllamaConnectionPool:
         else:
             self.connection_stats[stat_key] = new_value
 
+    async def _record_connection_acquired(self, wait_time: float) -> None:
+        """
+        Record stats when a connection is acquired.
+
+        Issue #665: Extracted from acquire_connection.
+
+        Args:
+            wait_time: Time spent waiting for connection
+        """
+        async with self._stats_lock:
+            self.connection_stats["queued"] -= 1
+            self.active_connections += 1
+            self.total_requests += 1
+            self.connection_stats["active"] += 1
+            self._update_running_average("avg_wait_time", wait_time, self.total_requests)
+
+    async def _record_execution_success(
+        self, request_id: str, execution_time: float
+    ) -> None:
+        """
+        Record stats for successful execution.
+
+        Issue #665: Extracted from acquire_connection.
+
+        Args:
+            request_id: Request identifier for logging
+            execution_time: Time taken for execution
+        """
+        async with self._stats_lock:
+            self.connection_stats["completed"] += 1
+            self._update_running_average(
+                "avg_execution_time",
+                execution_time,
+                self.connection_stats["completed"],
+            )
+        logger.debug(
+            "[%s] Connection completed successfully (%.2fs)", request_id, execution_time
+        )
+
+    async def _record_execution_failure(self, request_id: str, error: Exception) -> None:
+        """
+        Record stats for failed execution.
+
+        Issue #665: Extracted from acquire_connection.
+
+        Args:
+            request_id: Request identifier for logging
+            error: The exception that occurred
+        """
+        async with self._stats_lock:
+            self.failed_requests += 1
+            self.connection_stats["failed"] += 1
+        logger.error("[%s] Connection failed: %s", request_id, error)
+
+    async def _handle_queue_timeout(self, request_id: str) -> None:
+        """
+        Handle queue timeout by updating stats and logging.
+
+        Issue #665: Extracted from acquire_connection.
+
+        Args:
+            request_id: Request identifier for logging
+        """
+        async with self._stats_lock:
+            self.connection_stats["queued"] -= 1
+            self.failed_requests += 1
+            self.connection_stats["failed"] += 1
+        logger.error(
+            "[%s] Timeout waiting for connection slot (%.1fs)",
+            request_id,
+            self.config.queue_timeout,
+        )
+
     @asynccontextmanager
     async def acquire_connection(self):
         """
         Context manager for acquiring a connection from the pool (thread-safe).
+
+        Issue #665: Refactored to extract stats recording helpers.
 
         Usage:
             async with pool.acquire_connection() as session:
@@ -111,27 +186,14 @@ class OllamaConnectionPool:
             async with self._stats_lock:
                 self.connection_stats["queued"] += 1
 
-            # Use timeout to prevent infinite waiting
             await asyncio.wait_for(
                 self.semaphore.acquire(), timeout=self.config.queue_timeout
             )
             semaphore_acquired = True
 
             wait_time = time.time() - start_time
-
-            # Update stats under lock
-            async with self._stats_lock:
-                self.connection_stats["queued"] -= 1
-                self.active_connections += 1
-                self.total_requests += 1
-                self.connection_stats["active"] += 1
-
-                # Update average wait time (Issue #281: uses helper)
-                self._update_running_average("avg_wait_time", wait_time, self.total_requests)
-
-            logger.debug(
-                f"[{request_id}] Acquired connection (waited {wait_time:.2f}s)"
-            )
+            await self._record_connection_acquired(wait_time)
+            logger.debug("[%s] Acquired connection (waited %.2fs)", request_id, wait_time)
 
             # Use singleton HTTP client for efficient connection pooling
             http_client = get_http_client()
@@ -141,41 +203,15 @@ class OllamaConnectionPool:
 
             try:
                 yield session
-
-                # Record successful execution under lock
-                execution_time = time.time() - execution_start
-                async with self._stats_lock:
-                    self.connection_stats["completed"] += 1
-
-                    # Update average execution time (Issue #281: uses helper)
-                    self._update_running_average(
-                        "avg_execution_time",
-                        execution_time,
-                        self.connection_stats["completed"],
-                    )
-
-                logger.debug(
-                    f"[{request_id}] Connection completed successfully ({execution_time:.2f}s)"
+                await self._record_execution_success(
+                    request_id, time.time() - execution_start
                 )
-
             except Exception as e:
-                # Record failed execution under lock
-                async with self._stats_lock:
-                    self.failed_requests += 1
-                    self.connection_stats["failed"] += 1
-                logger.error("[%s] Connection failed: %s", request_id, e)
+                await self._record_execution_failure(request_id, e)
                 raise
 
-            # Session cleanup is handled by singleton HTTPClientManager
-
         except asyncio.TimeoutError:
-            async with self._stats_lock:
-                self.connection_stats["queued"] -= 1
-                self.failed_requests += 1
-                self.connection_stats["failed"] += 1
-            logger.error(
-                f"[{request_id}] Timeout waiting for connection slot ({self.config.queue_timeout}s)"
-            )
+            await self._handle_queue_timeout(request_id)
             raise asyncio.TimeoutError(
                 f"Timeout waiting for Ollama connection slot after {self.config.queue_timeout}s"
             )

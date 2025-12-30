@@ -1537,6 +1537,94 @@ class AutoBotMemoryGraph:
             logger.error("Failed to create activity entity: %s", e)
             raise
 
+    def _validate_secret_params(
+        self, secret_type: str, scope: str, session_id: Optional[str]
+    ) -> None:
+        """
+        Validate secret creation parameters.
+
+        Issue #665: Extracted from create_secret_entity.
+
+        Args:
+            secret_type: Type of secret
+            scope: Scope level
+            session_id: Session ID for session-scoped secrets
+
+        Raises:
+            ValueError: If validation fails
+        """
+        valid_secret_types = {"api_key", "token", "password", "ssh_key", "certificate"}
+        valid_scopes = {"user", "session", "shared"}
+
+        if secret_type not in valid_secret_types:
+            raise ValueError(
+                f"Invalid secret_type: {secret_type}. Must be one of {valid_secret_types}"
+            )
+        if scope not in valid_scopes:
+            raise ValueError(f"Invalid scope: {scope}. Must be one of {valid_scopes}")
+        if scope == "session" and not session_id:
+            raise ValueError("session_id is required for session-scoped secrets")
+
+    async def _create_secret_owner_relations(
+        self, owner_id: str, entity_id: str
+    ) -> None:
+        """
+        Create owner relationships for a secret entity.
+
+        Issue #665: Extracted from create_secret_entity.
+
+        Args:
+            owner_id: User ID of secret owner
+            entity_id: ID of the created secret entity
+        """
+        # Create relationship: User owns Secret
+        await self.create_relation_by_id(
+            from_entity_id=owner_id,
+            to_entity_id=entity_id,
+            relation_type="owns",
+        )
+        # Create relationship: User has Secret
+        await self.create_relation_by_id(
+            from_entity_id=owner_id,
+            to_entity_id=entity_id,
+            relation_type="has_secret",
+        )
+
+    async def _create_secret_scope_relations(
+        self,
+        entity_id: str,
+        scope: str,
+        session_id: Optional[str],
+        shared_with: Optional[List[str]],
+    ) -> None:
+        """
+        Create scope-based relationships for a secret entity.
+
+        Issue #665: Extracted from create_secret_entity.
+
+        Args:
+            entity_id: ID of the secret entity
+            scope: Scope level (user, session, shared)
+            session_id: Session ID for session-scoped secrets
+            shared_with: List of user IDs for shared secrets
+        """
+        # Session-scoped: link to session
+        if scope == "session" and session_id:
+            await self.create_relation_by_id(
+                from_entity_id=session_id,
+                to_entity_id=entity_id,
+                relation_type="has_secret",
+                metadata={"scope": "session"},
+            )
+        # Shared: create relationships to shared users
+        if scope == "shared" and shared_with:
+            for shared_user_id in shared_with:
+                await self.create_relation_by_id(
+                    from_entity_id=entity_id,
+                    to_entity_id=shared_user_id,
+                    relation_type="shared_with",
+                )
+
     async def create_secret_entity(
         self,
         name: str,
@@ -1555,6 +1643,8 @@ class AutoBotMemoryGraph:
         - Session-scoped: Shared within a specific session
         - Shared: Explicitly shared with specific users
 
+        Issue #665: Refactored to extract validation and relation helpers.
+
         Note: This does NOT store the actual secret value. The encrypted value
         should be stored separately in a secure vault.
 
@@ -1571,16 +1661,7 @@ class AutoBotMemoryGraph:
             Created secret entity (without the actual secret value)
         """
         self.ensure_initialized()
-
-        valid_secret_types = {"api_key", "token", "password", "ssh_key", "certificate"}
-        valid_scopes = {"user", "session", "shared"}
-
-        if secret_type not in valid_secret_types:
-            raise ValueError(f"Invalid secret_type: {secret_type}. Must be one of {valid_secret_types}")
-        if scope not in valid_scopes:
-            raise ValueError(f"Invalid scope: {scope}. Must be one of {valid_scopes}")
-        if scope == "session" and not session_id:
-            raise ValueError("session_id is required for session-scoped secrets")
+        self._validate_secret_params(secret_type, scope, session_id)
 
         try:
             # Build secret metadata
@@ -1604,37 +1685,11 @@ class AutoBotMemoryGraph:
                 tags=["secret", secret_type, scope],
             )
 
-            # Create relationship: User owns Secret (using ID-based relation)
-            await self.create_relation_by_id(
-                from_entity_id=owner_id,
-                to_entity_id=entity["id"],
-                relation_type="owns",
+            # Create owner and scope relationships
+            await self._create_secret_owner_relations(owner_id, entity["id"])
+            await self._create_secret_scope_relations(
+                entity["id"], scope, session_id, shared_with
             )
-
-            # Create relationship: User has Secret
-            await self.create_relation_by_id(
-                from_entity_id=owner_id,
-                to_entity_id=entity["id"],
-                relation_type="has_secret",
-            )
-
-            # Session-scoped: link to session
-            if scope == "session" and session_id:
-                await self.create_relation_by_id(
-                    from_entity_id=session_id,
-                    to_entity_id=entity["id"],
-                    relation_type="has_secret",
-                    metadata={"scope": "session"},
-                )
-
-            # Shared: create relationships to shared users
-            if scope == "shared" and shared_with:
-                for shared_user_id in shared_with:
-                    await self.create_relation_by_id(
-                        from_entity_id=entity["id"],
-                        to_entity_id=shared_user_id,
-                        relation_type="shared_with",
-                    )
 
             logger.info("Created secret entity: %s (scope: %s)", name, scope)
             return entity

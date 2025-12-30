@@ -337,6 +337,116 @@ class AgentTerminalService:
     # Helper Methods for _approve_command_internal (Issue #281)
     # ============================================================================
 
+    async def _log_command_approval(
+        self,
+        session: AgentTerminalSession,
+        command: str,
+        user_id: Optional[str],
+    ) -> None:
+        """
+        Log command approval to terminal logger.
+
+        Issue #665: Extracted from _execute_approved_command.
+
+        Args:
+            session: Terminal session
+            command: Command being approved
+            user_id: User who approved the command
+        """
+        if session.has_conversation():
+            await self.terminal_logger.log_command(
+                session_id=session.conversation_id,
+                command=command,
+                run_type="manual",
+                status="approved",
+                user_id=user_id,
+            )
+
+    async def _log_command_result(
+        self,
+        session: AgentTerminalSession,
+        command: str,
+        result: Metadata,
+        user_id: Optional[str],
+    ) -> None:
+        """
+        Log command execution result to terminal logger.
+
+        Issue #665: Extracted from _execute_approved_command.
+
+        Args:
+            session: Terminal session
+            command: Executed command
+            result: Execution result
+            user_id: User who approved the command
+        """
+        if session.has_conversation():
+            await self.terminal_logger.log_command(
+                session_id=session.conversation_id,
+                command=command,
+                run_type="manual",
+                status="success" if result.get("status") == "success" else "error",
+                result=result,
+                user_id=user_id,
+            )
+
+    async def _post_execution_updates(
+        self,
+        session: AgentTerminalSession,
+        command: str,
+        result: Metadata,
+        risk_level: str,
+        user_id: Optional[str],
+        comment: Optional[str],
+        auto_approve_future: bool,
+    ) -> None:
+        """
+        Perform all post-execution updates after command runs.
+
+        Issue #665: Extracted from _execute_approved_command.
+
+        Args:
+            session: Terminal session
+            command: Executed command
+            result: Execution result
+            risk_level: Risk level of command
+            user_id: User who approved
+            comment: Approval comment
+            auto_approve_future: Whether to auto-approve similar commands
+        """
+        # Save to chat
+        await self._save_command_to_chat(
+            session.conversation_id, command, result, command_type="approved"
+        )
+
+        # Interpret command with workflow manager
+        await self._interpret_approved_command(session, command, result)
+
+        # Update session history
+        session.add_approved_to_history(
+            command=command,
+            risk_level=risk_level,
+            user_id=user_id,
+            comment=comment,
+            result=result,
+        )
+
+        # Clear pending and resume
+        session.clear_pending_and_resume()
+
+        # Store auto-approve rule if requested
+        if auto_approve_future and user_id:
+            await self.approval_handler.store_auto_approve_rule(
+                user_id=user_id,
+                command=command,
+                risk_level=risk_level,
+            )
+
+        # Update and broadcast status
+        await self._update_and_broadcast_approval_status(
+            session, command, True, user_id, comment
+        )
+
     async def _execute_approved_command(
         self,
         session: AgentTerminalSession,
@@ -347,7 +457,24 @@ class AgentTerminalService:
         comment: Optional[str],
         auto_approve_future: bool,
     ) -> Metadata:
-        """Execute an approved command and update all tracking (Issue #281: extracted)."""
+        """
+        Execute an approved command and update all tracking.
+
+        Issue #281: Extracted from approve_command.
+        Issue #665: Refactored to extract logging and post-execution helpers.
+
+        Args:
+            session: Terminal session
+            command: Command to execute
+            command_id: Unique command ID
+            risk_level: Risk level of command
+            user_id: User who approved
+            comment: Approval comment
+            auto_approve_future: Whether to auto-approve similar commands
+
+        Returns:
+            Execution result metadata
+        """
         # Update queue status
         await self.approval_handler.update_command_queue_status(
             command_id=command_id,
@@ -357,15 +484,7 @@ class AgentTerminalService:
         )
 
         try:
-            # Log approval
-            if session.has_conversation():
-                await self.terminal_logger.log_command(
-                    session_id=session.conversation_id,
-                    command=command,
-                    run_type="manual",
-                    status="approved",
-                    user_id=user_id,
-                )
+            await self._log_command_approval(session, command, user_id)
 
             # Execute command
             result = await self.command_executor.execute_in_pty(session, command)
@@ -379,48 +498,9 @@ class AgentTerminalService:
                 return_code=result.get("return_code", 0),
             )
 
-            # Log execution result
-            if session.has_conversation():
-                await self.terminal_logger.log_command(
-                    session_id=session.conversation_id,
-                    command=command,
-                    run_type="manual",
-                    status="success" if result.get("status") == "success" else "error",
-                    result=result,
-                    user_id=user_id,
-                )
-
-            # Save to chat
-            await self._save_command_to_chat(
-                session.conversation_id, command, result, command_type="approved"
-            )
-
-            # Interpret command with workflow manager
-            await self._interpret_approved_command(session, command, result)
-
-            # Update session history
-            session.add_approved_to_history(
-                command=command,
-                risk_level=risk_level,
-                user_id=user_id,
-                comment=comment,
-                result=result,
-            )
-
-            # Clear pending and resume
-            session.clear_pending_and_resume()
-
-            # Store auto-approve rule if requested
-            if auto_approve_future and user_id:
-                await self.approval_handler.store_auto_approve_rule(
-                    user_id=user_id,
-                    command=command,
-                    risk_level=risk_level,
-                )
-
-            # Update and broadcast status
-            await self._update_and_broadcast_approval_status(
-                session, command, True, user_id, comment
+            await self._log_command_result(session, command, result, user_id)
+            await self._post_execution_updates(
+                session, command, result, risk_level, user_id, comment, auto_approve_future
             )
 
             return {
