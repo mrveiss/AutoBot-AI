@@ -205,7 +205,7 @@ class NPUWorkerManager:
                 await asyncio.sleep(TimingConstants.LONG_DELAY)
 
     async def _check_worker_health(self, worker_id: str):
-        """Check health of a specific worker"""
+        """Check health of a specific worker (Issue #665: refactored with helper)."""
         worker_config = self._workers.get(worker_id)
         if not worker_config:
             return
@@ -227,35 +227,9 @@ class NPUWorkerManager:
                 timeout=self._load_balancing_config.timeout_seconds,
             )
 
-            # Update worker status
-            status = NPUWorkerStatus(
-                id=worker_id,
-                status=(
-                    WorkerStatus.ONLINE
-                    if health_data.get("status") == "healthy"
-                    else WorkerStatus.ERROR
-                ),
-                current_load=health_data.get("current_load", 0),
-                total_tasks_completed=health_data.get("total_tasks", 0),
-                uptime_seconds=health_data.get("uptime_seconds", 0.0),
-                last_heartbeat=datetime.utcnow(),
-                error_message=(
-                    health_data.get("error")
-                    if health_data.get("status") != "healthy"
-                    else None
-                ),
-            )
-
-            # Store status in Redis
-            await self._store_worker_status(worker_id, status)
-
-            # Emit status change event if status actually changed
-            if prev_status_value != status.status:
-                worker_details = await self.get_worker(worker_id)
-                if worker_details:
-                    await self._emit_worker_event(
-                        "worker.status.changed", worker_details
-                    )
+            # Build status from health data
+            status = self._build_healthy_status(worker_id, health_data)
+            await self._store_and_emit_status(worker_id, status, prev_status_value)
 
         except asyncio.TimeoutError:
             logger.warning("Worker %s health check timed out", worker_id)
@@ -264,30 +238,51 @@ class NPUWorkerManager:
                 status=WorkerStatus.OFFLINE,
                 error_message="Health check timeout",
             )
-            await self._store_worker_status(worker_id, status)
-
-            # Emit status change event if status changed
-            if prev_status_value != status.status:
-                worker_details = await self.get_worker(worker_id)
-                if worker_details:
-                    await self._emit_worker_event(
-                        "worker.status.changed", worker_details
-                    )
+            await self._store_and_emit_status(worker_id, status, prev_status_value)
 
         except Exception as e:
             logger.error("Worker %s health check failed: %s", worker_id, e)
             status = NPUWorkerStatus(
                 id=worker_id, status=WorkerStatus.ERROR, error_message=str(e)
             )
-            await self._store_worker_status(worker_id, status)
+            await self._store_and_emit_status(worker_id, status, prev_status_value)
 
-            # Emit status change event if status changed
-            if prev_status_value != status.status:
-                worker_details = await self.get_worker(worker_id)
-                if worker_details:
-                    await self._emit_worker_event(
-                        "worker.status.changed", worker_details
-                    )
+    def _build_healthy_status(
+        self, worker_id: str, health_data: Dict[str, Any]
+    ) -> NPUWorkerStatus:
+        """Build worker status from health check data (Issue #665: extracted helper)."""
+        return NPUWorkerStatus(
+            id=worker_id,
+            status=(
+                WorkerStatus.ONLINE
+                if health_data.get("status") == "healthy"
+                else WorkerStatus.ERROR
+            ),
+            current_load=health_data.get("current_load", 0),
+            total_tasks_completed=health_data.get("total_tasks", 0),
+            uptime_seconds=health_data.get("uptime_seconds", 0.0),
+            last_heartbeat=datetime.utcnow(),
+            error_message=(
+                health_data.get("error")
+                if health_data.get("status") != "healthy"
+                else None
+            ),
+        )
+
+    async def _store_and_emit_status(
+        self,
+        worker_id: str,
+        status: NPUWorkerStatus,
+        prev_status_value: WorkerStatus,
+    ) -> None:
+        """Store status and emit change event if needed (Issue #665: extracted helper)."""
+        await self._store_worker_status(worker_id, status)
+
+        # Emit status change event if status actually changed
+        if prev_status_value != status.status:
+            worker_details = await self.get_worker(worker_id)
+            if worker_details:
+                await self._emit_worker_event("worker.status.changed", worker_details)
 
     async def _store_worker_status(self, worker_id: str, status: NPUWorkerStatus):
         """Store worker status in Redis"""

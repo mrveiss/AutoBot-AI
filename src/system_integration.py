@@ -203,7 +203,7 @@ class SystemIntegration:
         return {"status": "error", "message": "Unsupported OS for listing services."}
 
     def manage_service(self, service_name: str, action: str) -> Dict[str, Any]:
-        """Starts, stops, or restarts a system service."""
+        """Starts, stops, or restarts a system service (Issue #665: refactored)."""
         if action not in VALID_SERVICE_ACTIONS:
             return {
                 "status": "error",
@@ -213,78 +213,86 @@ class SystemIntegration:
             }
 
         if self.os_type == "Windows":
-            cmd = [
-                "powershell",
-                f"Set-Service -Name '{service_name}' -Status '{action}'",
-            ]
-            # Note: Set-Service -Status doesn't directly start/stop,
-            # it sets desired state. For immediate action, use Start-Service,
-            # Stop-Service, Restart-Service
-            if action == "start":
-                cmd = ["powershell", f"Start-Service -Name '{service_name}'"]
-            elif action == "stop":
-                cmd = ["powershell", f"Stop-Service -Name '{service_name}'"]
-            elif action == "restart":
-                cmd = ["powershell", f"Restart-Service -Name '{service_name}'"]
-
-            result = self._run_command(cmd)
-            if result["status"] == "success":
-                return {
-                    "status": "success",
-                    "message": f"Service '{service_name}' {action}ed successfully.",
-                }
-            return result
+            return self._manage_windows_service(service_name, action)
         elif self.os_type == "Linux":
-            # Use systemctl without sudo - elevation will be handled if needed
-            cmd = ["systemctl", action, service_name]
-            result = self._run_command(cmd)
-
-            # Check if permission denied
-            if (
-                result.get("status") == "error"
-                and "permission denied" in result.get("error", "").lower()
-            ):
-                # Try with elevation wrapper
-                import asyncio
-
-                from src.elevation_wrapper import execute_with_elevation
-
-                elevation_result = asyncio.run(
-                    execute_with_elevation(
-                        f"systemctl {action} {service_name}",
-                        operation=f"Manage service: {service_name}",
-                        reason=(
-                            f"Need administrator privileges to {action} the {service_name}"
-                            f"service"
-                        ),
-                        risk_level="MEDIUM",
-                    )
-                )
-
-                if elevation_result.get("success"):
-                    return {
-                        "status": "success",
-                        "message": f"Service '{service_name}' {action}ed successfully.",
-                    }
-                else:
-                    return {
-                        "status": "error",
-                        "message": elevation_result.get(
-                            "error", "Failed to manage service with elevation"
-                        ),
-                    }
-
-            if result["status"] == "success":
-                return {
-                    "status": "success",
-                    "message": f"Service '{service_name}' {action}ed successfully.",
-                }
-            return result
+            return self._manage_linux_service(service_name, action)
         else:
             return {
                 "status": "error",
                 "message": "Unsupported OS for service management.",
             }
+
+    def _manage_windows_service(
+        self, service_name: str, action: str
+    ) -> Dict[str, Any]:
+        """Manage Windows service (Issue #665: extracted helper)."""
+        # Map action to PowerShell cmdlet
+        action_map = {
+            "start": f"Start-Service -Name '{service_name}'",
+            "stop": f"Stop-Service -Name '{service_name}'",
+            "restart": f"Restart-Service -Name '{service_name}'",
+        }
+        cmd = ["powershell", action_map.get(action, f"Start-Service -Name '{service_name}'")]
+
+        result = self._run_command(cmd)
+        if result["status"] == "success":
+            return {
+                "status": "success",
+                "message": f"Service '{service_name}' {action}ed successfully.",
+            }
+        return result
+
+    def _manage_linux_service(self, service_name: str, action: str) -> Dict[str, Any]:
+        """Manage Linux service with elevation fallback (Issue #665: extracted helper)."""
+        # Use systemctl without sudo - elevation will be handled if needed
+        cmd = ["systemctl", action, service_name]
+        result = self._run_command(cmd)
+
+        # Check if permission denied - try elevation
+        if (
+            result.get("status") == "error"
+            and "permission denied" in result.get("error", "").lower()
+        ):
+            return self._manage_linux_service_elevated(service_name, action)
+
+        if result["status"] == "success":
+            return {
+                "status": "success",
+                "message": f"Service '{service_name}' {action}ed successfully.",
+            }
+        return result
+
+    def _manage_linux_service_elevated(
+        self, service_name: str, action: str
+    ) -> Dict[str, Any]:
+        """Manage Linux service with elevation (Issue #665: extracted helper)."""
+        import asyncio
+
+        from src.elevation_wrapper import execute_with_elevation
+
+        elevation_result = asyncio.run(
+            execute_with_elevation(
+                f"systemctl {action} {service_name}",
+                operation=f"Manage service: {service_name}",
+                reason=(
+                    f"Need administrator privileges to {action} the {service_name} "
+                    f"service"
+                ),
+                risk_level="MEDIUM",
+            )
+        )
+
+        if elevation_result.get("success"):
+            return {
+                "status": "success",
+                "message": f"Service '{service_name}' {action}ed successfully.",
+            }
+        return {
+            "status": "error",
+            "message": elevation_result.get(
+                "error", "Failed to manage service with elevation"
+            ),
+        }
 
     def execute_system_command(self, command: str) -> Dict[str, Any]:
         """Executes a general system command."""
