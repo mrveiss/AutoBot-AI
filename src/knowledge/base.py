@@ -162,23 +162,81 @@ class KnowledgeBaseCore:
         """Alias for initialize() - backward compatibility with existing scripts."""
         return await self.initialize()
 
+    def _configure_llm_provider(
+        self, provider: str, model: str, endpoint: str, timeout: float, ssot_config
+    ) -> None:
+        """Configure LLM provider for LlamaIndex (Issue #665: extracted helper).
+
+        Args:
+            provider: Provider name (ollama, openai, anthropic)
+            model: Model name to use
+            endpoint: Provider endpoint URL
+            timeout: Request timeout in seconds
+            ssot_config: SSOT configuration object
+        """
+        if provider == "ollama":
+            Settings.llm = LlamaIndexOllamaLLM(
+                model=model,
+                request_timeout=timeout,
+                base_url=endpoint,
+            )
+        elif provider == "openai":
+            from llama_index.llms.openai import OpenAI as LlamaIndexOpenAI
+            Settings.llm = LlamaIndexOpenAI(
+                model=model,
+                api_key=ssot_config.llm.openai_api_key,
+                timeout=timeout,
+            )
+        elif provider == "anthropic":
+            from llama_index.llms.anthropic import Anthropic as LlamaIndexAnthropic
+            Settings.llm = LlamaIndexAnthropic(
+                model=model,
+                api_key=ssot_config.llm.anthropic_api_key,
+                timeout=timeout,
+            )
+        else:
+            raise ValueError(f"Unsupported LlamaIndex LLM provider: {provider}")
+
+    def _configure_embedding_provider(
+        self, provider: str, model_name: str, endpoint: str, ssot_config
+    ) -> int:
+        """Configure embedding provider for LlamaIndex (Issue #665: extracted helper).
+
+        Args:
+            provider: Provider name (ollama, openai)
+            model_name: Embedding model name
+            endpoint: Provider endpoint URL
+            ssot_config: SSOT configuration object
+
+        Returns:
+            int: Embedding dimensions for the configured provider
+        """
+        if provider == "ollama":
+            Settings.embed_model = LlamaIndexOllamaEmbedding(
+                model_name=model_name,
+                base_url=endpoint,
+                ollama_additional_kwargs={"num_ctx": 2048},
+            )
+            return 768  # nomic-embed-text dimensions
+        elif provider == "openai":
+            from llama_index.embeddings.openai import OpenAIEmbedding
+            Settings.embed_model = OpenAIEmbedding(
+                model=model_name,
+                api_key=ssot_config.llm.openai_api_key,
+            )
+            # OpenAI text-embedding-3-small: 1536, text-embedding-3-large: 3072
+            return 1536
+        else:
+            raise ValueError(f"Unsupported LlamaIndex embedding provider: {provider}")
+
     async def _configure_llama_index(self):
         """Configure LlamaIndex with explicit SSOT settings.
 
         Uses AUTOBOT_LLAMAINDEX_* environment variables for RAG/vectorization.
         No fallbacks - settings must be explicitly configured.
-
-        Environment variables:
-        - AUTOBOT_LLAMAINDEX_LLM_PROVIDER: ollama, openai, or anthropic
-        - AUTOBOT_LLAMAINDEX_LLM_ENDPOINT: Provider endpoint URL
-        - AUTOBOT_LLAMAINDEX_LLM_MODEL: Model name for LLM
-        - AUTOBOT_LLAMAINDEX_EMBEDDING_PROVIDER: ollama or openai
-        - AUTOBOT_LLAMAINDEX_EMBEDDING_ENDPOINT: Provider endpoint URL
-        - AUTOBOT_EMBEDDING_MODEL: Model name for embeddings
+        Issue #665: Refactored to use extracted helper methods.
         """
         from src.config.ssot_config import config as ssot_config
-
-        llm_timeout = kb_timeouts.llm_default
 
         # Get LlamaIndex-specific settings (no fallbacks)
         llm_provider = ssot_config.llm.llamaindex_llm_provider.lower()
@@ -192,31 +250,12 @@ class KnowledgeBaseCore:
             llm_model, llm_provider, embed_provider, embed_endpoint
         )
 
-        # Configure LLM based on provider
-        if llm_provider == "ollama":
-            Settings.llm = LlamaIndexOllamaLLM(
-                model=llm_model,
-                request_timeout=llm_timeout,
-                base_url=llm_endpoint,
-            )
-        elif llm_provider == "openai":
-            from llama_index.llms.openai import OpenAI as LlamaIndexOpenAI
-            Settings.llm = LlamaIndexOpenAI(
-                model=llm_model,
-                api_key=ssot_config.llm.openai_api_key,
-                timeout=llm_timeout,
-            )
-        elif llm_provider == "anthropic":
-            from llama_index.llms.anthropic import Anthropic as LlamaIndexAnthropic
-            Settings.llm = LlamaIndexAnthropic(
-                model=llm_model,
-                api_key=ssot_config.llm.anthropic_api_key,
-                timeout=llm_timeout,
-            )
-        else:
-            raise ValueError(f"Unsupported LlamaIndex LLM provider: {llm_provider}")
+        # Configure LLM (Issue #665: uses helper)
+        self._configure_llm_provider(
+            llm_provider, llm_model, llm_endpoint, kb_timeouts.llm_default, ssot_config
+        )
 
-        # Check for stored embedding model to maintain consistency across knowledge base
+        # Determine embedding model (stored or config)
         stored_model = await self._detect_stored_embedding_model()
         if stored_model:
             embed_model_name = stored_model
@@ -225,24 +264,10 @@ class KnowledgeBaseCore:
             embed_model_name = ssot_config.llm.embedding_model
             logger.info("Using embedding model from config: %s", embed_model_name)
 
-        # Configure embeddings based on provider
-        if embed_provider == "ollama":
-            Settings.embed_model = LlamaIndexOllamaEmbedding(
-                model_name=embed_model_name,
-                base_url=embed_endpoint,
-                ollama_additional_kwargs={"num_ctx": 2048},
-            )
-            self.embedding_dimensions = 768  # nomic-embed-text dimensions
-        elif embed_provider == "openai":
-            from llama_index.embeddings.openai import OpenAIEmbedding
-            Settings.embed_model = OpenAIEmbedding(
-                model=embed_model_name,
-                api_key=ssot_config.llm.openai_api_key,
-            )
-            # OpenAI text-embedding-3-small: 1536, text-embedding-3-large: 3072
-            self.embedding_dimensions = 1536
-        else:
-            raise ValueError(f"Unsupported LlamaIndex embedding provider: {embed_provider}")
+        # Configure embeddings (Issue #665: uses helper)
+        self.embedding_dimensions = self._configure_embedding_provider(
+            embed_provider, embed_model_name, embed_endpoint, ssot_config
+        )
 
         # Store model configuration
         self.embedding_model_name = embed_model_name

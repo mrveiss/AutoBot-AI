@@ -254,11 +254,47 @@ class HybridSearchEngine:
 
         return unique_results
 
+    def _enhance_result_with_scores(
+        self,
+        result: Dict[str, Any],
+        query_keywords: List[str],
+    ) -> Dict[str, Any]:
+        """Enhance a single result with hybrid scoring (Issue #665: extracted helper).
+
+        Args:
+            result: Original search result
+            query_keywords: Keywords extracted from query
+
+        Returns:
+            Enhanced result with hybrid, semantic, and keyword scores
+        """
+        content = result.get("content", "")
+        metadata = result.get("metadata", {})
+        semantic_score = result.get("score", 0.0)
+
+        # Calculate keyword score
+        keyword_score = self.calculate_keyword_score(query_keywords, content, metadata)
+
+        # Combine scores
+        hybrid_score = self.combine_scores(semantic_score, keyword_score)
+
+        # Create enhanced result
+        return {
+            **result,  # Copy original result
+            "hybrid_score": hybrid_score,
+            "semantic_score": semantic_score,
+            "keyword_score": keyword_score,
+            "matched_keywords": [
+                kw for kw in query_keywords if kw.lower() in content.lower()
+            ],
+        }
+
     async def search(
         self, query: str, top_k: int = 10, filters: Optional[Dict] = None
     ) -> List[Dict[str, Any]]:
         """
         Perform hybrid search combining semantic and keyword-based approaches.
+        Issue #665: Refactored to use _enhance_result_with_scores helper.
 
         Args:
             query: Search query string
@@ -286,33 +322,11 @@ class HybridSearchEngine:
                 self.logger.warning("No semantic results found for query: '%s'", query)
                 return []
 
-            # Enhance results with keyword scoring
-            enhanced_results = []
-            for result in semantic_results:
-                content = result.get("content", "")
-                metadata = result.get("metadata", {})
-                semantic_score = result.get("score", 0.0)
-
-                # Calculate keyword score
-                keyword_score = self.calculate_keyword_score(
-                    query_keywords, content, metadata
-                )
-
-                # Combine scores
-                hybrid_score = self.combine_scores(semantic_score, keyword_score)
-
-                # Create enhanced result
-                enhanced_result = {
-                    **result,  # Copy original result
-                    "hybrid_score": hybrid_score,
-                    "semantic_score": semantic_score,
-                    "keyword_score": keyword_score,
-                    "matched_keywords": [
-                        kw for kw in query_keywords if kw.lower() in content.lower()
-                    ],
-                }
-
-                enhanced_results.append(enhanced_result)
+            # Enhance results with keyword scoring (Issue #665: uses helper)
+            enhanced_results = [
+                self._enhance_result_with_scores(result, query_keywords)
+                for result in semantic_results
+            ]
 
             # Sort by hybrid score (descending)
             enhanced_results.sort(key=lambda x: x["hybrid_score"], reverse=True)
@@ -321,10 +335,8 @@ class HybridSearchEngine:
             for result in enhanced_results:
                 result["score"] = result["hybrid_score"]
 
-            # Deduplicate results
+            # Deduplicate and return top results
             unique_results = self.deduplicate_results(enhanced_results)
-
-            # Return top results
             final_results = unique_results[: min(top_k, self.final_top_k)]
 
             self.logger.info(
