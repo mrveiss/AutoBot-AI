@@ -166,11 +166,46 @@ class PromptInjectionDetector:
 
         logger.info("PromptInjectionDetector initialized (strict_mode=%s)", strict_mode)
 
+    def _check_and_accumulate_patterns(
+        self,
+        text: str,
+        patterns: List[str],
+        label: str,
+        risk_level: InjectionRisk,
+        detected_patterns: List[str],
+        current_risk: InjectionRisk,
+        use_regex: bool = True,
+        case_sensitive: bool = False,
+    ) -> tuple[InjectionRisk, List[str]]:
+        """Check patterns and accumulate results (Issue #665: extracted helper).
+
+        Args:
+            text: Text to check
+            patterns: Pattern list to check against
+            label: Label for detected patterns (e.g., "Shell metacharacter")
+            risk_level: Risk level to assign for matches
+            detected_patterns: List to accumulate detected patterns
+            current_risk: Current maximum risk level
+            use_regex: Whether to use regex matching
+            case_sensitive: Whether matching is case-sensitive
+
+        Returns:
+            Tuple of (updated_risk, found_patterns)
+        """
+        found = self._check_pattern_list(
+            text, patterns, label, use_regex=use_regex, case_sensitive=case_sensitive
+        )
+        for pattern in found:
+            detected_patterns.append(f"{label}: {pattern}")
+            current_risk = self._update_risk(current_risk, risk_level)
+        return current_risk, found
+
     def detect_injection(
         self, text: str, context: str = "user_input"
     ) -> InjectionDetectionResult:
         """
-        Detect prompt injection attempts in text
+        Detect prompt injection attempts in text.
+        Issue #665: Refactored to use _check_and_accumulate_patterns helper.
 
         Args:
             text: User input or LLM response to analyze
@@ -179,9 +214,9 @@ class PromptInjectionDetector:
         Returns:
             InjectionDetectionResult with risk assessment and details
         """
-        detected_patterns = []
+        detected_patterns: List[str] = []
         max_risk = InjectionRisk.SAFE
-        metadata = {"context": context, "original_length": len(text)}
+        metadata: Dict[str, Any] = {"context": context, "original_length": len(text)}
 
         if not text or not text.strip():
             return InjectionDetectionResult(
@@ -192,55 +227,42 @@ class PromptInjectionDetector:
                 metadata=metadata,
             )
 
-        # Issue #281: Using extracted helper for pattern checking
-        # Check for shell metacharacters (literal match, case-sensitive for metachars)
-        metachar_found = self._check_pattern_list(
-            text, self.shell_metacharacters, "metacharacter",
+        # Check shell metacharacters (Issue #665: uses helper)
+        max_risk, found = self._check_and_accumulate_patterns(
+            text, self.shell_metacharacters, "Shell metacharacter",
+            InjectionRisk.HIGH, detected_patterns, max_risk,
             use_regex=False, case_sensitive=True
         )
-        for meta in metachar_found:
-            detected_patterns.append(f"Shell metacharacter: {meta}")
-            max_risk = self._update_risk(max_risk, InjectionRisk.HIGH)
-        metadata["metacharacters"] = metachar_found
+        metadata["metacharacters"] = found
 
-        # Check for prompt injection patterns (regex match)
-        injection_found = self._check_pattern_list(
-            text, self.injection_patterns, "injection",
-            use_regex=True, case_sensitive=False
+        # Check injection patterns (Issue #665: uses helper)
+        max_risk, found = self._check_and_accumulate_patterns(
+            text, self.injection_patterns, "Injection pattern",
+            InjectionRisk.CRITICAL, detected_patterns, max_risk
         )
-        for pattern in injection_found:
-            detected_patterns.append(f"Injection pattern: {pattern}")
-            max_risk = InjectionRisk.CRITICAL
-        metadata["injection_patterns"] = injection_found
+        metadata["injection_patterns"] = found
 
-        # Check for dangerous commands (regex match)
-        dangerous_found = self._check_pattern_list(
-            text, self.dangerous_patterns, "dangerous",
-            use_regex=True, case_sensitive=False
+        # Check dangerous commands (Issue #665: uses helper)
+        max_risk, found = self._check_and_accumulate_patterns(
+            text, self.dangerous_patterns, "Dangerous command",
+            InjectionRisk.CRITICAL, detected_patterns, max_risk
         )
-        for pattern in dangerous_found:
-            detected_patterns.append(f"Dangerous command: {pattern}")
-            max_risk = self._update_risk(max_risk, InjectionRisk.CRITICAL)
-        metadata["dangerous_patterns"] = dangerous_found
+        metadata["dangerous_patterns"] = found
 
-        # Check for context poisoning (if analyzing conversation context)
+        # Check context poisoning if analyzing conversation context
         if context == "conversation_context":
-            poison_found = self._check_pattern_list(
-                text, self.context_poison_patterns, "poison",
-                use_regex=True, case_sensitive=False
+            max_risk, found = self._check_and_accumulate_patterns(
+                text, self.context_poison_patterns, "Context poisoning",
+                InjectionRisk.MODERATE, detected_patterns, max_risk
             )
-            for pattern in poison_found:
-                detected_patterns.append(f"Context poisoning: {pattern}")
-                max_risk = self._update_risk(max_risk, InjectionRisk.MODERATE)
-            metadata["context_poisoning"] = poison_found
+            metadata["context_poisoning"] = found
 
-        # Sanitize the text
+        # Sanitize and determine blocking
         sanitized_text = self.sanitize_input(text)
         metadata["sanitized_length"] = len(sanitized_text)
-
-        # Determine if text should be blocked
         blocked = max_risk in {InjectionRisk.HIGH, InjectionRisk.CRITICAL}
 
+        # Log detection results
         if blocked:
             logger.warning("🚨 BLOCKED: Prompt injection detected (risk=%s)", max_risk.value)
             logger.warning("Detected patterns: %s", detected_patterns)
