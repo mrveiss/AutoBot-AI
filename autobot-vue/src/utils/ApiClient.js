@@ -203,13 +203,15 @@ class ApiClient {
   }
 
   // GET request with enhanced error handling and retries
+  // Issue #671: Added configurable maxRetries option (default: 3)
   async get(endpoint, options = {}) {
 
     // Log the full URL being accessed for debugging
     const fullUrl = await this.getApiUrl(endpoint, options);
 
     let lastError;
-    const maxRetries = 3;
+    // Issue #671: Allow caller to reduce retries for faster failure on init calls
+    const maxRetries = options.maxRetries !== undefined ? options.maxRetries : 3;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
