@@ -248,6 +248,55 @@ class StartupCoordinator:
 
         return True
 
+    def _get_component_env_and_cwd(self, component: ComponentInfo) -> tuple:
+        """Get environment and working directory for a component (Issue #665: extracted helper)."""
+        env = os.environ.copy()
+        cwd = None
+
+        if component.name == 'backend':
+            cwd = 'backend'
+            env['PYTHONPATH'] = os.path.abspath('.') + ':' + env.get('PYTHONPATH', '')
+        elif component.name == 'frontend':
+            cwd = 'autobot-vue'
+
+        return env, cwd
+
+    async def _wait_for_component_health(
+        self, component: ComponentInfo, process: subprocess.Popen
+    ) -> bool:
+        """Wait for component to become healthy with timeout (Issue #665: extracted helper)."""
+        max_wait = self.max_startup_time
+        check_interval = 2
+
+        for attempt in range(0, max_wait, check_interval):
+            if process.poll() is not None:
+                stdout, stderr = process.communicate()
+                error_msg = f"Process died: {stderr.decode()}"
+                logger.error("❌ %s failed: %s", component.name, error_msg)
+                component.error_message = error_msg
+                component.state = ComponentState.FAILED
+                self.save_state()
+                return False
+
+            if await self.check_health(component):
+                component.state = ComponentState.READY
+                component.ready_time = time.time()
+                startup_duration = component.ready_time - component.start_time
+                logger.info("✅ %s is ready (took %.1fs)", component.name, startup_duration)
+                self.save_state()
+                return True
+
+            if attempt % 10 == 0 and attempt > 0:
+                logger.info("⏳ Waiting for %s to be ready... (%ss elapsed)", component.name, attempt)
+
+            await asyncio.sleep(check_interval)
+
+        logger.error("❌ %s did not become ready within %ss", component.name, max_wait)
+        component.error_message = f"Startup timeout ({max_wait}s)"
+        component.state = ComponentState.FAILED
+        self.save_state()
+        return False
+
     async def start_component(self, component: ComponentInfo) -> bool:
         """Start a single component"""
         logger.info("🚀 Starting component: %s", component.name)
@@ -257,20 +306,10 @@ class StartupCoordinator:
 
         try:
             if component.start_command:
-                # Start external process
                 logger.info("Executing: %s", component.start_command)
 
-                # Set up environment and working directory
-                env = os.environ.copy()
-                cwd = None
+                env, cwd = self._get_component_env_and_cwd(component)
 
-                if component.name == 'backend':
-                    cwd = 'backend'  # Run from backend directory
-                    env['PYTHONPATH'] = os.path.abspath('.') + ':' + env.get('PYTHONPATH', '')
-                elif component.name == 'frontend':
-                    cwd = 'autobot-vue'
-
-                # Start process
                 process = subprocess.Popen(
                     component.start_command,
                     shell=True,
@@ -285,44 +324,8 @@ class StartupCoordinator:
 
                 logger.info("Started %s with PID %s", component.name, component.pid)
 
-                # Wait for component to become healthy
-                max_wait = self.max_startup_time
-                check_interval = 2  # Check every 2 seconds
-
-                for attempt in range(0, max_wait, check_interval):
-                    # Check if process died
-                    if process.poll() is not None:
-                        stdout, stderr = process.communicate()
-                        error_msg = f"Process died: {stderr.decode()}"
-                        logger.error("❌ %s failed: %s", component.name, error_msg)
-                        component.error_message = error_msg
-                        component.state = ComponentState.FAILED
-                        self.save_state()
-                        return False
-
-                    # Check health
-                    if await self.check_health(component):
-                        component.state = ComponentState.READY
-                        component.ready_time = time.time()
-                        startup_duration = component.ready_time - component.start_time
-                        logger.info("✅ %s is ready (took %.1fs)", component.name, startup_duration)
-                        self.save_state()
-                        return True
-
-                    # Progress feedback
-                    if attempt % 10 == 0 and attempt > 0:
-                        logger.info("⏳ Waiting for %s to be ready... (%ss elapsed)", component.name, attempt)
-
-                    await asyncio.sleep(check_interval)
-
-                # Timeout reached
-                logger.error("❌ %s did not become ready within %ss", component.name, max_wait)
-                component.error_message = f"Startup timeout ({max_wait}s)"
-                component.state = ComponentState.FAILED
-                self.save_state()
-                return False
+                return await self._wait_for_component_health(component, process)
             else:
-                # Built-in component (no external process)
                 logger.info("✅ %s is ready (built-in)", component.name)
                 component.state = ComponentState.READY
                 component.ready_time = time.time()
