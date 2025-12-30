@@ -66,7 +66,9 @@ class AutoBotMemoryGraph:
     """
 
     # Valid entity types
+    # Issue #608: Extended with user-centric session tracking types
     ENTITY_TYPES = {
+        # Core entity types
         "conversation",
         "bug_fix",
         "feature",
@@ -77,10 +79,21 @@ class AutoBotMemoryGraph:
         "learning",
         "research",
         "implementation",
+        # Issue #608: User-centric session tracking entity types
+        "user",  # User entity with profile and settings
+        "chat_session",  # Chat session (enhanced conversation)
+        "terminal_activity",  # Terminal command execution
+        "file_activity",  # File browser operations
+        "browser_activity",  # Web browser/Playwright actions
+        "desktop_activity",  # noVNC desktop interactions
+        "secret",  # User secrets (API keys, credentials)
+        "secret_usage",  # Audit trail for secret access
     }
 
     # Valid relation types
+    # Issue #608: Extended with user-centric session tracking relations
     RELATION_TYPES = {
+        # Core relation types
         "relates_to",
         "depends_on",
         "implements",
@@ -90,6 +103,19 @@ class AutoBotMemoryGraph:
         "follows",
         "contains",
         "blocks",
+        # Issue #608: User-session relationships
+        "owns",  # User owns session/secret
+        "created_by",  # Entity created by user
+        "has_participant",  # Session has participant (multi-user)
+        "has_session",  # User has session
+        # Issue #608: Activity relationships
+        "has_activity",  # Session has activity (terminal, file, browser, desktop)
+        "has_message",  # Session has chat message
+        "performed_by",  # Activity performed by user
+        # Issue #608: Secret relationships
+        "has_secret",  # User/session has secret
+        "uses_secret",  # Activity uses secret
+        "shared_with",  # Secret shared with user
     }
 
     def __init__(
@@ -817,6 +843,121 @@ class AutoBotMemoryGraph:
             logger.debug("Error getting incoming relations for %s: %s", entity_id, e)
             return []
 
+    async def get_relations(
+        self,
+        entity_id: str,
+        relation_types: Optional[List[str]] = None,
+        direction: str = "both",
+    ) -> Dict[str, Any]:
+        """
+        Get relations for an entity.
+
+        Issue #608: Public method for retrieving entity relationships.
+
+        Args:
+            entity_id: Entity ID to get relations for
+            relation_types: Optional filter by relation types
+            direction: "outgoing", "incoming", or "both"
+
+        Returns:
+            Dict with "relations" key containing list of relations
+        """
+        self.ensure_initialized()
+
+        try:
+            relations = []
+
+            # Get outgoing relations
+            if direction in _OUTGOING_DIRECTIONS:
+                outgoing = await self._get_outgoing_relations(entity_id)
+                for rel in outgoing:
+                    if relation_types is None or rel.get("type") in relation_types:
+                        relations.append({
+                            "from": entity_id,
+                            "to": rel.get("to"),
+                            "type": rel.get("type"),
+                            "direction": "outgoing",
+                            "metadata": rel.get("metadata", {}),
+                        })
+
+            # Get incoming relations
+            if direction in _INCOMING_DIRECTIONS:
+                incoming = await self._get_incoming_relations(entity_id)
+                for rel in incoming:
+                    if relation_types is None or rel.get("type") in relation_types:
+                        relations.append({
+                            "from": rel.get("from"),
+                            "to": entity_id,
+                            "type": rel.get("type"),
+                            "direction": "incoming",
+                            "metadata": rel.get("metadata", {}),
+                        })
+
+            return {"relations": relations}
+
+        except Exception as e:
+            logger.error("Failed to get relations for %s: %s", entity_id, e)
+            return {"relations": []}
+
+    async def create_relation_by_id(
+        self,
+        from_entity_id: str,
+        to_entity_id: str,
+        relation_type: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """
+        Create relationship between two entities using their IDs directly.
+
+        Issue #608: Helper for user-centric session tracking where we have
+        entity IDs rather than names.
+
+        Args:
+            from_entity_id: Source entity ID (UUID)
+            to_entity_id: Target entity ID (UUID)
+            relation_type: Type of relationship
+            metadata: Optional additional metadata
+
+        Returns:
+            True if relation created successfully
+        """
+        self.ensure_initialized()
+
+        if relation_type not in self.RELATION_TYPES:
+            raise ValueError(f"Invalid relation_type: {relation_type}")
+
+        try:
+            timestamp = int(datetime.now().timestamp() * 1000)
+
+            # Build relation objects
+            relation = {
+                "to": to_entity_id,
+                "type": relation_type,
+                "created_at": timestamp,
+                "metadata": metadata or {},
+            }
+            reverse_rel = {
+                "from": from_entity_id,
+                "type": relation_type,
+                "created_at": timestamp,
+            }
+
+            # Store both directions using existing helpers
+            await self._store_outgoing_relation(from_entity_id, relation)
+            await self._store_incoming_relation(to_entity_id, reverse_rel)
+
+            logger.debug(
+                "Created relation by ID: %s --[%s]--> %s",
+                from_entity_id[:8],
+                relation_type,
+                to_entity_id[:8],
+            )
+            return True
+
+        except Exception as e:
+            logger.error("Failed to create relation by ID: %s", e)
+            return False
+
     async def _store_outgoing_relation(
         self, from_id: str, relation: Dict[str, Any]
     ) -> None:
@@ -1158,6 +1299,584 @@ class AutoBotMemoryGraph:
         except Exception as e:
             logger.error("Failed to create conversation entity: %s", e)
             raise
+
+    # ==================== ISSUE #608: USER-CENTRIC SESSION TRACKING ====================
+
+    async def create_user_entity(
+        self,
+        user_id: str,
+        username: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Create or get a user entity in the knowledge graph.
+
+        Issue #608: User entities are the foundation for user-centric session tracking.
+        Each user has a unique entity that owns their sessions, secrets, and preferences.
+
+        Args:
+            user_id: Unique user identifier
+            username: Human-readable username
+            metadata: Optional additional metadata (email, display_name, etc.)
+
+        Returns:
+            Created or existing user entity
+        """
+        self.ensure_initialized()
+
+        try:
+            # Check if user entity already exists
+            # search_entities returns a list, not a dict
+            existing = await self.search_entities(
+                query=user_id,
+                entity_type="user",
+                limit=1,
+            )
+
+            if existing:
+                logger.debug("User entity already exists for %s", username)
+                return existing[0]
+
+            # Create user metadata
+            user_metadata = metadata or {}
+            user_metadata.update({
+                "user_id": user_id,
+                "username": username,
+                "status": "active",
+                "created_at": datetime.utcnow().isoformat(),
+            })
+
+            # Create user entity
+            entity = await self.create_entity(
+                entity_type="user",
+                name=f"User: {username}",
+                observations=[f"User account created: {username}"],
+                metadata=user_metadata,
+                tags=["user", "account"],
+            )
+
+            logger.info("Created user entity for %s (id: %s)", username, user_id)
+            return entity
+
+        except Exception as e:
+            logger.error("Failed to create user entity: %s", e)
+            raise
+
+    async def create_chat_session_entity(
+        self,
+        session_id: str,
+        owner_id: str,
+        title: Optional[str] = None,
+        collaborators: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Create a chat session entity with user ownership tracking.
+
+        Issue #608: Enhanced session entity that supports:
+        - Single user mode (owner only)
+        - Multi-user collaborative mode (owner + collaborators)
+        - Activity tracking (terminal, file, browser, desktop)
+        - Secret scoping
+
+        Args:
+            session_id: Unique session identifier
+            owner_id: User ID of session owner
+            title: Session title
+            collaborators: List of collaborator user IDs (for multi-user mode)
+            metadata: Optional additional metadata
+
+        Returns:
+            Created chat session entity
+        """
+        self.ensure_initialized()
+
+        try:
+            # Build session metadata
+            session_metadata = metadata or {}
+            session_metadata.update({
+                "session_id": session_id,
+                "owner_id": owner_id,
+                "mode": "collaborative" if collaborators else "single_user",
+                "collaborators": collaborators or [],
+                "status": "active",
+                "created_at": datetime.utcnow().isoformat(),
+            })
+
+            # Create session entity
+            entity = await self.create_entity(
+                entity_type="chat_session",
+                name=title or f"Chat Session {session_id[:8]}",
+                observations=[f"Session created by user {owner_id}"],
+                metadata=session_metadata,
+                tags=["session", "chat"],
+            )
+
+            # Create relationship: User owns Session (using ID-based relation)
+            await self.create_relation_by_id(
+                from_entity_id=owner_id,
+                to_entity_id=entity["id"],
+                relation_type="owns",
+                metadata={"role": "owner"},
+            )
+
+            # Create relationship: User has Session
+            await self.create_relation_by_id(
+                from_entity_id=owner_id,
+                to_entity_id=entity["id"],
+                relation_type="has_session",
+            )
+
+            # Add collaborator relationships if multi-user
+            if collaborators:
+                for collaborator_id in collaborators:
+                    await self.create_relation_by_id(
+                        from_entity_id=entity["id"],
+                        to_entity_id=collaborator_id,
+                        relation_type="has_participant",
+                        metadata={"role": "collaborator"},
+                    )
+
+            logger.info("Created chat session entity: %s", session_id)
+            return entity
+
+        except Exception as e:
+            logger.error("Failed to create chat session entity: %s", e)
+            raise
+
+    async def create_activity_entity(
+        self,
+        activity_type: str,
+        session_id: str,
+        user_id: str,
+        content: str,
+        secrets_used: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Create an activity entity within a chat session.
+
+        Issue #608: Activities are tracked with user attribution and secret usage.
+
+        Args:
+            activity_type: One of terminal_activity, file_activity, browser_activity, desktop_activity
+            session_id: Parent chat session ID
+            user_id: User who performed the activity
+            content: Activity content (command, file path, URL, etc.)
+            secrets_used: List of secret IDs used in this activity
+            metadata: Optional additional metadata
+
+        Returns:
+            Created activity entity
+        """
+        self.ensure_initialized()
+
+        valid_activity_types = {
+            "terminal_activity",
+            "file_activity",
+            "browser_activity",
+            "desktop_activity",
+        }
+
+        if activity_type not in valid_activity_types:
+            raise ValueError(f"Invalid activity_type: {activity_type}. Must be one of {valid_activity_types}")
+
+        try:
+            # Build activity metadata
+            activity_metadata = metadata or {}
+            activity_metadata.update({
+                "session_id": session_id,
+                "user_id": user_id,
+                "secrets_used": secrets_used or [],
+                "timestamp": datetime.utcnow().isoformat(),
+            })
+
+            # Create activity entity
+            entity = await self.create_entity(
+                entity_type=activity_type,
+                name=f"{activity_type.replace('_', ' ').title()} by {user_id[:8]}",
+                observations=[content],
+                metadata=activity_metadata,
+                tags=["activity", activity_type.replace("_activity", "")],
+            )
+
+            # Create relationship: Session has Activity (using ID-based relation)
+            await self.create_relation_by_id(
+                from_entity_id=session_id,
+                to_entity_id=entity["id"],
+                relation_type="has_activity",
+            )
+
+            # Create relationship: Activity performed by User
+            await self.create_relation_by_id(
+                from_entity_id=entity["id"],
+                to_entity_id=user_id,
+                relation_type="performed_by",
+            )
+
+            # Create secret usage relationships
+            if secrets_used:
+                for secret_id in secrets_used:
+                    await self.create_relation_by_id(
+                        from_entity_id=entity["id"],
+                        to_entity_id=secret_id,
+                        relation_type="uses_secret",
+                    )
+                    # Also create secret usage audit entity
+                    await self._create_secret_usage_audit(
+                        secret_id=secret_id,
+                        user_id=user_id,
+                        activity_type=activity_type,
+                        activity_id=entity["id"],
+                    )
+
+            logger.info("Created %s entity for session %s", activity_type, session_id)
+            return entity
+
+        except Exception as e:
+            logger.error("Failed to create activity entity: %s", e)
+            raise
+
+    async def create_secret_entity(
+        self,
+        name: str,
+        secret_type: str,
+        owner_id: str,
+        scope: str = "user",
+        session_id: Optional[str] = None,
+        shared_with: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Create a secret entity with ownership and scoping.
+
+        Issue #608: Secrets can be:
+        - User-scoped: Private to the owner
+        - Session-scoped: Shared within a specific session
+        - Shared: Explicitly shared with specific users
+
+        Note: This does NOT store the actual secret value. The encrypted value
+        should be stored separately in a secure vault.
+
+        Args:
+            name: Human-readable secret name
+            secret_type: Type of secret (api_key, token, password, ssh_key, certificate)
+            owner_id: User ID of secret owner
+            scope: Scope level (user, session, shared)
+            session_id: Session ID for session-scoped secrets
+            shared_with: List of user IDs for shared secrets
+            metadata: Optional additional metadata
+
+        Returns:
+            Created secret entity (without the actual secret value)
+        """
+        self.ensure_initialized()
+
+        valid_secret_types = {"api_key", "token", "password", "ssh_key", "certificate"}
+        valid_scopes = {"user", "session", "shared"}
+
+        if secret_type not in valid_secret_types:
+            raise ValueError(f"Invalid secret_type: {secret_type}. Must be one of {valid_secret_types}")
+        if scope not in valid_scopes:
+            raise ValueError(f"Invalid scope: {scope}. Must be one of {valid_scopes}")
+        if scope == "session" and not session_id:
+            raise ValueError("session_id is required for session-scoped secrets")
+
+        try:
+            # Build secret metadata
+            secret_metadata = metadata or {}
+            secret_metadata.update({
+                "owner_id": owner_id,
+                "secret_type": secret_type,
+                "scope": scope,
+                "session_id": session_id,
+                "shared_with": shared_with or [],
+                "usage_count": 0,
+                "created_at": datetime.utcnow().isoformat(),
+            })
+
+            # Create secret entity
+            entity = await self.create_entity(
+                entity_type="secret",
+                name=name,
+                observations=[f"Secret created: {secret_type} ({scope} scope)"],
+                metadata=secret_metadata,
+                tags=["secret", secret_type, scope],
+            )
+
+            # Create relationship: User owns Secret (using ID-based relation)
+            await self.create_relation_by_id(
+                from_entity_id=owner_id,
+                to_entity_id=entity["id"],
+                relation_type="owns",
+            )
+
+            # Create relationship: User has Secret
+            await self.create_relation_by_id(
+                from_entity_id=owner_id,
+                to_entity_id=entity["id"],
+                relation_type="has_secret",
+            )
+
+            # Session-scoped: link to session
+            if scope == "session" and session_id:
+                await self.create_relation_by_id(
+                    from_entity_id=session_id,
+                    to_entity_id=entity["id"],
+                    relation_type="has_secret",
+                    metadata={"scope": "session"},
+                )
+
+            # Shared: create relationships to shared users
+            if scope == "shared" and shared_with:
+                for shared_user_id in shared_with:
+                    await self.create_relation_by_id(
+                        from_entity_id=entity["id"],
+                        to_entity_id=shared_user_id,
+                        relation_type="shared_with",
+                    )
+
+            logger.info("Created secret entity: %s (scope: %s)", name, scope)
+            return entity
+
+        except Exception as e:
+            logger.error("Failed to create secret entity: %s", e)
+            raise
+
+    async def _create_secret_usage_audit(
+        self,
+        secret_id: str,
+        user_id: str,
+        activity_type: str,
+        activity_id: str,
+    ) -> Dict[str, Any]:
+        """
+        Create a secret usage audit entity for tracking access.
+
+        Issue #608: All secret usage is logged for audit trail.
+
+        Args:
+            secret_id: ID of the secret being used
+            user_id: ID of the user using the secret
+            activity_type: Type of activity using the secret
+            activity_id: ID of the activity entity
+
+        Returns:
+            Created secret usage audit entity
+        """
+        try:
+            audit_metadata = {
+                "secret_id": secret_id,
+                "user_id": user_id,
+                "activity_type": activity_type,
+                "activity_id": activity_id,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+
+            entity = await self.create_entity(
+                entity_type="secret_usage",
+                name=f"Secret Usage: {secret_id[:8]} by {user_id[:8]}",
+                observations=[f"Secret {secret_id} used in {activity_type}"],
+                metadata=audit_metadata,
+                tags=["audit", "secret_usage"],
+            )
+
+            return entity
+
+        except Exception as e:
+            logger.error("Failed to create secret usage audit: %s", e)
+            raise
+
+    async def get_user_sessions(
+        self,
+        user_id: str,
+        include_collaborative: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all sessions for a user.
+
+        Issue #608: Returns both owned sessions and collaborative sessions
+        where the user is a participant.
+
+        Args:
+            user_id: User ID to query
+            include_collaborative: Include sessions where user is collaborator
+
+        Returns:
+            List of session entities
+        """
+        self.ensure_initialized()
+
+        try:
+            sessions = []
+
+            # Get owned sessions via relationship
+            owned_relations = await self.get_relations(
+                entity_id=user_id,
+                relation_types=["owns", "has_session"],
+                direction="outgoing",
+            )
+
+            for rel in owned_relations.get("relations", []):
+                session = await self.get_entity(rel["to"])
+                if session and session.get("metadata", {}).get("session_id"):
+                    sessions.append(session)
+
+            # Get collaborative sessions if requested
+            if include_collaborative:
+                # search_entities returns a list, filter for chat_session type
+                collab_sessions = await self.search_entities(
+                    query=user_id,
+                    entity_type="chat_session",
+                    limit=100,
+                )
+                for session in collab_sessions:
+                    collaborators = session.get("metadata", {}).get("collaborators", [])
+                    if user_id in collaborators and session not in sessions:
+                        sessions.append(session)
+
+            return sessions
+
+        except Exception as e:
+            logger.error("Failed to get user sessions: %s", e)
+            return []
+
+    async def get_session_activities(
+        self,
+        session_id: str,
+        activity_types: Optional[List[str]] = None,
+        user_id: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get activities for a session.
+
+        Issue #608: Returns all activities within a session, optionally
+        filtered by activity type and/or user.
+
+        Args:
+            session_id: Session ID to query
+            activity_types: Filter by activity types (terminal, file, browser, desktop)
+            user_id: Filter by user who performed the activity
+            limit: Maximum number of activities to return
+
+        Returns:
+            List of activity entities
+        """
+        self.ensure_initialized()
+
+        try:
+            # Get activities via relationship
+            relations = await self.get_relations(
+                entity_id=session_id,
+                relation_types=["has_activity"],
+                direction="outgoing",
+            )
+
+            activities = []
+            for rel in relations.get("relations", []):
+                activity = await self.get_entity(rel["to"])
+                if not activity:
+                    continue
+
+                # Filter by activity type
+                if activity_types:
+                    if activity.get("type") not in activity_types:
+                        continue
+
+                # Filter by user
+                if user_id:
+                    if activity.get("metadata", {}).get("user_id") != user_id:
+                        continue
+
+                activities.append(activity)
+
+                if len(activities) >= limit:
+                    break
+
+            # Sort by timestamp descending
+            activities.sort(
+                key=lambda x: x.get("metadata", {}).get("timestamp", ""),
+                reverse=True,
+            )
+
+            return activities
+
+        except Exception as e:
+            logger.error("Failed to get session activities: %s", e)
+            return []
+
+    async def get_user_secrets(
+        self,
+        user_id: str,
+        scope: Optional[str] = None,
+        session_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get secrets accessible to a user.
+
+        Issue #608: Returns secrets based on access permissions:
+        - User-scoped: Only if user is owner
+        - Session-scoped: If user is owner or session participant
+        - Shared: If user is owner or in shared_with list
+
+        Args:
+            user_id: User ID to query
+            scope: Filter by scope (user, session, shared)
+            session_id: For session-scoped, which session to check
+
+        Returns:
+            List of secret entities (without actual secret values)
+        """
+        self.ensure_initialized()
+
+        try:
+            secrets = []
+
+            # Get owned secrets
+            owned_relations = await self.get_relations(
+                entity_id=user_id,
+                relation_types=["has_secret"],
+                direction="outgoing",
+            )
+
+            for rel in owned_relations.get("relations", []):
+                secret = await self.get_entity(rel["to"])
+                if not secret:
+                    continue
+
+                secret_scope = secret.get("metadata", {}).get("scope")
+
+                # Filter by scope if specified
+                if scope and secret_scope != scope:
+                    continue
+
+                # For session scope, filter by session_id if specified
+                if secret_scope == "session" and session_id:
+                    if secret.get("metadata", {}).get("session_id") != session_id:
+                        continue
+
+                secrets.append(secret)
+
+            # Get shared secrets (where user is in shared_with)
+            # search_entities returns a list
+            shared_search = await self.search_entities(
+                query=user_id,
+                entity_type="secret",
+                limit=100,
+            )
+
+            for secret in shared_search:
+                shared_with = secret.get("metadata", {}).get("shared_with", [])
+                if user_id in shared_with and secret not in secrets:
+                    if scope is None or secret.get("metadata", {}).get("scope") == scope:
+                        secrets.append(secret)
+
+            return secrets
+
+        except Exception as e:
+            logger.error("Failed to get user secrets: %s", e)
+            return []
 
     async def close(self):
         """Close all connections and cleanup resources"""

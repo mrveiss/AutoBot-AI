@@ -29,6 +29,35 @@ export interface ChatMessage {
   }
 }
 
+// Issue #608: User context for session tracking
+export interface UserContext {
+  id: string
+  username: string
+  displayName?: string
+  role?: 'owner' | 'collaborator' | 'viewer'
+}
+
+// Issue #608: Activity tracking within sessions
+export interface SessionActivity {
+  id: string
+  type: 'terminal' | 'file' | 'browser' | 'desktop'
+  userId: string
+  content: string
+  secretsUsed?: string[]
+  timestamp: Date
+  metadata?: Record<string, unknown>
+}
+
+// Issue #608: Session secret reference (not the actual value)
+export interface SessionSecret {
+  id: string
+  name: string
+  type: 'api_key' | 'token' | 'password' | 'ssh_key' | 'certificate'
+  scope: 'user' | 'session' | 'shared'
+  ownerId: string
+  usageCount: number
+}
+
 export interface ChatSession {
   id: string
   title: string
@@ -36,6 +65,14 @@ export interface ChatSession {
   createdAt: Date
   updatedAt: Date
   isActive: boolean
+  // Issue #608: User-centric session tracking
+  owner?: UserContext
+  collaborators?: UserContext[]
+  mode?: 'single_user' | 'collaborative'
+  // Issue #608: Activity tracking (terminal, file, browser, desktop)
+  activities?: SessionActivity[]
+  // Issue #608: Session-scoped secrets
+  sessionSecrets?: SessionSecret[]
   // Desktop automation context
   desktopSession?: {
     id?: string
@@ -519,6 +556,228 @@ export const useChatStore = defineStore('chat', () => {
     return session?.desktopSession?.automationContext || {}
   }
 
+  // ==================== ISSUE #608: USER-CENTRIC SESSION TRACKING ====================
+
+  /**
+   * Set the owner of a session.
+   * Issue #608: User-centric session tracking.
+   *
+   * @param sessionId - The session to update
+   * @param owner - The owner user context
+   */
+  function setSessionOwner(sessionId: string, owner: UserContext): boolean {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session) return false
+
+    session.owner = owner
+    session.mode = session.collaborators?.length ? 'collaborative' : 'single_user'
+    session.updatedAt = new Date()
+    logger.debug(`[Issue #608] Set session ${sessionId} owner to ${owner.username}`)
+    return true
+  }
+
+  /**
+   * Add a collaborator to a session.
+   * Issue #608: Multi-user collaborative mode support.
+   *
+   * @param sessionId - The session to update
+   * @param collaborator - The collaborator user context
+   */
+  function addSessionCollaborator(sessionId: string, collaborator: UserContext): boolean {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session) return false
+
+    if (!session.collaborators) {
+      session.collaborators = []
+    }
+
+    // Check if already a collaborator
+    if (session.collaborators.some(c => c.id === collaborator.id)) {
+      logger.debug(`[Issue #608] User ${collaborator.username} is already a collaborator`)
+      return false
+    }
+
+    session.collaborators.push({ ...collaborator, role: 'collaborator' })
+    session.mode = 'collaborative'
+    session.updatedAt = new Date()
+    logger.debug(`[Issue #608] Added collaborator ${collaborator.username} to session ${sessionId}`)
+    return true
+  }
+
+  /**
+   * Remove a collaborator from a session.
+   * Issue #608: Multi-user collaborative mode support.
+   *
+   * @param sessionId - The session to update
+   * @param collaboratorId - The collaborator user ID to remove
+   */
+  function removeSessionCollaborator(sessionId: string, collaboratorId: string): boolean {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session || !session.collaborators) return false
+
+    const index = session.collaborators.findIndex(c => c.id === collaboratorId)
+    if (index === -1) return false
+
+    session.collaborators.splice(index, 1)
+
+    // Update mode if no more collaborators
+    if (session.collaborators.length === 0) {
+      session.mode = 'single_user'
+    }
+
+    session.updatedAt = new Date()
+    logger.debug(`[Issue #608] Removed collaborator ${collaboratorId} from session ${sessionId}`)
+    return true
+  }
+
+  /**
+   * Add an activity to a session.
+   * Issue #608: Activity tracking within sessions.
+   *
+   * @param sessionId - The session to update
+   * @param activity - The activity to add (without id and timestamp)
+   */
+  function addSessionActivity(
+    sessionId: string,
+    activity: Omit<SessionActivity, 'id' | 'timestamp'>
+  ): string | null {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session) return null
+
+    if (!session.activities) {
+      session.activities = []
+    }
+
+    const newActivity: SessionActivity = {
+      id: generateMessageId(), // Reuse message ID generator
+      timestamp: new Date(),
+      ...activity
+    }
+
+    session.activities.push(newActivity)
+    session.updatedAt = new Date()
+    logger.debug(`[Issue #608] Added ${activity.type} activity to session ${sessionId}`)
+    return newActivity.id
+  }
+
+  /**
+   * Get activities for a session with optional filtering.
+   * Issue #608: Activity tracking within sessions.
+   *
+   * @param sessionId - The session to query
+   * @param filters - Optional filters for activity type and user
+   */
+  function getSessionActivities(
+    sessionId: string,
+    filters?: { type?: SessionActivity['type']; userId?: string }
+  ): SessionActivity[] {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session?.activities) return []
+
+    let activities = [...session.activities]
+
+    if (filters?.type) {
+      activities = activities.filter(a => a.type === filters.type)
+    }
+
+    if (filters?.userId) {
+      activities = activities.filter(a => a.userId === filters.userId)
+    }
+
+    // Sort by timestamp descending
+    return activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+  }
+
+  /**
+   * Add a session-scoped secret reference.
+   * Issue #608: Secret ownership model.
+   * Note: This only stores metadata, not the actual secret value.
+   *
+   * @param sessionId - The session to update
+   * @param secret - The secret reference (without usage count)
+   */
+  function addSessionSecret(
+    sessionId: string,
+    secret: Omit<SessionSecret, 'usageCount'>
+  ): boolean {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session) return false
+
+    if (!session.sessionSecrets) {
+      session.sessionSecrets = []
+    }
+
+    // Check if secret already added
+    if (session.sessionSecrets.some(s => s.id === secret.id)) {
+      logger.debug(`[Issue #608] Secret ${secret.name} already in session`)
+      return false
+    }
+
+    session.sessionSecrets.push({ ...secret, usageCount: 0 })
+    session.updatedAt = new Date()
+    logger.debug(`[Issue #608] Added session secret ${secret.name} to session ${sessionId}`)
+    return true
+  }
+
+  /**
+   * Remove a session-scoped secret reference.
+   * Issue #608: Secret ownership model.
+   *
+   * @param sessionId - The session to update
+   * @param secretId - The secret ID to remove
+   */
+  function removeSessionSecret(sessionId: string, secretId: string): boolean {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session?.sessionSecrets) return false
+
+    const index = session.sessionSecrets.findIndex(s => s.id === secretId)
+    if (index === -1) return false
+
+    session.sessionSecrets.splice(index, 1)
+    session.updatedAt = new Date()
+    logger.debug(`[Issue #608] Removed secret ${secretId} from session ${sessionId}`)
+    return true
+  }
+
+  /**
+   * Increment the usage count for a session secret.
+   * Issue #608: Secret usage tracking.
+   *
+   * @param sessionId - The session containing the secret
+   * @param secretId - The secret ID to update
+   */
+  function incrementSecretUsage(sessionId: string, secretId: string): boolean {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session?.sessionSecrets) return false
+
+    const secret = session.sessionSecrets.find(s => s.id === secretId)
+    if (!secret) return false
+
+    secret.usageCount++
+    logger.debug(`[Issue #608] Secret ${secretId} usage count: ${secret.usageCount}`)
+    return true
+  }
+
+  /**
+   * Get the current user context for a session.
+   * Issue #608: User-centric session tracking.
+   *
+   * @param sessionId - The session to query
+   * @param userId - The user ID to check
+   * @returns The user's role in the session, or null if not a participant
+   */
+  function getUserSessionRole(sessionId: string, userId: string): UserContext['role'] | null {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session) return null
+
+    if (session.owner?.id === userId) {
+      return 'owner'
+    }
+
+    const collaborator = session.collaborators?.find(c => c.id === userId)
+    return collaborator?.role || null
+  }
+
   // CRITICAL FIX: Debug method to verify persistence state
   function debugPersistenceState(): void {
     try {
@@ -602,6 +861,16 @@ export const useChatStore = defineStore('chat', () => {
     getDesktopUrl,
     updateDesktopContext,
     getDesktopContext,
+    // Issue #608: User-centric session tracking
+    setSessionOwner,
+    addSessionCollaborator,
+    removeSessionCollaborator,
+    addSessionActivity,
+    getSessionActivities,
+    addSessionSecret,
+    removeSessionSecret,
+    incrementSecretUsage,
+    getUserSessionRole,
     // Debug method
     debugPersistenceState
   }
@@ -625,6 +894,11 @@ export const useChatStore = defineStore('chat', () => {
               messages: session.messages.map((msg: any) => ({
                 ...msg,
                 timestamp: new Date(msg.timestamp)
+              })),
+              // Issue #608: Handle activity timestamps
+              activities: session.activities?.map((activity: any) => ({
+                ...activity,
+                timestamp: new Date(activity.timestamp)
               })),
               // Handle desktop session dates
               desktopSession: session.desktopSession ? {
