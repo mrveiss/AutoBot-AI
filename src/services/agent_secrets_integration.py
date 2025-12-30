@@ -184,6 +184,47 @@ class AgentSecretsIntegration:
         self._custom_mappings[mapping.agent_type] = mapping
         logger.info("Registered secret mapping for agent: %s", mapping.agent_type)
 
+    def _determine_types_to_fetch(
+        self,
+        mapping: AgentSecretMapping,
+        secret_types: Optional[List[str]],
+    ) -> Set[str]:
+        """Determine which secret types to fetch based on mapping and overrides (Issue #665: extracted helper)."""
+        if secret_types:
+            return set(secret_types)
+        return mapping.required_types | mapping.optional_types
+
+    async def _fetch_and_merge_secrets(
+        self,
+        types_to_fetch: Set[str],
+        agent_type: str,
+        chat_id: Optional[str],
+        include_general: bool,
+        accessed_by: Optional[str],
+    ) -> Dict[str, str]:
+        """Fetch chat and general secrets and merge with priority (Issue #665: extracted helper)."""
+        agent_secrets: Dict[str, str] = {}
+        accessor = accessed_by or f"agent:{agent_type}"
+
+        # Fetch chat-scoped secrets first (higher priority)
+        if chat_id:
+            chat_secrets = await self._fetch_secrets_by_types(
+                types_to_fetch, scope="chat", chat_id=chat_id, accessed_by=accessor
+            )
+            agent_secrets.update(chat_secrets)
+
+        # Fetch general secrets
+        if include_general:
+            general_secrets = await self._fetch_secrets_by_types(
+                types_to_fetch, scope="general", chat_id=None, accessed_by=accessor
+            )
+            # Only add general secrets that don't override chat secrets
+            for name, value in general_secrets.items():
+                if name not in agent_secrets:
+                    agent_secrets[name] = value
+
+        return agent_secrets
+
     async def get_secrets_for_agent(
         self,
         agent_type: str,
@@ -216,40 +257,13 @@ class AgentSecretsIntegration:
             logger.debug("Agent %s has auto_inject disabled", agent_type)
             return {}
 
-        # Determine which secret types to fetch
-        types_to_fetch = set()
-        if secret_types:
-            types_to_fetch = set(secret_types)
-        else:
-            types_to_fetch = mapping.required_types | mapping.optional_types
-
+        types_to_fetch = self._determine_types_to_fetch(mapping, secret_types)
         if not types_to_fetch:
             return {}
 
-        agent_secrets: Dict[str, str] = {}
-
-        # Fetch chat-scoped secrets first (higher priority)
-        if chat_id:
-            chat_secrets = await self._fetch_secrets_by_types(
-                types_to_fetch,
-                scope="chat",
-                chat_id=chat_id,
-                accessed_by=accessed_by or f"agent:{agent_type}",
-            )
-            agent_secrets.update(chat_secrets)
-
-        # Fetch general secrets
-        if include_general:
-            general_secrets = await self._fetch_secrets_by_types(
-                types_to_fetch,
-                scope="general",
-                chat_id=None,
-                accessed_by=accessed_by or f"agent:{agent_type}",
-            )
-            # Only add general secrets that don't override chat secrets
-            for name, value in general_secrets.items():
-                if name not in agent_secrets:
-                    agent_secrets[name] = value
+        agent_secrets = await self._fetch_and_merge_secrets(
+            types_to_fetch, agent_type, chat_id, include_general, accessed_by
+        )
 
         logger.info(
             "Retrieved %d secrets for agent %s (chat_id=%s)",

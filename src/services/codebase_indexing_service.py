@@ -734,73 +734,82 @@ class CodebaseIndexingService:
             )
             return False
 
+    def _group_files_by_category(self, files: List) -> Dict[str, List]:
+        """Group files by their category (Issue #665: extracted helper)."""
+        files_by_category = {}
+        for file_info in files:
+            category = file_info.category
+            if category not in files_by_category:
+                files_by_category[category] = []
+            files_by_category[category].append(file_info)
+        return files_by_category
+
+    async def _process_category_batches(
+        self, category_files: List, batch_size: int, knowledge_base
+    ) -> None:
+        """Process a category's files in batches (Issue #665: extracted helper)."""
+        for i in range(0, len(category_files), batch_size):
+            batch = category_files[i : i + batch_size]
+
+            tasks = [
+                self.index_single_file(file_info, knowledge_base)
+                for file_info in batch
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            successful_in_batch = sum(1 for r in results if r is True)
+            logger.info(
+                "Batch %s: %s/%s files indexed successfully",
+                i // batch_size + 1, successful_in_batch, len(batch)
+            )
+
+            await asyncio.sleep(TimingConstants.MICRO_DELAY)
+
+    def _log_indexing_completion(self) -> None:
+        """Log indexing completion summary (Issue #665: extracted helper)."""
+        logger.info("Codebase indexing completed!")
+        logger.info(
+            "Results: %s successful, %s failed",
+            self.progress.successful_files, self.progress.failed_files
+        )
+        logger.info("Total chunks created: %s", self.progress.total_chunks)
+
+        if self.progress.errors:
+            logger.warning("Errors encountered: %s", len(self.progress.errors))
+            for error in self.progress.errors[:10]:
+                logger.warning("  - %s", error)
+
     async def index_codebase(
         self, batch_size: int = 10, max_files: Optional[int] = None
     ) -> IndexingProgress:
         """Index the entire codebase with progress tracking"""
         logger.info("Starting codebase indexing for: %s", self.root_path)
 
-        # Reset progress
         self.progress = IndexingProgress()
         self.progress.start_time = datetime.now()
 
         try:
-            # Get knowledge base
             knowledge_base = await get_knowledge_base()
             if knowledge_base is None:
                 raise RuntimeError("Could not initialize knowledge base")
 
-            # Scan files
             logger.info("Scanning codebase for files...")
             files = self._scan_files()
 
-            # Limit files if specified
             if max_files:
                 files = files[:max_files]
 
             self.progress.total_files = len(files)
             logger.info("Found %s files to index", len(files))
 
-            # Group files by category for organized processing
-            files_by_category = {}
-            for file_info in files:
-                category = file_info.category
-                if category not in files_by_category:
-                    files_by_category[category] = []
-                files_by_category[category].append(file_info)
+            files_by_category = self._group_files_by_category(files)
 
-            # Process files in batches by category
             for category, category_files in files_by_category.items():
                 logger.info("Processing %s files in category: %s", len(category_files), category)
-
-                # Process in batches to avoid overwhelming the system
-                for i in range(0, len(category_files), batch_size):
-                    batch = category_files[i : i + batch_size]
-
-                    # Process batch concurrently
-                    tasks = [
-                        self.index_single_file(file_info, knowledge_base)
-                        for file_info in batch
-                    ]
-                    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-                    # Log batch progress
-                    successful_in_batch = sum(1 for r in results if r is True)
-                    logger.info("Batch %s: %s/%s files indexed successfully", i//batch_size + 1, successful_in_batch, len(batch))
-
-                    # Small delay to prevent overwhelming the system
-                    await asyncio.sleep(TimingConstants.MICRO_DELAY)
+                await self._process_category_batches(category_files, batch_size, knowledge_base)
 
             self.progress.end_time = datetime.now()
-
-            logger.info("Codebase indexing completed!")
-            logger.info("Results: %s successful, %s failed", self.progress.successful_files, self.progress.failed_files)
-            logger.info("Total chunks created: %s", self.progress.total_chunks)
-
-            if self.progress.errors:
-                logger.warning("Errors encountered: %s", len(self.progress.errors))
-                for error in self.progress.errors[:10]:  # Log first 10 errors
-                    logger.warning("  - %s", error)
+            self._log_indexing_completion()
 
             return self.progress
 
