@@ -297,54 +297,22 @@ Focus on practical assessment that helps improve agent performance and user expe
         context: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
-        Compare multiple agent responses to the same request
+        Compare multiple agent responses to the same request (Issue #665: refactored).
 
         Returns:
             Dict with ranked responses and comparative analysis
         """
         try:
-            evaluations = []
-
-            # Evaluate each response
-            for i, (response, agent_type) in enumerate(zip(responses, agent_types)):
-                evaluation = await self.evaluate_agent_response(
-                    request, response, agent_type, context
-                )
-                evaluations.append(
-                    {
-                        "response_index": i,
-                        "agent_type": agent_type,
-                        "response": response,
-                        "evaluation": evaluation,
-                    }
-                )
-
-            # Rank by overall score
+            # Evaluate and rank each response
+            evaluations = await self._evaluate_all_responses(
+                request, responses, agent_types, context
+            )
             evaluations.sort(key=lambda x: x["evaluation"].overall_score, reverse=True)
 
             # Generate comparative insights
             best_eval = evaluations[0]["evaluation"]
             worst_eval = evaluations[-1]["evaluation"]
-
-            # Find best performing dimensions across all responses
-            dimension_leaders = {}
-            for dimension in JudgmentDimension:
-                best_score = 0.0
-                best_agent = None
-                for eval_data in evaluations:
-                    scores = eval_data["evaluation"].criterion_scores
-                    dim_score = next(
-                        (s.score for s in scores if s.dimension == dimension), 0.0
-                    )
-                    if dim_score > best_score:
-                        best_score = dim_score
-                        best_agent = eval_data["agent_type"]
-
-                if best_agent:
-                    dimension_leaders[dimension.value] = {
-                        "agent": best_agent,
-                        "score": best_score,
-                    }
+            dimension_leaders = self._find_dimension_leaders(evaluations)
 
             return {
                 "best_response": evaluations[0],
@@ -371,6 +339,53 @@ Focus on practical assessment that helps improve agent performance and user expe
                 "best_response": None,
                 "recommendation": "Unable to compare responses due to error",
             }
+
+    async def _evaluate_all_responses(
+        self,
+        request: Dict[str, Any],
+        responses: List[Dict[str, Any]],
+        agent_types: List[str],
+        context: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        """Evaluate all agent responses (Issue #665: extracted helper)."""
+        evaluations = []
+        for i, (response, agent_type) in enumerate(zip(responses, agent_types)):
+            evaluation = await self.evaluate_agent_response(
+                request, response, agent_type, context
+            )
+            evaluations.append(
+                {
+                    "response_index": i,
+                    "agent_type": agent_type,
+                    "response": response,
+                    "evaluation": evaluation,
+                }
+            )
+        return evaluations
+
+    def _find_dimension_leaders(
+        self, evaluations: List[Dict[str, Any]]
+    ) -> Dict[str, Dict[str, Any]]:
+        """Find best performing agent for each dimension (Issue #665: extracted helper)."""
+        dimension_leaders = {}
+        for dimension in JudgmentDimension:
+            best_score = 0.0
+            best_agent = None
+            for eval_data in evaluations:
+                scores = eval_data["evaluation"].criterion_scores
+                dim_score = next(
+                    (s.score for s in scores if s.dimension == dimension), 0.0
+                )
+                if dim_score > best_score:
+                    best_score = dim_score
+                    best_agent = eval_data["agent_type"]
+
+            if best_agent:
+                dimension_leaders[dimension.value] = {
+                    "agent": best_agent,
+                    "score": best_score,
+                }
+        return dimension_leaders
 
     def _find_consensus_strengths(self, evaluations: List[Dict]) -> List[str]:
         """Find dimensions where all agents performed well"""

@@ -554,9 +554,14 @@ class ToolPatternAnalyzer:
         return min(1.0, optimization_potential)
 
     async def _identify_optimization_opportunities(self) -> None:
-        """Identify specific optimization opportunities"""
+        """Identify specific optimization opportunities (Issue #665: refactored)."""
+        self._check_batching_opportunity()
+        self._check_caching_opportunity()
+        self._check_sequence_optimization()
+        self._check_todowrite_optimization()
 
-        # Opportunity 1: Batch similar operations
+    def _check_batching_opportunity(self) -> None:
+        """Check for batching optimization opportunity (Issue #665: extracted helper)."""
         similar_operations = self._find_similar_operations()
         if similar_operations:
             self.optimization_opportunities.append(
@@ -576,7 +581,8 @@ class ToolPatternAnalyzer:
                 )
             )
 
-        # Opportunity 2: Cache frequent reads
+    def _check_caching_opportunity(self) -> None:
+        """Check for caching optimization opportunity (Issue #665: extracted helper)."""
         frequent_reads = self._find_frequent_reads()
         if frequent_reads:
             self.optimization_opportunities.append(
@@ -594,7 +600,8 @@ class ToolPatternAnalyzer:
                 )
             )
 
-        # Opportunity 3: Optimize tool sequences
+    def _check_sequence_optimization(self) -> None:
+        """Check for sequence optimization opportunity (Issue #665: extracted helper)."""
         inefficient_sequences = self._find_inefficient_sequences()
         if inefficient_sequences:
             self.optimization_opportunities.append(
@@ -615,7 +622,8 @@ class ToolPatternAnalyzer:
                 )
             )
 
-        # Opportunity 4: Reduce TodoWrite frequency
+    def _check_todowrite_optimization(self) -> None:
+        """Check for TodoWrite optimization opportunity (Issue #665: extracted helper)."""
         todowrite_calls = [
             call for call in self.tool_calls if "todo" in call.tool_name.lower()
         ]
