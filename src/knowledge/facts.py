@@ -27,6 +27,73 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# NPU-ACCELERATED EMBEDDING GENERATION (Issue #165)
+# =============================================================================
+# Cached state to avoid repeated imports and availability checks
+_npu_client_cache: Optional[Any] = None
+_npu_available_cache: Optional[bool] = None
+_npu_cache_timestamp: float = 0.0
+_NPU_CACHE_TTL: float = 30.0  # Cache availability for 30 seconds
+
+# Metrics counters for observability
+_npu_embedding_count: int = 0
+_fallback_embedding_count: int = 0
+
+# Bounded concurrency for fallback to prevent overwhelming Ollama
+_FALLBACK_MAX_CONCURRENT: int = 5
+
+
+async def _get_npu_client_cached() -> tuple:
+    """
+    Get cached NPU client and availability status.
+
+    Issue #165: Caches client instance and availability check to reduce
+    overhead on repeated embedding calls.
+
+    Returns:
+        Tuple of (client, is_available)
+    """
+    global _npu_client_cache, _npu_available_cache, _npu_cache_timestamp
+
+    import time
+    current_time = time.time()
+
+    # Check if cache is still valid
+    if (
+        _npu_client_cache is not None
+        and _npu_available_cache is not None
+        and (current_time - _npu_cache_timestamp) < _NPU_CACHE_TTL
+    ):
+        return _npu_client_cache, _npu_available_cache
+
+    # Refresh cache
+    try:
+        from backend.services.npu_client import get_npu_client
+        _npu_client_cache = get_npu_client()
+        _npu_available_cache = await _npu_client_cache.is_available()
+        _npu_cache_timestamp = current_time
+        return _npu_client_cache, _npu_available_cache
+    except Exception as e:
+        logger.debug("Failed to get NPU client: %s", e)
+        _npu_available_cache = False
+        _npu_cache_timestamp = current_time
+        return None, False
+
+
+def get_embedding_metrics() -> Dict[str, int]:
+    """
+    Get metrics on NPU vs fallback embedding usage.
+
+    Returns:
+        Dict with npu_count and fallback_count
+    """
+    return {
+        "npu_count": _npu_embedding_count,
+        "fallback_count": _fallback_embedding_count,
+    }
+
+
 async def _generate_embedding_with_npu_fallback(text: str) -> List[float]:
     """
     Generate embedding using NPU worker with fallback to LlamaIndex.
@@ -35,25 +102,30 @@ async def _generate_embedding_with_npu_fallback(text: str) -> List[float]:
     embedding generation. Falls back to LlamaIndex's embed_model if NPU
     is unavailable.
 
+    Optimizations:
+    - Caches NPU client and availability to reduce overhead
+    - Tracks metrics for observability
+
     Args:
         text: Text content to embed
 
     Returns:
         Embedding vector as list of floats
     """
-    try:
-        # Try NPU worker first for hardware acceleration
-        from backend.services.npu_client import get_npu_client
+    global _npu_embedding_count, _fallback_embedding_count
 
-        client = get_npu_client()
-        if await client.is_available():
+    client, is_available = await _get_npu_client_cached()
+
+    if is_available and client:
+        try:
             embedding = await client.generate_embedding(text)
             if embedding:
+                _npu_embedding_count += 1
                 logger.debug("Generated embedding via NPU worker")
                 return embedding
-            logger.warning("NPU worker returned empty embedding, falling back to LlamaIndex")
-    except Exception as e:
-        logger.debug("NPU worker unavailable, falling back to LlamaIndex: %s", e)
+            logger.warning("NPU worker returned empty embedding, falling back")
+        except Exception as e:
+            logger.debug("NPU embedding failed, falling back: %s", e)
 
     # Fallback to LlamaIndex embed_model
     from llama_index.core import Settings
@@ -61,7 +133,8 @@ async def _generate_embedding_with_npu_fallback(text: str) -> List[float]:
     embedding = await asyncio.to_thread(
         Settings.embed_model.get_text_embedding, text
     )
-    logger.debug("Generated embedding via LlamaIndex")
+    _fallback_embedding_count += 1
+    logger.debug("Generated embedding via LlamaIndex fallback")
     return embedding
 
 
@@ -72,7 +145,12 @@ async def _generate_embeddings_batch_with_npu_fallback(
     Generate embeddings for multiple texts using NPU worker with fallback.
 
     Issue #165: Uses NPU worker batch endpoint for efficient bulk embedding
-    generation. Falls back to parallel LlamaIndex calls if NPU is unavailable.
+    generation. Falls back to bounded-parallel LlamaIndex calls if unavailable.
+
+    Optimizations:
+    - Caches NPU client to avoid repeated lookups
+    - Uses bounded concurrency for fallback to prevent overwhelming Ollama
+    - Tracks metrics for observability
 
     Args:
         texts: List of text contents to embed
@@ -80,36 +158,41 @@ async def _generate_embeddings_batch_with_npu_fallback(
     Returns:
         List of embedding vectors
     """
+    global _npu_embedding_count, _fallback_embedding_count
+
     if not texts:
         return []
 
-    try:
-        # Try NPU worker batch endpoint first
-        from backend.services.npu_client import get_npu_client
+    client, is_available = await _get_npu_client_cached()
 
-        client = get_npu_client()
-        if await client.is_available():
+    if is_available and client:
+        try:
             result = await client.generate_embeddings(texts)
             if result and len(result.embeddings) == len(texts):
+                _npu_embedding_count += len(texts)
                 logger.info(
                     "Generated %d embeddings via NPU worker in %.2fms",
                     len(texts), result.processing_time_ms
                 )
                 return result.embeddings
-            logger.warning("NPU worker batch returned incomplete results, falling back")
-    except Exception as e:
-        logger.debug("NPU worker batch unavailable, falling back to LlamaIndex: %s", e)
+            logger.warning("NPU batch returned incomplete results, falling back")
+        except Exception as e:
+            logger.debug("NPU batch failed, falling back: %s", e)
 
-    # Fallback to parallel LlamaIndex calls
+    # Fallback to bounded-parallel LlamaIndex calls
     from llama_index.core import Settings
 
+    semaphore = asyncio.Semaphore(_FALLBACK_MAX_CONCURRENT)
+
     async def embed_one(text: str) -> List[float]:
-        return await asyncio.to_thread(
-            Settings.embed_model.get_text_embedding, text
-        )
+        async with semaphore:
+            return await asyncio.to_thread(
+                Settings.embed_model.get_text_embedding, text
+            )
 
     embeddings = await asyncio.gather(*[embed_one(t) for t in texts])
-    logger.debug("Generated %d embeddings via LlamaIndex", len(texts))
+    _fallback_embedding_count += len(texts)
+    logger.debug("Generated %d embeddings via LlamaIndex fallback", len(texts))
     return list(embeddings)
 
 
