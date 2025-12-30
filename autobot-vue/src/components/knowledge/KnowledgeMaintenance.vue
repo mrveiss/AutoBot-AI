@@ -68,7 +68,7 @@
           </div>
         </div>
 
-        <div class="health-card">
+        <div v-if="healthDashboard?.quality" class="health-card">
           <div class="card-icon quality" :class="getQualityClass(healthDashboard.quality.overall_score)">
             <i class="fas fa-chart-line"></i>
           </div>
@@ -79,7 +79,7 @@
         </div>
 
         <!-- Quality Dimensions -->
-        <div class="quality-dimensions">
+        <div v-if="healthDashboard?.quality?.dimensions" class="quality-dimensions">
           <h4>Quality Dimensions</h4>
           <div class="dimension-bars">
             <div
@@ -103,16 +103,16 @@
         </div>
 
         <!-- Issues Summary -->
-        <div class="issues-summary">
+        <div v-if="healthDashboard?.quality" class="issues-summary">
           <h4>Issues Found</h4>
           <div class="issues-counts">
             <div class="issue-count critical">
               <i class="fas fa-exclamation-circle"></i>
-              <span>{{ healthDashboard.quality.critical_issues }} Critical</span>
+              <span>{{ healthDashboard.quality.critical_issues ?? 0 }} Critical</span>
             </div>
             <div class="issue-count warning">
               <i class="fas fa-exclamation-triangle"></i>
-              <span>{{ healthDashboard.quality.warnings }} Warnings</span>
+              <span>{{ healthDashboard.quality.warnings ?? 0 }} Warnings</span>
             </div>
           </div>
         </div>

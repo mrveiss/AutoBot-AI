@@ -18,7 +18,7 @@ export function createMonitoredApiClient(originalApiClient) {
       return function(...args) {
         const startTime = performance.now()
         const method = prop.toUpperCase()
-        const url = this.getUrlFromArgs(prop, args)
+        const url = getUrlFromArgs(prop, args)
         
         rumAgent.trackUserInteraction('api_call_initiated', null, { method, url })
         

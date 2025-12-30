@@ -1,5 +1,5 @@
 import { defineAsyncComponent, defineComponent, h } from 'vue'
-import type { AsyncComponentLoader, Component } from 'vue'
+import type { AsyncComponentLoader } from 'vue'
 import AsyncErrorFallback from '@/components/async/AsyncErrorFallback.vue'
 // Issue #156 Fix: Import RumAgent to get complete Window.rum type
 import '../utils/RumAgent'
@@ -57,7 +57,7 @@ export function createAsyncComponent(
     retryDelay = 1000,
     timeout = 10000,
     props = {},
-    showProgress = true,
+    showProgress: _showProgress = true, // Reserved for future progress indicators
     onError,
     onRetry
   } = options
@@ -121,7 +121,7 @@ export function defineRobustAsyncComponent(
 
       const component = await loader()
 
-      const loadTime = Date.now() - startTime
+      const _loadTime = Date.now() - startTime // For future metrics logging
 
       // Reset retry count on success
       retryCount = 0

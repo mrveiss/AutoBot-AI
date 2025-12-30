@@ -4,7 +4,7 @@
  * Provides reactive chat history management with proper API endpoints
  */
 
-import { ref, reactive, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import apiClient from '@/utils/ApiClient.js';
 import { createLogger } from '@/utils/debugUtils';
 

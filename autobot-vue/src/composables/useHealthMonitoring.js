@@ -3,7 +3,7 @@
  * Extracted from App.vue for better maintainability
  */
 
-import { ref, onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { useRouter } from 'vue-router'
 
@@ -19,7 +19,7 @@ export function useHealthMonitoring() {
   const router = useRouter()
   const appStore = useAppStore()
 
-  let systemHealthCheck = null
+  let _systemHealthCheck = null // Reserved for future health check expansion
   let notificationCleanup = null
 
   // OPTIMIZED: Intelligent system health monitoring
@@ -73,7 +73,7 @@ export function useHealthMonitoring() {
   // Router event monitoring - OPTIMIZED: Event-driven instead of polling
   const setupRouterMonitoring = () => {
     // Monitor router navigation events
-    router.afterEach((to, from) => {
+    router.afterEach((_to, _from) => {
 
       // Update user activity in smart monitoring controller
       smartMonitoringController.userActivity.lastActivity = Date.now()

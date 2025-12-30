@@ -8,7 +8,7 @@
  * - Real-time connection recovery with automatic retry
  */
 
-import { NetworkConstants, ServiceURLs } from '../constants/network';
+import { NetworkConstants } from '../constants/network';
 import { createLogger } from '@/utils/debugUtils';
 
 const logger = createLogger('BackendFallback');
@@ -114,7 +114,7 @@ export class BackendFallbackService {
       
       clearTimeout(timeoutId);
       return response.ok;
-    } catch (error) {
+    } catch (_error) {
       clearTimeout(timeoutId);
       return false;
     }

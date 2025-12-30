@@ -6,7 +6,6 @@ import type {
   WorkflowApproval
 } from '@/types/api'
 import apiClient from '@/utils/ApiClient'
-import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
 
 // Create scoped logger for ApiService

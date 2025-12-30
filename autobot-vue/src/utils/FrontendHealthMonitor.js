@@ -4,7 +4,7 @@
  */
 
 import { cacheBuster } from './CacheBuster.js';
-import { routerHealthMonitor } from './RouterHealthMonitor.js';
+import { routerHealthMonitor as _routerHealthMonitor } from './RouterHealthMonitor.js'; // Reserved for future router health integration
 import { createLogger } from '@/utils/debugUtils';
 
 // Create scoped logger for FrontendHealthMonitor
@@ -178,7 +178,8 @@ class FrontendHealthMonitor {
             this.healthStatus.backend = backendHealth.status === 'healthy' ? 'healthy' : 'degraded';
             this.healthStatus.overall = this.healthStatus.backend;
             this.notifyHealthChange();
-        } catch (error) {
+        } catch (_error) {
+            // Silently ignore health check errors
         }
     }
 
@@ -303,7 +304,7 @@ class FrontendHealthMonitor {
     /**
      * Execute specific recovery strategy - DISABLED
      */
-    async executeRecoveryStrategy(strategy) {
+    async executeRecoveryStrategy(_strategy) {
         return;
     }
 

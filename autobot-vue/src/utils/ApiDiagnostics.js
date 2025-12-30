@@ -64,9 +64,9 @@ class ApiDiagnostics {
         if (response.data) {
           connectivity.message = response.data.message;
         }
-      } catch (helloError) {
+      } catch (_helloError) {
         // Fallback to health endpoint
-        const healthResponse = await apiClient.getSystemHealth();
+        await apiClient.getSystemHealth();
         connectivity.responseTime = Math.round(performance.now() - startTime);
         connectivity.reachable = true;
         connectivity.alternativeEndpoint = '/api/system/health';

@@ -551,7 +551,7 @@ class GlobalWebSocketService {
       try {
         await this.connect()
         return this.isConnected.value
-      } catch (error) {
+      } catch (_error) {
         return false
       }
     }

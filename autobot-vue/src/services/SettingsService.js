@@ -60,7 +60,7 @@ export class SettingsService {
         const ollamaUrl = await appConfig.getServiceUrl('ollama');
         this.defaultSettings.backend.api_endpoint = backendUrl.replace(/\/$/, '');
         this.defaultSettings.backend.ollama_endpoint = ollamaUrl;
-      } catch (configError) {
+      } catch (_configError) {
         logger.warn('AppConfig loading failed, using appConfig defaults');
         // Use appConfig defaults instead of hardcoded IPs
         const defaults = appConfig.get('defaults', {});

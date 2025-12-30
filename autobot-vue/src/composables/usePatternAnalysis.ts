@@ -159,7 +159,7 @@ export function usePatternAnalysis() {
   const getBackendUrl = async (): Promise<string> => {
     try {
       return await appConfig.getServiceUrl('backend')
-    } catch (e) {
+    } catch (_e) {
       logger.warn('AppConfig failed, using SSOT config backend URL')
       return getConfig().backendUrl
     }

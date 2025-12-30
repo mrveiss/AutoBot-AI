@@ -265,8 +265,9 @@ function parseShortcut(shortcut: string): {
 
 /**
  * Check if keyboard event matches shortcut
+ * (Note: Currently unused but preserved for potential direct shortcut matching use cases)
  */
-function matchesShortcut(event: KeyboardEvent, shortcut: string): boolean {
+function _matchesShortcut(event: KeyboardEvent, shortcut: string): boolean {
   const parsed = parseShortcut(shortcut)
 
   return (

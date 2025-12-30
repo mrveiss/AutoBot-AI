@@ -161,7 +161,7 @@ class CacheService {
     let expiredCount = 0;
     let validCount = 0;
 
-    for (const [key, entry] of this.cache) {
+    for (const [_key, entry] of this.cache) {
       totalSize += JSON.stringify(entry.data).length;
 
       if (now > entry.expiresAt) {

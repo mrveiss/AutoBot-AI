@@ -40,7 +40,7 @@ class UnifiedLoadingManager {
     return this.states.get(key)!
   }
 
-  private createState(key: string): LoadingState {
+  private createState(_key: string): LoadingState {
     return {
       isLoading: ref(false),
       error: ref(null),
@@ -171,7 +171,7 @@ export function useUnifiedLoading(componentKey?: string) {
   ): Promise<T | null> => {
     try {
       return await loadingManager.startLoading(key, operation, options)
-    } catch (error) {
+    } catch (_error) {
       // Return null on error to allow component to handle gracefully
       return null
     }

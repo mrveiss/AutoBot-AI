@@ -14,7 +14,6 @@
  */
 
 import { ref } from 'vue'
-import type { ChatMessage } from '@/stores/useChatStore'
 import appConfig from '@/config/AppConfig.js'
 import { useToast } from '@/composables/useToast'
 import { createLogger } from '@/utils/debugUtils'

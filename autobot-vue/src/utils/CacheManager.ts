@@ -287,8 +287,8 @@ export class CacheManager {
       this.updateBuildVersion();
     }
     
-    // Log cache stats
-    const stats = await this.getCacheStats();
+    // Prefetch cache stats to trigger any lazy initialization
+    await this.getCacheStats();
   }
 }
 

@@ -11,7 +11,7 @@
  * Resolved: Issue #76 - Replaced mockup data with real backend metrics
  */
 
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
 import { useApi } from './useApi'
 import { createLogger } from '@/utils/debugUtils'

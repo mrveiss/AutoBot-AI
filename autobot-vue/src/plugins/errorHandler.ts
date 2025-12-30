@@ -188,7 +188,7 @@ class GlobalErrorHandler {
     return 'An unexpected error occurred. Please try refreshing the page.'
   }
 
-  private getJavaScriptErrorMessage(error: Error, filename?: string, lineno?: number): string {
+  private getJavaScriptErrorMessage(error: Error, _filename?: string, _lineno?: number): string {
     if (error?.message) {
       if (error.message.includes('ChunkLoadError')) {
         return 'Application files failed to load. Please reload the page.'

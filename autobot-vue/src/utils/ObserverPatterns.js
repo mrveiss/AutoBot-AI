@@ -319,7 +319,7 @@ class ConditionWaiter {
    * Cancel all conditions
    */
   cancelAll() {
-    for (const [conditionName, condition] of this.conditions.entries()) {
+    for (const [_conditionName, condition] of this.conditions.entries()) {
       condition.reject(new Error('All conditions cancelled'));
     }
     

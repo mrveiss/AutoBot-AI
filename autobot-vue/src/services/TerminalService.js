@@ -67,7 +67,7 @@ class TerminalService {
    * @param {string} state - New connection state
    */
   setConnectionState(sessionId, state) {
-    const oldState = this.connectionStates.get(sessionId);
+    const _oldState = this.connectionStates.get(sessionId); // Track for potential future logging
     this.connectionStates.set(sessionId, state);
 
     // Terminal state change

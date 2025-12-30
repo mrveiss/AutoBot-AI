@@ -11,7 +11,7 @@ export function createMonitoredWebSocket(url, protocols) {
   rumAgent.trackWebSocketEvent('connection_attempt', { url })
   
   const originalAddEventListener = ws.addEventListener.bind(ws)
-  const originalRemoveEventListener = ws.removeEventListener.bind(ws)
+  const _originalRemoveEventListener = ws.removeEventListener.bind(ws) // Reserved for future unsubscribe support
   
   // Override addEventListener to track all events
   ws.addEventListener = function(type, listener, options) {

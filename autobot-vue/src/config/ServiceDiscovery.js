@@ -263,7 +263,7 @@ export default class ServiceDiscovery {
   /**
    * Get host for development environment
    */
-  _getDevHost(serviceConfig) {
+  _getDevHost(_serviceConfig) {
     return 'localhost';
   }
 
@@ -437,7 +437,7 @@ export default class ServiceDiscovery {
       let serviceUrl = 'unknown';
       try {
         serviceUrl = await this.getServiceUrl(serviceName);
-      } catch (urlError) {
+      } catch (_urlError) {
         // URL resolution also failed
       }
 

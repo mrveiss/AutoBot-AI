@@ -5,7 +5,7 @@
  * Use this in any Vue component to get real-time updates regardless of page/tab.
  */
 
-import { computed, onMounted, onUnmounted, getCurrentInstance } from 'vue'
+import { computed, onUnmounted, getCurrentInstance } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import globalWebSocketService from '@/services/GlobalWebSocketService.js'
 

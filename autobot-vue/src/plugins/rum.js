@@ -1,6 +1,6 @@
 // Real User Monitoring (RUM) Plugin
 export default {
-  install(app) {
+  install(_app) {
     // Initialize RUM monitoring
     if (typeof window !== 'undefined') {
       window.rum = {

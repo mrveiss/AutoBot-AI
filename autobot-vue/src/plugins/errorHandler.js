@@ -4,7 +4,7 @@ import { createLogger } from '@/utils/debugUtils'
 const logger = createLogger('errorHandler')
 
 export default {
-  install(app) {
+  install(_app) {
     // Basic error handling
     window.addEventListener('error', (event) => {
       logger.error('[Global Error]', event.error);

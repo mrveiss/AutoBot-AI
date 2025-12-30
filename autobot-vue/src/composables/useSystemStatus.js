@@ -4,7 +4,7 @@
  * Enhanced with API endpoint mapping and graceful fallbacks
  */
 
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import apiEndpointMapper from '@/utils/ApiEndpointMapper.js'
 import { createLogger } from '@/utils/debugUtils'
 
