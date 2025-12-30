@@ -149,6 +149,50 @@ class LLMPatternAnalyzer:
         self.token_tracker = TokenTracker()
         self.analysis_history: List[AnalysisResult] = []
 
+    def _scan_files_for_patterns(
+        self, python_files: List[Path]
+    ) -> tuple[List[UsagePattern], List[RetryPattern]]:
+        """Scan files and collect patterns (Issue #665: extracted helper)."""
+        all_patterns: List[UsagePattern] = []
+        all_retry_patterns: List[RetryPattern] = []
+
+        for file_path in python_files:
+            patterns, retries = CodePatternScanner.scan_file(file_path)
+            all_patterns.extend(patterns)
+            all_retry_patterns.extend(retries)
+
+        return all_patterns, all_retry_patterns
+
+    def _detect_opportunities_and_costs(
+        self, all_patterns: List[UsagePattern]
+    ) -> tuple[List[CacheOpportunity], List[BatchingOpportunity], List[CostEstimate]]:
+        """Detect optimization opportunities and calculate costs (Issue #665: extracted helper)."""
+        cache_opportunities = CacheOpportunityDetector.detect_opportunities(all_patterns)
+        batching_opportunities = BatchingAnalyzer.find_opportunities(all_patterns)
+        cost_estimates = CostCalculator.estimate_costs(all_patterns)
+        return cache_opportunities, batching_opportunities, cost_estimates
+
+    def _build_analysis_summary(
+        self,
+        start_time: float,
+        all_patterns: List[UsagePattern],
+        cache_opportunities: List[CacheOpportunity],
+        batching_opportunities: List[BatchingOpportunity],
+        recommendations: List[OptimizationRecommendation],
+        cost_estimates: List[CostEstimate],
+    ) -> Dict[str, Any]:
+        """Build analysis summary dict (Issue #665: extracted helper)."""
+        return {
+            "analysis_time_seconds": time.time() - start_time,
+            "total_patterns": len(all_patterns),
+            "total_opportunities": len(cache_opportunities) + len(batching_opportunities),
+            "total_recommendations": len(recommendations),
+            "estimated_monthly_cost": sum(c.monthly_cost_usd for c in cost_estimates),
+            "estimated_optimized_cost": sum(
+                c.optimized_monthly_cost_usd for c in cost_estimates
+            ),
+        }
+
     def analyze(
         self,
         directories: Optional[List[Path]] = None,
@@ -156,6 +200,8 @@ class LLMPatternAnalyzer:
     ) -> AnalysisResult:
         """
         Analyze the codebase for LLM patterns.
+
+        Issue #665: Refactored with extracted helper methods.
 
         Args:
             directories: Specific directories to analyze (default: src/)
@@ -167,33 +213,20 @@ class LLMPatternAnalyzer:
         start_time = time.time()
         analysis_id = f"analysis_{int(start_time)}"
 
-        # Default directories
+        # Default directories and exclusions
         if directories is None:
             directories = [self.project_root / "src"]
-
-        # Default exclusions
         if exclude_patterns is None:
             exclude_patterns = ["**/test*", "**/__pycache__", "**/venv"]
 
-        # Collect all Python files
+        # Collect and scan files (Issue #665: uses helper)
         python_files = self._collect_files(directories, exclude_patterns)
+        all_patterns, all_retry_patterns = self._scan_files_for_patterns(python_files)
 
-        # Scan all files
-        all_patterns: List[UsagePattern] = []
-        all_retry_patterns: List[RetryPattern] = []
-        prompt_templates: List[PromptTemplate] = []
-
-        for file_path in python_files:
-            patterns, retries = CodePatternScanner.scan_file(file_path)
-            all_patterns.extend(patterns)
-            all_retry_patterns.extend(retries)
-
-        # Detect opportunities
-        cache_opportunities = CacheOpportunityDetector.detect_opportunities(all_patterns)
-        batching_opportunities = BatchingAnalyzer.find_opportunities(all_patterns)
-
-        # Calculate costs
-        cost_estimates = CostCalculator.estimate_costs(all_patterns)
+        # Detect opportunities and costs (Issue #665: uses helper)
+        cache_opportunities, batching_opportunities, cost_estimates = (
+            self._detect_opportunities_and_costs(all_patterns)
+        )
 
         # Generate recommendations
         recommendations = RecommendationEngine.generate_recommendations(
@@ -204,35 +237,27 @@ class LLMPatternAnalyzer:
             cost_estimates=cost_estimates,
         )
 
-        # Calculate total savings potential
+        # Calculate savings and build result
         total_savings = sum(r.estimated_savings_percent for r in recommendations) / max(
             len(recommendations), 1
         )
 
-        # Build result
         result = AnalysisResult(
             analysis_id=analysis_id,
             analysis_timestamp=datetime.now(),
             files_analyzed=len(python_files),
             patterns_found=all_patterns,
-            prompt_templates=prompt_templates,
+            prompt_templates=[],  # Populated by separate analysis
             cache_opportunities=cache_opportunities,
             batching_opportunities=batching_opportunities,
             retry_patterns=all_retry_patterns,
             cost_estimates=cost_estimates,
             recommendations=recommendations,
             total_estimated_savings_percent=total_savings,
-            summary={
-                "analysis_time_seconds": time.time() - start_time,
-                "total_patterns": len(all_patterns),
-                "total_opportunities": len(cache_opportunities)
-                + len(batching_opportunities),
-                "total_recommendations": len(recommendations),
-                "estimated_monthly_cost": sum(c.monthly_cost_usd for c in cost_estimates),
-                "estimated_optimized_cost": sum(
-                    c.optimized_monthly_cost_usd for c in cost_estimates
-                ),
-            },
+            summary=self._build_analysis_summary(
+                start_time, all_patterns, cache_opportunities,
+                batching_opportunities, recommendations, cost_estimates
+            ),
         )
 
         self.analysis_history.append(result)

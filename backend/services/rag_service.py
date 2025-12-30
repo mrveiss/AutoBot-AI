@@ -98,6 +98,30 @@ class RAGService:
             self._initialized = False
             return False
 
+    def _build_cache_key(
+        self, query: str, max_results: int, enable_reranking: bool, categories: Optional[List[str]]
+    ) -> str:
+        """Build cache key for search (Issue #665: extracted helper)."""
+        categories_key = ",".join(sorted(categories)) if categories else "all"
+        return f"{query}:{max_results}:{enable_reranking}:{categories_key}"
+
+    async def _execute_search_with_timeout(
+        self,
+        query: str,
+        fetch_limit: int,
+        enable_reranking: bool,
+        timeout_seconds: float,
+    ) -> Tuple[List[SearchResult], RAGMetrics]:
+        """Execute search with timeout protection (Issue #665: extracted helper)."""
+        return await asyncio.wait_for(
+            self.optimizer.advanced_search(
+                query=query,
+                max_results=fetch_limit,
+                enable_reranking=enable_reranking and self.config.enable_reranking,
+            ),
+            timeout=timeout_seconds,
+        )
+
     async def advanced_search(
         self,
         query: str,
@@ -110,6 +134,7 @@ class RAGService:
         Perform advanced RAG search with reranking.
 
         Issue #556: Added categories parameter for category-based filtering.
+        Issue #665: Refactored with extracted helper methods.
 
         Args:
             query: Search query string
@@ -117,7 +142,6 @@ class RAGService:
             enable_reranking: Whether to apply cross-encoder reranking
             timeout: Optional timeout in seconds (uses config default if not provided)
             categories: Optional list of categories to filter results
-                       (e.g., ["system_knowledge", "user_knowledge", "autobot_knowledge"])
 
         Returns:
             Tuple of (search_results, metrics)
@@ -126,9 +150,8 @@ class RAGService:
             logger.info("Advanced RAG disabled in configuration")
             return await self._fallback_basic_search(query, max_results, categories)
 
-        # Issue #556: Include categories in cache key for proper caching
-        categories_key = ",".join(sorted(categories)) if categories else "all"
-        cache_key = f"{query}:{max_results}:{enable_reranking}:{categories_key}"
+        # Check cache (Issue #665: uses helper)
+        cache_key = self._build_cache_key(query, max_results, enable_reranking, categories)
         cached_result = await self._get_from_cache(cache_key)
         if cached_result:
             logger.debug("Cache hit for query: '%s...'", query[:50])
@@ -139,47 +162,27 @@ class RAGService:
             logger.warning("RAG optimizer initialization failed, using fallback")
             return await self._fallback_basic_search(query, max_results, categories)
 
-        # Apply timeout
         timeout_seconds = timeout or self.config.timeout_seconds
+        fetch_limit = max_results * (2 if categories else 1)
 
         try:
-            # Fetch more results to account for category filtering
-            fetch_multiplier = 2 if categories else 1
-            fetch_limit = max_results * fetch_multiplier
-
-            # Run advanced search with timeout protection
-            results, metrics = await asyncio.wait_for(
-                self.optimizer.advanced_search(
-                    query=query,
-                    max_results=fetch_limit,
-                    enable_reranking=enable_reranking and self.config.enable_reranking,
-                ),
-                timeout=timeout_seconds,
+            # Execute search (Issue #665: uses helper)
+            results, metrics = await self._execute_search_with_timeout(
+                query, fetch_limit, enable_reranking, timeout_seconds
             )
 
-            # Issue #556: Apply category filtering if specified
+            # Apply category filtering if specified
             if categories:
-                results = self._filter_by_categories(results, categories)
-                # Trim to requested max_results after filtering
-                results = results[:max_results]
+                results = self._filter_by_categories(results, categories)[:max_results]
                 metrics.final_results_count = len(results)
-                logger.info(
-                    "Category filter applied: %s, results: %d",
-                    categories, len(results)
-                )
+                logger.info("Category filter applied: %s, results: %d", categories, len(results))
 
-            # Cache successful results
             await self._add_to_cache(cache_key, (results, metrics))
-
-            logger.info(
-                f"Advanced search completed: {len(results)} results in {metrics.total_time:.3f}s"
-            )
+            logger.info(f"Advanced search completed: {len(results)} results in {metrics.total_time:.3f}s")
             return results, metrics
 
         except asyncio.TimeoutError:
-            logger.error(
-                f"Advanced search timed out after {timeout_seconds}s, using fallback"
-            )
+            logger.error(f"Advanced search timed out after {timeout_seconds}s, using fallback")
             if self.config.fallback_to_basic_search:
                 return await self._fallback_basic_search(query, max_results)
             raise
