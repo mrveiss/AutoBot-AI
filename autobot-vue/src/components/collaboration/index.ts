@@ -1,0 +1,11 @@
+/**
+ * Collaboration Components
+ *
+ * Issue #608: User-Centric Session Tracking - Phase 5
+ *
+ * Components for real-time multi-user collaboration features.
+ */
+
+export { default as ActivityFeed } from './ActivityFeed.vue'
+export { default as PresenceIndicator } from './PresenceIndicator.vue'
+export { default as SecretNotifications } from './SecretNotifications.vue'
