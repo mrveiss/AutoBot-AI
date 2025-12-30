@@ -27,6 +27,92 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+async def _generate_embedding_with_npu_fallback(text: str) -> List[float]:
+    """
+    Generate embedding using NPU worker with fallback to LlamaIndex.
+
+    Issue #165: Uses NPU worker (172.16.168.20:8082) for hardware-accelerated
+    embedding generation. Falls back to LlamaIndex's embed_model if NPU
+    is unavailable.
+
+    Args:
+        text: Text content to embed
+
+    Returns:
+        Embedding vector as list of floats
+    """
+    try:
+        # Try NPU worker first for hardware acceleration
+        from backend.services.npu_client import get_npu_client
+
+        client = get_npu_client()
+        if await client.is_available():
+            embedding = await client.generate_embedding(text)
+            if embedding:
+                logger.debug("Generated embedding via NPU worker")
+                return embedding
+            logger.warning("NPU worker returned empty embedding, falling back to LlamaIndex")
+    except Exception as e:
+        logger.debug("NPU worker unavailable, falling back to LlamaIndex: %s", e)
+
+    # Fallback to LlamaIndex embed_model
+    from llama_index.core import Settings
+
+    embedding = await asyncio.to_thread(
+        Settings.embed_model.get_text_embedding, text
+    )
+    logger.debug("Generated embedding via LlamaIndex")
+    return embedding
+
+
+async def _generate_embeddings_batch_with_npu_fallback(
+    texts: List[str],
+) -> List[List[float]]:
+    """
+    Generate embeddings for multiple texts using NPU worker with fallback.
+
+    Issue #165: Uses NPU worker batch endpoint for efficient bulk embedding
+    generation. Falls back to parallel LlamaIndex calls if NPU is unavailable.
+
+    Args:
+        texts: List of text contents to embed
+
+    Returns:
+        List of embedding vectors
+    """
+    if not texts:
+        return []
+
+    try:
+        # Try NPU worker batch endpoint first
+        from backend.services.npu_client import get_npu_client
+
+        client = get_npu_client()
+        if await client.is_available():
+            result = await client.generate_embeddings(texts)
+            if result and len(result.embeddings) == len(texts):
+                logger.info(
+                    "Generated %d embeddings via NPU worker in %.2fms",
+                    len(texts), result.processing_time_ms
+                )
+                return result.embeddings
+            logger.warning("NPU worker batch returned incomplete results, falling back")
+    except Exception as e:
+        logger.debug("NPU worker batch unavailable, falling back to LlamaIndex: %s", e)
+
+    # Fallback to parallel LlamaIndex calls
+    from llama_index.core import Settings
+
+    async def embed_one(text: str) -> List[float]:
+        return await asyncio.to_thread(
+            Settings.embed_model.get_text_embedding, text
+        )
+
+    embeddings = await asyncio.gather(*[embed_one(t) for t in texts])
+    logger.debug("Generated %d embeddings via LlamaIndex", len(texts))
+    return list(embeddings)
+
+
 def _decode_redis_hash(fact_data: Dict[bytes, bytes]) -> Dict[str, Any]:
     """Decode Redis hash bytes to strings and parse metadata (Issue #315: extracted).
 
@@ -249,7 +335,7 @@ class FactsMixin:
         Vectorize and store fact in ChromaDB vector store.
 
         Issue #281: Extracted helper for ChromaDB vectorization.
-        Issue #165: Fixed to generate embeddings before adding to ChromaDB.
+        Issue #165: Uses NPU worker for hardware-accelerated embedding generation.
 
         Args:
             fact_id: Fact identifier
@@ -259,8 +345,6 @@ class FactsMixin:
         if not self.vector_store:
             return
 
-        from llama_index.core import Settings
-
         # Import sanitization utility
         from src.knowledge.utils import (
             sanitize_metadata_for_chromadb as _sanitize_metadata_for_chromadb,
@@ -269,11 +353,9 @@ class FactsMixin:
         # Sanitize metadata for ChromaDB
         sanitized_metadata = _sanitize_metadata_for_chromadb(metadata)
 
-        # Issue #165: Generate embedding using configured embed_model
+        # Issue #165: Generate embedding using NPU worker with fallback
         # ChromaVectorStore.add() expects nodes with embeddings already set
-        embedding = await asyncio.to_thread(
-            Settings.embed_model.get_text_embedding, content
-        )
+        embedding = await _generate_embedding_with_npu_fallback(content)
 
         # Create Document for LlamaIndex with embedding
         doc = Document(
@@ -527,20 +609,16 @@ class FactsMixin:
     ) -> None:
         """Re-vectorize fact after content update (Issue #398: extracted).
 
-        Issue #165: Fixed to generate embeddings before adding to ChromaDB.
+        Issue #165: Uses NPU worker for hardware-accelerated embedding generation.
         """
-        from llama_index.core import Settings
-
         from src.knowledge.utils import sanitize_metadata_for_chromadb as _sanitize
 
         sanitized_metadata = _sanitize(current_metadata)
         sanitized_metadata["fact_id"] = fact_id
         await asyncio.to_thread(self.vector_store.delete, fact_id)
 
-        # Issue #165: Generate embedding before adding
-        embedding = await asyncio.to_thread(
-            Settings.embed_model.get_text_embedding, content
-        )
+        # Issue #165: Generate embedding using NPU worker with fallback
+        embedding = await _generate_embedding_with_npu_fallback(content)
         doc = Document(text=content, doc_id=fact_id, metadata=sanitized_metadata)
         doc.embedding = embedding
 

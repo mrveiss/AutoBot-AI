@@ -167,19 +167,20 @@ class SearchMixin:
             return []
 
     async def _get_query_embedding(self, query: str) -> List[float]:
-        """Get embedding for query, using cache when available. Issue #281: Extracted helper."""
-        from llama_index.core import Settings
+        """Get embedding for query, using cache when available.
 
+        Issue #281: Extracted helper.
+        Issue #165: Uses NPU worker for hardware-accelerated embedding generation.
+        """
         from src.knowledge.embedding_cache import get_embedding_cache
+        from src.knowledge.facts import _generate_embedding_with_npu_fallback
 
         _embedding_cache = get_embedding_cache()
         query_embedding = await _embedding_cache.get(query)
 
         if query_embedding is None:
-            # Cache miss - compute embedding
-            query_embedding = await asyncio.to_thread(
-                Settings.embed_model.get_text_embedding, query
-            )
+            # Cache miss - compute embedding using NPU worker with fallback
+            query_embedding = await _generate_embedding_with_npu_fallback(query)
             await _embedding_cache.put(query, query_embedding)
 
         return query_embedding
