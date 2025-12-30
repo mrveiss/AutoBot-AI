@@ -419,87 +419,103 @@ class LogPatternMiner:
 
         return (direction, round(change, 1))
 
-    def analyze_trends(
+    def _build_hourly_log_data(
         self, log_lines: List[Tuple[str, str, str]]
-    ) -> List[LogTrend]:
-        """Analyze trends in log data"""
-        trends = []
-
-        # Group by hour
+    ) -> Dict[str, Dict[str, int]]:
+        """
+        Group log lines by hour with counts (Issue #665: extracted helper).
+        """
         hourly_data: Dict[str, Dict[str, int]] = defaultdict(
             lambda: {"total": 0, "errors": 0, "warnings": 0}
         )
-
         for line, source, _ in log_lines:
             ts = self.extract_timestamp(line)
             if ts:
                 hour_key = ts.strftime("%Y-%m-%d %H:00")
                 hourly_data[hour_key]["total"] += 1
-
                 level = self.extract_log_level(line)
-                if level in ERROR_LEVELS:  # O(1) lookup (Issue #326)
+                if level in ERROR_LEVELS:
                     hourly_data[hour_key]["errors"] += 1
                 elif level == "WARNING":
                     hourly_data[hour_key]["warnings"] += 1
+        return hourly_data
 
-        if len(hourly_data) < 3:
-            return trends
-
-        hours = sorted(hourly_data)
-
-        # Analyze total log volume trend (Issue #281: uses helper)
+    def _build_volume_trend(
+        self, hourly_data: Dict[str, Dict[str, int]], hours: List[str]
+    ) -> Optional[LogTrend]:
+        """
+        Build log volume trend (Issue #665: extracted helper).
+        """
         totals = [float(hourly_data[h]["total"]) for h in hours]
+        if not totals:
+            return None
         direction, change = self._calculate_trend_direction(totals, change_threshold=10.0)
-        if totals:
-            trends.append(
-                LogTrend(
-                    trend_id="log_volume",
-                    metric_name="Total Log Volume",
-                    direction=direction,
-                    change_percent=change,
-                    time_period=f"{hours[0]} to {hours[-1]}",
-                    data_points=[
-                        {"hour": h, "count": hourly_data[h]["total"]} for h in hours[-24:]
-                    ],
-                )
-            )
+        return LogTrend(
+            trend_id="log_volume",
+            metric_name="Total Log Volume",
+            direction=direction,
+            change_percent=change,
+            time_period=f"{hours[0]} to {hours[-1]}",
+            data_points=[{"hour": h, "count": hourly_data[h]["total"]} for h in hours[-24:]],
+        )
 
-        # Analyze error rate trend (Issue #281: uses helper)
+    def _build_error_rate_trend(
+        self, hourly_data: Dict[str, Dict[str, int]], hours: List[str]
+    ) -> Optional[LogTrend]:
+        """
+        Build error rate trend (Issue #665: extracted helper).
+        """
         error_rates = [
-            (
-                hourly_data[h]["errors"] / hourly_data[h]["total"] * 100
-                if hourly_data[h]["total"] > 0
-                else 0.0
-            )
+            hourly_data[h]["errors"] / hourly_data[h]["total"] * 100
+            if hourly_data[h]["total"] > 0
+            else 0.0
             for h in hours
         ]
-        err_direction, err_change = self._calculate_trend_direction(
-            error_rates, change_threshold=20.0
+        if not error_rates:
+            return None
+        direction, change = self._calculate_trend_direction(error_rates, change_threshold=20.0)
+        return LogTrend(
+            trend_id="error_rate",
+            metric_name="Error Rate",
+            direction=direction,
+            change_percent=change,
+            time_period=f"{hours[0]} to {hours[-1]}",
+            data_points=[
+                {
+                    "hour": h,
+                    "error_rate": round(
+                        hourly_data[h]["errors"] / hourly_data[h]["total"] * 100
+                        if hourly_data[h]["total"] > 0
+                        else 0,
+                        2,
+                    ),
+                }
+                for h in hours[-24:]
+            ],
         )
-        if error_rates:
-            trends.append(
-                LogTrend(
-                    trend_id="error_rate",
-                    metric_name="Error Rate",
-                    direction=err_direction,
-                    change_percent=err_change,
-                    time_period=f"{hours[0]} to {hours[-1]}",
-                    data_points=[
-                        {
-                            "hour": h,
-                            "error_rate": round(
-                                (
-                                    hourly_data[h]["errors"] / hourly_data[h]["total"] * 100
-                                    if hourly_data[h]["total"] > 0
-                                    else 0
-                                ),
-                                2,
-                            ),
-                        }
-                        for h in hours[-24:]
-                    ],
-                )
-            )
+
+    def analyze_trends(
+        self, log_lines: List[Tuple[str, str, str]]
+    ) -> List[LogTrend]:
+        """
+        Analyze trends in log data.
+
+        Issue #665: Refactored to use extracted helpers.
+        """
+        hourly_data = self._build_hourly_log_data(log_lines)
+        if len(hourly_data) < 3:
+            return []
+
+        hours = sorted(hourly_data)
+        trends = []
+
+        volume_trend = self._build_volume_trend(hourly_data, hours)
+        if volume_trend:
+            trends.append(volume_trend)
+
+        error_trend = self._build_error_rate_trend(hourly_data, hours)
+        if error_trend:
+            trends.append(error_trend)
 
         return trends
 

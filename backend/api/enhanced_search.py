@@ -77,6 +77,62 @@ class OptimizationRequest(BaseModel):
     )
 
 
+def _parse_force_device(force_device_str: Optional[str]) -> Optional[HardwareDevice]:
+    """
+    Parse and validate force_device parameter (Issue #665: extracted helper).
+
+    Args:
+        force_device_str: Optional device string (npu/gpu/cpu)
+
+    Returns:
+        HardwareDevice enum or None
+
+    Raises:
+        HTTPException: If device string is invalid
+    """
+    if not force_device_str:
+        return None
+    try:
+        return HardwareDevice(force_device_str.lower())
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid device '{force_device_str}'. Must be one of: npu, gpu, cpu",
+        )
+
+
+def _convert_search_results_to_api_format(search_results: list) -> list:
+    """
+    Convert search results to API response format (Issue #665: extracted helper).
+    """
+    return [
+        {
+            "content": result.content,
+            "metadata": result.metadata,
+            "score": result.score,
+            "doc_id": result.doc_id,
+            "device_used": result.device_used,
+            "processing_time_ms": result.processing_time_ms,
+            "embedding_model": result.embedding_model,
+        }
+        for result in search_results
+    ]
+
+
+def _convert_metrics_to_api_format(metrics) -> dict:
+    """
+    Convert metrics object to API response format (Issue #665: extracted helper).
+    """
+    return {
+        "total_documents_searched": metrics.total_documents_searched,
+        "embedding_generation_time_ms": metrics.embedding_generation_time_ms,
+        "similarity_computation_time_ms": metrics.similarity_computation_time_ms,
+        "total_search_time_ms": metrics.total_search_time_ms,
+        "device_used": metrics.device_used,
+        "hardware_utilization": metrics.hardware_utilization,
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_semantic_search",
@@ -87,6 +143,8 @@ async def enhanced_semantic_search(request: SearchRequest):
     """
     Perform NPU-enhanced semantic search.
 
+    Issue #665: Refactored to use extracted helper functions.
+
     This endpoint provides intelligent hardware-accelerated semantic search:
     - NPU acceleration for lightweight embedding generation
     - GPU acceleration for heavy compute tasks
@@ -96,24 +154,9 @@ async def enhanced_semantic_search(request: SearchRequest):
     start_time = time.time()
 
     try:
-        # Get NPU search engine
         search_engine = await get_npu_search_engine()
+        force_device = _parse_force_device(request.force_device)
 
-        # Parse force_device if specified
-        force_device = None
-        if request.force_device:
-            try:
-                force_device = HardwareDevice(request.force_device.lower())
-            except ValueError:
-                raise HTTPException(
-                    status_code=400,
-                    detail=(
-                        f"Invalid device '{request.force_device}'. Must be one of: npu, gpu,"
-                        f"cpu"
-                    )
-                )
-
-        # Perform enhanced search
         search_results, metrics = await search_engine.enhanced_search(
             query=request.query,
             similarity_top_k=request.similarity_top_k,
@@ -122,36 +165,16 @@ async def enhanced_semantic_search(request: SearchRequest):
             force_device=force_device,
         )
 
-        # Convert search results to API format
-        results_data = []
-        for result in search_results:
-            results_data.append(
-                {
-                    "content": result.content,
-                    "metadata": result.metadata,
-                    "score": result.score,
-                    "doc_id": result.doc_id,
-                    "device_used": result.device_used,
-                    "processing_time_ms": result.processing_time_ms,
-                    "embedding_model": result.embedding_model,
-                }
-            )
-
-        # Convert metrics to API format
-        metrics_data = {
-            "total_documents_searched": metrics.total_documents_searched,
-            "embedding_generation_time_ms": metrics.embedding_generation_time_ms,
-            "similarity_computation_time_ms": metrics.similarity_computation_time_ms,
-            "total_search_time_ms": metrics.total_search_time_ms,
-            "device_used": metrics.device_used,
-            "hardware_utilization": metrics.hardware_utilization,
-        }
-
+        results_data = _convert_search_results_to_api_format(search_results)
+        metrics_data = _convert_metrics_to_api_format(metrics)
         total_time = (time.time() - start_time) * 1000
 
         logger.info(
-            f"Enhanced search completed: '{request.query[:50]}...' -> "
-            f"{len(results_data)} results in {total_time:.2f}ms using {metrics.device_used}"
+            "Enhanced search completed: '%s...' -> %d results in %.2fms using %s",
+            request.query[:50],
+            len(results_data),
+            total_time,
+            metrics.device_used,
         )
 
         return SearchResponse(
@@ -163,6 +186,8 @@ async def enhanced_semantic_search(request: SearchRequest):
             device_used=metrics.device_used,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Enhanced search failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
