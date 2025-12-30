@@ -273,6 +273,30 @@ async def _warmup_npu_connection():
         logger.warning("NPU warmup failed: %s", warmup_error)
 
 
+async def _init_documentation_watcher():
+    """
+    Initialize documentation watcher for real-time sync (NON-CRITICAL).
+
+    Issue #165: Starts file system watcher for docs/ directory to enable
+    automatic reindexing when documentation files change.
+    """
+    logger.info("✅ [ 84%] Doc Watcher: Initializing documentation watcher...")
+    try:
+        from backend.services.documentation_watcher import start_documentation_watcher
+
+        success = await start_documentation_watcher()
+
+        if success:
+            logger.info("✅ [ 84%] Doc Watcher: Documentation watcher started")
+        else:
+            logger.warning("⚠️ [ 84%] Doc Watcher: Failed to start (non-critical)")
+
+    except ImportError as import_error:
+        logger.debug("Documentation watcher not available: %s", import_error)
+    except Exception as watcher_error:
+        logger.warning("Documentation watcher failed: %s", watcher_error)
+
+
 async def _init_graph_rag_service(app: FastAPI, memory_graph):
     """
     Initialize Graph-RAG service (depends on knowledge base and memory graph).
@@ -438,6 +462,7 @@ async def initialize_background_services(app: FastAPI):
         await _warmup_npu_connection()  # Issue #165: Warm up NPU for fast embeddings
         await _init_memory_graph(app)
         await _init_background_llm_sync(app)
+        await _init_documentation_watcher()  # Issue #165: Real-time doc sync
 
         await update_app_state_multi(
             initialization_status="ready",
@@ -463,6 +488,14 @@ async def cleanup_services(app: FastAPI):
             await app.state.background_llm_sync.stop()
         if hasattr(app.state, "memory_graph") and app.state.memory_graph:
             await app.state.memory_graph.close()
+
+        # Issue #165: Stop documentation watcher
+        try:
+            from backend.services.documentation_watcher import stop_documentation_watcher
+            await stop_documentation_watcher()
+        except ImportError:
+            pass  # Watcher not available
+
         # Redis connections automatically managed by get_redis_client()
         logger.info("✅ Cleanup completed successfully")
     except Exception as e:

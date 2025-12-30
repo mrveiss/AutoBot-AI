@@ -1956,6 +1956,93 @@ async def get_documentation_stats(req: Request):
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_doc_watcher_status",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.get("/docs/watcher/status")
+async def get_documentation_watcher_status(req: Request):
+    """
+    Get documentation watcher status.
+
+    Issue #165: Returns status of the real-time documentation sync service.
+    """
+    try:
+        from backend.services.documentation_watcher import get_documentation_watcher
+
+        watcher = get_documentation_watcher()
+        stats = watcher.get_stats()
+
+        return {
+            "success": True,
+            "watcher": stats,
+        }
+    except ImportError:
+        return {
+            "success": True,
+            "watcher": {
+                "is_running": False,
+                "message": "Documentation watcher not available",
+            },
+        }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="control_doc_watcher",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.post("/docs/watcher/control")
+async def control_documentation_watcher(request: dict, req: Request):
+    """
+    Control documentation watcher (start/stop).
+
+    Issue #165: Allows manual control of the real-time sync service.
+    """
+    action = request.get("action", "status")
+
+    try:
+        from backend.services.documentation_watcher import (
+            get_documentation_watcher,
+            start_documentation_watcher,
+            stop_documentation_watcher,
+        )
+
+        if action == "start":
+            success = await start_documentation_watcher()
+            return {
+                "success": success,
+                "message": "Watcher started" if success else "Failed to start watcher",
+            }
+
+        elif action == "stop":
+            await stop_documentation_watcher()
+            return {
+                "success": True,
+                "message": "Watcher stopped",
+            }
+
+        elif action == "status":
+            watcher = get_documentation_watcher()
+            return {
+                "success": True,
+                "watcher": watcher.get_stats(),
+            }
+
+        else:
+            return {
+                "success": False,
+                "message": f"Unknown action: {action}",
+            }
+
+    except ImportError:
+        return {
+            "success": False,
+            "message": "Documentation watcher not available",
+        }
+
+
 # ===== MAINTENANCE ENDPOINTS =====
 # NOTE: Maintenance and bulk operation endpoints moved to knowledge_maintenance.py (Issue #185)
 # Includes: deduplication, bulk operations, orphaned facts, export/import, cleanup, host scanning
