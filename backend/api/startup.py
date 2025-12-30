@@ -86,7 +86,7 @@ def add_startup_message(
         if len(startup_state["messages"]) > 20:
             startup_state["messages"] = startup_state["messages"][-20:]
 
-    logger.info("Startup: [%s] %s (%s%)", phase.value, message, progress)
+    logger.info("Startup: [%s] %s (%s%%)", phase.value, message, progress)
 
     # Broadcast to connected WebSocket clients (only if event loop is running)
     try:
