@@ -282,6 +282,73 @@ class TerminalSecretsService:
             logger.debug("Could not get key fingerprint: %s", e)
             return None
 
+    def _find_key_by_name(
+        self, session_state: SessionKeyState, key_name: str
+    ) -> Optional[SSHKeyInfo]:
+        """
+        Find an SSH key by name in session state.
+
+        Issue #665: Extracted from add_key_to_agent.
+
+        Args:
+            session_state: Session key state
+            key_name: Name of the key to find
+
+        Returns:
+            SSHKeyInfo if found, None otherwise
+        """
+        for k in session_state.keys:
+            if k.name == key_name:
+                return k
+        return None
+
+    def _setup_askpass_script(self, temp_dir: str) -> str:
+        """
+        Create a temporary askpass script for passphrase handling.
+
+        Issue #665: Extracted from add_key_to_agent.
+
+        Args:
+            temp_dir: Directory for temporary files
+
+        Returns:
+            Path to the askpass script
+        """
+        askpass_script = os.path.join(temp_dir, "askpass.sh")
+        with open(askpass_script, "w", encoding="utf-8") as f:
+            f.write("#!/bin/bash\ncat\n")
+        os.chmod(askpass_script, 0o700)
+        return askpass_script
+
+    async def _run_ssh_add(
+        self,
+        key_path: str,
+        env: dict,
+        passphrase: Optional[str] = None,
+    ) -> subprocess.CompletedProcess:
+        """
+        Run ssh-add command with the given environment.
+
+        Issue #665: Extracted from add_key_to_agent.
+
+        Args:
+            key_path: Path to the SSH key file
+            env: Environment variables including SSH_AUTH_SOCK
+            passphrase: Optional passphrase for encrypted keys
+
+        Returns:
+            CompletedProcess with result of ssh-add command
+        """
+        return await asyncio.to_thread(
+            subprocess.run,
+            ["ssh-add", key_path],
+            input=passphrase,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=10,
+        )
+
     async def add_key_to_agent(
         self,
         session_id: str,
@@ -289,6 +356,8 @@ class TerminalSecretsService:
         passphrase: Optional[str] = None,
     ) -> bool:
         """Add an SSH key to ssh-agent for a session.
+
+        Issue #665: Refactored from 96 lines to use extracted helper methods.
 
         Args:
             session_id: Terminal session ID
@@ -305,12 +374,8 @@ class TerminalSecretsService:
             logger.warning("No session state found for %s", session_id)
             return False
 
-        # Find the key
-        key_info = None
-        for k in session_state.keys:
-            if k.name == key_name:
-                key_info = k
-                break
+        # Find the key (Issue #665: uses _find_key_by_name helper)
+        key_info = self._find_key_by_name(session_state, key_name)
 
         if not key_info:
             logger.warning("Key '%s' not found in session %s", key_name, session_id)
@@ -321,47 +386,30 @@ class TerminalSecretsService:
             return True
 
         try:
-            # Use ssh-add to add the key
+            # Setup environment for ssh-add
             env = os.environ.copy()
             if session_state.agent_socket:
                 env["SSH_AUTH_SOCK"] = session_state.agent_socket
 
+            askpass_script = None
             if key_info.passphrase_required and passphrase:
-                # Use SSH_ASKPASS with stdin to avoid exposing passphrase in process list
-                # Create a temporary script that echoes the passphrase
-                askpass_script = os.path.join(session_state.temp_dir, "askpass.sh")
-                with open(askpass_script, "w", encoding="utf-8") as f:
-                    f.write("#!/bin/bash\ncat\n")
-                os.chmod(askpass_script, 0o700)
-
+                # Setup askpass for passphrase (Issue #665: uses helper)
+                askpass_script = self._setup_askpass_script(session_state.temp_dir)
                 env["SSH_ASKPASS"] = askpass_script
                 env["SSH_ASKPASS_REQUIRE"] = "force"
                 env["DISPLAY"] = ":0"  # Required for SSH_ASKPASS
 
-                result = await asyncio.to_thread(
-                    subprocess.run,
-                    ["ssh-add", key_info.key_path],
-                    input=passphrase,
-                    capture_output=True,
-                    text=True,
-                    env=env,
-                    timeout=10,
-                )
+            # Run ssh-add (Issue #665: uses _run_ssh_add helper)
+            result = await self._run_ssh_add(
+                key_info.key_path, env, passphrase if askpass_script else None
+            )
 
-                # Cleanup askpass script
+            # Cleanup askpass script if created
+            if askpass_script:
                 try:
                     os.remove(askpass_script)
                 except OSError:
                     pass
-            else:
-                result = await asyncio.to_thread(
-                    subprocess.run,
-                    ["ssh-add", key_info.key_path],
-                    capture_output=True,
-                    text=True,
-                    env=env,
-                    timeout=10,
-                )
 
             if result.returncode == 0:
                 key_info.added_to_agent = True
@@ -369,9 +417,7 @@ class TerminalSecretsService:
                 return True
             else:
                 logger.error(
-                    "Failed to add key '%s' to agent: %s",
-                    key_name,
-                    result.stderr,
+                    "Failed to add key '%s' to agent: %s", key_name, result.stderr
                 )
                 return False
 

@@ -207,9 +207,74 @@ class RedisServiceManager:
                 f"Cannot execute command on Redis VM: {str(e)}"
             ) from e
 
+    def _already_in_state_result(
+        self, operation: str, target_status: str, duration: float
+    ) -> ServiceOperationResult:
+        """
+        Create result for service already in target state.
+
+        Issue #665: Extracted from start_service and stop_service.
+        """
+        return ServiceOperationResult(
+            success=True,
+            operation=operation,
+            message=f"Redis Stack service already {target_status}",
+            duration_seconds=duration,
+            timestamp=datetime.now(),
+            new_status=target_status,
+        )
+
+    def _operation_result(
+        self,
+        operation: str,
+        success: bool,
+        actual_status: str,
+        duration: float,
+        stderr: Optional[str] = None,
+    ) -> ServiceOperationResult:
+        """
+        Create result for service operation completion.
+
+        Issue #665: Extracted from start_service and stop_service.
+        """
+        action = "started" if operation == "start" else "stopped"
+        return ServiceOperationResult(
+            success=success,
+            operation=operation,
+            message=(
+                f"Redis Stack service {action} successfully"
+                if success
+                else f"Failed to {operation} Redis Stack service"
+            ),
+            duration_seconds=duration,
+            timestamp=datetime.now(),
+            new_status=actual_status,
+            error=None if success else stderr,
+        )
+
+    def _operation_failure_result(
+        self, operation: str, error: str, duration: float
+    ) -> ServiceOperationResult:
+        """
+        Create result for operation failure.
+
+        Issue #665: Extracted from start_service and stop_service.
+        """
+        return ServiceOperationResult(
+            success=False,
+            operation=operation,
+            message=f"Failed to {operation} Redis Stack service: {error}",
+            duration_seconds=duration,
+            timestamp=datetime.now(),
+            new_status="unknown",
+            error=error,
+        )
+
     async def start_service(self, user_id: str = "system") -> ServiceOperationResult:
         """
-        Start Redis Stack service
+        Start Redis Stack service.
+
+        Issue #665: Refactored from 87 lines to use extracted helper methods.
 
         Args:
             user_id: User ID for audit logging
@@ -221,83 +286,53 @@ class RedisServiceManager:
             RedisConnectionError: If cannot connect to Redis VM
         """
         start_time = datetime.now()
-
         self._audit_log(
             "redis_service_start_attempt", {"user_id": user_id}, user_id=user_id
         )
 
         try:
-            # Check current status first
+            # Check if already running (Issue #665: uses helper)
             current_status = await self.get_service_status()
             if current_status.status == "running":
                 duration = (datetime.now() - start_time).total_seconds()
-                return ServiceOperationResult(
-                    success=True,
-                    operation="start",
-                    message="Redis Stack service already running",
-                    duration_seconds=duration,
-                    timestamp=datetime.now(),
-                    new_status="running",
-                )
+                return self._already_in_state_result("start", "running", duration)
 
-            # Execute start command
-            result = await self._execute_systemctl_command("start", timeout=TimingConstants.SHORT_TIMEOUT)
-
-            # Verify service started - wait for service initialization
+            # Execute start command and verify
+            result = await self._execute_systemctl_command(
+                "start", timeout=TimingConstants.SHORT_TIMEOUT
+            )
             await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
             new_status = await self.get_service_status()
 
             duration = (datetime.now() - start_time).total_seconds()
             success = new_status.status == "running"
 
-            operation_result = ServiceOperationResult(
-                success=success,
-                operation="start",
-                message=(
-                    "Redis Stack service started successfully"
-                    if success
-                    else "Failed to start Redis Stack service"
-                ),
-                duration_seconds=duration,
-                timestamp=datetime.now(),
-                new_status=new_status.status,
-                error=None if success else result.stderr,
+            # Build result (Issue #665: uses helper)
+            operation_result = self._operation_result(
+                "start", success, new_status.status, duration, result.stderr
             )
 
             self._audit_log(
                 "redis_service_start_completed",
-                {
-                    "success": success,
-                    "duration": duration,
-                    "new_status": new_status.status,
-                },
+                {"success": success, "duration": duration, "new_status": new_status.status},
                 user_id=user_id,
             )
-
             return operation_result
 
         except Exception as e:
             duration = (datetime.now() - start_time).total_seconds()
             logger.error("Start service failed: %s", e)
             await self._record_error()
-
             self._audit_log(
                 "redis_service_start_failed", {"error": str(e)}, user_id=user_id
             )
-
-            return ServiceOperationResult(
-                success=False,
-                operation="start",
-                message=f"Failed to start Redis Stack service: {str(e)}",
-                duration_seconds=duration,
-                timestamp=datetime.now(),
-                new_status="unknown",
-                error=str(e),
-            )
+            return self._operation_failure_result("start", str(e), duration)
 
     async def stop_service(self, user_id: str = "system") -> ServiceOperationResult:
         """
-        Stop Redis Stack service
+        Stop Redis Stack service.
+
+        Issue #665: Refactored from 87 lines to use extracted helper methods.
 
         Args:
             user_id: User ID for audit logging
@@ -309,79 +344,47 @@ class RedisServiceManager:
             RedisConnectionError: If cannot connect to Redis VM
         """
         start_time = datetime.now()
-
         self._audit_log(
             "redis_service_stop_attempt", {"user_id": user_id}, user_id=user_id
         )
 
         try:
-            # Check current status first
+            # Check if already stopped (Issue #665: uses helper)
             current_status = await self.get_service_status()
             if current_status.status == "stopped":
                 duration = (datetime.now() - start_time).total_seconds()
-                return ServiceOperationResult(
-                    success=True,
-                    operation="stop",
-                    message="Redis Stack service already stopped",
-                    duration_seconds=duration,
-                    timestamp=datetime.now(),
-                    new_status="stopped",
-                )
+                return self._already_in_state_result("stop", "stopped", duration)
 
-            # Execute stop command
-            result = await self._execute_systemctl_command("stop", timeout=TimingConstants.SHORT_TIMEOUT)
-
-            # Verify service stopped - wait for shutdown
+            # Execute stop command and verify
+            result = await self._execute_systemctl_command(
+                "stop", timeout=TimingConstants.SHORT_TIMEOUT
+            )
             await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
             new_status = await self.get_service_status()
 
             duration = (datetime.now() - start_time).total_seconds()
             success = new_status.status == "stopped"
 
-            operation_result = ServiceOperationResult(
-                success=success,
-                operation="stop",
-                message=(
-                    "Redis Stack service stopped successfully"
-                    if success
-                    else "Failed to stop Redis Stack service"
-                ),
-                duration_seconds=duration,
-                timestamp=datetime.now(),
-                new_status=new_status.status,
-                error=None if success else result.stderr,
+            # Build result (Issue #665: uses helper)
+            operation_result = self._operation_result(
+                "stop", success, new_status.status, duration, result.stderr
             )
 
             self._audit_log(
                 "redis_service_stop_completed",
-                {
-                    "success": success,
-                    "duration": duration,
-                    "new_status": new_status.status,
-                },
+                {"success": success, "duration": duration, "new_status": new_status.status},
                 user_id=user_id,
             )
-
             return operation_result
 
         except Exception as e:
             duration = (datetime.now() - start_time).total_seconds()
             logger.error("Stop service failed: %s", e)
             await self._record_error()
-
             self._audit_log(
                 "redis_service_stop_failed", {"error": str(e)}, user_id=user_id
             )
-
-            return ServiceOperationResult(
-                success=False,
-                operation="stop",
-                message=f"Failed to stop Redis Stack service: {str(e)}",
-                duration_seconds=duration,
-                timestamp=datetime.now(),
-                new_status="unknown",
-                error=str(e),
-            )
+            return self._operation_failure_result("stop", str(e), duration)
 
     async def restart_service(self, user_id: str = "system") -> ServiceOperationResult:
         """

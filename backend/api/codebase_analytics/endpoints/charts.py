@@ -25,6 +25,96 @@ router = APIRouter()
 _CHART_SEVERITY_ORDER = ("high", "medium", "low", "info", "hint")
 
 
+def _try_chromadb_aggregation(
+    code_collection,
+    problem_types: Dict[str, int],
+    severity_counts: Dict[str, int],
+    race_conditions: Dict[str, int],
+    file_problems: Dict[str, int],
+) -> tuple[int, bool]:
+    """
+    Try to aggregate problem data from ChromaDB collection.
+
+    Issue #665: Extracted from get_chart_data to reduce complexity.
+
+    Returns:
+        Tuple of (total_problems, success) where success indicates if aggregation worked.
+    """
+    if not code_collection:
+        return 0, False
+
+    try:
+        results = code_collection.get(where={"type": "problem"}, include=["metadatas"])
+        total = 0
+        for metadata in results.get("metadatas", []):
+            total += 1
+            _aggregate_problem_data(
+                metadata, problem_types, severity_counts, race_conditions, file_problems
+            )
+        logger.info("Aggregated chart data for %s problems", total)
+        return total, True
+    except Exception as chroma_error:
+        logger.warning("ChromaDB query failed: %s", chroma_error)
+        return 0, False
+
+
+def _build_severity_chart_data(severity_counts: Dict[str, int]) -> list[dict]:
+    """
+    Build severity chart data with proper ordering.
+
+    Issue #665: Extracted from get_chart_data.
+    Issue #380: Uses module-level constant for severity ordering.
+
+    Args:
+        severity_counts: Dict mapping severity levels to counts
+
+    Returns:
+        List of dicts with 'severity' and 'count' fields in proper order
+    """
+    severity_data = []
+    # Add severities in defined order
+    for sev in _CHART_SEVERITY_ORDER:
+        if sev in severity_counts:
+            severity_data.append({"severity": sev, "count": severity_counts[sev]})
+    # Add any unlisted severities at the end
+    for sev, count in severity_counts.items():
+        if sev not in _CHART_SEVERITY_ORDER:
+            severity_data.append({"severity": sev, "count": count})
+    return severity_data
+
+
+def _build_chart_response(
+    problem_types: Dict[str, int],
+    severity_counts: Dict[str, int],
+    race_conditions: Dict[str, int],
+    file_problems: Dict[str, int],
+    total_problems: int,
+    storage_type: str,
+) -> dict:
+    """
+    Build the final chart response dictionary.
+
+    Issue #665: Extracted from get_chart_data.
+    Issue #281: Uses _dict_to_chart_data helper for conversions.
+    """
+    return {
+        "status": "success",
+        "chart_data": {
+            "problem_types": _dict_to_chart_data(problem_types, "type"),
+            "severity_counts": _build_severity_chart_data(severity_counts),
+            "race_conditions": _dict_to_chart_data(race_conditions, "category"),
+            "top_files": _dict_to_chart_data(file_problems, "file", limit=15),
+            "summary": {
+                "total_problems": total_problems,
+                "unique_problem_types": len(problem_types),
+                "files_with_problems": len(file_problems),
+                "race_condition_count": sum(race_conditions.values()),
+            },
+        },
+        "storage_type": storage_type,
+    }
+
+
 def _aggregate_problem_data(
     metadata: dict,
     problem_types: Dict[str, int],
@@ -126,6 +216,8 @@ async def get_chart_data():
     """
     Get aggregated data for analytics charts.
 
+    Issue #665: Refactored from 98 lines to use extracted helper methods.
+
     Returns data structures optimized for ApexCharts:
     - problem_types: Pie chart data for problem type distribution
     - severity_counts: Bar chart data for severity levels
@@ -140,27 +232,16 @@ async def get_chart_data():
     severity_counts: Dict[str, int] = {}
     race_conditions: Dict[str, int] = {}
     file_problems: Dict[str, int] = {}
-    total_problems = 0
 
-    # Try ChromaDB first (Issue #315: refactored depth 7→3)
-    if code_collection:
-        try:
-            results = code_collection.get(
-                where={"type": "problem"}, include=["metadatas"]
-            )
-            for metadata in results.get("metadatas", []):
-                total_problems += 1
-                _aggregate_problem_data(
-                    metadata, problem_types, severity_counts, race_conditions, file_problems
-                )
-            storage_type = "chromadb"
-            logger.info("Aggregated chart data for %s problems", total_problems)
-        except Exception as chroma_error:
-            logger.warning("ChromaDB query failed: %s", chroma_error)
-            code_collection = None
+    # Try ChromaDB first (Issue #665: uses _try_chromadb_aggregation helper)
+    total_problems, success = _try_chromadb_aggregation(
+        code_collection, problem_types, severity_counts, race_conditions, file_problems
+    )
 
-    # Fallback to Redis if ChromaDB fails
-    if not code_collection:
+    if success:
+        storage_type = "chromadb"
+    else:
+        # Fallback to Redis if ChromaDB fails
         redis_client = await get_redis_connection()
         if not redis_client:
             return JSONResponse({
@@ -181,42 +262,7 @@ async def get_chart_data():
                 status_code=500,
             )
 
-    # Convert to chart-friendly format (Issue #281: uses _dict_to_chart_data helper)
-
-    # Problem types for pie chart (sorted by count descending)
-    problem_types_data = _dict_to_chart_data(problem_types, "type")
-
-    # Severity for bar chart (Issue #380: use module-level constant for ordering)
-    severity_data = []
-    for sev in _CHART_SEVERITY_ORDER:
-        if sev in severity_counts:
-            severity_data.append({"severity": sev, "count": severity_counts[sev]})
-    # Add any unlisted severities
-    for sev, count in severity_counts.items():
-        if sev not in _CHART_SEVERITY_ORDER:
-            severity_data.append({"severity": sev, "count": count})
-
-    # Race conditions for donut chart
-    race_conditions_data = _dict_to_chart_data(race_conditions, "category")
-
-    # Top files for horizontal bar chart (top 15)
-    top_files_data = _dict_to_chart_data(file_problems, "file", limit=15)
-
-    return JSONResponse(
-        {
-            "status": "success",
-            "chart_data": {
-                "problem_types": problem_types_data,
-                "severity_counts": severity_data,
-                "race_conditions": race_conditions_data,
-                "top_files": top_files_data,
-                "summary": {
-                    "total_problems": total_problems,
-                    "unique_problem_types": len(problem_types),
-                    "files_with_problems": len(file_problems),
-                    "race_condition_count": sum(race_conditions.values()),
-                },
-            },
-            "storage_type": storage_type,
-        }
-    )
+    # Build and return chart response (Issue #665: uses _build_chart_response helper)
+    return JSONResponse(_build_chart_response(
+        problem_types, severity_counts, race_conditions, file_problems, total_problems, storage_type
+    ))
