@@ -908,6 +908,80 @@ async def reset_chat(request: Request, reset_request: Optional[ChatResetRequest]
 # ====================================================================
 
 
+def _validate_session_id_or_raise(session_id: str) -> None:
+    """
+    Validate session ID format and raise ValidationError if invalid.
+
+    Issue #665: Extracted helper to reduce duplication in activity endpoints.
+    """
+    if not validate_chat_session_id(session_id):
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ValidationError("Invalid session ID format")
+
+
+def _get_memory_graph_or_none(request: Request) -> Optional[AutoBotMemoryGraph]:
+    """
+    Get memory graph from app state or None if unavailable.
+
+    Issue #665: Extracted helper for memory graph access.
+    """
+    return getattr(request.app.state, "memory_graph", None)
+
+
+def _create_activity_unavailable_response(
+    activity_count: int, request_id: str, *, is_batch: bool = False
+) -> JSONResponse:
+    """
+    Create response when memory graph is unavailable.
+
+    Issue #665: Extracted helper for unavailable response.
+    """
+    if is_batch:
+        return create_success_response(
+            data={"total": activity_count, "stored": 0, "failed": activity_count},
+            message="Activities received but memory graph unavailable",
+            request_id=request_id,
+        )
+    return create_success_response(
+        data={"activity_id": None, "stored": False},
+        message="Activity received but memory graph unavailable",
+        request_id=request_id,
+    )
+
+
+async def _store_single_activity(
+    memory_graph: AutoBotMemoryGraph,
+    session_id: str,
+    activity: ActivityCreate,
+) -> Dict:
+    """
+    Store a single activity in memory graph.
+
+    Issue #665: Extracted helper for activity storage.
+
+    Returns:
+        Entity creation result dict
+    """
+    return await memory_graph.create_activity_entity(
+        activity_type=f"{activity.type}_activity",
+        session_id=session_id,
+        user_id=activity.user_id,
+        content=activity.content,
+        secrets_used=activity.secrets_used,
+        metadata={
+            "frontend_id": activity.activity_id,
+            "frontend_timestamp": activity.timestamp,
+            **(activity.metadata or {}),
+        },
+    )
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_session_activity",
@@ -924,51 +998,21 @@ async def add_session_activity(
     Add a single activity to a chat session.
 
     Issue #608: User-Centric Session Tracking - Phase 3
-    Stores activity in memory graph for tracking user actions.
+    Issue #665: Refactored to use extracted helpers for validation and storage.
     """
     request_id = generate_request_id()
     log_request_context(request, "add_session_activity", request_id)
 
-    # Validate session ID
-    if not validate_chat_session_id(session_id):
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise ValidationError("Invalid session ID format")
+    _validate_session_id_or_raise(session_id)
 
-    # Get memory graph from app state
-    memory_graph: Optional[AutoBotMemoryGraph] = getattr(
-        request.app.state, "memory_graph", None
-    )
-
+    memory_graph = _get_memory_graph_or_none(request)
     if not memory_graph:
-        logger.warning(
-            "[%s] Memory graph not available, activity not persisted to graph",
-            request_id,
-        )
-        return create_success_response(
-            data={"activity_id": activity_data.activity_id, "stored": False},
-            message="Activity received but memory graph unavailable",
-            request_id=request_id,
-        )
+        logger.warning("[%s] Memory graph not available", request_id)
+        return _create_activity_unavailable_response(1, request_id, is_batch=False)
 
     try:
-        # Create activity entity in memory graph
-        activity_entity = await memory_graph.create_activity_entity(
-            activity_type=f"{activity_data.type}_activity",
-            session_id=session_id,
-            user_id=activity_data.user_id,
-            content=activity_data.content,
-            secrets_used=activity_data.secrets_used,
-            metadata={
-                "frontend_id": activity_data.activity_id,
-                "frontend_timestamp": activity_data.timestamp,
-                **(activity_data.metadata or {}),
-            },
+        activity_entity = await _store_single_activity(
+            memory_graph, session_id, activity_data
         )
 
         log_chat_event(
@@ -994,11 +1038,7 @@ async def add_session_activity(
         )
 
     except Exception as graph_error:
-        logger.warning(
-            "[%s] Failed to store activity in memory graph: %s",
-            request_id,
-            graph_error,
-        )
+        logger.warning("[%s] Failed to store activity: %s", request_id, graph_error)
         return create_success_response(
             data={"activity_id": activity_data.activity_id, "stored": False},
             message="Activity received but storage failed",
@@ -1022,42 +1062,19 @@ async def add_session_activities_batch(
     Add multiple activities to a chat session in a single request.
 
     Issue #608: User-Centric Session Tracking - Phase 3
-    Efficiently stores batched activities from frontend.
+    Issue #665: Refactored to use extracted helpers for validation and storage.
     """
     request_id = generate_request_id()
     log_request_context(request, "add_session_activities_batch", request_id)
 
-    # Validate session ID
-    if not validate_chat_session_id(session_id):
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise ValidationError("Invalid session ID format")
+    _validate_session_id_or_raise(session_id)
 
-    # Get memory graph from app state
-    memory_graph: Optional[AutoBotMemoryGraph] = getattr(
-        request.app.state, "memory_graph", None
-    )
+    memory_graph = _get_memory_graph_or_none(request)
+    total_activities = len(batch_data.activities)
 
     if not memory_graph:
-        logger.warning(
-            "[%s] Memory graph not available, %d activities not persisted",
-            request_id,
-            len(batch_data.activities),
-        )
-        return create_success_response(
-            data={
-                "total": len(batch_data.activities),
-                "stored": 0,
-                "failed": len(batch_data.activities),
-            },
-            message="Activities received but memory graph unavailable",
-            request_id=request_id,
-        )
+        logger.warning("[%s] Memory graph not available, %d activities not persisted", request_id, total_activities)
+        return _create_activity_unavailable_response(total_activities, request_id, is_batch=True)
 
     stored_count = 0
     failed_count = 0
@@ -1065,47 +1082,21 @@ async def add_session_activities_batch(
 
     for activity in batch_data.activities:
         try:
-            await memory_graph.create_activity_entity(
-                activity_type=f"{activity.type}_activity",
-                session_id=session_id,
-                user_id=activity.user_id,
-                content=activity.content,
-                secrets_used=activity.secrets_used,
-                metadata={
-                    "frontend_id": activity.activity_id,
-                    "frontend_timestamp": activity.timestamp,
-                    **(activity.metadata or {}),
-                },
-            )
+            await _store_single_activity(memory_graph, session_id, activity)
             stored_count += 1
             stored_ids.append(activity.activity_id)
         except Exception as activity_error:
-            logger.warning(
-                "[%s] Failed to store activity %s: %s",
-                request_id,
-                activity.activity_id,
-                activity_error,
-            )
+            logger.warning("[%s] Failed to store activity %s: %s", request_id, activity.activity_id, activity_error)
             failed_count += 1
 
     log_chat_event(
         "activities_batch_created",
         session_id,
-        {
-            "total": len(batch_data.activities),
-            "stored": stored_count,
-            "failed": failed_count,
-            "request_id": request_id,
-        },
+        {"total": total_activities, "stored": stored_count, "failed": failed_count, "request_id": request_id},
     )
 
     return create_success_response(
-        data={
-            "total": len(batch_data.activities),
-            "stored": stored_count,
-            "failed": failed_count,
-            "stored_ids": stored_ids,
-        },
+        data={"total": total_activities, "stored": stored_count, "failed": failed_count, "stored_ids": stored_ids},
         message=f"Batch processed: {stored_count} stored, {failed_count} failed",
         request_id=request_id,
         status_code=201 if stored_count > 0 else 200,
