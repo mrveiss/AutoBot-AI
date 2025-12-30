@@ -78,10 +78,27 @@ npu:
     batch_optimization: true
 
   # Device selection priority
+  # GPU.1 = NVIDIA RTX 4070 (fastest for embeddings)
+  # GPU.0 = Intel Arc Graphics (iGPU)
+  # NPU = Intel AI Boost (power efficient but slower)
+  # CPU = Intel Core Ultra 9 (fallback)
   device_priority:
-    - "NPU"
-    - "GPU"
-    - "CPU"
+    - "GPU.1"   # NVIDIA RTX 4070 - ~10-100x faster than NPU for embeddings
+    - "GPU.0"   # Intel Arc Graphics - faster than NPU
+    - "NPU"     # Intel AI Boost - power efficient but slower
+    - "GPU"     # Generic GPU fallback
+    - "CPU"     # CPU fallback
+
+  # Issue #165: Parallel device configuration
+  # Use different devices for different workloads for maximum throughput
+  parallel_devices:
+    enabled: true
+    # Embedding workloads: Use NVIDIA GPU for maximum speed
+    embedding_device: "GPU.1"
+    # Chat/inference workloads: Can use NPU (power efficient) or GPU
+    chat_device: "NPU"
+    # Fallback if preferred device unavailable
+    fallback_device: "CPU"
 
   # Model cache
   model_cache_dir: "models"

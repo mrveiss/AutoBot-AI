@@ -102,7 +102,50 @@ SUPPORTED_MODELS = {
 }
 
 # Device selection priority: NPU → GPU → CPU (Issue #640)
+# Default priority - can be overridden in config.npu.device_priority
 DEVICE_PRIORITY = ["NPU", "GPU", "CPU"]
+
+
+def get_device_priority() -> List[str]:
+    """
+    Get device priority from config or use default.
+
+    Issue #165: Added support for specific GPU devices (GPU.0, GPU.1)
+    to allow preferring NVIDIA dGPU over Intel NPU for faster embeddings.
+    """
+    try:
+        priority = config.get("npu", {}).get("device_priority", DEVICE_PRIORITY)
+        if isinstance(priority, list) and len(priority) > 0:
+            return priority
+    except Exception:
+        pass
+    return DEVICE_PRIORITY
+
+
+def get_parallel_device_config() -> Dict[str, Any]:
+    """
+    Get parallel device configuration for workload-specific device selection.
+
+    Issue #165: Allows using different devices for different workloads:
+    - GPU.1 (NVIDIA RTX 4070) for embedding generation (fastest)
+    - NPU for chat/inference (power efficient, runs in parallel)
+
+    Returns:
+        Dict with parallel device settings
+    """
+    default_config = {
+        "enabled": False,
+        "embedding_device": None,  # Will use default device priority
+        "chat_device": None,  # Will use default device priority
+        "fallback_device": "CPU",
+    }
+    try:
+        parallel_config = config.get("npu", {}).get("parallel_devices", {})
+        if isinstance(parallel_config, dict):
+            return {**default_config, **parallel_config}
+    except Exception:
+        pass
+    return default_config
 
 # =============================================================================
 # Configuration loader
@@ -440,7 +483,13 @@ class ONNXModelManager:
             raise
 
     def _detect_openvino_devices(self):
-        """Detect available OpenVINO devices (NPU, GPU, CPU) and their full names"""
+        """
+        Detect available OpenVINO devices and select based on config priority.
+
+        Issue #165: Enhanced to support specific GPU devices (GPU.0, GPU.1)
+        to allow preferring NVIDIA dGPU (GPU.1) over Intel NPU for faster embeddings.
+        The NVIDIA RTX 4070 (GPU.1) is ~10-100x faster than Intel NPU for embeddings.
+        """
         try:
             # Try to import OpenVINO to check available devices
             from openvino import Core
@@ -458,22 +507,27 @@ class ONNXModelManager:
                     logger.debug(f"Could not get full name for {device}: {e}")
                     self._device_full_names[device] = device
 
-            # Priority: NPU > GPU > CPU
-            if "NPU" in available_devices:
-                self._selected_device = "NPU"
-                self._openvino_device = "NPU"
-                npu_name = self._device_full_names.get("NPU", "Intel NPU")
-                logger.info(f"Intel NPU detected: {npu_name} - using NPU acceleration!")
-            elif "GPU" in available_devices:
-                self._selected_device = "GPU"
-                self._openvino_device = "GPU"
-                gpu_name = self._device_full_names.get("GPU", "Intel GPU")
-                logger.info(f"Intel GPU detected: {gpu_name} - using GPU acceleration")
-            else:
+            # Issue #165: Use config-based device priority
+            # This allows preferring GPU.1 (NVIDIA) over NPU for faster embeddings
+            device_priority = get_device_priority()
+            logger.info(f"Device priority from config: {device_priority}")
+
+            selected = False
+            for preferred_device in device_priority:
+                if preferred_device in available_devices:
+                    self._selected_device = preferred_device
+                    self._openvino_device = preferred_device
+                    device_name = self._device_full_names.get(preferred_device, preferred_device)
+                    logger.info(f"Selected device: {preferred_device} ({device_name})")
+                    selected = True
+                    break
+
+            if not selected:
+                # Fallback to CPU if no preferred device available
                 self._selected_device = "CPU"
                 self._openvino_device = "CPU"
                 cpu_name = self._device_full_names.get("CPU", "CPU")
-                logger.info(f"Using CPU via OpenVINO: {cpu_name}")
+                logger.info(f"Fallback to CPU: {cpu_name}")
 
         except ImportError:
             # OpenVINO not installed separately, use EP defaults
@@ -485,24 +539,80 @@ class ONNXModelManager:
             self._selected_device = "OpenVINO"
             self._openvino_device = "CPU"
 
-    def _get_session_providers(self) -> List[tuple]:
-        """Get ordered list of execution providers with options for session creation"""
+    def _get_device_for_model_type(self, model_type: str = "default") -> str:
+        """
+        Get the device to use for a specific model type.
+
+        Issue #165: Enables parallel device usage - different devices for different workloads.
+        GPU.1 (NVIDIA RTX 4070) for embeddings, NPU for chat inference.
+
+        Args:
+            model_type: "embedding", "chat", or "default"
+
+        Returns:
+            Device string (e.g., "GPU.1", "NPU", "CPU")
+        """
+        parallel_config = get_parallel_device_config()
+
+        if not parallel_config.get("enabled", False):
+            # Parallel mode disabled, use default device
+            return self._openvino_device
+
+        # Get available devices
+        try:
+            from openvino import Core
+            available_devices = Core().available_devices
+        except Exception:
+            available_devices = ["CPU"]
+
+        # Select device based on model type
+        if model_type == "embedding":
+            preferred = parallel_config.get("embedding_device")
+        elif model_type == "chat":
+            preferred = parallel_config.get("chat_device")
+        else:
+            preferred = None
+
+        # Check if preferred device is available
+        if preferred and preferred in available_devices:
+            logger.info(f"Using {preferred} for {model_type} workload (parallel mode)")
+            return preferred
+
+        # Fallback to default device
+        fallback = parallel_config.get("fallback_device", "CPU")
+        if fallback in available_devices:
+            return fallback
+
+        return self._openvino_device
+
+    def _get_session_providers(self, model_type: str = "default") -> List[tuple]:
+        """
+        Get ordered list of execution providers with options for session creation.
+
+        Issue #165: Added model_type parameter for workload-specific device selection.
+
+        Args:
+            model_type: "embedding", "chat", or "default" for device selection
+        """
         self._initialize_onnx_runtime()
+
+        # Get the appropriate device for this model type
+        target_device = self._get_device_for_model_type(model_type)
 
         providers = []
 
-        # OpenVINO Execution Provider with NPU device (preferred for Intel NPU)
+        # OpenVINO Execution Provider with workload-specific device
         if "OpenVINOExecutionProvider" in self._available_providers:
-            # OpenVINO EP provider options for NPU
+            # OpenVINO EP provider options
             # device_type can be: NPU, GPU, CPU, GPU.0, GPU.1, etc.
             openvino_options = {
-                "device_type": self._openvino_device,
-                "precision": "FP16",  # FP16 for better NPU performance
+                "device_type": target_device,
+                "precision": "FP16",  # FP16 for better performance
                 "enable_opencl_throttling": True,
                 "num_of_threads": DEFAULT_NPU_THREADS,
             }
             providers.append(("OpenVINOExecutionProvider", openvino_options))
-            logger.info(f"Using OpenVINO EP with device_type='{self._openvino_device}'")
+            logger.info(f"Using OpenVINO EP with device_type='{target_device}' for {model_type}")
 
         # DirectML as fallback for GPU (doesn't support NPU properly)
         if "DmlExecutionProvider" in self._available_providers:
@@ -645,8 +755,21 @@ class ONNXModelManager:
                 logger.error(f"Failed to load model {model_name}: {e}")
                 return False
 
+    def _determine_model_type(self, model_name: str) -> str:
+        """
+        Determine model type from model name for device selection.
+
+        Issue #165: Used to route embedding models to GPU, chat models to NPU.
+        """
+        model_name_lower = model_name.lower()
+        if "embed" in model_name_lower or "minilm" in model_name_lower or "bge" in model_name_lower:
+            return "embedding"
+        elif "llama" in model_name_lower or "chat" in model_name_lower or "instruct" in model_name_lower:
+            return "chat"
+        return "default"
+
     def _create_inference_session(self, model_name: str, model_path: Path) -> bool:
-        """Create ONNX Runtime inference session with DirectML (blocking)"""
+        """Create ONNX Runtime inference session with workload-specific device selection"""
         try:
             import onnxruntime as ort
             from transformers import AutoTokenizer
@@ -658,11 +781,14 @@ class ONNXModelManager:
             tokenizer = AutoTokenizer.from_pretrained(str(model_path), trust_remote_code=True)
             self._tokenizers[model_name] = tokenizer
 
-            # Create ONNX Runtime session with DirectML
-            onnx_model_path = model_path / "model.onnx"
-            logger.info(f"Creating inference session for {onnx_model_path}...")
+            # Issue #165: Determine model type for device selection
+            model_type = self._determine_model_type(model_name)
 
-            providers = self._get_session_providers()
+            # Create ONNX Runtime session with workload-specific device
+            onnx_model_path = model_path / "model.onnx"
+            logger.info(f"Creating inference session for {onnx_model_path} (type: {model_type})...")
+
+            providers = self._get_session_providers(model_type)
             logger.info(f"Using execution providers: {providers}")
 
             # Session options for optimization
