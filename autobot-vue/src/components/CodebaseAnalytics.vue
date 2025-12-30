@@ -2219,7 +2219,13 @@
 
           <!-- Hardcoded Values Preview -->
           <div v-if="environmentAnalysis.hardcoded_values.length > 0" class="hardcoded-preview">
-            <h4>Sample Hardcoded Values</h4>
+            <h4>
+              Sample Hardcoded Values
+              <!-- Issue #631: Show truncation warning when results are limited -->
+              <span v-if="environmentAnalysis.is_truncated || environmentAnalysis.hardcoded_values.length < environmentAnalysis.total_hardcoded_values" class="truncation-warning">
+                (showing {{ environmentAnalysis.hardcoded_values.length }} of {{ environmentAnalysis.total_hardcoded_values.toLocaleString() }} - use Export for full data)
+              </span>
+            </h4>
             <div
               v-for="(hv, index) in environmentAnalysis.hardcoded_values.slice(0, 8)"
               :key="'hv-' + index"
@@ -3208,6 +3214,8 @@ interface EnvironmentAnalysisResult {
   analysis_time_seconds: number
   hardcoded_values: HardcodedValue[]
   recommendations: EnvRecommendation[]
+  // Issue #631: Indicates if display results are truncated
+  is_truncated?: boolean
 }
 const environmentAnalysis = ref<EnvironmentAnalysisResult | null>(null)
 const loadingEnvAnalysis = ref(false)
@@ -5294,7 +5302,31 @@ const exportSection = async (section: SectionType, format: 'md' | 'json' = 'md')
       filename = `code-intelligence-scores-${timestamp}`
       break
     case 'environment':
-      data = environmentAnalysis.value
+      // Issue #631: Fetch full data from export endpoint to avoid truncation
+      try {
+        const backendUrl = await appConfig.getServiceUrl('backend')
+        const exportResponse = await fetch(`${backendUrl}/api/analytics/codebase/env-analysis/export`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        })
+        if (exportResponse.ok) {
+          data = await exportResponse.json()
+          logger.info('Environment export: fetched full data from export endpoint', {
+            total_in_export: (data as { total_in_export?: number }).total_in_export,
+            total_in_analysis: (data as { total_in_analysis?: number }).total_in_analysis,
+          })
+        } else {
+          // Fallback to cached display data if export fails
+          logger.warn('Environment export: export endpoint failed, using display data')
+          notify('Using cached display data (may be truncated) - run analysis first for full export', 'warning')
+          data = environmentAnalysis.value
+        }
+      } catch (err) {
+        // Fallback to cached display data
+        logger.warn('Environment export: fetch failed, using display data', err)
+        notify('Export endpoint unavailable - using truncated display data', 'warning')
+        data = environmentAnalysis.value
+      }
       filename = `environment-analysis-${timestamp}`
       break
     case 'ownership':
@@ -5477,26 +5509,108 @@ const generateSectionMarkdown = (section: SectionType, data: unknown): string =>
       break
     }
     case 'environment': {
-      const env = data as { system?: Record<string, unknown>; python?: Record<string, unknown>; node?: Record<string, unknown> }
-      md += `## Environment Analysis\n\n`
-      if (env.system) {
-        md += `### System\n\n`
-        Object.entries(env.system).forEach(([k, v]) => {
-          md += `- **${k}:** ${v}\n`
+      // Issue #631: Updated to handle new export format with hardcoded_values
+      interface EnvExportData {
+        total_in_export?: number
+        total_in_analysis?: number
+        total_hardcoded_values?: number
+        high_priority_count?: number
+        categories?: Record<string, number>
+        hardcoded_values?: Array<{
+          type: string
+          severity: string
+          value: string
+          file_path?: string
+          line_number?: number
+          context?: string
+        }>
+        recommendations?: Array<{
+          priority?: string
+          description?: string
+          env_var_name?: string
+        }>
+      }
+      const env = data as EnvExportData
+
+      md += `## Environment Analysis Report\n\n`
+
+      // Summary section
+      md += `### Summary\n\n`
+      const totalItems = env.total_in_export ?? env.total_hardcoded_values ?? 0
+      const totalAnalysis = env.total_in_analysis ?? env.total_hardcoded_values ?? 0
+      md += `- **Total Items Exported:** ${totalItems.toLocaleString()}\n`
+      if (env.total_in_analysis && env.total_in_export !== env.total_in_analysis) {
+        md += `- **Total in Analysis:** ${totalAnalysis.toLocaleString()}\n`
+      }
+      if (env.high_priority_count !== undefined) {
+        md += `- **High Priority Items:** ${env.high_priority_count}\n`
+      }
+      md += `\n`
+
+      // Categories breakdown
+      if (env.categories && Object.keys(env.categories).length > 0) {
+        md += `### Categories\n\n`
+        md += `| Category | Count |\n`
+        md += `|----------|-------|\n`
+        Object.entries(env.categories).forEach(([cat, count]) => {
+          md += `| ${cat} | ${count} |\n`
         })
         md += `\n`
       }
-      if (env.python) {
-        md += `### Python\n\n`
-        Object.entries(env.python).forEach(([k, v]) => {
-          md += `- **${k}:** ${v}\n`
+
+      // Hardcoded values - group by severity
+      if (env.hardcoded_values && env.hardcoded_values.length > 0) {
+        const byPriority = { high: [], medium: [], low: [] } as Record<string, typeof env.hardcoded_values>
+        env.hardcoded_values.forEach(v => {
+          const sev = (v.severity || 'low').toLowerCase()
+          if (!byPriority[sev]) byPriority[sev] = []
+          byPriority[sev].push(v)
         })
-        md += `\n`
+
+        // High priority first
+        if (byPriority.high.length > 0) {
+          md += `### 🔴 High Priority (${byPriority.high.length})\n\n`
+          md += `| Type | Value | File | Line |\n`
+          md += `|------|-------|------|------|\n`
+          byPriority.high.forEach(v => {
+            const val = String(v.value).substring(0, 50) + (String(v.value).length > 50 ? '...' : '')
+            md += `| ${v.type} | \`${val}\` | ${v.file_path || '-'} | ${v.line_number || '-'} |\n`
+          })
+          md += `\n`
+        }
+
+        if (byPriority.medium.length > 0) {
+          md += `### 🟡 Medium Priority (${byPriority.medium.length})\n\n`
+          md += `| Type | Value | File | Line |\n`
+          md += `|------|-------|------|------|\n`
+          byPriority.medium.forEach(v => {
+            const val = String(v.value).substring(0, 50) + (String(v.value).length > 50 ? '...' : '')
+            md += `| ${v.type} | \`${val}\` | ${v.file_path || '-'} | ${v.line_number || '-'} |\n`
+          })
+          md += `\n`
+        }
+
+        if (byPriority.low.length > 0) {
+          md += `### 🟢 Low Priority (${byPriority.low.length})\n\n`
+          md += `| Type | Value | File | Line |\n`
+          md += `|------|-------|------|------|\n`
+          byPriority.low.forEach(v => {
+            const val = String(v.value).substring(0, 50) + (String(v.value).length > 50 ? '...' : '')
+            md += `| ${v.type} | \`${val}\` | ${v.file_path || '-'} | ${v.line_number || '-'} |\n`
+          })
+          md += `\n`
+        }
       }
-      if (env.node) {
-        md += `### Node.js\n\n`
-        Object.entries(env.node).forEach(([k, v]) => {
-          md += `- **${k}:** ${v}\n`
+
+      // Recommendations
+      if (env.recommendations && env.recommendations.length > 0) {
+        md += `### Recommendations\n\n`
+        env.recommendations.forEach((rec, i) => {
+          md += `${i + 1}. **[${rec.priority || 'medium'}]** ${rec.description || ''}`
+          if (rec.env_var_name) {
+            md += ` → \`${rec.env_var_name}\``
+          }
+          md += `\n`
         })
       }
       break
@@ -10048,6 +10162,14 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   color: #e5e7eb;
   font-size: 1em;
   margin-bottom: 12px;
+}
+
+/* Issue #631: Truncation warning style */
+.environment-analysis-section .truncation-warning {
+  font-size: 0.85em;
+  color: #f59e0b;
+  font-weight: normal;
+  margin-left: 8px;
 }
 
 .environment-analysis-section .hardcoded-item {

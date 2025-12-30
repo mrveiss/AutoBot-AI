@@ -27,6 +27,8 @@ router = APIRouter()
 
 # Cache for environment analysis (in-memory, refreshed on demand)
 _env_analysis_cache: Optional[dict] = None
+# Full analysis cache for export (Issue #631)
+_env_analysis_full_cache: Optional[dict] = None
 # Lock for thread-safe access to _env_analysis_cache (Issue #559)
 _env_analysis_cache_lock = asyncio.Lock()
 
@@ -95,8 +97,27 @@ async def _run_environment_analysis(analyzer, path: str, pattern_list: list):
         return None
 
 
-def _build_environment_result(analysis: dict, path: str) -> dict:
-    """Build success result from analysis data with limits on list sizes."""
+def _build_environment_result(analysis: dict, path: str, for_display: bool = True) -> dict:
+    """
+    Build result from analysis data.
+
+    Args:
+        analysis: Raw analysis data from EnvironmentAnalyzer
+        path: Path that was analyzed
+        for_display: If True, limit list sizes for UI performance.
+                     If False (export), return all data.
+
+    Issue #631: for_display=False returns full data for export.
+    """
+    hardcoded_values = analysis.get("hardcoded_details", [])
+    recommendations = analysis.get("configuration_recommendations", [])
+
+    # For display, limit to 50 items (UI performance)
+    # For export, include all items
+    if for_display:
+        hardcoded_values = hardcoded_values[:50]
+        recommendations = recommendations[:20]
+
     return {
         "status": "success",
         "path": path,
@@ -105,10 +126,15 @@ def _build_environment_result(analysis: dict, path: str) -> dict:
         "recommendations_count": analysis.get("recommendations_count", 0),
         "categories": analysis.get("categories", {}),
         "analysis_time_seconds": analysis.get("analysis_time_seconds", 0),
-        "hardcoded_values": analysis.get("hardcoded_details", [])[:50],
-        "recommendations": analysis.get("configuration_recommendations", [])[:20],
+        "hardcoded_values": hardcoded_values,
+        "recommendations": recommendations,
         "metrics": analysis.get("metrics", {}),
         "storage_type": "live_analysis",
+        # Issue #631: Add truncation info for display mode
+        "is_truncated": for_display and (
+            len(analysis.get("hardcoded_details", [])) > 50 or
+            len(analysis.get("configuration_recommendations", [])) > 20
+        ),
     }
 
 
@@ -227,11 +253,16 @@ async def get_environment_analysis(
                 "recommendations_count": 0,
             })
 
-        result = _build_environment_result(analysis, path)
+        result = _build_environment_result(analysis, path, for_display=True)
+
+        # Issue #631: Build full result for export (no truncation)
+        full_result = _build_environment_result(analysis, path, for_display=False)
 
         # Cache the results (thread-safe, Issue #559)
         async with _env_analysis_cache_lock:
+            global _env_analysis_full_cache
             _env_analysis_cache = result
+            _env_analysis_full_cache = full_result
 
         logger.info(
             "Environment analysis complete: %d hardcoded values, %d recommendations",
@@ -317,3 +348,125 @@ async def get_env_recommendations(
             "recommendations": [],
             "total": 0,
         })
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_env_analysis",
+    error_code_prefix="CODEBASE",
+)
+@router.get("/env-analysis/export")
+async def export_env_analysis(
+    category: str = Query(None, description="Filter by category (e.g., 'security', 'port', 'hostname')"),
+    severity: str = Query(None, description="Filter by severity ('high', 'medium', 'low')"),
+    limit: int = Query(None, description="Limit number of results (default: all)"),
+    include_recommendations: bool = Query(True, description="Include recommendations in export"),
+):
+    """
+    Export full environment analysis results without truncation (Issue #631).
+
+    Unlike the display endpoint which limits results to 50 items for UI performance,
+    this endpoint returns all hardcoded values for export/download purposes.
+
+    Supports filtering by:
+    - category: Only include items of specific type (security, port, hostname, etc.)
+    - severity: Only include items of specific severity (high, medium, low)
+    - limit: Cap number of results if needed for large exports
+
+    Security-sensitive items (severity=high, category=security) are always prioritized.
+
+    Args:
+        category: Filter by hardcoded value category
+        severity: Filter by severity level
+        limit: Maximum number of items to return
+        include_recommendations: Whether to include recommendations
+
+    Returns:
+        JSON with complete hardcoded values list and metadata
+    """
+    global _env_analysis_full_cache
+
+    # Check cache first
+    async with _env_analysis_cache_lock:
+        if not _env_analysis_full_cache:
+            return JSONResponse({
+                "status": "error",
+                "message": "No cached analysis available. Run environment analysis first.",
+                "hardcoded_values": [],
+                "recommendations": [],
+                "total": 0,
+            }, status_code=404)
+
+        # Get full data from cache
+        full_data = _env_analysis_full_cache.copy()
+
+    # Issue #631: Make a copy of the list to avoid mutating cached data during sort
+    hardcoded_values = list(full_data.get("hardcoded_values", []))
+    recommendations = full_data.get("recommendations", [])
+
+    # Validate severity if provided
+    valid_severities = {"high", "medium", "low"}
+    if severity and severity.lower() not in valid_severities:
+        return JSONResponse({
+            "status": "error",
+            "message": f"Invalid severity '{severity}'. Must be one of: {', '.join(sorted(valid_severities))}",
+            "hardcoded_values": [],
+            "recommendations": [],
+            "total": 0,
+        }, status_code=400)
+
+    # Apply filters
+    if category:
+        hardcoded_values = [
+            v for v in hardcoded_values
+            if v.get("type", "").lower() == category.lower()
+        ]
+
+    if severity:
+        hardcoded_values = [
+            v for v in hardcoded_values
+            if v.get("severity", "").lower() == severity.lower()
+        ]
+
+    # Sort by severity (high first) for prioritization
+    severity_order = {"high": 0, "medium": 1, "low": 2}
+    hardcoded_values.sort(
+        key=lambda v: severity_order.get(v.get("severity", "low").lower(), 3)
+    )
+
+    # Apply limit after sorting (so high severity items come first)
+    if limit and limit > 0:
+        hardcoded_values = hardcoded_values[:limit]
+
+    # Calculate category breakdown for filtered results
+    category_counts = {}
+    for v in hardcoded_values:
+        cat = v.get("type", "unknown")
+        category_counts[cat] = category_counts.get(cat, 0) + 1
+
+    result = {
+        "status": "success",
+        "path": full_data.get("path", ""),
+        "export_timestamp": full_data.get("analysis_time_seconds", 0),
+        "total_in_export": len(hardcoded_values),
+        "total_in_analysis": full_data.get("total_hardcoded_values", 0),
+        "categories": category_counts,
+        "filters_applied": {
+            "category": category,
+            "severity": severity,
+            "limit": limit,
+        },
+        "hardcoded_values": hardcoded_values,
+        "recommendations": recommendations if include_recommendations else [],
+        "recommendations_count": len(recommendations) if include_recommendations else 0,
+    }
+
+    logger.info(
+        "Environment analysis export: %d/%d items (category=%s, severity=%s)",
+        len(hardcoded_values),
+        full_data.get("total_hardcoded_values", 0),
+        category or "all",
+        severity or "all",
+    )
+
+    return JSONResponse(result)
