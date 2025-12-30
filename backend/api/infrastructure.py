@@ -743,6 +743,36 @@ async def list_deployments(
 # ==================== Credential Management Endpoints ====================
 
 
+def _store_ssh_key_and_update_host(
+    host_id: int, host, private_key_content: str, public_key_content: str
+) -> ProvisionKeyResponse:
+    """Store SSH key in database and update host status (Issue #665: extracted helper)."""
+    # Deactivate old credentials
+    db.deactivate_credentials(host_id, "ssh_key")
+
+    # Store new SSH key in encrypted database
+    db.store_ssh_credential(
+        host_id=host_id, credential_type="ssh_key", value=private_key_content
+    )
+
+    # Update host status (no key_path needed - key stored in database)
+    db.update_host_status(host_id, "deployed")
+
+    # Calculate fingerprint for response
+    fingerprint = (
+        public_key_content.split()[-1] if "@" in public_key_content else None
+    )
+
+    logger.info("SSH key provisioning successful for host %s", host_id)
+
+    return ProvisionKeyResponse(
+        success=True,
+        message=f"SSH key provisioned successfully for {host.hostname}",
+        host_id=host_id,
+        public_key_fingerprint=fingerprint,
+    )
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="provision_ssh_key",
@@ -751,7 +781,9 @@ async def list_deployments(
 @router.post("/hosts/{host_id}/provision-key", response_model=ProvisionKeyResponse)
 async def provision_ssh_key(host_id: int, provision_request: ProvisionKeyRequest):
     """
-    Provision SSH key on host using password authentication
+    Provision SSH key on host using password authentication.
+
+    Issue #665: Refactored to extract _store_ssh_key_and_update_host helper.
 
     This endpoint:
     1. Connects to host using password
@@ -776,15 +808,12 @@ async def provision_ssh_key(host_id: int, provision_request: ProvisionKeyRequest
     """
     try:
         host = db.get_host(host_id)
-
         if not host:
             raise HTTPException(status_code=404, detail=f"Host {host_id} not found")
 
         logger.info(
-            f"Starting SSH key provisioning for host {host_id} ({host.hostname})"
+            "Starting SSH key provisioning for host %s (%s)", host_id, host.hostname
         )
-
-        # Update host status
         db.update_host_status(host_id, "provisioning")
 
         try:
@@ -796,38 +825,14 @@ async def provision_ssh_key(host_id: int, provision_request: ProvisionKeyRequest
                 password=provision_request.password,
             )
 
-            # Deactivate old credentials
-            db.deactivate_credentials(host_id, "ssh_key")
-
-            # Store new SSH key in encrypted database
-            db.store_ssh_credential(
-                host_id=host_id, credential_type="ssh_key", value=private_key_content
-            )
-
-            # Update host status (no key_path needed - key stored in database)
-            host.status = "deployed"
-            db.update_host_status(host_id, "deployed")
-
-            # Calculate fingerprint for response
-            fingerprint = (
-                public_key_content.split()[-1] if "@" in public_key_content else None
-            )
-
-            logger.info("SSH key provisioning successful for host %s", host_id)
-
-            return ProvisionKeyResponse(
-                success=True,
-                message=f"SSH key provisioned successfully for {host.hostname}",
-                host_id=host_id,
-                public_key_fingerprint=fingerprint,
+            # Issue #665: Use extracted helper for storage and status update
+            return _store_ssh_key_and_update_host(
+                host_id, host, private_key_content, public_key_content
             )
 
         except Exception as e:
-            # Update host status to failed
             db.update_host_status(host_id, "failed")
-
             logger.error("SSH key provisioning failed for host %s: %s", host_id, e)
-
             raise HTTPException(
                 status_code=400, detail=f"SSH key provisioning failed: {str(e)}"
             )

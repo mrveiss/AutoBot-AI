@@ -473,6 +473,65 @@ class IDEIntegrationEngine:
             contents += f"\n**Suggested Fix:**\n```python\n{rule['fix_template']}\n```"
         return contents
 
+    def _find_rule_by_id(self, diagnostic_code: str) -> Optional[dict]:
+        """Find a rule by its ID (Issue #665: extracted helper)."""
+        for rule in self.rules:
+            if rule["id"] == diagnostic_code:
+                return rule
+        return None
+
+    def _create_fix_action(
+        self, rule: dict, file_path: str, edit_range: dict
+    ) -> CodeAction:
+        """Create a quick fix code action from rule template (Issue #665: extracted helper)."""
+        return CodeAction(
+            title=f"Fix: {rule['name']}",
+            kind=CodeActionKind.QUICKFIX,
+            is_preferred=True,
+            edit={
+                "changes": {
+                    file_path: [
+                        {
+                            "range": edit_range,
+                            "newText": rule["fix_template"],
+                        }
+                    ]
+                }
+            },
+        )
+
+    def _create_disable_rule_action(self, rule: dict) -> CodeAction:
+        """Create action to disable a rule (Issue #665: extracted helper)."""
+        return CodeAction(
+            title=f"Disable rule: {rule['id']}",
+            kind=CodeActionKind.QUICKFIX,
+            is_preferred=False,
+            edit=None,  # Handled by configuration
+        )
+
+    def _create_suppress_comment_action(
+        self, rule: dict, file_path: str, line_num: int, line_end: int
+    ) -> CodeAction:
+        """Create action to suppress rule with comment (Issue #665: extracted helper)."""
+        return CodeAction(
+            title="Suppress with comment",
+            kind=CodeActionKind.QUICKFIX,
+            is_preferred=False,
+            edit={
+                "changes": {
+                    file_path: [
+                        {
+                            "range": {
+                                "start": {"line": line_num, "character": line_end},
+                                "end": {"line": line_num, "character": line_end},
+                            },
+                            "newText": f"  # noqa: {rule['id']}",
+                        }
+                    ]
+                }
+            },
+        )
+
     async def analyze(self, request: AnalysisRequest) -> AnalysisResponse:
         """
         Analyze code and return diagnostics.
@@ -620,83 +679,38 @@ class IDEIntegrationEngine:
         """
         Get quick fix suggestions for a diagnostic.
 
+        Issue #665: Refactored to use extracted helper methods for creating actions.
+
         Args:
             request: Quick fix request
 
         Returns:
             List of available code actions
         """
-        actions = []
-
-        # Find the matching rule
-        rule = None
-        for r in self.rules:
-            if r["id"] == request.diagnostic_code:
-                rule = r
-                break
-
+        # Issue #665: Use extracted helper for rule lookup
+        rule = self._find_rule_by_id(request.diagnostic_code)
         if not rule:
             return QuickFixResponse(actions=[], diagnostic_code=request.diagnostic_code)
 
-        # Get the problematic code
+        # Validate line number
         lines = request.content.split("\n")
         line_num = request.range.start.line
         if line_num >= len(lines):
             return QuickFixResponse(actions=[], diagnostic_code=request.diagnostic_code)
 
         problematic_line = lines[line_num]
+        actions = []
 
-        # Generate fix based on rule
+        # Issue #665: Use extracted helpers for action creation
         if rule.get("fix_template"):
-            # Create a quick fix action
-            action = CodeAction(
-                title=f"Fix: {rule['name']}",
-                kind=CodeActionKind.QUICKFIX,
-                is_preferred=True,
-                edit={
-                    "changes": {
-                        request.file_path: [
-                            {
-                                "range": request.range.model_dump(),
-                                "newText": rule["fix_template"],
-                            }
-                        ]
-                    }
-                },
+            actions.append(
+                self._create_fix_action(rule, request.file_path, request.range.model_dump())
             )
-            actions.append(action)
 
-        # Add disable rule action
+        actions.append(self._create_disable_rule_action(rule))
         actions.append(
-            CodeAction(
-                title=f"Disable rule: {rule['id']}",
-                kind=CodeActionKind.QUICKFIX,
-                is_preferred=False,
-                edit=None,  # Handled by configuration
-            )
-        )
-
-        # Add suppress for line action
-        indent = len(problematic_line) - len(problematic_line.lstrip())
-        suppress_comment = f"{' ' * indent}# noqa: {rule['id']}"
-        actions.append(
-            CodeAction(
-                title="Suppress with comment",
-                kind=CodeActionKind.QUICKFIX,
-                is_preferred=False,
-                edit={
-                    "changes": {
-                        request.file_path: [
-                            {
-                                "range": {
-                                    "start": {"line": line_num, "character": len(problematic_line)},
-                                    "end": {"line": line_num, "character": len(problematic_line)},
-                                },
-                                "newText": f"  # noqa: {rule['id']}",
-                            }
-                        ]
-                    }
-                },
+            self._create_suppress_comment_action(
+                rule, request.file_path, line_num, len(problematic_line)
             )
         )
 
