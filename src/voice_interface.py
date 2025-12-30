@@ -496,7 +496,7 @@ class VoiceInterface:
 
     async def _speak_coqui_tts(self, text: str) -> Dict[str, Any]:
         """
-        Coqui TTS text-to-speech synthesis and playback.
+        Coqui TTS text-to-speech synthesis and playback (Issue #665: refactored).
 
         Uses Coqui TTS for high-quality neural text-to-speech.
         Requires TTS package and sounddevice for playback.
@@ -507,6 +507,36 @@ class VoiceInterface:
         Returns:
             Dict with status and message.
         """
+        # Check dependencies
+        dep_error = self._check_coqui_dependencies()
+        if dep_error:
+            return dep_error
+
+        tts = self._get_coqui_tts()
+        if tts is None:
+            return {
+                "status": "error",
+                "message": (
+                    f"Failed to initialize Coqui TTS with model: {self._coqui_model}"
+                ),
+            }
+
+        try:
+            loop = asyncio.get_running_loop()
+            result = await loop.run_in_executor(
+                None, self._synthesize_and_play_blocking, tts, text
+            )
+            return result
+
+        except Exception as e:
+            logger.error("Coqui TTS error: %s", e)
+            return {
+                "status": "error",
+                "message": f"Coqui TTS failed: {str(e)}",
+            }
+
+    def _check_coqui_dependencies(self) -> Optional[Dict[str, Any]]:
+        """Check Coqui TTS dependencies (Issue #665: extracted helper)."""
         if not COQUI_TTS_AVAILABLE:
             return {
                 "status": "error",
@@ -521,60 +551,37 @@ class VoiceInterface:
                     "Install with: pip install sounddevice soundfile"
                 ),
             }
+        return None
 
-        tts = self._get_coqui_tts()
-        if tts is None:
-            return {
-                "status": "error",
-                "message": (
-                    f"Failed to initialize Coqui TTS with model: {self._coqui_model}"
-                ),
-            }
+    def _synthesize_and_play_blocking(self, tts: Any, text: str) -> Dict[str, Any]:
+        """Blocking TTS synthesis and playback (Issue #665: extracted helper)."""
+        # Create temporary file for audio output
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
+            output_path = tmp_file.name
 
         try:
-            loop = asyncio.get_running_loop()
+            # Synthesize speech to file
+            logger.debug("Synthesizing speech: %s", text[:50])
+            tts.tts_to_file(text=text, file_path=output_path)
 
-            def _synthesize_and_play():
-                """Blocking TTS synthesis and playback in executor."""
-                # Create temporary file for audio output
-                with tempfile.NamedTemporaryFile(
-                    suffix=".wav", delete=False
-                ) as tmp_file:
-                    output_path = tmp_file.name
+            # Read and play the audio
+            data, samplerate = sf.read(output_path)
+            logger.debug(
+                "Playing audio: %d samples at %d Hz",
+                len(data),
+                samplerate,
+            )
+            sd.play(data, samplerate)
+            sd.wait()
 
-                try:
-                    # Synthesize speech to file
-                    logger.debug("Synthesizing speech: %s", text[:50])
-                    tts.tts_to_file(text=text, file_path=output_path)
-
-                    # Read and play the audio
-                    data, samplerate = sf.read(output_path)
-                    logger.debug(
-                        "Playing audio: %d samples at %d Hz",
-                        len(data),
-                        samplerate,
-                    )
-                    sd.play(data, samplerate)
-                    sd.wait()
-
-                    return {
-                        "status": "success",
-                        "message": "Text spoken successfully via Coqui TTS.",
-                    }
-                finally:
-                    # Clean up temporary file
-                    if os.path.exists(output_path):
-                        os.unlink(output_path)
-
-            result = await loop.run_in_executor(None, _synthesize_and_play)
-            return result
-
-        except Exception as e:
-            logger.error("Coqui TTS error: %s", e)
             return {
-                "status": "error",
-                "message": f"Coqui TTS failed: {str(e)}",
+                "status": "success",
+                "message": "Text spoken successfully via Coqui TTS.",
             }
+        finally:
+            # Clean up temporary file
+            if os.path.exists(output_path):
+                os.unlink(output_path)
 
     async def _speak_gtts(self, text: str) -> Dict[str, Any]:
         """

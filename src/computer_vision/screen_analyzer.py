@@ -305,7 +305,7 @@ class ScreenAnalyzer:
     async def _detect_and_classify_elements(
         self, screenshot: np.ndarray, processing_results: Dict[str, Any]
     ) -> List[UIElement]:
-        """Detect and classify UI elements using advanced computer vision"""
+        """Detect and classify UI elements (Issue #665: refactored)."""
         ui_elements: List[UIElement] = []
 
         try:
@@ -315,74 +315,87 @@ class ScreenAnalyzer:
 
             # Enhance with advanced classification
             for i, element in enumerate(detected_elements):
-                bbox = element.get("bbox", {})
-                if not bbox:
-                    continue
-
-                # Extract element region
-                x, y, w, h = bbox["x"], bbox["y"], bbox["width"], bbox["height"]
-                element_region = (
-                    screenshot[y : y + h, x : x + w]
-                    if (y + h <= screenshot.shape[0] and x + w <= screenshot.shape[1])
-                    else None
+                ui_element = await self._classify_single_element(
+                    screenshot, element, i
                 )
-
-                # Classify element type
-                element_type = await self.element_classifier.classify_element(
-                    element_region, bbox
-                )
-
-                # Determine possible interactions
-                interactions = self._determine_interactions(element_type, element_region)
-
-                # Extract text from element
-                text_content = await self._extract_element_text(element_region)
-
-                # Create UI element
-                ui_element = UIElement(
-                    element_id=f"element_{i}_{int(time.time())}",
-                    element_type=element_type,
-                    bbox=bbox,
-                    center_point=(x + w // 2, y + h // 2),
-                    confidence=element.get("confidence", 0.7),
-                    text_content=text_content,
-                    attributes={
-                        "area": element.get("area", w * h),
-                        "aspect_ratio": element.get(
-                            "aspect_ratio", w / h if h > 0 else 1.0
-                        ),
-                        "perimeter": element.get("perimeter", 2 * (w + h)),
-                    },
-                    possible_interactions=interactions,
-                    screenshot_region=element_region,
-                    ocr_data=None,
-                )
-
-                ui_elements.append(ui_element)
+                if ui_element:
+                    ui_elements.append(ui_element)
 
             # Add template matching results
-            template_matches = await self.template_matcher.find_common_elements(
-                screenshot
-            )
-            for match in template_matches:
-                ui_element = UIElement(
-                    element_id=f"template_{match['template_name']}_{int(time.time())}",
-                    element_type=ElementType(match.get("element_type", "unknown")),
-                    bbox=match["bbox"],
-                    center_point=match["center"],
-                    confidence=match["confidence"],
-                    text_content=match.get("text", ""),
-                    attributes=match.get("attributes", {}),
-                    possible_interactions=[InteractionType.CLICK],
-                    screenshot_region=None,
-                )
-                ui_elements.append(ui_element)
+            template_elements = await self._process_template_matches(screenshot)
+            ui_elements.extend(template_elements)
 
             return ui_elements
 
         except Exception as e:
             logger.error("Element detection and classification failed: %s", e)
             return []
+
+    async def _classify_single_element(
+        self, screenshot: np.ndarray, element: Dict[str, Any], index: int
+    ) -> Optional[UIElement]:
+        """Classify a single detected element (Issue #665: extracted helper)."""
+        bbox = element.get("bbox", {})
+        if not bbox:
+            return None
+
+        # Extract element region
+        x, y, w, h = bbox["x"], bbox["y"], bbox["width"], bbox["height"]
+        element_region = (
+            screenshot[y : y + h, x : x + w]
+            if (y + h <= screenshot.shape[0] and x + w <= screenshot.shape[1])
+            else None
+        )
+
+        # Classify element type
+        element_type = await self.element_classifier.classify_element(
+            element_region, bbox
+        )
+
+        # Determine possible interactions
+        interactions = self._determine_interactions(element_type, element_region)
+
+        # Extract text from element
+        text_content = await self._extract_element_text(element_region)
+
+        # Create UI element
+        return UIElement(
+            element_id=f"element_{index}_{int(time.time())}",
+            element_type=element_type,
+            bbox=bbox,
+            center_point=(x + w // 2, y + h // 2),
+            confidence=element.get("confidence", 0.7),
+            text_content=text_content,
+            attributes={
+                "area": element.get("area", w * h),
+                "aspect_ratio": element.get("aspect_ratio", w / h if h > 0 else 1.0),
+                "perimeter": element.get("perimeter", 2 * (w + h)),
+            },
+            possible_interactions=interactions,
+            screenshot_region=element_region,
+            ocr_data=None,
+        )
+
+    async def _process_template_matches(
+        self, screenshot: np.ndarray
+    ) -> List[UIElement]:
+        """Process template matching results (Issue #665: extracted helper)."""
+        template_elements = []
+        template_matches = await self.template_matcher.find_common_elements(screenshot)
+        for match in template_matches:
+            ui_element = UIElement(
+                element_id=f"template_{match['template_name']}_{int(time.time())}",
+                element_type=ElementType(match.get("element_type", "unknown")),
+                bbox=match["bbox"],
+                center_point=match["center"],
+                confidence=match["confidence"],
+                text_content=match.get("text", ""),
+                attributes=match.get("attributes", {}),
+                possible_interactions=[InteractionType.CLICK],
+                screenshot_region=None,
+            )
+            template_elements.append(ui_element)
+        return template_elements
 
     def _determine_interactions(
         self, element_type: ElementType, element_region: Optional[np.ndarray]
