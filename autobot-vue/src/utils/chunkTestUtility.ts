@@ -3,6 +3,10 @@
  * Tests and validates chunk loading fixes in development and production modes
  */
 
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('ChunkTest')
+
 export interface ChunkTestResult {
   success: boolean
   component: string
@@ -55,7 +59,7 @@ export async function testComponentChunkLoading(components: string[]): Promise<C
 
 
     } catch (error) {
-      console.error(`[ChunkTest] ❌ ${component} failed:`, error)
+      logger.error(`❌ ${component} failed:`, error)
 
       results.push({
         success: false,
@@ -109,7 +113,7 @@ export async function testAsyncComponentErrorRecovery(): Promise<boolean> {
 
     return hasFailed && retryCount === 1
   } catch (error) {
-    console.error('[ChunkTest] Error recovery test failed:', error)
+    logger.error('Error recovery test failed:', error)
     return false
   }
 }
@@ -138,7 +142,7 @@ export async function testCacheManagement(): Promise<boolean> {
 
     return true
   } catch (error) {
-    console.error('[ChunkTest] ❌ Cache management test failed:', error)
+    logger.error('❌ Cache management test failed:', error)
     return false
   }
 }
@@ -187,8 +191,7 @@ export async function runComprehensiveChunkTests(): Promise<void> {
         }
       }
     } else {
-      console.warn('[ChunkTest] ⚠️ Some chunk loading tests failed!')
-      console.table(chunkResults.results.filter(r => !r.success))
+      logger.warn('⚠️ Some chunk loading tests failed!', chunkResults.results.filter(r => !r.success))
     }
 
     // Store test results for debugging
@@ -197,7 +200,7 @@ export async function runComprehensiveChunkTests(): Promise<void> {
     }
 
   } catch (error) {
-    console.error('[ChunkTest] Comprehensive test suite failed:', error)
+    logger.error('Comprehensive test suite failed:', error)
   }
 }
 
@@ -221,12 +224,12 @@ export async function quickChunkValidation(): Promise<boolean> {
     if (failures.length === 0) {
       return true
     } else {
-      console.error('[ChunkTest] ❌ Quick validation failed:', failures)
+      logger.error('❌ Quick validation failed:', failures)
       return false
     }
 
   } catch (error) {
-    console.error('[ChunkTest] Quick validation error:', error)
+    logger.error('Quick validation error:', error)
     return false
   }
 }

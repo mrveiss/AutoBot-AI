@@ -4,6 +4,10 @@
  * Restores 95% monitoring capability with <5% performance impact
  */
 
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('OptimizedPerformance')
+
 export const OPTIMIZED_PERFORMANCE = {
   // Smart performance mode - enabled but balanced
   ENABLED: true,
@@ -177,7 +181,7 @@ export function isOptimizedFeatureEnabled(featureName) {
   const enabled = OPTIMIZED_PERFORMANCE.FEATURES[featureName];
 
   if (OPTIMIZED_PERFORMANCE.DEBUG.LOG_ADAPTIVE_CHANGES && enabled === false) {
-    console.log(`[OptimizedPerformance] Feature "${featureName}" disabled`);
+    logger.debug(`Feature "${featureName}" disabled`);
   }
 
   return enabled !== false; // Default to true unless explicitly false
@@ -255,7 +259,7 @@ class PerformanceBudgetTracker {
 
   onBudgetExceeded(operationName, duration) {
     if (OPTIMIZED_PERFORMANCE.DEBUG.SHOW_PERFORMANCE_WARNINGS) {
-      console.warn(`[PerformanceBudget] Budget exceeded! Operation: ${operationName}, Duration: ${duration}ms, Total: ${this.currentOverhead}ms`);
+      logger.warn(`Budget exceeded! Operation: ${operationName}, Duration: ${duration}ms, Total: ${this.currentOverhead}ms`);
     }
   }
 
@@ -424,7 +428,7 @@ export function isPerformanceModeEnabled() {
 
 export function logPerformanceMetric(component, metric, value) {
   if (OPTIMIZED_PERFORMANCE.DEBUG.LOG_PERFORMANCE_METRICS) {
-    console.log(`[Performance] ${component}.${metric}: ${value}`);
+    logger.debug(`${component}.${metric}: ${value}`);
   }
 }
 

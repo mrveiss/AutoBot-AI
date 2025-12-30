@@ -3,6 +3,10 @@
  * TEMPORARILY DISABLE AGGRESSIVE MONITORING FOR IMMEDIATE PERFORMANCE FIX
  */
 
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('Performance')
+
 export const PERFORMANCE_MODE = {
   // Master performance switch - set to true for emergency performance mode
   ENABLED: true,
@@ -123,7 +127,7 @@ export function isFeatureEnabled(featureName) {
   const enabled = PERFORMANCE_MODE.FEATURES[featureName];
 
   if (enabled === false && PERFORMANCE_MODE.DEBUG.LOG_DISABLED_FEATURES) {
-    console.log(`[Performance] Feature "${featureName}" DISABLED for performance`);
+    logger.debug(`Feature "${featureName}" DISABLED for performance`);
   }
 
   return enabled !== false; // Default to true unless explicitly false
@@ -156,7 +160,7 @@ export function getPerformanceTimeout(timeoutName, defaultValue) {
  */
 export function logPerformanceIssue(component, issue, data = {}) {
   if (PERFORMANCE_MODE.DEBUG.LOG_PERFORMANCE_ISSUES) {
-    console.warn(`[Performance Issue] ${component}: ${issue}`, data);
+    logger.warn(`${component}: ${issue}`, data);
   }
 }
 
@@ -165,7 +169,7 @@ export function logPerformanceIssue(component, issue, data = {}) {
  */
 export function showPerformanceWarning(message) {
   if (PERFORMANCE_MODE.DEBUG.SHOW_PERFORMANCE_WARNINGS) {
-    console.warn(`[Performance Warning] ${message}`);
+    logger.warn(message);
 
     // Could also show user notification here if needed
     if (typeof window !== 'undefined' && window.appStore) {
@@ -187,7 +191,7 @@ export function isPerformanceModeEnabled() {
 // Emergency performance reset
 export function enableEmergencyPerformanceMode() {
   PERFORMANCE_MODE.ENABLED = true;
-  console.log('[Performance] EMERGENCY PERFORMANCE MODE ENABLED');
+  logger.info('EMERGENCY PERFORMANCE MODE ENABLED');
 
   // Could trigger immediate cleanup here
   if (typeof window !== 'undefined') {
@@ -197,14 +201,14 @@ export function enableEmergencyPerformanceMode() {
       window.clearTimeout(i);
     }
 
-    console.log('[Performance] Cleared all existing intervals and timeouts');
+    logger.info('Cleared all existing intervals and timeouts');
   }
 }
 
 // Disable performance mode (restore normal operation)
 export function disablePerformanceMode() {
   PERFORMANCE_MODE.ENABLED = false;
-  console.log('[Performance] Performance mode DISABLED - normal operation restored');
+  logger.info('Performance mode DISABLED - normal operation restored');
 }
 
 export default PERFORMANCE_MODE;
