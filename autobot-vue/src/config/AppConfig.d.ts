@@ -163,6 +163,18 @@ export declare class AppConfigService {
   getAllServiceUrls(): Promise<{ [key: string]: string }>;
 
   getBackendConfig(): Promise<AppConfig>;
+
+  /**
+   * Get cached frontend config - Issue #677
+   * Returns already-loaded config or loads it first (with deduplication)
+   */
+  getFrontendConfig(): Promise<AppConfig>;
+
+  /**
+   * Get project root path from config - Issue #677
+   * Convenience method for components that need the project root
+   */
+  getProjectRoot(): Promise<string | null>;
 }
 
 declare const appConfig: AppConfigService;

@@ -3603,6 +3603,7 @@ const cancelIndexingJob = async () => {
 }
 
 // Fetch project root from backend configuration (only if no localStorage path)
+// Issue #677: Uses centralized appConfig to avoid duplicate API calls
 const loadProjectRoot = async () => {
   // Skip if we already have a saved path from localStorage
   const savedPath = localStorage.getItem(STORAGE_KEY_PATH)
@@ -3612,15 +3613,11 @@ const loadProjectRoot = async () => {
   }
 
   try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const configEndpoint = `${backendUrl}/api/frontend-config`
-    const response = await fetch(configEndpoint)
-    if (!response.ok) {
-      throw new Error(`Failed to fetch config: ${response.status}`)
-    }
-    const config = await response.json()
-    if (config.project && config.project.root_path) {
-      rootPath.value = config.project.root_path
+    // Issue #677: Use appConfig.getProjectRoot() instead of direct fetch
+    // This leverages the centralized config with deduplication
+    const projectRoot = await appConfig.getProjectRoot()
+    if (projectRoot) {
+      rootPath.value = projectRoot
     } else {
       logger.warn('Project root not found in config, using default')
     }

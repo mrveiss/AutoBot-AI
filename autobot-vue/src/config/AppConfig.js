@@ -16,6 +16,7 @@ export class AppConfigService {
     this.serviceDiscovery = new ServiceDiscovery();
     this.config = this.initializeConfig();
     this.configLoaded = false;
+    this.configLoadingPromise = null; // Issue #677: Track in-flight config request
     this.debugMode = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEBUG === 'true';
 
     this.log('AppConfigService initialized');
@@ -348,8 +349,35 @@ export class AppConfigService {
 
   /**
    * Load configuration from backend
+   * Issue #677: Uses request deduplication to prevent multiple concurrent loads
    */
   async loadRemoteConfig() {
+    // Issue #677: If already loaded, return immediately
+    if (this.configLoaded) {
+      this.log('Config already loaded, skipping duplicate request');
+      return;
+    }
+
+    // Issue #677: If a load is in progress, return the existing promise
+    if (this.configLoadingPromise) {
+      this.log('Config load already in progress, reusing existing request');
+      return this.configLoadingPromise;
+    }
+
+    // Issue #677: Store the promise to deduplicate concurrent calls
+    this.configLoadingPromise = this._doLoadRemoteConfig();
+
+    try {
+      await this.configLoadingPromise;
+    } finally {
+      this.configLoadingPromise = null;
+    }
+  }
+
+  /**
+   * Internal method to actually load remote config
+   */
+  async _doLoadRemoteConfig() {
     try {
       const response = await this.fetchApi('/api/frontend-config', {
         timeout: 5000, // Short timeout for config loading
@@ -547,6 +575,28 @@ export class AppConfigService {
       // Return current local config as fallback
       return this.config;
     }
+  }
+
+  /**
+   * Get cached frontend config - Issue #677
+   * Returns already-loaded config or loads it first (with deduplication)
+   * @returns {Promise<Object>} The frontend configuration
+   */
+  async getFrontendConfig() {
+    if (!this.configLoaded) {
+      await this.loadRemoteConfig();
+    }
+    return this.config;
+  }
+
+  /**
+   * Get project root path from config - Issue #677
+   * Convenience method for components that need the project root
+   * @returns {Promise<string|null>} The project root path or null
+   */
+  async getProjectRoot() {
+    const config = await this.getFrontendConfig();
+    return config?.project?.root_path || null;
   }
 }
 
