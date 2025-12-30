@@ -185,20 +185,16 @@ export class ChatController {
       throw new Error('No response stream available')
     }
 
-    // Issue #352: Track multiple messages for thought/planning/response splitting
-    let currentMessageId = this.chatStore.addMessage({
-      content: '',
-      sender: 'assistant'
-    })
-    let currentMessageType: string = 'response'
-    let accumulatedContent = ''
-    const messageIds: string[] = [currentMessageId] // Track all message IDs for cleanup
+    // Issue #680: Agent Zero Pattern - Track messages by stable backend ID
+    // Backend sends cumulative content with stable message_id - we just replace
+    const messageIdMap = new Map<string, string>() // backend_id -> frontend_id
+    let fallbackMessageId: string | null = null // For messages without backend ID
 
     const decoder = new TextDecoder()
     let buffer = ''
 
     try {
-      logger.debug('Starting to read streaming response')
+      logger.debug('Starting to read streaming response (Agent Zero pattern)')
 
       while (true) {
         const { done, value } = await reader.read()
@@ -227,55 +223,73 @@ export class ChatController {
               const data = JSON.parse(jsonStr)
               logger.debug('Received stream data:', data.type || 'unknown')
 
+              // Handle control events
               if (data.type === 'start') {
                 logger.debug('Stream started:', data.session_id)
-              } else if (data.type === 'segment_complete') {
-                // Issue #352: Segment complete - finalize current message and prepare for new one
+                continue
+              }
+              if (data.type === 'end') {
+                logger.debug('Stream ended')
+                continue
+              }
+              if (data.type === 'segment_complete') {
                 logger.debug(`Segment complete: ${data.metadata?.completed_type}`)
-
-                // Finalize current message
-                if (accumulatedContent) {
-                  this.chatStore.updateMessage(currentMessageId, {
-                    content: accumulatedContent,
-                    status: 'sent'
-                  })
+                // Mark the message as finalized
+                const backendId = data.metadata?.message_id
+                if (backendId && messageIdMap.has(backendId)) {
+                  const frontendId = messageIdMap.get(backendId)!
+                  this.chatStore.updateMessage(frontendId, { status: 'sent' })
                 }
+                continue
+              }
 
-                // Create new message for next segment
-                currentMessageId = this.chatStore.addMessage({
+              // Handle error events
+              if (data.type === 'error') {
+                logger.error('Stream error:', data.content)
+                const errorMsgId = fallbackMessageId || this.chatStore.addMessage({
                   content: '',
                   sender: 'assistant'
                 })
-                messageIds.push(currentMessageId)
-                accumulatedContent = ''
-                currentMessageType = 'response'
+                this.chatStore.updateMessage(errorMsgId, {
+                  content: `⚠️ Error: ${data.content || 'Stream error'}`,
+                  status: 'error'
+                })
+                continue
+              }
 
-              } else if (data.type === 'command_approval_request') {
-                // Issue #352: Create SEPARATE bubble for approval requests
-                logger.debug('Approval request detected - creating separate bubble')
-                this.chatStore.setTyping(false)
+              // Skip messages without content
+              if (!data.content && data.type !== 'command_approval_request') {
+                continue
+              }
 
-                // Finalize current message if it has content
-                if (accumulatedContent.trim()) {
-                  this.chatStore.updateMessage(currentMessageId, {
-                    content: accumulatedContent,
-                    status: 'sent',
-                    type: currentMessageType
-                  })
-                  // Create new message for approval request
-                  currentMessageId = this.chatStore.addMessage({
-                    content: '',
-                    sender: 'assistant'
-                  })
-                  messageIds.push(currentMessageId)
-                  accumulatedContent = ''
+              // Agent Zero Pattern: Use backend message_id for stable identity
+              const backendMessageId = data.metadata?.message_id || data.id
+              let frontendMessageId: string
+
+              if (backendMessageId && messageIdMap.has(backendMessageId)) {
+                // Existing message - update it (Agent Zero: always replace)
+                frontendMessageId = messageIdMap.get(backendMessageId)!
+              } else {
+                // New message - create it
+                const sender = data.type === 'terminal_output' ? 'system' : 'assistant'
+                frontendMessageId = this.chatStore.addMessage({
+                  content: '',
+                  sender
+                })
+                if (backendMessageId) {
+                  messageIdMap.set(backendMessageId, frontendMessageId)
                 }
+                fallbackMessageId = frontendMessageId
+              }
 
-                // Add approval request as its own bubble
-                accumulatedContent = data.content || 'Command approval required'
-                currentMessageType = 'command_approval_request'
-                this.chatStore.updateMessage(currentMessageId, {
-                  content: accumulatedContent,
+              // Map backend type to frontend type
+              const messageType = this.mapMessageType(data.type, data.metadata?.message_type)
+
+              // Handle special message types
+              if (data.type === 'command_approval_request') {
+                this.chatStore.setTyping(false)
+                this.chatStore.updateMessage(frontendMessageId, {
+                  content: data.content || 'Command approval required',
                   type: 'command_approval_request',
                   metadata: {
                     ...data.metadata,
@@ -283,153 +297,76 @@ export class ChatController {
                     approval_status: 'pending'
                   }
                 })
-
-              } else if (data.type === 'terminal_output' || data.type === 'terminal_command') {
-                // Issue #352: Create SEPARATE bubble for terminal output/commands
-                logger.debug(`Terminal message detected: ${data.type} - creating separate bubble`)
-
-                // Finalize current message if it has content
-                if (accumulatedContent.trim()) {
-                  this.chatStore.updateMessage(currentMessageId, {
-                    content: accumulatedContent,
-                    status: 'sent',
-                    type: currentMessageType
-                  })
-                  // Create new message for terminal output
-                  currentMessageId = this.chatStore.addMessage({
-                    content: '',
-                    sender: data.type === 'terminal_output' ? 'system' : 'assistant'
-                  })
-                  messageIds.push(currentMessageId)
-                  accumulatedContent = ''
-                }
-
-                // Add terminal output/command as its own bubble
-                accumulatedContent = data.content || ''
-                currentMessageType = data.type as 'terminal_output' | 'terminal_command'
-                this.chatStore.updateMessage(currentMessageId, {
-                  content: accumulatedContent,
-                  type: data.type,
-                  metadata: data.metadata || {}
-                })
-
-                // Create new message for any following content
-                currentMessageId = this.chatStore.addMessage({
-                  content: '',
-                  sender: 'assistant'
-                })
-                messageIds.push(currentMessageId)
-                accumulatedContent = ''
-                currentMessageType = 'response'
-
-              } else if (data.type === 'end') {
-                logger.debug('Stream ended')
-              } else if (data.type === 'error') {
-                // Display error as message content instead of throwing
-                logger.error('Stream error:', data.content)
-                accumulatedContent += `⚠️ Error: ${data.content || 'Stream error'}`
-                this.chatStore.updateMessage(currentMessageId, {
-                  content: accumulatedContent,
-                  status: 'error'
-                })
-              } else if (data.content) {
-                // Map backend message type to frontend type
-                // Issue #351 Fix: Backend sends type at top level (data.type), not in metadata
-                type MessageType = 'thought' | 'planning' | 'debug' | 'utility' | 'sources' | 'json' | 'response' | 'message' | undefined
-                let messageType: MessageType = 'response'
-
-                // Check data.type first (backend WorkflowMessage.to_dict()), then metadata.message_type for backward compat
-                const backendType = data.type || data.metadata?.message_type
-                if (backendType && backendType !== 'response' && backendType !== 'llm_response') {
-                  logger.debug(`Received message type: ${backendType}`)
-                }
-                if (backendType) {
-                  // Map backend types to frontend types
-                  if (backendType === 'thought' || backendType.includes('thought')) messageType = 'thought'
-                  else if (backendType.includes('planning')) messageType = 'planning'
-                  else if (backendType.includes('debug')) messageType = 'debug'
-                  else if (backendType.includes('utility')) messageType = 'utility'
-                  else if (backendType.includes('source')) messageType = 'sources'
-                  else if (backendType.includes('json')) messageType = 'json'
-                  else if (backendType === 'response' || backendType === 'llm_response') messageType = 'response'
-                  // Keep 'response' as default for unknown types
-                }
-
-                // Issue #352: Detect type change and create NEW bubble
-                // When message type changes (e.g., response -> thought -> response),
-                // finalize current bubble and start a new one
-                if (currentMessageType !== messageType && accumulatedContent.trim()) {
-                  logger.debug(`Message type changed: ${currentMessageType} -> ${messageType}, creating new bubble`)
-
-                  // Finalize current message with its accumulated content
-                  this.chatStore.updateMessage(currentMessageId, {
-                    content: accumulatedContent,
-                    type: currentMessageType as any,
-                    status: 'sent'
-                  })
-
-                  // Create new message for the new type
-                  currentMessageId = this.chatStore.addMessage({
-                    content: '',
-                    sender: 'assistant',
-                    type: messageType
-                  })
-                  messageIds.push(currentMessageId)
-                  accumulatedContent = ''
-                }
-
-                // Update the current message type
-                currentMessageType = messageType
-
-                // Accumulate content for current bubble
-                accumulatedContent += data.content
-
-                // CRITICAL FIX: Merge metadata instead of replacing to preserve terminal_session_id
-                const currentMessage = this.chatStore.currentSession?.messages.find(m => m.id === currentMessageId)
-                const existingMetadata = currentMessage?.metadata || {}
-
-                this.chatStore.updateMessage(currentMessageId, {
-                  content: accumulatedContent,
-                  type: messageType,
-                  metadata: {
-                    ...existingMetadata,  // Preserve existing metadata (including terminal_session_id)
-                    ...data.metadata  // Merge in new metadata
-                  }
-                })
+                continue
               }
+
+              // Agent Zero Pattern: Backend sends CUMULATIVE content - just replace
+              // No local accumulation needed - content is already complete in each update
+              this.chatStore.updateMessage(frontendMessageId, {
+                content: data.content,
+                type: messageType,
+                metadata: data.metadata || {}
+              })
+
             } catch (e) {
-              logger.warn('Failed to parse stream data:', line, e)
+              logger.warn('Failed to parse stream data:', { line, error: e })
             }
           }
         }
       }
 
-      // Final update for the last message
-      if (accumulatedContent) {
-        this.chatStore.updateMessage(currentMessageId, {
-          content: accumulatedContent,
-          status: 'sent'
-        })
+      // Finalize all messages
+      for (const frontendId of messageIdMap.values()) {
+        const msg = this.chatStore.currentSession?.messages.find(m => m.id === frontendId)
+        if (msg && msg.content?.trim()) {
+          this.chatStore.updateMessage(frontendId, { status: 'sent' })
+        }
       }
 
-      // Issue #352: Clean up empty messages that may have been created
-      for (const msgId of messageIds) {
-        const msg = this.chatStore.currentSession?.messages.find(m => m.id === msgId)
+      // Clean up empty messages
+      for (const frontendId of messageIdMap.values()) {
+        const msg = this.chatStore.currentSession?.messages.find(m => m.id === frontendId)
         if (msg && !msg.content?.trim()) {
-          this.chatStore.removeMessage(msgId)
+          this.chatStore.deleteMessage(frontendId)
         }
       }
 
     } catch (error) {
       logger.error('Streaming response error:', error)
-      this.chatStore.updateMessage(currentMessageId, {
-        content: accumulatedContent || 'Response was interrupted due to an error.',
-        status: 'error'
-      })
+      if (fallbackMessageId) {
+        this.chatStore.updateMessage(fallbackMessageId, {
+          content: 'Response was interrupted due to an error.',
+          status: 'error'
+        })
+      }
       throw error
     } finally {
       reader.releaseLock()
     }
+  }
+
+  /**
+   * Map backend message type to frontend message type.
+   * Agent Zero Pattern: Centralized type mapping for consistency.
+   */
+  private mapMessageType(
+    backendType?: string,
+    metadataType?: string
+  ): 'thought' | 'planning' | 'debug' | 'utility' | 'sources' | 'json' | 'response' | undefined {
+    const type = backendType || metadataType
+    if (!type) return 'response'
+
+    // Map backend types to frontend types
+    if (type === 'thought' || type.includes('thought')) return 'thought'
+    if (type.includes('planning')) return 'planning'
+    if (type.includes('debug')) return 'debug'
+    if (type.includes('utility')) return 'utility'
+    if (type.includes('source')) return 'sources'
+    if (type.includes('json')) return 'json'
+    if (type === 'response' || type === 'llm_response' || type === 'llm_response_chunk') return 'response'
+
+    // Default to response for unknown types
+    return 'response'
   }
 
   private handleJsonResponse(data: any): void {
@@ -574,11 +511,11 @@ export class ChatController {
       const session = this.chatStore.sessions.find(s => s.id === targetSessionId)
       if (!session) return
 
-      // CRITICAL FIX Issue #259: Pass session name to backend for proper save
+      // CRITICAL FIX Issue #259: Pass session title to backend for proper save
       await chatRepository.saveChatMessages({
         chatId: targetSessionId,
         messages: session.messages,
-        name: session.name || ''
+        name: session.title || ''
       })
 
       logger.debug('Chat session saved successfully:', targetSessionId)
