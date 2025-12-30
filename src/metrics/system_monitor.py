@@ -200,30 +200,67 @@ class SystemResourceMonitor:
             logger.error("Failed to get current metrics: %s", e)
             return {"error": str(e)}
 
+    def _filter_recent_data(self, minutes: int) -> List[Dict[str, Any]]:
+        """
+        Filter resource history to get data from last N minutes (Issue #665: extracted helper).
+
+        Args:
+            minutes: Number of minutes to look back
+
+        Returns:
+            List of recent data points within the time window
+        """
+        cutoff_time = datetime.now().timestamp() - (minutes * 60)
+        recent_data = []
+
+        for data in reversed(self.resource_history):
+            try:
+                data_time = datetime.fromisoformat(data["timestamp"]).timestamp()
+                if data_time >= cutoff_time:
+                    recent_data.append(data)
+                else:
+                    break
+            except (ValueError, KeyError):
+                continue
+
+        return recent_data
+
+    def _calculate_resource_stats(self, values: List[float]) -> Dict[str, float]:
+        """
+        Calculate min/max/avg statistics for a list of values (Issue #665: extracted helper).
+
+        Args:
+            values: List of numeric values
+
+        Returns:
+            Dict with avg_percent, max_percent, min_percent
+        """
+        if not values:
+            return {"avg_percent": 0, "max_percent": 0, "min_percent": 0}
+        return {
+            "avg_percent": sum(values) / len(values),
+            "max_percent": max(values),
+            "min_percent": min(values),
+        }
+
     def get_resource_summary(self, minutes: int = 10) -> Dict[str, Any]:
-        """Get resource usage summary for the last N minutes"""
+        """
+        Get resource usage summary for the last N minutes.
+
+        Issue #665: Refactored to use extracted helper methods for
+        data filtering and statistics calculation.
+        """
         try:
             if not self.resource_history:
                 return {"message": "No resource history available"}
 
-            # Filter recent data
-            cutoff_time = datetime.now().timestamp() - (minutes * 60)
-            recent_data = []
-
-            for data in reversed(self.resource_history):
-                try:
-                    data_time = datetime.fromisoformat(data["timestamp"]).timestamp()
-                    if data_time >= cutoff_time:
-                        recent_data.append(data)
-                    else:
-                        break
-                except (ValueError, KeyError):
-                    continue
+            # Filter recent data (Issue #665: uses helper)
+            recent_data = self._filter_recent_data(minutes)
 
             if not recent_data:
                 return {"message": f"No data available for last {minutes} minutes"}
 
-            # Calculate averages and peaks
+            # Extract value arrays
             cpu_values = [
                 d["cpu"]["percent"]
                 for d in recent_data
@@ -239,37 +276,17 @@ class SystemResourceMonitor:
                 for d in recent_data
                 if "disk" in d and "percent" in d["disk"]
             ]
-
             autobot_memory = [d.get("total_autobot_memory_mb", 0) for d in recent_data]
             autobot_cpu = [d.get("total_autobot_cpu_percent", 0) for d in recent_data]
 
+            # Build summary using helper (Issue #665: uses helper)
             return {
                 "time_window_minutes": minutes,
                 "data_points": len(recent_data),
                 "system": {
-                    "cpu": {
-                        "avg_percent": (
-                            sum(cpu_values) / len(cpu_values) if cpu_values else 0
-                        ),
-                        "max_percent": max(cpu_values) if cpu_values else 0,
-                        "min_percent": min(cpu_values) if cpu_values else 0,
-                    },
-                    "memory": {
-                        "avg_percent": (
-                            sum(memory_values) / len(memory_values)
-                            if memory_values
-                            else 0
-                        ),
-                        "max_percent": max(memory_values) if memory_values else 0,
-                        "min_percent": min(memory_values) if memory_values else 0,
-                    },
-                    "disk": {
-                        "avg_percent": (
-                            sum(disk_values) / len(disk_values) if disk_values else 0
-                        ),
-                        "max_percent": max(disk_values) if disk_values else 0,
-                        "min_percent": min(disk_values) if disk_values else 0,
-                    },
+                    "cpu": self._calculate_resource_stats(cpu_values),
+                    "memory": self._calculate_resource_stats(memory_values),
+                    "disk": self._calculate_resource_stats(disk_values),
                 },
                 "autobot": {
                     "memory": {

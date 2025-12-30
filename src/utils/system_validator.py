@@ -893,8 +893,78 @@ class SystemValidator:
 
         return self._get_component_results(component)
 
+    def _calculate_validation_statistics(self) -> Dict[str, int]:
+        """
+        Calculate validation statistics from results (Issue #665: extracted helper).
+
+        Returns:
+            Dict with total_tests, passed_tests, failed_tests, critical_issues, warnings
+        """
+        total_tests = len(self.results)
+        passed_tests = sum(1 for r in self.results if r.status)
+        critical_issues = sum(
+            1
+            for r in self.results
+            if r.severity == ValidationSeverity.CRITICAL and not r.status
+        )
+        warnings = sum(
+            1
+            for r in self.results
+            if r.severity == ValidationSeverity.WARNING and not r.status
+        )
+        return {
+            "total_tests": total_tests,
+            "passed_tests": passed_tests,
+            "failed_tests": total_tests - passed_tests,
+            "critical_issues": critical_issues,
+            "warnings": warnings,
+        }
+
+    def _calculate_health_score(self, stats: Dict[str, int]) -> float:
+        """
+        Calculate overall health score with penalties (Issue #665: extracted helper).
+
+        Args:
+            stats: Validation statistics dict
+
+        Returns:
+            Health score from 0 to 100
+        """
+        if stats["total_tests"] == 0:
+            return 0.0
+        base_score = (stats["passed_tests"] / stats["total_tests"]) * 100
+        critical_penalty = stats["critical_issues"] * 20
+        warning_penalty = stats["warnings"] * 5
+        return max(0, base_score - critical_penalty - warning_penalty)
+
+    def _calculate_performance_metrics(self, total_duration: float) -> Dict[str, float]:
+        """
+        Calculate performance metrics from results (Issue #665: extracted helper).
+
+        Args:
+            total_duration: Total validation time in seconds
+
+        Returns:
+            Dict with timing metrics
+        """
+        valid_durations = [r.duration_ms for r in self.results if r.duration_ms > 0]
+        avg_response_time = (
+            sum(valid_durations) / len(valid_durations) if valid_durations else 0
+        )
+        return {
+            "total_validation_time_seconds": round(total_duration, 2),
+            "average_response_time_ms": round(avg_response_time, 2),
+            "fastest_test_ms": min(valid_durations, default=0),
+            "slowest_test_ms": max(valid_durations, default=0),
+        }
+
     async def run_comprehensive_validation(self) -> SystemValidationReport:
-        """Run all validation tests and generate comprehensive report"""
+        """
+        Run all validation tests and generate comprehensive report.
+
+        Issue #665: Refactored to use extracted helper methods for
+        statistics, health score, and performance metric calculation.
+        """
         self.logger.info("🔍 Starting comprehensive system validation...")
         start_time = time.time()
 
@@ -914,74 +984,29 @@ class SystemValidator:
         # Execute validations concurrently
         await asyncio.gather(*validation_tasks, return_exceptions=True)
 
-        # Generate comprehensive report
+        # Calculate statistics using helpers (Issue #665)
         total_duration = time.time() - start_time
-
-        # Calculate statistics
-        total_tests = len(self.results)
-        passed_tests = sum(1 for r in self.results if r.status)
-        failed_tests = total_tests - passed_tests
-        critical_issues = sum(
-            1
-            for r in self.results
-            if r.severity == ValidationSeverity.CRITICAL and not r.status
-        )
-        warnings = sum(
-            1
-            for r in self.results
-            if r.severity == ValidationSeverity.WARNING and not r.status
-        )
-
-        # Calculate overall health score
-        if total_tests > 0:
-            base_score = (passed_tests / total_tests) * 100
-            # Penalize critical issues more heavily
-            critical_penalty = critical_issues * 20
-            warning_penalty = warnings * 5
-            overall_health_score = max(
-                0, base_score - critical_penalty - warning_penalty
-            )
-        else:
-            overall_health_score = 0
-
-        # Determine if system is ready
-        system_ready = critical_issues == 0 and overall_health_score >= 70
-
-        # Generate recommendations
-        recommendations = self._generate_recommendations()
-
-        # Calculate performance metrics
-        avg_response_time = sum(
-            r.duration_ms for r in self.results if r.duration_ms > 0
-        ) / max(len([r for r in self.results if r.duration_ms > 0]), 1)
-
-        performance_metrics = {
-            "total_validation_time_seconds": round(total_duration, 2),
-            "average_response_time_ms": round(avg_response_time, 2),
-            "fastest_test_ms": min(
-                (r.duration_ms for r in self.results if r.duration_ms > 0), default=0
-            ),
-            "slowest_test_ms": max(
-                (r.duration_ms for r in self.results if r.duration_ms > 0), default=0
-            ),
-        }
+        stats = self._calculate_validation_statistics()
+        overall_health_score = self._calculate_health_score(stats)
+        system_ready = stats["critical_issues"] == 0 and overall_health_score >= 70
+        performance_metrics = self._calculate_performance_metrics(total_duration)
 
         report = SystemValidationReport(
             timestamp=time.time(),
-            total_tests=total_tests,
-            passed_tests=passed_tests,
-            failed_tests=failed_tests,
-            critical_issues=critical_issues,
-            warnings=warnings,
+            total_tests=stats["total_tests"],
+            passed_tests=stats["passed_tests"],
+            failed_tests=stats["failed_tests"],
+            critical_issues=stats["critical_issues"],
+            warnings=stats["warnings"],
             overall_health_score=round(overall_health_score, 1),
             system_ready=system_ready,
             validation_results=self.results,
-            recommendations=recommendations,
+            recommendations=self._generate_recommendations(),
             performance_metrics=performance_metrics,
         )
 
         self.logger.info(
-            f"✅ Validation completed: {passed_tests}/{total_tests} tests passed, "
+            f"✅ Validation completed: {stats['passed_tests']}/{stats['total_tests']} tests passed, "
             f"Health Score: {overall_health_score:.1f}%, Ready: {system_ready}"
         )
 
