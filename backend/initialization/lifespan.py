@@ -244,6 +244,35 @@ async def _init_npu_worker_websocket():
         logger.warning("NPU worker WebSocket initialization failed: %s", npu_ws_error)
 
 
+async def _warmup_npu_connection():
+    """
+    Warm up NPU worker connection for fast first-request embedding (NON-CRITICAL).
+
+    Issue #165: Pre-initializes the NPU connection pool and performs a test
+    embedding to ensure the NPU worker's model is ready. This eliminates
+    cold-start latency on the first real embedding request.
+    """
+    logger.info("✅ [ 82%] NPU Warmup: Warming up NPU connection...")
+    try:
+        from src.knowledge.facts import warmup_npu_connection
+
+        result = await warmup_npu_connection()
+
+        if result["status"] == "success":
+            logger.info(
+                "✅ [ 82%] NPU Warmup: Connection ready (%.1fms, %d dimensions)",
+                result.get("warmup_time_ms", 0),
+                result.get("embedding_dimensions", 0)
+            )
+        elif result["status"] == "npu_unavailable":
+            logger.info("🔄 [ 82%] NPU Warmup: NPU unavailable, using fallback embeddings")
+        else:
+            logger.warning("⚠️ [ 82%] NPU Warmup: %s", result.get("message", "Unknown status"))
+
+    except Exception as warmup_error:
+        logger.warning("NPU warmup failed: %s", warmup_error)
+
+
 async def _init_graph_rag_service(app: FastAPI, memory_graph):
     """
     Initialize Graph-RAG service (depends on knowledge base and memory graph).
@@ -406,6 +435,7 @@ async def initialize_background_services(app: FastAPI):
         # Initialize services (Issue #281: uses helpers)
         await _init_knowledge_base(app)
         await _init_npu_worker_websocket()
+        await _warmup_npu_connection()  # Issue #165: Warm up NPU for fast embeddings
         await _init_memory_graph(app)
         await _init_background_llm_sync(app)
 

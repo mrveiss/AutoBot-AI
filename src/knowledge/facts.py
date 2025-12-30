@@ -43,6 +43,111 @@ _fallback_embedding_count: int = 0
 # Bounded concurrency for fallback to prevent overwhelming Ollama
 _FALLBACK_MAX_CONCURRENT: int = 5
 
+# Warmup state tracking
+_npu_warmup_complete: bool = False
+_npu_warmup_time_ms: float = 0.0
+
+
+async def warmup_npu_connection() -> Dict[str, Any]:
+    """
+    Warm up the NPU worker connection by performing a test embedding.
+
+    Issue #165: Called during backend startup (Phase 2) to eliminate
+    first-request latency. Pre-initializes the HTTP connection pool
+    and ensures the NPU worker's embedding model is ready.
+
+    Returns:
+        Dict with warmup status and timing information
+    """
+    global _npu_warmup_complete, _npu_warmup_time_ms
+    global _npu_client_cache, _npu_available_cache, _npu_cache_timestamp
+
+    import time
+    start_time = time.time()
+
+    result = {
+        "status": "skipped",
+        "npu_available": False,
+        "warmup_time_ms": 0.0,
+        "message": "",
+    }
+
+    try:
+        from backend.services.npu_client import get_npu_client
+
+        # Get client and check availability
+        client = get_npu_client()
+        is_available = await client.is_available(force_check=True)
+
+        if not is_available:
+            result["status"] = "npu_unavailable"
+            result["message"] = "NPU worker not available, will use fallback"
+            logger.info("NPU warmup: Worker not available")
+            return result
+
+        # Perform test embedding to warm up model and connection
+        test_text = "NPU warmup test embedding for connection initialization"
+        embedding = await client.generate_embedding(test_text)
+
+        warmup_time = (time.time() - start_time) * 1000
+        _npu_warmup_time_ms = warmup_time
+        _npu_warmup_complete = True
+
+        # Update cache with verified availability
+        _npu_client_cache = client
+        _npu_available_cache = True
+        _npu_cache_timestamp = time.time()
+
+        if embedding and len(embedding) > 0:
+            result["status"] = "success"
+            result["npu_available"] = True
+            result["warmup_time_ms"] = warmup_time
+            result["embedding_dimensions"] = len(embedding)
+            result["message"] = f"NPU connection warmed up in {warmup_time:.1f}ms"
+
+            # Get device info for diagnostics
+            try:
+                device_info = await client.get_device_info()
+                if device_info:
+                    result["device"] = device_info.device_name
+                    result["is_npu"] = device_info.is_npu
+                    result["is_gpu"] = device_info.is_gpu
+            except Exception:
+                pass  # Non-critical device info
+
+            logger.info(
+                "NPU warmup complete: %d dimensions in %.1fms",
+                len(embedding), warmup_time
+            )
+        else:
+            result["status"] = "empty_embedding"
+            result["message"] = "NPU returned empty embedding during warmup"
+            logger.warning("NPU warmup returned empty embedding")
+
+    except Exception as e:
+        warmup_time = (time.time() - start_time) * 1000
+        result["status"] = "error"
+        result["warmup_time_ms"] = warmup_time
+        result["message"] = f"NPU warmup failed: {e}"
+        logger.warning("NPU warmup failed: %s", e)
+
+    return result
+
+
+def get_npu_warmup_status() -> Dict[str, Any]:
+    """
+    Get NPU warmup status for diagnostics.
+
+    Returns:
+        Dict with warmup completion status and timing
+    """
+    return {
+        "warmup_complete": _npu_warmup_complete,
+        "warmup_time_ms": _npu_warmup_time_ms,
+        "cache_valid": _npu_available_cache is not None,
+        "npu_available": _npu_available_cache,
+    }
+
 
 async def _get_npu_client_cached() -> tuple:
     """
