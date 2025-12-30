@@ -39,6 +39,10 @@ from datetime import datetime
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv(PROJECT_ROOT / ".env")
+
 from src.knowledge_base import KnowledgeBase
 
 # Configure logging
@@ -442,7 +446,7 @@ async def index_all_documentation(
     if dry_run:
         logger.info("DRY RUN - Preview of files to be indexed:")
         for file_path, category in discovered_files:
-            print(f"  [{category:15}] {file_path.relative_to(PROJECT_ROOT)}")
+            logger.info("  [%15s] %s", category, file_path.relative_to(PROJECT_ROOT))
         return {
             "status": "dry_run",
             "total_files": len(discovered_files),

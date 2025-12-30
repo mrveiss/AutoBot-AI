@@ -249,6 +249,7 @@ class FactsMixin:
         Vectorize and store fact in ChromaDB vector store.
 
         Issue #281: Extracted helper for ChromaDB vectorization.
+        Issue #165: Fixed to generate embeddings before adding to ChromaDB.
 
         Args:
             fact_id: Fact identifier
@@ -258,6 +259,8 @@ class FactsMixin:
         if not self.vector_store:
             return
 
+        from llama_index.core import Settings
+
         # Import sanitization utility
         from src.knowledge.utils import (
             sanitize_metadata_for_chromadb as _sanitize_metadata_for_chromadb,
@@ -266,10 +269,17 @@ class FactsMixin:
         # Sanitize metadata for ChromaDB
         sanitized_metadata = _sanitize_metadata_for_chromadb(metadata)
 
-        # Create Document for LlamaIndex
+        # Issue #165: Generate embedding using configured embed_model
+        # ChromaVectorStore.add() expects nodes with embeddings already set
+        embedding = await asyncio.to_thread(
+            Settings.embed_model.get_text_embedding, content
+        )
+
+        # Create Document for LlamaIndex with embedding
         doc = Document(
             text=content, doc_id=fact_id, metadata=sanitized_metadata
         )
+        doc.embedding = embedding
 
         # Add to vector store
         await asyncio.to_thread(self.vector_store.add, [doc])
@@ -510,13 +520,25 @@ class FactsMixin:
     async def _revectorize_fact(
         self, fact_id: str, content: str, current_metadata: Dict
     ) -> None:
-        """Re-vectorize fact after content update (Issue #398: extracted)."""
+        """Re-vectorize fact after content update (Issue #398: extracted).
+
+        Issue #165: Fixed to generate embeddings before adding to ChromaDB.
+        """
+        from llama_index.core import Settings
+
         from src.knowledge.utils import sanitize_metadata_for_chromadb as _sanitize
 
         sanitized_metadata = _sanitize(current_metadata)
         sanitized_metadata["fact_id"] = fact_id
         await asyncio.to_thread(self.vector_store.delete, fact_id)
+
+        # Issue #165: Generate embedding before adding
+        embedding = await asyncio.to_thread(
+            Settings.embed_model.get_text_embedding, content
+        )
         doc = Document(text=content, doc_id=fact_id, metadata=sanitized_metadata)
+        doc.embedding = embedding
+
         await asyncio.to_thread(self.vector_store.add, [doc])
         logger.info("Re-vectorized updated fact %s", fact_id)
 
