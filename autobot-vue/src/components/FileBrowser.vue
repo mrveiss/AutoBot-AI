@@ -88,6 +88,10 @@ import { ref, computed, onMounted } from 'vue'
 import apiClient from '@/utils/ApiClient.js'
 import { useUserStore } from '@/stores/useUserStore'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
+import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger'
+
+// Issue #608: Activity logger for session tracking
+const { logFileActivity } = useSessionActivityLogger()
 
 // Import components
 import FileBrowserHeader from './file-browser/FileBrowserHeader.vue'
@@ -188,9 +192,18 @@ const { execute: loadDirectoryTree, loading: isLoadingTree } = useAsyncHandler(
 )
 
 const navigateToPath = (path: string) => {
+  const previousPath = currentPath.value
   currentPath.value = path
   selectedPath.value = path
   refreshFiles()
+
+  // Issue #608: Log navigation activity
+  if (props.chatContext) {
+    logFileActivity('navigate', path, {
+      fromPath: previousPath,
+      toPath: path
+    })
+  }
 }
 
 const toggleView = () => {
@@ -225,6 +238,17 @@ const { execute: uploadFiles, loading: isUploadingFiles } = useAsyncHandler(
 
     await apiClient.post('/api/files/upload', formData)
     await refreshFiles()
+
+    // Issue #608: Log file upload activity
+    if (props.chatContext) {
+      const fileNames = Array.from(fileList).map(f => f.name).join(', ')
+      const totalSize = Array.from(fileList).reduce((sum, f) => sum + f.size, 0)
+      logFileActivity('upload', currentPath.value, {
+        fileNames,
+        fileCount: fileList.length,
+        totalSize
+      })
+    }
   },
   {
     onError: () => {
@@ -252,6 +276,15 @@ const { execute: viewFile, loading: isViewingFile } = useAsyncHandler(
       size: file.size
     }
     showPreview.value = true
+
+    // Issue #608: Log file view activity
+    if (props.chatContext) {
+      logFileActivity('view', file.path, {
+        fileName: file.name,
+        fileType: getFileType(file.name),
+        size: file.size
+      })
+    }
   },
   {
     logErrors: true,
@@ -264,6 +297,15 @@ const { execute: performDelete, loading: isDeletingFile } = useAsyncHandler(
     const itemType = file.is_dir ? 'folder' : 'file'
     await apiClient.delete(`/api/files/delete?path=${encodeURIComponent(file.path)}`)
     await refreshFiles()
+
+    // Issue #608: Log file/folder delete activity
+    if (props.chatContext) {
+      logFileActivity('delete', file.path, {
+        fileName: file.name,
+        isDir: file.is_dir,
+        itemType
+      })
+    }
     return itemType
   },
   {
@@ -293,6 +335,15 @@ const { execute: performRename, loading: isRenamingFile } = useAsyncHandler(
 
     await apiClient.post('/api/files/rename', formData)
     await refreshFiles()
+
+    // Issue #608: Log file/folder rename activity
+    if (props.chatContext) {
+      logFileActivity('rename', file.path, {
+        oldName: file.name,
+        newName,
+        isDir: file.is_dir
+      })
+    }
   },
   {
     onError: () => {
@@ -320,6 +371,14 @@ const { execute: performCreateFolder, loading: isCreatingFolder } = useAsyncHand
 
     await apiClient.post('/api/files/create_directory', formData)
     await refreshFiles()
+
+    // Issue #608: Log folder creation activity
+    if (props.chatContext) {
+      logFileActivity('create_folder', `${currentPath.value}/${folderName}`, {
+        folderName,
+        parentPath: currentPath.value
+      })
+    }
   },
   {
     onError: () => {

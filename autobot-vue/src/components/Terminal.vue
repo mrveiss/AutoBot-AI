@@ -70,9 +70,13 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import appConfig from '@/config/AppConfig.js'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('Terminal')
+
+// Issue #608: Activity logger for session tracking
+const { logTerminalActivity } = useSessionActivityLogger()
 
 // Props
 interface Props {
@@ -318,6 +322,15 @@ const sendCommand = (command: string) => {
 
     wsSend(message) // useWebSocket handles JSON.stringify
     currentCommand.value = ''
+
+    // Issue #608: Log terminal activity for session tracking
+    if (props.chatSessionId) {
+      logTerminalActivity(command, {
+        subtype: 'command',
+        sessionId: sessionId.value,
+        terminalType: props.sessionType
+      })
+    }
 
   } catch (error) {
     logger.error('Failed to send command:', error)

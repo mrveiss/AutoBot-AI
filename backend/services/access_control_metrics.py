@@ -181,6 +181,44 @@ class AccessControlMetrics:
                 count = count.decode("utf-8")
             target_dict[key] = target_dict.get(key, 0) + int(count)
 
+    def _process_daily_results(
+        self, results: list, dates: list, stats: Metadata
+    ) -> None:
+        """Process pipeline results and aggregate into stats (Issue #665: extracted helper)."""
+        for i, date in enumerate(dates):
+            daily_data = results[i * 3]
+            endpoint_counts = results[i * 3 + 1]
+            user_counts = results[i * 3 + 2]
+
+            # Process daily total
+            if daily_data:
+                total_key = (
+                    b"total"
+                    if isinstance(list(daily_data.keys())[0], bytes)
+                    else "total"
+                )
+                daily_total = int(daily_data.get(total_key, 0))
+                stats["by_day"][date] = daily_total
+                stats["total_violations"] += daily_total
+
+            # Process endpoint and user breakdowns
+            self._aggregate_redis_counts(endpoint_counts, stats["by_endpoint"])
+            self._aggregate_redis_counts(user_counts, stats["by_user"])
+
+    def _calculate_daily_trend(self, stats: Metadata) -> None:
+        """Calculate daily change percent if enough data exists (Issue #665: extracted helper)."""
+        if len(stats["by_day"]) <= 1:
+            return
+
+        dates = sorted(stats["by_day"])
+        if len(dates) >= 2:
+            yesterday = stats["by_day"].get(dates[-2], 0)
+            today = stats["by_day"].get(dates[-1], 0)
+
+            if yesterday > 0:
+                change = ((today - yesterday) / yesterday) * 100
+                stats["daily_change_percent"] = round(change, 2)
+
     async def get_statistics(
         self, days: int = 7, include_details: bool = False
     ) -> Metadata:
@@ -219,41 +257,15 @@ class AccessControlMetrics:
                     await pipe.hgetall(f"violations:by_user:{date}")
                 results = await pipe.execute()
 
-            # Process results (3 results per date: daily, endpoint, user)
-            for i, date in enumerate(dates):
-                daily_data = results[i * 3]
-                endpoint_counts = results[i * 3 + 1]
-                user_counts = results[i * 3 + 2]
-
-                # Process daily total
-                if daily_data:
-                    total_key = (
-                        b"total"
-                        if isinstance(list(daily_data.keys())[0], bytes)
-                        else "total"
-                    )
-                    daily_total = int(daily_data.get(total_key, 0))
-                    stats["by_day"][date] = daily_total
-                    stats["total_violations"] += daily_total
-
-                # Process endpoint and user breakdowns using extracted helper
-                self._aggregate_redis_counts(endpoint_counts, stats["by_endpoint"])
-                self._aggregate_redis_counts(user_counts, stats["by_user"])
+            # Process results
+            self._process_daily_results(results, dates, stats)
 
             # Get recent violations if requested
             if include_details:
                 stats["recent_violations"] = await self._get_recent_violations(limit=20)
 
             # Calculate trends
-            if len(stats["by_day"]) > 1:
-                dates = sorted(stats["by_day"])
-                if len(dates) >= 2:
-                    yesterday = stats["by_day"].get(dates[-2], 0)
-                    today = stats["by_day"].get(dates[-1], 0)
-
-                    if yesterday > 0:
-                        change = ((today - yesterday) / yesterday) * 100
-                        stats["daily_change_percent"] = round(change, 2)
+            self._calculate_daily_trend(stats)
 
             return stats
 

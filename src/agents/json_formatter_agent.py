@@ -181,11 +181,56 @@ class JSONFormatterAgent:
             warnings=["No valid JSON found in text"],
         )
 
+    def _apply_json_fixes(
+        self, json_content: str, warnings: List[str]
+    ) -> tuple:
+        """Apply common JSON syntax fixes and return fixed content with fixes list (Issue #665: extracted helper)."""
+        fixes_applied = []
+
+        # Fix trailing commas
+        if re.search(r",\s*}", json_content):
+            json_content = re.sub(r",\s*}", "}", json_content)
+            fixes_applied.append("removed_trailing_commas")
+
+        # Fix missing quotes on keys
+        json_content = re.sub(r"(\w+):", r'"\1":', json_content)
+        if '"' in json_content:
+            fixes_applied.append("added_missing_quotes")
+
+        # Fix single quotes to double quotes
+        if "'" in json_content:
+            json_content = json_content.replace("'", '"')
+            fixes_applied.append("converted_single_quotes")
+
+        return json_content, fixes_applied
+
+    def _try_parse_fixed_json(
+        self, json_content: str, text: str, fixes_applied: List[str], warnings: List[str]
+    ) -> Optional[JSONParseResult]:
+        """Attempt to parse fixed JSON and return result if successful (Issue #665: extracted helper)."""
+        try:
+            parsed = json.loads(json_content)
+            if isinstance(parsed, dict):
+                with self._stats_lock:
+                    self.successful_parses += 1
+                confidence = 0.8 - (len(fixes_applied) * 0.1)
+                warnings.extend([f"Applied fix: {fix}" for fix in fixes_applied])
+
+                return JSONParseResult(
+                    success=True,
+                    data=parsed,
+                    original_text=text,
+                    method_used="malformed_json_fix",
+                    confidence=max(confidence, 0.3),
+                    warnings=warnings,
+                )
+        except json.JSONDecodeError as e:
+            warnings.append(f"JSON fix failed: {e}")
+        return None
+
     def _fix_malformed_json(self, text: str) -> JSONParseResult:
         """Attempt to fix common JSON formatting errors"""
         warnings = []
-
-        # Start with the original text
         fixed_text = text.strip()
 
         # Find potential JSON boundaries
@@ -212,45 +257,13 @@ class JSONFormatterAgent:
             if old_content != json_content:
                 warnings.append(f"Applied cleanup pattern: {pattern}")
 
-        # Fix common issues
-        fixes_applied = []
-
-        # Fix trailing commas
-        if re.search(r",\s*}", json_content):
-            json_content = re.sub(r",\s*}", "}", json_content)
-            fixes_applied.append("removed_trailing_commas")
-
-        # Fix missing quotes on keys
-        json_content = re.sub(r"(\w+):", r'"\1":', json_content)
-        if '"' in json_content:
-            fixes_applied.append("added_missing_quotes")
-
-        # Fix single quotes to double quotes
-        if "'" in json_content:
-            json_content = json_content.replace("'", '"')
-            fixes_applied.append("converted_single_quotes")
+        # Apply common fixes
+        json_content, fixes_applied = self._apply_json_fixes(json_content, warnings)
 
         # Try parsing the fixed JSON
-        try:
-            parsed = json.loads(json_content)
-            if isinstance(parsed, dict):
-                with self._stats_lock:
-                    self.successful_parses += 1
-                confidence = 0.8 - (
-                    len(fixes_applied) * 0.1
-                )  # Lower confidence for more fixes
-                warnings.extend([f"Applied fix: {fix}" for fix in fixes_applied])
-
-                return JSONParseResult(
-                    success=True,
-                    data=parsed,
-                    original_text=text,
-                    method_used="malformed_json_fix",
-                    confidence=max(confidence, 0.3),
-                    warnings=warnings,
-                )
-        except json.JSONDecodeError as e:
-            warnings.append(f"JSON fix failed: {e}")
+        result = self._try_parse_fixed_json(json_content, text, fixes_applied, warnings)
+        if result:
+            return result
 
         return JSONParseResult(
             success=False,

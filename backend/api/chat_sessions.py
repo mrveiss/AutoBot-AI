@@ -4,7 +4,7 @@
 
 import json
 import logging
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from backend.type_defs.common import Metadata
 from fastapi import APIRouter, Depends, Request, Response
@@ -136,6 +136,25 @@ class SessionUpdate(BaseModel):
 
     title: Optional[str] = Field(None, max_length=200, description="New session title")
     metadata: Optional[Metadata] = Field(None, description="Updated metadata")
+
+
+# Issue #608: Activity tracking models
+class ActivityCreate(BaseModel):
+    """Single activity creation model"""
+
+    activity_id: str = Field(..., description="Frontend-generated activity ID")
+    type: str = Field(..., description="Activity type: terminal, file, browser, desktop")
+    user_id: str = Field(..., description="User who performed the activity")
+    content: str = Field(..., max_length=10000, description="Activity content/description")
+    secrets_used: list[str] = Field(default_factory=list, description="Secret IDs used")
+    metadata: Optional[Metadata] = Field(default_factory=dict, description="Activity metadata")
+    timestamp: str = Field(..., description="ISO format timestamp from frontend")
+
+
+class ActivityBatchCreate(BaseModel):
+    """Batch activity creation model"""
+
+    activities: list[ActivityCreate] = Field(..., description="List of activities to create")
 
 
 # ====================================================================
@@ -882,3 +901,290 @@ async def reset_chat(request: Request, reset_request: Optional[ChatResetRequest]
         message="Chat session reset successfully",
         request_id=request_id,
     )
+
+
+# ====================================================================
+# API Endpoints - Activity Tracking (Issue #608)
+# ====================================================================
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="add_session_activity",
+    error_code_prefix="CHAT",
+)
+@router.post("/chat/sessions/{session_id}/activities")
+async def add_session_activity(
+    session_id: str,
+    activity_data: ActivityCreate,
+    request: Request,
+    ownership: Dict = Depends(validate_session_ownership),
+):
+    """
+    Add a single activity to a chat session.
+
+    Issue #608: User-Centric Session Tracking - Phase 3
+    Stores activity in memory graph for tracking user actions.
+    """
+    request_id = generate_request_id()
+    log_request_context(request, "add_session_activity", request_id)
+
+    # Validate session ID
+    if not validate_chat_session_id(session_id):
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ValidationError("Invalid session ID format")
+
+    # Get memory graph from app state
+    memory_graph: Optional[AutoBotMemoryGraph] = getattr(
+        request.app.state, "memory_graph", None
+    )
+
+    if not memory_graph:
+        logger.warning(
+            "[%s] Memory graph not available, activity not persisted to graph",
+            request_id,
+        )
+        return create_success_response(
+            data={"activity_id": activity_data.activity_id, "stored": False},
+            message="Activity received but memory graph unavailable",
+            request_id=request_id,
+        )
+
+    try:
+        # Create activity entity in memory graph
+        activity_entity = await memory_graph.create_activity_entity(
+            activity_type=f"{activity_data.type}_activity",
+            session_id=session_id,
+            user_id=activity_data.user_id,
+            content=activity_data.content,
+            secrets_used=activity_data.secrets_used,
+            metadata={
+                "frontend_id": activity_data.activity_id,
+                "frontend_timestamp": activity_data.timestamp,
+                **(activity_data.metadata or {}),
+            },
+        )
+
+        log_chat_event(
+            "activity_created",
+            session_id,
+            {
+                "activity_id": activity_data.activity_id,
+                "type": activity_data.type,
+                "user_id": activity_data.user_id,
+                "request_id": request_id,
+            },
+        )
+
+        return create_success_response(
+            data={
+                "activity_id": activity_data.activity_id,
+                "entity_id": activity_entity.get("entity_id"),
+                "stored": True,
+            },
+            message="Activity recorded successfully",
+            request_id=request_id,
+            status_code=201,
+        )
+
+    except Exception as graph_error:
+        logger.warning(
+            "[%s] Failed to store activity in memory graph: %s",
+            request_id,
+            graph_error,
+        )
+        return create_success_response(
+            data={"activity_id": activity_data.activity_id, "stored": False},
+            message="Activity received but storage failed",
+            request_id=request_id,
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="add_session_activities_batch",
+    error_code_prefix="CHAT",
+)
+@router.post("/chat/sessions/{session_id}/activities/batch")
+async def add_session_activities_batch(
+    session_id: str,
+    batch_data: ActivityBatchCreate,
+    request: Request,
+    ownership: Dict = Depends(validate_session_ownership),
+):
+    """
+    Add multiple activities to a chat session in a single request.
+
+    Issue #608: User-Centric Session Tracking - Phase 3
+    Efficiently stores batched activities from frontend.
+    """
+    request_id = generate_request_id()
+    log_request_context(request, "add_session_activities_batch", request_id)
+
+    # Validate session ID
+    if not validate_chat_session_id(session_id):
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ValidationError("Invalid session ID format")
+
+    # Get memory graph from app state
+    memory_graph: Optional[AutoBotMemoryGraph] = getattr(
+        request.app.state, "memory_graph", None
+    )
+
+    if not memory_graph:
+        logger.warning(
+            "[%s] Memory graph not available, %d activities not persisted",
+            request_id,
+            len(batch_data.activities),
+        )
+        return create_success_response(
+            data={
+                "total": len(batch_data.activities),
+                "stored": 0,
+                "failed": len(batch_data.activities),
+            },
+            message="Activities received but memory graph unavailable",
+            request_id=request_id,
+        )
+
+    stored_count = 0
+    failed_count = 0
+    stored_ids: List[str] = []
+
+    for activity in batch_data.activities:
+        try:
+            await memory_graph.create_activity_entity(
+                activity_type=f"{activity.type}_activity",
+                session_id=session_id,
+                user_id=activity.user_id,
+                content=activity.content,
+                secrets_used=activity.secrets_used,
+                metadata={
+                    "frontend_id": activity.activity_id,
+                    "frontend_timestamp": activity.timestamp,
+                    **(activity.metadata or {}),
+                },
+            )
+            stored_count += 1
+            stored_ids.append(activity.activity_id)
+        except Exception as activity_error:
+            logger.warning(
+                "[%s] Failed to store activity %s: %s",
+                request_id,
+                activity.activity_id,
+                activity_error,
+            )
+            failed_count += 1
+
+    log_chat_event(
+        "activities_batch_created",
+        session_id,
+        {
+            "total": len(batch_data.activities),
+            "stored": stored_count,
+            "failed": failed_count,
+            "request_id": request_id,
+        },
+    )
+
+    return create_success_response(
+        data={
+            "total": len(batch_data.activities),
+            "stored": stored_count,
+            "failed": failed_count,
+            "stored_ids": stored_ids,
+        },
+        message=f"Batch processed: {stored_count} stored, {failed_count} failed",
+        request_id=request_id,
+        status_code=201 if stored_count > 0 else 200,
+    )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_session_activities",
+    error_code_prefix="CHAT",
+)
+@router.get("/chat/sessions/{session_id}/activities")
+async def get_session_activities(
+    session_id: str,
+    request: Request,
+    ownership: Dict = Depends(validate_session_ownership),
+    activity_type: Optional[str] = None,
+    user_id: Optional[str] = None,
+    limit: int = 100,
+):
+    """
+    Get activities for a chat session with optional filtering.
+
+    Issue #608: User-Centric Session Tracking - Phase 3
+    Retrieves activities from memory graph.
+    """
+    request_id = generate_request_id()
+    log_request_context(request, "get_session_activities", request_id)
+
+    # Validate session ID
+    if not validate_chat_session_id(session_id):
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ValidationError("Invalid session ID format")
+
+    # Get memory graph from app state
+    memory_graph: Optional[AutoBotMemoryGraph] = getattr(
+        request.app.state, "memory_graph", None
+    )
+
+    if not memory_graph:
+        return create_success_response(
+            data={"activities": [], "total": 0},
+            message="Memory graph unavailable",
+            request_id=request_id,
+        )
+
+    try:
+        # Get session activities from memory graph
+        activities = await memory_graph.get_session_activities(
+            session_id=session_id,
+            activity_type=activity_type,
+            user_id=user_id,
+            limit=limit,
+        )
+
+        return create_success_response(
+            data={
+                "activities": activities,
+                "total": len(activities),
+                "session_id": session_id,
+            },
+            message="Activities retrieved successfully",
+            request_id=request_id,
+        )
+
+    except Exception as graph_error:
+        logger.warning(
+            "[%s] Failed to retrieve activities: %s",
+            request_id,
+            graph_error,
+        )
+        return create_success_response(
+            data={"activities": [], "total": 0},
+            message="Failed to retrieve activities",
+            request_id=request_id,
+        )
