@@ -5,7 +5,6 @@
  * This composable eliminates duplicate code and provides a consistent API interface.
  */
 
-import { ref } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import {
@@ -20,15 +19,12 @@ import { createLogger } from '@/utils/debugUtils'
 const logger = createLogger('useKnowledgeBase')
 import type {
   KnowledgeStats,
-  KnowledgeStatsResponse,
   CategoryResponse,
   CategoriesListResponse,
   KnowledgeCategoryItem,
   SearchResponse,
   AddFactResponse,
   UploadResponse,
-  MachineProfileResponse,
-  ManPagesSummaryResponse,
   IntegrationResponse,
   VectorizationStatusResponse,
   VectorizationResponse,
@@ -36,9 +32,7 @@ import type {
   SystemKnowledgeResponse,
   ManPagesPopulateResponse,
   AutoBotDocsResponse,
-  BasicStatsResponse,
   CategorizedFactsResponse,
-  CategorizedFact,
   CategoryFilterOption
 } from '@/types/knowledgeBase'
 

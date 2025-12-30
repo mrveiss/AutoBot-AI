@@ -55,7 +55,7 @@ class RouterHealthMonitor {
         if (!this.router) return;
 
         // Monitor successful navigation
-        this.router.afterEach((to, from) => {
+        this.router.afterEach((_to, _from) => {
             this.lastSuccessfulNavigation = Date.now();
             this.failureCount = 0;
             this.setHealthy(true);
@@ -231,7 +231,7 @@ class RouterHealthMonitor {
     /**
      * Handle route verification failures
      */
-    handleRouteVerificationFailure(route) {
+    handleRouteVerificationFailure(_route) {
         // Route verification failures are now handled more gracefully
         // Only log debug info instead of triggering cascade failures
 
@@ -328,7 +328,7 @@ class RouterHealthMonitor {
     /**
      * Trigger recovery procedures - DISABLED to prevent _recovery URL parameters
      */
-    async triggerRecovery(reason) {
+    async triggerRecovery(_reason) {
 
         // All recovery procedures disabled to prevent _recovery parameters
         // this.recoveryAttempts++;

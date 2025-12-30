@@ -1,5 +1,5 @@
 // ChatInterface TypeScript definitions and setup
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, computed, onUnmounted, nextTick } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
 // Create scoped logger for ChatInterface
@@ -10,7 +10,6 @@ import type {
   WebSocketMessage,
   LLMResponse,
   AppSettings,
-  ApiResponse,
   KnowledgeBaseStatus,
   FileUploadResponse
 } from '@/types/api'
@@ -24,7 +23,7 @@ export function useChatInterface() {
   // WebSocket integration
   const wsService = useGlobalWebSocket()
   const wsConnected = wsService?.isConnected || ref(false)
-  const wsOn = wsService?.on || (() => () => {})
+  const _wsOn = wsService?.on || (() => () => {})  // Reserved for future use
   const wsSend = wsService?.send || (() => false)
   const wsState = wsService?.state || ref({})
 
@@ -401,7 +400,7 @@ export function useChatInterface() {
 
   // Message polling for real-time updates
   let messagePollingInterval: number | null = null
-  let lastMessageCount = 0
+  let _lastMessageCount = 0  // Tracks count for future deduplication optimization
 
   const loadChatMessages = async (chatId: string, silent: boolean = false): Promise<void> => {
     try {
@@ -422,7 +421,7 @@ export function useChatInterface() {
       if (newMessages.length !== messages.value.length || !silent) {
         const previousLength = messages.value.length
         messages.value = newMessages
-        lastMessageCount = newMessages.length
+        _lastMessageCount = newMessages.length
 
         // Auto-scroll only if new messages appeared
         if (newMessages.length > previousLength) {
