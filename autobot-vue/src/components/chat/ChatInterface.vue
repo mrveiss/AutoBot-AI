@@ -119,11 +119,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, provide } from 'vue'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useAppStore } from '@/stores/useAppStore'
 import { useToast } from '@/composables/useToast'
+import { useOverseerAgent } from '@/composables/useOverseerAgent'
 import ApiClient from '@/utils/ApiClient.js'
 import batchApiService from '@/services/BatchApiService'
 // MIGRATED: Using AppConfig.js for better configuration management
@@ -176,6 +177,69 @@ const currentWorkflowId = ref<string | null>(null)
 
 // Tab state
 const activeTab = ref<string>('chat')
+
+// Issue #690: Overseer Agent State
+const overseerEnabled = ref(false)
+
+// Provide overseer state to child components (ChatInput)
+provide('overseerEnabled', overseerEnabled)
+provide('toggleOverseer', () => {
+  overseerEnabled.value = !overseerEnabled.value
+  logger.debug('Overseer mode toggled:', overseerEnabled.value)
+})
+
+// Issue #690: Overseer Agent Integration
+// Initialize only when enabled AND we have a session
+const overseerAgent = computed(() => {
+  if (!overseerEnabled.value || !store.currentSessionId) {
+    return null
+  }
+  return useOverseerAgent({
+    sessionId: store.currentSessionId,
+    autoConnect: true,
+    onPlanCreated: (plan) => {
+      logger.info('[Overseer] Plan created:', plan.plan_id)
+      notify('Execution plan created', 'info')
+    },
+    onStepUpdate: (step) => {
+      logger.debug('[Overseer] Step update:', step.step_number, step.status)
+    },
+    onStreamChunk: (chunk) => {
+      logger.debug('[Overseer] Stream chunk:', chunk.chunk_type)
+    },
+    onError: (error) => {
+      logger.error('[Overseer] Error:', error)
+      notify(`Overseer error: ${error}`, 'error')
+    },
+    onComplete: () => {
+      logger.info('[Overseer] Execution complete')
+      notify('Execution completed', 'success')
+    }
+  })
+})
+
+// Provide overseer agent to child components
+provide('overseerAgent', overseerAgent)
+
+// Issue #690: Handle overseer query submission
+const submitOverseerQuery = async (query: string) => {
+  if (!overseerAgent.value) {
+    logger.warn('Overseer agent not available')
+    return false
+  }
+
+  if (!overseerAgent.value.isConnected.value) {
+    overseerAgent.value.connect()
+    // Wait for connection
+    await new Promise(resolve => setTimeout(resolve, 500))
+  }
+
+  overseerAgent.value.submitQuery(query)
+  return true
+}
+
+// Provide submit function to child components
+provide('submitOverseerQuery', submitOverseerQuery)
 
 // Connection state with stabilized status management
 const baseConnectionStatus = ref('Connected')

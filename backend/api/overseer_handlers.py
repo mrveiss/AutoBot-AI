@@ -8,6 +8,7 @@ Provides WebSocket endpoints for:
 - Task decomposition and planning
 - Step-by-step execution with streaming output
 - Real-time progress updates to frontend
+- Saving explanations to chat history
 """
 
 import asyncio
@@ -24,8 +25,20 @@ from src.agents.overseer import (
     StepResult,
     StreamChunk,
 )
+from src.chat_history import ChatHistoryManager
 
 logger = logging.getLogger(__name__)
+
+# Shared chat history manager
+_chat_history_manager: Optional[ChatHistoryManager] = None
+
+
+def _get_chat_history_manager() -> ChatHistoryManager:
+    """Get or create chat history manager."""
+    global _chat_history_manager
+    if _chat_history_manager is None:
+        _chat_history_manager = ChatHistoryManager()
+    return _chat_history_manager
 
 router = APIRouter(prefix="/api/overseer", tags=["overseer"])
 
@@ -42,6 +55,7 @@ class OverseerWebSocketHandler:
         self.session_id = session_id
         self.overseer: Optional[OverseerAgent] = None
         self.executor: Optional[StepExecutorAgent] = None
+        self.chat_history = _get_chat_history_manager()
 
     async def connect(self) -> bool:
         """Accept WebSocket connection."""
@@ -56,7 +70,11 @@ class OverseerWebSocketHandler:
                 _active_overseers[self.session_id] = self.overseer
 
             # Create executor for this session
-            self.executor = StepExecutorAgent(self.session_id)
+            # Pass session_id as both chat session and PTY session (they should match)
+            self.executor = StepExecutorAgent(
+                session_id=self.session_id,
+                pty_session_id=self.session_id,  # PTY session uses same ID
+            )
 
             logger.info("[OverseerWS] Connected: session=%s", self.session_id)
             return True
@@ -84,6 +102,113 @@ class OverseerWebSocketHandler:
         except Exception as e:
             logger.error("[OverseerWS] Failed to send JSON: %s", e)
 
+    async def save_plan_to_chat(self, plan) -> None:
+        """Save execution plan to chat history."""
+        try:
+            # Format plan as a message
+            steps_text = "\n".join([
+                f"  {s.step_number}. {s.description}"
+                + (f"\n     $ {s.command}" if s.command else "")
+                for s in plan.steps
+            ])
+
+            message_text = f"""📋 **Execution Plan**
+
+{plan.analysis}
+
+**Steps:**
+{steps_text}
+"""
+            # Build plan object for frontend component rendering
+            plan_data = {
+                "plan_id": plan.plan_id,
+                "analysis": plan.analysis,
+                "steps": [
+                    {
+                        "step_number": s.step_number,
+                        "description": s.description,
+                        "command": s.command,
+                    }
+                    for s in plan.steps
+                ],
+            }
+
+            await self.chat_history.add_message(
+                sender="assistant",
+                text=message_text,
+                message_type="overseer_plan",
+                session_id=self.session_id,
+                metadata={
+                    "plan": plan_data,  # Full plan object for OverseerPlanMessage component
+                    "plan_id": plan.plan_id,
+                    "total_steps": len(plan.steps),
+                },
+            )
+            logger.info("[OverseerWS] Saved plan to chat: %s", plan.plan_id)
+        except Exception as e:
+            logger.error("[OverseerWS] Failed to save plan to chat: %s", e)
+
+    async def save_step_result_to_chat(self, result: StepResult) -> None:
+        """Save step result with explanations to chat history."""
+        try:
+            # Build command explanation text for display
+            cmd_explanation = ""
+            if result.command_explanation:
+                breakdown_text = "\n".join([
+                    f"  • `{p['part']}`: {p['explanation']}"
+                    for p in (result.to_dict().get("command_explanation", {}).get("breakdown", []))
+                ])
+                cmd_explanation = f"""
+📖 **What this command does:**
+{result.command_explanation.summary}
+
+{breakdown_text}
+"""
+
+            # Build output explanation text for display
+            output_explanation = ""
+            if result.output_explanation:
+                findings_text = "\n".join([
+                    f"  • {f}" for f in result.output_explanation.key_findings
+                ])
+                output_explanation = f"""
+📊 **What we found:**
+{result.output_explanation.summary}
+
+{findings_text}
+"""
+
+            message_text = f"""📌 **Step {result.step_number}/{result.total_steps}**
+
+**Command:** `{result.command or 'N/A'}`
+{cmd_explanation}
+{output_explanation}
+"""
+            # Include full step object in metadata for frontend component rendering
+            step_data = result.to_dict()
+            step_data["description"] = f"Step {result.step_number}: {result.command or 'N/A'}"
+
+            await self.chat_history.add_message(
+                sender="assistant",
+                text=message_text,
+                message_type="overseer_step",
+                session_id=self.session_id,
+                metadata={
+                    "step": step_data,  # Full step object for OverseerStepMessage component
+                    "step_number": result.step_number,
+                    "total_steps": result.total_steps,
+                    "status": result.status.value,
+                    "command": result.command,
+                    "return_code": result.return_code,
+                },
+            )
+            logger.info(
+                "[OverseerWS] Saved step %d result to chat",
+                result.step_number,
+            )
+        except Exception as e:
+            logger.error("[OverseerWS] Failed to save step to chat: %s", e)
+
     async def handle_query(self, query: str, context: Optional[Dict] = None):
         """
         Handle a user query through the overseer.
@@ -104,7 +229,10 @@ class OverseerWebSocketHandler:
 
             plan = await self.overseer.analyze_query(query, context)
 
-            # Send plan overview
+            # Save plan to chat history (so it appears in chat)
+            await self.save_plan_to_chat(plan)
+
+            # Send plan overview via WebSocket
             await self.send_update(
                 OverseerUpdate(
                     update_type="plan",
@@ -129,6 +257,53 @@ class OverseerWebSocketHandler:
                 plan, self.executor
             ):
                 await self.send_update(update)
+
+                # Save step results to chat history
+                if update.update_type == "step_complete" and update.content:
+                    # Convert content to StepResult if it's a dict
+                    if isinstance(update.content, dict):
+                        from src.agents.overseer.types import (
+                            StepStatus,
+                            CommandExplanation,
+                            CommandBreakdownPart,
+                            OutputExplanation,
+                        )
+                        # Create StepResult from dict
+                        step_data = update.content
+                        cmd_exp = None
+                        if step_data.get("command_explanation"):
+                            ce = step_data["command_explanation"]
+                            cmd_exp = CommandExplanation(
+                                summary=ce.get("summary", ""),
+                                breakdown=[
+                                    CommandBreakdownPart(
+                                        part=p.get("part", ""),
+                                        explanation=p.get("explanation", ""),
+                                    )
+                                    for p in ce.get("breakdown", [])
+                                ],
+                            )
+                        out_exp = None
+                        if step_data.get("output_explanation"):
+                            oe = step_data["output_explanation"]
+                            out_exp = OutputExplanation(
+                                summary=oe.get("summary", ""),
+                                key_findings=oe.get("key_findings", []),
+                            )
+                        result = StepResult(
+                            task_id=step_data.get("task_id", ""),
+                            step_number=step_data.get("step_number", 0),
+                            total_steps=step_data.get("total_steps", 0),
+                            status=StepStatus(step_data.get("status", "completed")),
+                            command=step_data.get("command"),
+                            command_explanation=cmd_exp,
+                            output=step_data.get("output"),
+                            output_explanation=out_exp,
+                            return_code=step_data.get("return_code"),
+                        )
+                        await self.save_step_result_to_chat(result)
+                    elif isinstance(update.content, StepResult):
+                        await self.save_step_result_to_chat(update.content)
 
             # Phase 3: Complete
             await self.send_json({

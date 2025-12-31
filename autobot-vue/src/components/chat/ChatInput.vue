@@ -123,7 +123,18 @@
               <span class="toggle-label">KB</span>
             </label>
 
-            <!-- Vertical Divider after KB toggle -->
+            <!-- Issue #690: Overseer Mode Toggle -->
+            <label
+              class="overseer-toggle"
+              :class="{ 'active': overseerEnabled }"
+              title="Overseer Mode: Break down tasks into steps with command explanations"
+              @click.prevent="toggleOverseer"
+            >
+              <i class="fas fa-sitemap" aria-hidden="true"></i>
+              <span class="toggle-label">Explain</span>
+            </label>
+
+            <!-- Vertical Divider after toggles -->
             <div class="action-divider"></div>
 
             <!-- File Attach Button -->
@@ -249,7 +260,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, inject, type Ref, type ComputedRef } from 'vue'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import globalWebSocketService from '@/services/GlobalWebSocketService'
@@ -259,8 +270,14 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
 import { getFileIconByMimeType } from '@/utils/iconMappings'
 import { createLogger } from '@/utils/debugUtils'
+import type { UseOverseerAgentOptions } from '@/composables/useOverseerAgent'
 
 const logger = createLogger('ChatInput')
+
+// Issue #690: Inject overseer state from ChatInterface
+const overseerEnabled = inject<Ref<boolean>>('overseerEnabled', ref(false))
+const toggleOverseer = inject<() => void>('toggleOverseer', () => {})
+const submitOverseerQuery = inject<(query: string) => Promise<boolean>>('submitOverseerQuery', async () => false)
 
 const store = useChatStore()
 const controller = useChatController()
@@ -396,17 +413,43 @@ const sendMessage = async () => {
   isSending.value = true
 
   try {
-    // Send message with attachments and knowledge toggle (Issue #249)
-    await controller.sendMessage(message, {
-      attachments: files.length > 0 ? files.map(f => ({
+    // Issue #690: Use Overseer Agent when enabled
+    if (overseerEnabled.value) {
+      logger.info('[ChatInput] Sending via Overseer Agent:', message.substring(0, 50))
+
+      // Add user message to chat store directly (appears immediately)
+      // The overseer will handle the response via WebSocket
+      store.addMessage({
         id: generateId(),
-        name: f.name,
-        type: f.type,
-        size: f.size,
-        data: f // In real implementation, would upload file first
-      })) : undefined,
-      use_knowledge: useKnowledge.value  // Issue #249: RAG toggle
-    })
+        content: message,
+        sender: 'user',
+        timestamp: new Date(),
+        status: 'sent',
+        type: 'message'
+      })
+
+      // Submit to overseer for task decomposition
+      const success = await submitOverseerQuery(message)
+      if (!success) {
+        logger.warn('[ChatInput] Overseer submission failed, falling back to normal flow')
+        // Fallback: send as normal message
+        await controller.sendMessage(message, {
+          use_knowledge: useKnowledge.value
+        })
+      }
+    } else {
+      // Normal message flow (Issue #249)
+      await controller.sendMessage(message, {
+        attachments: files.length > 0 ? files.map(f => ({
+          id: generateId(),
+          name: f.name,
+          type: f.type,
+          size: f.size,
+          data: f // In real implementation, would upload file first
+        })) : undefined,
+        use_knowledge: useKnowledge.value  // Issue #249: RAG toggle
+      })
+    }
 
   } catch (error) {
     logger.error('Failed to send message:', error)
@@ -854,6 +897,27 @@ onUnmounted(() => {
 }
 
 .knowledge-toggle .toggle-label {
+  @apply text-xs font-medium;
+}
+
+/* Issue #690: Overseer Toggle Styles */
+.overseer-toggle {
+  @apply flex items-center gap-1 px-2 py-1 rounded cursor-pointer transition-all duration-200 text-gray-500;
+}
+
+.overseer-toggle:hover {
+  @apply bg-gray-100 text-gray-700;
+}
+
+.overseer-toggle.active {
+  @apply bg-purple-100 text-purple-600;
+}
+
+.overseer-toggle.active i {
+  @apply text-purple-600;
+}
+
+.overseer-toggle .toggle-label {
   @apply text-xs font-medium;
 }
 
