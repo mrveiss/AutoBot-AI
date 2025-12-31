@@ -13,7 +13,7 @@ export interface ChatMessage {
   timestamp: Date
   status?: 'sending' | 'sent' | 'error'
   error?: string // Error message if status is 'error'
-  type?: 'thought' | 'planning' | 'debug' | 'utility' | 'sources' | 'json' | 'response' | 'message' | 'command_approval_request' // For filtering
+  type?: 'thought' | 'planning' | 'debug' | 'utility' | 'sources' | 'json' | 'response' | 'message' | 'command_approval_request' | 'overseer_plan' | 'overseer_step' | 'terminal_output' | 'terminal_command' // For filtering
   attachments?: Array<{
     id: string
     name: string

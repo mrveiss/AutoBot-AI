@@ -94,8 +94,21 @@
           />
         </div>
 
+        <!-- Issue #690: Overseer Agent Plan Message -->
+        <OverseerPlanMessage
+          v-if="message.type === 'overseer_plan' && message.metadata?.plan"
+          :plan="message.metadata.plan"
+          :steps="message.metadata?.steps"
+        />
+
+        <!-- Issue #690: Overseer Agent Step Message -->
+        <OverseerStepMessage
+          v-else-if="message.type === 'overseer_step' && message.metadata?.step"
+          :step="message.metadata.step"
+        />
+
         <!-- Message Content -->
-        <div class="message-content" :class="getContentClass(message)">
+        <div v-else class="message-content" :class="getContentClass(message)">
           <!-- Streaming content with typing indicator -->
           <div v-if="isStreamingMessage(message)" class="streaming-content">
             <div class="message-text" v-html="formatMessageContent(message.content)"></div>
@@ -481,6 +494,8 @@ import SkeletonLoader from '@/components/ui/SkeletonLoader.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
+import OverseerPlanMessage from '@/components/chat/OverseerPlanMessage.vue'
+import OverseerStepMessage from '@/components/chat/OverseerStepMessage.vue'
 import appConfig from '@/config/AppConfig.js'
 import { formatFileSize, formatTime } from '@/utils/formatHelpers'
 import { useToast } from '@/composables/useToast'
@@ -650,6 +665,9 @@ const getSenderIcon = (sender: string, messageType?: string): string => {
       sources: 'fas fa-book-open',
       command_approval_request: 'fas fa-shield-halved',
       terminal_output: 'fas fa-terminal',
+      terminal_command: 'fas fa-terminal',
+      overseer_plan: 'fas fa-sitemap',
+      overseer_step: 'fas fa-tasks',
       llm_response: 'fas fa-robot',
       llm_response_chunk: 'fas fa-robot'
     }
@@ -1445,6 +1463,22 @@ onMounted(() => {
 .message-wrapper.type-terminal_output::after {
   content: 'Terminal';
   @apply bg-gray-700 text-green-400;
+}
+
+/* Issue #690: Overseer Agent Message Styles */
+.message-wrapper.type-overseer_plan::after {
+  content: 'Plan';
+  @apply bg-indigo-700 text-indigo-100;
+}
+
+.message-wrapper.type-overseer_step::after {
+  content: 'Step';
+  @apply bg-purple-700 text-purple-100;
+}
+
+.message-wrapper.type-overseer_plan,
+.message-wrapper.type-overseer_step {
+  @apply bg-gray-800/50 border-indigo-600/50;
 }
 
 .message-wrapper.error {

@@ -13,6 +13,7 @@ and are imported at module level to fail fast if missing.
 from backend.api.agent import router as agent_router
 from backend.api.agent_config import router as agent_config_router
 from backend.api.browser_mcp import router as browser_mcp_router
+from backend.api.overseer_handlers import router as overseer_router
 from backend.api.chat import router as chat_router
 from backend.api.database_mcp import router as database_mcp_router
 from backend.api.developer import router as developer_router
@@ -110,6 +111,7 @@ def _get_agent_routers() -> list:
         (agent_router, "/agent", ["agent"], "agent"),
         (agent_config_router, "/agent_config", ["agent_config"], "agent_config"),
         (intelligent_agent_router, "/intelligent_agent", ["intelligent_agent"], "intelligent_agent"),
+        (overseer_router, "/overseer", ["overseer", "agent"], "overseer"),
         (files_router, "/files", ["files"], "files"),
         (developer_router, "/developer", ["developer"], "developer"),
         (memory_router, "/memory", ["memory"], "memory"),
