@@ -40,8 +40,23 @@ if [ -f ".env" ]; then
 fi
 
 # Set default Celery configuration if not in .env
-export CELERY_BROKER_URL="${CELERY_BROKER_URL:-redis://172.16.168.23:6379/1}"
-export CELERY_RESULT_BACKEND="${CELERY_RESULT_BACKEND:-redis://172.16.168.23:6379/2}"
+# Redis password must be URL-encoded if present
+REDIS_HOST="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+REDIS_PORT="${AUTOBOT_REDIS_PORT:-6379}"
+REDIS_PASSWORD="${AUTOBOT_REDIS_PASSWORD:-}"
+
+if [ -n "$REDIS_PASSWORD" ]; then
+    # URL-encode the password (handle +, /, =, etc.)
+    ENCODED_PASSWORD=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$REDIS_PASSWORD', safe=''))")
+    DEFAULT_BROKER="redis://:${ENCODED_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/1"
+    DEFAULT_BACKEND="redis://:${ENCODED_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/2"
+else
+    DEFAULT_BROKER="redis://${REDIS_HOST}:${REDIS_PORT}/1"
+    DEFAULT_BACKEND="redis://${REDIS_HOST}:${REDIS_PORT}/2"
+fi
+
+export CELERY_BROKER_URL="${CELERY_BROKER_URL:-$DEFAULT_BROKER}"
+export CELERY_RESULT_BACKEND="${CELERY_RESULT_BACKEND:-$DEFAULT_BACKEND}"
 export ANSIBLE_PRIVATE_DATA_DIR="${ANSIBLE_PRIVATE_DATA_DIR:-/tmp/ansible-runner}"
 
 echo "[3/4] Celery configuration:"

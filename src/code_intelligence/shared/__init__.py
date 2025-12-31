@@ -33,6 +33,18 @@ from src.code_intelligence.shared.ast_cache import (
     get_ast_cache_stats,
 )
 
+# Issue #686: Scoring utilities for consistent score calculation
+from src.code_intelligence.shared.scoring import (
+    calculate_exponential_score,
+    calculate_weighted_deduction,
+    calculate_score_from_severity_counts,
+    get_grade_from_score,
+    get_risk_level_from_score,
+    get_status_message,
+    DEFAULT_SEVERITY_WEIGHTS,
+    DEFAULT_DECAY_CONSTANT,
+)
+
 __all__ = [
     # FileListCache
     "FileListCache",
@@ -48,4 +60,13 @@ __all__ = [
     "get_ast_with_content",
     "invalidate_ast_cache",
     "get_ast_cache_stats",
+    # Scoring utilities (Issue #686)
+    "calculate_exponential_score",
+    "calculate_weighted_deduction",
+    "calculate_score_from_severity_counts",
+    "get_grade_from_score",
+    "get_risk_level_from_score",
+    "get_status_message",
+    "DEFAULT_SEVERITY_WEIGHTS",
+    "DEFAULT_DECAY_CONSTANT",
 ]

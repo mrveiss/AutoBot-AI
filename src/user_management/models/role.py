@@ -281,7 +281,9 @@ SYSTEM_PERMISSIONS = [
     ("admin:access", "admin", "access", "Access admin panel"),
     ("admin:users", "admin", "users", "Manage all users"),
     ("admin:organization", "admin", "organization", "Manage organization"),
+    # Audit (Issue #683: Role-Based Access Control)
     ("audit:read", "audit", "read", "View audit logs"),
+    ("audit:write", "audit", "write", "Manage audit logs (cleanup)"),
 ]
 
 # Default system roles with their permissions
@@ -297,7 +299,7 @@ SYSTEM_ROLES = {
             "files:view", "files:upload", "files:download", "files:delete",
             "settings:read", "settings:write",
             "admin:access", "admin:users", "admin:organization",
-            "audit:read",
+            "audit:read", "audit:write",
         ],
     },
     "user": {

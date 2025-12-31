@@ -149,10 +149,15 @@ class TerminalChatIntegrator:
             return False
 
         try:
+            # Strip ANSI escape codes before writing to transcript
+            clean_content = strip_ansi_codes(content)
+            if not clean_content:
+                return False
+
             transcript_file = f"{self.conversation_id}_terminal_transcript.txt"
             transcript_path = self.data_dir / transcript_file
             async with aiofiles.open(transcript_path, "a", encoding="utf-8") as f:
-                await f.write(content)
+                await f.write(clean_content)
             return True
         except OSError as e:
             logger.error("Failed to write to transcript (I/O error): %s", e)

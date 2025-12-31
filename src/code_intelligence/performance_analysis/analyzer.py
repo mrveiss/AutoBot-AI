@@ -79,6 +79,7 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
             "migrations",
         ]
         self.results: List[PerformanceIssue] = []
+        self.total_files_scanned: int = 0  # Issue #686: Track total files analyzed
         self.use_semantic_analysis = use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
         self.use_shared_cache = use_shared_cache and HAS_SHARED_CACHE
 
@@ -214,11 +215,13 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
         """Analyze all Python files in a directory."""
         target = Path(directory) if directory else self.project_root
         self.results = []
+        self.total_files_scanned = 0  # Issue #686: Reset counter
 
         for py_file in target.rglob("*.py"):
             if self._should_exclude(py_file):
                 continue
 
+            self.total_files_scanned += 1  # Issue #686: Count all files scanned
             findings = self.analyze_file(str(py_file))
             self.results.extend(findings)
 
@@ -236,7 +239,18 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
         return False
 
     def get_summary(self) -> Dict[str, Any]:
-        """Get summary of performance findings."""
+        """
+        Get summary of performance findings.
+
+        Issue #686: Uses exponential decay scoring to prevent score overflow.
+        Scores now degrade gracefully instead of immediately hitting 0.
+        """
+        # Import scoring utilities
+        from src.code_intelligence.shared.scoring import (
+            calculate_score_from_severity_counts,
+            get_grade_from_score,
+        )
+
         by_severity: Dict[str, int] = {}
         by_type: Dict[str, int] = {}
 
@@ -247,31 +261,39 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
             itype = finding.issue_type.value
             by_type[itype] = by_type.get(itype, 0) + 1
 
-        # Calculate performance score (0-100)
+        # Issue #686: Use exponential decay scoring instead of linear deduction
+        # This prevents scores from immediately collapsing to 0 with many issues
+        score = calculate_score_from_severity_counts(by_severity)
+
         total = len(self.results)
         critical = by_severity.get("critical", 0)
         high = by_severity.get("high", 0)
-        medium = by_severity.get("medium", 0)
-        low = by_severity.get("low", 0)
 
-        # Weighted deduction
-        deduction = (critical * 20) + (high * 8) + (medium * 3) + low
-        score = max(0, 100 - deduction)
+        # Issue #686: Use total_files_scanned instead of files with issues
+        files_analyzed = self.total_files_scanned if self.total_files_scanned > 0 else len(
+            set(f.file_path for f in self.results)
+        )
 
         return {
             "total_issues": total,
             "by_severity": by_severity,
             "by_type": by_type,
             "performance_score": score,
-            "grade": self._get_grade(score),
+            "grade": get_grade_from_score(score),
             "critical_issues": critical,
             "high_issues": high,
-            "files_analyzed": len(set(f.file_path for f in self.results)),
+            "files_analyzed": files_analyzed,
+            "files_with_issues": len(set(f.file_path for f in self.results)),
             "top_issues": self._get_top_issues(),
         }
 
     def _get_grade(self, score: int) -> str:
-        """Get letter grade from score."""
+        """
+        Get letter grade from score.
+
+        DEPRECATED: Use get_grade_from_score from shared.scoring instead.
+        Kept for backward compatibility.
+        """
         if score >= 90:
             return "A"
         elif score >= 80:

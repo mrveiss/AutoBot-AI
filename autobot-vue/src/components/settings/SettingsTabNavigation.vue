@@ -7,37 +7,43 @@
     </div>
 
     <div class="settings-tabs">
-      <button
+      <router-link
         v-for="tab in tabs"
         :key="tab.id"
-        :class="{ active: activeTab === tab.id }"
-        @click="$emit('tab-changed', tab.id)"
+        :to="`/settings/${tab.id}`"
+        class="settings-tab-link"
+        :class="{ active: isActiveTab(tab.id) }"
         :aria-label="tab.label"
       >
         {{ tab.label }}
-      </button>
+      </router-link>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { useRoute } from 'vue-router'
+
 interface Tab {
   id: string
   label: string
 }
 
 interface Props {
-  activeTab: string
   hasUnsavedChanges: boolean
   tabs: Tab[]
 }
 
-interface Emits {
-  (e: 'tab-changed', tabId: string): void
-}
-
 defineProps<Props>()
-defineEmits<Emits>()
+
+const route = useRoute()
+
+const isActiveTab = (tabId: string): boolean => {
+  // Check if current route matches the tab
+  const currentPath = route.path
+  return currentPath === `/settings/${tabId}` ||
+         route.name === `settings-${tabId}`
+}
 </script>
 
 <style scoped>
@@ -74,7 +80,7 @@ defineEmits<Emits>()
   display: none;
 }
 
-.settings-tabs button {
+.settings-tab-link {
   background: none;
   border: none;
   padding: 12px 20px;
@@ -85,20 +91,22 @@ defineEmits<Emits>()
   color: #666;
   font-weight: 500;
   min-width: 100px;
+  text-decoration: none;
+  text-align: center;
 }
 
-.settings-tabs button:hover {
+.settings-tab-link:hover {
   background-color: #f5f5f5;
   color: #333;
 }
 
-.settings-tabs button.active {
+.settings-tab-link.active {
   border-bottom-color: #007acc;
   color: #007acc;
   background-color: #f9f9f9;
 }
 
-.settings-tabs button:focus {
+.settings-tab-link:focus {
   outline: none;
   box-shadow: inset 0 0 0 2px #007acc;
 }
@@ -109,16 +117,16 @@ defineEmits<Emits>()
     border-bottom-color: #444;
   }
 
-  .settings-tabs button {
+  .settings-tab-link {
     color: #ccc;
   }
 
-  .settings-tabs button:hover {
+  .settings-tab-link:hover {
     background-color: #333;
     color: #fff;
   }
 
-  .settings-tabs button.active {
+  .settings-tab-link.active {
     background-color: #2d2d2d;
     color: #4fc3f7;
     border-bottom-color: #4fc3f7;
@@ -127,7 +135,7 @@ defineEmits<Emits>()
 
 /* Mobile responsive */
 @media (max-width: 768px) {
-  .settings-tabs button {
+  .settings-tab-link {
     padding: 10px 16px;
     min-width: 80px;
     font-size: 14px;

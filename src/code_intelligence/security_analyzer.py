@@ -755,6 +755,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
             "migrations",
         ]
         self.results: List[SecurityFinding] = []
+        self.total_files_scanned: int = 0  # Issue #686: Track total files analyzed
         self.use_semantic_analysis = use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
         self.use_shared_cache = use_shared_cache and HAS_SHARED_CACHE
 
@@ -942,12 +943,14 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         """Analyze all Python files in a directory."""
         target = Path(directory) if directory else self.project_root
         self.results = []
+        self.total_files_scanned = 0  # Issue #686: Reset counter
 
         for py_file in target.rglob("*.py"):
             # Check exclusions
             if self._should_exclude(py_file):
                 continue
 
+            self.total_files_scanned += 1  # Issue #686: Count all files scanned
             findings = self.analyze_file(str(py_file))
             self.results.extend(findings)
 
@@ -965,10 +968,21 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         return False
 
     def get_summary(self) -> Dict[str, Any]:
-        """Get summary of security findings."""
-        by_severity = {}
-        by_type = {}
-        by_owasp = {}
+        """
+        Get summary of security findings.
+
+        Issue #686: Uses exponential decay scoring to prevent score overflow.
+        Scores now degrade gracefully instead of immediately hitting 0.
+        """
+        # Import scoring utilities
+        from src.code_intelligence.shared.scoring import (
+            calculate_score_from_severity_counts,
+            get_risk_level_from_score,
+        )
+
+        by_severity: Dict[str, int] = {}
+        by_type: Dict[str, int] = {}
+        by_owasp: Dict[str, int] = {}
 
         for finding in self.results:
             # Count by severity
@@ -983,18 +997,18 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
             owasp = finding.owasp_category
             by_owasp[owasp] = by_owasp.get(owasp, 0) + 1
 
-        # Calculate security score (0-100)
+        # Issue #686: Use exponential decay scoring instead of linear deduction
+        # This prevents scores from immediately collapsing to 0 with many issues
+        security_score = calculate_score_from_severity_counts(by_severity)
+
         total_findings = len(self.results)
         critical_count = by_severity.get("critical", 0)
         high_count = by_severity.get("high", 0)
-        medium_count = by_severity.get("medium", 0)
-        low_count = by_severity.get("low", 0)
 
-        # Weighted deduction: critical=25, high=10, medium=3, low=1
-        deduction = (
-            (critical_count * 25) + (high_count * 10) + (medium_count * 3) + low_count
+        # Issue #686: Use total_files_scanned instead of files with issues
+        files_analyzed = self.total_files_scanned if self.total_files_scanned > 0 else len(
+            set(f.file_path for f in self.results)
         )
-        security_score = max(0, 100 - deduction)
 
         return {
             "total_findings": total_findings,
@@ -1002,14 +1016,20 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
             "by_type": by_type,
             "by_owasp_category": by_owasp,
             "security_score": security_score,
-            "risk_level": self._get_risk_level(security_score),
+            "risk_level": get_risk_level_from_score(security_score),
             "critical_issues": critical_count,
             "high_issues": high_count,
-            "files_analyzed": len(set(f.file_path for f in self.results)),
+            "files_analyzed": files_analyzed,
+            "files_with_issues": len(set(f.file_path for f in self.results)),
         }
 
     def _get_risk_level(self, score: int) -> str:
-        """Get risk level based on security score."""
+        """
+        Get risk level based on security score.
+
+        DEPRECATED: Use get_risk_level_from_score from shared.scoring instead.
+        Kept for backward compatibility.
+        """
         if score >= 90:
             return "low"
         elif score >= 70:

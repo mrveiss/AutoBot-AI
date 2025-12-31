@@ -373,6 +373,7 @@ class RedisOptimizer:
         """
         self.project_root = Path(project_root) if project_root else Path.cwd()
         self.results: List[OptimizationResult] = []
+        self.total_files_scanned: int = 0  # Issue #686: Track total files analyzed
 
     def _run_all_detectors(
         self,
@@ -460,6 +461,7 @@ class RedisOptimizer:
             List of all optimization results
         """
         self.results = []
+        self.total_files_scanned = 0  # Issue #686: Reset counter
         target_dir = Path(directory) if directory else self.project_root
         exclude_patterns = exclude_patterns or self._get_default_exclude_patterns()
         python_files = list(target_dir.rglob("*.py"))
@@ -467,9 +469,10 @@ class RedisOptimizer:
         for file_path in python_files:
             rel_path = str(file_path.relative_to(target_dir))
             if not self._is_path_excluded(rel_path, exclude_patterns):
+                self.total_files_scanned += 1  # Issue #686: Count all files scanned
                 self.results.extend(self.analyze_file(str(file_path)))
 
-        logger.info("Analyzed %d files, found %d optimizations", len(python_files), len(self.results))
+        logger.info("Analyzed %d files, found %d optimizations", self.total_files_scanned, len(self.results))
         return self.results
 
     def _group_consecutive_operations(self, operations: List[RedisOperation]) -> List[List[RedisOperation]]:
@@ -944,13 +947,28 @@ async def get_with_lock(redis, key, compute_fn, ttl=300):
         return value"""
 
     def get_summary(self) -> Dict[str, Any]:
-        """Get summary of optimization findings."""
+        """
+        Get summary of optimization findings.
+
+        Issue #686: Uses exponential decay scoring to prevent score overflow.
+        Scores now degrade gracefully instead of immediately hitting 0.
+        """
+        # Import scoring utilities
+        from src.code_intelligence.shared.scoring import (
+            calculate_score_from_severity_counts,
+            get_grade_from_score,
+        )
+
         if not self.results:
             return {
                 "total_optimizations": 0,
                 "by_severity": {},
                 "by_type": {},
                 "estimated_improvements": [],
+                "redis_health_score": 100.0,
+                "grade": "A",
+                "files_analyzed": self.total_files_scanned,
+                "files_with_issues": 0,
             }
 
         by_severity: Dict[str, int] = {}
@@ -963,11 +981,23 @@ async def get_with_lock(redis, key, compute_fn, ttl=300):
             by_severity[sev] = by_severity.get(sev, 0) + 1
             by_type[opt_type] = by_type.get(opt_type, 0) + 1
 
+        # Issue #686: Use exponential decay scoring instead of linear deduction
+        # This prevents scores from immediately collapsing to 0 with many issues
+        redis_health_score = calculate_score_from_severity_counts(by_severity)
+
+        # Issue #686: Use total_files_scanned instead of files with issues
+        files_analyzed = self.total_files_scanned if self.total_files_scanned > 0 else len(
+            set(r.file_path for r in self.results)
+        )
+
         return {
             "total_optimizations": len(self.results),
             "by_severity": by_severity,
             "by_type": by_type,
-            "files_analyzed": len(set(r.file_path for r in self.results)),
+            "redis_health_score": redis_health_score,
+            "grade": get_grade_from_score(redis_health_score),
+            "files_analyzed": files_analyzed,
+            "files_with_issues": len(set(r.file_path for r in self.results)),
             "critical_findings": [
                 r.to_dict()
                 for r in self.results

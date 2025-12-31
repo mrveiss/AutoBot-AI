@@ -8,7 +8,9 @@ Celery tasks for asynchronous Ansible playbook execution with real-time progress
 """
 
 import asyncio
+import json
 import logging
+import subprocess
 
 from backend.type_defs.common import Metadata
 
@@ -288,3 +290,418 @@ async def _provision_ssh_key_async(host_ip: str, password: str, ssh_user: str):
     except Exception as e:
         logger.exception("SSH key provisioning exception for %s: %s", host_ip, e)
         raise
+
+
+# Issue #687: Module-level frozenset for loggable RBAC event types
+_RBAC_LOGGABLE_EVENTS = frozenset({"runner_on_ok", "runner_on_failed", "runner_on_unreachable"})
+
+
+def _create_rbac_event_callback(task):
+    """Create event callback for RBAC initialization monitoring (Issue #687).
+
+    Args:
+        task: Celery task instance for state updates
+
+    Returns:
+        Callback function for Ansible event handling
+    """
+    def event_callback(event):
+        """Publish Ansible events to Celery state for real-time monitoring."""
+        event_type = event.get("event", "unknown")
+        event_data = event.get("event_data", {})
+        task_name = event_data.get("task", "")
+        task.update_state(
+            state="PROGRESS",
+            meta={
+                "event_type": event_type,
+                "task_name": task_name,
+                "stdout": event.get("stdout", ""),
+                "step": "initializing",
+            },
+        )
+        if event_type in _RBAC_LOGGABLE_EVENTS:
+            logger.info("RBAC init event: %s - %s", event_type, task_name)
+    return event_callback
+
+
+@celery_app.task(bind=True, name="tasks.initialize_rbac")
+def initialize_rbac(self, create_admin: bool = False, admin_username: str = "admin"):
+    """
+    Initialize RBAC system using Ansible playbook (Issue #687).
+
+    Runs setup-rbac.yml to create:
+    - System permissions
+    - System roles
+    - Role-permission mappings
+    - Optional admin user
+
+    Args:
+        self: Celery task instance (bound)
+        create_admin: Whether to create initial admin user
+        admin_username: Username for admin user if create_admin is True
+
+    Returns:
+        Dict with initialization results
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    try:
+        result = loop.run_until_complete(
+            _initialize_rbac_async(self, create_admin, admin_username)
+        )
+        return result
+    except Exception as e:
+        logger.exception("RBAC initialization task failed: %s", e)
+        raise
+    finally:
+        loop.close()
+
+
+async def _initialize_rbac_async(task, create_admin: bool, admin_username: str):
+    """
+    Async implementation of RBAC initialization (Issue #687).
+
+    Args:
+        task: Celery task instance
+        create_admin: Whether to create admin user
+        admin_username: Admin username
+
+    Returns:
+        Dict with initialization results
+    """
+    executor = AnsibleExecutor()
+
+    logger.info("Starting RBAC initialization (create_admin=%s)", create_admin)
+
+    # Inventory for localhost (RBAC runs on backend host)
+    inventory = {
+        "backend": {
+            "hosts": ["localhost"],
+            "vars": {
+                "ansible_connection": "local",
+                "ansible_python_interpreter": "/usr/bin/python3",
+            },
+        }
+    }
+
+    # Extra variables for playbook
+    extra_vars = {
+        "create_admin": create_admin,
+        "admin_username": admin_username,
+    }
+
+    try:
+        event_callback = _create_rbac_event_callback(task)
+        playbook_path = await executor.get_playbook_path("setup-rbac.yml")
+
+        runner = await executor.run_playbook(
+            playbook_path=playbook_path,
+            inventory=inventory,
+            extra_vars=extra_vars,
+            event_callback=event_callback,
+            run_id="rbac_init",
+        )
+
+        if runner.status == "successful":
+            logger.info("RBAC initialization successful")
+            return {
+                "status": "success",
+                "message": "RBAC system initialized successfully",
+                "create_admin": create_admin,
+                "admin_username": admin_username if create_admin else None,
+            }
+        else:
+            logger.error("RBAC initialization failed")
+            return {
+                "status": "failed",
+                "error": f"RBAC playbook failed with return code {runner.rc}",
+                "return_code": runner.rc,
+            }
+
+    except FileNotFoundError as e:
+        logger.error("RBAC playbook not found: %s", e)
+        return {
+            "status": "failed",
+            "error": "RBAC playbook not found. Ensure setup-rbac.yml exists.",
+        }
+    except Exception as e:
+        logger.exception("RBAC initialization exception: %s", e)
+        raise
+
+
+# Issue #544: Module-level frozenset for loggable system update event types
+_SYSTEM_UPDATE_LOGGABLE_EVENTS = frozenset({"runner_on_ok", "runner_on_failed", "runner_on_unreachable"})
+
+
+def _create_system_update_event_callback(task, update_type: str):
+    """Create event callback for system update monitoring (Issue #544).
+
+    Args:
+        task: Celery task instance for state updates
+        update_type: Type of update ('dependencies' or 'system')
+
+    Returns:
+        Callback function for Ansible event handling
+    """
+    def event_callback(event):
+        """Publish Ansible events to Celery state for real-time monitoring."""
+        event_type = event.get("event", "unknown")
+        event_data = event.get("event_data", {})
+        task_name = event_data.get("task", "")
+        host = event_data.get("host", "localhost")
+        task.update_state(
+            state="PROGRESS",
+            meta={
+                "event_type": event_type,
+                "task_name": task_name,
+                "host": host,
+                "stdout": event.get("stdout", ""),
+                "update_type": update_type,
+                "step": "updating",
+            },
+        )
+        if event_type in _SYSTEM_UPDATE_LOGGABLE_EVENTS:
+            logger.info("System update event [%s]: %s - %s", update_type, event_type, task_name)
+    return event_callback
+
+
+@celery_app.task(bind=True, name="tasks.run_system_update")
+def run_system_update(
+    self,
+    update_type: str = "dependencies",
+    target_groups: list | None = None,
+    dry_run: bool = False,
+    force_update: bool = False,
+):
+    """
+    Run system updates using Ansible playbook (Issue #544).
+
+    Runs patch-dependencies.yml or patch-system-packages.yml to update:
+    - Python dependencies (CVE fixes)
+    - System packages (apt updates)
+
+    Args:
+        self: Celery task instance (bound)
+        update_type: 'dependencies' (Python pip) or 'system' (apt packages)
+        target_groups: List of host groups to update (None = all)
+        dry_run: Preview changes without applying
+        force_update: Skip version checks
+
+    Returns:
+        Dict with update results
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    try:
+        result = loop.run_until_complete(
+            _run_system_update_async(self, update_type, target_groups, dry_run, force_update)
+        )
+        return result
+    except Exception as e:
+        logger.exception("System update task failed: %s", e)
+        raise
+    finally:
+        loop.close()
+
+
+async def _run_system_update_async(
+    task,
+    update_type: str,
+    target_groups: list | None,
+    dry_run: bool,
+    force_update: bool,
+):
+    """
+    Async implementation of system updates (Issue #544).
+
+    Args:
+        task: Celery task instance
+        update_type: Type of update
+        target_groups: Target host groups
+        dry_run: Preview mode
+        force_update: Force update flag
+
+    Returns:
+        Dict with update results
+    """
+    executor = AnsibleExecutor()
+
+    logger.info(
+        "Starting system update (type=%s, dry_run=%s, force=%s, targets=%s)",
+        update_type, dry_run, force_update, target_groups
+    )
+
+    # Select playbook based on update type
+    if update_type == "dependencies":
+        playbook_name = "patch-dependencies.yml"
+    elif update_type == "system":
+        playbook_name = "patch-system-packages.yml"
+    else:
+        return {
+            "status": "failed",
+            "error": f"Invalid update type: {update_type}. Use 'dependencies' or 'system'.",
+        }
+
+    # Build inventory - use default distributed inventory
+    inventory = {
+        "backend": {
+            "hosts": ["localhost"],
+            "vars": {
+                "ansible_connection": "local",
+                "ansible_python_interpreter": "/usr/bin/python3",
+            },
+        }
+    }
+
+    # Extra variables for playbook
+    extra_vars = {
+        "dry_run": dry_run,
+        "force_update": force_update,
+        "auto_confirm": True,  # Skip interactive prompts when run via API
+        "rollback_on_failure": True,
+        "health_check_enabled": True,
+    }
+
+    # Add target groups if specified
+    if target_groups:
+        extra_vars["target_groups"] = target_groups
+
+    try:
+        event_callback = _create_system_update_event_callback(task, update_type)
+        playbook_path = await executor.get_playbook_path(playbook_name)
+
+        runner = await executor.run_playbook(
+            playbook_path=playbook_path,
+            inventory=inventory,
+            extra_vars=extra_vars,
+            event_callback=event_callback,
+            run_id=f"system_update_{update_type}",
+        )
+
+        if runner.status == "successful":
+            logger.info("System update successful (type=%s)", update_type)
+            return {
+                "status": "success",
+                "message": f"System {update_type} update completed successfully",
+                "update_type": update_type,
+                "dry_run": dry_run,
+            }
+        else:
+            logger.error("System update failed (type=%s)", update_type)
+            return {
+                "status": "failed",
+                "error": f"Update playbook failed with return code {runner.rc}",
+                "return_code": runner.rc,
+                "update_type": update_type,
+            }
+
+    except FileNotFoundError as e:
+        logger.error("Update playbook not found: %s", e)
+        return {
+            "status": "failed",
+            "error": f"Update playbook not found: {playbook_name}",
+        }
+    except Exception as e:
+        logger.exception("System update exception: %s", e)
+        raise
+
+
+@celery_app.task(bind=True, name="tasks.check_available_updates")
+def check_available_updates(self):
+    """
+    Check for available updates without applying them (Issue #544).
+
+    Runs pip-audit and apt check to identify available updates.
+
+    Returns:
+        Dict with available updates
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    try:
+        result = loop.run_until_complete(_check_available_updates_async(self))
+        return result
+    except Exception as e:
+        logger.exception("Update check task failed: %s", e)
+        raise
+    finally:
+        loop.close()
+
+
+async def _check_available_updates_async(task):
+    """
+    Async implementation of update check (Issue #544).
+
+    Args:
+        task: Celery task instance
+
+    Returns:
+        Dict with available updates
+    """
+    logger.info("Checking for available updates")
+
+    task.update_state(
+        state="PROGRESS",
+        meta={"step": "checking_python", "message": "Checking Python dependencies..."},
+    )
+
+    python_updates = []
+    system_updates = []
+
+    # Check Python dependencies with pip-audit
+    try:
+        result = subprocess.run(
+            ["pip-audit", "--format", "json"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            encoding="utf-8",
+        )
+        if result.returncode == 0:
+            audit_data = json.loads(result.stdout)
+            python_updates = audit_data if isinstance(audit_data, list) else []
+    except FileNotFoundError:
+        logger.warning("pip-audit not installed, skipping Python audit")
+    except subprocess.TimeoutExpired:
+        logger.warning("pip-audit timed out")
+    except Exception as e:
+        logger.warning("pip-audit failed: %s", e)
+
+    task.update_state(
+        state="PROGRESS",
+        meta={"step": "checking_system", "message": "Checking system packages..."},
+    )
+
+    # Check system packages with apt
+    try:
+        result = subprocess.run(
+            ["apt", "list", "--upgradable"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            encoding="utf-8",
+        )
+        if result.returncode == 0:
+            lines = result.stdout.strip().split("\n")
+            # Skip header line "Listing..."
+            for line in lines[1:]:
+                if line.strip():
+                    system_updates.append(line.strip())
+    except FileNotFoundError:
+        logger.warning("apt not available (not Debian-based)")
+    except subprocess.TimeoutExpired:
+        logger.warning("apt check timed out")
+    except Exception as e:
+        logger.warning("apt check failed: %s", e)
+
+    return {
+        "status": "success",
+        "python_updates": python_updates,
+        "python_update_count": len(python_updates),
+        "system_updates": system_updates,
+        "system_update_count": len(system_updates),
+        "message": f"Found {len(python_updates)} Python and {len(system_updates)} system updates",
+    }

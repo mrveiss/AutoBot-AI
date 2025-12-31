@@ -418,7 +418,113 @@ const routes: RouteRecordRaw[] = [
       icon: 'fas fa-cog',
       description: 'Application settings and preferences',
       requiresAuth: false
-    }
+    },
+    children: [
+      {
+        path: '',
+        name: 'settings-default',
+        redirect: '/settings/backend'
+      },
+      {
+        path: 'user',
+        name: 'settings-user',
+        component: () => import('@/components/settings/UserManagementSettings.vue'),
+        meta: {
+          title: 'User Management',
+          parent: 'settings'
+        }
+      },
+      {
+        path: 'chat',
+        name: 'settings-chat',
+        component: () => import('@/components/settings/ChatSettings.vue'),
+        meta: {
+          title: 'Chat Settings',
+          parent: 'settings'
+        }
+      },
+      {
+        path: 'backend',
+        name: 'settings-backend',
+        component: () => import('@/components/settings/BackendSettings.vue'),
+        meta: {
+          title: 'Backend Settings',
+          parent: 'settings'
+        }
+      },
+      {
+        path: 'ui',
+        name: 'settings-ui',
+        component: () => import('@/components/settings/UISettings.vue'),
+        meta: {
+          title: 'UI Settings',
+          parent: 'settings'
+        }
+      },
+      {
+        path: 'npu-workers',
+        name: 'settings-npu-workers',
+        component: () => import('@/components/settings/NPUWorkersSettings.vue'),
+        meta: {
+          title: 'NPU Workers',
+          parent: 'settings'
+        }
+      },
+      {
+        path: 'logging',
+        name: 'settings-logging',
+        component: () => import('@/components/settings/LoggingSettings.vue'),
+        meta: {
+          title: 'Logging',
+          parent: 'settings'
+        }
+      },
+      {
+        path: 'cache',
+        name: 'settings-cache',
+        component: () => import('@/components/settings/CacheSettings.vue'),
+        meta: {
+          title: 'Cache',
+          parent: 'settings'
+        }
+      },
+      {
+        path: 'prompts',
+        name: 'settings-prompts',
+        component: () => import('@/components/settings/PromptsSettings.vue'),
+        meta: {
+          title: 'Prompts',
+          parent: 'settings'
+        }
+      },
+      {
+        path: 'services',
+        name: 'settings-services',
+        component: () => import('@/components/settings/ServicesSettings.vue'),
+        meta: {
+          title: 'Services',
+          parent: 'settings'
+        }
+      },
+      {
+        path: 'infrastructure',
+        name: 'settings-infrastructure',
+        component: () => import('@/components/settings/InfrastructureSettings.vue'),
+        meta: {
+          title: 'Infrastructure & Updates',
+          parent: 'settings'
+        }
+      },
+      {
+        path: 'developer',
+        name: 'settings-developer',
+        component: () => import('@/components/settings/DeveloperSettings.vue'),
+        meta: {
+          title: 'Developer',
+          parent: 'settings'
+        }
+      }
+    ]
   },
   {
     path: '/:pathMatch(.*)*',

@@ -9,23 +9,33 @@ with real-time event streaming and task routing.
 """
 
 import os
+import urllib.parse
 
 from celery import Celery
 
+from src.config.ssot_config import config as ssot_config
 from src.unified_config_manager import UnifiedConfigManager
 
-# Create singleton config instance
+# Create singleton config instance for extended config values
 config = UnifiedConfigManager()
 
-# Build Redis URLs from centralized configuration
-# Environment variables take precedence, then config-based construction
-_redis_host = config.get_host("redis")
-_redis_port = config.get_port("redis")
+# Build Redis URLs from SSOT configuration (loads directly from .env)
+# Environment variables take precedence, then SSOT config-based construction
+_redis_host = ssot_config.vm.redis
+_redis_port = ssot_config.port.redis
+_redis_password = ssot_config.redis.password
 _celery_broker_db = config.get("redis.databases.celery_broker", 1)
 _celery_results_db = config.get("redis.databases.celery_results", 2)
 
-_default_broker_url = f"redis://{_redis_host}:{_redis_port}/{_celery_broker_db}"
-_default_backend_url = f"redis://{_redis_host}:{_redis_port}/{_celery_results_db}"
+# Construct URLs with password authentication if available
+if _redis_password:
+    # URL-encode the password to handle special characters (+, /, =, etc.)
+    _encoded_password = urllib.parse.quote(_redis_password, safe="")
+    _default_broker_url = f"redis://:{_encoded_password}@{_redis_host}:{_redis_port}/{_celery_broker_db}"
+    _default_backend_url = f"redis://:{_encoded_password}@{_redis_host}:{_redis_port}/{_celery_results_db}"
+else:
+    _default_broker_url = f"redis://{_redis_host}:{_redis_port}/{_celery_broker_db}"
+    _default_backend_url = f"redis://{_redis_host}:{_redis_port}/{_celery_results_db}"
 
 # Get Celery-specific configuration
 _celery_config = config.get("celery", {})
@@ -57,6 +67,11 @@ celery_app.conf.update(
         "tasks.deploy_host": {"queue": "deployments"},
         "tasks.provision_ssh_key": {"queue": "provisioning"},
         "tasks.manage_service": {"queue": "services"},
+        # Issue #687: RBAC initialization tasks
+        "tasks.initialize_rbac": {"queue": "deployments"},
+        # Issue #544: System update tasks
+        "tasks.run_system_update": {"queue": "deployments"},
+        "tasks.check_available_updates": {"queue": "deployments"},
     },
     # Worker configuration for long-running Ansible playbooks
     # Uses centralized config from unified_config_manager

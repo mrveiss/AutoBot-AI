@@ -572,6 +572,15 @@ def check_admin_permission(request: Request) -> bool:
     Raises:
         HTTPException: 401 if not authenticated, 403 if not admin
     """
+    # Check for single user mode - bypass auth and grant admin access
+    from src.user_management.config import DeploymentMode, get_deployment_config
+
+    deployment_config = get_deployment_config()
+    if deployment_config.mode == DeploymentMode.SINGLE_USER:
+        # In single user mode, all requests are treated as admin
+        logger.debug("Single user mode: granting admin access")
+        return True
+
     user_data = auth_middleware.get_user_from_request(request)
 
     if not user_data:

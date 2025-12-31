@@ -463,16 +463,23 @@ class ConsolidatedTerminalWebSocket:
             return
 
         try:
-            transcript_file = f"{self.conversation_id}_terminal_transcript.txt"
             from pathlib import Path
 
             import aiofiles
 
+            from src.utils.encoding_utils import strip_ansi_codes
+
+            # Strip ANSI escape codes before writing to transcript
+            clean_text = strip_ansi_codes(text)
+            if not clean_text:
+                return
+
+            transcript_file = f"{self.conversation_id}_terminal_transcript.txt"
             transcript_path = Path("data/chats") / transcript_file
             async with aiofiles.open(
                 transcript_path, "a", encoding="utf-8"
             ) as f:
-                await f.write(text)
+                await f.write(clean_text)
         except OSError as e:
             logger.error("Failed to write input to transcript (I/O error): %s", e)
         except Exception as e:
@@ -1008,11 +1015,17 @@ class ConsolidatedTerminalWebSocket:
 
         from pathlib import Path
         import aiofiles
+        from src.utils.encoding_utils import strip_ansi_codes
 
         try:
+            # Strip ANSI escape codes before writing to transcript
+            clean_content = strip_ansi_codes(content)
+            if not clean_content:
+                return
+
             transcript_path = Path("data/chats") / f"{self.conversation_id}_terminal_transcript.txt"
             async with aiofiles.open(transcript_path, "a", encoding="utf-8") as f:
-                await f.write(content)
+                await f.write(clean_content)
         except OSError as e:
             logger.error("Failed to write terminal transcript (I/O error): %s", e)
         except Exception as e:

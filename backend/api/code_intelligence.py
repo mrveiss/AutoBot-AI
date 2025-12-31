@@ -344,16 +344,20 @@ def _calculate_health_score(anti_patterns: list) -> float:
     """
     Calculate health score from list of anti-patterns.
 
-    (Issue #315 - extracted/refactored)
+    Issue #686: Uses exponential decay scoring to prevent score overflow.
+    Scores now degrade gracefully instead of immediately hitting 0.
 
     Args:
         anti_patterns: List of detected anti-patterns
 
     Returns:
-        Health score from 0-100
+        Health score from 1-100
     """
-    score = 100.0
+    from src.code_intelligence.shared.scoring import (
+        calculate_exponential_score,
+    )
 
+    # Calculate weighted deduction
     severity_penalties = {
         AntiPatternSeverity.INFO: 0.5,
         AntiPatternSeverity.LOW: 1,
@@ -362,28 +366,33 @@ def _calculate_health_score(anti_patterns: list) -> float:
         AntiPatternSeverity.CRITICAL: 8,
     }
 
+    total_deduction = 0.0
     for pattern in anti_patterns:
         penalty = severity_penalties.get(pattern.severity, 1)
-        score -= penalty
+        total_deduction += penalty
 
-    # Normalize to 0-100
-    return max(0, min(100, score))
+    # Issue #686: Use exponential decay instead of linear deduction
+    return calculate_exponential_score(total_deduction)
 
 
 def _calculate_redis_health_score(results: list) -> float:
     """
     Calculate Redis health score from optimization results.
 
-    (Issue #315 - extracted/refactored)
+    Issue #686: Uses exponential decay scoring to prevent score overflow.
+    Scores now degrade gracefully instead of immediately hitting 0.
 
     Args:
         results: List of Redis optimization findings
 
     Returns:
-        Health score from 0-100
+        Health score from 1-100
     """
-    score = 100.0
+    from src.code_intelligence.shared.scoring import (
+        calculate_exponential_score,
+    )
 
+    # Calculate weighted deduction
     severity_penalties = {
         OptimizationSeverity.INFO: 0.5,
         OptimizationSeverity.LOW: 1,
@@ -392,12 +401,13 @@ def _calculate_redis_health_score(results: list) -> float:
         OptimizationSeverity.CRITICAL: 8,
     }
 
+    total_deduction = 0.0
     for result in results:
         penalty = severity_penalties.get(result.severity, 1)
-        score -= penalty
+        total_deduction += penalty
 
-    # Normalize to 0-100
-    return max(0, min(100, score))
+    # Issue #686: Use exponential decay instead of linear deduction
+    return calculate_exponential_score(total_deduction)
 
 
 async def _validate_analysis_path(path: str) -> None:

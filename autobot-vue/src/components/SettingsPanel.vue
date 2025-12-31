@@ -3,12 +3,10 @@
 <div class="settings-panel">
   <h2>Settings</h2>
 
-  <!-- Tab Navigation -->
+  <!-- Tab Navigation (now using router-links) -->
   <SettingsTabNavigation
-    :activeTab="activeTab"
     :hasUnsavedChanges="hasUnsavedChanges"
     :tabs="tabs"
-    @tab-changed="activeTab = $event"
   />
 
   <div class="settings-content">
@@ -24,68 +22,22 @@
       <span>Backend offline - using cached settings</span>
     </div>
 
-    <!-- User Management Settings -->
-    <UserManagementSettings
-      v-if="activeTab === 'user'"
+    <!-- Router View for Settings Sub-routes -->
+    <router-view
+      v-if="isSettingsLoaded"
+      :settings="settings"
       :isSettingsLoaded="isSettingsLoaded"
-      @setting-changed="updateUserSetting"
-    />
-
-    <!-- Chat Settings -->
-    <ChatSettings
-      v-if="activeTab === 'chat'"
-      :chatSettings="settings.chat"
-      :isSettingsLoaded="isSettingsLoaded"
-      @setting-changed="updateChatSetting"
-    />
-
-    <!-- Backend Settings -->
-    <!-- Issue #156 Fix: Convert null to undefined for BackendSettings prop -->
-    <BackendSettings
-      v-if="activeTab === 'backend'"
-      :backendSettings="settings.backend || undefined"
-      :isSettingsLoaded="isSettingsLoaded"
-      :activeBackendSubTab="activeBackendSubTab"
       :healthStatus="healthStatus"
-      :currentLLMDisplay="getCurrentLLMDisplay()"
-      @subtab-changed="activeBackendSubTab = $event"
-      @setting-changed="updateBackendSetting"
-      @llm-setting-changed="updateLLMSetting"
-    />
-
-    <!-- UI Settings -->
-    <UISettings
-      v-if="activeTab === 'ui'"
-      :uiSettings="settings.ui"
-      :isSettingsLoaded="isSettingsLoaded"
-      @setting-changed="updateUISetting"
-    />
-
-    <!-- NPU Workers Settings -->
-    <NPUWorkersSettings
-      v-if="activeTab === 'npu-workers'"
-      :isSettingsLoaded="isSettingsLoaded"
-      @change="markAsChanged"
-    />
-
-    <!-- Logging Settings -->
-    <LoggingSettings
-      v-if="activeTab === 'logging'"
-      :loggingSettings="settings.logging"
-      :isSettingsLoaded="isSettingsLoaded"
-      @setting-changed="updateLoggingSetting"
-    />
-
-    <!-- Cache Settings -->
-    <CacheSettings
-      v-if="activeTab === 'cache'"
-      :isSettingsLoaded="isSettingsLoaded"
       :cacheConfig="cacheConfig"
       :cacheActivity="cacheActivity"
       :cacheStats="cacheStats"
       :isSaving="isSaving"
       :isClearing="isClearing"
       :cacheApiAvailable="cacheApiAvailable"
+      :activeBackendSubTab="activeBackendSubTab"
+      @setting-changed="handleSettingChanged"
+      @change="markAsChanged"
+      @subtab-changed="activeBackendSubTab = $event"
       @cache-config-changed="updateCacheConfig"
       @save-cache-config="saveCacheConfig"
       @refresh-cache-activity="refreshCacheActivity"
@@ -94,35 +46,12 @@
       @clear-redis-cache="clearRedisCache"
       @clear-cache-type="clearCacheType"
       @warmup-caches="warmupCaches"
-    />
-
-    <!-- Prompts Settings -->
-    <PromptsSettings
-      v-if="activeTab === 'prompts'"
-      :promptsSettings="settings.prompts"
-      :isSettingsLoaded="isSettingsLoaded"
       @prompt-selected="selectPrompt"
       @edited-content-changed="updatePromptEditedContent"
       @selected-prompt-cleared="clearSelectedPrompt"
       @load-prompts="loadPrompts"
       @save-prompt="savePrompt"
       @revert-prompt-to-default="revertPromptToDefault"
-    />
-
-    <!-- Developer Settings -->
-    <DeveloperSettings
-      v-if="activeTab === 'developer'"
-      :developerSettings="settings.developer"
-      :isSettingsLoaded="isSettingsLoaded"
-      @setting-changed="updateDeveloperSetting"
-      @rum-setting-changed="updateRUMSetting"
-    />
-
-    <!-- Services Settings -->
-    <ServicesSettings
-      v-if="activeTab === 'services'"
-      :isSettingsLoaded="isSettingsLoaded"
-      @change="markAsChanged"
     />
 
     <!-- Save Settings Button -->
@@ -142,7 +71,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, provide } from 'vue'
 import axios from 'axios'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -155,16 +84,6 @@ import { useToast } from '../composables/useToast'
 // Import sub-components
 import ErrorBoundary from './ErrorBoundary.vue'
 import SettingsTabNavigation from './settings/SettingsTabNavigation.vue'
-import UserManagementSettings from './settings/UserManagementSettings.vue'
-import ChatSettings from './settings/ChatSettings.vue'
-import BackendSettings from './settings/BackendSettings.vue'
-import UISettings from './settings/UISettings.vue'
-import NPUWorkersSettings from './settings/NPUWorkersSettings.vue'
-import LoggingSettings from './settings/LoggingSettings.vue'
-import CacheSettings from './settings/CacheSettings.vue'
-import PromptsSettings from './settings/PromptsSettings.vue'
-import DeveloperSettings from './settings/DeveloperSettings.vue'
-import ServicesSettings from './settings/ServicesSettings.vue'
 
 // Import services and types
 import cacheService from '../services/CacheService'
@@ -212,9 +131,9 @@ const tabs = ref<SettingsTab[]>([
   { id: 'cache', label: 'Cache' },
   { id: 'prompts', label: 'Prompts' },
   { id: 'services', label: 'Services' },
+  { id: 'infrastructure', label: 'Infrastructure' },
   { id: 'developer', label: 'Developer' }
 ])
-const activeTab = ref('backend')
 const activeBackendSubTab = ref('agents')
 
 // Cache state
@@ -233,6 +152,43 @@ const notify = (message: string, type: 'success' | 'error' | 'info') => {
 // Helper functions
 const markAsChanged = () => {
   hasUnsavedChanges.value = true
+}
+
+// Generic setting change handler that routes to appropriate update function
+const handleSettingChanged = (key: string, value: any) => {
+  const [category, ...rest] = key.split('.')
+  const subKey = rest.join('.')
+
+  switch (category) {
+    case 'chat':
+      updateChatSetting(subKey || key, value)
+      break
+    case 'user':
+      updateUserSetting(subKey || key, value)
+      break
+    case 'backend':
+      updateBackendSetting(subKey || key, value)
+      break
+    case 'ui':
+      updateUISetting(subKey || key, value)
+      break
+    case 'logging':
+      updateLoggingSetting(subKey || key, value)
+      break
+    case 'developer':
+      if (subKey.startsWith('rum.')) {
+        updateRUMSetting(subKey.replace('rum.', ''), value)
+      } else {
+        updateDeveloperSetting(subKey || key, value)
+      }
+      break
+    case 'llm':
+      updateLLMSetting(subKey || key, value)
+      break
+    default:
+      // For settings without category prefix
+      markAsChanged()
+  }
 }
 
 const updateChatSetting = (key: string, value: any) => {
@@ -399,6 +355,14 @@ const getCurrentLLMDisplay = (): string => {
     return `${provider.toUpperCase()}: ${model}`
   }
 }
+
+// Provide settings data for child components via router-view
+provide('settingsData', {
+  settings,
+  isSettingsLoaded,
+  healthStatus,
+  getCurrentLLMDisplay
+})
 
 // Add guard to prevent infinite loading loops
 let isLoadingSettings = false

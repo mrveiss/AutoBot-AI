@@ -633,6 +633,47 @@ async def _cleanup_knowledge_base_facts(request: Request, session_id: str) -> di
     return kb_cleanup_result
 
 
+async def _cleanup_conversation_transcript(session_id: str) -> dict:
+    """
+    Clean up conversation transcript file from data/conversation_transcripts/.
+
+    This removes the duplicate transcript storage used by ChatWorkflowManager.
+
+    Args:
+        session_id: Chat session ID being deleted
+
+    Returns:
+        Dict with cleanup result
+    """
+    import os
+    from pathlib import Path
+
+    result = {"transcript_deleted": False, "error": None}
+
+    try:
+        transcript_path = Path("data/conversation_transcripts") / f"{session_id}.json"
+
+        if transcript_path.exists():
+            os.remove(transcript_path)
+            result["transcript_deleted"] = True
+            logger.info("Deleted conversation transcript for session %s", session_id)
+        else:
+            logger.debug(
+                "No conversation transcript found for session %s (may not exist)",
+                session_id,
+            )
+
+    except Exception as e:
+        logger.warning(
+            "Failed to delete conversation transcript for session %s: %s",
+            session_id,
+            e,
+        )
+        result["error"] = str(e)
+
+    return result
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_session",
@@ -684,8 +725,12 @@ async def delete_session(
     # Issue #547: Clean up knowledge base facts created during this session
     kb_cleanup_result = await _cleanup_knowledge_base_facts(request, session_id)
 
+    # Clean up conversation transcript (duplicate storage from ChatWorkflowManager)
+    transcript_cleanup_result = await _cleanup_conversation_transcript(session_id)
+
     # Delete session from chat history
-    deleted = chat_history_manager.delete_session(session_id)
+    # FIX: delete_session is async - must await it
+    deleted = await chat_history_manager.delete_session(session_id)
 
     if not deleted:
         (
@@ -706,6 +751,7 @@ async def delete_session(
             "file_deletion_result": file_deletion_result,
             "terminal_cleanup_result": terminal_cleanup_result,
             "kb_cleanup_result": kb_cleanup_result,
+            "transcript_cleanup_result": transcript_cleanup_result,
         },
     )
 
@@ -716,6 +762,7 @@ async def delete_session(
             "file_handling": file_deletion_result,
             "terminal_cleanup": terminal_cleanup_result,
             "kb_cleanup": kb_cleanup_result,
+            "transcript_cleanup": transcript_cleanup_result,
         },
         message="Session deleted successfully",
         request_id=request_id,

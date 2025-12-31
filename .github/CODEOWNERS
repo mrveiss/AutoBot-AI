@@ -1,0 +1,37 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+#
+# CODEOWNERS - Defines code ownership for the repository
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# mrveiss is the SOLE OWNER and AUTHOR of all AutoBot code.
+# All pull requests require approval from mrveiss.
+
+# Global ownership - mrveiss owns ALL files in this repository
+* @mrveiss
+
+# Backend (Python)
+/backend/ @mrveiss
+/src/ @mrveiss
+/tests/ @mrveiss
+
+# Frontend (Vue.js/TypeScript)
+/autobot-vue/ @mrveiss
+
+# Infrastructure & Configuration
+/scripts/ @mrveiss
+/docker/ @mrveiss
+/.github/ @mrveiss
+
+# Documentation
+/docs/ @mrveiss
+*.md @mrveiss
+
+# MCP Tools
+/mcp-tools/ @mrveiss
+
+# Configuration files
+*.yml @mrveiss
+*.yaml @mrveiss
+*.json @mrveiss
+*.toml @mrveiss
