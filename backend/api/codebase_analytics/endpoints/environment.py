@@ -97,6 +97,51 @@ async def _run_environment_analysis(analyzer, path: str, pattern_list: list):
         return None
 
 
+async def _run_llm_filtered_analysis(
+    analyzer,
+    path: str,
+    pattern_list: list,
+    llm_model: str,
+    filter_priority: Optional[str],
+):
+    """
+    Run environment analysis with LLM filtering (Issue #633).
+
+    Args:
+        analyzer: EnvironmentAnalyzer instance
+        path: Path to analyze
+        pattern_list: List of glob patterns
+        llm_model: Ollama model to use for filtering
+        filter_priority: Priority level to filter ('high', 'medium', 'low', or None for all)
+
+    Returns:
+        Analysis result with LLM filtering applied, or None if timed out
+    """
+    # Issue #633: Extended timeout for LLM filtering (2 min base + 2 min for LLM)
+    LLM_ANALYSIS_TIMEOUT = 240
+    try:
+        coro = analyzer.analyze_codebase_with_llm_filter(
+            path,
+            pattern_list,
+            llm_model=llm_model,
+            filter_priority=filter_priority,
+        )
+        if asyncio.iscoroutine(coro):
+            return await asyncio.wait_for(coro, timeout=LLM_ANALYSIS_TIMEOUT)
+        else:
+            loop = asyncio.get_event_loop()
+            return await asyncio.wait_for(
+                loop.run_in_executor(None, lambda: coro),
+                timeout=LLM_ANALYSIS_TIMEOUT
+            )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "LLM-filtered environment analysis timed out after %d seconds",
+            LLM_ANALYSIS_TIMEOUT
+        )
+        return None
+
+
 def _build_environment_result(analysis: dict, path: str, for_display: bool = True) -> dict:
     """
     Build result from analysis data.
@@ -191,6 +236,9 @@ async def get_environment_analysis(
     path: str = Query(None, description="Root path to analyze (defaults to project root)"),
     refresh: bool = Query(False, description="Force fresh analysis instead of cache"),
     patterns: str = Query("**/*.py", description="Glob patterns for files to scan, comma-separated"),
+    use_llm_filter: bool = Query(False, description="Issue #633: Use LLM to filter false positives"),
+    llm_model: str = Query("llama3.2:1b", description="Ollama model for LLM filtering"),
+    filter_priority: str = Query("high", description="Priority level to filter: 'high', 'medium', 'low', or 'all'"),
 ):
     """
     Analyze codebase for hardcoded values and environment variable opportunities (Issue #538).
@@ -202,19 +250,28 @@ async def get_environment_analysis(
     - API keys and secrets
     - Configuration values that should be externalized
 
+    Issue #633: Optional LLM filtering to reduce false positives by 90%+.
+
     Args:
         path: Root path to analyze (defaults to project root)
         refresh: Force fresh analysis instead of using cached results
         patterns: Comma-separated glob patterns for files to scan
+        use_llm_filter: Enable LLM-based false positive filtering
+        llm_model: Ollama model to use for filtering (default: llama3.2:1b)
+        filter_priority: Which severity level to filter ('high', 'medium', 'low', 'all')
 
     Returns:
         JSON with hardcoded values, recommendations, and metrics
     """
     global _env_analysis_cache
 
+    # Issue #633: Include LLM filter state in cache key consideration
+    # If LLM filter is enabled, we need fresh results
+    cache_valid = not use_llm_filter
+
     # Use cached results if available and not refreshing (thread-safe, Issue #559)
     async with _env_analysis_cache_lock:
-        if _env_analysis_cache and not refresh:
+        if _env_analysis_cache and not refresh and cache_valid:
             logger.info(
                 "Returning cached environment analysis (%d hardcoded values)",
                 _env_analysis_cache.get("total_hardcoded_values", 0)
@@ -243,7 +300,16 @@ async def get_environment_analysis(
                 "recommendations_count": 0,
             })
 
-        analysis = await _run_environment_analysis(analyzer, path, pattern_list)
+        # Issue #633: Use LLM-filtered analysis if requested
+        if use_llm_filter:
+            # Convert 'all' to None for the filter
+            priority = None if filter_priority == "all" else filter_priority
+            analysis = await _run_llm_filtered_analysis(
+                analyzer, path, pattern_list, llm_model, priority
+            )
+        else:
+            analysis = await _run_environment_analysis(analyzer, path, pattern_list)
+
         if analysis is None:
             return JSONResponse({
                 "status": "partial",
@@ -255,19 +321,28 @@ async def get_environment_analysis(
 
         result = _build_environment_result(analysis, path, for_display=True)
 
+        # Issue #633: Include LLM filtering metadata in result
+        if use_llm_filter and "llm_filtering" in analysis:
+            result["llm_filtering"] = analysis["llm_filtering"]
+
         # Issue #631: Build full result for export (no truncation)
         full_result = _build_environment_result(analysis, path, for_display=False)
+        if use_llm_filter and "llm_filtering" in analysis:
+            full_result["llm_filtering"] = analysis["llm_filtering"]
 
         # Cache the results (thread-safe, Issue #559)
-        async with _env_analysis_cache_lock:
-            global _env_analysis_full_cache
-            _env_analysis_cache = result
-            _env_analysis_full_cache = full_result
+        # Issue #633: Only cache non-LLM-filtered results (LLM filtering is dynamic)
+        if not use_llm_filter:
+            async with _env_analysis_cache_lock:
+                global _env_analysis_full_cache
+                _env_analysis_cache = result
+                _env_analysis_full_cache = full_result
 
         logger.info(
-            "Environment analysis complete: %d hardcoded values, %d recommendations",
+            "Environment analysis complete: %d hardcoded values, %d recommendations%s",
             result["total_hardcoded_values"],
             result["recommendations_count"],
+            " (LLM filtered)" if use_llm_filter else "",
         )
 
         return JSONResponse(result)

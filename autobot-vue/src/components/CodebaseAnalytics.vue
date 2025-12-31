@@ -2149,9 +2149,40 @@
           </div>
         </h3>
 
+        <!-- Issue #633: AI Filtering Toggle -->
+        <div class="ai-filter-controls" style="margin-bottom: 15px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 6px; display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+          <label class="toggle-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input
+              type="checkbox"
+              v-model="useAiFiltering"
+              style="width: 18px; height: 18px; cursor: pointer;"
+            />
+            <span style="font-weight: 500;">
+              <i class="fas fa-robot"></i> Use AI Filtering
+            </span>
+          </label>
+          <span v-if="useAiFiltering" class="ai-filter-options" style="display: flex; align-items: center; gap: 10px;">
+            <select v-model="aiFilteringPriority" style="padding: 4px 8px; border-radius: 4px; background: #2a2a2a; color: #fff; border: 1px solid #444;">
+              <option value="high">High Priority Only</option>
+              <option value="medium">Medium Priority</option>
+              <option value="low">Low Priority</option>
+              <option value="all">All Priorities</option>
+            </select>
+            <span style="font-size: 0.85em; color: #888;">
+              Model: {{ aiFilteringModel }}
+            </span>
+          </span>
+          <span v-if="llmFilteringResult" class="llm-result-badge" style="font-size: 0.85em; padding: 4px 10px; background: #2e7d32; color: #fff; border-radius: 12px;">
+            <i class="fas fa-check-circle"></i>
+            {{ llmFilteringResult.original_count }} → {{ llmFilteringResult.filtered_count }}
+            ({{ llmFilteringResult.reduction_percent }}% reduced)
+          </span>
+        </div>
+
         <!-- Loading State -->
         <div v-if="loadingEnvAnalysis" class="loading-state">
-          <i class="fas fa-spinner fa-spin"></i> Scanning for hardcoded values...
+          <i class="fas fa-spinner fa-spin"></i>
+          {{ useAiFiltering ? 'Scanning with AI filtering...' : 'Scanning for hardcoded values...' }}
         </div>
 
         <!-- Error State -->
@@ -3220,6 +3251,19 @@ interface EnvironmentAnalysisResult {
 const environmentAnalysis = ref<EnvironmentAnalysisResult | null>(null)
 const loadingEnvAnalysis = ref(false)
 const envAnalysisError = ref('')
+
+// Issue #633: AI filtering toggle state
+const useAiFiltering = ref(false)
+const aiFilteringModel = ref('llama3.2:1b')
+const aiFilteringPriority = ref('high')
+const llmFilteringResult = ref<{
+  enabled: boolean
+  model: string
+  original_count: number
+  filtered_count: number
+  reduction_percent: number
+  filter_priority: string | null
+} | null>(null)
 
 // Issue #248: Code Ownership and Expertise Map data
 interface OwnershipContributor {
@@ -4365,13 +4409,22 @@ const getSeverityClass = (severity: string): string => {
 }
 
 // Issue #538: Load environment analysis from codebase analytics
+// Issue #633: Added AI filtering support with LLM-based false positive reduction
 const loadEnvironmentAnalysis = async () => {
   if (!rootPath.value) return
   loadingEnvAnalysis.value = true
   envAnalysisError.value = ''
+  llmFilteringResult.value = null
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/analytics/codebase/env-analysis?path=${encodeURIComponent(rootPath.value)}`, {
+    // Issue #633: Build URL with optional AI filtering parameters
+    let url = `${backendUrl}/api/analytics/codebase/env-analysis?path=${encodeURIComponent(rootPath.value)}`
+    if (useAiFiltering.value) {
+      url += `&use_llm_filter=true`
+      url += `&llm_model=${encodeURIComponent(aiFilteringModel.value)}`
+      url += `&filter_priority=${encodeURIComponent(aiFilteringPriority.value)}`
+    }
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -4391,6 +4444,11 @@ const loadEnvironmentAnalysis = async () => {
         analysis_time_seconds: data.analysis_time_seconds || 0,
         hardcoded_values: data.hardcoded_values || [],
         recommendations: data.recommendations || []
+      }
+      // Issue #633: Store LLM filtering result if present
+      if (data.llm_filtering) {
+        llmFilteringResult.value = data.llm_filtering
+        logger.info('LLM filtering applied:', data.llm_filtering)
       }
     } else if (data.status === 'no_data') {
       // Issue #543: Handle no_data status from backend
