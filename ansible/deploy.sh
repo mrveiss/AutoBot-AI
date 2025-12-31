@@ -317,14 +317,54 @@ restart_services() {
 # Rollback functionality
 rollback_deployment() {
     log "INFO" "🔙 Rolling back deployment..."
-    
+
     # Stop current services
     stop_services
-    
+
     # Run rollback playbook
     run_playbook "rollback.yml" "Deployment rollback"
-    
+
     success "Rollback completed"
+}
+
+# Dependency patching - Issue #682
+# oVirt-style rolling updates for Python dependencies
+patch_dependencies() {
+    local dry_run="${1:-false}"
+    local extra_args=""
+
+    log "INFO" "🔧 Starting dependency patching (rolling updates)..."
+    log "INFO" "Mode: $([ "$dry_run" = "true" ] && echo "DRY RUN" || echo "LIVE UPDATE")"
+
+    if [[ "$dry_run" == "true" ]]; then
+        extra_args="-e dry_run=true --check"
+    else
+        extra_args="-e auto_confirm=true"
+    fi
+
+    run_playbook "patch-dependencies.yml" "Dependency patching (CVE remediation)" "$extra_args"
+
+    if [[ "$dry_run" != "true" ]]; then
+        log "INFO" "Running pip-audit to verify CVE remediation..."
+        # Verify on backend (primary Python service)
+        ansible backend -i "$INVENTORY_FILE" -m shell -a "source /opt/autobot/venv/bin/activate && pip-audit 2>/dev/null | head -20" --become || true
+    fi
+
+    success "Dependency patching completed"
+}
+
+# Rollback dependencies - Issue #682
+rollback_dependencies() {
+    log "INFO" "🔙 Rolling back dependencies to last backup..."
+
+    # Use dedicated rollback playbook (targets Python hosts only: backend, ai_stack, npu_workers)
+    run_playbook "rollback-dependencies.yml" "Dependency rollback" "-e auto_confirm=true"
+
+    # Verify health after rollback
+    log "INFO" "Verifying service health after rollback..."
+    health_check
+
+    success "Dependency rollback completed"
 }
 
 # Health check
@@ -348,10 +388,13 @@ OPTIONS:
   --services          Deploy AutoBot services only
   --data-migration    Migrate data from Docker/existing system
   --start             Start AutoBot services
-  --stop              Stop AutoBot services  
+  --stop              Stop AutoBot services
   --restart           Restart AutoBot services
   --health-check      Validate all services are healthy
   --rollback          Rollback to previous version
+  --patch-dependencies  Update Python dependencies with CVE fixes (rolling update)
+  --patch-dependencies-check  Dry run - preview dependency updates
+  --rollback-dependencies  Rollback dependencies to last backup
   --test-connectivity Test SSH connectivity to all VMs
   --install-reqs      Install Ansible requirements
   --validate          Validate deployment configuration
@@ -458,6 +501,21 @@ main() {
                 check_prerequisites
                 test_connectivity
                 rollback_deployment
+                ;;
+            --patch-dependencies)
+                check_prerequisites
+                test_connectivity
+                patch_dependencies false
+                ;;
+            --patch-dependencies-check)
+                check_prerequisites
+                test_connectivity
+                patch_dependencies true
+                ;;
+            --rollback-dependencies)
+                check_prerequisites
+                test_connectivity
+                rollback_dependencies
                 ;;
             --test-connectivity)
                 check_prerequisites
