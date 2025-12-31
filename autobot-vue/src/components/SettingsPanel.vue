@@ -129,6 +129,7 @@ const tabs = ref<SettingsTab[]>([
   { id: 'npu-workers', label: 'NPU Workers' },
   { id: 'logging', label: 'Logging' },
   { id: 'cache', label: 'Cache' },
+  { id: 'data-storage', label: 'Data Storage' },
   { id: 'prompts', label: 'Prompts' },
   { id: 'services', label: 'Services' },
   { id: 'infrastructure', label: 'Infrastructure' },

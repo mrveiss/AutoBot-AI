@@ -489,6 +489,15 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'data-storage',
+        name: 'settings-data-storage',
+        component: () => import('@/components/settings/DataStorageSettings.vue'),
+        meta: {
+          title: 'Data Storage',
+          parent: 'settings'
+        }
+      },
+      {
         path: 'prompts',
         name: 'settings-prompts',
         component: () => import('@/components/settings/PromptsSettings.vue'),

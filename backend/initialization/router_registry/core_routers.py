@@ -39,6 +39,7 @@ from backend.api.prompts import router as prompts_router
 from backend.api.redis import router as redis_router
 from backend.api.sequential_thinking_mcp import router as sequential_thinking_mcp_router
 from backend.api.settings import router as settings_router
+from backend.api.data_storage import router as data_storage_router
 from backend.api.structured_thinking_mcp import router as structured_thinking_mcp_router
 from backend.api.system import router as system_router
 from backend.api.vnc_manager import router as vnc_router
@@ -54,6 +55,7 @@ def _get_system_routers() -> list:
         (chat_router, "", ["chat"], "chat"),
         (system_router, "/system", ["system"], "system"),
         (settings_router, "/settings", ["settings"], "settings"),
+        (data_storage_router, "", ["data-storage"], "data_storage"),
         (prompts_router, "/prompts", ["prompts"], "prompts"),
         (frontend_config_router, "", ["frontend-config"], "frontend_config"),
     ]
