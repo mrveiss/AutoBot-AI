@@ -41,6 +41,12 @@ service_definitions:
     health_port: 6379
     has_python_venv: false
 
+  browser:
+    service_name: "autobot-playwright"
+    health_endpoint: "/health"
+    health_port: 3000
+    has_python_venv: false  # Playwright uses Node.js
+
 # Update order - defines the sequence for rolling updates
 # Based on service dependencies: Database -> Backend -> AI -> Frontend -> Browser
 update_order:
@@ -49,6 +55,7 @@ update_order:
   - ai_stack
   - npu_workers
   - frontend
+  - browser
 
 # CVE reference mapping for audit trail
 cve_references:

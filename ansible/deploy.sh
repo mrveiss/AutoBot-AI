@@ -367,6 +367,52 @@ rollback_dependencies() {
     success "Dependency rollback completed"
 }
 
+# System package patching - Issue #682
+# oVirt-style rolling updates for apt packages
+patch_system() {
+    local dry_run="${1:-false}"
+    local security_only="${2:-false}"
+    local reboot="${3:-false}"
+    local extra_args=""
+
+    log "INFO" "🔧 Starting system package patching (rolling updates)..."
+    log "INFO" "Mode: $([ "$dry_run" = "true" ] && echo "DRY RUN" || echo "LIVE UPDATE")"
+    log "INFO" "Security only: $security_only"
+    log "INFO" "Reboot if required: $reboot"
+
+    extra_args="-e auto_confirm=true"
+
+    if [[ "$dry_run" == "true" ]]; then
+        extra_args="$extra_args --check"
+    fi
+
+    if [[ "$security_only" == "true" ]]; then
+        extra_args="$extra_args -e security_only=true"
+    fi
+
+    if [[ "$reboot" == "true" ]]; then
+        extra_args="$extra_args -e reboot_if_required=true"
+    fi
+
+    run_playbook "patch-system-packages.yml" "System package patching (apt updates)" "$extra_args"
+
+    success "System package patching completed"
+}
+
+# Rollback system packages - Issue #682
+rollback_system() {
+    log "INFO" "🔙 Rolling back system packages..."
+
+    # Use dedicated rollback playbook
+    run_playbook "rollback-system-packages.yml" "System package rollback" "-e auto_confirm=true"
+
+    # Verify health after rollback
+    log "INFO" "Verifying service health after rollback..."
+    health_check
+
+    success "System package rollback completed"
+}
+
 # Health check
 health_check() {
     log "INFO" "🏥 Running health checks..."
@@ -392,9 +438,19 @@ OPTIONS:
   --restart           Restart AutoBot services
   --health-check      Validate all services are healthy
   --rollback          Rollback to previous version
-  --patch-dependencies  Update Python dependencies with CVE fixes (rolling update)
+
+  Dependency Patching (Issue #682):
+  --patch-dependencies        Update Python dependencies with CVE fixes (rolling update)
   --patch-dependencies-check  Dry run - preview dependency updates
-  --rollback-dependencies  Rollback dependencies to last backup
+  --rollback-dependencies     Rollback dependencies to last backup
+
+  System Package Updates (Issue #682):
+  --patch-system              Update all system packages (apt upgrade)
+  --patch-system-check        Dry run - preview system updates
+  --patch-system-security     Security updates only (apt security upgrades)
+  --patch-system-reboot       Update and reboot if required (kernel updates)
+  --rollback-system           Rollback system packages (restore services)
+
   --test-connectivity Test SSH connectivity to all VMs
   --install-reqs      Install Ansible requirements
   --validate          Validate deployment configuration
@@ -516,6 +572,31 @@ main() {
                 check_prerequisites
                 test_connectivity
                 rollback_dependencies
+                ;;
+            --patch-system)
+                check_prerequisites
+                test_connectivity
+                patch_system false false false
+                ;;
+            --patch-system-check)
+                check_prerequisites
+                test_connectivity
+                patch_system true false false
+                ;;
+            --patch-system-security)
+                check_prerequisites
+                test_connectivity
+                patch_system false true false
+                ;;
+            --patch-system-reboot)
+                check_prerequisites
+                test_connectivity
+                patch_system false false true
+                ;;
+            --rollback-system)
+                check_prerequisites
+                test_connectivity
+                rollback_system
                 ;;
             --test-connectivity)
                 check_prerequisites

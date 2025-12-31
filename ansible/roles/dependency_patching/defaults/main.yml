@@ -51,3 +51,8 @@ python_security_updates:
 # Service restart after update
 restart_service_after_update: true
 service_restart_delay: 5  # seconds to wait after restart before health check
+
+# System package (apt) update settings
+security_only: false  # Only apply security updates
+reboot_if_required: false  # Reboot automatically if kernel updated
+system_update_timeout: 600  # seconds for apt upgrade to complete
