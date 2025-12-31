@@ -35,7 +35,7 @@
         <div class="message-header">
           <div class="flex items-center gap-1.5">
             <div class="message-avatar" :class="getAvatarClass(message.sender)">
-              <i :class="getSenderIcon(message.sender)" aria-hidden="true"></i>
+              <i :class="getSenderIcon(message.sender, message.type || message.metadata?.display_type)" aria-hidden="true"></i>
             </div>
             <div class="message-info">
               <span class="sender-name">
@@ -623,6 +623,12 @@ const getMessageWrapperClass = (message: ChatMessage): string => {
   const classes = ['message']
   classes.push(`${message.sender}-message`)
 
+  // Add message type class for type-specific styling
+  const messageType = message.type || message.metadata?.display_type
+  if (messageType && messageType !== 'response' && messageType !== 'message') {
+    classes.push(`type-${messageType}`)
+  }
+
   if (message.status === 'error') classes.push('error')
   if (message.status === 'sending') classes.push('sending')
 
@@ -633,8 +639,24 @@ const getAvatarClass = (sender: string): string => {
   return `message-avatar ${sender}`
 }
 
-const getSenderIcon = (sender: string): string => {
-  const icons = {
+const getSenderIcon = (sender: string, messageType?: string): string => {
+  // Type-specific icons take precedence over sender icons
+  if (messageType) {
+    const typeIcons: Record<string, string> = {
+      thought: 'fas fa-brain',
+      planning: 'fas fa-list-check',
+      debug: 'fas fa-bug',
+      utility: 'fas fa-wrench',
+      sources: 'fas fa-book-open',
+      command_approval_request: 'fas fa-shield-halved',
+      terminal_output: 'fas fa-terminal',
+      llm_response: 'fas fa-robot',
+      llm_response_chunk: 'fas fa-robot'
+    }
+    if (typeIcons[messageType]) return typeIcons[messageType]
+  }
+
+  const icons: Record<string, string> = {
     user: 'fas fa-user',
     assistant: 'fas fa-robot',
     system: 'fas fa-cog',
@@ -644,7 +666,7 @@ const getSenderIcon = (sender: string): string => {
     'tool-output': 'fas fa-terminal'
   }
 
-  return icons[sender as keyof typeof icons] || 'fas fa-comment'
+  return icons[sender] || 'fas fa-comment'
 }
 
 const getSenderName = (sender: string): string => {
@@ -1181,7 +1203,7 @@ onMounted(() => {
 
 <style scoped>
 .message-wrapper {
-  @apply rounded-lg shadow-sm border transition-all duration-200;
+  @apply rounded-lg shadow-sm border transition-all duration-200 relative;
   max-width: 85%;
   padding: 6px 10px;
 }
@@ -1228,6 +1250,201 @@ onMounted(() => {
   @apply bg-gray-50 border-gray-200 mx-auto text-gray-700;
   max-width: 70%;
   border-radius: 12px;
+}
+
+/* ============================================
+   MESSAGE TYPE STYLING
+   Different visual styles for message types:
+   - thought: Purple theme (AI reasoning)
+   - planning: Indigo theme (task planning)
+   - debug: Orange theme (debug output)
+   - utility: Slate theme (tool/utility output)
+   - sources: Teal theme (source references)
+   ============================================ */
+
+/* THOUGHT MESSAGES - Purple theme for AI reasoning */
+.message-wrapper.type-thought {
+  @apply bg-purple-50 border-purple-300 text-purple-900;
+  border-left: 4px solid theme('colors.purple.500');
+}
+
+.message-wrapper.type-thought .message-avatar {
+  @apply bg-purple-600;
+}
+
+.message-wrapper.type-thought .sender-name {
+  @apply text-purple-800;
+}
+
+.message-wrapper.type-thought .message-time {
+  @apply text-purple-600;
+}
+
+.message-wrapper.type-thought::before {
+  content: '';
+  @apply absolute top-2 right-2 w-2 h-2 rounded-full bg-purple-400;
+}
+
+/* PLANNING MESSAGES - Indigo theme for task planning */
+.message-wrapper.type-planning {
+  @apply bg-indigo-50 border-indigo-300 text-indigo-900;
+  border-left: 4px solid theme('colors.indigo.500');
+}
+
+.message-wrapper.type-planning .message-avatar {
+  @apply bg-indigo-600;
+}
+
+.message-wrapper.type-planning .sender-name {
+  @apply text-indigo-800;
+}
+
+.message-wrapper.type-planning .message-time {
+  @apply text-indigo-600;
+}
+
+/* DEBUG MESSAGES - Orange/Amber theme for debug output */
+.message-wrapper.type-debug {
+  @apply bg-amber-50 border-amber-300 text-amber-900;
+  border-left: 4px solid theme('colors.amber.500');
+}
+
+.message-wrapper.type-debug .message-avatar {
+  @apply bg-amber-600;
+}
+
+.message-wrapper.type-debug .sender-name {
+  @apply text-amber-800;
+}
+
+.message-wrapper.type-debug .message-time {
+  @apply text-amber-600;
+}
+
+.message-wrapper.type-debug .message-text {
+  @apply font-mono text-xs;
+}
+
+/* UTILITY MESSAGES - Slate theme for tool/utility output */
+.message-wrapper.type-utility {
+  @apply bg-slate-100 border-slate-300 text-slate-800;
+  border-left: 4px solid theme('colors.slate.500');
+}
+
+.message-wrapper.type-utility .message-avatar {
+  @apply bg-slate-600;
+}
+
+.message-wrapper.type-utility .sender-name {
+  @apply text-slate-700;
+}
+
+.message-wrapper.type-utility .message-time {
+  @apply text-slate-500;
+}
+
+/* SOURCES MESSAGES - Teal theme for source references */
+.message-wrapper.type-sources {
+  @apply bg-teal-50 border-teal-300 text-teal-900;
+  border-left: 4px solid theme('colors.teal.500');
+}
+
+.message-wrapper.type-sources .message-avatar {
+  @apply bg-teal-600;
+}
+
+.message-wrapper.type-sources .sender-name {
+  @apply text-teal-800;
+}
+
+.message-wrapper.type-sources .message-time {
+  @apply text-teal-600;
+}
+
+/* JSON MESSAGES - Cyan theme for structured data */
+.message-wrapper.type-json {
+  @apply bg-cyan-50 border-cyan-300 text-cyan-900;
+  border-left: 4px solid theme('colors.cyan.500');
+}
+
+.message-wrapper.type-json .message-avatar {
+  @apply bg-cyan-600;
+}
+
+.message-wrapper.type-json .message-text {
+  @apply font-mono text-xs;
+}
+
+/* TERMINAL OUTPUT MESSAGES - Dark theme for terminal output */
+.message-wrapper.type-terminal_output {
+  @apply bg-gray-900 border-gray-700 text-gray-100;
+  border-left: 4px solid theme('colors.green.500');
+}
+
+.message-wrapper.type-terminal_output .message-avatar {
+  @apply bg-green-600;
+}
+
+.message-wrapper.type-terminal_output .sender-name {
+  @apply text-green-400;
+}
+
+.message-wrapper.type-terminal_output .message-time {
+  @apply text-gray-400;
+}
+
+.message-wrapper.type-terminal_output .message-text {
+  @apply font-mono text-sm leading-relaxed whitespace-pre-wrap;
+  color: #d4d4d4;
+}
+
+.message-wrapper.type-terminal_output .message-content {
+  @apply text-gray-100;
+}
+
+/* COMMAND APPROVAL REQUEST - Yellow/Warning theme */
+.message-wrapper.type-command_approval_request {
+  @apply bg-yellow-50 border-yellow-400 text-yellow-900;
+  border-left: 4px solid theme('colors.yellow.500');
+}
+
+.message-wrapper.type-command_approval_request .message-avatar {
+  @apply bg-yellow-600;
+}
+
+/* Message type indicator badge */
+.message-wrapper[class*="type-"]::after {
+  @apply absolute top-1 right-1 px-1.5 py-0.5 text-xs font-medium rounded-full opacity-75;
+}
+
+.message-wrapper.type-thought::after {
+  content: 'Thought';
+  @apply bg-purple-200 text-purple-800;
+}
+
+.message-wrapper.type-planning::after {
+  content: 'Planning';
+  @apply bg-indigo-200 text-indigo-800;
+}
+
+.message-wrapper.type-debug::after {
+  content: 'Debug';
+  @apply bg-amber-200 text-amber-800;
+}
+
+.message-wrapper.type-utility::after {
+  content: 'Utility';
+  @apply bg-slate-200 text-slate-800;
+}
+
+.message-wrapper.type-sources::after {
+  content: 'Sources';
+  @apply bg-teal-200 text-teal-800;
+}
+
+.message-wrapper.type-terminal_output::after {
+  content: 'Terminal';
+  @apply bg-gray-700 text-green-400;
 }
 
 .message-wrapper.error {

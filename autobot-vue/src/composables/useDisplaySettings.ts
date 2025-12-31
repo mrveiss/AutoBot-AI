@@ -19,10 +19,10 @@ export interface DisplaySettings {
 const getDefaultSettings = (): DisplaySettings => ({
   showThoughts: true,
   showJson: true,
-  showUtility: false,
+  showUtility: true,  // Changed: Show utility messages by default to prevent disappearing messages
   showPlanning: true, // Issue #352: Enable by default for multi-step task visibility
-  showDebug: false,
-  showSources: false,
+  showDebug: false,   // Keep debug hidden by default (verbose)
+  showSources: true,  // Changed: Show sources by default for transparency
   autoScroll: true
 })
 
