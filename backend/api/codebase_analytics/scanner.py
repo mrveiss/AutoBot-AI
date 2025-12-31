@@ -165,27 +165,8 @@ _FILE_HASH_CHUNK_SIZE = 65536
 
 # =============================================================================
 # Batch Embedding Functions (Issue #660: Pre-computed Embeddings)
+# Issue #681: NPU Worker Integration for Hardware-Accelerated Embeddings
 # =============================================================================
-
-# Lazy import to avoid circular dependencies
-_semantic_chunker = None
-_embedding_model_lock = asyncio.Lock()
-
-
-async def _get_semantic_chunker():
-    """Get or initialize the semantic chunker singleton (Issue #660)."""
-    global _semantic_chunker
-    async with _embedding_model_lock:
-        if _semantic_chunker is None:
-            try:
-                from src.utils.semantic_chunker import get_semantic_chunker
-                _semantic_chunker = get_semantic_chunker()
-                await _semantic_chunker._initialize_model()
-                logger.info("Initialized semantic chunker for batch embeddings")
-            except Exception as e:
-                logger.warning("Failed to initialize semantic chunker: %s", e)
-                return None
-        return _semantic_chunker
 
 
 async def _generate_batch_embeddings(
@@ -193,67 +174,131 @@ async def _generate_batch_embeddings(
     batch_size: int = EMBEDDING_BATCH_SIZE,
 ) -> List[List[float]]:
     """
-    Generate embeddings for documents in batches using GPU/NPU acceleration.
+    Generate embeddings for documents in batches using NPU/GPU acceleration.
 
     Issue #660: Pre-computes embeddings before ChromaDB insert for 5-10x speedup.
-    ChromaDB's default embedding function processes documents sequentially,
-    while this function uses optimized batch processing with GPU/NPU.
+    Issue #681: Uses NPU worker for hardware-accelerated embedding generation.
+               Falls back to local semantic chunker if NPU unavailable.
+
+    Priority order:
+    1. NPU Worker (GPU.1 - RTX 4070) - fastest, uses nomic-embed-text
+    2. Local semantic chunker (all-MiniLM-L6-v2) - fallback
 
     Args:
         documents: List of document strings to embed
         batch_size: Number of documents to process per batch (default: 100)
 
     Returns:
-        List of embedding vectors (384 dimensions for MiniLM-L6-v2)
+        List of embedding vectors
     """
     if not documents:
         return []
 
-    chunker = await _get_semantic_chunker()
-    if chunker is None:
-        logger.warning("Semantic chunker unavailable, returning empty embeddings")
+    logger.info(
+        "Generating embeddings for %d documents (batch_size=%d, mode=%s)",
+        len(documents), batch_size, CHROMADB_EMBEDDING_MODE
+    )
+
+    # Issue #681: Use NPU-accelerated embeddings with automatic fallback
+    try:
+        from backend.api.codebase_analytics.npu_embeddings import (
+            generate_codebase_embeddings_batch,
+        )
+
+        embeddings = await generate_codebase_embeddings_batch(
+            documents, batch_size=batch_size
+        )
+
+        if embeddings and len(embeddings) == len(documents):
+            return embeddings
+
+        logger.warning(
+            "NPU embeddings returned incomplete results: %d/%d",
+            len(embeddings) if embeddings else 0,
+            len(documents),
+        )
+
+    except ImportError as e:
+        logger.warning("NPU embeddings module not available: %s", e)
+    except Exception as e:
+        logger.warning("NPU embeddings failed, using fallback: %s", e)
+
+    # Fallback to original semantic chunker implementation
+    return await _generate_batch_embeddings_fallback(documents, batch_size)
+
+
+async def _generate_batch_embeddings_fallback(
+    documents: List[str],
+    batch_size: int = EMBEDDING_BATCH_SIZE,
+) -> List[List[float]]:
+    """
+    Generate embeddings using local semantic chunker (fallback).
+
+    Issue #681: Original implementation preserved as fallback when
+    NPU worker is unavailable or fails.
+
+    Args:
+        documents: List of document strings to embed
+        batch_size: Number of documents to process per batch
+
+    Returns:
+        List of embedding vectors (384 dimensions for MiniLM-L6-v2)
+    """
+    from src.utils.semantic_chunker import get_semantic_chunker
+
+    try:
+        chunker = get_semantic_chunker()
+        await chunker._initialize_model()
+    except Exception as e:
+        logger.warning("Semantic chunker unavailable: %s", e)
         return []
 
     all_embeddings = []
     total_docs = len(documents)
 
-    logger.info(
-        "Generating embeddings for %d documents (batch_size=%d, mode=%s)",
-        total_docs, batch_size, CHROMADB_EMBEDDING_MODE
-    )
-
     start_time = asyncio.get_running_loop().time()
 
     for i in range(0, total_docs, batch_size):
-        batch_docs = documents[i:i + batch_size]
+        batch_docs = documents[i : i + batch_size]
 
         try:
             # Use async batch embedding method
-            batch_embeddings = await chunker._compute_sentence_embeddings_async(batch_docs)
+            batch_embeddings = await chunker._compute_sentence_embeddings_async(
+                batch_docs
+            )
 
             # Convert numpy arrays to lists for ChromaDB
             for emb in batch_embeddings:
-                all_embeddings.append(emb.tolist() if hasattr(emb, 'tolist') else list(emb))
+                all_embeddings.append(
+                    emb.tolist() if hasattr(emb, "tolist") else list(emb)
+                )
 
             # Log progress for large batches
             if total_docs > 100 and (i + batch_size) % (batch_size * 5) == 0:
                 progress = min(100, int((i + batch_size) / total_docs * 100))
-                logger.info("Embedding progress: %d%% (%d/%d)", progress, i + batch_size, total_docs)
+                logger.info(
+                    "Fallback embedding progress: %d%% (%d/%d)",
+                    progress,
+                    i + batch_size,
+                    total_docs,
+                )
 
             # Yield to event loop periodically
             if i % (batch_size * 2) == 0:
                 await asyncio.sleep(0)
 
         except Exception as e:
-            logger.error("Batch embedding failed at index %d: %s", i, e)
+            logger.error("Fallback batch embedding failed at index %d: %s", i, e)
             # Fill with empty embeddings for failed batch
             for _ in batch_docs:
                 all_embeddings.append([0.0] * 384)  # MiniLM-L6-v2 dimension
 
     elapsed = asyncio.get_running_loop().time() - start_time
     logger.info(
-        "Generated %d embeddings in %.2fs (%.1f docs/sec)",
-        len(all_embeddings), elapsed, total_docs / elapsed if elapsed > 0 else 0
+        "Generated %d fallback embeddings in %.2fs (%.1f docs/sec)",
+        len(all_embeddings),
+        elapsed,
+        total_docs / elapsed if elapsed > 0 else 0,
     )
 
     return all_embeddings

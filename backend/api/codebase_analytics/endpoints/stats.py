@@ -340,6 +340,100 @@ async def _fetch_problems_from_redis(problem_type: Optional[str]) -> tuple:
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
+    operation="get_embedding_stats",
+    error_code_prefix="CODEBASE",
+)
+@router.get("/embedding-stats")
+async def get_embedding_stats() -> JSONResponse:
+    """
+    Get NPU embedding generation statistics.
+
+    Issue #681: Provides visibility into NPU vs fallback embedding usage
+    for codebase indexing. Shows throughput, timing, and error metrics.
+
+    Returns:
+        JSONResponse with embedding statistics including:
+        - total_embeddings: Total embeddings generated
+        - npu_embeddings: Count generated via NPU worker
+        - fallback_embeddings: Count generated via local model
+        - npu_percentage: Percentage using NPU acceleration
+        - timing metrics (total, npu, fallback)
+        - error count
+    """
+    try:
+        from ..npu_embeddings import get_embedding_stats as get_npu_stats
+
+        stats = get_npu_stats()
+        total = stats.get("total_embeddings", 0)
+        npu_count = stats.get("npu_embeddings", 0)
+
+        # Determine NPU availability based on actual usage:
+        # - None if no embeddings generated yet (unknown status)
+        # - True if NPU was used for any embeddings
+        # - False if only fallback was used
+        npu_available = None if total == 0 else npu_count > 0
+
+        return JSONResponse({
+            "status": "success",
+            "embedding_stats": stats,
+            "npu_available": npu_available,
+        })
+    except ImportError as e:
+        logger.warning("NPU embeddings module not available: %s", e)
+        return JSONResponse({
+            "status": "unavailable",
+            "message": "NPU embeddings module not loaded",
+            "embedding_stats": None,
+        })
+    except Exception as e:
+        logger.error("Failed to get embedding stats: %s", e)
+        return JSONResponse({
+            "status": "error",
+            "message": str(e),
+            "embedding_stats": None,
+        })
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reset_embedding_stats",
+    error_code_prefix="CODEBASE",
+)
+@router.post("/embedding-stats/reset")
+async def reset_embedding_stats_endpoint() -> JSONResponse:
+    """
+    Reset NPU embedding statistics.
+
+    Issue #681: Allows clearing metrics for benchmarking or after
+    configuration changes.
+
+    Returns:
+        JSONResponse confirming reset.
+    """
+    try:
+        from ..npu_embeddings import reset_embedding_stats
+
+        await reset_embedding_stats()
+        return JSONResponse({
+            "status": "success",
+            "message": "Embedding statistics reset successfully",
+        })
+    except ImportError as e:
+        logger.warning("NPU embeddings module not available: %s", e)
+        return JSONResponse({
+            "status": "unavailable",
+            "message": "NPU embeddings module not loaded",
+        })
+    except Exception as e:
+        logger.error("Failed to reset embedding stats: %s", e)
+        return JSONResponse({
+            "status": "error",
+            "message": str(e),
+        })
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
     operation="get_codebase_problems",
     error_code_prefix="CODEBASE",
 )
