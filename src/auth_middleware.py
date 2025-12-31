@@ -555,3 +555,30 @@ def require_file_permission(operation: str):
         return wrapper
 
     return decorator
+
+
+def check_admin_permission(request: Request) -> bool:
+    """
+    FastAPI dependency to check if user has admin permission.
+
+    Use as: Depends(check_admin_permission)
+
+    Args:
+        request: FastAPI Request object
+
+    Returns:
+        True if user has admin role
+
+    Raises:
+        HTTPException: 401 if not authenticated, 403 if not admin
+    """
+    user_data = auth_middleware.get_user_from_request(request)
+
+    if not user_data:
+        raise_auth_error("AUTH_0002", "Authentication required")
+
+    user_role = user_data.get("role", "guest")
+    if user_role != "admin":
+        raise_auth_error("AUTH_0003", "Admin permission required for this operation")
+
+    return True
