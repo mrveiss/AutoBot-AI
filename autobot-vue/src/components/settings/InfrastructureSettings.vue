@@ -18,6 +18,14 @@
         <i class="fas fa-microchip mr-2"></i>
         NPU Workers
       </button>
+      <button
+        class="infrastructure-tab"
+        :class="{ active: activeSubTab === 'data-storage' }"
+        @click="activeSubTab = 'data-storage'"
+      >
+        <i class="fas fa-database mr-2"></i>
+        Data Storage
+      </button>
     </div>
 
     <!-- System Updates Tab -->
@@ -174,6 +182,11 @@
     <div v-show="activeSubTab === 'npu-workers'">
       <NPUWorkersSettings :isSettingsLoaded="isSettingsLoaded" @change="$emit('change')" />
     </div>
+
+    <!-- Data Storage Tab -->
+    <div v-show="activeSubTab === 'data-storage'">
+      <DataStorageSettings />
+    </div>
   </div>
 </template>
 
@@ -182,6 +195,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useUserStore } from '../../stores/useUserStore'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import NPUWorkersSettings from './NPUWorkersSettings.vue'
+import DataStorageSettings from './DataStorageSettings.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { getBackendUrl } from '@/config/ssot-config'
 
@@ -189,7 +203,7 @@ const logger = createLogger('InfrastructureSettings')
 const userStore = useUserStore()
 
 // Sub-tab state
-const activeSubTab = ref<'updates' | 'npu-workers'>('updates')
+const activeSubTab = ref<'updates' | 'npu-workers' | 'data-storage'>('updates')
 
 // Props
 interface Props {

@@ -438,6 +438,31 @@ DEFAULT_AGENT_CONFIGS = {
         "invoked_by": "AsyncChatWorkflow for research queries, browser_mcp tools",
         "source_file": "src/agents/web_research_integration.py",
     },
+    # Overseer Architecture: Task Decomposition & Execution
+    "overseer": {
+        "name": "Overseer Agent",
+        "description": "Decomposes user queries into sequential executable tasks. Analyzes user intent, creates task plans with proper dependencies, and orchestrates step-by-step execution via StepExecutorAgent workers. Supports complex multi-step queries.",
+        "default_model": TIER_3_MODEL,
+        "provider": "ollama",
+        "enabled": True,
+        "priority": 3,
+        "tasks": ["task_decomposition", "plan_creation", "step_orchestration", "dependency_management"],
+        "mcp_tools": ["sequential_thinking_mcp", "structured_thinking_mcp"],
+        "invoked_by": "AsyncChatWorkflow for complex multi-step queries requiring task planning",
+        "source_file": "src/agents/overseer/overseer_agent.py",
+    },
+    "step_executor": {
+        "name": "Step Executor Agent",
+        "description": "Executes individual tasks/steps from OverseerAgent plans. Handles command validation, PTY terminal execution with streaming output, and generates two-part explanations (command explanation + output explanation). Supports security validation against dangerous patterns.",
+        "default_model": TIER_3_MODEL,
+        "provider": "ollama",
+        "enabled": True,
+        "priority": 3,
+        "tasks": ["step_execution", "command_validation", "pty_terminal", "output_streaming", "explanation_generation"],
+        "mcp_tools": ["filesystem_mcp"],
+        "invoked_by": "OverseerAgent during task plan execution",
+        "source_file": "src/agents/overseer/step_executor_agent.py",
+    },
 }
 
 
