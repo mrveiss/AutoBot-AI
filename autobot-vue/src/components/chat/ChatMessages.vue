@@ -639,8 +639,10 @@ const getMessageWrapperClass = (message: ChatMessage): string => {
   classes.push(`${message.sender}-message`)
 
   // Add message type class for type-specific styling
+  // Issue #680: Exclude streaming types from type-class assignment to prevent wrong badges
   const messageType = message.type || message.metadata?.display_type
-  if (messageType && messageType !== 'response' && messageType !== 'message') {
+  const noTypeClassTypes = ['response', 'message', 'default', 'llm_response', 'llm_response_chunk']
+  if (messageType && !noTypeClassTypes.includes(messageType)) {
     classes.push(`type-${messageType}`)
   }
 

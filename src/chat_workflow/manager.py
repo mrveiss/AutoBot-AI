@@ -276,14 +276,26 @@ class ChatWorkflowManager(
         llm_response: str,
         chunk_text: str,
     ) -> tuple:
-        """Handle message type transitions. Returns (complete_msg or None, new_id, new_segment, new_type)."""
+        """Handle message type transitions. Returns (complete_msg or None, new_id, new_segment, new_type).
+
+        Issue #680: Fixed tag splitting - don't start new segment from partial tag content.
+        When transitioning types (e.g., response → thought or thought → response),
+        we need to find where the tag ends in the accumulated response and start
+        the new segment from there, not from the current chunk which may just be
+        a closing bracket like ']'.
+        """
         import uuid
 
         if new_type != current_message_type and current_message_type != "response":
-            # Signal that current segment is complete
+            # Transitioning from thought/planning back to response
+            # Issue #680: Find content after closing tag [/THOUGHT] or [/PLANNING]
             logger.info(
                 "[Issue #352] Message type transition: %s → %s",
                 current_message_type, new_type
+            )
+            # Find content after the closing tag
+            new_segment_start = self._find_new_segment_start(
+                llm_response, new_type, previous_type=current_message_type
             )
             complete_msg = WorkflowMessage(
                 type="segment_complete",
@@ -294,13 +306,66 @@ class ChatWorkflowManager(
                     "model": selected_model,
                 },
             )
-            return (complete_msg, str(uuid.uuid4()), "", new_type)
+            return (complete_msg, str(uuid.uuid4()), new_segment_start, new_type)
 
         elif new_type != current_message_type:
             # Type changed from response to thought/planning
-            return (None, str(uuid.uuid4()), chunk_text, new_type)
+            # Issue #680: Find the tag position to properly split content
+            new_segment_start = self._find_new_segment_start(
+                llm_response, new_type, previous_type=current_message_type
+            )
+            return (None, str(uuid.uuid4()), new_segment_start, new_type)
 
         return (None, current_message_id, None, current_message_type)
+
+    def _find_new_segment_start(
+        self, llm_response: str, new_type: str, previous_type: str = "response"
+    ) -> str:
+        """Find content after the relevant tag for the new segment type.
+
+        Issue #680: When type changes, extract only the content AFTER the complete
+        tag, not including partial tag characters like ']'.
+
+        For opening tags (thought/planning), find content after [TYPE].
+        For closing tags (response after thought/planning), find content after [/TYPE].
+        """
+        # Opening tags for entering a block
+        opening_tag_map = {
+            "thought": r"\[THOUGHT\]",
+            "planning": r"\[PLANNING\]",
+        }
+
+        # Closing tags for exiting a block
+        closing_tag_map = {
+            "thought": r"\[/THOUGHT\]",
+            "planning": r"\[/PLANNING\]",
+        }
+
+        # Determine which tag to look for
+        if new_type in opening_tag_map:
+            # Entering a thought/planning block
+            pattern = opening_tag_map[new_type]
+        elif new_type == "response" and previous_type in closing_tag_map:
+            # Exiting a thought/planning block back to response
+            pattern = closing_tag_map[previous_type]
+        else:
+            return ""
+
+        # Find the last occurrence of the complete tag
+        match = None
+        for m in re.finditer(pattern, llm_response, re.IGNORECASE):
+            match = m
+
+        if match:
+            # Return content after the tag
+            content_after_tag = llm_response[match.end():]
+            logger.debug(
+                "[Issue #680] New segment for %s starts after tag: '%s...'",
+                new_type, content_after_tag[:50] if content_after_tag else "(empty)"
+            )
+            return content_after_tag
+
+        return ""
 
     def _build_stream_chunk_message(
         self,
@@ -395,6 +460,10 @@ class ChatWorkflowManager(
                     selected_model, llm_response, chunk_text
                 )
 
+                # Issue #680: Track if we just transitioned to use proper content
+                just_transitioned = False
+                transition_content = None
+
                 if complete_msg:
                     yield (complete_msg, llm_response, False, True)
                     # Issue #656: Create new StreamingMessage for new type
@@ -407,6 +476,8 @@ class ChatWorkflowManager(
                     })
                     current_segment = new_segment
                     current_message_type = new_type
+                    just_transitioned = True
+                    transition_content = new_segment
                 elif new_segment is not None:
                     # Type changed without completion message
                     streaming_msg = StreamingMessage(type=new_type)
@@ -418,9 +489,17 @@ class ChatWorkflowManager(
                     })
                     current_segment = new_segment
                     current_message_type = new_type
+                    just_transitioned = True
+                    transition_content = new_segment
 
                 # Issue #656: Use stream() to append chunk and increment version
-                streaming_msg.stream(chunk_text)
+                # Issue #680: After type transition, stream the content AFTER the tag, not raw chunk
+                if just_transitioned and transition_content is not None:
+                    # Stream the content after the tag, not the raw chunk with partial tag
+                    if transition_content:
+                        streaming_msg.stream(transition_content)
+                else:
+                    streaming_msg.stream(chunk_text)
                 streaming_msg.set_metadata("display_type", current_message_type)
                 streaming_msg.set_metadata("message_type", "llm_response_chunk")
 
@@ -538,36 +617,43 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
 
         payload = self._get_llm_request_payload(selected_model, current_prompt)
 
-        async with await http_client.post(
-            ollama_endpoint, json=payload, timeout=aiohttp.ClientTimeout(total=60.0)
-        ) as response:
-            logger.info("[ChatWorkflowManager] Ollama response status: %s", response.status)
+        # Issue #680: Use try/finally to properly track streaming request as active
+        # This prevents pool recreation from closing the connection mid-stream
+        llm_response = ""
+        try:
+            async with await http_client.post(
+                ollama_endpoint, json=payload, timeout=aiohttp.ClientTimeout(total=60.0)
+            ) as response:
+                logger.info("[ChatWorkflowManager] Ollama response status: %s", response.status)
 
-            if response.status != 200:
-                logger.error("[ChatWorkflowManager] Ollama request failed: %s", response.status)
-                yield WorkflowMessage(type="error", content=f"LLM service error: {response.status}", metadata={"error": True})
-                yield (None, None)
-                return
+                if response.status != 200:
+                    logger.error("[ChatWorkflowManager] Ollama request failed: %s", response.status)
+                    yield WorkflowMessage(type="error", content=f"LLM service error: {response.status}", metadata={"error": True})
+                    yield (None, None)
+                    return
 
-            llm_response = ""
-            async for chunk_msg, llm_response, is_done, is_segment_complete in self._stream_llm_response(
-                response, selected_model, terminal_session_id, used_knowledge, rag_citations
-            ):
-                if chunk_msg:
-                    yield chunk_msg
-                if is_done:
-                    break
+                async for chunk_msg, llm_response, is_done, is_segment_complete in self._stream_llm_response(
+                    response, selected_model, terminal_session_id, used_knowledge, rag_citations
+                ):
+                    if chunk_msg:
+                        yield chunk_msg
+                    if is_done:
+                        break
 
-            logger.info("[ChatWorkflowManager] Full LLM response length: %d characters (iteration %d)", len(llm_response), iteration)
-            # Issue #651: Log response snippet to debug multi-step issues
-            has_tool_call_tag = '<TOOL_CALL' in llm_response or '<tool_call' in llm_response
-            logger.info(
-                "[Issue #651] Iteration %d: Response has TOOL_CALL tag: %s, snippet: %s",
-                iteration, has_tool_call_tag, llm_response[:500].replace('\n', ' ')
-            )
-            tool_calls = self._parse_tool_calls(llm_response)
-            logger.info("[Issue #352] Iteration %d: Parsed %d tool calls", iteration, len(tool_calls))
-            yield (llm_response, tool_calls)
+                logger.info("[ChatWorkflowManager] Full LLM response length: %d characters (iteration %d)", len(llm_response), iteration)
+        finally:
+            # Issue #680: Decrement active request count after streaming is complete
+            await http_client.decrement_active()
+
+        # Issue #651: Log response snippet to debug multi-step issues
+        has_tool_call_tag = '<TOOL_CALL' in llm_response or '<tool_call' in llm_response
+        logger.info(
+            "[Issue #651] Iteration %d: Response has TOOL_CALL tag: %s, snippet: %s",
+            iteration, has_tool_call_tag, llm_response[:500].replace('\n', ' ')
+        )
+        tool_calls = self._parse_tool_calls(llm_response)
+        logger.info("[Issue #352] Iteration %d: Parsed %d tool calls", iteration, len(tool_calls))
+        yield (llm_response, tool_calls)
 
     async def _process_tool_results(
         self,
