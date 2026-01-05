@@ -39,9 +39,10 @@ Related: #599 - SSOT Configuration System Epic
 from __future__ import annotations
 
 import os
+from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -456,6 +457,111 @@ class RedisConfig(BaseSettings):
     password: Optional[str] = Field(default=None, alias="AUTOBOT_REDIS_PASSWORD")
 
 
+class PermissionMode(str, Enum):
+    """
+    Permission modes for command execution control.
+
+    Aligned with Claude Code's permission model:
+    - DEFAULT: Standard risk-based approval (current behavior)
+    - ACCEPT_EDITS: Auto-approve file edit operations for session
+    - PLAN: Read-only mode - no modifications allowed
+    - DONT_ASK: Auto-approve all commands (ADMIN ONLY - dangerous)
+    - BYPASS: Skip all security checks (ADMIN ONLY - very dangerous)
+    """
+
+    DEFAULT = "default"
+    ACCEPT_EDITS = "acceptEdits"
+    PLAN = "plan"
+    DONT_ASK = "dontAsk"
+    BYPASS = "bypassPermissions"
+
+
+class PermissionAction(str, Enum):
+    """Permission actions for rules."""
+
+    ALLOW = "allow"  # Auto-approve matching commands
+    ASK = "ask"  # Always prompt for matching commands
+    DENY = "deny"  # Block matching commands
+
+
+class PermissionConfig(BaseSettings):
+    """
+    Permission system configuration - Claude Code style.
+
+    Provides flexible, user-configurable control over command execution
+    with pattern-based rules and per-project approval memory.
+
+    Security:
+    - Normal users can use DEFAULT, ACCEPT_EDITS, and PLAN modes
+    - DONT_ASK and BYPASS modes require admin privileges
+    - Dangerous pattern overrides (ALLOW for rm -rf, etc.) require admin
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=str(PROJECT_ROOT / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    # Enable permission system v2 (feature flag)
+    enabled: bool = Field(
+        default=False,
+        alias="AUTOBOT_PERMISSION_SYSTEM_V2",
+        description="Enable Claude Code-style permission system",
+    )
+
+    # Global permission mode
+    mode: PermissionMode = Field(
+        default=PermissionMode.DEFAULT,
+        alias="AUTOBOT_PERMISSION_MODE",
+        description="Default permission mode for command approval",
+    )
+
+    # Per-project approval memory
+    approval_memory_enabled: bool = Field(
+        default=True,
+        alias="AUTOBOT_APPROVAL_MEMORY_ENABLED",
+        description="Remember approved commands per project",
+    )
+
+    # Approval memory TTL in seconds (default: 30 days)
+    approval_memory_ttl: int = Field(
+        default=2592000,
+        alias="AUTOBOT_APPROVAL_MEMORY_TTL",
+        description="How long to remember approved commands (seconds)",
+    )
+
+    # Redis database for permission storage
+    redis_db: int = Field(
+        default=11,
+        alias="AUTOBOT_REDIS_DB_PERMISSIONS",
+        description="Redis database for permission rules and memory",
+    )
+
+    # Permission rules file path (relative to project root)
+    rules_file: str = Field(
+        default="config/permission_rules.yaml",
+        alias="AUTOBOT_PERMISSION_RULES_FILE",
+        description="Path to permission rules YAML file",
+    )
+
+    # Admin-only modes - users without admin role cannot use these
+    ADMIN_ONLY_MODES: List[PermissionMode] = [
+        PermissionMode.DONT_ASK,
+        PermissionMode.BYPASS,
+    ]
+
+    def is_admin_only_mode(self, mode: PermissionMode) -> bool:
+        """Check if a mode requires admin privileges."""
+        return mode in self.ADMIN_ONLY_MODES
+
+    def get_allowed_modes_for_role(self, is_admin: bool) -> List[PermissionMode]:
+        """Get list of permission modes allowed for a role."""
+        if is_admin:
+            return list(PermissionMode)
+        return [m for m in PermissionMode if m not in self.ADMIN_ONLY_MODES]
+
+
 class FeatureConfig(BaseSettings):
     """Feature flags configuration."""
 
@@ -470,6 +576,10 @@ class FeatureConfig(BaseSettings):
     debug_mode: bool = Field(default=False, alias="AUTOBOT_DEBUG_MODE")
     hot_reload: bool = Field(default=True, alias="AUTOBOT_HOT_RELOAD")
     single_user_mode: bool = Field(default=True, alias="AUTOBOT_SINGLE_USER_MODE")
+    # Permission system v2 feature flag (also in PermissionConfig for convenience)
+    permission_system_v2: bool = Field(
+        default=False, alias="AUTOBOT_PERMISSION_SYSTEM_V2"
+    )
 
 
 class AutoBotConfig(BaseSettings):
@@ -501,6 +611,7 @@ class AutoBotConfig(BaseSettings):
     timeout: TimeoutConfig = Field(default_factory=TimeoutConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
     feature: FeatureConfig = Field(default_factory=FeatureConfig)
+    permission: PermissionConfig = Field(default_factory=PermissionConfig)
 
     # Top-level settings
     deployment_mode: str = Field(default="distributed", alias="AUTOBOT_DEPLOYMENT_MODE")

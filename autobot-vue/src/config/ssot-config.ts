@@ -130,6 +130,89 @@ export interface FeatureConfig {
   cacheDisabled: boolean;
 }
 
+// =============================================================================
+// Permission System v2 Types - Claude Code Style
+// Issue: Permission System v2 - Claude Code Style
+// =============================================================================
+
+/**
+ * Permission modes matching backend PermissionMode enum.
+ */
+export type PermissionMode =
+  | 'default'
+  | 'acceptEdits'
+  | 'plan'
+  | 'dontAsk'
+  | 'bypassPermissions';
+
+/**
+ * Permission actions matching backend PermissionAction enum.
+ */
+export type PermissionAction = 'allow' | 'ask' | 'deny';
+
+/**
+ * Permission rule interface.
+ */
+export interface PermissionRule {
+  tool: string;
+  pattern: string;
+  action: PermissionAction;
+  description: string;
+}
+
+/**
+ * Approval record interface for project memory.
+ */
+export interface ApprovalRecord {
+  pattern: string;
+  tool: string;
+  risk_level: string;
+  user_id: string;
+  created_at: number;
+  original_command: string;
+  comment?: string;
+}
+
+/**
+ * Permission system status interface.
+ */
+export interface PermissionStatus {
+  enabled: boolean;
+  mode: PermissionMode;
+  approval_memory_enabled: boolean;
+  approval_memory_ttl_days: number;
+  rules_file: string;
+  rules_count: {
+    allow: number;
+    ask: number;
+    deny: number;
+    total: number;
+  };
+}
+
+/**
+ * Permission configuration interface.
+ */
+export interface PermissionConfig {
+  /** Whether permission system v2 is enabled */
+  enabled: boolean;
+  /** Current permission mode */
+  mode: PermissionMode;
+  /** Whether approval memory is enabled */
+  approvalMemoryEnabled: boolean;
+  /** TTL for approval memory in seconds */
+  approvalMemoryTtl: number;
+  /** Path to rules YAML file */
+  rulesFile: string;
+  /** Admin-only modes that require elevated privileges */
+  adminOnlyModes: PermissionMode[];
+}
+
+/**
+ * Match result from permission checker.
+ */
+export type MatchResult = 'allow' | 'ask' | 'deny' | 'default';
+
 /**
  * Complete AutoBot configuration.
  */

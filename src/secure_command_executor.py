@@ -13,10 +13,15 @@ import re
 import shlex
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from src.constants.network_constants import NetworkConstants
 from src.utils.command_utils import execute_shell_command
+
+# Permission system imports (lazy to avoid circular imports)
+if TYPE_CHECKING:
+    from backend.services.permission_matcher import PermissionMatcher, MatchResult
+    from backend.services.approval_memory import ApprovalMemoryManager
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +129,16 @@ class SecurityPolicy:
 
 class SecureCommandExecutor:
     """
-    Secure command executor with sandboxing and permission controls
+    Secure command executor with sandboxing and permission controls.
+
+    Supports two permission models:
+    1. Risk-based (default): Commands assessed by risk level (SAFE/MODERATE/HIGH/FORBIDDEN)
+    2. Claude Code-style: Glob-pattern rules with ALLOW/ASK/DENY/DEFAULT actions
+
+    When permission_v2 is enabled, the order is:
+    1. Check permission rules (DENY > ASK > ALLOW)
+    2. Check approval memory (per-project remembered approvals)
+    3. Fall back to risk-based assessment (DEFAULT case)
     """
 
     def __init__(
@@ -132,6 +146,9 @@ class SecureCommandExecutor:
         policy: Optional[SecurityPolicy] = None,
         require_approval_callback=None,
         use_docker_sandbox: bool = False,
+        is_admin: bool = False,
+        project_path: Optional[str] = None,
+        user_id: Optional[str] = None,
     ):
         """
         Initialize secure command executor
@@ -140,11 +157,23 @@ class SecureCommandExecutor:
             policy: Security policy to use (default: SecurityPolicy())
             require_approval_callback: Async callback function for user approval
             use_docker_sandbox: Whether to execute commands in Docker container
+            is_admin: Whether current user has admin privileges (for permission v2)
+            project_path: Current project path (for approval memory)
+            user_id: Current user ID (for approval memory)
         """
         self.policy = policy or SecurityPolicy()
         self.require_approval_callback = require_approval_callback
         self.use_docker_sandbox = use_docker_sandbox
         self.docker_image = "autobot-sandbox:latest"
+
+        # Permission v2 attributes
+        self.is_admin = is_admin
+        self.project_path = project_path
+        self.user_id = user_id
+
+        # Lazy-loaded permission matcher and approval memory
+        self._permission_matcher: Optional["PermissionMatcher"] = None
+        self._approval_memory: Optional["ApprovalMemoryManager"] = None
 
         # Command history for audit
         self.command_history: List[Dict[str, Any]] = []
@@ -179,6 +208,195 @@ class SecureCommandExecutor:
             if str(allowed_path) in command:
                 return True
         return False
+
+    def _get_permission_matcher(self) -> Optional["PermissionMatcher"]:
+        """
+        Get or create the permission matcher (lazy initialization).
+
+        Returns:
+            PermissionMatcher instance if permission v2 is enabled, None otherwise
+        """
+        from src.config.ssot_config import config
+
+        if not config.permission.enabled:
+            return None
+
+        if self._permission_matcher is None:
+            try:
+                from backend.services.permission_matcher import PermissionMatcher
+                self._permission_matcher = PermissionMatcher(is_admin=self.is_admin)
+            except ImportError as e:
+                logger.warning(f"Permission matcher not available: {e}")
+                return None
+
+        return self._permission_matcher
+
+    def _get_approval_memory(self) -> Optional["ApprovalMemoryManager"]:
+        """
+        Get or create the approval memory manager (lazy initialization).
+
+        Returns:
+            ApprovalMemoryManager instance if enabled, None otherwise
+        """
+        from src.config.ssot_config import config
+
+        if not config.permission.enabled or not config.permission.approval_memory_enabled:
+            return None
+
+        if self._approval_memory is None:
+            try:
+                from backend.services.approval_memory import ApprovalMemoryManager
+                self._approval_memory = ApprovalMemoryManager()
+            except ImportError as e:
+                logger.warning(f"Approval memory not available: {e}")
+                return None
+
+        return self._approval_memory
+
+    async def check_permission_rules(
+        self, command: str, tool: str = "Bash"
+    ) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+        """
+        Check command against Claude Code-style permission rules.
+
+        Called BEFORE risk assessment when permission v2 is enabled.
+
+        Args:
+            command: The command to check
+            tool: The tool name (default: "Bash")
+
+        Returns:
+            Tuple of (action, rule_info) where:
+            - action is "allow", "ask", "deny", or None (for default/risk-based)
+            - rule_info contains matched rule details or None
+        """
+        matcher = self._get_permission_matcher()
+        if not matcher:
+            return None, None
+
+        try:
+            from backend.services.permission_matcher import MatchResult
+
+            result, rule = matcher.match(tool, command)
+
+            if result == MatchResult.DENY:
+                rule_info = {
+                    "action": "deny",
+                    "pattern": rule.pattern if rule else None,
+                    "description": rule.description if rule else "Denied by permission rule",
+                }
+                return "deny", rule_info
+
+            if result == MatchResult.ASK:
+                rule_info = {
+                    "action": "ask",
+                    "pattern": rule.pattern if rule else None,
+                    "description": rule.description if rule else "Requires approval",
+                }
+                return "ask", rule_info
+
+            if result == MatchResult.ALLOW:
+                # Check approval memory for project-specific overrides
+                if await self._check_approval_memory(command, tool):
+                    rule_info = {
+                        "action": "allow",
+                        "pattern": rule.pattern if rule else None,
+                        "description": rule.description if rule else "Allowed by rule",
+                        "from_memory": True,
+                    }
+                    return "allow", rule_info
+
+                rule_info = {
+                    "action": "allow",
+                    "pattern": rule.pattern if rule else None,
+                    "description": rule.description if rule else "Allowed by rule",
+                }
+                return "allow", rule_info
+
+            # DEFAULT - fall through to risk-based assessment
+            # But still check approval memory
+            if await self._check_approval_memory(command, tool):
+                return "allow", {"action": "allow", "from_memory": True}
+
+            return None, None
+
+        except Exception as e:
+            logger.error(f"Permission rule check failed: {e}")
+            return None, None
+
+    async def _check_approval_memory(self, command: str, tool: str = "Bash") -> bool:
+        """
+        Check if command is remembered in approval memory.
+
+        Args:
+            command: The command to check
+            tool: The tool name
+
+        Returns:
+            True if command should be auto-approved from memory
+        """
+        if not self.project_path or not self.user_id:
+            return False
+
+        memory = self._get_approval_memory()
+        if not memory:
+            return False
+
+        try:
+            # Get risk level for memory check
+            risk, _ = self.assess_command_risk(command)
+            return await memory.check_remembered(
+                project_path=self.project_path,
+                command=command,
+                user_id=self.user_id,
+                risk_level=risk.value,
+                tool=tool,
+            )
+        except Exception as e:
+            logger.error(f"Approval memory check failed: {e}")
+            return False
+
+    async def store_approval_memory(
+        self,
+        command: str,
+        risk_level: str,
+        tool: str = "Bash",
+        comment: Optional[str] = None,
+    ) -> bool:
+        """
+        Store a command approval in memory for future auto-approval.
+
+        Called when user approves a command with "Remember" checkbox.
+
+        Args:
+            command: The approved command
+            risk_level: Risk level of the command
+            tool: Tool name
+            comment: Optional approval comment
+
+        Returns:
+            True if stored successfully
+        """
+        if not self.project_path or not self.user_id:
+            logger.debug("Cannot store approval: no project_path or user_id")
+            return False
+
+        memory = self._get_approval_memory()
+        if not memory:
+            return False
+
+        try:
+            return await memory.remember_approval(
+                project_path=self.project_path,
+                command=command,
+                user_id=self.user_id,
+                risk_level=risk_level,
+                tool=tool,
+                comment=comment,
+            )
+        except Exception as e:
+            logger.error(f"Failed to store approval memory: {e}")
+            return False
 
     def assess_command_risk(self, command: str) -> tuple[CommandRisk, List[str]]:
         """
@@ -340,21 +558,140 @@ class SecureCommandExecutor:
             "security": security_info,
         }
 
+    async def _execute_command(
+        self,
+        command: str,
+        risk: CommandRisk,
+        reasons: List[str],
+        log_entry: Dict[str, Any],
+        rule_info: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Execute a command after permission/risk checks.
+
+        Internal helper used by run_shell_command for actual execution.
+
+        Args:
+            command: The shell command to execute
+            risk: Assessed risk level
+            reasons: Risk assessment reasons
+            log_entry: Log entry dict to update
+            rule_info: Optional permission rule info
+
+        Returns:
+            Execution result dictionary
+        """
+        # Prepare command for execution
+        if self.use_docker_sandbox and risk != CommandRisk.SAFE:
+            actual_command = self._build_docker_command(command)
+            logger.info("Executing in Docker sandbox: %s", command)
+        else:
+            actual_command = command
+
+        # Execute command
+        try:
+            result = await execute_shell_command(actual_command)
+
+            log_entry["executed"] = True
+            log_entry["return_code"] = result["return_code"]
+            self.command_history.append(log_entry)
+
+            security_info = {
+                "risk": risk.value,
+                "reasons": reasons,
+                "sandboxed": self.use_docker_sandbox and risk != CommandRisk.SAFE,
+                "approved": log_entry.get("approved", False),
+            }
+
+            # Add permission rule info if present
+            if rule_info:
+                security_info["permission_rule"] = rule_info
+                if rule_info.get("from_memory"):
+                    security_info["auto_approved_by"] = "approval_memory"
+                else:
+                    security_info["auto_approved_by"] = "permission_rule"
+
+            result["security"] = security_info
+            return result
+
+        except asyncio.TimeoutError:
+            logger.error("Command timed out: %s", command)
+            log_entry["error"] = "Command timed out"
+            self.command_history.append(log_entry)
+            return self._build_error_result(
+                risk, reasons, "timeout", "Command execution timed out after 5 minutes"
+            )
+        except Exception as e:
+            logger.error("Command execution error: %s", e)
+            log_entry["error"] = str(e)
+            self.command_history.append(log_entry)
+            return self._build_error_result(
+                risk, reasons, "error", f"Error executing command: {e}"
+            )
+
     async def run_shell_command(
-        self, command: str, force_approval: bool = False
+        self, command: str, force_approval: bool = False, tool: str = "Bash"
     ) -> Dict[str, Any]:
         """
         Securely execute a shell command with risk assessment and sandboxing.
 
         Issue #281: Refactored from 111 lines to use extracted helper methods.
 
+        When permission_v2 is enabled, the order is:
+        1. Check permission rules (DENY > ASK > ALLOW)
+        2. Check approval memory (per-project remembered approvals)
+        3. Fall back to risk-based assessment (DEFAULT case)
+
         Args:
             command: The shell command to execute
             force_approval: Force user approval regardless of risk level
+            tool: Tool name for permission matching (default: "Bash")
 
         Returns:
             Dictionary containing execution results and security info
         """
+        # Step 1: Check permission rules FIRST (when v2 enabled)
+        permission_action, rule_info = await self.check_permission_rules(command, tool)
+
+        # Handle permission rule results
+        if permission_action == "deny":
+            # DENY rule matched - block immediately
+            logger.warning(f"Command denied by permission rule: {command}")
+            return {
+                "stdout": "",
+                "stderr": f"Command denied by permission rule: {rule_info.get('description', 'Denied')}",
+                "return_code": 1,
+                "status": "error",
+                "security": {
+                    "risk": "forbidden",
+                    "reasons": [rule_info.get("description", "Denied by rule")],
+                    "blocked": True,
+                    "permission_rule": rule_info,
+                },
+            }
+
+        if permission_action == "allow":
+            # ALLOW rule matched - auto-approve, skip risk assessment approval flow
+            logger.info(f"Command auto-approved by permission rule: {command[:50]}...")
+            # Still do risk assessment for logging/sandboxing decisions
+            risk, reasons = self.assess_command_risk(command)
+
+            log_entry = {
+                "command": command,
+                "risk": risk.value,
+                "reasons": reasons,
+                "timestamp": asyncio.get_event_loop().time(),
+                "approved": True,
+                "executed": False,
+                "auto_approved_by": "permission_rule" if not rule_info.get("from_memory") else "approval_memory",
+            }
+
+            # Execute command (skip approval flow)
+            return await self._execute_command(
+                command, risk, reasons, log_entry, rule_info
+            )
+
+        # Step 2: Fall through to risk-based assessment
         risk, reasons = self.assess_command_risk(command)
 
         log_entry = {
@@ -376,7 +713,12 @@ class SecureCommandExecutor:
             )
 
         # Handle approval flow
-        needs_approval = force_approval or risk in {CommandRisk.HIGH, CommandRisk.MODERATE}
+        # ASK rule forces approval even for SAFE commands
+        needs_approval = (
+            force_approval
+            or permission_action == "ask"
+            or risk in {CommandRisk.HIGH, CommandRisk.MODERATE}
+        )
 
         if needs_approval:
             approved = await self._request_approval(command, risk, reasons)
@@ -390,43 +732,8 @@ class SecureCommandExecutor:
                     risk, reasons, "Command execution denied by user"
                 )
 
-        # Prepare command for execution
-        if self.use_docker_sandbox and risk != CommandRisk.SAFE:
-            actual_command = self._build_docker_command(command)
-            logger.info("Executing in Docker sandbox: %s", command)
-        else:
-            actual_command = command
-
-        # Execute command
-        try:
-            result = await execute_shell_command(actual_command)
-
-            log_entry["executed"] = True
-            log_entry["return_code"] = result["return_code"]
-            self.command_history.append(log_entry)
-
-            result["security"] = {
-                "risk": risk.value,
-                "reasons": reasons,
-                "sandboxed": self.use_docker_sandbox and risk != CommandRisk.SAFE,
-                "approved": needs_approval,
-            }
-            return result
-
-        except asyncio.TimeoutError:
-            logger.error("Command timed out: %s", command)
-            log_entry["error"] = "Command timed out"
-            self.command_history.append(log_entry)
-            return self._build_error_result(
-                risk, reasons, "timeout", "Command execution timed out after 5 minutes"
-            )
-        except Exception as e:
-            logger.error("Command execution error: %s", e)
-            log_entry["error"] = str(e)
-            self.command_history.append(log_entry)
-            return self._build_error_result(
-                risk, reasons, "error", f"Error executing command: {e}"
-            )
+        # Execute using the shared helper
+        return await self._execute_command(command, risk, reasons, log_entry)
 
     def get_command_history(self, limit: int = 100) -> List[Dict[str, Any]]:
         """Get recent command history for audit purposes"""

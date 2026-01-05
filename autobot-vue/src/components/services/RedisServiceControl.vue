@@ -20,7 +20,7 @@
             class="w-2 h-2 rounded-full mr-2 animate-pulse"
             :class="getStatusDotClass(serviceStatus.status)"
           ></span>
-          {{ serviceStatus.status.toUpperCase() }}
+          {{ (serviceStatus.status || 'unknown').toUpperCase() }}
         </StatusBadge>
       </div>
     </div>
@@ -101,7 +101,7 @@
 
       <!-- Overall Health Indicator -->
       <StatusBadge :variant="healthVariant" size="medium" class="font-semibold mb-4">
-        {{ healthStatus.overall_status.toUpperCase() }}
+        {{ (healthStatus?.overall_status || 'unknown').toUpperCase() }}
       </StatusBadge>
 
       <!-- Health Checks -->
@@ -263,7 +263,7 @@ const healthVariant = computed(() => {
     'degraded': 'warning',
     'critical': 'danger'
   }
-  return healthMap[healthStatus.value.overall_status] || 'secondary'
+  return healthMap[healthStatus.value?.overall_status] || 'secondary'
 })
 
 // Map health check status to StatusBadge variant

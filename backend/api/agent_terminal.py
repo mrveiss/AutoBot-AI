@@ -290,6 +290,13 @@ class ApproveCommandRequest(BaseModel):
     auto_approve_future: bool = Field(
         False, description="Auto-approve similar commands in the future"
     )
+    # Permission v2: Project memory fields
+    remember_for_project: bool = Field(
+        False, description="Remember approval for this project"
+    )
+    project_path: Optional[str] = Field(
+        None, description="Project path for approval memory"
+    )
 
 
 class InterruptRequest(BaseModel):
@@ -534,7 +541,9 @@ async def approve_agent_command(
     User approves HIGH/DANGEROUS commands that agents want to execute.
     """
     logger.info(
-        f"[API] Approval request received: session_id={session_id}, approved={request.approved}, user_id={request.user_id}, comment={request.comment}"
+        f"[API] Approval request received: session_id={session_id}, approved={request.approved}, "
+        f"user_id={request.user_id}, comment={request.comment}, "
+        f"remember_for_project={request.remember_for_project}"
     )
 
     result = await service.approve_command(
@@ -543,6 +552,8 @@ async def approve_agent_command(
         user_id=request.user_id,
         comment=request.comment,
         auto_approve_future=request.auto_approve_future,
+        remember_for_project=request.remember_for_project,
+        project_path=request.project_path,
     )
 
     logger.info(

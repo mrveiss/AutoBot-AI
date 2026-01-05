@@ -144,6 +144,7 @@ kill_autobot_processes() {
         "uvicorn.*backend"            # Uvicorn server
         "hypercorn.*backend"          # Hypercorn server
         "gunicorn.*backend"           # Gunicorn server
+        "celery.*backend.celery_app"  # Celery worker
     )
 
     local killed_any=false
@@ -599,12 +600,25 @@ start_backend_optimized() {
         echo -n "."
     done
     echo ""
+
+    # Start Celery worker for async task processing (RBAC, background jobs, etc.)
+    log "Starting Celery worker for async task processing..."
+    nohup celery -A backend.celery_app worker --loglevel=info > logs/celery.log 2>&1 &
+    local celery_pid=$!
+
+    # Brief wait to verify Celery started
+    sleep 2
+    if kill -0 "$celery_pid" 2>/dev/null; then
+        success "Celery worker started (PID: $celery_pid)"
+    else
+        warning "Celery worker may have failed to start. Check logs: tail -f logs/celery.log"
+    fi
 }
 
 stop_backend() {
-    log "Stopping all AutoBot services (backend + VMs)..."
+    log "Stopping all AutoBot services (backend + Celery + VMs)..."
 
-    # Stop local backend processes with verification
+    # Stop local backend and Celery processes with verification
     kill_autobot_processes 10
 
     # Stop VNC services
@@ -684,7 +698,7 @@ fi
 # Cleanup function for graceful shutdown
 cleanup() {
     echo ""
-    log "Shutting down AutoBot backend..."
+    log "Shutting down AutoBot backend and Celery worker..."
 
     # Stop VNC services
     if systemctl is-active --quiet novnc || systemctl is-active --quiet vncserver@1 || systemctl is-active --quiet xvfb@1; then
@@ -699,10 +713,10 @@ cleanup() {
         kill -TERM $VNC_PID 2>/dev/null || true
     fi
 
-    # Stop backend with improved process matching
+    # Stop backend and Celery with improved process matching
     kill_autobot_processes 5
 
-    success "AutoBot backend stopped"
+    success "AutoBot backend and Celery worker stopped"
     echo -e "${CYAN}VM services continue running. Use scripts/vm-management/stop-all-vms.sh to stop them.${NC}"
     exit 0
 }

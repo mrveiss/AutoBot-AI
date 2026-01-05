@@ -752,13 +752,16 @@ class AgentTerminalService:
         user_id: Optional[str] = None,
         comment: Optional[str] = None,
         auto_approve_future: bool = False,
+        remember_for_project: bool = False,
+        project_path: Optional[str] = None,
     ) -> Metadata:
         """Approve or deny a pending agent command."""
         # Get per-session lock
         approval_lock = await self.approval_handler._get_approval_lock(session_id)
         async with approval_lock:
             return await self._approve_command_internal(
-                session_id, approved, user_id, comment, auto_approve_future
+                session_id, approved, user_id, comment, auto_approve_future,
+                remember_for_project, project_path
             )
 
     async def _approve_command_internal(
@@ -768,6 +771,8 @@ class AgentTerminalService:
         user_id: Optional[str] = None,
         comment: Optional[str] = None,
         auto_approve_future: bool = False,
+        remember_for_project: bool = False,
+        project_path: Optional[str] = None,
     ) -> Metadata:
         """
         Internal implementation of approve_command.
@@ -788,6 +793,21 @@ class AgentTerminalService:
         command_id = session.get_pending_command_id()
 
         if approved:
+            # Permission v2: Store in project memory if requested
+            if remember_for_project and project_path and user_id:
+                await CommandApprovalManager.store_approval_memory_v2(
+                    command=command,
+                    project_path=project_path,
+                    user_id=user_id,
+                    risk_level=risk_level or "UNKNOWN",
+                    tool="Bash",
+                    comment=comment,
+                )
+                logger.info(
+                    f"[APPROVAL] Stored in project memory: {project_path}, "
+                    f"command={command[:50]}..."
+                )
+
             # Execute approved command (Issue #281: uses helper)
             return await self._execute_approved_command(
                 session=session,

@@ -24,11 +24,17 @@ import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from backend.type_defs.common import Metadata
 
 from src.secure_command_executor import CommandRisk
+
+# Permission system v2 imports (lazy to avoid circular imports)
+if TYPE_CHECKING:
+    from backend.services.permission_matcher import PermissionMatcher, MatchResult
+    from backend.services.approval_memory import ApprovalMemoryManager
+    from src.config.ssot_config import PermissionMode
 
 logger = logging.getLogger(__name__)
 
@@ -447,3 +453,194 @@ class CommandApprovalManager:
             logger.info("Cleared auto-approve rules for user %s", user_id)
             return True
         return False
+
+    # =========================================================================
+    # Permission System v2 Integration (Claude Code-style)
+    # =========================================================================
+
+    @staticmethod
+    def is_permission_v2_enabled() -> bool:
+        """
+        Check if permission system v2 (Claude Code-style) is enabled.
+
+        Returns:
+            True if permission v2 is enabled
+        """
+        try:
+            from src.config.ssot_config import config
+            return config.permission.enabled
+        except ImportError:
+            return False
+
+    @staticmethod
+    def get_permission_mode() -> Optional["PermissionMode"]:
+        """
+        Get the current permission mode.
+
+        Returns:
+            Current PermissionMode or None if v2 disabled
+        """
+        try:
+            from src.config.ssot_config import config, PermissionMode
+            if not config.permission.enabled:
+                return None
+            return config.permission.mode
+        except ImportError:
+            return None
+
+    @staticmethod
+    async def check_permission_rules_v2(
+        command: str,
+        tool: str = "Bash",
+        is_admin: bool = False,
+    ) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+        """
+        Check command against Claude Code-style permission rules.
+
+        This is the v2 permission checking that uses glob patterns
+        instead of risk-based assessment.
+
+        Args:
+            command: Command to check
+            tool: Tool name (default: "Bash")
+            is_admin: Whether user has admin privileges
+
+        Returns:
+            Tuple of (action, rule_info) where:
+            - action is "allow", "ask", "deny", or None (for default)
+            - rule_info contains matched rule details or None
+        """
+        try:
+            from src.config.ssot_config import config
+            if not config.permission.enabled:
+                return None, None
+
+            from backend.services.permission_matcher import (
+                PermissionMatcher,
+                MatchResult,
+            )
+
+            matcher = PermissionMatcher(is_admin=is_admin)
+            result, rule = matcher.match(tool, command)
+
+            if result == MatchResult.DENY:
+                return "deny", {
+                    "action": "deny",
+                    "pattern": rule.pattern if rule else None,
+                    "description": rule.description if rule else "Denied by rule",
+                }
+
+            if result == MatchResult.ASK:
+                return "ask", {
+                    "action": "ask",
+                    "pattern": rule.pattern if rule else None,
+                    "description": rule.description if rule else "Requires approval",
+                }
+
+            if result == MatchResult.ALLOW:
+                return "allow", {
+                    "action": "allow",
+                    "pattern": rule.pattern if rule else None,
+                    "description": rule.description if rule else "Allowed by rule",
+                }
+
+            # DEFAULT - use risk-based
+            return None, None
+
+        except ImportError as e:
+            logger.warning(f"Permission v2 modules not available: {e}")
+            return None, None
+        except Exception as e:
+            logger.error(f"Permission v2 check failed: {e}")
+            return None, None
+
+    @staticmethod
+    async def check_approval_memory_v2(
+        command: str,
+        project_path: str,
+        user_id: str,
+        risk_level: str,
+        tool: str = "Bash",
+    ) -> bool:
+        """
+        Check if command is in approval memory for project.
+
+        Args:
+            command: Command to check
+            project_path: Project directory path
+            user_id: User ID
+            risk_level: Risk level of command
+            tool: Tool name
+
+        Returns:
+            True if command should be auto-approved from memory
+        """
+        try:
+            from src.config.ssot_config import config
+            if not config.permission.enabled or not config.permission.approval_memory_enabled:
+                return False
+
+            from backend.services.approval_memory import ApprovalMemoryManager
+
+            memory = ApprovalMemoryManager()
+            return await memory.check_remembered(
+                project_path=project_path,
+                command=command,
+                user_id=user_id,
+                risk_level=risk_level,
+                tool=tool,
+            )
+
+        except ImportError as e:
+            logger.warning(f"Approval memory not available: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Approval memory check failed: {e}")
+            return False
+
+    @staticmethod
+    async def store_approval_memory_v2(
+        command: str,
+        project_path: str,
+        user_id: str,
+        risk_level: str,
+        tool: str = "Bash",
+        comment: Optional[str] = None,
+    ) -> bool:
+        """
+        Store command approval in memory for future auto-approval.
+
+        Args:
+            command: Approved command
+            project_path: Project directory path
+            user_id: User ID
+            risk_level: Risk level
+            tool: Tool name
+            comment: Optional approval comment
+
+        Returns:
+            True if stored successfully
+        """
+        try:
+            from src.config.ssot_config import config
+            if not config.permission.enabled or not config.permission.approval_memory_enabled:
+                return False
+
+            from backend.services.approval_memory import ApprovalMemoryManager
+
+            memory = ApprovalMemoryManager()
+            return await memory.remember_approval(
+                project_path=project_path,
+                command=command,
+                user_id=user_id,
+                risk_level=risk_level,
+                tool=tool,
+                comment=comment,
+            )
+
+        except ImportError as e:
+            logger.warning(f"Approval memory not available: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Failed to store approval memory: {e}")
+            return False

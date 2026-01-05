@@ -698,6 +698,21 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
                     )
                 continue
 
+            # Issue #680: Guard against None values from async generators
+            if tool_msg is None:
+                logger.warning(
+                    "[Issue #680] Received None from _process_tool_calls - skipping"
+                )
+                continue
+
+            # Ensure tool_msg has a type attribute before accessing it
+            if not hasattr(tool_msg, "type"):
+                logger.warning(
+                    "[Issue #680] tool_msg missing 'type' attribute: %s - skipping",
+                    type(tool_msg).__name__
+                )
+                continue
+
             if tool_msg.type == "execution_summary":
                 new_results = tool_msg.metadata.get("execution_results", [])
                 new_execution_results.extend(new_results)

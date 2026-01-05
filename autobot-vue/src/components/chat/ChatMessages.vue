@@ -361,11 +361,30 @@
               </div>
             </div>
 
+            <!-- Permission v2: Remember for this project checkbox -->
+            <div v-if="permissionStore.isEnabled" class="remember-project-section">
+              <label class="remember-project-checkbox">
+                <input
+                  type="checkbox"
+                  v-model="rememberForProject"
+                  class="checkbox-input"
+                />
+                <span class="checkbox-label">
+                  <i class="fas fa-folder-open" aria-hidden="true"></i>
+                  Remember this approval for this project
+                </span>
+              </label>
+              <div v-if="rememberForProject" class="remember-project-hint">
+                <i class="fas fa-info-circle" aria-hidden="true"></i>
+                <span>Similar commands in this project will be auto-approved ({{ currentProjectPath || 'No project context' }})</span>
+              </div>
+            </div>
+
             <div class="approval-actions">
               <BaseButton
                 variant="success"
                 size="sm"
-                @click="approveCommand(message.metadata.terminal_session_id, true, undefined, message.metadata.command_id)"
+                @click="approveCommand(message.metadata.terminal_session_id, true, undefined, message.metadata.command_id, { command: message.metadata.command, risk_level: message.metadata.risk_level })"
                 :disabled="processingApproval || showCommentInput"
                 class="approve-btn"
                 aria-label="Approve command"
@@ -387,7 +406,7 @@
               <BaseButton
                 variant="danger"
                 size="sm"
-                @click="approveCommand(message.metadata.terminal_session_id, false, undefined, message.metadata.command_id)"
+                @click="approveCommand(message.metadata.terminal_session_id, false, undefined, message.metadata.command_id, { command: message.metadata.command, risk_level: message.metadata.risk_level })"
                 :disabled="processingApproval || showCommentInput"
                 class="deny-btn"
                 aria-label="Deny command"
@@ -487,6 +506,7 @@ import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useDisplaySettings } from '@/composables/useDisplaySettings'
+import { usePermissionStore } from '@/stores/usePermissionStore'
 import type { ChatMessage } from '@/stores/useChatStore'
 import MessageStatus from '@/components/ui/MessageStatus.vue'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
@@ -522,6 +542,7 @@ const emit = defineEmits<{
 const store = useChatStore()
 const controller = useChatController()
 const { displaySettings } = useDisplaySettings()
+const permissionStore = usePermissionStore()
 
 // Toast notifications
 const { showToast } = useToast()
@@ -559,6 +580,10 @@ const pendingApprovalDecision = ref<boolean | null>(null)
 
 // Auto-approve functionality state
 const autoApproveFuture = ref(false)
+
+// Permission v2: Project memory state
+const rememberForProject = ref(false)
+const currentProjectPath = ref<string | null>(null)
 
 // CRITICAL FIX: Prevent EmptyState from flashing during polling/reactivity updates
 // Once messages have been loaded, never show EmptyState again (prevents flicker)
@@ -727,7 +752,21 @@ const formatMessageContent = (content: string): string => {
     .replace(/\]0;[^\x07\n]*\x07?/g, '') // Set title without ESC: ]0;...
     .trim()
 
-  // Strip TOOL_CALL tags SECOND (internal metadata that shouldn't be displayed)
+  // Strip message type tags (Issue #680: Tags should not be visible in chat)
+  // These tags are used internally for message categorization but shouldn't display
+  // Handles both complete tags [TAG] and malformed tags [TAG without closing bracket
+  formatted = formatted
+    .replace(/\[THOUGHT\]?/gi, '')
+    .replace(/\[\/THOUGHT\]?/gi, '')
+    .replace(/\[PLANNING\]?/gi, '')
+    .replace(/\[\/PLANNING\]?/gi, '')
+    .replace(/\[DEBUG\]?/gi, '')
+    .replace(/\[\/DEBUG\]?/gi, '')
+    .replace(/\[SOURCES\]?/gi, '')
+    .replace(/\[\/SOURCES\]?/gi, '')
+    .trim()
+
+  // Strip TOOL_CALL tags (internal metadata that shouldn't be displayed)
   // Removes: <tool_call name="..." params="...">content</tool_call>
   formatted = formatted.replace(/<tool_call[^>]*>.*?<\/tool_call>/gs, '')
 
@@ -1004,7 +1043,14 @@ const pollCommandState = async (command_id: string, callback: (result: any) => v
 }
 
 // Command Approval - Use HTTP POST to agent-terminal API with dynamic URL
-const approveCommand = async (terminal_session_id: string, approved: boolean, comment?: string, command_id?: string) => {
+// Permission v2: Enhanced with project memory support
+const approveCommand = async (
+  terminal_session_id: string,
+  approved: boolean,
+  comment?: string,
+  command_id?: string,
+  commandInfo?: { command: string; risk_level: string }  // Permission v2: Command details for memory
+) => {
   if (!terminal_session_id) {
     logger.error('No terminal_session_id provided for approval')
     return
@@ -1017,6 +1063,9 @@ const approveCommand = async (terminal_session_id: string, approved: boolean, co
   }
   if (autoApproveFuture.value) {
     logger.debug('Auto-approve similar commands in future:', autoApproveFuture.value)
+  }
+  if (rememberForProject.value) {
+    logger.debug('Remember for project:', currentProjectPath.value)
   }
 
   try {
@@ -1032,7 +1081,9 @@ const approveCommand = async (terminal_session_id: string, approved: boolean, co
         approved,
         user_id: 'web_user',
         comment: comment || null,
-        auto_approve_future: autoApproveFuture.value  // Send auto-approve preference
+        auto_approve_future: autoApproveFuture.value,  // Send auto-approve preference
+        remember_for_project: rememberForProject.value,  // Permission v2
+        project_path: currentProjectPath.value  // Permission v2
       })
     })
 
@@ -1084,8 +1135,31 @@ const approveCommand = async (terminal_session_id: string, approved: boolean, co
         logger.warn('No command_id available for polling (legacy approval flow)')
       }
 
-      // Reset auto-approve checkbox after submission
+      // Permission v2: Store approval in project memory if requested
+      if (
+        rememberForProject.value &&
+        approved &&
+        currentProjectPath.value &&
+        commandInfo &&
+        permissionStore.isEnabled
+      ) {
+        const stored = await permissionStore.storeApproval(
+          currentProjectPath.value,
+          'web_user',
+          commandInfo.command,
+          commandInfo.risk_level,
+          'Bash',
+          comment
+        )
+        if (stored) {
+          logger.info('Approval stored in project memory')
+          notify('Approval remembered for this project', 'info')
+        }
+      }
+
+      // Reset checkboxes after submission
       autoApproveFuture.value = false
+      rememberForProject.value = false
     } else if (result.status === 'error') {
       logger.error('Approval error:', result.error)
       notify(`Approval failed: ${result.error}`, 'error')
@@ -1215,9 +1289,20 @@ watch(() => store.isTyping, (isTyping) => {
 //   }
 // }, { deep: true })
 
-// Scroll to bottom on mount
-onMounted(() => {
+// Scroll to bottom on mount and initialize permission store
+onMounted(async () => {
   nextTick(scrollToBottom)
+
+  // Permission v2: Initialize permission store
+  try {
+    await permissionStore.initialize()
+    logger.debug('Permission store initialized:', {
+      enabled: permissionStore.isEnabled,
+      mode: permissionStore.currentMode
+    })
+  } catch (error) {
+    logger.warn('Failed to initialize permission store:', error)
+  }
 })
 </script>
 
@@ -1904,6 +1989,27 @@ onMounted(() => {
 }
 
 .auto-approve-hint i {
+  @apply mt-0.5;
+}
+
+/* Permission v2: Remember for project checkbox section */
+.remember-project-section {
+  @apply mt-3 mb-3 p-3 bg-green-50 border border-green-200 rounded-lg;
+}
+
+.remember-project-checkbox {
+  @apply flex items-center gap-2 cursor-pointer;
+}
+
+.remember-project-checkbox .checkbox-label i {
+  @apply text-green-600;
+}
+
+.remember-project-hint {
+  @apply mt-2 pl-6 flex items-start gap-2 text-xs text-green-700;
+}
+
+.remember-project-hint i {
   @apply mt-0.5;
 }
 

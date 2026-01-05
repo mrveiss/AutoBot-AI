@@ -1,8 +1,6 @@
 <template>
   <ErrorBoundary fallback="Settings panel failed to load.">
 <div class="settings-panel">
-  <h2>Settings</h2>
-
   <!-- Tab Navigation (now using router-links) -->
   <SettingsTabNavigation
     :hasUnsavedChanges="hasUnsavedChanges"
@@ -126,7 +124,6 @@ const tabs = ref<SettingsTab[]>([
   { id: 'chat', label: 'Chat' },
   { id: 'backend', label: 'Backend' },
   { id: 'ui', label: 'UI' },
-  { id: 'npu-workers', label: 'NPU Workers' },
   { id: 'logging', label: 'Logging' },
   { id: 'cache', label: 'Cache' },
   { id: 'data-storage', label: 'Data Storage' },
@@ -840,14 +837,6 @@ onMounted(async () => {
   min-height: calc(100vh - 40px);
 }
 
-.settings-panel h2 {
-  color: #2c3e50;
-  margin-bottom: 30px;
-  text-align: center;
-  font-weight: 600;
-  font-size: 28px;
-}
-
 .settings-content {
   background: #ffffff;
   border-radius: 8px;
@@ -951,9 +940,6 @@ onMounted(async () => {
 background: #1a1a1a;
   }
 
-  .settings-panel h2 {
-color: #ffffff;
-  }
 
   .settings-content {
 background: #2d2d2d;
@@ -975,11 +961,6 @@ border-top-color: #555;
 @media (max-width: 768px) {
   .settings-panel {
 padding: 12px;
-  }
-
-  .settings-panel h2 {
-font-size: 24px;
-margin-bottom: 20px;
   }
 
   .settings-actions {

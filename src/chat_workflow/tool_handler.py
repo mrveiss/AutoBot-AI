@@ -598,7 +598,8 @@ class ToolHandlerMixin:
                 if exec_result:
                     execution_results.append(exec_result)
                 additional_response_parts.append(add_text)
-            else:
+            elif msg is not None:
+                # Issue #680: Only yield non-None WorkflowMessage objects
                 yield msg
 
     async def _process_single_command(

@@ -295,8 +295,9 @@ export class ChatController {
                   type: 'command_approval_request',
                   metadata: {
                     ...data.metadata,
-                    requires_approval: true,
-                    approval_status: 'pending'
+                    requires_approval: true
+                    // Note: approval_status is NOT set here - it's only set after user action
+                    // This allows the template to show approval buttons when !approval_status
                   }
                 })
                 continue

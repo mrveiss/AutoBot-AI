@@ -62,6 +62,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("backend.api.sandbox", "/sandbox", ["sandbox"], "sandbox"),
     ("backend.api.security", "/security", ["security"], "security"),
     ("backend.api.security_assessment", "", ["security-assessment"], "security_assessment"),
+    # Permission system v2 (Claude Code-style)
+    ("backend.api.permissions", "", ["permissions"], "permissions"),
     # Code analysis and search
     ("backend.api.code_search", "/code-search", ["code-search"], "code_search"),
     ("backend.api.anti_pattern", "/anti-pattern", ["anti-pattern", "code-analysis"], "anti_pattern"),

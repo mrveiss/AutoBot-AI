@@ -1,7 +1,27 @@
 <template>
   <div class="infrastructure-settings">
-    <h3>Infrastructure & Updates</h3>
+    <!-- Sub-tabs for Infrastructure -->
+    <div class="infrastructure-tabs">
+      <button
+        class="infrastructure-tab"
+        :class="{ active: activeSubTab === 'updates' }"
+        @click="activeSubTab = 'updates'"
+      >
+        <i class="fas fa-download mr-2"></i>
+        System Updates
+      </button>
+      <button
+        class="infrastructure-tab"
+        :class="{ active: activeSubTab === 'npu-workers' }"
+        @click="activeSubTab = 'npu-workers'"
+      >
+        <i class="fas fa-microchip mr-2"></i>
+        NPU Workers
+      </button>
+    </div>
 
+    <!-- System Updates Tab -->
+    <div v-show="activeSubTab === 'updates'">
     <!-- System Updates (Admin Only) - Issue #544 -->
     <div v-if="userStore.isAdmin" class="settings-section">
       <h4>System Updates</h4>
@@ -148,6 +168,12 @@
         </button>
       </template>
     </BaseModal>
+    </div>
+
+    <!-- NPU Workers Tab -->
+    <div v-show="activeSubTab === 'npu-workers'">
+      <NPUWorkersSettings :isSettingsLoaded="isSettingsLoaded" @change="$emit('change')" />
+    </div>
   </div>
 </template>
 
@@ -155,11 +181,15 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useUserStore } from '../../stores/useUserStore'
 import BaseModal from '@/components/ui/BaseModal.vue'
+import NPUWorkersSettings from './NPUWorkersSettings.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { getBackendUrl } from '@/config/ssot-config'
 
 const logger = createLogger('InfrastructureSettings')
 const userStore = useUserStore()
+
+// Sub-tab state
+const activeSubTab = ref<'updates' | 'npu-workers'>('updates')
 
 // Props
 interface Props {
@@ -434,6 +464,41 @@ onMounted(async () => {
 <style scoped>
 .infrastructure-settings {
   padding: 24px;
+}
+
+/* Infrastructure Sub-tabs */
+.infrastructure-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 2px solid #e9ecef;
+  padding-bottom: 0;
+}
+
+.infrastructure-tab {
+  padding: 12px 20px;
+  border: none;
+  background: transparent;
+  color: #6c757d;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  display: flex;
+  align-items: center;
+}
+
+.infrastructure-tab:hover {
+  color: #495057;
+  background: #f8f9fa;
+}
+
+.infrastructure-tab.active {
+  color: #007bff;
+  border-bottom-color: #007bff;
+  background: transparent;
 }
 
 .infrastructure-settings h3 {

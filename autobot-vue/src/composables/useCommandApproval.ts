@@ -9,8 +9,10 @@
  * - Poll command execution state
  * - Comment functionality
  * - Auto-approve settings
+ * - Remember approval for project (Permission v2)
  *
  * Issue #184: Extracted from ChatMessages.vue for better maintainability
+ * Issue: Permission System v2 - Claude Code Style
  */
 
 import { ref } from 'vue'
@@ -18,6 +20,7 @@ import appConfig from '@/config/AppConfig.js'
 import { useToast } from '@/composables/useToast'
 import { createLogger } from '@/utils/debugUtils'
 import { useChatStore } from '@/stores/useChatStore'
+import { usePermissionStore } from '@/stores/usePermissionStore'
 
 const logger = createLogger('useCommandApproval')
 
@@ -28,6 +31,8 @@ export interface CommandApprovalState {
   approvalComment: string
   pendingApprovalDecision: boolean | null
   autoApproveFuture: boolean
+  rememberForProject: boolean // Permission v2: Remember approval for this project
+  currentProjectPath: string | null // Permission v2: Current project path
 }
 
 export interface CommandResult {
@@ -42,6 +47,7 @@ export interface CommandResult {
 export function useCommandApproval() {
   const { showToast } = useToast()
   const chatStore = useChatStore()
+  const permissionStore = usePermissionStore()
 
   // State
   const processingApproval = ref(false)
@@ -51,9 +57,26 @@ export function useCommandApproval() {
   const pendingApprovalDecision = ref<boolean | null>(null)
   const autoApproveFuture = ref(false)
 
+  // Permission v2: Remember for project state
+  const rememberForProject = ref(false)
+  const currentProjectPath = ref<string | null>(null)
+  const currentUserId = ref<string>('web_user')
+
   // Helper notification
   const notify = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
     showToast(message, type, type === 'error' ? 5000 : 3000)
+  }
+
+  /**
+   * Set the current project path for approval memory
+   * Permission v2: Called when project context changes
+   */
+  const setProjectContext = (projectPath: string | null, userId?: string) => {
+    currentProjectPath.value = projectPath
+    if (userId) {
+      currentUserId.value = userId
+    }
+    logger.debug('Project context set:', { projectPath, userId })
   }
 
   /**
@@ -134,13 +157,17 @@ export function useCommandApproval() {
 
   /**
    * Approve or deny a command via HTTP POST to agent-terminal API
+   *
+   * Permission v2: If rememberForProject is true and user approves,
+   * stores the approval in project memory for future auto-approval.
    */
   const approveCommand = async (
     terminal_session_id: string,
     approved: boolean,
     comment?: string,
     command_id?: string,
-    onMessageUpdate?: (sessionId: string, status: string, comment?: string) => void
+    onMessageUpdate?: (sessionId: string, status: string, comment?: string) => void,
+    commandInfo?: { command: string; risk_level: string } // Permission v2: Command details for memory
   ) => {
     if (!terminal_session_id) {
       logger.error('No terminal_session_id provided for approval')
@@ -158,6 +185,9 @@ export function useCommandApproval() {
     if (autoApproveFuture.value) {
       logger.debug('Auto-approve similar commands in future:', autoApproveFuture.value)
     }
+    if (rememberForProject.value) {
+      logger.debug('Remember for project:', currentProjectPath.value)
+    }
 
     try {
       // Get backend URL from appConfig
@@ -172,9 +202,11 @@ export function useCommandApproval() {
         },
         body: JSON.stringify({
           approved,
-          user_id: 'web_user',
+          user_id: currentUserId.value,
           comment: comment || null,
-          auto_approve_future: autoApproveFuture.value // Send auto-approve preference
+          auto_approve_future: autoApproveFuture.value, // Send auto-approve preference
+          remember_for_project: rememberForProject.value, // Permission v2
+          project_path: currentProjectPath.value // Permission v2
         })
       })
 
@@ -217,8 +249,31 @@ export function useCommandApproval() {
           logger.warn('No command_id available for polling (legacy approval flow)')
         }
 
-        // Reset auto-approve checkbox after submission
+        // Permission v2: Store approval in project memory if requested
+        if (
+          rememberForProject.value &&
+          approved &&
+          currentProjectPath.value &&
+          commandInfo &&
+          permissionStore.isEnabled
+        ) {
+          const stored = await permissionStore.storeApproval(
+            currentProjectPath.value,
+            currentUserId.value,
+            commandInfo.command,
+            commandInfo.risk_level,
+            'Bash',
+            comment
+          )
+          if (stored) {
+            logger.info('Approval stored in project memory')
+            notify('Approval remembered for this project', 'info')
+          }
+        }
+
+        // Reset checkboxes after submission
         autoApproveFuture.value = false
+        rememberForProject.value = false
         // Issue #680: Clear pending approval flag to allow polling to resume
         chatStore.setPendingApproval(false)
       } else if (result.status === 'error') {
@@ -315,12 +370,19 @@ export function useCommandApproval() {
     pendingApprovalDecision,
     autoApproveFuture,
 
+    // Permission v2: Project memory state
+    rememberForProject,
+    currentProjectPath,
+
     // Methods
     approveCommand,
     pollCommandState,
     promptForComment,
     submitApprovalWithComment,
     cancelComment,
-    getRiskClass
+    getRiskClass,
+
+    // Permission v2: Project context methods
+    setProjectContext
   }
 }

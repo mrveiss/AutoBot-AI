@@ -290,8 +290,44 @@ Examples:
         )
 
         # Execute each step in sequence
+        # Track completed step results for dependency resolution
+        completed_results: Dict[str, StepResult] = {}
+
         for task in plan.steps:
-            # Yield step start
+            # Check dependencies - ensure all required previous steps completed
+            if task.dependencies:
+                missing_deps = [
+                    dep for dep in task.dependencies if dep not in completed_results
+                ]
+                if missing_deps:
+                    logger.error(
+                        "[OverseerAgent] Step %d has unmet dependencies: %s",
+                        task.step_number, missing_deps
+                    )
+                    yield OverseerUpdate(
+                        update_type="error",
+                        plan_id=plan.plan_id,
+                        task_id=task.task_id,
+                        step_number=task.step_number,
+                        total_steps=task.total_steps,
+                        status="failed",
+                        content={"error": f"Unmet dependencies: {missing_deps}"},
+                    )
+                    continue
+
+            # Gather context from previous steps for this task
+            previous_context = {}
+            if task.step_number > 1:
+                # Get outputs from all previous steps as context
+                for prev_task_id, prev_result in completed_results.items():
+                    if prev_result.output:
+                        previous_context[prev_task_id] = {
+                            "command": prev_result.command,
+                            "output": prev_result.output,
+                            "return_code": prev_result.return_code,
+                        }
+
+            # Yield step start with dependency context
             yield OverseerUpdate(
                 update_type="step_start",
                 plan_id=plan.plan_id,
@@ -299,15 +335,24 @@ Examples:
                 step_number=task.step_number,
                 total_steps=task.total_steps,
                 status="executing",
-                content={"description": task.description, "command": task.command},
+                content={
+                    "description": task.description,
+                    "command": task.command,
+                    "previous_context": previous_context if previous_context else None,
+                },
             )
+
+            step_result: Optional[StepResult] = None
 
             try:
                 # Execute the step through the executor
                 # The executor will yield stream chunks for long-running commands
                 async for update in executor.execute_step(task):
                     if isinstance(update, StepResult):
-                        # Step completed
+                        # Step completed - store result for dependencies
+                        step_result = update
+                        completed_results[task.task_id] = update
+
                         yield OverseerUpdate(
                             update_type="step_complete",
                             plan_id=plan.plan_id,
