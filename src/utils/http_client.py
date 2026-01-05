@@ -187,6 +187,9 @@ class HTTPClientManager:
 
         Returns:
             ClientResponse: The response object
+
+        Note: For streaming responses, caller should use increment_active()/decrement_active()
+        to prevent pool recreation during streaming.
         """
         # Check if pool adjustment needed (non-blocking)
         asyncio.create_task(self._adjust_pool_size())
@@ -204,30 +207,47 @@ class HTTPClientManager:
         except Exception as e:
             async with self._counter_lock:
                 self._error_count += 1
+                # Also decrement active on error since we're not returning response
+                self._active_requests = max(0, self._active_requests - 1)
             logger.error("HTTP request failed: %s", e)
             raise
-        finally:
-            # Decrement active request count and check for pending pool recreation
-            should_recreate = False
-            async with self._counter_lock:
-                self._active_requests = max(0, self._active_requests - 1)
-                # Issue #352: Check if we should apply deferred pool recreation
-                if (
-                    self._active_requests == 0
-                    and self._pending_pool_recreation
-                    and self._session
-                    and not self._session.closed
-                ):
-                    self._pending_pool_recreation = False
-                    should_recreate = True
 
-            # Issue #352: Apply deferred recreation outside of lock to avoid deadlock
-            if should_recreate:
-                logger.info(
-                    "Applying deferred session recreation "
-                    f"(new pool size: {self._current_pool_size})"
-                )
-                await self._create_session()
+    async def decrement_active(self):
+        """
+        Decrement active request counter and potentially trigger deferred pool recreation.
+
+        Issue #680: Call this when a streaming response is fully consumed, not when the
+        initial request completes. This prevents pool recreation from closing streaming
+        connections mid-stream.
+
+        Usage:
+            response = await http_client.post(url, ...)
+            try:
+                async with response:
+                    # stream the response
+            finally:
+                await http_client.decrement_active()
+        """
+        should_recreate = False
+        async with self._counter_lock:
+            self._active_requests = max(0, self._active_requests - 1)
+            # Issue #352: Check if we should apply deferred pool recreation
+            if (
+                self._active_requests == 0
+                and self._pending_pool_recreation
+                and self._session
+                and not self._session.closed
+            ):
+                self._pending_pool_recreation = False
+                should_recreate = True
+
+        # Issue #352: Apply deferred recreation outside of lock to avoid deadlock
+        if should_recreate:
+            logger.info(
+                "Applying deferred session recreation "
+                f"(new pool size: {self._current_pool_size})"
+            )
+            await self._create_session()
 
     async def get(self, url: str, **kwargs) -> aiohttp.ClientResponse:
         """Convenience method for GET requests."""

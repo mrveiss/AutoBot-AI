@@ -8,17 +8,22 @@ Executes a single task/step and provides explanations.
 Handles streaming output for long-running commands (like nmap).
 
 Flow for each step:
-1. Generate Part 1 explanation (what the command does)
-2. Execute the command with streaming output
-3. Wait for command completion
-4. Generate Part 2 explanation (what the output shows)
+1. Validate command safety
+2. Generate Part 1 explanation (what the command does)
+3. Execute the command in PTY terminal (visible to user)
+4. Stream output in real-time
+5. Generate Part 2 explanation (what the output shows)
+
+Security: Commands are validated against dangerous patterns before execution.
+Execution: Uses PTY integration for commands to appear in user's terminal.
 """
 
 import asyncio
 import logging
+import re
 import time
 from datetime import datetime
-from typing import AsyncGenerator, Optional, Union
+from typing import AsyncGenerator, List, Optional, Set, Tuple, Union
 
 from .command_explanation_service import (
     CommandExplanationService,
@@ -33,7 +38,44 @@ from .types import (
     StreamChunk,
 )
 
+# Import PTY manager for terminal integration
+try:
+    from backend.services.simple_pty import simple_pty_manager
+    PTY_AVAILABLE = True
+except ImportError:
+    simple_pty_manager = None
+    PTY_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
+
+# Security: Dangerous command patterns that should be blocked or require confirmation
+DANGEROUS_PATTERNS: List[Tuple[re.Pattern, str]] = [
+    (re.compile(r"\brm\s+(-[rf]+\s+)*(/|~|\$HOME)", re.IGNORECASE), "Recursive delete on root/home"),
+    (re.compile(r"\brm\s+-rf\s+\*", re.IGNORECASE), "Recursive delete all files"),
+    (re.compile(r":\s*\(\s*\)\s*\{\s*:\s*\|"), "Fork bomb pattern"),
+    (re.compile(r"\bmkfs\b", re.IGNORECASE), "Filesystem format"),
+    (re.compile(r"\bdd\s+.*of=/dev/", re.IGNORECASE), "Direct disk write"),
+    (re.compile(r"\bchmod\s+-R\s+777\s+/", re.IGNORECASE), "Recursive chmod on root"),
+    (re.compile(r"\bchown\s+-R\s+.*\s+/\s*$", re.IGNORECASE), "Recursive chown on root"),
+    (re.compile(r">\s*/dev/sd[a-z]", re.IGNORECASE), "Write to disk device"),
+    (re.compile(r"\bshutdown\b|\breboot\b|\bpoweroff\b", re.IGNORECASE), "System shutdown/reboot"),
+    (re.compile(r"\bsystemctl\s+(stop|disable)\s+", re.IGNORECASE), "Stop/disable system service"),
+    (re.compile(r"\bkill\s+-9\s+-1\b", re.IGNORECASE), "Kill all processes"),
+    (re.compile(r"\biptables\s+-F\b", re.IGNORECASE), "Flush firewall rules"),
+]
+
+# Commands that are always safe to execute
+SAFE_COMMANDS: Set[str] = {
+    "ls", "pwd", "whoami", "hostname", "date", "uptime", "uname",
+    "cat", "head", "tail", "less", "more", "wc", "sort", "uniq",
+    "grep", "awk", "sed", "cut", "tr", "find", "locate",
+    "df", "du", "free", "top", "htop", "ps", "pgrep",
+    "ip", "ifconfig", "netstat", "ss", "ping", "traceroute", "dig", "nslookup", "host",
+    "nmap", "arp", "route",
+    "file", "stat", "which", "whereis", "type",
+    "echo", "printf", "env", "printenv",
+    "id", "groups", "w", "who", "last",
+}
 
 
 class StepExecutorAgent:
@@ -42,27 +84,72 @@ class StepExecutorAgent:
 
     Handles:
     - Command explanation generation (Part 1)
-    - Command execution with streaming output
+    - Command execution in PTY terminal (visible to user)
     - Output explanation generation (Part 2)
     """
 
     def __init__(
         self,
         session_id: str,
+        pty_session_id: Optional[str] = None,
         explanation_service: Optional[CommandExplanationService] = None,
     ):
         """
         Initialize the StepExecutorAgent.
 
         Args:
-            session_id: The chat session ID
+            session_id: The chat session ID (conversation_id)
+            pty_session_id: PTY session ID for terminal execution (usually same as session_id)
             explanation_service: Optional custom explanation service
         """
         self.session_id = session_id
+        # PTY session ID is usually the conversation_id
+        self.pty_session_id = pty_session_id or session_id
         self.explanation_service = (
             explanation_service or get_command_explanation_service()
         )
         self._command_executor = None
+        self._chat_history_manager = None
+
+    def _validate_command(self, command: str) -> Tuple[bool, Optional[str]]:
+        """
+        Validate a command for safety before execution.
+
+        Args:
+            command: The shell command to validate
+
+        Returns:
+            Tuple of (is_safe, reason_if_unsafe)
+        """
+        if not command or not command.strip():
+            return False, "Empty command"
+
+        # Extract base command
+        parts = command.strip().split()
+        if not parts:
+            return False, "Empty command"
+
+        base_cmd = parts[0].split("/")[-1]  # Handle full paths like /usr/bin/ls
+
+        # Check against dangerous patterns
+        for pattern, reason in DANGEROUS_PATTERNS:
+            if pattern.search(command):
+                logger.warning(
+                    "[StepExecutor] BLOCKED dangerous command: %s (reason: %s)",
+                    command[:50],
+                    reason,
+                )
+                return False, f"Blocked for security: {reason}"
+
+        # Check if base command is in safe list
+        if base_cmd not in SAFE_COMMANDS:
+            # Log but allow - user can decide
+            logger.info(
+                "[StepExecutor] Command '%s' not in safe list, proceeding with caution",
+                base_cmd,
+            )
+
+        return True, None
 
     async def _get_command_executor(self):
         """Get or create the command executor."""
@@ -117,22 +204,43 @@ class StepExecutorAgent:
             )
             return
 
-        # Phase 1: Generate command explanation BEFORE execution
-        command_explanation = await self._generate_command_explanation(task.command)
+        # Security: Validate command before execution
+        is_safe, safety_reason = self._validate_command(task.command)
+        if not is_safe:
+            task.status = StepStatus.FAILED
+            task.error = safety_reason
+            yield StepResult(
+                task_id=task.task_id,
+                step_number=task.step_number,
+                total_steps=task.total_steps,
+                status=StepStatus.FAILED,
+                command=task.command,
+                command_explanation=None,
+                output=f"Command blocked: {safety_reason}",
+                output_explanation=OutputExplanation(
+                    summary="This command was blocked for security reasons.",
+                    key_findings=[safety_reason or "Dangerous operation detected"],
+                ),
+                return_code=-1,
+                execution_time=time.time() - start_time,
+                error=safety_reason,
+            )
+            return
 
-        # Yield initial update with command explanation
-        yield StreamChunk(
-            task_id=task.task_id,
-            step_number=task.step_number,
-            chunk_type="command_explanation",
-            content="",  # Content is in the command_explanation field
-            is_final=False,
-        )
-
-        # Phase 2: Execute command with streaming output
+        # Phase 1: Execute command in terminal with streaming output
+        # User sees command + output in real-time in terminal
         task.status = StepStatus.STREAMING
         output_buffer = []
         return_code = 0
+
+        # Notify that execution is starting
+        yield StreamChunk(
+            task_id=task.task_id,
+            step_number=task.step_number,
+            chunk_type="execution_start",
+            content=f"Executing: {task.command}",
+            is_final=False,
+        )
 
         try:
             async for chunk in self._execute_command_streaming(task.command):
@@ -159,7 +267,7 @@ class StepExecutorAgent:
                 total_steps=task.total_steps,
                 status=StepStatus.FAILED,
                 command=task.command,
-                command_explanation=command_explanation,
+                command_explanation=None,
                 output=f"Error: {e}",
                 output_explanation=None,
                 return_code=-1,
@@ -171,8 +279,21 @@ class StepExecutorAgent:
         # Combine all output
         full_output = "".join(output_buffer)
 
-        # Phase 3: Generate output explanation AFTER completion
+        # Phase 2: AFTER command completes and terminal is ready,
+        # generate explanations for what we just did
         task.status = StepStatus.EXPLAINING
+
+        # Notify that we're now generating explanations
+        yield StreamChunk(
+            task_id=task.task_id,
+            step_number=task.step_number,
+            chunk_type="explaining",
+            content="Generating explanations...",
+            is_final=False,
+        )
+
+        # Generate BOTH explanations AFTER execution
+        command_explanation = await self._generate_command_explanation(task.command)
         output_explanation = await self._generate_output_explanation(
             task.command, full_output, return_code
         )
@@ -241,76 +362,231 @@ class StepExecutorAgent:
                 key_findings=["See output above for details."],
             )
 
+    async def _get_chat_history_manager(self):
+        """Get or create chat history manager."""
+        if self._chat_history_manager is None:
+            try:
+                from src.chat_history import ChatHistoryManager
+                self._chat_history_manager = ChatHistoryManager()
+            except ImportError:
+                logger.warning("ChatHistoryManager not available")
+        return self._chat_history_manager
+
+    def _write_to_pty(self, text: str) -> bool:
+        """
+        Write text to PTY terminal.
+
+        Args:
+            text: Text to write (command + newline)
+
+        Returns:
+            True if written successfully
+        """
+        if not PTY_AVAILABLE or not simple_pty_manager:
+            logger.warning("[StepExecutor] PTY not available")
+            return False
+
+        try:
+            pty = simple_pty_manager.get_session(self.pty_session_id)
+
+            if not pty or not pty.is_alive():
+                logger.warning(
+                    "[StepExecutor] PTY session %s not found or not alive",
+                    self.pty_session_id,
+                )
+                # Try to create a new PTY session
+                from src.constants.path_constants import PATH
+                pty = simple_pty_manager.create_session(
+                    self.pty_session_id,
+                    initial_cwd=str(PATH.PROJECT_ROOT)
+                )
+                if not pty:
+                    logger.error("[StepExecutor] Failed to create PTY session")
+                    return False
+                logger.info("[StepExecutor] Created new PTY session %s", self.pty_session_id)
+
+            success = pty.write_input(text)
+            if success:
+                logger.debug("[StepExecutor] Wrote to PTY: %s", text[:50])
+            return success
+
+        except Exception as e:
+            logger.error("[StepExecutor] Error writing to PTY: %s", e)
+            return False
+
     async def _execute_command_streaming(
         self, command: str
     ) -> AsyncGenerator[StreamChunk, None]:
         """
-        Execute a command and stream its output.
+        Execute a command in PTY terminal and stream output.
 
-        Uses asyncio subprocess for streaming.
+        Uses PTY integration so commands appear in user's terminal.
+        Output is polled from chat history (where WebSocket handler saves it).
         """
-        logger.info("[StepExecutor] Executing command: %s", command[:100])
+        logger.info("[StepExecutor] Executing command in PTY: %s", command[:100])
+        task_id = f"exec_{self.pty_session_id}_{int(time.time())}"
 
+        # Try PTY execution first (preferred - shows in user's terminal)
+        if PTY_AVAILABLE and simple_pty_manager:
+            # Write command to PTY
+            if not self._write_to_pty(f"{command}\n"):
+                logger.warning("[StepExecutor] PTY write failed, falling back to subprocess")
+            else:
+                # Poll for output from chat history
+                # The terminal WebSocket handler saves output to chat
+                chat_manager = await self._get_chat_history_manager()
+                if chat_manager:
+                    yield StreamChunk(
+                        task_id=task_id,
+                        step_number=0,
+                        chunk_type="pty_execution",
+                        content=f"Executing: {command}",
+                        is_final=False,
+                    )
+
+                    # Poll for output completion
+                    output = await self._poll_pty_output(chat_manager, timeout=60.0)
+
+                    # Yield final output
+                    yield StreamChunk(
+                        task_id=task_id,
+                        step_number=0,
+                        chunk_type="stdout",
+                        content=output,
+                        is_final=False,
+                    )
+
+                    # Yield return code (assume 0 for PTY execution)
+                    # TODO: Detect actual return code from PTY
+                    yield StreamChunk(
+                        task_id=task_id,
+                        step_number=0,
+                        chunk_type="return_code",
+                        content="0",
+                        is_final=True,
+                    )
+                    return
+
+        # Fallback: Use subprocess (output won't appear in user's terminal)
+        logger.info("[StepExecutor] Using subprocess fallback for: %s", command[:50])
+        async for chunk in self._execute_subprocess_streaming(command, task_id):
+            yield chunk
+
+    async def _poll_pty_output(
+        self,
+        chat_manager,
+        timeout: float = 60.0,
+        stability_threshold: float = 1.0,
+    ) -> str:
+        """
+        Poll chat history for PTY output until stable.
+
+        Args:
+            chat_manager: ChatHistoryManager instance
+            timeout: Maximum wait time
+            stability_threshold: Seconds of unchanged output to consider stable
+
+        Returns:
+            Collected output from chat history
+        """
+        from src.utils.encoding_utils import strip_ansi_codes
+
+        start_time = time.time()
+        last_output = ""
+        last_change_time = start_time
+        poll_interval = 0.2
+
+        logger.debug("[StepExecutor] Polling for PTY output (timeout=%ss)", timeout)
+
+        while (time.time() - start_time) < timeout:
+            try:
+                messages = await chat_manager.get_session_messages(
+                    session_id=self.session_id, limit=10
+                )
+
+                # Extract terminal output from recent messages
+                current_output = ""
+                for msg in reversed(messages):
+                    if msg.get("sender") == "terminal" and msg.get("text"):
+                        text = strip_ansi_codes(msg["text"])
+                        if text and not text.startswith("$"):
+                            current_output = text
+                            break
+
+                # Check stability
+                if current_output and current_output == last_output:
+                    stable_duration = time.time() - last_change_time
+                    if stable_duration >= stability_threshold:
+                        logger.info(
+                            "[StepExecutor] Output stabilized after %.2fs",
+                            time.time() - start_time,
+                        )
+                        return current_output
+                elif current_output != last_output:
+                    last_output = current_output
+                    last_change_time = time.time()
+
+            except Exception as e:
+                logger.warning("[StepExecutor] Polling error: %s", e)
+
+            await asyncio.sleep(poll_interval)
+            poll_interval = min(poll_interval * 1.2, 2.0)
+
+        logger.warning("[StepExecutor] Polling timeout reached")
+        return last_output
+
+    async def _execute_subprocess_streaming(
+        self, command: str, task_id: str
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """
+        Fallback: Execute command via subprocess (output won't appear in terminal UI).
+        """
         try:
-            # Use asyncio subprocess for streaming
             process = await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            # Create task ID for chunks
-            task_id = f"exec_{id(process)}"
+            output_queue: asyncio.Queue[StreamChunk] = asyncio.Queue()
+            done_event = asyncio.Event()
 
-            # Stream stdout
-            async def stream_stdout():
-                while True:
-                    line = await process.stdout.readline()
-                    if not line:
-                        break
-                    yield StreamChunk(
-                        task_id=task_id,
-                        step_number=0,  # Will be overwritten by caller
-                        chunk_type="stdout",
-                        content=line.decode("utf-8", errors="replace"),
-                        is_final=False,
-                    )
+            async def read_stream(stream, chunk_type: str):
+                try:
+                    while True:
+                        line = await stream.readline()
+                        if not line:
+                            break
+                        chunk = StreamChunk(
+                            task_id=task_id,
+                            step_number=0,
+                            chunk_type=chunk_type,
+                            content=line.decode("utf-8", errors="replace"),
+                            is_final=False,
+                        )
+                        await output_queue.put(chunk)
+                except Exception as e:
+                    logger.error("Error reading %s: %s", chunk_type, e)
 
-            # Stream stderr
-            async def stream_stderr():
-                while True:
-                    line = await process.stderr.readline()
-                    if not line:
-                        break
-                    yield StreamChunk(
-                        task_id=task_id,
-                        step_number=0,
-                        chunk_type="stderr",
-                        content=line.decode("utf-8", errors="replace"),
-                        is_final=False,
-                    )
+            stdout_task = asyncio.create_task(read_stream(process.stdout, "stdout"))
+            stderr_task = asyncio.create_task(read_stream(process.stderr, "stderr"))
 
-            # Interleave stdout and stderr
-            stdout_task = asyncio.create_task(self._collect_stream(stream_stdout()))
-            stderr_task = asyncio.create_task(self._collect_stream(stream_stderr()))
+            async def wait_for_completion():
+                await asyncio.gather(stdout_task, stderr_task)
+                done_event.set()
 
-            # Yield chunks as they come
-            stdout_chunks, stderr_chunks = await asyncio.gather(
-                stdout_task, stderr_task
-            )
+            completion_task = asyncio.create_task(wait_for_completion())
 
-            # Yield all stdout chunks
-            for chunk in stdout_chunks:
-                yield chunk
+            while not done_event.is_set() or not output_queue.empty():
+                try:
+                    chunk = await asyncio.wait_for(output_queue.get(), timeout=0.1)
+                    yield chunk
+                except asyncio.TimeoutError:
+                    continue
 
-            # Yield all stderr chunks
-            for chunk in stderr_chunks:
-                yield chunk
-
-            # Wait for process to complete
+            await completion_task
             return_code = await process.wait()
 
-            # Yield return code as final chunk
             yield StreamChunk(
                 task_id=task_id,
                 step_number=0,
@@ -320,7 +596,7 @@ class StepExecutorAgent:
             )
 
         except Exception as e:
-            logger.error("[StepExecutor] Command execution error: %s", e)
+            logger.error("[StepExecutor] Subprocess error: %s", e)
             yield StreamChunk(
                 task_id="error",
                 step_number=0,
