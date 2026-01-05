@@ -319,6 +319,15 @@ const routes: RouteRecordRaw[] = [
           title: 'Grafana Dashboards',
           parent: 'monitoring'
         }
+      },
+      {
+        path: 'operations',
+        name: 'monitoring-operations',
+        component: () => import('@/views/OperationsView.vue'),
+        meta: {
+          title: 'Operations',
+          parent: 'monitoring'
+        }
       }
     ]
   },
@@ -462,15 +471,6 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
-        path: 'npu-workers',
-        name: 'settings-npu-workers',
-        component: () => import('@/components/settings/NPUWorkersSettings.vue'),
-        meta: {
-          title: 'NPU Workers',
-          parent: 'settings'
-        }
-      },
-      {
         path: 'logging',
         name: 'settings-logging',
         component: () => import('@/components/settings/LoggingSettings.vue'),
@@ -531,6 +531,17 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: 'Developer',
           parent: 'settings'
+        }
+      },
+      {
+        path: 'permissions',
+        name: 'settings-permissions',
+        component: () => import('@/components/settings/PermissionSettings.vue'),
+        meta: {
+          title: 'Permissions',
+          parent: 'settings',
+          icon: 'fas fa-shield-halved',
+          description: 'Claude Code-style permission system'
         }
       }
     ]
@@ -724,7 +735,7 @@ router.beforeEach(async (to, from, next) => {
     // Update active tab in store (with null safety)
     if (to.name && typeof to.name === 'string' && appStore && typeof appStore.updateRoute === 'function') {
       const tabName = to.name.split('-')[0] // Extract main section
-      const validTabs = ['chat', 'knowledge', 'tools', 'monitoring', 'analytics', 'infrastructure', 'secrets', 'settings'] as const
+      const validTabs = ['chat', 'knowledge', 'tools', 'monitoring', 'operations', 'analytics', 'infrastructure', 'secrets', 'settings'] as const
       type ValidTab = typeof validTabs[number]
 
       if ((validTabs as readonly string[]).includes(tabName)) {

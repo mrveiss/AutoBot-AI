@@ -4,7 +4,8 @@ import { generateChatId } from '@/utils/ChatIdGenerator.js'
 
 // Issue #156 Fix: Changed 'desktop' to 'infrastructure' to match router routes
 // Issue #545: Added 'analytics' for consolidated analytics section
-export type TabType = 'chat' | 'infrastructure' | 'knowledge' | 'tools' | 'monitoring' | 'analytics' | 'secrets' | 'settings'
+// Issue #591: Added 'operations' for long-running operations tracker
+export type TabType = 'chat' | 'infrastructure' | 'knowledge' | 'tools' | 'monitoring' | 'operations' | 'analytics' | 'secrets' | 'settings'
 
 export interface BackendStatus {
   text: string
@@ -190,6 +191,7 @@ export const useAppStore = defineStore('app', () => {
     // Handle router navigation if router is provided
     if (router) {
       // Issue #156 Fix: Changed 'desktop' to 'infrastructure' to match TabType and router routes
+      // Issue #591: Added 'operations' and 'analytics' routes
       const routeMap: Record<TabType, string> = {
         'chat': '/chat',
         'infrastructure': '/infrastructure',
@@ -197,6 +199,8 @@ export const useAppStore = defineStore('app', () => {
         'secrets': '/secrets',
         'tools': '/tools',
         'monitoring': '/monitoring',
+        'operations': '/operations',
+        'analytics': '/analytics',
         'settings': '/settings'
       };
 
