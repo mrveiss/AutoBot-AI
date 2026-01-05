@@ -12,7 +12,7 @@ and targeted testing suggestions.
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -21,6 +21,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
 from src.constants.threshold_constants import TimingConstants
+from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -407,6 +408,239 @@ async def analyze_file_complexity(file_path: str) -> float:
 
 
 # ============================================================================
+# Prediction History Storage (Issue #569)
+# ============================================================================
+
+# Redis key for prediction history sorted set
+_PREDICTION_HISTORY_KEY = "bug_prediction:history"
+# Maximum history entries to retain (approx 1 year of daily predictions)
+_MAX_HISTORY_ENTRIES = 400
+# Trend direction threshold: changes within +/-5% are considered stable
+_TREND_STABILITY_THRESHOLD_PCT = 5.0
+
+
+async def _store_prediction_history(
+    total_files: int,
+    high_risk_count: int,
+    risk_distribution: Dict[str, int],
+    analyzed_files: List[Dict[str, Any]],
+) -> bool:
+    """
+    Store a prediction snapshot for trend tracking.
+
+    Issue #569: Stores prediction results in Redis sorted set for historical analysis.
+    Each prediction includes timestamp, file counts, risk distribution, and average risk.
+
+    Args:
+        total_files: Total number of files analyzed
+        high_risk_count: Number of files with risk score >= 60
+        risk_distribution: Dict mapping risk levels to file counts
+        analyzed_files: List of analyzed file dicts with risk_score
+
+    Returns:
+        True if stored successfully, False otherwise
+    """
+    try:
+        redis = get_redis_client(async_client=False, database="analytics")
+        if not redis:
+            logger.debug("Redis not available for prediction history storage")
+            return False
+
+        timestamp = datetime.now()
+        timestamp_ms = int(timestamp.timestamp() * 1000)
+
+        # Calculate average risk score
+        avg_risk = 0.0
+        if analyzed_files:
+            avg_risk = sum(f.get("risk_score", 0) for f in analyzed_files) / len(analyzed_files)
+
+        # Build prediction snapshot
+        prediction_snapshot = {
+            "timestamp": timestamp.isoformat(),
+            "total_files": total_files,
+            "high_risk_count": high_risk_count,
+            "risk_distribution": risk_distribution,
+            "average_risk_score": round(avg_risk, 2),
+            "critical_count": risk_distribution.get("critical", 0),
+            "high_count": risk_distribution.get("high", 0),
+            "medium_count": risk_distribution.get("medium", 0),
+            "low_count": risk_distribution.get("low", 0),
+            "minimal_count": risk_distribution.get("minimal", 0),
+        }
+
+        # Store in sorted set with timestamp as score (for range queries)
+        await asyncio.to_thread(
+            redis.zadd,
+            _PREDICTION_HISTORY_KEY,
+            {json.dumps(prediction_snapshot): timestamp_ms},
+        )
+
+        # Trim to keep only the most recent entries
+        # zremrangebyrank removes entries from index 0 to stop_index, keeping -MAX to -1
+        await asyncio.to_thread(
+            redis.zremrangebyrank,
+            _PREDICTION_HISTORY_KEY,
+            0,
+            -(_MAX_HISTORY_ENTRIES + 1),
+        )
+
+        logger.debug("Stored prediction history snapshot at %s", timestamp.isoformat())
+        return True
+
+    except Exception as e:
+        logger.error("Failed to store prediction history: %s", e, exc_info=True)
+        return False
+
+
+async def _get_prediction_history(days: int) -> List[Dict[str, Any]]:
+    """
+    Retrieve prediction history for the specified time period.
+
+    Issue #569: Fetches historical prediction data from Redis sorted set.
+
+    Args:
+        days: Number of days to look back
+
+    Returns:
+        List of prediction snapshots ordered by timestamp (oldest first)
+    """
+    try:
+        redis = get_redis_client(async_client=False, database="analytics")
+        if not redis:
+            return []
+
+        # Calculate time range
+        end_time = datetime.now()
+        start_time = end_time - timedelta(days=days)
+        start_ms = int(start_time.timestamp() * 1000)
+        end_ms = int(end_time.timestamp() * 1000)
+
+        # Fetch entries within time range
+        entries = await asyncio.to_thread(
+            redis.zrangebyscore,
+            _PREDICTION_HISTORY_KEY,
+            start_ms,
+            end_ms,
+        )
+
+        history = []
+        for entry in entries:
+            try:
+                data = json.loads(entry)
+                history.append(data)
+            except json.JSONDecodeError:
+                continue
+
+        return history
+
+    except Exception as e:
+        logger.warning("Failed to retrieve prediction history: %s", e)
+        return []
+
+
+def _calculate_trend_metrics(history: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Calculate trend metrics from historical prediction data.
+
+    Issue #569: Computes trend direction, percentage changes, and averages.
+
+    Args:
+        history: List of prediction snapshots (oldest first)
+
+    Returns:
+        Dict containing trend analysis metrics
+    """
+    if not history:
+        return {}
+
+    # Calculate averages
+    avg_risk_scores = [h.get("average_risk_score", 0) for h in history]
+    high_risk_counts = [h.get("high_risk_count", 0) for h in history]
+
+    overall_avg = sum(avg_risk_scores) / len(avg_risk_scores) if avg_risk_scores else 0
+    avg_high_risk = sum(high_risk_counts) / len(high_risk_counts) if high_risk_counts else 0
+
+    # Calculate trend direction (compare first half to second half)
+    half = len(history) // 2
+    if half > 0:
+        first_half_avg = sum(avg_risk_scores[:half]) / half
+        second_half_avg = sum(avg_risk_scores[half:]) / (len(avg_risk_scores) - half)
+
+        if first_half_avg > 0:
+            risk_change_pct = ((second_half_avg - first_half_avg) / first_half_avg) * 100
+        else:
+            risk_change_pct = 0
+
+        # Determine trend direction using stability threshold
+        if risk_change_pct > _TREND_STABILITY_THRESHOLD_PCT:
+            trend_direction = "increasing"
+        elif risk_change_pct < -_TREND_STABILITY_THRESHOLD_PCT:
+            trend_direction = "decreasing"
+        else:
+            trend_direction = "stable"
+    else:
+        risk_change_pct = 0
+        trend_direction = "insufficient_data"
+
+    # Build data points for charting
+    data_points = []
+    for h in history:
+        data_points.append({
+            "timestamp": h.get("timestamp"),
+            "average_risk": h.get("average_risk_score", 0),
+            "high_risk_count": h.get("high_risk_count", 0),
+            "total_files": h.get("total_files", 0),
+        })
+
+    return {
+        "data_points": data_points,
+        "summary": {
+            "overall_average_risk": round(overall_avg, 2),
+            "average_high_risk_files": round(avg_high_risk, 1),
+            "trend_direction": trend_direction,
+            "risk_change_percentage": round(risk_change_pct, 1),
+            "data_point_count": len(history),
+            "period_start": history[0].get("timestamp") if history else None,
+            "period_end": history[-1].get("timestamp") if history else None,
+        },
+        "risk_level_trends": _calculate_risk_level_trends(history),
+    }
+
+
+def _calculate_risk_level_trends(history: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Calculate per-risk-level trends over time.
+
+    Issue #569: Tracks how each risk level (critical, high, medium, etc.) changes.
+    """
+    if not history:
+        return {}
+
+    risk_levels = ["critical", "high", "medium", "low", "minimal"]
+    trends = {}
+
+    for level in risk_levels:
+        counts = [h.get(f"{level}_count", h.get("risk_distribution", {}).get(level, 0)) for h in history]
+        if counts:
+            avg = sum(counts) / len(counts)
+            latest = counts[-1] if counts else 0
+            earliest = counts[0] if counts else 0
+
+            if earliest > 0:
+                change_pct = ((latest - earliest) / earliest) * 100
+            else:
+                change_pct = 0 if latest == 0 else 100
+
+            trends[level] = {
+                "average": round(avg, 1),
+                "latest": latest,
+                "change_percentage": round(change_pct, 1),
+            }
+
+    return trends
+
+
+# ============================================================================
 # REST Endpoints
 # ============================================================================
 
@@ -480,6 +714,29 @@ async def _analyze_single_file(
     return _build_file_risk_dict(rel_path, risk_score, factors, bug_count)
 
 
+async def _safe_store_prediction_history(
+    total_files: int,
+    high_risk_count: int,
+    risk_distribution: Dict[str, int],
+    analyzed_files: List[Dict[str, Any]],
+) -> None:
+    """
+    Wrapper for fire-and-forget prediction history storage with error logging.
+
+    Issue #569: Ensures exceptions from background tasks are properly logged
+    instead of being silently swallowed when using asyncio.create_task().
+    """
+    try:
+        await _store_prediction_history(
+            total_files=total_files,
+            high_risk_count=high_risk_count,
+            risk_distribution=risk_distribution,
+            analyzed_files=analyzed_files,
+        )
+    except Exception as e:
+        logger.error("Background prediction history storage failed: %s", e, exc_info=True)
+
+
 @router.get("/analyze")
 async def analyze_codebase(
     path: str = Query(".", description="Path to analyze"),
@@ -490,6 +747,7 @@ async def analyze_codebase(
     Analyze codebase for bug risk (Issue #543: no demo data).
 
     Returns risk assessment for all files matching the pattern.
+    Issue #569: Also stores prediction history for trend tracking.
     """
     try:
         # Issue #664: Parallelize independent data fetches
@@ -506,6 +764,20 @@ async def analyze_codebase(
         analyzed_files = await _analyze_files_parallel(files_to_analyze, change_freq, bug_history)
         analyzed_files.sort(key=lambda x: x["risk_score"], reverse=True)
         high_risk = sum(1 for f in analyzed_files if f["risk_score"] >= 60)
+
+        # Issue #569: Calculate risk distribution and store prediction history
+        risk_dist = {level.value: 0 for level in RiskLevel}
+        for f in analyzed_files:
+            level = get_risk_level(f["risk_score"])
+            risk_dist[level.value] += 1
+
+        # Store prediction history asynchronously (don't block response)
+        asyncio.create_task(_safe_store_prediction_history(
+            total_files=len(files_to_analyze),
+            high_risk_count=high_risk,
+            risk_distribution=risk_dist,
+            analyzed_files=analyzed_files,
+        ))
 
         return {
             "status": "success",
@@ -699,18 +971,39 @@ async def get_prediction_trends(
     """
     Get historical bug prediction accuracy trends.
 
-    Issue #543: Returns no_data until real trend tracking is implemented.
-    Real implementation would require:
-    - Storing prediction results over time
-    - Tracking actual bugs found vs predicted
-    - Calculating accuracy metrics from historical data
+    Issue #569: Returns real trend data from stored prediction history.
+    Prediction history is automatically captured each time /analyze is called.
+
+    Args:
+        period: Time period to analyze - "7d", "30d", or "90d"
+
+    Returns:
+        Trend analysis including:
+        - data_points: Time-series data for charting
+        - summary: Overall trend metrics (direction, average risk, change %)
+        - risk_level_trends: Per-level (critical, high, etc.) trend analysis
     """
-    # Issue #543: Return no_data instead of fake random data
-    # TODO: Implement real trend tracking by storing prediction history
-    return _no_data_response(
-        f"Bug prediction trend data for period '{period}' not available. "
-        "Trend tracking requires storing prediction history over time."
-    )
+    # Parse period to days
+    period_days = {"7d": 7, "30d": 30, "90d": 90}.get(period, 30)
+
+    # Fetch historical prediction data
+    history = await _get_prediction_history(period_days)
+
+    if not history:
+        return _no_data_response(
+            f"No prediction history available for period '{period}'. "
+            "Run /bug-prediction/analyze to start collecting trend data."
+        )
+
+    # Calculate trend metrics
+    trend_metrics = _calculate_trend_metrics(history)
+
+    return {
+        "status": "success",
+        "period": period,
+        "period_days": period_days,
+        **trend_metrics,
+    }
 
 
 @router.get("/summary")
