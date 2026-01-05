@@ -17,6 +17,7 @@ import { ref } from 'vue'
 import appConfig from '@/config/AppConfig.js'
 import { useToast } from '@/composables/useToast'
 import { createLogger } from '@/utils/debugUtils'
+import { useChatStore } from '@/stores/useChatStore'
 
 const logger = createLogger('useCommandApproval')
 
@@ -40,6 +41,7 @@ export interface CommandResult {
 
 export function useCommandApproval() {
   const { showToast } = useToast()
+  const chatStore = useChatStore()
 
   // State
   const processingApproval = ref(false)
@@ -217,9 +219,13 @@ export function useCommandApproval() {
 
         // Reset auto-approve checkbox after submission
         autoApproveFuture.value = false
+        // Issue #680: Clear pending approval flag to allow polling to resume
+        chatStore.setPendingApproval(false)
       } else if (result.status === 'error') {
         logger.error('Approval error:', result.error)
         notify(`Approval failed: ${result.error}`, 'error')
+        // Issue #680: Clear pending approval flag on error too
+        chatStore.setPendingApproval(false)
       }
 
       processingApproval.value = false
@@ -227,6 +233,8 @@ export function useCommandApproval() {
       logger.error('Error sending approval:', error)
       notify('Failed to process command approval', 'error')
       processingApproval.value = false
+      // Issue #680: Clear pending approval flag on exception
+      chatStore.setPendingApproval(false)
     }
   }
 

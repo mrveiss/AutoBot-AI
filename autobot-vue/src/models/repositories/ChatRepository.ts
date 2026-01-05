@@ -329,17 +329,22 @@ export class ChatRepository {
 
       // Transform backend message format to frontend format
       const messages = backendMessages.map((msg: any, index: number) => {
+        // Issue #680: Normalize message type to prevent wrong badges
+        // Backend may save raw types like 'llm_response_chunk' which need mapping
+        const rawType = msg.messageType || msg.type || 'message'
+        const normalizedType = this.normalizeMessageType(rawType)
+
         const transformed = {
           id: msg.id || `${Date.now()}-${Math.random()}`,
           sender: this.normalizeSender(msg.sender),
           content: msg.text || msg.content || '',
           timestamp: new Date(msg.timestamp || new Date().toISOString()),
-          type: msg.messageType || msg.type || 'message',
+          type: normalizedType,
           // CRITICAL FIX: Backend saves approval metadata in rawData, not metadata
           // Check both rawData (old format) and metadata (new format) for backward compatibility
           metadata: msg.metadata || msg.rawData || {}
         }
-        logger.debug(`Message ${index + 1}: sender=${msg.sender} → ${transformed.sender}, content length=${transformed.content.length}`)
+        logger.debug(`Message ${index + 1}: sender=${msg.sender} → ${transformed.sender}, type=${rawType} → ${normalizedType}, content length=${transformed.content.length}`)
         return transformed
       })
 
@@ -350,6 +355,34 @@ export class ChatRepository {
       // Return empty array on error to prevent UI breakage
       return []
     }
+  }
+
+  /**
+   * Normalize backend message types to frontend display types.
+   * Issue #680: Prevents wrong type badges from showing on loaded messages.
+   *
+   * Maps backend types like 'llm_response_chunk' to display types like 'response'.
+   */
+  private normalizeMessageType(type: string): string {
+    if (!type) return 'response'
+
+    // Map streaming types to 'response'
+    if (type === 'response' || type === 'llm_response' || type === 'llm_response_chunk') {
+      return 'response'
+    }
+
+    // Map known semantic types
+    if (type === 'thought' || type.includes('thought')) return 'thought'
+    if (type.includes('planning')) return 'planning'
+    if (type.includes('debug')) return 'debug'
+    if (type.includes('utility')) return 'utility'
+    if (type.includes('source')) return 'sources'
+    if (type.includes('json')) return 'json'
+    if (type === 'command_approval_request') return 'command_approval_request'
+    if (type === 'terminal_output' || type === 'terminal_command') return type
+
+    // Default to 'message' for unrecognized types
+    return 'message'
   }
 
   // Helper to normalize sender field from backend to frontend format

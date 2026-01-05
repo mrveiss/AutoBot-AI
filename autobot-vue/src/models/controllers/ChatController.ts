@@ -288,6 +288,8 @@ export class ChatController {
               // Handle special message types
               if (data.type === 'command_approval_request') {
                 this.chatStore.setTyping(false)
+                // Issue #680: Set pending approval flag to prevent polling race conditions
+                this.chatStore.setPendingApproval(true)
                 this.chatStore.updateMessage(frontendMessageId, {
                   content: data.content || 'Command approval required',
                   type: 'command_approval_request',
@@ -464,6 +466,18 @@ export class ChatController {
 
   async loadChatMessages(sessionId: string): Promise<void> {
     try {
+      // Issue #680: Skip loading while streaming or pending approval to prevent race conditions
+      // During SSE streaming, messages are added in real-time and should not be overwritten
+      // by polling which may have stale data from backend
+      if (this.chatStore.isTyping) {
+        logger.debug(`Skipping message load - streaming in progress (isTyping=true)`)
+        return
+      }
+      if (this.chatStore.hasPendingApproval) {
+        logger.debug(`Skipping message load - pending approval (hasPendingApproval=true)`)
+        return
+      }
+
       logger.debug(`Loading messages for session: ${sessionId}`)
       this.getAppStore()?.setLoading(true, 'Loading messages...')
 

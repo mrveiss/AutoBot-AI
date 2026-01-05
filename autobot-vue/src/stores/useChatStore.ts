@@ -97,6 +97,8 @@ export const useChatStore = defineStore('chat', () => {
   const sessions = ref<ChatSession[]>([])
   const currentSessionId = ref<string | null>(null)
   const isTyping = ref(false)
+  // Issue #680: Track pending approval state to prevent polling race conditions
+  const hasPendingApproval = ref(false)
   const sidebarCollapsed = ref(false)
   // Issue #671: Track initialization state for loading indicators
   const isInitializing = ref(false)
@@ -386,6 +388,11 @@ export const useChatStore = defineStore('chat', () => {
 
   function setTyping(typing: boolean) {
     isTyping.value = typing
+  }
+
+  // Issue #680: Pending approval state management to prevent polling race conditions
+  function setPendingApproval(pending: boolean) {
+    hasPendingApproval.value = pending
   }
 
   // Issue #671: Initialization state management for loading feedback
@@ -823,6 +830,7 @@ export const useChatStore = defineStore('chat', () => {
     sessions,
     currentSessionId,
     isTyping,
+    hasPendingApproval,  // Issue #680: Pending approval state
     sidebarCollapsed,
     settings,
     // Issue #671: Initialization state for loading indicators
@@ -850,6 +858,7 @@ export const useChatStore = defineStore('chat', () => {
     updateSettings,
     toggleSidebar,
     setTyping,
+    setPendingApproval,  // Issue #680: Pending approval state management
     // Issue #671: Initialization state management
     setInitializing,
     setInitializationError,
