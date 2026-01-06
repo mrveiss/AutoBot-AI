@@ -47,6 +47,10 @@ class NPUWorkerManager:
     - YAML-based persistent storage
     """
 
+    # Issue #699: Constants for exponential backoff on unavailable workers
+    _MIN_BACKOFF_MULTIPLIER = 1
+    _MAX_BACKOFF_MULTIPLIER = 8  # Max 8x the health check interval (4 minutes at 30s)
+
     def __init__(self, config_file: Path = None, redis_client=None):
         """
         Initialize NPU Worker Manager.
@@ -62,6 +66,10 @@ class NPUWorkerManager:
         self._health_check_task: Optional[asyncio.Task] = None
         self._running = False
         self._load_balancing_config = LoadBalancingConfig()
+
+        # Issue #699: Track consecutive failures for exponential backoff
+        self._worker_failure_counts: Dict[str, int] = {}
+        self._worker_next_check: Dict[str, float] = {}
 
         # Initialize from config file
         self._load_workers_from_config()
@@ -179,7 +187,65 @@ class NPUWorkerManager:
         try:
             await self._check_worker_health(worker_id)
         except Exception as e:
-            logger.error("Health check failed for worker %s: %s", worker_id, e)
+            # Issue #699: NPU workers are optional - log at DEBUG level to avoid spam
+            logger.debug(
+                "Health check failed for worker %s: %s (NPU workers are optional - "
+                "configure at /settings/infrastructure)",
+                worker_id,
+                e,
+            )
+
+    def _get_backoff_multiplier(self, worker_id: str) -> int:
+        """Get backoff multiplier for a worker based on consecutive failures (Issue #699).
+
+        Returns:
+            Multiplier for health check interval (1, 2, 4, 8)
+        """
+        failures = self._worker_failure_counts.get(worker_id, 0)
+        # Exponential backoff: 2^failures, capped at MAX_BACKOFF_MULTIPLIER
+        multiplier = min(
+            2 ** failures,
+            self._MAX_BACKOFF_MULTIPLIER
+        )
+        return max(multiplier, self._MIN_BACKOFF_MULTIPLIER)
+
+    def _should_check_worker(self, worker_id: str) -> bool:
+        """Check if enough time has passed to check this worker again (Issue #699).
+
+        Returns:
+            True if worker should be checked, False if still in backoff
+        """
+        import time
+        next_check = self._worker_next_check.get(worker_id, 0)
+        return time.time() >= next_check
+
+    def _record_worker_failure(self, worker_id: str) -> None:
+        """Record a health check failure and schedule next check with backoff (Issue #699)."""
+        import time
+        # Increment failure count
+        self._worker_failure_counts[worker_id] = (
+            self._worker_failure_counts.get(worker_id, 0) + 1
+        )
+        # Calculate next check time with backoff
+        multiplier = self._get_backoff_multiplier(worker_id)
+        interval = self._load_balancing_config.health_check_interval * multiplier
+        self._worker_next_check[worker_id] = time.time() + interval
+
+        if multiplier > 1:
+            logger.debug(
+                "Worker %s: %d consecutive failures, next check in %ds (backoff %dx)",
+                worker_id,
+                self._worker_failure_counts[worker_id],
+                interval,
+                multiplier,
+            )
+
+    def _record_worker_success(self, worker_id: str) -> None:
+        """Reset failure count on successful health check (Issue #699)."""
+        if worker_id in self._worker_failure_counts:
+            del self._worker_failure_counts[worker_id]
+        if worker_id in self._worker_next_check:
+            del self._worker_next_check[worker_id]
 
     async def _health_check_loop(self):
         """Background task that periodically checks worker health"""
@@ -187,11 +253,14 @@ class NPUWorkerManager:
 
         while self._running:
             try:
-                # Check all enabled workers (Issue #315: reduced nesting)
+                # Issue #699: Check all enabled workers with exponential backoff
                 enabled_workers = [
                     wid for wid, cfg in self._workers.items() if cfg.enabled
                 ]
                 for worker_id in enabled_workers:
+                    # Skip workers still in backoff period
+                    if not self._should_check_worker(worker_id):
+                        continue
                     await self._check_single_worker_health(worker_id)
 
                 # Wait for next check interval
@@ -200,7 +269,10 @@ class NPUWorkerManager:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error("Health check loop error: %s", e)
+                # Issue #699: Log at DEBUG for health check loop errors (NPU is optional)
+                logger.debug(
+                    "Health check loop error: %s (NPU workers are optional)", e
+                )
                 # Error recovery delay before retry
                 await asyncio.sleep(TimingConstants.LONG_DELAY)
 
@@ -231,8 +303,16 @@ class NPUWorkerManager:
             status = self._build_healthy_status(worker_id, health_data)
             await self._store_and_emit_status(worker_id, status, prev_status_value)
 
+            # Issue #699: Reset backoff on successful health check
+            self._record_worker_success(worker_id)
+
         except asyncio.TimeoutError:
-            logger.warning("Worker %s health check timed out", worker_id)
+            # Issue #699: NPU workers are optional - log at DEBUG to avoid spam
+            logger.debug(
+                "Worker %s health check timed out (NPU workers are optional - "
+                "configure at /settings/infrastructure)",
+                worker_id,
+            )
             status = NPUWorkerStatus(
                 id=worker_id,
                 status=WorkerStatus.OFFLINE,
@@ -240,12 +320,24 @@ class NPUWorkerManager:
             )
             await self._store_and_emit_status(worker_id, status, prev_status_value)
 
+            # Issue #699: Apply exponential backoff for consecutive failures
+            self._record_worker_failure(worker_id)
+
         except Exception as e:
-            logger.error("Worker %s health check failed: %s", worker_id, e)
+            # Issue #699: NPU workers are optional - log at DEBUG to avoid spam
+            logger.debug(
+                "Worker %s health check failed: %s (NPU workers are optional - "
+                "configure at /settings/infrastructure)",
+                worker_id,
+                e,
+            )
             status = NPUWorkerStatus(
                 id=worker_id, status=WorkerStatus.ERROR, error_message=str(e)
             )
             await self._store_and_emit_status(worker_id, status, prev_status_value)
+
+            # Issue #699: Apply exponential backoff for consecutive failures
+            self._record_worker_failure(worker_id)
 
     def _build_healthy_status(
         self, worker_id: str, health_data: Dict[str, Any]

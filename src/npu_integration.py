@@ -58,7 +58,10 @@ class NPUWorkerClient:
                     return {"status": "unhealthy", "error": f"HTTP {response.status}"}
         except Exception as e:
             self.available = False
-            logger.warning("NPU worker health check failed: %s", e)
+            # Issue #699: NPU workers are optional - log at DEBUG level to avoid spam
+            logger.debug(
+                "NPU worker not available (optional service - configure at /settings/infrastructure): %s", e
+            )
             return {"status": "unavailable", "error": str(e)}
 
     async def get_available_models(self) -> Dict[str, Any]:
@@ -309,5 +312,8 @@ async def process_with_npu_fallback(
 
         return result
     except Exception as e:
-        logger.warning("NPU processing error for %s: %s", task_type, e)
+        # Issue #699: NPU is optional, fallback is expected - log at DEBUG
+        logger.debug(
+            "NPU processing unavailable for %s, using fallback: %s", task_type, e
+        )
         return await fallback_func()
