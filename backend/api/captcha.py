@@ -46,6 +46,7 @@ class CaptchaResolutionResponse(BaseModel):
     captcha_id: str
     status: str
     message: str
+    timestamp: Optional[str] = None
 
 
 @router.post("/{captcha_id}/resolve", response_model=CaptchaResolutionResponse)
@@ -90,12 +91,13 @@ async def resolve_captcha(
                 "message": "CAPTCHA marked as solved. Research will continue.",
                 "timestamp": datetime.utcnow().isoformat(),
             },
+            media_type="application/json; charset=utf-8",
         )
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Error resolving CAPTCHA %s: %s", captcha_id, e)
+        logger.error("Error resolving CAPTCHA %s: %s", captcha_id, e, exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to resolve CAPTCHA: {str(e)}",
