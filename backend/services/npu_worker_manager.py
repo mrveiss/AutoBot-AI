@@ -9,6 +9,7 @@ Manages NPU worker registration, health monitoring, and state tracking.
 
 import asyncio
 import logging
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -16,15 +17,10 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 import yaml
 
-from backend.models.npu_models import (
-    LoadBalancingConfig,
-    NPUWorkerConfig,
-    NPUWorkerDetails,
-    NPUWorkerMetrics,
-    NPUWorkerStatus,
-    WorkerStatus,
-    WorkerTestResult,
-)
+from backend.models.npu_models import (LoadBalancingConfig, NPUWorkerConfig,
+                                       NPUWorkerDetails, NPUWorkerMetrics,
+                                       NPUWorkerStatus, WorkerStatus,
+                                       WorkerTestResult)
 from src.constants.threshold_constants import TimingConstants
 from src.event_manager import event_manager
 from src.npu_integration import NPUWorkerClient
@@ -130,15 +126,15 @@ class NPUWorkerManager:
             # Prepare data - use mode='json' to serialize enums as strings
             # This prevents !!python/object tags that yaml.safe_load() cannot parse
             data = {
-                "workers": [worker.model_dump(mode='json') for worker in self._workers.values()],
-                "load_balancing": self._load_balancing_config.model_dump(mode='json'),
+                "workers": [
+                    worker.model_dump(mode="json") for worker in self._workers.values()
+                ],
+                "load_balancing": self._load_balancing_config.model_dump(mode="json"),
             }
 
             # Write to file asynchronously
             try:
-                async with aiofiles.open(
-                    self.config_file, "w", encoding="utf-8"
-                ) as f:
+                async with aiofiles.open(self.config_file, "w", encoding="utf-8") as f:
                     await f.write(yaml.dump(data, default_flow_style=False))
             except OSError as e:
                 logger.error("Failed to write worker config file: %s", e)
@@ -203,10 +199,7 @@ class NPUWorkerManager:
         """
         failures = self._worker_failure_counts.get(worker_id, 0)
         # Exponential backoff: 2^failures, capped at MAX_BACKOFF_MULTIPLIER
-        multiplier = min(
-            2 ** failures,
-            self._MAX_BACKOFF_MULTIPLIER
-        )
+        multiplier = min(2**failures, self._MAX_BACKOFF_MULTIPLIER)
         return max(multiplier, self._MIN_BACKOFF_MULTIPLIER)
 
     def _should_check_worker(self, worker_id: str) -> bool:
@@ -215,13 +208,11 @@ class NPUWorkerManager:
         Returns:
             True if worker should be checked, False if still in backoff
         """
-        import time
         next_check = self._worker_next_check.get(worker_id, 0)
         return time.time() >= next_check
 
     def _record_worker_failure(self, worker_id: str) -> None:
         """Record a health check failure and schedule next check with backoff (Issue #699)."""
-        import time
         # Increment failure count
         self._worker_failure_counts[worker_id] = (
             self._worker_failure_counts.get(worker_id, 0) + 1
@@ -448,7 +439,7 @@ class NPUWorkerManager:
         # Batch fetch all worker statuses in parallel - eliminates N+1 queries
         statuses = await asyncio.gather(
             *[self._get_worker_status(wid) for wid in worker_ids],
-            return_exceptions=True
+            return_exceptions=True,
         )
 
         # Build worker details list
@@ -551,7 +542,11 @@ class NPUWorkerManager:
         # Create status from heartbeat
         status = NPUWorkerStatus(
             id=worker_id,
-            status=WorkerStatus.ONLINE if heartbeat.status == "online" else WorkerStatus.ERROR,
+            status=(
+                WorkerStatus.ONLINE
+                if heartbeat.status == "online"
+                else WorkerStatus.ERROR
+            ),
             current_load=heartbeat.current_load,
             total_tasks_completed=heartbeat.total_tasks_completed,
             total_tasks_failed=heartbeat.total_tasks_failed,

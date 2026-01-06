@@ -13,7 +13,6 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict
 
-
 from src.constants.threshold_constants import LLMDefaults, TimingConstants
 from src.utils.http_client import get_http_client
 
@@ -60,7 +59,8 @@ class NPUWorkerClient:
             self.available = False
             # Issue #699: NPU workers are optional - log at DEBUG level to avoid spam
             logger.debug(
-                "NPU worker not available (optional service - configure at /settings/infrastructure): %s", e
+                "NPU worker not available (optional service - configure at /settings/infrastructure): %s",
+                e,
             )
             return {"status": "unavailable", "error": str(e)}
 
@@ -259,7 +259,9 @@ class NPUTaskQueue:
 
         try:
             # Wait for result with timeout (Issue #376 - use named constants)
-            result = await asyncio.wait_for(future, timeout=TimingConstants.SHORT_TIMEOUT)
+            result = await asyncio.wait_for(
+                future, timeout=TimingConstants.SHORT_TIMEOUT
+            )
             return result
         except asyncio.TimeoutError:
             return {"success": False, "error": "NPU task timeout", "fallback": True}
