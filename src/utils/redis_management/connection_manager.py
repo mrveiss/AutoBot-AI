@@ -289,21 +289,35 @@ class RedisConnectionManager:
 
         for attempt in range(max_attempts):
             try:
-                pool = async_redis.ConnectionPool(
-                    host=config.host,
-                    port=config.port,
-                    db=config.db,
-                    password=config.password,
-                    decode_responses=config.decode_responses,
-                    max_connections=config.max_connections,
-                    socket_timeout=config.socket_timeout,
-                    socket_connect_timeout=config.socket_connect_timeout,
-                    socket_keepalive=config.socket_keepalive,
-                    socket_keepalive_options=config.socket_keepalive_options
+                # Build connection parameters
+                pool_params = {
+                    "host": config.host,
+                    "port": config.port,
+                    "db": config.db,
+                    "password": config.password,
+                    "decode_responses": config.decode_responses,
+                    "max_connections": config.max_connections,
+                    "socket_timeout": config.socket_timeout,
+                    "socket_connect_timeout": config.socket_connect_timeout,
+                    "socket_keepalive": config.socket_keepalive,
+                    "socket_keepalive_options": config.socket_keepalive_options
                     or self._tcp_keepalive_options,
-                    retry_on_timeout=config.retry_on_timeout,
-                    health_check_interval=0,  # Disable auto health checks
-                )
+                    "retry_on_timeout": config.retry_on_timeout,
+                    "health_check_interval": 0,  # Disable auto health checks
+                }
+
+                # Add TLS parameters if enabled
+                if config.ssl:
+                    import ssl
+                    ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+                    if config.ssl_ca_certs:
+                        ssl_context.load_verify_locations(config.ssl_ca_certs)
+                    if config.ssl_certfile and config.ssl_keyfile:
+                        ssl_context.load_cert_chain(config.ssl_certfile, config.ssl_keyfile)
+                    pool_params["ssl"] = ssl_context
+                    logger.info(f"TLS enabled for Redis connection '{database_name}'")
+
+                pool = async_redis.ConnectionPool(**pool_params)
 
                 # Test connection and wait for Redis to be ready
                 client = async_redis.Redis(connection_pool=pool)
@@ -368,6 +382,17 @@ class RedisConnectionManager:
             "retry_on_timeout": config.retry_on_timeout,
             "retry": retry_policy,
         }
+
+        # Add TLS parameters if enabled
+        if config.ssl:
+            import ssl
+            ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+            if config.ssl_ca_certs:
+                ssl_context.load_verify_locations(config.ssl_ca_certs)
+            if config.ssl_certfile and config.ssl_keyfile:
+                ssl_context.load_cert_chain(config.ssl_certfile, config.ssl_keyfile)
+            pool_params["ssl"] = ssl_context
+            logger.info(f"TLS enabled for sync Redis connection '{database_name}'")
 
         # Remove None values
         pool_params = {k: v for k, v in pool_params.items() if v is not None}

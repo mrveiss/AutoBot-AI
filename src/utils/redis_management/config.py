@@ -32,7 +32,7 @@ class RedisConfig:
     Redis database configuration.
 
     Holds all configuration options for a Redis database connection,
-    including network settings, pooling options, and retry configuration.
+    including network settings, pooling options, retry configuration, and TLS.
     """
 
     name: str
@@ -50,14 +50,29 @@ class RedisConfig:
     retry_on_timeout: bool = REDIS_CONFIG.RETRY_ON_TIMEOUT
     max_retries: int = RetryConfig.DEFAULT_RETRIES
     description: str = ""
+    # TLS configuration
+    ssl: bool = False
+    ssl_ca_certs: Optional[str] = None
+    ssl_certfile: Optional[str] = None
+    ssl_keyfile: Optional[str] = None
+    ssl_cert_reqs: str = "required"
 
     def __post_init__(self):
-        """Auto-load password from environment if not provided."""
+        """Auto-load password and TLS settings from environment if not provided."""
         if self.password is None:
             # Try REDIS_PASSWORD first, then AUTOBOT_REDIS_PASSWORD
             self.password = os.getenv("REDIS_PASSWORD") or os.getenv(
                 "AUTOBOT_REDIS_PASSWORD"
             )
+        # Auto-load TLS settings from SSOT config
+        if os.getenv("AUTOBOT_REDIS_TLS_ENABLED", "").lower() == "true":
+            self.ssl = True
+            self.port = int(os.getenv("AUTOBOT_REDIS_TLS_PORT", "6380"))
+            cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "certs")
+            project_root = "/home/kali/Desktop/AutoBot"
+            self.ssl_ca_certs = os.path.join(project_root, cert_dir, "ca", "ca-cert.pem")
+            self.ssl_certfile = os.path.join(project_root, cert_dir, "main-host", "server-cert.pem")
+            self.ssl_keyfile = os.path.join(project_root, cert_dir, "main-host", "server-key.pem")
 
 
 class RedisConfigLoader:

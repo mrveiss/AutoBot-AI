@@ -562,6 +562,37 @@ class PermissionConfig(BaseSettings):
         return [m for m in PermissionMode if m not in self.ADMIN_ONLY_MODES]
 
 
+class TLSMode(str, Enum):
+    """TLS operation modes."""
+
+    DISABLED = "disabled"
+    OPTIONAL = "optional"
+    REQUIRED = "required"
+
+
+class TLSConfig(BaseSettings):
+    """TLS/PKI Configuration for secure communications."""
+
+    model_config = SettingsConfigDict(
+        env_file=str(PROJECT_ROOT / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    mode: TLSMode = Field(default=TLSMode.DISABLED, alias="AUTOBOT_TLS_MODE")
+    cert_dir: str = Field(default="certs", alias="AUTOBOT_TLS_CERT_DIR")
+    ca_cert: str = Field(default="certs/ca/ca-cert.pem", alias="AUTOBOT_TLS_CA_CERT")
+    remote_cert_dir: str = Field(default="/etc/autobot/certs", alias="AUTOBOT_TLS_REMOTE_CERT_DIR")
+    redis_tls_enabled: bool = Field(default=False, alias="AUTOBOT_REDIS_TLS_ENABLED")
+    redis_tls_port: int = Field(default=6380, alias="AUTOBOT_REDIS_TLS_PORT")
+    backend_tls_enabled: bool = Field(default=False, alias="AUTOBOT_BACKEND_TLS_ENABLED")
+
+    @property
+    def is_enabled(self) -> bool:
+        """Check if TLS is enabled."""
+        return self.mode != TLSMode.DISABLED
+
+
 class FeatureConfig(BaseSettings):
     """Feature flags configuration."""
 
@@ -576,7 +607,6 @@ class FeatureConfig(BaseSettings):
     debug_mode: bool = Field(default=False, alias="AUTOBOT_DEBUG_MODE")
     hot_reload: bool = Field(default=True, alias="AUTOBOT_HOT_RELOAD")
     single_user_mode: bool = Field(default=True, alias="AUTOBOT_SINGLE_USER_MODE")
-    # Permission system v2 feature flag (also in PermissionConfig for convenience)
     permission_system_v2: bool = Field(
         default=False, alias="AUTOBOT_PERMISSION_SYSTEM_V2"
     )
@@ -610,6 +640,7 @@ class AutoBotConfig(BaseSettings):
     llm: LLMConfig = Field(default_factory=LLMConfig)
     timeout: TimeoutConfig = Field(default_factory=TimeoutConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
+    tls: TLSConfig = Field(default_factory=TLSConfig)
     feature: FeatureConfig = Field(default_factory=FeatureConfig)
     permission: PermissionConfig = Field(default_factory=PermissionConfig)
 
@@ -633,14 +664,22 @@ class AutoBotConfig(BaseSettings):
     @property
     def redis_url(self) -> str:
         """Get the full Redis URL (without password)."""
+        if self.tls.redis_tls_enabled:
+            return f"rediss://{self.vm.redis}:{self.tls.redis_tls_port}"
         return f"redis://{self.vm.redis}:{self.port.redis}"
 
     @property
     def redis_url_with_auth(self) -> str:
         """Get the full Redis URL with password if configured."""
+        if self.tls.redis_tls_enabled:
+            scheme = "rediss"
+            port = self.tls.redis_tls_port
+        else:
+            scheme = "redis"
+            port = self.port.redis
         if self.redis.password:
-            return f"redis://:{self.redis.password}@{self.vm.redis}:{self.port.redis}"
-        return self.redis_url
+            return f"{scheme}://:{self.redis.password}@{self.vm.redis}:{port}"
+        return f"{scheme}://{self.vm.redis}:{port}"
 
     @property
     def ollama_url(self) -> str:
