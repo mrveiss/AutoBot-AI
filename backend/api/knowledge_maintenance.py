@@ -36,6 +36,7 @@ from backend.api.knowledge_models import (
     ScanHostChangesRequest,
     UpdateFactRequest,
 )
+from src.constants.threshold_constants import QueryDefaults
 from backend.knowledge_factory import get_or_create_knowledge_base
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
@@ -1565,7 +1566,7 @@ async def restore_backup(request: RestoreRequest, req: Request):
 @router.get("/backups")
 async def list_backups(
     req: Request,
-    limit: int = Query(default=50, ge=1, le=200, description="Max backups to return"),
+    limit: int = Query(default=QueryDefaults.DEFAULT_PAGE_SIZE, ge=1, le=200, description="Max backups to return"),
 ):
     """
     List available knowledge base backups.

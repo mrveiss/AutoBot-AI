@@ -367,7 +367,7 @@ class ConsolidatedSearchRequest(BaseModel):
 class PaginationRequest(BaseModel):
     """Request model for pagination"""
 
-    limit: int = Field(default=100, ge=1, le=1000)
+    limit: int = Field(default=QueryDefaults.KNOWLEDGE_DEFAULT_LIMIT, ge=1, le=1000)
     offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0)
     cursor: Optional[str] = Field(default=None, max_length=255)
     category: Optional[str] = Field(default=None, max_length=100)
@@ -568,7 +568,7 @@ class SearchByTagsRequest(BaseModel):
         default=False,
         description="If True, facts must have ALL tags. If False, facts with ANY tag.",
     )
-    limit: int = Field(default=50, ge=1, le=500)
+    limit: int = Field(default=QueryDefaults.DEFAULT_PAGE_SIZE, ge=1, le=500)
     offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0)
     category: Optional[str] = Field(default=None, max_length=100)
 
@@ -649,7 +649,7 @@ class MergeTagsRequest(BaseModel):
 class GetFactsByTagRequest(BaseModel):
     """Request model for getting facts by tag with pagination."""
 
-    limit: int = Field(default=50, ge=1, le=500, description="Max facts to return")
+    limit: int = Field(default=QueryDefaults.DEFAULT_PAGE_SIZE, ge=1, le=500, description="Max facts to return")
     offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset")
     include_content: bool = Field(
         default=False,
@@ -907,7 +907,7 @@ class SearchCategoriesByPathRequest(BaseModel):
         description="Path pattern with optional wildcard (e.g., 'tech/python/*')",
     )
     limit: int = Field(
-        default=50,
+        default=QueryDefaults.DEFAULT_PAGE_SIZE,
         ge=1,
         le=200,
         description="Maximum number of categories to return",
@@ -1372,7 +1372,7 @@ class SearchByMetadataRequest(BaseModel):
         description="Comparison operator: eq, contains, gt, lt",
     )
     limit: int = Field(
-        default=50,
+        default=QueryDefaults.DEFAULT_PAGE_SIZE,
         ge=1,
         le=200,
         description="Maximum results to return",

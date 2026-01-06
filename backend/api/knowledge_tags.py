@@ -276,7 +276,7 @@ async def search_facts_by_tags(
 )
 @router.get("/tags")
 async def list_all_tags(
-    limit: int = Query(default=100, ge=1, le=1000),
+    limit: int = Query(default=QueryDefaults.KNOWLEDGE_DEFAULT_LIMIT, ge=1, le=1000),
     prefix: Optional[str] = Query(default=None, max_length=50),
     req: Request = None,
 ):
@@ -550,7 +550,7 @@ async def merge_tags(
 @router.get("/tags/{tag_name}/facts")
 async def get_facts_by_tag(
     tag_name: str = Path(..., description="Tag name to get facts for"),
-    limit: int = Query(default=50, ge=1, le=500),
+    limit: int = Query(default=QueryDefaults.DEFAULT_PAGE_SIZE, ge=1, le=500),
     offset: int = Query(default=QueryDefaults.DEFAULT_OFFSET, ge=0),
     include_content: bool = Query(default=False),
     req: Request = None,

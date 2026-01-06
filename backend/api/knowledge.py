@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, field_validator
 from backend.knowledge_factory import get_or_create_knowledge_base
 from src.exceptions import InternalError
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.constants.threshold_constants import CategoryDefaults
+from src.constants.threshold_constants import CategoryDefaults, QueryDefaults
 from src.utils.path_validation import contains_path_traversal
 
 
@@ -883,7 +883,7 @@ def _parse_and_filter_facts(
 @router.get("/entries")
 async def get_knowledge_entries(
     req: Request,
-    limit: int = Query(default=100, ge=1, le=1000),
+    limit: int = Query(default=QueryDefaults.KNOWLEDGE_DEFAULT_LIMIT, ge=1, le=1000),
     cursor: Optional[str] = Query(default="0", regex=r"^[0-9]+$"),
     category: Optional[str] = Query(default=None, regex=r"^[a-zA-Z0-9_-]*$"),
 ):

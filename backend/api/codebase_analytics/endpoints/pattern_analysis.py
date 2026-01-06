@@ -15,6 +15,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from src.constants.path_constants import PATH
+from src.constants.threshold_constants import QueryDefaults
 
 logger = logging.getLogger(__name__)
 
@@ -674,7 +675,7 @@ async def get_cached_pattern_summary() -> Dict[str, Any]:
 async def get_cached_patterns(
     pattern_type: Optional[str] = Query(None, description="Filter by pattern type"),
     severity: Optional[str] = Query(None, description="Filter by severity"),
-    limit: int = Query(default=50, ge=1, le=200, description="Maximum results"),
+    limit: int = Query(default=QueryDefaults.DEFAULT_PAGE_SIZE, ge=1, le=200, description="Maximum results"),
     offset: int = Query(default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Offset for pagination"),
 ) -> Dict[str, Any]:
     """Get cached patterns from ChromaDB with filtering and pagination.

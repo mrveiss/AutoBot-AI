@@ -34,6 +34,7 @@ from backend.api.knowledge_models import (
     SearchCategoriesByPathRequest,
     UpdateCategoryRequest,
 )
+from src.constants.threshold_constants import QueryDefaults
 from backend.knowledge_factory import get_or_create_knowledge_base
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
@@ -538,7 +539,7 @@ async def get_category_ancestors(
 async def get_facts_in_category(
     category_id: str = Path(..., description="Category UUID"),
     include_descendants: bool = Query(default=False, description="Include facts from children"),
-    limit: int = Query(default=50, ge=1, le=500),
+    limit: int = Query(default=QueryDefaults.DEFAULT_PAGE_SIZE, ge=1, le=500),
     offset: int = Query(default=QueryDefaults.DEFAULT_OFFSET, ge=0),
     req: Request = None,
 ):

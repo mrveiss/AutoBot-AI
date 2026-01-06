@@ -118,7 +118,7 @@ async def create_collection(
 )
 @router.get("/collections")
 async def list_collections(
-    limit: int = Query(default=100, ge=1, le=500),
+    limit: int = Query(default=QueryDefaults.KNOWLEDGE_DEFAULT_LIMIT, ge=1, le=500),
     offset: int = Query(default=QueryDefaults.DEFAULT_OFFSET, ge=0),
     sort_by: str = Query(default="name", regex="^(name|created_at|fact_count)$"),
     req: Request = None,
@@ -476,7 +476,7 @@ async def remove_facts_from_collection(
 @router.get("/collections/{collection_id}/facts")
 async def get_facts_in_collection(
     collection_id: str = Path(..., description="Collection UUID"),
-    limit: int = Query(default=50, ge=1, le=500),
+    limit: int = Query(default=QueryDefaults.DEFAULT_PAGE_SIZE, ge=1, le=500),
     offset: int = Query(default=QueryDefaults.DEFAULT_OFFSET, ge=0),
     include_content: bool = Query(default=False, description="Include fact content"),
     req: Request = None,
