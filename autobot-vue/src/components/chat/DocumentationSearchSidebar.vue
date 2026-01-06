@@ -219,7 +219,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<Emits>()
 
-const { apiClient, parseApiResponse } = useApi()
+const { apiClient, parseApiResponse } = useApi() as any
 
 // State
 const isCollapsed = ref(!props.initiallyOpen)

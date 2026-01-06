@@ -646,6 +646,13 @@ const typingStatusText = computed(() => {
 })
 
 const typingDetailText = computed(() => {
+  // Issue #691: Display actual streaming content when available
+  // This shows real LLM thinking/reasoning instead of hardcoded placeholders
+  if (store.streamingPreview && store.streamingPreview.trim()) {
+    return store.streamingPreview
+  }
+
+  // Fallback to time-based placeholder text when no streaming content yet
   const elapsed = typingStartTime.value ? Date.now() - typingStartTime.value : 0
   const details = [
     'Understanding your request...',

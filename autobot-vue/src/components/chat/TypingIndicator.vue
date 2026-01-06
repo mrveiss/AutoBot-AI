@@ -44,6 +44,7 @@
  * Extracted from ChatMessages.vue for better maintainability.
  *
  * Issue #184: Split oversized Vue components
+ * Issue #691: Display actual streaming content instead of placeholder text
  */
 
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
@@ -52,11 +53,14 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 interface Props {
   isTyping: boolean
   messageComplexity?: number
+  // Issue #691: Streaming preview from actual LLM content
+  streamingPreview?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   isTyping: false,
-  messageComplexity: 0
+  messageComplexity: 0,
+  streamingPreview: ''
 })
 
 // Typing timing state
@@ -73,6 +77,13 @@ const statusText = computed(() => {
 })
 
 const detailText = computed(() => {
+  // Issue #691: Display actual streaming content when available
+  // This shows real LLM thinking/reasoning instead of hardcoded placeholders
+  if (props.streamingPreview && props.streamingPreview.trim()) {
+    return props.streamingPreview
+  }
+
+  // Fallback to time-based placeholder text when no streaming content yet
   const details = [
     'Understanding your request...',
     'Searching knowledge base...',

@@ -202,7 +202,7 @@ const overseerAgent = computed(() => {
       notify('Execution plan created', 'info')
     },
     onStepUpdate: (step) => {
-      logger.debug('[Overseer] Step update:', step.step_number, step.status)
+      logger.debug('[Overseer] Step update:', { step_number: step.step_number, status: step.status })
     },
     onStreamChunk: (chunk) => {
       logger.debug('[Overseer] Stream chunk:', chunk.chunk_type)
@@ -269,7 +269,7 @@ const loadNovncUrl = async () => {
 
     if (response.ok) {
       const result = await response.json()
-      logger.debug('VNC status:', result.status, '-', result.message)
+      logger.debug('VNC status:', { status: result.status, message: result.message })
     } else {
       logger.warn('VNC ensure-running check failed:', response.status)
       notify('VNC server check failed - desktop may not be available', 'warning')

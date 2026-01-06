@@ -438,7 +438,7 @@ const deleteSession = async (sessionId: string) => {
     // Fetch file stats
     (async () => {
       const response = await ApiClient.get(`/api/conversation-files/conversation/${sessionId}/list`)
-      const data = await response.json()
+      const data = await (response as any).json()
       return data?.stats || null
     })(),
     // Fetch KB facts (Issue #547)
@@ -550,7 +550,7 @@ const reloadSystem = async () => {
   try {
     // Call real system reload API
     const response = await ApiClient.post('/api/system/reload_config')
-    const data = await response.json()
+    const data = await (response as any).json()
 
     if (data && data.success) {
       systemStatus.value = 'Ready'
