@@ -31,7 +31,9 @@ import re
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Path, Query
-from src.constants.threshold_constants import QueryDefaults, Request
+from starlette.requests import Request
+
+from src.constants.threshold_constants import QueryDefaults
 
 from backend.api.knowledge_models import (
     AddTagsRequest,
