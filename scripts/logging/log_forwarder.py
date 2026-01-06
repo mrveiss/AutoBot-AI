@@ -32,6 +32,7 @@ import os
 import re
 import signal
 import socket
+import ssl
 import subprocess
 import sys
 import threading
@@ -67,6 +68,19 @@ class DestinationType(str, Enum):
     SYSLOG = "syslog"
     WEBHOOK = "webhook"
     FILE = "file"
+
+
+class DestinationScope(str, Enum):
+    """Scope for log forwarding destination configuration."""
+    GLOBAL = "global"  # Applies to all hosts
+    PER_HOST = "per_host"  # Applies only to specific hosts
+
+
+class SyslogProtocol(str, Enum):
+    """Syslog transport protocol."""
+    UDP = "udp"
+    TCP = "tcp"
+    TCP_TLS = "tcp_tls"  # TCP with SSL/TLS
 
 
 class LogLevel(str, Enum):
@@ -148,10 +162,33 @@ class DestinationConfig:
     batch_timeout: float = 5.0
     retry_count: int = 3
     retry_delay: float = 1.0
+    # Scope configuration (global vs per-host)
+    scope: DestinationScope = DestinationScope.GLOBAL
+    target_hosts: List[str] = field(default_factory=list)  # For per_host scope
+    # Syslog-specific options
+    syslog_protocol: SyslogProtocol = SyslogProtocol.UDP
+    ssl_verify: bool = True  # Verify SSL certificates for TCP_TLS
+    ssl_ca_cert: Optional[str] = None  # Path to CA certificate
+    ssl_client_cert: Optional[str] = None  # Path to client certificate (mutual TLS)
+    ssl_client_key: Optional[str] = None  # Path to client key (mutual TLS)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "DestinationConfig":
         """Create config from dictionary."""
+        # Parse scope
+        scope_str = data.get("scope", "global")
+        try:
+            scope = DestinationScope(scope_str)
+        except ValueError:
+            scope = DestinationScope.GLOBAL
+
+        # Parse syslog protocol
+        protocol_str = data.get("syslog_protocol", "udp")
+        try:
+            syslog_protocol = SyslogProtocol(protocol_str)
+        except ValueError:
+            syslog_protocol = SyslogProtocol.UDP
+
         return cls(
             name=data.get("name", "unnamed"),
             type=DestinationType(data.get("type", "seq")),
@@ -166,7 +203,14 @@ class DestinationConfig:
             batch_size=data.get("batch_size", 10),
             batch_timeout=data.get("batch_timeout", 5.0),
             retry_count=data.get("retry_count", 3),
-            retry_delay=data.get("retry_delay", 1.0)
+            retry_delay=data.get("retry_delay", 1.0),
+            scope=scope,
+            target_hosts=data.get("target_hosts", []),
+            syslog_protocol=syslog_protocol,
+            ssl_verify=data.get("ssl_verify", True),
+            ssl_ca_cert=data.get("ssl_ca_cert"),
+            ssl_client_cert=data.get("ssl_client_cert"),
+            ssl_client_key=data.get("ssl_client_key"),
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -185,8 +229,45 @@ class DestinationConfig:
             "batch_size": self.batch_size,
             "batch_timeout": self.batch_timeout,
             "retry_count": self.retry_count,
-            "retry_delay": self.retry_delay
+            "retry_delay": self.retry_delay,
+            "scope": self.scope.value,
+            "target_hosts": self.target_hosts,
+            "syslog_protocol": self.syslog_protocol.value,
+            "ssl_verify": self.ssl_verify,
+            "ssl_ca_cert": self.ssl_ca_cert,
+            "ssl_client_cert": self.ssl_client_cert,
+            "ssl_client_key": self.ssl_client_key,
         }
+
+    def to_dict_sanitized(self) -> Dict[str, Any]:
+        """Convert to dictionary with sensitive fields masked for API responses."""
+        data = self.to_dict()
+        # Mask sensitive fields
+        if data.get("api_key"):
+            data["api_key"] = "****" + data["api_key"][-4:] if len(data["api_key"]) > 4 else "****"
+        if data.get("password"):
+            data["password"] = "****"
+        return data
+
+    def applies_to_host(self, hostname: str) -> bool:
+        """Check if this destination applies to the given host."""
+        if self.scope == DestinationScope.GLOBAL:
+            return True
+        # Per-host scope: check if hostname is in target_hosts
+        if not self.target_hosts:
+            return False
+        # Support wildcards and exact matching
+        for target in self.target_hosts:
+            if target == "*":
+                return True
+            if target == hostname:
+                return True
+            # Simple wildcard matching (e.g., "vm-*" matches "vm-frontend")
+            if target.endswith("*") and hostname.startswith(target[:-1]):
+                return True
+            if target.startswith("*") and hostname.endswith(target[1:]):
+                return True
+        return False
 
 
 class LogDestination(ABC):
@@ -508,33 +589,178 @@ class FileDestination(LogDestination):
 
 
 class SyslogDestination(LogDestination):
-    """Syslog destination (UDP)."""
+    """Syslog destination supporting UDP, TCP, and TCP with SSL/TLS."""
+
+    def _parse_url(self) -> tuple:
+        """Parse host and port from URL."""
+        url = self.config.url
+        # Remove protocol prefixes
+        for prefix in ["syslog://", "udp://", "tcp://", "tcp+tls://", "tls://"]:
+            url = url.replace(prefix, "")
+
+        if ":" in url:
+            host, port_str = url.rsplit(":", 1)
+            port = int(port_str)
+        else:
+            host = url
+            port = 514
+
+        return host, port
+
+    def _validate_cert_path(self, path: str) -> bool:
+        """Validate certificate path is safe and accessible."""
+        if not path:
+            return True
+        try:
+            resolved = Path(path).resolve()
+            # Security: Block path traversal attempts
+            if ".." in path:
+                return False
+            # Allowed system directories for certificates
+            system_dirs = [
+                Path("/etc/ssl"),
+                Path("/etc/pki"),
+                Path("/usr/share/ca-certificates"),
+                Path("/usr/local/share/ca-certificates"),
+            ]
+            # User directories
+            user_dirs = [
+                Path.home() / ".ssl",
+                Path.home() / ".certs",
+            ]
+            # Project-relative certs directory (works regardless of project location)
+            # Find project root by looking for known markers
+            project_root = Path(__file__).resolve().parent
+            while project_root != project_root.parent:
+                if (project_root / "pyproject.toml").exists() or (project_root / "setup.py").exists():
+                    break
+                project_root = project_root.parent
+            project_dirs = [
+                project_root / "certs",
+                project_root / "ssl",
+                project_root / "certificates",
+            ]
+            all_allowed = system_dirs + user_dirs + project_dirs
+            # Check if path is within allowed directories
+            for allowed in all_allowed:
+                try:
+                    if allowed.exists() and str(resolved).startswith(str(allowed.resolve())):
+                        return True
+                except (OSError, PermissionError):
+                    continue
+            # Final check: file must exist and be readable
+            return resolved.is_file() and os.access(resolved, os.R_OK)
+        except (ValueError, OSError):
+            return False
+
+    def _create_ssl_context(self) -> ssl.SSLContext:
+        """Create SSL context for TLS connections."""
+        context = ssl.create_default_context()
+
+        # Configure certificate verification
+        if not self.config.ssl_verify:
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+        else:
+            context.verify_mode = ssl.CERT_REQUIRED
+
+        # Load CA certificate if provided (with path validation)
+        if self.config.ssl_ca_cert:
+            if not self._validate_cert_path(self.config.ssl_ca_cert):
+                raise ValueError(f"Invalid CA certificate path: {self.config.ssl_ca_cert}")
+            context.load_verify_locations(self.config.ssl_ca_cert)
+
+        # Load client certificate for mutual TLS if provided (with path validation)
+        if self.config.ssl_client_cert and self.config.ssl_client_key:
+            if not self._validate_cert_path(self.config.ssl_client_cert):
+                raise ValueError(f"Invalid client certificate path: {self.config.ssl_client_cert}")
+            if not self._validate_cert_path(self.config.ssl_client_key):
+                raise ValueError(f"Invalid client key path: {self.config.ssl_client_key}")
+            context.load_cert_chain(
+                certfile=self.config.ssl_client_cert,
+                keyfile=self.config.ssl_client_key
+            )
+
+        return context
+
+    def _send_udp(self, entries: List[LogEntry], host: str, port: int) -> bool:
+        """Send logs via UDP."""
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            for entry in entries:
+                message = entry.to_syslog_format()
+                sock.sendto(message.encode("utf-8"), (host, port))
+                self._sent_count += 1
+            return True
+        finally:
+            sock.close()
+
+    def _send_tcp(self, entries: List[LogEntry], host: str, port: int, use_tls: bool = False) -> bool:
+        """Send logs via TCP, optionally with TLS."""
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(10.0)
+
+        try:
+            if use_tls:
+                context = self._create_ssl_context()
+                # Wrap socket with SSL
+                if self.config.ssl_verify:
+                    sock = context.wrap_socket(sock, server_hostname=host)
+                else:
+                    sock = context.wrap_socket(sock)
+
+            sock.connect((host, port))
+
+            for entry in entries:
+                # RFC 5425: Use octet counting for TCP syslog
+                message = entry.to_syslog_format()
+                # Format: <length> <message>
+                framed_message = f"{len(message)} {message}"
+                sock.sendall(framed_message.encode("utf-8"))
+                self._sent_count += 1
+
+            return True
+        finally:
+            sock.close()
 
     def send(self, entries: List[LogEntry]) -> bool:
         if not self.config.url:
             return False
 
         try:
-            # Parse host:port from URL
-            url = self.config.url.replace("syslog://", "").replace("udp://", "")
-            if ":" in url:
-                host, port = url.split(":")
-                port = int(port)
+            host, port = self._parse_url()
+            protocol = self.config.syslog_protocol
+
+            if protocol == SyslogProtocol.UDP:
+                success = self._send_udp(entries, host, port)
+            elif protocol == SyslogProtocol.TCP:
+                success = self._send_tcp(entries, host, port, use_tls=False)
+            elif protocol == SyslogProtocol.TCP_TLS:
+                success = self._send_tcp(entries, host, port, use_tls=True)
             else:
-                host = url
-                port = 514
+                self._last_error = f"Unknown syslog protocol: {protocol}"
+                return False
 
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            if success:
+                self._healthy = True
+                return True
+            return False
 
-            for entry in entries:
-                message = entry.to_syslog_format()
-                sock.sendto(message.encode(), (host, port))
-                self._sent_count += 1
-
-            sock.close()
-            self._healthy = True
-            return True
-
+        except ssl.SSLError as e:
+            self._last_error = f"SSL error: {e}"
+            self._healthy = False
+            self._failed_count += len(entries)
+            return False
+        except socket.timeout:
+            self._last_error = "Connection timeout"
+            self._healthy = False
+            self._failed_count += len(entries)
+            return False
+        except ConnectionRefusedError:
+            self._last_error = "Connection refused"
+            self._healthy = False
+            self._failed_count += len(entries)
+            return False
         except Exception as e:
             self._last_error = str(e)
             self._healthy = False
@@ -542,8 +768,40 @@ class SyslogDestination(LogDestination):
             return False
 
     def health_check(self) -> bool:
-        # UDP syslog doesn't have health checks
-        return True
+        """Check connectivity to syslog server."""
+        if not self.config.url:
+            return False
+
+        try:
+            host, port = self._parse_url()
+            protocol = self.config.syslog_protocol
+
+            # UDP doesn't have reliable health checks
+            if protocol == SyslogProtocol.UDP:
+                return True
+
+            # For TCP/TLS, try to establish a connection
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5.0)
+
+            try:
+                if protocol == SyslogProtocol.TCP_TLS:
+                    context = self._create_ssl_context()
+                    if self.config.ssl_verify:
+                        sock = context.wrap_socket(sock, server_hostname=host)
+                    else:
+                        sock = context.wrap_socket(sock)
+
+                sock.connect((host, port))
+                self._healthy = True
+                return True
+            finally:
+                sock.close()
+
+        except Exception as e:
+            self._last_error = str(e)
+            self._healthy = False
+            return False
 
 
 def create_destination(config: DestinationConfig) -> LogDestination:
@@ -685,8 +943,15 @@ class LogForwarder:
 
         try:
             self.log_queue.put_nowait(entry)
-        except:
-            pass  # Queue full, drop log
+        except Exception:
+            # Queue full - track dropped logs but avoid log storms
+            self._dropped_count = getattr(self, '_dropped_count', 0) + 1
+            # Log every 100th drop to provide visibility without flooding
+            if self._dropped_count % 100 == 1:
+                self.logger.warning(
+                    "Log queue full, dropped %d logs (queue size: %d)",
+                    self._dropped_count, self.log_queue.qsize()
+                )
 
     def _log_sender_thread(self):
         """Background thread that sends logs to destinations."""
@@ -697,9 +962,9 @@ class LogForwarder:
             try:
                 entry = self.log_queue.get(timeout=1.0)
 
-                # Add to batch for each enabled destination
+                # Add to batch for each enabled destination that applies to this host
                 for name, dest in self.destinations.items():
-                    if dest.config.enabled:
+                    if dest.config.enabled and dest.config.applies_to_host(self.hostname):
                         batch[name].append(entry)
 
                 self.log_queue.task_done()
@@ -711,6 +976,8 @@ class LogForwarder:
             current_time = time.time()
             for name, dest in self.destinations.items():
                 if not dest.config.enabled:
+                    continue
+                if not dest.config.applies_to_host(self.hostname):
                     continue
 
                 should_send = (
@@ -727,7 +994,7 @@ class LogForwarder:
 
         # Send remaining logs
         for name, dest in self.destinations.items():
-            if batch[name] and dest.config.enabled:
+            if batch[name] and dest.config.enabled and dest.config.applies_to_host(self.hostname):
                 dest.send(batch[name])
 
     def _docker_log_streamer(self, container):
@@ -928,6 +1195,15 @@ def main():
     parser.add_argument("--add-seq", type=str, metavar="URL", help="Add Seq destination")
     parser.add_argument("--add-elasticsearch", type=str, metavar="URL", help="Add Elasticsearch destination")
     parser.add_argument("--add-loki", type=str, metavar="URL", help="Add Loki destination")
+    parser.add_argument("--add-syslog", type=str, metavar="HOST:PORT", help="Add Syslog destination (e.g., 192.168.168.49:514)")
+    parser.add_argument("--syslog-protocol", type=str, choices=["udp", "tcp", "tcp_tls"], default="udp",
+                        help="Syslog protocol: udp (default), tcp, or tcp_tls")
+    parser.add_argument("--syslog-name", type=str, default="syslog-default", help="Name for syslog destination")
+    parser.add_argument("--ssl-verify", action="store_true", help="Verify SSL certificates (for tcp_tls)")
+    parser.add_argument("--ssl-ca-cert", type=str, help="Path to CA certificate for SSL verification")
+    parser.add_argument("--scope", type=str, choices=["global", "per_host"], default="global",
+                        help="Destination scope: global (all hosts) or per_host")
+    parser.add_argument("--target-hosts", type=str, help="Comma-separated list of target hosts (for per_host scope)")
     parser.add_argument("--list", action="store_true", help="List configured destinations")
 
     args = parser.parse_args()
@@ -969,11 +1245,46 @@ def main():
         forwarder.add_destination(config)
         print(f"Added Loki destination: {args.add_loki}")
 
+    if args.add_syslog:
+        # Parse scope and target hosts
+        scope = DestinationScope(args.scope)
+        target_hosts = []
+        if args.target_hosts:
+            target_hosts = [h.strip() for h in args.target_hosts.split(",")]
+
+        config = DestinationConfig(
+            name=args.syslog_name,
+            type=DestinationType.SYSLOG,
+            url=args.add_syslog,
+            syslog_protocol=SyslogProtocol(args.syslog_protocol),
+            ssl_verify=args.ssl_verify,
+            ssl_ca_cert=args.ssl_ca_cert,
+            scope=scope,
+            target_hosts=target_hosts
+        )
+        forwarder.add_destination(config)
+        protocol_info = f" ({args.syslog_protocol})"
+        scope_info = f" [scope: {args.scope}]"
+        hosts_info = f" [hosts: {args.target_hosts}]" if args.target_hosts else ""
+        print(f"Added Syslog destination: {args.add_syslog}{protocol_info}{scope_info}{hosts_info}")
+
     if args.list:
         print("\nConfigured Destinations:")
         for dest in forwarder.destinations.values():
             status = "enabled" if dest.config.enabled else "disabled"
-            print(f"  - {dest.config.name} ({dest.config.type.value}): {dest.config.url or dest.config.file_path} [{status}]")
+            scope = dest.config.scope.value
+            url = dest.config.url or dest.config.file_path
+            line = f"  - {dest.config.name} ({dest.config.type.value}): {url} [{status}] [scope: {scope}]"
+
+            # Add protocol info for syslog
+            if dest.config.type == DestinationType.SYSLOG:
+                line += f" [protocol: {dest.config.syslog_protocol.value}]"
+
+            # Add target hosts for per_host scope
+            if dest.config.scope == DestinationScope.PER_HOST and dest.config.target_hosts:
+                line += f" [hosts: {', '.join(dest.config.target_hosts)}]"
+
+            print(line)
 
     if args.test_destinations:
         print("\nTesting destinations...")
@@ -985,7 +1296,7 @@ def main():
     if args.start:
         forwarder.start()
 
-    if not any([args.start, args.add_seq, args.add_elasticsearch, args.add_loki, args.list, args.test_destinations]):
+    if not any([args.start, args.add_seq, args.add_elasticsearch, args.add_loki, args.add_syslog, args.list, args.test_destinations]):
         parser.print_help()
 
 

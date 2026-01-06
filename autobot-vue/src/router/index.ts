@@ -480,6 +480,15 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'log-forwarding',
+        name: 'settings-log-forwarding',
+        component: () => import('@/components/settings/LogForwardingSettings.vue'),
+        meta: {
+          title: 'Log Forwarding',
+          parent: 'settings'
+        }
+      },
+      {
         path: 'cache',
         name: 'settings-cache',
         component: () => import('@/components/settings/CacheSettings.vue'),

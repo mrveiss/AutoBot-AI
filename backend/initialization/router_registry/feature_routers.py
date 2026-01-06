@@ -30,6 +30,7 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("backend.services.workflow_automation", "/workflow-automation", ["workflow-automation"], "workflow_automation"),
     # Logging and configuration
     ("backend.api.logs", "/logs", ["logs"], "logs"),
+    ("backend.api.log_forwarding", "/log-forwarding", ["log-forwarding"], "log_forwarding"),
     ("backend.api.secrets", "/secrets", ["secrets"], "secrets"),
     ("backend.api.cache", "/cache", ["cache"], "cache"),
     ("backend.api.registry", "/registry", ["registry"], "registry"),

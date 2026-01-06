@@ -125,6 +125,7 @@ const tabs = ref<SettingsTab[]>([
   { id: 'backend', label: 'Backend' },
   { id: 'ui', label: 'UI' },
   { id: 'logging', label: 'Logging' },
+  { id: 'log-forwarding', label: 'Log Forwarding' },
   { id: 'cache', label: 'Cache' },
   { id: 'prompts', label: 'Prompts' },
   { id: 'infrastructure', label: 'Infrastructure' },
