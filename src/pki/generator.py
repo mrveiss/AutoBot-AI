@@ -29,6 +29,73 @@ from src.pki.config import (
 logger = logging.getLogger(__name__)
 
 
+def _run_openssl_command(
+    cmd: List[str], operation: str, context: str = ""
+) -> Tuple[bool, Optional[str]]:
+    """
+    Execute an OpenSSL command with error handling.
+
+    Issue #665: Extracted helper to reduce code duplication in certificate
+    generation methods.
+
+    Args:
+        cmd: OpenSSL command as list of strings
+        operation: Human-readable operation name for logging
+        context: Additional context (e.g., VM name)
+
+    Returns:
+        Tuple of (success: bool, error_message: Optional[str])
+    """
+    try:
+        subprocess.run(cmd, check=True, capture_output=True)
+        return True, None
+    except subprocess.CalledProcessError as e:
+        error_msg = e.stderr.decode() if e.stderr else str(e)
+        log_ctx = f" for {context}" if context else ""
+        logger.error(f"Failed to {operation}{log_ctx}: {error_msg}")
+        return False, error_msg
+
+
+def _write_openssl_config(
+    conf_path: Path, config: TLSConfig, vm_info: VMCertificateInfo
+) -> None:
+    """
+    Write OpenSSL configuration file for certificate generation.
+
+    Issue #665: Extracted from _generate_service_cert to improve readability.
+
+    Args:
+        conf_path: Path to write the config file
+        config: TLS configuration with key size, country, org
+        vm_info: VM certificate info with common name and SAN entries
+    """
+    san_string = ",".join(vm_info.san_entries)
+
+    conf_content = f"""[req]
+default_bits = {config.key_size}
+prompt = no
+default_md = sha256
+distinguished_name = dn
+req_extensions = req_ext
+
+[dn]
+C = {config.country}
+O = {config.organization}
+CN = {vm_info.common_name}
+
+[req_ext]
+subjectAltName = {san_string}
+
+[v3_ext]
+authorityKeyIdentifier = keyid,issuer
+basicConstraints = CA:FALSE
+keyUsage = digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth, clientAuth
+subjectAltName = {san_string}
+"""
+    conf_path.write_text(conf_content, encoding="utf-8")
+
+
 class CertificateGenerator:
     """
     Generates TLS certificates for AutoBot VMs.
@@ -124,7 +191,12 @@ class CertificateGenerator:
     def _generate_service_cert(
         self, vm_info: VMCertificateInfo, force: bool = False
     ) -> bool:
-        """Generate service certificate for a VM."""
+        """
+        Generate service certificate for a VM.
+
+        Issue #665: Refactored to use extracted helpers for OpenSSL operations
+        and config file generation.
+        """
         cert_path = vm_info.cert_path
         key_path = vm_info.key_path
 
@@ -134,71 +206,37 @@ class CertificateGenerator:
 
         logger.info(f"Generating certificate for {vm_info.name}")
 
-        # Create directory
+        # Create directory and write OpenSSL config (Issue #665: uses helper)
         cert_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Create OpenSSL config for SAN
         conf_path = cert_path.parent / "server.conf"
-        san_string = ",".join(vm_info.san_entries)
+        _write_openssl_config(conf_path, self.config, vm_info)
 
-        conf_content = f"""[req]
-default_bits = {self.config.key_size}
-prompt = no
-default_md = sha256
-distinguished_name = dn
-req_extensions = req_ext
-
-[dn]
-C = {self.config.country}
-O = {self.config.organization}
-CN = {vm_info.common_name}
-
-[req_ext]
-subjectAltName = {san_string}
-
-[v3_ext]
-authorityKeyIdentifier = keyid,issuer
-basicConstraints = CA:FALSE
-keyUsage = digitalSignature, keyEncipherment
-extendedKeyUsage = serverAuth, clientAuth
-subjectAltName = {san_string}
-"""
-        conf_path.write_text(conf_content)
-
-        # Generate private key
+        # Generate private key (Issue #665: uses helper)
         key_cmd = [
             "openssl", "genrsa",
             "-out", str(key_path),
             str(self.config.key_size),
         ]
-
-        try:
-            subprocess.run(key_cmd, check=True, capture_output=True)
-            os.chmod(key_path, 0o600)
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to generate key for {vm_info.name}: {e.stderr.decode()}")
+        success, _ = _run_openssl_command(key_cmd, "generate key", vm_info.name)
+        if not success:
             return False
+        os.chmod(key_path, 0o600)
 
-        # Generate CSR
+        # Generate CSR (Issue #665: uses helper)
         csr_path = cert_path.parent / "server.csr"
         csr_cmd = [
-            "openssl", "req",
-            "-new",
+            "openssl", "req", "-new",
             "-key", str(key_path),
             "-out", str(csr_path),
             "-config", str(conf_path),
         ]
-
-        try:
-            subprocess.run(csr_cmd, check=True, capture_output=True)
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to generate CSR for {vm_info.name}: {e.stderr.decode()}")
+        success, _ = _run_openssl_command(csr_cmd, "generate CSR", vm_info.name)
+        if not success:
             return False
 
-        # Sign with CA
+        # Sign with CA (Issue #665: uses helper)
         sign_cmd = [
-            "openssl", "x509",
-            "-req",
+            "openssl", "x509", "-req",
             "-in", str(csr_path),
             "-CA", str(self.config.ca_cert_path),
             "-CAkey", str(self.config.ca_key_path),
@@ -209,17 +247,14 @@ subjectAltName = {san_string}
             "-extfile", str(conf_path),
             "-extensions", "v3_ext",
         ]
-
-        try:
-            subprocess.run(sign_cmd, check=True, capture_output=True)
-            os.chmod(cert_path, 0o644)
-            # Clean up CSR
-            csr_path.unlink()
-            logger.info(f"Certificate generated for {vm_info.name}: {cert_path}")
-            return True
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to sign certificate for {vm_info.name}: {e.stderr.decode()}")
+        success, _ = _run_openssl_command(sign_cmd, "sign certificate", vm_info.name)
+        if not success:
             return False
+
+        os.chmod(cert_path, 0o644)
+        csr_path.unlink()  # Clean up CSR
+        logger.info(f"Certificate generated for {vm_info.name}: {cert_path}")
+        return True
 
     def get_certificate_status(self, cert_path: Path) -> CertificateStatus:
         """Get status of a certificate."""

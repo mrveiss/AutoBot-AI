@@ -25,9 +25,77 @@ from src.agents.overseer import (
     StepResult,
     StreamChunk,
 )
+from src.agents.overseer.types import (
+    CommandBreakdownPart,
+    CommandExplanation,
+    OutputExplanation,
+    StepStatus,
+)
 from src.chat_history import ChatHistoryManager
 
 logger = logging.getLogger(__name__)
+
+
+def _dict_to_step_result(step_data: Dict[str, Any]) -> StepResult:
+    """
+    Convert a dictionary to a StepResult object.
+
+    Issue #665: Extracted from handle_query to reduce function length and
+    improve code reusability.
+
+    Args:
+        step_data: Dictionary containing step result data
+
+    Returns:
+        StepResult object populated from the dict
+    """
+    cmd_exp = None
+    if step_data.get("command_explanation"):
+        ce = step_data["command_explanation"]
+        cmd_exp = CommandExplanation(
+            summary=ce.get("summary", ""),
+            breakdown=[
+                CommandBreakdownPart(
+                    part=p.get("part", ""),
+                    explanation=p.get("explanation", ""),
+                )
+                for p in ce.get("breakdown", [])
+            ],
+        )
+
+    out_exp = None
+    if step_data.get("output_explanation"):
+        oe = step_data["output_explanation"]
+        out_exp = OutputExplanation(
+            summary=oe.get("summary", ""),
+            key_findings=oe.get("key_findings", []),
+        )
+
+    # Handle status with defensive error handling
+    try:
+        status = StepStatus(step_data.get("status", "completed"))
+    except ValueError:
+        logger.warning(
+            "Invalid status '%s', defaulting to COMPLETED", step_data.get("status")
+        )
+        status = StepStatus.COMPLETED
+
+    return StepResult(
+        task_id=step_data.get("task_id", ""),
+        step_number=step_data.get("step_number", 0),
+        total_steps=step_data.get("total_steps", 0),
+        status=status,
+        command=step_data.get("command"),
+        command_explanation=cmd_exp,
+        output=step_data.get("output"),
+        output_explanation=out_exp,
+        return_code=step_data.get("return_code"),
+        execution_time=step_data.get("execution_time", 0.0),
+        error=step_data.get("error"),
+        is_streaming=step_data.get("is_streaming", False),
+        stream_complete=step_data.get("stream_complete", False),
+    )
+
 
 # Shared chat history manager
 _chat_history_manager: Optional[ChatHistoryManager] = None
@@ -258,49 +326,10 @@ class OverseerWebSocketHandler:
             ):
                 await self.send_update(update)
 
-                # Save step results to chat history
+                # Save step results to chat history (Issue #665: uses helper)
                 if update.update_type == "step_complete" and update.content:
-                    # Convert content to StepResult if it's a dict
                     if isinstance(update.content, dict):
-                        from src.agents.overseer.types import (
-                            StepStatus,
-                            CommandExplanation,
-                            CommandBreakdownPart,
-                            OutputExplanation,
-                        )
-                        # Create StepResult from dict
-                        step_data = update.content
-                        cmd_exp = None
-                        if step_data.get("command_explanation"):
-                            ce = step_data["command_explanation"]
-                            cmd_exp = CommandExplanation(
-                                summary=ce.get("summary", ""),
-                                breakdown=[
-                                    CommandBreakdownPart(
-                                        part=p.get("part", ""),
-                                        explanation=p.get("explanation", ""),
-                                    )
-                                    for p in ce.get("breakdown", [])
-                                ],
-                            )
-                        out_exp = None
-                        if step_data.get("output_explanation"):
-                            oe = step_data["output_explanation"]
-                            out_exp = OutputExplanation(
-                                summary=oe.get("summary", ""),
-                                key_findings=oe.get("key_findings", []),
-                            )
-                        result = StepResult(
-                            task_id=step_data.get("task_id", ""),
-                            step_number=step_data.get("step_number", 0),
-                            total_steps=step_data.get("total_steps", 0),
-                            status=StepStatus(step_data.get("status", "completed")),
-                            command=step_data.get("command"),
-                            command_explanation=cmd_exp,
-                            output=step_data.get("output"),
-                            output_explanation=out_exp,
-                            return_code=step_data.get("return_code"),
-                        )
+                        result = _dict_to_step_result(update.content)
                         await self.save_step_result_to_chat(result)
                     elif isinstance(update.content, StepResult):
                         await self.save_step_result_to_chat(update.content)
