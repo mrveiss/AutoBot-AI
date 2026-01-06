@@ -46,90 +46,114 @@ class NaturalLanguageProcessor:
 
         logger.info("Natural Language Processor initialized")
 
+    def _get_automation_patterns(self) -> Dict[str, Any]:
+        """Issue #665: Extracted from _load_command_patterns to reduce function length."""
+        return {
+            "patterns": [
+                r"(?i).*(click|press|tap)\s+(.+)",
+                r"(?i).*(type|enter|input)\s+(.+)",
+                r"(?i).*(open|start|launch)\s+(.+)",
+                r"(?i).*(close|exit|quit)\s+(.+)",
+                r"(?i).*(scroll|move)\s+(up|down|left|right)",
+                r"(?i).*(fill|complete)\s+(.+form|.+field)",
+            ],
+            "examples": [
+                "click the submit button",
+                "type hello world",
+                "open the settings menu",
+                "scroll down",
+            ],
+        }
+
+    def _get_navigation_patterns(self) -> Dict[str, Any]:
+        """Issue #665: Extracted from _load_command_patterns to reduce function length."""
+        return {
+            "patterns": [
+                r"(?i).*(go to|navigate to|visit)\s+(.+)",
+                r"(?i).*(back|forward|home)",
+                r"(?i).*(refresh|reload)\s*(page|screen)?",
+                r"(?i).*(find|search for)\s+(.+)",
+            ],
+            "examples": [
+                "go to the homepage",
+                "go back",
+                "search for documentation",
+            ],
+        }
+
+    def _get_control_patterns(self) -> Dict[str, Any]:
+        """Issue #665: Extracted from _load_command_patterns to reduce function length."""
+        return {
+            "patterns": [
+                r"(?i).*(stop|pause|resume|continue)",
+                r"(?i).*(cancel|abort)\s*(.+)?",
+                r"(?i).*(save|export|download)\s+(.+)",
+                r"(?i).*(show|display|hide)\s+(.+)",
+            ],
+            "examples": [
+                "stop the current task",
+                "save the document",
+                "show the debug panel",
+            ],
+        }
+
+    def _get_query_patterns(self) -> Dict[str, Any]:
+        """Issue #665: Extracted from _load_command_patterns to reduce function length."""
+        return {
+            "patterns": [
+                r"(?i).*(what|how|when|where|why)\s+(.+)",
+                r"(?i).*(tell me|explain|describe)\s+(.+)",
+                r"(?i).*(status|state)\s+of\s+(.+)",
+                r"(?i).*(list|show me)\s+(.+)",
+            ],
+            "examples": [
+                "what is the current status",
+                "how do I configure this",
+                "list all running processes",
+            ],
+        }
+
+    def _get_system_patterns(self) -> Dict[str, Any]:
+        """Issue #665: Extracted from _load_command_patterns to reduce function length."""
+        return {
+            "patterns": [
+                r"(?i).*(shutdown|restart|reboot)",
+                r"(?i).*(update|upgrade|install)\s+(.+)",
+                r"(?i).*(settings|preferences|configuration)",
+                r"(?i).*(help|assistance|support)",
+            ],
+            "examples": [
+                "open system settings",
+                "install new software",
+                "show help documentation",
+            ],
+        }
+
+    def _get_takeover_patterns(self) -> Dict[str, Any]:
+        """Issue #665: Extracted from _load_command_patterns to reduce function length."""
+        return {
+            "patterns": [
+                r"(?i).*(take over|take control|manual control)",
+                r"(?i).*(emergency|urgent|critical)",
+                r"(?i).*(human|manual)\s+(intervention|control)",
+                r"(?i).*(stop autonomous|disable auto)",
+            ],
+            "examples": [
+                "take manual control",
+                "emergency takeover",
+                "stop autonomous mode",
+            ],
+        }
+
     def _load_command_patterns(self) -> Dict[str, Any]:
         """Load command patterns and intents"""
         return {
-            "automation": {
-                "patterns": [
-                    r"(?i).*(click|press|tap)\s+(.+)",
-                    r"(?i).*(type|enter|input)\s+(.+)",
-                    r"(?i).*(open|start|launch)\s+(.+)",
-                    r"(?i).*(close|exit|quit)\s+(.+)",
-                    r"(?i).*(scroll|move)\s+(up|down|left|right)",
-                    r"(?i).*(fill|complete)\s+(.+form|.+field)",
-                ],
-                "examples": [
-                    "click the submit button",
-                    "type hello world",
-                    "open the settings menu",
-                    "scroll down",
-                ],
-            },
-            "navigation": {
-                "patterns": [
-                    r"(?i).*(go to|navigate to|visit)\s+(.+)",
-                    r"(?i).*(back|forward|home)",
-                    r"(?i).*(refresh|reload)\s*(page|screen)?",
-                    r"(?i).*(find|search for)\s+(.+)",
-                ],
-                "examples": [
-                    "go to the homepage",
-                    "go back",
-                    "search for documentation",
-                ],
-            },
-            "control": {
-                "patterns": [
-                    r"(?i).*(stop|pause|resume|continue)",
-                    r"(?i).*(cancel|abort)\s*(.+)?",
-                    r"(?i).*(save|export|download)\s+(.+)",
-                    r"(?i).*(show|display|hide)\s+(.+)",
-                ],
-                "examples": [
-                    "stop the current task",
-                    "save the document",
-                    "show the debug panel",
-                ],
-            },
-            "query": {
-                "patterns": [
-                    r"(?i).*(what|how|when|where|why)\s+(.+)",
-                    r"(?i).*(tell me|explain|describe)\s+(.+)",
-                    r"(?i).*(status|state)\s+of\s+(.+)",
-                    r"(?i).*(list|show me)\s+(.+)",
-                ],
-                "examples": [
-                    "what is the current status",
-                    "how do I configure this",
-                    "list all running processes",
-                ],
-            },
-            "system": {
-                "patterns": [
-                    r"(?i).*(shutdown|restart|reboot)",
-                    r"(?i).*(update|upgrade|install)\s+(.+)",
-                    r"(?i).*(settings|preferences|configuration)",
-                    r"(?i).*(help|assistance|support)",
-                ],
-                "examples": [
-                    "open system settings",
-                    "install new software",
-                    "show help documentation",
-                ],
-            },
-            "takeover": {
-                "patterns": [
-                    r"(?i).*(take over|take control|manual control)",
-                    r"(?i).*(emergency|urgent|critical)",
-                    r"(?i).*(human|manual)\s+(intervention|control)",
-                    r"(?i).*(stop autonomous|disable auto)",
-                ],
-                "examples": [
-                    "take manual control",
-                    "emergency takeover",
-                    "stop autonomous mode",
-                ],
-            },
+            "automation": self._get_automation_patterns(),
+            "navigation": self._get_navigation_patterns(),
+            "control": self._get_control_patterns(),
+            "query": self._get_query_patterns(),
+            "system": self._get_system_patterns(),
+            "takeover": self._get_takeover_patterns(),
         }
 
     async def analyze_voice_command(

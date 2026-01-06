@@ -249,50 +249,51 @@ class DecisionEngine:
             metadata={"algorithm": "navigation_selection"},
         )
 
-    async def _decide_task_prioritization(self, context: DecisionContext) -> Decision:
-        """Decide on task prioritization based on context elements and constraints."""
+    def _score_task_for_prioritization(self, task: Dict[str, Any]) -> float:
+        """Issue #665: Extracted from _decide_task_prioritization to reduce function length.
 
-        # Find tasks to prioritize in available actions
-        task_actions = [
-            action
-            for action in context.available_actions
-            if action.get("action_type") in ("task", "prioritization", "scheduling")
-        ]
+        Scores a task based on urgency, importance, and dependencies.
 
-        if not task_actions:
-            return await self._create_no_action_decision(
-                context, "No tasks available for prioritization"
-            )
+        Args:
+            task: Task dictionary containing urgency, importance, and dependencies info.
 
-        # Score tasks based on urgency, importance, and context
-        scored_tasks = []
-        for task in task_actions:
-            score = 0.5  # Base score
+        Returns:
+            Float score between 0.1 and 1.0 indicating task priority.
+        """
+        score = 0.5  # Base score
 
-            # Urgency factors
-            if task.get("urgent", False):
-                score += 0.3
-            if task.get("deadline"):
-                score += 0.2
+        # Urgency factors
+        if task.get("urgent", False):
+            score += 0.3
+        if task.get("deadline"):
+            score += 0.2
 
-            # Importance factors
-            importance = task.get("importance", "medium")
-            if importance == "high":
-                score += 0.2
-            elif importance == "critical":
-                score += 0.4
+        # Importance factors
+        importance = task.get("importance", "medium")
+        if importance == "high":
+            score += 0.2
+        elif importance == "critical":
+            score += 0.4
 
-            # Dependencies - tasks with fewer blockers get priority
-            dependencies = task.get("dependencies", [])
-            if len(dependencies) == 0:
-                score += 0.1
+        # Dependencies - tasks with fewer blockers get priority
+        dependencies = task.get("dependencies", [])
+        if len(dependencies) == 0:
+            score += 0.1
 
-            scored_tasks.append((min(score, 1.0), task))
+        return min(score, 1.0)
 
-        # Sort by score (highest first)
-        scored_tasks.sort(key=lambda x: x[0], reverse=True)
-        best_score, prioritized_task = scored_tasks[0]
+    def _build_task_prioritization_decision(
+        self,
+        context: DecisionContext,
+        best_score: float,
+        prioritized_task: Dict[str, Any],
+        scored_tasks: List[tuple],
+        task_count: int,
+    ) -> Decision:
+        """Issue #665: Extracted from _decide_task_prioritization to reduce function length.
 
+        Builds the Decision object for task prioritization.
+        """
         confidence = best_score
         confidence_level = self._determine_confidence_level(confidence)
 
@@ -311,7 +312,7 @@ class DecisionEngine:
             confidence_level=confidence_level,
             reasoning=f"Prioritized based on urgency, importance, and dependencies (score: {best_score:.2f})",
             supporting_evidence=[
-                {"type": "prioritization_analysis", "tasks_considered": len(task_actions)}
+                {"type": "prioritization_analysis", "tasks_considered": task_count}
             ],
             risk_assessment={"risk_level": "low", "factors": []},
             expected_outcomes=[
@@ -323,8 +324,35 @@ class DecisionEngine:
             timestamp=self.time_provider.current_timestamp(),
             metadata={
                 "algorithm": "task_prioritization",
-                "total_tasks": len(task_actions),
+                "total_tasks": task_count,
             },
+        )
+
+    async def _decide_task_prioritization(self, context: DecisionContext) -> Decision:
+        """Decide on task prioritization based on context elements and constraints."""
+        # Find tasks to prioritize in available actions
+        task_actions = [
+            action
+            for action in context.available_actions
+            if action.get("action_type") in ("task", "prioritization", "scheduling")
+        ]
+
+        if not task_actions:
+            return await self._create_no_action_decision(
+                context, "No tasks available for prioritization"
+            )
+
+        # Score tasks based on urgency, importance, and context
+        scored_tasks = [
+            (self._score_task_for_prioritization(task), task) for task in task_actions
+        ]
+
+        # Sort by score (highest first)
+        scored_tasks.sort(key=lambda x: x[0], reverse=True)
+        best_score, prioritized_task = scored_tasks[0]
+
+        return self._build_task_prioritization_decision(
+            context, best_score, prioritized_task, scored_tasks, len(task_actions)
         )
 
     async def _decide_risk_assessment(self, context: DecisionContext) -> Decision:
@@ -486,54 +514,51 @@ class DecisionEngine:
         else:
             return self._create_continue_autonomous_decision(context, escalation_actions)
 
-    async def _decide_workflow_optimization(self, context: DecisionContext) -> Decision:
-        """Decide on workflow optimization actions based on context analysis."""
+    def _score_optimization_action(self, opt: Dict[str, Any]) -> float:
+        """Issue #665: Extracted from _decide_workflow_optimization to reduce function length.
 
-        # Find optimization opportunities in available actions
-        optimization_actions = [
-            action
-            for action in context.available_actions
-            if action.get("action_type") in ("optimization", "workflow", "efficiency")
-        ]
+        Scores an optimization action based on efficiency gain, risk level, and complexity.
 
-        if not optimization_actions:
-            # Analyze context for implicit optimization opportunities
-            optimization_suggestions = self._analyze_workflow_for_optimization(context)
-            if not optimization_suggestions:
-                return await self._create_no_action_decision(
-                    context, "No workflow optimization opportunities identified"
-                )
-            optimization_actions = optimization_suggestions
+        Args:
+            opt: Optimization action dictionary.
 
-        # Score optimization actions
-        scored_optimizations = []
-        for opt in optimization_actions:
-            score = 0.5  # Base score
+        Returns:
+            Float score between 0.1 and 1.0 indicating optimization priority.
+        """
+        score = 0.5  # Base score
 
-            # Efficiency impact
-            efficiency_gain = opt.get("efficiency_gain", 0)
-            score += min(efficiency_gain / 100, 0.3)
+        # Efficiency impact
+        efficiency_gain = opt.get("efficiency_gain", 0)
+        score += min(efficiency_gain / 100, 0.3)
 
-            # Risk level - lower risk = higher score
-            risk = opt.get("risk_level", "medium")
-            if risk == "low":
-                score += 0.2
-            elif risk == "high":
-                score -= 0.1
+        # Risk level - lower risk = higher score
+        risk = opt.get("risk_level", "medium")
+        if risk == "low":
+            score += 0.2
+        elif risk == "high":
+            score -= 0.1
 
-            # Implementation complexity - simpler = higher score
-            complexity = opt.get("complexity", "medium")
-            if complexity == "low":
-                score += 0.1
-            elif complexity == "high":
-                score -= 0.1
+        # Implementation complexity - simpler = higher score
+        complexity = opt.get("complexity", "medium")
+        if complexity == "low":
+            score += 0.1
+        elif complexity == "high":
+            score -= 0.1
 
-            scored_optimizations.append((min(max(score, 0.1), 1.0), opt))
+        return min(max(score, 0.1), 1.0)
 
-        # Sort by score
-        scored_optimizations.sort(key=lambda x: x[0], reverse=True)
-        best_score, best_optimization = scored_optimizations[0]
+    def _build_workflow_optimization_decision(
+        self,
+        context: DecisionContext,
+        best_score: float,
+        best_optimization: Dict[str, Any],
+        scored_optimizations: List[tuple],
+        optimization_count: int,
+    ) -> Decision:
+        """Issue #665: Extracted from _decide_workflow_optimization to reduce function length.
 
+        Builds the Decision object for workflow optimization.
+        """
         confidence = best_score
         confidence_level = self._determine_confidence_level(confidence)
 
@@ -552,7 +577,7 @@ class DecisionEngine:
             confidence_level=confidence_level,
             reasoning=f"Selected workflow optimization based on efficiency, risk, and complexity analysis (score: {best_score:.2f})",
             supporting_evidence=[
-                {"type": "workflow_analysis", "optimizations_found": len(optimization_actions)}
+                {"type": "workflow_analysis", "optimizations_found": optimization_count}
             ],
             risk_assessment={"risk_level": best_optimization.get("risk_level", "low"), "factors": []},
             expected_outcomes=[
@@ -565,8 +590,39 @@ class DecisionEngine:
             timestamp=self.time_provider.current_timestamp(),
             metadata={
                 "algorithm": "workflow_optimization",
-                "optimizations_considered": len(optimization_actions),
+                "optimizations_considered": optimization_count,
             },
+        )
+
+    async def _decide_workflow_optimization(self, context: DecisionContext) -> Decision:
+        """Decide on workflow optimization actions based on context analysis."""
+        # Find optimization opportunities in available actions
+        optimization_actions = [
+            action
+            for action in context.available_actions
+            if action.get("action_type") in ("optimization", "workflow", "efficiency")
+        ]
+
+        if not optimization_actions:
+            # Analyze context for implicit optimization opportunities
+            optimization_suggestions = self._analyze_workflow_for_optimization(context)
+            if not optimization_suggestions:
+                return await self._create_no_action_decision(
+                    context, "No workflow optimization opportunities identified"
+                )
+            optimization_actions = optimization_suggestions
+
+        # Score optimization actions
+        scored_optimizations = [
+            (self._score_optimization_action(opt), opt) for opt in optimization_actions
+        ]
+
+        # Sort by score
+        scored_optimizations.sort(key=lambda x: x[0], reverse=True)
+        best_score, best_optimization = scored_optimizations[0]
+
+        return self._build_workflow_optimization_decision(
+            context, best_score, best_optimization, scored_optimizations, len(optimization_actions)
         )
 
     def _analyze_workflow_for_optimization(

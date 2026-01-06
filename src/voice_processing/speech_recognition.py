@@ -64,6 +64,66 @@ class SpeechRecognitionEngine:
         except ImportError:
             logger.warning("Language detection not available")
 
+    async def _run_parallel_analysis(
+        self, audio_input: AudioInput
+    ) -> tuple:
+        """Issue #665: Extracted from transcribe_audio to reduce function length.
+
+        Run audio analysis operations in parallel for better performance.
+        All operations are independent and only read from audio_input.
+        """
+        if self.recognizer is not None:
+            return await asyncio.gather(
+                self._analyze_audio_quality(audio_input),
+                self._calculate_noise_level(audio_input),
+                self._perform_speech_recognition(audio_input),
+                self._detect_speech_segments(audio_input),
+            )
+        # Run parallel operations without speech recognition
+        audio_quality, noise_level, speech_segments = await asyncio.gather(
+            self._analyze_audio_quality(audio_input),
+            self._calculate_noise_level(audio_input),
+            self._detect_speech_segments(audio_input),
+        )
+        # Fallback when speech recognition not available
+        transcription_result = {
+            "transcription": "[Speech recognition not available]",
+            "confidence": 0.0,
+            "alternatives": [],
+            "language": "unknown",
+        }
+        return audio_quality, noise_level, transcription_result, speech_segments
+
+    def _build_recognition_result(
+        self,
+        audio_input: AudioInput,
+        transcription_result: Dict[str, Any],
+        speech_segments: List[Dict[str, Any]],
+        audio_quality: Any,
+        noise_level: float,
+        processing_time: float,
+    ) -> SpeechRecognitionResult:
+        """Issue #665: Extracted from transcribe_audio to reduce function length.
+
+        Build the SpeechRecognitionResult from analysis outputs.
+        """
+        return SpeechRecognitionResult(
+            audio_id=audio_input.audio_id,
+            transcription=transcription_result["transcription"],
+            confidence=transcription_result["confidence"],
+            language=transcription_result["language"],
+            alternative_transcriptions=transcription_result["alternatives"],
+            speech_segments=speech_segments,
+            audio_quality=audio_quality,
+            noise_level=noise_level,
+            processing_time=processing_time,
+            metadata={
+                "original_metadata": audio_input.metadata,
+                "processing_timestamp": time.time(),
+                "engine": "speech_recognition" if self.recognizer else "placeholder",
+            },
+        )
+
     async def transcribe_audio(
         self, audio_input: AudioInput
     ) -> SpeechRecognitionResult:
@@ -83,65 +143,22 @@ class SpeechRecognitionEngine:
             start_time = time.time()
 
             try:
-                # Run audio analysis operations in parallel for better performance
-                # All operations are independent and only read from audio_input
-                if self.recognizer is not None:
-                    (
-                        audio_quality,
-                        noise_level,
-                        transcription_result,
-                        speech_segments,
-                    ) = await asyncio.gather(
-                        self._analyze_audio_quality(audio_input),
-                        self._calculate_noise_level(audio_input),
-                        self._perform_speech_recognition(audio_input),
-                        self._detect_speech_segments(audio_input),
-                    )
-                else:
-                    # Run parallel operations without speech recognition
-                    audio_quality, noise_level, speech_segments = await asyncio.gather(
-                        self._analyze_audio_quality(audio_input),
-                        self._calculate_noise_level(audio_input),
-                        self._detect_speech_segments(audio_input),
-                    )
-                    # Fallback when speech recognition not available
-                    transcription_result = {
-                        "transcription": "[Speech recognition not available]",
-                        "confidence": 0.0,
-                        "alternatives": [],
-                        "language": "unknown",
-                    }
-
+                audio_quality, noise_level, transcription_result, speech_segments = (
+                    await self._run_parallel_analysis(audio_input)
+                )
                 processing_time = time.time() - start_time
 
-                # Create result
-                result = SpeechRecognitionResult(
-                    audio_id=audio_input.audio_id,
-                    transcription=transcription_result["transcription"],
-                    confidence=transcription_result["confidence"],
-                    language=transcription_result["language"],
-                    alternative_transcriptions=transcription_result["alternatives"],
-                    speech_segments=speech_segments,
-                    audio_quality=audio_quality,
-                    noise_level=noise_level,
-                    processing_time=processing_time,
-                    metadata={
-                        "original_metadata": audio_input.metadata,
-                        "processing_timestamp": time.time(),
-                        "engine": (
-                            "speech_recognition" if self.recognizer else "placeholder"
-                        ),
-                    },
+                result = self._build_recognition_result(
+                    audio_input, transcription_result, speech_segments,
+                    audio_quality, noise_level, processing_time,
                 )
 
-                task_context.set_outputs(
-                    {
-                        "transcription": result.transcription,
-                        "confidence": result.confidence,
-                        "audio_quality": result.audio_quality.value,
-                        "processing_time": processing_time,
-                    }
-                )
+                task_context.set_outputs({
+                    "transcription": result.transcription,
+                    "confidence": result.confidence,
+                    "audio_quality": result.audio_quality.value,
+                    "processing_time": processing_time,
+                })
 
                 logger.info(
                     f"Speech recognition completed: {audio_input.audio_id}, "

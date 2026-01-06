@@ -702,6 +702,99 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         logger.info("[Issue #352] Iteration %d: Parsed %d tool calls", iteration, len(tool_calls))
         yield (llm_response, tool_calls)
 
+    def _handle_break_loop_tuple(self, tool_msg: Any) -> tuple:
+        """Issue #665: Extracted from _process_tool_results to reduce function length.
+
+        Handle break_loop tuple from _process_tool_calls.
+
+        Returns:
+            Tuple of (is_break_loop_tuple, break_loop_requested)
+        """
+        if isinstance(tool_msg, tuple) and len(tool_msg) == 2:
+            break_loop_requested, _ = tool_msg
+            if break_loop_requested:
+                logger.info(
+                    "[Issue #654] break_loop=True signal received from respond tool"
+                )
+            return (True, break_loop_requested)
+        return (False, False)
+
+    def _validate_tool_message(self, tool_msg: Any) -> bool:
+        """Issue #665: Extracted from _process_tool_results to reduce function length.
+
+        Validate that tool_msg is valid and has required attributes.
+
+        Returns:
+            True if valid, False if should skip
+        """
+        if tool_msg is None:
+            logger.warning(
+                "[Issue #680] Received None from _process_tool_calls - skipping"
+            )
+            return False
+
+        if not hasattr(tool_msg, "type"):
+            logger.warning(
+                "[Issue #680] tool_msg missing 'type' attribute: %s - skipping",
+                type(tool_msg).__name__
+            )
+            return False
+
+        return True
+
+    def _handle_execution_summary(
+        self,
+        tool_msg: WorkflowMessage,
+        new_execution_results: List[Dict[str, Any]],
+        execution_history: List[Dict[str, Any]],
+    ) -> bool:
+        """Issue #665: Extracted from _process_tool_results to reduce function length.
+
+        Handle execution_summary message type.
+
+        Returns:
+            True if this was an execution_summary (caller should continue)
+        """
+        if tool_msg.type == "execution_summary":
+            new_results = tool_msg.metadata.get("execution_results", [])
+            new_execution_results.extend(new_results)
+            execution_history.extend(new_results)
+            logger.info(
+                "[Issue #651] Collected %d execution results (total history: %d)",
+                len(new_results), len(execution_history)
+            )
+            return True
+        return False
+
+    def _handle_tool_message_types(
+        self,
+        tool_msg: WorkflowMessage,
+        workflow_messages: List[WorkflowMessage],
+    ) -> tuple:
+        """Issue #665: Extracted from _process_tool_results to reduce function length.
+
+        Handle various tool message types and track state.
+
+        Returns:
+            Tuple of (has_pending_approval, processed_any_command)
+        """
+        has_pending_approval = False
+
+        if tool_msg.type == "command_approval_request":
+            has_pending_approval = True
+            logger.info("[Issue #651] Command requires approval - will wait for resolution")
+
+        if tool_msg.type in _TERMINAL_MESSAGE_TYPES:
+            workflow_messages.append(tool_msg)
+
+        if tool_msg.type == "error":
+            logger.warning(
+                "[Issue #651] Tool processing error: %s - LLM will decide next action",
+                tool_msg.content[:100]
+            )
+
+        return (has_pending_approval, True)
+
     async def _process_tool_results(
         self,
         tool_calls: List[Dict[str, Any]],
@@ -712,98 +805,43 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         execution_history: List[Dict[str, Any]],
         workflow_messages: List[WorkflowMessage],
     ):
-        """Process tool calls and collect results (Issue #315: extracted).
+        """Issue #665: Refactored - Process tool calls and collect results.
 
         Issue #651: Fixed logic that incorrectly broke continuation loop.
-        The loop should ALWAYS continue so the LLM can decide next steps,
-        even if execution failed or was denied. Only break on actual errors
-        in the tool processing itself.
-
         Issue #654: Added support for 'respond' tool with break_loop pattern.
-        When LLM uses respond tool, it explicitly signals task completion.
 
         Yields:
-            WorkflowMessage items
-
-        Returns:
-            Tuple of (new_execution_results, has_pending_approval, should_break, break_loop_requested)
+            WorkflowMessage items, then (results, has_pending_approval, should_break, break_loop_requested)
         """
         new_execution_results = []
         has_pending_approval = False
-        processed_any_command = False
-        break_loop_requested = False  # Issue #654: Track explicit completion signal
+        break_loop_requested = False
 
         async for tool_msg in self._process_tool_calls(
             tool_calls, session_id, terminal_session_id, ollama_endpoint, selected_model
         ):
-            # Issue #654: Handle break_loop tuple from _process_tool_calls
-            if isinstance(tool_msg, tuple) and len(tool_msg) == 2:
-                break_loop_requested, respond_content = tool_msg
-                if break_loop_requested:
-                    logger.info(
-                        "[Issue #654] break_loop=True signal received from respond tool"
-                    )
+            is_tuple, loop_requested = self._handle_break_loop_tuple(tool_msg)
+            if is_tuple:
+                break_loop_requested = loop_requested or break_loop_requested
                 continue
 
-            # Issue #680: Guard against None values from async generators
-            if tool_msg is None:
-                logger.warning(
-                    "[Issue #680] Received None from _process_tool_calls - skipping"
-                )
+            if not self._validate_tool_message(tool_msg):
                 continue
 
-            # Ensure tool_msg has a type attribute before accessing it
-            if not hasattr(tool_msg, "type"):
-                logger.warning(
-                    "[Issue #680] tool_msg missing 'type' attribute: %s - skipping",
-                    type(tool_msg).__name__
-                )
+            if self._handle_execution_summary(tool_msg, new_execution_results, execution_history):
                 continue
 
-            if tool_msg.type == "execution_summary":
-                new_results = tool_msg.metadata.get("execution_results", [])
-                new_execution_results.extend(new_results)
-                execution_history.extend(new_results)
-                processed_any_command = True
-                logger.info(
-                    "[Issue #651] Collected %d execution results (total history: %d)",
-                    len(new_results), len(execution_history)
-                )
-                continue
-
-            # Issue #651: Track approval requests to prevent premature loop termination
-            if tool_msg.type == "command_approval_request":
-                has_pending_approval = True
-                processed_any_command = True
-                logger.info("[Issue #651] Command requires approval - will wait for resolution")
-
-            if tool_msg.type in _TERMINAL_MESSAGE_TYPES:
-                workflow_messages.append(tool_msg)
-                processed_any_command = True
-
-            # Issue #651: Track terminal errors - continue so LLM can decide next step
-            if tool_msg.type == "error":
-                processed_any_command = True
-                logger.warning(
-                    "[Issue #651] Tool processing error: %s - LLM will decide next action",
-                    tool_msg.content[:100]
-                )
+            pending, _ = self._handle_tool_message_types(tool_msg, workflow_messages)
+            has_pending_approval = has_pending_approval or pending
 
             yield tool_msg
 
-        # Issue #651: Never break the loop prematurely - always let LLM decide next action
-        # The LLM will either generate more TOOL_CALLs or provide a final summary
-        # Issue #654: UNLESS the respond tool was used with break_loop=True
-        should_break = False
-
         logger.info(
-            "[Issue #654] Tool results: exec_results=%d, pending_approval=%s, "
-            "should_break=%s, break_loop_requested=%s",
-            len(new_execution_results), has_pending_approval, should_break, break_loop_requested
+            "[Issue #654] Tool results: exec_results=%d, pending_approval=%s, break_loop_requested=%s",
+            len(new_execution_results), has_pending_approval, break_loop_requested
         )
 
-        # Issue #654: Return 4-tuple including break_loop_requested
-        yield (new_execution_results, has_pending_approval, should_break, break_loop_requested)
+        yield (new_execution_results, has_pending_approval, False, break_loop_requested)
 
     async def _collect_llm_iteration_response(
         self,
@@ -1062,25 +1100,88 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
 
         yield (llm_response, should_continue)
 
+    def _log_iteration_start(self, ctx: LLMIterationContext) -> None:
+        """Issue #665: Extracted from _run_llm_iterations to reduce function length.
+
+        Log the start of the multi-step task loop.
+        """
+        logger.info(
+            "[Issue #651] Starting multi-step task loop. Max iterations: %d, Original message: '%s'",
+            self.MAX_CONTINUATION_ITERATIONS, ctx.message[:100] if ctx.message else "None"
+        )
+
+    def _log_iteration_complete(
+        self,
+        iteration: int,
+        should_continue: bool,
+        all_responses_count: int,
+        history_count: int,
+    ) -> None:
+        """Issue #665: Extracted from _run_llm_iterations to reduce function length.
+
+        Log completion of an iteration.
+        """
+        logger.info(
+            "[Issue #651] Iteration %d complete: should_continue=%s, total_responses=%d, execution_history=%d",
+            iteration, should_continue, all_responses_count, history_count
+        )
+
+    def _build_and_log_continuation_prompt(
+        self,
+        ctx: LLMIterationContext,
+        execution_history: List[Dict[str, Any]],
+    ) -> str:
+        """Issue #665: Extracted from _run_llm_iterations to reduce function length.
+
+        Build continuation prompt and log debug info.
+        """
+        current_prompt = self._build_continuation_prompt(
+            ctx.message, execution_history, ctx.system_prompt
+        )
+        logger.info(
+            "[Issue #651] Built continuation prompt: %d chars, %d executed steps",
+            len(current_prompt), len(execution_history)
+        )
+        instructions_start = current_prompt.find("MULTI-STEP TASK CONTINUATION")
+        if instructions_start > -1:
+            logger.debug(
+                "[Issue #651] Continuation prompt instructions: %s",
+                current_prompt[instructions_start:instructions_start+1500].replace('\n', ' | ')
+            )
+        return current_prompt
+
+    def _log_task_complete(self, iteration: int, history_count: int) -> None:
+        """Issue #665: Extracted from _run_llm_iterations to reduce function length."""
+        logger.info(
+            "[Issue #651] Task complete after %d iteration(s). Executed %d command(s) total.",
+            iteration, history_count
+        )
+
+    def _log_max_iterations_warning(self, iteration: int) -> None:
+        """Issue #665: Extracted from _run_llm_iterations to reduce function length."""
+        if iteration >= self.MAX_CONTINUATION_ITERATIONS:
+            logger.warning(
+                "[Issue #651] Reached max continuation iterations (%d) - stopping loop",
+                self.MAX_CONTINUATION_ITERATIONS
+            )
+
     async def _run_llm_iterations(
         self,
         http_client,
         ctx: LLMIterationContext,
     ):
-        """
-        Run LLM continuation iterations. Yields messages, then (all_responses, history, error).
+        """Issue #665: Refactored - Run LLM continuation iterations.
 
         Issue #375: Uses LLMIterationContext to reduce parameter count from 11 to 2.
         Issue #651: Added comprehensive logging for debugging multi-step tasks.
+
+        Yields messages, then (all_responses, history, error).
         """
         execution_history = ctx.execution_history
         all_llm_responses = []
         current_prompt = ctx.initial_prompt
 
-        logger.info(
-            "[Issue #651] Starting multi-step task loop. Max iterations: %d, Original message: '%s'",
-            self.MAX_CONTINUATION_ITERATIONS, ctx.message[:100] if ctx.message else "None"
-        )
+        self._log_iteration_start(ctx)
 
         for iteration in range(1, self.MAX_CONTINUATION_ITERATIONS + 1):
             llm_response, should_continue = None, False
@@ -1099,41 +1200,15 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
                 return
 
             all_llm_responses.append(llm_response)
-
-            logger.info(
-                "[Issue #651] Iteration %d complete: should_continue=%s, total_responses=%d, execution_history=%d",
-                iteration, should_continue, len(all_llm_responses), len(execution_history)
-            )
+            self._log_iteration_complete(iteration, should_continue, len(all_llm_responses), len(execution_history))
 
             if not should_continue:
-                logger.info(
-                    "[Issue #651] Task complete after %d iteration(s). Executed %d command(s) total.",
-                    iteration, len(execution_history)
-                )
+                self._log_task_complete(iteration, len(execution_history))
                 break
 
-            # Issue #651: Build continuation prompt with full execution history
-            current_prompt = self._build_continuation_prompt(
-                ctx.message, execution_history, ctx.system_prompt
-            )
-            logger.info(
-                "[Issue #651] Built continuation prompt: %d chars, %d executed steps",
-                len(current_prompt), len(execution_history)
-            )
-            # Log the continuation prompt for debugging (first 1000 chars of instructions section)
-            instructions_start = current_prompt.find("MULTI-STEP TASK CONTINUATION")
-            if instructions_start > -1:
-                logger.debug(
-                    "[Issue #651] Continuation prompt instructions: %s",
-                    current_prompt[instructions_start:instructions_start+1500].replace('\n', ' | ')
-                )
+            current_prompt = self._build_and_log_continuation_prompt(ctx, execution_history)
 
-        if iteration >= self.MAX_CONTINUATION_ITERATIONS:
-            logger.warning(
-                "[Issue #651] Reached max continuation iterations (%d) - stopping loop",
-                self.MAX_CONTINUATION_ITERATIONS
-            )
-
+        self._log_max_iterations_warning(iteration)
         yield (all_llm_responses, execution_history, None)
 
     async def _execute_llm_continuation_loop(
