@@ -504,13 +504,10 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
+        // Redirect services to infrastructure (services is now a subtab)
         path: 'services',
         name: 'settings-services',
-        component: () => import('@/components/settings/ServicesSettings.vue'),
-        meta: {
-          title: 'Services',
-          parent: 'settings'
-        }
+        redirect: '/settings/infrastructure'
       },
       {
         path: 'infrastructure',

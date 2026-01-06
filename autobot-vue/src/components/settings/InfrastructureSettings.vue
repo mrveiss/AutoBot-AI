@@ -26,6 +26,22 @@
         <i class="fas fa-database mr-2"></i>
         Data Storage
       </button>
+      <button
+        class="infrastructure-tab"
+        :class="{ active: activeSubTab === 'hardware' }"
+        @click="activeSubTab = 'hardware'"
+      >
+        <i class="fas fa-server mr-2"></i>
+        Hardware
+      </button>
+      <button
+        class="infrastructure-tab"
+        :class="{ active: activeSubTab === 'services' }"
+        @click="activeSubTab = 'services'"
+      >
+        <i class="fas fa-cogs mr-2"></i>
+        Services
+      </button>
     </div>
 
     <!-- System Updates Tab -->
@@ -187,6 +203,16 @@
     <div v-show="activeSubTab === 'data-storage'">
       <DataStorageSettings />
     </div>
+
+    <!-- Hardware Tab -->
+    <div v-show="activeSubTab === 'hardware'">
+      <HardwareSettings :isSettingsLoaded="isSettingsLoaded" @change="$emit('change')" />
+    </div>
+
+    <!-- Services Tab -->
+    <div v-show="activeSubTab === 'services'">
+      <ServicesSettings :isSettingsLoaded="isSettingsLoaded" @change="$emit('change')" />
+    </div>
   </div>
 </template>
 
@@ -196,6 +222,8 @@ import { useUserStore } from '../../stores/useUserStore'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import NPUWorkersSettings from './NPUWorkersSettings.vue'
 import DataStorageSettings from './DataStorageSettings.vue'
+import HardwareSettings from './HardwareSettings.vue'
+import ServicesSettings from './ServicesSettings.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { getBackendUrl } from '@/config/ssot-config'
 
@@ -203,7 +231,7 @@ const logger = createLogger('InfrastructureSettings')
 const userStore = useUserStore()
 
 // Sub-tab state
-const activeSubTab = ref<'updates' | 'npu-workers' | 'data-storage'>('updates')
+const activeSubTab = ref<'updates' | 'npu-workers' | 'data-storage' | 'hardware' | 'services'>('updates')
 
 // Props
 interface Props {
