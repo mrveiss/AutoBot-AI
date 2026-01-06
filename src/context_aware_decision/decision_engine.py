@@ -99,10 +99,72 @@ class DecisionEngine:
                 logger.error("Decision making failed: %s", e)
                 raise
 
+    async def _score_and_sort_automation_actions(
+        self, automation_actions: List[Dict[str, Any]], context: DecisionContext
+    ) -> List[tuple]:
+        """Issue #665: Extracted from _decide_automation_action to reduce function length.
+
+        Scores automation actions in parallel and returns sorted list.
+
+        Args:
+            automation_actions: List of automation action dictionaries.
+            context: Decision context for scoring.
+
+        Returns:
+            List of (score, action) tuples sorted by score descending.
+        """
+        scores = await asyncio.gather(
+            *[self._score_automation_action(action, context) for action in automation_actions],
+            return_exceptions=True,
+        )
+        scored_actions = [
+            (score, action)
+            for score, action in zip(scores, automation_actions)
+            if not isinstance(score, Exception)
+        ]
+        scored_actions.sort(key=lambda x: x[0], reverse=True)
+        return scored_actions
+
+    async def _build_automation_decision(
+        self,
+        context: DecisionContext,
+        best_score: float,
+        best_action: Dict[str, Any],
+        scored_actions: List[tuple],
+        action_count: int,
+    ) -> Decision:
+        """Issue #665: Extracted from _decide_automation_action to reduce function length.
+
+        Builds the Decision object for automation actions.
+        """
+        confidence = min(best_score, 1.0)
+        confidence_level = self._determine_confidence_level(confidence)
+        requires_approval = await self._requires_approval(best_action, context, confidence)
+
+        reasoning = f"Selected {best_action['action']} based on confidence score {best_score:.2f}"
+        if requires_approval:
+            reasoning += " - requires approval due to low confidence or high risk"
+
+        return Decision(
+            decision_id=context.decision_id,
+            decision_type=context.decision_type,
+            chosen_action=best_action,
+            alternative_actions=[action for _, action in scored_actions[1:3]],
+            confidence=confidence,
+            confidence_level=confidence_level,
+            reasoning=reasoning,
+            supporting_evidence=[{"type": "context_analysis", "score": best_score}],
+            risk_assessment=await self._assess_action_risk(best_action, context),
+            expected_outcomes=[{"outcome": "action_completed", "probability": confidence}],
+            monitoring_criteria=["action_execution_status", "target_element_response"],
+            fallback_plan={"action": "request_human_takeover"} if confidence < 0.6 else None,
+            requires_approval=requires_approval,
+            timestamp=self.time_provider.current_timestamp(),
+            metadata={"algorithm": "automation_scoring", "total_actions_considered": action_count},
+        )
+
     async def _decide_automation_action(self, context: DecisionContext) -> Decision:
         """Decide on automation actions."""
-
-        # Find automation opportunities in context
         automation_actions = [
             action
             for action in context.available_actions
@@ -115,63 +177,19 @@ class DecisionEngine:
             )
 
         # Issue #370: Score actions in parallel instead of sequentially
-        scores = await asyncio.gather(
-            *[self._score_automation_action(action, context) for action in automation_actions],
-            return_exceptions=True,
+        scored_actions = await self._score_and_sort_automation_actions(
+            automation_actions, context
         )
-        scored_actions = [
-            (score, action)
-            for score, action in zip(scores, automation_actions)
-            if not isinstance(score, Exception)
-        ]
+
         if not scored_actions:
             return await self._create_no_action_decision(
                 context, "Failed to score automation actions"
             )
 
-        # Sort by score and select best action
-        scored_actions.sort(key=lambda x: x[0], reverse=True)
         best_score, best_action = scored_actions[0]
 
-        # Determine confidence level
-        confidence = min(best_score, 1.0)
-        confidence_level = self._determine_confidence_level(confidence)
-
-        # Assess if approval is required
-        requires_approval = await self._requires_approval(
-            best_action, context, confidence
-        )
-
-        # Generate reasoning
-        reasoning = f"Selected {best_action['action']} based on confidence score {best_score:.2f}"
-        if requires_approval:
-            reasoning += " - requires approval due to low confidence or high risk"
-
-        return Decision(
-            decision_id=context.decision_id,
-            decision_type=context.decision_type,
-            chosen_action=best_action,
-            alternative_actions=[
-                action for _, action in scored_actions[1:3]
-            ],  # Top 2 alternatives
-            confidence=confidence,
-            confidence_level=confidence_level,
-            reasoning=reasoning,
-            supporting_evidence=[{"type": "context_analysis", "score": best_score}],
-            risk_assessment=await self._assess_action_risk(best_action, context),
-            expected_outcomes=[
-                {"outcome": "action_completed", "probability": confidence}
-            ],
-            monitoring_criteria=["action_execution_status", "target_element_response"],
-            fallback_plan=(
-                {"action": "request_human_takeover"} if confidence < 0.6 else None
-            ),
-            requires_approval=requires_approval,
-            timestamp=self.time_provider.current_timestamp(),
-            metadata={
-                "algorithm": "automation_scoring",
-                "total_actions_considered": len(automation_actions),
-            },
+        return await self._build_automation_decision(
+            context, best_score, best_action, scored_actions, len(automation_actions)
         )
 
     async def _score_automation_action(

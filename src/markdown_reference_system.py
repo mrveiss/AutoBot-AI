@@ -289,61 +289,29 @@ class MarkdownReferenceSystem:
 
         return sorted(list(tags))
 
-    def _process_markdown_sections(self, conn, file_path: Path, content: str):
-        """Extract and store markdown sections"""
-        # Clear existing sections for this file
-        conn.execute(
-            """
-            DELETE FROM markdown_sections WHERE file_path = ?
-        """,
-            (str(file_path),),
+    def _finalize_section(
+        self, section: Dict[str, Any], lines: List[str], end_line: int
+    ) -> Dict[str, Any]:
+        """Issue #665: Extracted from _process_markdown_sections to reduce function length.
+
+        Finalize a section by setting end_line, content_text, and content_hash.
+        """
+        section["end_line"] = end_line
+        section["content_text"] = "\n".join(
+            lines[section["start_line"] - 1 : section["end_line"]]
         )
+        section["content_hash"] = hashlib.sha256(
+            section["content_text"].encode()
+        ).hexdigest()
+        return section
 
-        lines = content.split("\n")
-        current_section = None
-        sections = []
+    def _insert_sections_to_db(
+        self, conn: sqlite3.Connection, sections: List[Dict[str, Any]]
+    ) -> None:
+        """Issue #665: Extracted from _process_markdown_sections to reduce function length.
 
-        for line_num, line in enumerate(lines, 1):
-            # Check for headers using pre-compiled pattern (Issue #380)
-            header_match = _HEADER_RE.match(line.strip())
-            if header_match:
-                # Save previous section if exists
-                if current_section:
-                    current_section["end_line"] = line_num - 1
-                    current_section["content_text"] = "\n".join(
-                        lines[
-                            current_section["start_line"]
-                            - 1 : current_section["end_line"]
-                        ]
-                    )
-                    current_section["content_hash"] = hashlib.sha256(
-                        current_section["content_text"].encode()
-                    ).hexdigest()
-                    sections.append(current_section)
-
-                # Start new section
-                level = len(header_match.group(1))
-                title = header_match.group(2)
-
-                current_section = {
-                    "file_path": str(file_path),
-                    "section_title": title,
-                    "section_level": level,
-                    "start_line": line_num,
-                }
-
-        # Save final section
-        if current_section:
-            current_section["end_line"] = len(lines)
-            current_section["content_text"] = "\n".join(
-                lines[current_section["start_line"] - 1 : current_section["end_line"]]
-            )
-            current_section["content_hash"] = hashlib.sha256(
-                current_section["content_text"].encode()
-            ).hexdigest()
-            sections.append(current_section)
-
-        # Insert sections
+        Insert all parsed sections into the database.
+        """
         for section in sections:
             conn.execute(
                 """
@@ -351,7 +319,7 @@ class MarkdownReferenceSystem:
                 (file_path, section_title, section_level, content_text,
                  content_hash, start_line, end_line, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
+                """,
                 (
                     section["file_path"],
                     section["section_title"],
@@ -363,6 +331,38 @@ class MarkdownReferenceSystem:
                     datetime.now(),
                 ),
             )
+
+    def _process_markdown_sections(
+        self, conn: sqlite3.Connection, file_path: Path, content: str
+    ) -> None:
+        """Extract and store markdown sections"""
+        conn.execute(
+            "DELETE FROM markdown_sections WHERE file_path = ?",
+            (str(file_path),),
+        )
+
+        lines = content.split("\n")
+        current_section = None
+        sections = []
+
+        for line_num, line in enumerate(lines, 1):
+            header_match = _HEADER_RE.match(line.strip())
+            if header_match:
+                if current_section:
+                    sections.append(
+                        self._finalize_section(current_section, lines, line_num - 1)
+                    )
+                current_section = {
+                    "file_path": str(file_path),
+                    "section_title": header_match.group(2),
+                    "section_level": len(header_match.group(1)),
+                    "start_line": line_num,
+                }
+
+        if current_section:
+            sections.append(self._finalize_section(current_section, lines, len(lines)))
+
+        self._insert_sections_to_db(conn, sections)
 
     def _update_cross_references(self):
         """Update cross-references between markdown documents"""

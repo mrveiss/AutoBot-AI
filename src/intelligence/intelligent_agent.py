@@ -125,6 +125,62 @@ class IntelligentAgent:
 
         logger.info("Intelligent Agent initialized")
 
+    async def _init_core_components(self) -> None:
+        """Issue #665: Extracted from initialize to reduce function length.
+
+        Initialize OS detector, tool selector, and streaming executor.
+        """
+        self.os_detector = await get_os_detector()
+        self.state.os_info = await self.os_detector.detect_system()
+        self.tool_selector = OSAwareToolSelector(self.os_detector)
+        self.streaming_executor = StreamingCommandExecutor(
+            llm_interface=self.llm_interface,
+            command_validator=self.command_validator,
+        )
+
+    async def _get_init_capabilities(self) -> tuple[bool, str, Dict[str, Any]]:
+        """Issue #665: Extracted from initialize to reduce function length.
+
+        Validate installation capabilities and get capability summary.
+        Returns (can_install, install_reason, capabilities_info) tuple.
+        """
+        can_install, install_reason = await self.os_detector.validate_installation_capability()
+        capabilities_info = await self.os_detector.get_capabilities_info()
+        return can_install, install_reason, capabilities_info
+
+    def _build_init_result(
+        self,
+        initialization_time: float,
+        can_install: bool,
+        install_reason: str,
+        capabilities_info: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Issue #665: Extracted from initialize to reduce function length.
+
+        Build the initialization result dictionary.
+        """
+        return {
+            "status": "initialized",
+            "initialization_time": initialization_time,
+            "os_info": self.state.get_os_info_dict(),
+            "capabilities": capabilities_info,
+            "can_install_tools": can_install,
+            "install_capability_reason": install_reason,
+            "supported_categories": self.goal_processor.get_supported_categories(),
+        }
+
+    def _log_init_success(self, initialization_time: float, capabilities_info: Dict[str, Any]) -> None:
+        """Issue #665: Extracted from initialize to reduce function length.
+
+        Log successful initialization details.
+        """
+        logger.info("Agent initialized successfully in %.2fs", initialization_time)
+        logger.info("OS: %s", self.state.get_os_type_value())
+        distro_value = self.state.get_distro_value()
+        if distro_value:
+            logger.info("Distribution: %s", distro_value)
+        logger.info("Total capabilities: %s", capabilities_info.get("total_count", 0))
+
     async def initialize(self) -> Dict[str, Any]:
         """
         Initialize the agent system with OS detection and capability assessment.
@@ -136,61 +192,20 @@ class IntelligentAgent:
             return {"status": "already_initialized", "os_info": self.state.os_info}
 
         logger.info("Initializing Intelligent Agent system...")
-
         start_time = time.time()
 
         try:
-            # Initialize OS detector
-            self.os_detector = await get_os_detector()
-            self.state.os_info = await self.os_detector.detect_system()
-
-            # Initialize tool selector with OS detector
-            self.tool_selector = OSAwareToolSelector(self.os_detector)
-
-            # Initialize streaming executor with LLM and validator
-            self.streaming_executor = StreamingCommandExecutor(
-                llm_interface=self.llm_interface,
-                command_validator=self.command_validator,
-            )
-
-            # Update system context in LLM and knowledge base
+            await self._init_core_components()
             await self._update_system_context()
-
-            # Validate installation capabilities
-            (
-                can_install,
-                install_reason,
-            ) = await self.os_detector.validate_installation_capability()
-
-            # Get capability summary
-            capabilities_info = await self.os_detector.get_capabilities_info()
+            can_install, install_reason, capabilities_info = await self._get_init_capabilities()
 
             initialization_time = time.time() - start_time
-
             self.state.initialized = True
 
-            # Issue #321: Use helper method to reduce message chains
-            os_info_dict = self.state.get_os_info_dict()
-            init_result = {
-                "status": "initialized",
-                "initialization_time": initialization_time,
-                "os_info": os_info_dict,
-                "capabilities": capabilities_info,
-                "can_install_tools": can_install,
-                "install_capability_reason": install_reason,
-                "supported_categories": self.goal_processor.get_supported_categories(),
-            }
-
-            logger.info("Agent initialized successfully in %.2fs", initialization_time)
-            # Issue #321: Use helper methods to reduce message chains
-            logger.info("OS: %s", self.state.get_os_type_value())
-            distro_value = self.state.get_distro_value()
-            if distro_value:
-                logger.info("Distribution: %s", distro_value)
-            logger.info(
-                "Total capabilities: %s", capabilities_info.get("total_count", 0)
+            init_result = self._build_init_result(
+                initialization_time, can_install, install_reason, capabilities_info
             )
-
+            self._log_init_success(initialization_time, capabilities_info)
             return init_result
 
         except Exception as e:

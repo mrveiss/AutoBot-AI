@@ -470,6 +470,81 @@ class ToolHandlerMixin:
                 )
             yield approval_result
 
+    async def _handle_approved_command(
+        self,
+        command: str,
+        host: str,
+        approval_result: Dict[str, Any],
+        ollama_endpoint: str,
+        selected_model: str,
+    ):
+        """Issue #665: Extracted from _handle_approval_workflow to reduce function length.
+
+        Handle successful command approval - execute and interpret results.
+
+        Yields:
+            WorkflowMessage for execution status
+            Tuple of (exec_result, additional_text) as final item
+        """
+        exec_result = _create_execution_result(command, host, approval_result, approved=True)
+        additional_text = ""
+
+        yield WorkflowMessage(
+            type="response",
+            content="\n\n✅ Command approved and executed! Interpreting results...\n\n",
+            metadata={
+                "message_type": "command_executed",
+                "command": command,
+                "executed": True,
+                "approved": True,
+            },
+        )
+
+        async for interp_chunk in self._interpret_command_results(
+            command,
+            approval_result.get("stdout", ""),
+            approval_result.get("stderr", ""),
+            approval_result.get("return_code", 0),
+            ollama_endpoint,
+            selected_model,
+            streaming=True,
+        ):
+            yield interp_chunk
+            if hasattr(interp_chunk, "content"):
+                additional_text += interp_chunk.content
+
+        yield (exec_result, additional_text)
+
+    def _handle_approval_failure(
+        self, command: str, approval_result: Dict[str, Any] | None
+    ) -> tuple[WorkflowMessage, str]:
+        """Issue #665: Extracted from _handle_approval_workflow to reduce function length.
+
+        Handle approval denial or timeout.
+
+        Returns:
+            Tuple of (WorkflowMessage, additional_text)
+        """
+        if approval_result:
+            error = approval_result.get("error", "Command was denied or failed")
+            return (
+                WorkflowMessage(
+                    type="error",
+                    content=f"Command execution failed: {error}",
+                    metadata={"command": command, "error": True},
+                ),
+                f"\n\n❌ {error}",
+            )
+        else:
+            return (
+                WorkflowMessage(
+                    type="error",
+                    content=f"Approval timeout for command: {command}",
+                    metadata={"command": command, "timeout": True},
+                ),
+                f"\n\n⏱️ Approval timeout for command: {command}",
+            )
+
     async def _handle_approval_workflow(
         self,
         session_id: str,
@@ -487,7 +562,6 @@ class ToolHandlerMixin:
             WorkflowMessage for approval stages
             Tuple of (exec_result, additional_text) as final item
         """
-        # Handle approval workflow - yields messages and returns result
         approval_result = None
         async for approval_msg in self._handle_pending_approval(
             session_id, command, result, terminal_session_id, description
@@ -497,53 +571,15 @@ class ToolHandlerMixin:
             else:
                 yield approval_msg
 
-        additional_text = ""
-        exec_result = None
-
         if approval_result and approval_result.get("status") == "success":
-            exec_result = _create_execution_result(command, host, approval_result, approved=True)
-
-            yield WorkflowMessage(
-                type="response",
-                content="\n\n✅ Command approved and executed! Interpreting results...\n\n",
-                metadata={
-                    "message_type": "command_executed",
-                    "command": command,
-                    "executed": True,
-                    "approved": True,
-                },
-            )
-
-            async for interp_chunk in self._interpret_command_results(
-                command,
-                approval_result.get("stdout", ""),
-                approval_result.get("stderr", ""),
-                approval_result.get("return_code", 0),
-                ollama_endpoint,
-                selected_model,
-                streaming=True,
+            async for msg in self._handle_approved_command(
+                command, host, approval_result, ollama_endpoint, selected_model
             ):
-                yield interp_chunk
-                if hasattr(interp_chunk, "content"):
-                    additional_text += interp_chunk.content
-
-        elif approval_result:
-            error = approval_result.get("error", "Command was denied or failed")
-            additional_text = f"\n\n❌ {error}"
-            yield WorkflowMessage(
-                type="error",
-                content=f"Command execution failed: {error}",
-                metadata={"command": command, "error": True},
-            )
+                yield msg
         else:
-            additional_text = f"\n\n⏱️ Approval timeout for command: {command}"
-            yield WorkflowMessage(
-                type="error",
-                content=f"Approval timeout for command: {command}",
-                metadata={"command": command, "timeout": True},
-            )
-
-        yield (exec_result, additional_text)
+            error_msg, additional_text = self._handle_approval_failure(command, approval_result)
+            yield error_msg
+            yield (None, additional_text)
 
     async def _handle_direct_execution(
         self,
