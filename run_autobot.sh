@@ -316,9 +316,9 @@ check_vm_services() {
         fi
     fi
 
-    # Check Redis
+    # Check Redis (with authentication if password is set)
     echo -n "  Redis (${VMS["redis"]}:$REDIS_PORT)... "
-    if timeout 3 redis-cli -h "${VMS["redis"]}" ping 2>/dev/null | grep -q PONG; then
+    if timeout 3 redis-cli -h "${VMS["redis"]}" -a "${AUTOBOT_REDIS_PASSWORD:-}" --no-auth-warning ping 2>/dev/null | grep -q PONG; then
         echo -e "${GREEN}✅ Running${NC}"
     else
         echo -e "${RED}❌ Not running${NC}"
