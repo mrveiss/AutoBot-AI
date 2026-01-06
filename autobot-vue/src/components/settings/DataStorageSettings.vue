@@ -408,9 +408,9 @@ const loadStorageStats = async () => {
       apiClient.get('/api/data-storage/conversations/summary'),
     ])
 
-    storageStats.value = statsRes.data
-    databaseFiles.value = dbRes.data
-    conversationsSummary.value = convoRes.data
+    storageStats.value = await statsRes.json() as StorageStats
+    databaseFiles.value = await dbRes.json() as DatabaseFiles
+    conversationsSummary.value = await convoRes.json() as ConversationsSummary
 
     logger.info('Storage stats loaded:', storageStats.value?.total_size_human)
   } catch (err: unknown) {
@@ -432,7 +432,7 @@ const previewCleanup = async (category: string) => {
       dry_run: true,
     })
 
-    cleanupResult.value = response.data
+    cleanupResult.value = await response.json() as CleanupResult
     pendingCleanup.value = { category, older_than_days: 0 }
   } catch (err: unknown) {
     logger.error('Cleanup preview failed:', err)
@@ -453,7 +453,7 @@ const executeCleanup = async () => {
       dry_run: false,
     })
 
-    cleanupResult.value = response.data
+    cleanupResult.value = await response.json() as CleanupResult
     pendingCleanup.value = null
 
     // Refresh stats after cleanup
@@ -470,13 +470,14 @@ const cleanupOldBackups = async (dryRun: boolean) => {
 
   try {
     const response = await apiClient.post(`/api/data-storage/cleanup/old-backups?dry_run=${dryRun}`)
+    const responseData = await response.json() as { total_count: number; bytes_freed: number; bytes_freed_human: string }
 
     if (dryRun) {
       cleanupResult.value = {
         category: 'Old Backups',
-        files_removed: response.data.total_count,
-        bytes_freed: response.data.bytes_freed,
-        bytes_freed_human: response.data.bytes_freed_human,
+        files_removed: responseData.total_count,
+        bytes_freed: responseData.bytes_freed,
+        bytes_freed_human: responseData.bytes_freed_human,
         dry_run: true,
         errors: [],
       }
@@ -484,9 +485,9 @@ const cleanupOldBackups = async (dryRun: boolean) => {
       await loadStorageStats()
       cleanupResult.value = {
         category: 'Old Backups',
-        files_removed: response.data.total_count,
-        bytes_freed: response.data.bytes_freed,
-        bytes_freed_human: response.data.bytes_freed_human,
+        files_removed: responseData.total_count,
+        bytes_freed: responseData.bytes_freed,
+        bytes_freed_human: responseData.bytes_freed_human,
         dry_run: false,
         errors: [],
       }
@@ -505,10 +506,10 @@ const cleanupConversations = async (dryRun: boolean) => {
     const response = await apiClient.post('/api/data-storage/cleanup', {
       category: 'conversation_transcripts',
       older_than_days: cleanupDays.value,
-      dry_run,
+      dry_run: dryRun,
     })
 
-    cleanupResult.value = response.data
+    cleanupResult.value = await response.json() as CleanupResult
     pendingCleanup.value = dryRun ? { category: 'conversation_transcripts', older_than_days: cleanupDays.value } : null
 
     if (!dryRun) {
@@ -524,7 +525,7 @@ const cleanupConversations = async (dryRun: boolean) => {
 const viewCategoryDetails = async (categoryPath: string) => {
   try {
     const response = await apiClient.get(`/api/data-storage/category/${categoryPath}`)
-    categoryDetails.value = response.data
+    categoryDetails.value = await response.json() as CategoryDetails
   } catch (err: unknown) {
     logger.error('Failed to load category details:', err)
   }

@@ -129,7 +129,7 @@
  */
 
 import { ref, reactive, onMounted } from 'vue'
-import { NetworkConstants } from '@/constants/network'
+import { NetworkConstants, BACKEND_URL } from '@/constants/network'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('HardwareSettingsPanel')
@@ -226,7 +226,7 @@ const testGPU = async () => {
   try {
     // Issue #570: Use correct /api/monitoring/hardware path after refactor
     const response = await fetch(
-      `${NetworkConstants.API_BASE_URL}/api/monitoring/hardware/gpu/test`,
+      `${BACKEND_URL}/api/monitoring/hardware/gpu/test`,
       { method: 'POST' }
     )
     const data = await response.json()
@@ -256,7 +256,7 @@ const testNPU = async () => {
   try {
     // Issue #570: Use correct /api/monitoring/hardware path after refactor
     const response = await fetch(
-      `${NetworkConstants.API_BASE_URL}/api/monitoring/hardware/npu/test`,
+      `${BACKEND_URL}/api/monitoring/hardware/npu/test`,
       { method: 'POST' }
     )
     const data = await response.json()
@@ -286,7 +286,7 @@ const refreshMemoryStatus = async () => {
   try {
     // Issue #570: Use correct /api/monitoring/hardware path after refactor
     const response = await fetch(
-      `${NetworkConstants.API_BASE_URL}/api/monitoring/hardware/memory`
+      `${BACKEND_URL}/api/monitoring/hardware/memory`
     )
     const data = await response.json()
 

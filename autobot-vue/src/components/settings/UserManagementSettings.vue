@@ -285,7 +285,7 @@
           </div>
           <div v-if="rbacProgressInfo" class="progress-details">
             <p v-if="rbacProgressInfo.task_name"><strong>Task:</strong> {{ rbacProgressInfo.task_name }}</p>
-            <p v-if="rbacProgressInfo.host"><strong>Host:</strong> {{ rbacProgressInfo.host }}</p>
+            <p v-if="(rbacProgressInfo as any).host"><strong>Host:</strong> {{ (rbacProgressInfo as any).host }}</p>
           </div>
           <div class="task-info">
             <span class="task-id">Task ID: {{ rbacTaskId.substring(0, 8) }}...</span>

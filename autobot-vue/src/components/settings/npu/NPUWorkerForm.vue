@@ -104,7 +104,7 @@
  */
 
 import BaseAlert from '@/components/ui/BaseAlert.vue'
-import { NetworkConstants } from '@/config/NetworkConstants'
+import { NetworkConstants } from '@/constants/network'
 
 interface WorkerForm {
   name: string
