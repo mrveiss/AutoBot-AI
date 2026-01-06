@@ -413,6 +413,80 @@ class ChatWorkflowManager(
                 llm_response[:200]
             )
 
+    def _init_streaming_message(
+        self,
+        message_type: str,
+        selected_model: str,
+        terminal_session_id: str,
+        used_knowledge: bool,
+        rag_citations: List[Dict[str, Any]],
+    ) -> StreamingMessage:
+        """
+        Initialize a StreamingMessage with metadata.
+
+        Issue #665: Extracted from _stream_llm_response to reduce function length.
+        """
+        streaming_msg = StreamingMessage(type=message_type)
+        streaming_msg.merge_metadata({
+            "model": selected_model,
+            "terminal_session_id": terminal_session_id,
+            "used_knowledge": used_knowledge,
+            "citations": rag_citations if used_knowledge else [],
+        })
+        return streaming_msg
+
+    def _process_chunk_and_detect_type(
+        self,
+        chunk_data: Dict[str, Any],
+        llm_response: str,
+        current_segment: str,
+        current_message_type: str,
+    ) -> tuple:
+        """
+        Process chunk data and detect content type.
+
+        Issue #665: Extracted from _stream_llm_response to reduce function length.
+
+        Returns:
+            Tuple of (chunk_text, new_llm_response, new_current_segment, new_type)
+        """
+        chunk_text = chunk_data.get("response", "")
+        if not chunk_text:
+            return (None, llm_response, current_segment, current_message_type)
+
+        chunk_text = self._normalize_tool_call_text(chunk_text)
+        new_llm_response = llm_response + chunk_text
+        new_current_segment = current_segment + chunk_text
+        new_type = self._detect_content_type(new_llm_response, current_message_type)
+
+        return (chunk_text, new_llm_response, new_current_segment, new_type)
+
+    def _apply_type_transition(
+        self,
+        complete_msg: Optional[WorkflowMessage],
+        new_segment: Optional[str],
+        new_type: str,
+        selected_model: str,
+        terminal_session_id: str,
+        used_knowledge: bool,
+        rag_citations: List[Dict[str, Any]],
+    ) -> tuple:
+        """
+        Apply type transition and create new StreamingMessage if needed.
+
+        Issue #665: Extracted from _stream_llm_response to reduce function length.
+
+        Returns:
+            Tuple of (new_streaming_msg, new_segment_value, new_type, just_transitioned, transition_content)
+        """
+        if complete_msg or new_segment is not None:
+            # Issue #656: Create new StreamingMessage for new type
+            streaming_msg = self._init_streaming_message(
+                new_type, selected_model, terminal_session_id, used_knowledge, rag_citations
+            )
+            return (streaming_msg, new_segment, new_type, True, new_segment)
+        return (None, None, new_type, False, None)
+
     async def _stream_llm_response(
         self,
         response,
@@ -425,77 +499,50 @@ class ChatWorkflowManager(
         Stream LLM response chunks and yield WorkflowMessages.
 
         Issue #656: Uses StreamingMessage for stable identity and version tracking.
-        The streaming_msg object maintains content accumulation with stream() method,
-        while the ID remains stable across all chunks for frontend deduplication.
+        Issue #665: Refactored to extract helper functions and reduce complexity.
         """
         llm_response = ""
         current_segment = ""
         current_message_type = "response"
 
         # Issue #656: Use StreamingMessage for stable identity
-        streaming_msg = StreamingMessage(type="response")
-        streaming_msg.merge_metadata({
-            "model": selected_model,
-            "terminal_session_id": terminal_session_id,
-            "used_knowledge": used_knowledge,
-            "citations": rag_citations if used_knowledge else [],
-        })
+        streaming_msg = self._init_streaming_message(
+            "response", selected_model, terminal_session_id, used_knowledge, rag_citations
+        )
 
         async for line in response.content:
             chunk_data = self._parse_stream_chunk(line)
             if not chunk_data:
                 continue
 
-            chunk_text = chunk_data.get("response", "")
+            chunk_text, llm_response, current_segment, new_type = self._process_chunk_and_detect_type(
+                chunk_data, llm_response, current_segment, current_message_type
+            )
+
             if chunk_text:
-                chunk_text = self._normalize_tool_call_text(chunk_text)
-                llm_response += chunk_text
-                current_segment += chunk_text
-
-                new_type = self._detect_content_type(llm_response, current_message_type)
-
                 # Handle type transitions
                 complete_msg, new_id, new_segment, new_type = self._handle_type_transition(
                     new_type, current_message_type, streaming_msg.id,
                     selected_model, llm_response, chunk_text
                 )
 
-                # Issue #680: Track if we just transitioned to use proper content
-                just_transitioned = False
-                transition_content = None
+                # Apply transition if needed
+                new_msg, new_segment_val, new_type, just_transitioned, transition_content = self._apply_type_transition(
+                    complete_msg, new_segment, new_type, selected_model,
+                    terminal_session_id, used_knowledge, rag_citations
+                )
 
                 if complete_msg:
                     yield (complete_msg, llm_response, False, True)
-                    # Issue #656: Create new StreamingMessage for new type
-                    streaming_msg = StreamingMessage(type=new_type)
-                    streaming_msg.merge_metadata({
-                        "model": selected_model,
-                        "terminal_session_id": terminal_session_id,
-                        "used_knowledge": used_knowledge,
-                        "citations": rag_citations if used_knowledge else [],
-                    })
-                    current_segment = new_segment
+
+                if new_msg:
+                    streaming_msg = new_msg
+                    current_segment = new_segment_val
                     current_message_type = new_type
-                    just_transitioned = True
-                    transition_content = new_segment
-                elif new_segment is not None:
-                    # Type changed without completion message
-                    streaming_msg = StreamingMessage(type=new_type)
-                    streaming_msg.merge_metadata({
-                        "model": selected_model,
-                        "terminal_session_id": terminal_session_id,
-                        "used_knowledge": used_knowledge,
-                        "citations": rag_citations if used_knowledge else [],
-                    })
-                    current_segment = new_segment
-                    current_message_type = new_type
-                    just_transitioned = True
-                    transition_content = new_segment
 
                 # Issue #656: Use stream() to append chunk and increment version
                 # Issue #680: After type transition, stream the content AFTER the tag, not raw chunk
                 if just_transitioned and transition_content is not None:
-                    # Stream the content after the tag, not the raw chunk with partial tag
                     if transition_content:
                         streaming_msg.stream(transition_content)
                 else:
@@ -792,7 +839,7 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
 
         yield (llm_response, tool_calls)
 
-    async def _run_continuation_iteration(
+    async def _collect_and_validate_llm_response(
         self,
         http_client,
         current_prompt: str,
@@ -800,19 +847,15 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         ctx: LLMIterationContext,
     ):
         """
-        Run a single continuation iteration. Yields WorkflowMessages, then (llm_response, tool_calls, should_continue).
+        Collect LLM response and validate it's not empty.
 
-        Issue #375: Uses LLMIterationContext to reduce parameter count from 12 to 4.
-        Issue #651: Fixed premature loop termination by allowing continuation even with empty results.
-        Issue #654: Added support for 'respond' tool with break_loop pattern.
+        Issue #665: Extracted from _run_continuation_iteration to reduce function length.
+
+        Yields:
+            WorkflowMessages, then (llm_response, tool_calls, should_stop)
         """
         llm_response = None
         tool_calls = None
-
-        logger.info(
-            "[Issue #651] Starting iteration %d - execution history has %d entries",
-            iteration, len(ctx.execution_history)
-        )
 
         async for item in self._collect_llm_iteration_response(
             http_client, current_prompt, iteration, ctx
@@ -824,7 +867,7 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
 
         if llm_response is None:
             logger.warning("[Issue #651] Iteration %d: No LLM response - stopping", iteration)
-            yield (None, None, False)
+            yield (None, None, True)
             return
 
         if not tool_calls:
@@ -832,9 +875,25 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
                 "[Issue #651] Iteration %d: No tool calls in response - task complete after %d step(s)",
                 iteration, len(ctx.execution_history)
             )
-            yield (llm_response, tool_calls, False)
+            yield (llm_response, tool_calls, True)
             return
 
+        yield (llm_response, tool_calls, False)
+
+    async def _collect_tool_execution_results(
+        self,
+        tool_calls: List[Dict[str, Any]],
+        iteration: int,
+        ctx: LLMIterationContext,
+    ):
+        """
+        Collect tool execution results and handle backwards compatibility.
+
+        Issue #665: Extracted from _run_continuation_iteration to reduce function length.
+
+        Yields:
+            WorkflowMessages, then (new_results, has_pending_approval, should_break, break_loop_requested)
+        """
         logger.info(
             "[Issue #651] Iteration %d: Processing %d tool call(s)",
             iteration, len(tool_calls)
@@ -843,7 +902,7 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         new_results = []
         has_pending_approval = False
         should_break = False
-        break_loop_requested = False  # Issue #654: Track explicit completion signal
+        break_loop_requested = False
 
         async for item in self._process_tool_results(
             tool_calls, ctx.session_id, ctx.terminal_session_id, ctx.ollama_endpoint,
@@ -864,14 +923,31 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
             else:
                 yield item
 
+        yield (new_results, has_pending_approval, should_break, break_loop_requested)
+
+    def _check_continuation_decision(
+        self,
+        iteration: int,
+        break_loop_requested: bool,
+        should_break: bool,
+        new_results: List[Dict[str, Any]],
+        has_pending_approval: bool,
+    ) -> bool:
+        """
+        Determine if continuation loop should continue or stop.
+
+        Issue #665: Extracted from _run_continuation_iteration to reduce function length.
+
+        Returns:
+            True if should continue, False if should stop
+        """
         # Issue #654: If respond tool was used with break_loop=True, stop the loop
         if break_loop_requested:
             logger.info(
                 "[Issue #654] Iteration %d: Respond tool signaled task completion (break_loop=True)",
                 iteration
             )
-            yield (llm_response, tool_calls, False)
-            return
+            return False
 
         # Issue #651: Only break if there was a catastrophic failure, not just empty results
         if should_break:
@@ -879,16 +955,69 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
                 "[Issue #651] Iteration %d: Catastrophic tool failure - stopping continuation",
                 iteration
             )
-            yield (llm_response, tool_calls, False)
-            return
+            return False
 
         # Issue #651: Log decision to continue
         logger.info(
             "[Issue #651] Iteration %d: Completed with %d new result(s), pending_approval=%s - continuing to next iteration",
             iteration, len(new_results), has_pending_approval
         )
+        return True
 
-        yield (llm_response, tool_calls, True)
+    async def _run_continuation_iteration(
+        self,
+        http_client,
+        current_prompt: str,
+        iteration: int,
+        ctx: LLMIterationContext,
+    ):
+        """
+        Run a single continuation iteration. Yields WorkflowMessages, then (llm_response, tool_calls, should_continue).
+
+        Issue #375: Uses LLMIterationContext to reduce parameter count from 12 to 4.
+        Issue #651: Fixed premature loop termination by allowing continuation even with empty results.
+        Issue #654: Added support for 'respond' tool with break_loop pattern.
+        Issue #665: Refactored to extract helper functions and reduce complexity.
+        """
+        logger.info(
+            "[Issue #651] Starting iteration %d - execution history has %d entries",
+            iteration, len(ctx.execution_history)
+        )
+
+        llm_response = None
+        tool_calls = None
+        should_stop = False
+
+        async for item in self._collect_and_validate_llm_response(
+            http_client, current_prompt, iteration, ctx
+        ):
+            if isinstance(item, tuple) and len(item) == 3:
+                llm_response, tool_calls, should_stop = item
+            else:
+                yield item
+
+        if should_stop:
+            yield (llm_response, tool_calls, False)
+            return
+
+        new_results = []
+        has_pending_approval = False
+        should_break = False
+        break_loop_requested = False
+
+        async for item in self._collect_tool_execution_results(
+            tool_calls, iteration, ctx
+        ):
+            if isinstance(item, tuple) and len(item) == 4:
+                new_results, has_pending_approval, should_break, break_loop_requested = item
+            else:
+                yield item
+
+        should_continue = self._check_continuation_decision(
+            iteration, break_loop_requested, should_break, new_results, has_pending_approval
+        )
+
+        yield (llm_response, tool_calls, should_continue)
 
     def _create_llm_error_message(
         self, error: Exception, workflow_messages: List[WorkflowMessage]

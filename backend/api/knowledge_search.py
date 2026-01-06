@@ -367,6 +367,105 @@ async def _process_with_rag_agent(
         }
 
 
+# =============================================================================
+# Helper Functions for consolidated_search (Issue #665)
+# =============================================================================
+
+
+async def _check_kb_initialization(req: Request) -> tuple:
+    """
+    Check KB initialization and return (kb_instance, error_response).
+
+    Issue #665: Extracted from consolidated_search to reduce function length.
+
+    Args:
+        req: FastAPI request object
+
+    Returns:
+        Tuple of (kb_instance, error_response). If kb_instance is None,
+        error_response contains the error dict to return.
+    """
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb_to_use is None:
+        return None, {
+            "results": [],
+            "total_results": 0,
+            "message": "Knowledge base not initialized - please check logs for errors",
+        }
+    return kb_to_use, None
+
+
+async def _check_empty_kb_for_search(
+    kb_to_use, query: str, mode: str
+) -> dict | None:
+    """
+    Check if KB is empty and return early response if so.
+
+    Issue #665: Extracted from consolidated_search to reduce function length.
+
+    Args:
+        kb_to_use: Knowledge base instance
+        query: Search query
+        mode: Search mode
+
+    Returns:
+        Response dict if KB is empty, None otherwise
+    """
+    try:
+        stats = await kb_to_use.get_stats()
+        if stats.get("total_facts", 0) == 0:
+            logger.info("Knowledge base is empty - returning empty results immediately")
+            return _build_search_response(
+                results=[],
+                query=query,
+                mode=mode,
+                kb_implementation=kb_to_use.__class__.__name__,
+                message="Knowledge base is empty - no documents to search. "
+                "Add documents in the Manage tab.",
+            )
+    except Exception as stats_err:
+        logger.warning("Could not check KB stats: %s", stats_err)
+
+    return None
+
+
+async def _execute_basic_search_with_reranking(
+    request: ConsolidatedSearchRequest, kb_to_use, query: str
+) -> dict:
+    """
+    Execute basic search with optional reranking.
+
+    Issue #665: Extracted from consolidated_search to reduce function length.
+
+    Args:
+        request: Search request parameters
+        kb_to_use: Knowledge base instance
+        query: Search query
+
+    Returns:
+        Response dict with search results
+    """
+    kb_class_name = kb_to_use.__class__.__name__
+
+    # Execute basic search
+    results = await _execute_kb_search(
+        kb_to_use, query, request.top_k, request.mode
+    )
+
+    # Apply reranking if requested
+    if request.enable_reranking:
+        response = await _apply_reranking(query, results, kb_to_use)
+        if response:
+            return response
+
+    return _build_search_response(
+        results=results,
+        query=query,
+        mode=request.mode,
+        kb_implementation=kb_class_name,
+    )
+
+
 # ===== SEARCH ENDPOINTS =====
 
 
@@ -416,35 +515,21 @@ async def consolidated_search(request: ConsolidatedSearchRequest, req: Request):
     - `/enhanced_search` → Use with tags, enable_reranking parameters
     - `/rag_search` → Use with enable_rag=true, reformulate_query=true
     - `/similarity_search` → Use with mode=semantic, min_score parameter
+
+    Issue #665: Refactored from 96 lines to use extracted helper methods.
     """
-    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    # Check KB initialization (Issue #665: uses helper)
+    kb_to_use, error_response = await _check_kb_initialization(req)
     if kb_to_use is None:
-        return {
-            "results": [],
-            "total_results": 0,
-            "message": "Knowledge base not initialized - please check logs for errors",
-        }
+        return error_response
 
-    kb_class_name = kb_to_use.__class__.__name__
     query = request.query
-
     logger.info("Consolidated search: %s", request.get_log_summary())
 
-    # Check if KB is empty
-    try:
-        stats = await kb_to_use.get_stats()
-        if stats.get("total_facts", 0) == 0:
-            logger.info("Knowledge base is empty - returning empty results immediately")
-            return _build_search_response(
-                results=[],
-                query=query,
-                mode=request.mode,
-                kb_implementation=kb_class_name,
-                message="Knowledge base is empty - no documents to search. "
-                "Add documents in the Manage tab.",
-            )
-    except Exception as stats_err:
-        logger.warning("Could not check KB stats: %s", stats_err)
+    # Check if KB is empty (Issue #665: uses helper)
+    empty_response = await _check_empty_kb_for_search(kb_to_use, query, request.mode)
+    if empty_response:
+        return empty_response
 
     # Determine which search path to use based on features requested
     # Path 1: Full RAG search with synthesis
@@ -455,23 +540,8 @@ async def consolidated_search(request: ConsolidatedSearchRequest, req: Request):
     if request.tags or request.min_score > 0 or hasattr(kb_to_use, "enhanced_search"):
         return await _consolidated_enhanced_search(request, kb_to_use)
 
-    # Path 3: Basic search
-    results = await _execute_kb_search(
-        kb_to_use, query, request.top_k, request.mode
-    )
-
-    # Apply reranking if requested
-    if request.enable_reranking:
-        response = await _apply_reranking(query, results, kb_to_use)
-        if response:
-            return response
-
-    return _build_search_response(
-        results=results,
-        query=query,
-        mode=request.mode,
-        kb_implementation=kb_class_name,
-    )
+    # Path 3: Basic search (Issue #665: uses helper)
+    return await _execute_basic_search_with_reranking(request, kb_to_use, query)
 
 
 async def _consolidated_enhanced_search(

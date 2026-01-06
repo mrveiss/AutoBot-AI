@@ -175,6 +175,73 @@ def generate_request_id() -> str:
 
 
 # ====================================================================
+# Helper Functions for extract_entities (Issue #665)
+# ====================================================================
+
+
+def _prepare_extraction_messages(messages: List[Message]) -> list:
+    """
+    Convert Pydantic messages to dict format for extraction.
+
+    Issue #665: Extracted from extract_entities to reduce function length.
+
+    Args:
+        messages: List of Pydantic Message objects
+
+    Returns:
+        List of message dictionaries
+    """
+    return [msg.dict() for msg in messages]
+
+
+def _log_extraction_result(request_id: str, result: ExtractionResult) -> None:
+    """
+    Log extraction completion with metrics.
+
+    Issue #665: Extracted from extract_entities to reduce function length.
+
+    Args:
+        request_id: Request tracking ID
+        result: Extraction result with metrics
+    """
+    logger.info(
+        f"[{request_id}] Extraction complete: {result.entities_created} entities, "
+        f"{result.relations_created} relations in {result.processing_time:.3f}s"
+    )
+
+
+def _build_extraction_response(
+    result: ExtractionResult, request_id: str
+) -> JSONResponse:
+    """
+    Build JSONResponse from extraction result.
+
+    Issue #665: Extracted from extract_entities to reduce function length.
+
+    Args:
+        result: Extraction result with all metrics
+        request_id: Request tracking ID
+
+    Returns:
+        JSONResponse with extraction results
+    """
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": len(result.errors) == 0,
+            "conversation_id": result.conversation_id,
+            "facts_analyzed": result.facts_analyzed,
+            "entities_created": result.entities_created,
+            "relations_created": result.relations_created,
+            "processing_time": result.processing_time,
+            "errors": result.errors,
+            "request_id": request_id,
+        },
+        media_type="application/json; charset=utf-8",
+    )
+
+
+# ====================================================================
 # API Endpoints
 # ====================================================================
 
@@ -234,6 +301,7 @@ async def extract_entities(
             "request_id": "req-def-456"
         }
         ```
+    Issue #665: Refactored from 97 lines to use extracted helper methods.
     """
     request_id = generate_request_id()
 
@@ -243,8 +311,8 @@ async def extract_entities(
             f"({len(extraction_request.messages)} messages)"
         )
 
-        # Convert Pydantic messages to dict format
-        messages_dict = [msg.dict() for msg in extraction_request.messages]
+        # Convert Pydantic messages to dict format (Issue #665: uses helper)
+        messages_dict = _prepare_extraction_messages(extraction_request.messages)
 
         # Execute entity extraction
         result: ExtractionResult = await extractor.extract_and_populate(
@@ -253,25 +321,11 @@ async def extract_entities(
             session_metadata=extraction_request.session_metadata,
         )
 
-        logger.info(
-            f"[{request_id}] Extraction complete: {result.entities_created} entities, "
-            f"{result.relations_created} relations in {result.processing_time:.3f}s"
-        )
+        # Log completion (Issue #665: uses helper)
+        _log_extraction_result(request_id, result)
 
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": len(result.errors) == 0,
-                "conversation_id": result.conversation_id,
-                "facts_analyzed": result.facts_analyzed,
-                "entities_created": result.entities_created,
-                "relations_created": result.relations_created,
-                "processing_time": result.processing_time,
-                "errors": result.errors,
-                "request_id": request_id,
-            },
-            media_type="application/json; charset=utf-8",
-        )
+        # Build response (Issue #665: uses helper)
+        return _build_extraction_response(result, request_id)
 
     except ValueError as e:
         logger.warning("[%s] Validation error: %s", request_id, e)

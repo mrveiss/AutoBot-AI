@@ -506,6 +506,122 @@ def run_system_update(
         loop.close()
 
 
+def _select_update_playbook(update_type: str) -> tuple[str | None, dict | None]:
+    """
+    Select the appropriate playbook based on update type.
+
+    Issue #665: Extracted from _run_system_update_async to reduce function length.
+
+    Args:
+        update_type: Type of update ('dependencies' or 'system')
+
+    Returns:
+        Tuple of (playbook_name, error_dict) - one will be None
+    """
+    if update_type == "dependencies":
+        return "patch-dependencies.yml", None
+    elif update_type == "system":
+        return "patch-system-packages.yml", None
+    else:
+        error = {
+            "status": "failed",
+            "error": f"Invalid update type: {update_type}. Use 'dependencies' or 'system'.",
+        }
+        return None, error
+
+
+def _build_update_inventory() -> dict:
+    """
+    Build Ansible inventory for system updates.
+
+    Issue #665: Extracted from _run_system_update_async to reduce function length.
+
+    Returns:
+        Ansible inventory dictionary for localhost
+    """
+    return {
+        "backend": {
+            "hosts": ["localhost"],
+            "vars": {
+                "ansible_connection": "local",
+                "ansible_python_interpreter": "/usr/bin/python3",
+            },
+        }
+    }
+
+
+def _build_update_extra_vars(
+    dry_run: bool,
+    force_update: bool,
+    target_groups: list | None
+) -> dict:
+    """
+    Build extra variables for system update playbook.
+
+    Issue #665: Extracted from _run_system_update_async to reduce function length.
+
+    Args:
+        dry_run: Preview mode flag
+        force_update: Force update flag
+        target_groups: Target host groups (optional)
+
+    Returns:
+        Dictionary of extra variables for Ansible playbook
+    """
+    extra_vars = {
+        "dry_run": dry_run,
+        "force_update": force_update,
+        "auto_confirm": True,  # Skip interactive prompts when run via API
+        "rollback_on_failure": True,
+        "health_check_enabled": True,
+    }
+
+    if target_groups:
+        extra_vars["target_groups"] = target_groups
+
+    return extra_vars
+
+
+def _build_update_result(
+    success: bool,
+    update_type: str,
+    dry_run: bool,
+    runner=None,
+    playbook_name: str = None
+) -> dict:
+    """
+    Build result dictionary for system update operation.
+
+    Issue #665: Extracted from _run_system_update_async to reduce function length.
+
+    Args:
+        success: Whether update was successful
+        update_type: Type of update performed
+        dry_run: Whether this was a dry run
+        runner: Ansible runner object (for failures)
+        playbook_name: Name of playbook (for file not found errors)
+
+    Returns:
+        Result dictionary with status and details
+    """
+    if success:
+        logger.info("System update successful (type=%s)", update_type)
+        return {
+            "status": "success",
+            "message": f"System {update_type} update completed successfully",
+            "update_type": update_type,
+            "dry_run": dry_run,
+        }
+    else:
+        logger.error("System update failed (type=%s)", update_type)
+        return {
+            "status": "failed",
+            "error": f"Update playbook failed with return code {runner.rc}",
+            "return_code": runner.rc,
+            "update_type": update_type,
+        }
+
+
 async def _run_system_update_async(
     task,
     update_type: str,
@@ -533,40 +649,14 @@ async def _run_system_update_async(
         update_type, dry_run, force_update, target_groups
     )
 
-    # Select playbook based on update type
-    if update_type == "dependencies":
-        playbook_name = "patch-dependencies.yml"
-    elif update_type == "system":
-        playbook_name = "patch-system-packages.yml"
-    else:
-        return {
-            "status": "failed",
-            "error": f"Invalid update type: {update_type}. Use 'dependencies' or 'system'.",
-        }
+    # Select playbook based on update type (Issue #665: extracted)
+    playbook_name, error = _select_update_playbook(update_type)
+    if error:
+        return error
 
-    # Build inventory - use default distributed inventory
-    inventory = {
-        "backend": {
-            "hosts": ["localhost"],
-            "vars": {
-                "ansible_connection": "local",
-                "ansible_python_interpreter": "/usr/bin/python3",
-            },
-        }
-    }
-
-    # Extra variables for playbook
-    extra_vars = {
-        "dry_run": dry_run,
-        "force_update": force_update,
-        "auto_confirm": True,  # Skip interactive prompts when run via API
-        "rollback_on_failure": True,
-        "health_check_enabled": True,
-    }
-
-    # Add target groups if specified
-    if target_groups:
-        extra_vars["target_groups"] = target_groups
+    # Build inventory and extra vars (Issue #665: extracted)
+    inventory = _build_update_inventory()
+    extra_vars = _build_update_extra_vars(dry_run, force_update, target_groups)
 
     try:
         event_callback = _create_system_update_event_callback(task, update_type)
@@ -580,22 +670,13 @@ async def _run_system_update_async(
             run_id=f"system_update_{update_type}",
         )
 
-        if runner.status == "successful":
-            logger.info("System update successful (type=%s)", update_type)
-            return {
-                "status": "success",
-                "message": f"System {update_type} update completed successfully",
-                "update_type": update_type,
-                "dry_run": dry_run,
-            }
-        else:
-            logger.error("System update failed (type=%s)", update_type)
-            return {
-                "status": "failed",
-                "error": f"Update playbook failed with return code {runner.rc}",
-                "return_code": runner.rc,
-                "update_type": update_type,
-            }
+        # Build result based on runner status (Issue #665: extracted)
+        return _build_update_result(
+            success=(runner.status == "successful"),
+            update_type=update_type,
+            dry_run=dry_run,
+            runner=runner
+        )
 
     except FileNotFoundError as e:
         logger.error("Update playbook not found: %s", e)
