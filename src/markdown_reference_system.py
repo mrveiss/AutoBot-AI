@@ -173,6 +173,72 @@ class MarkdownReferenceSystem:
             "directory": str(directory),
         }
 
+    def _get_file_metadata(
+        self, file_path: Path, content: str
+    ) -> Dict[str, Any]:
+        """Issue #665: Extracted from _process_markdown_file to reduce function length.
+
+        Calculate hash, stats, word count and tags for a markdown file.
+        """
+        stat = file_path.stat()
+        return {
+            "content_hash": hashlib.sha256(content.encode()).hexdigest(),
+            "created_at": datetime.fromtimestamp(stat.st_ctime),
+            "last_modified": datetime.fromtimestamp(stat.st_mtime),
+            "word_count": len(_WORD_RE.findall(content)),
+            "tags": self._extract_tags(content),
+        }
+
+    def _check_document_status(
+        self, conn: sqlite3.Connection, file_path: Path, content_hash: str
+    ) -> tuple[bool, bool]:
+        """Issue #665: Extracted from _process_markdown_file to reduce function length.
+
+        Check if document exists and whether it has been updated.
+        Returns (is_new, is_updated) tuple.
+        """
+        cursor = conn.execute(
+            "SELECT content_hash FROM markdown_documents WHERE file_path = ?",
+            (str(file_path),),
+        )
+        existing_record = cursor.fetchone()
+        is_new = existing_record is None
+        is_updated = bool(existing_record and existing_record[0] != content_hash)
+        return is_new, is_updated
+
+    def _upsert_document_record(
+        self,
+        conn: sqlite3.Connection,
+        file_path: Path,
+        document_type: str,
+        metadata: Dict[str, Any],
+    ) -> None:
+        """Issue #665: Extracted from _process_markdown_file to reduce function length.
+
+        Insert or update the document record in the database.
+        """
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO markdown_documents
+            (file_path, file_name, directory, content_hash, word_count,
+             created_at, last_modified, last_scanned, document_type, tags, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(file_path),
+                file_path.name,
+                str(file_path.parent),
+                metadata["content_hash"],
+                metadata["word_count"],
+                metadata["created_at"],
+                metadata["last_modified"],
+                datetime.now(),
+                document_type,
+                json.dumps(metadata["tags"]),
+                json.dumps({"encoding": "utf-8"}),
+            ),
+        )
+
     def _process_markdown_file(
         self, file_path: Path, document_type: str
     ) -> Dict[str, Any]:
@@ -180,75 +246,27 @@ class MarkdownReferenceSystem:
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
 
-        # Calculate content hash
-        content_hash = hashlib.sha256(content.encode()).hexdigest()
+        metadata = self._get_file_metadata(file_path, content)
 
-        # Get file stats
-        stat = file_path.stat()
-        created_at = datetime.fromtimestamp(stat.st_ctime)
-        last_modified = datetime.fromtimestamp(stat.st_mtime)
-
-        # Count words using pre-compiled pattern (Issue #380)
-        word_count = len(_WORD_RE.findall(content))
-
-        # Extract tags from content (look for tags in frontmatter or special comments)
-        tags = self._extract_tags(content)
-
-        # Check if file exists in database
         with sqlite3.connect(self.memory_manager.db_path) as conn:
-            cursor = conn.execute(
-                """
-                SELECT content_hash FROM markdown_documents WHERE file_path = ?
-            """,
-                (str(file_path),),
+            is_new, is_updated = self._check_document_status(
+                conn, file_path, metadata["content_hash"]
             )
+            self._upsert_document_record(conn, file_path, document_type, metadata)
 
-            existing_record = cursor.fetchone()
-            is_new = existing_record is None
-            is_updated = False
-
-            if existing_record and existing_record[0] != content_hash:
-                is_updated = True
-
-            # Insert or update document record
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO markdown_documents
-                (file_path, file_name, directory, content_hash, word_count,
-                 created_at, last_modified, last_scanned, document_type, tags, metadata_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-                (
-                    str(file_path),
-                    file_path.name,
-                    str(file_path.parent),
-                    content_hash,
-                    word_count,
-                    created_at,
-                    last_modified,
-                    datetime.now(),
-                    document_type,
-                    json.dumps(tags),
-                    json.dumps({"encoding": "utf-8"}),
-                ),
-            )
-
-            # Process sections if file is new or updated
             if is_new or is_updated:
                 self._process_markdown_sections(conn, file_path, content)
-
             conn.commit()
 
-        logger.debug(
-            f"Processed markdown: {file_path.name} ({'new' if is_new else 'updated' if is_updated else 'unchanged'})"
-        )
+        status = "new" if is_new else "updated" if is_updated else "unchanged"
+        logger.debug("Processed markdown: %s (%s)", file_path.name, status)
 
         return {
             "file_path": str(file_path),
-            "content_hash": content_hash,
+            "content_hash": metadata["content_hash"],
             "is_new": is_new,
             "is_updated": is_updated,
-            "word_count": word_count,
+            "word_count": metadata["word_count"],
         }
 
     def _extract_tags(self, content: str) -> List[str]:
@@ -497,6 +515,92 @@ class MarkdownReferenceSystem:
 
         return {"outgoing_references": outgoing, "incoming_references": incoming}
 
+    def _build_document_search_query(
+        self,
+        query: str,
+        document_type: Optional[str],
+        tags: Optional[List[str]],
+        limit: int,
+    ) -> tuple[str, List[Any]]:
+        """Issue #665: Extracted from search_markdown_content to reduce function length.
+
+        Build the SQL query and parameters for document search.
+        """
+        sql = """
+            SELECT md.file_path, md.file_name, md.directory, md.word_count,
+                   md.last_modified, md.document_type, md.tags
+            FROM markdown_documents md
+            WHERE (md.file_name LIKE ? OR md.directory LIKE ?)
+        """
+        params: List[Any] = [f"%{query}%", f"%{query}%"]
+
+        if document_type:
+            sql += " AND md.document_type = ?"
+            params.append(document_type)
+
+        if tags:
+            # Issue #622: Use list + join for O(n) performance
+            tag_conditions = [" AND md.tags LIKE ?" for _ in tags]
+            sql += "".join(tag_conditions)
+            params.extend(f"%{tag}%" for tag in tags)
+
+        sql += " LIMIT ?"
+        params.append(limit)
+        return sql, params
+
+    def _search_documents(
+        self, conn: sqlite3.Connection, sql: str, params: List[Any]
+    ) -> List[Dict[str, Any]]:
+        """Issue #665: Extracted from search_markdown_content to reduce function length.
+
+        Execute document search and format results.
+        """
+        cursor = conn.execute(sql, params)
+        return [
+            {
+                "file_path": row[0],
+                "file_name": row[1],
+                "directory": row[2],
+                "word_count": row[3],
+                "last_modified": row[4],
+                "document_type": row[5],
+                "tags": json.loads(row[6]) if row[6] else [],
+                "match_type": "document",
+            }
+            for row in cursor.fetchall()
+        ]
+
+    def _search_sections(
+        self, conn: sqlite3.Connection, query: str, limit: int
+    ) -> List[Dict[str, Any]]:
+        """Issue #665: Extracted from search_markdown_content to reduce function length.
+
+        Search markdown sections and format results.
+        """
+        cursor = conn.execute(
+            """
+            SELECT ms.file_path, ms.section_title, ms.section_level,
+                   ms.start_line, ms.end_line, md.file_name
+            FROM markdown_sections ms
+            JOIN markdown_documents md ON ms.file_path = md.file_path
+            WHERE ms.section_title LIKE ? OR ms.content_text LIKE ?
+            LIMIT ?
+            """,
+            (f"%{query}%", f"%{query}%", limit),
+        )
+        return [
+            {
+                "file_path": row[0],
+                "section_title": row[1],
+                "section_level": row[2],
+                "start_line": row[3],
+                "end_line": row[4],
+                "file_name": row[5],
+                "match_type": "section",
+            }
+            for row in cursor.fetchall()
+        ]
+
     def search_markdown_content(
         self,
         query: str,
@@ -505,74 +609,15 @@ class MarkdownReferenceSystem:
         limit: int = 20,
     ) -> List[Dict[str, Any]]:
         """Search markdown content and sections"""
-        results = []
+        sql, params = self._build_document_search_query(
+            query, document_type, tags, limit
+        )
 
         with sqlite3.connect(self.memory_manager.db_path) as conn:
-            # Search in document metadata
-            sql = """
-                SELECT md.file_path, md.file_name, md.directory, md.word_count,
-                       md.last_modified, md.document_type, md.tags
-                FROM markdown_documents md
-                WHERE (md.file_name LIKE ? OR md.directory LIKE ?)
-            """
-            params = [f"%{query}%", f"%{query}%"]
+            doc_results = self._search_documents(conn, sql, params)
+            section_results = self._search_sections(conn, query, limit)
 
-            if document_type:
-                sql += " AND md.document_type = ?"
-                params.append(document_type)
-
-            if tags:
-                # Issue #622: Use list + join for O(n) performance
-                tag_conditions = [" AND md.tags LIKE ?" for _ in tags]
-                sql += "".join(tag_conditions)
-                params.extend(f"%{tag}%" for tag in tags)
-
-            sql += " LIMIT ?"
-            params.append(limit)
-
-            cursor = conn.execute(sql, params)
-
-            for row in cursor.fetchall():
-                results.append(
-                    {
-                        "file_path": row[0],
-                        "file_name": row[1],
-                        "directory": row[2],
-                        "word_count": row[3],
-                        "last_modified": row[4],
-                        "document_type": row[5],
-                        "tags": json.loads(row[6]) if row[6] else [],
-                        "match_type": "document",
-                    }
-                )
-
-            # Search in sections
-            cursor = conn.execute(
-                """
-                SELECT ms.file_path, ms.section_title, ms.section_level,
-                       ms.start_line, ms.end_line, md.file_name
-                FROM markdown_sections ms
-                JOIN markdown_documents md ON ms.file_path = md.file_path
-                WHERE ms.section_title LIKE ? OR ms.content_text LIKE ?
-                LIMIT ?
-            """,
-                (f"%{query}%", f"%{query}%", limit),
-            )
-
-            for row in cursor.fetchall():
-                results.append(
-                    {
-                        "file_path": row[0],
-                        "section_title": row[1],
-                        "section_level": row[2],
-                        "start_line": row[3],
-                        "end_line": row[4],
-                        "file_name": row[5],
-                        "match_type": "section",
-                    }
-                )
-
-        return results
+        return doc_results + section_results
 
     def get_markdown_statistics(self) -> Dict[str, Any]:
         """Get comprehensive markdown statistics"""

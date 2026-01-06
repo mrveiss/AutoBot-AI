@@ -171,67 +171,57 @@ class AuthenticationMiddleware:
         if username in self.failed_attempts:
             del self.failed_attempts[username]
 
-    def authenticate_user(
-        self, username: str, password: str, ip_address: str = "unknown"
-    ) -> Optional[Dict]:
+    def _get_auth_disabled_user(self) -> Dict:
+        """Issue #665: Extracted from authenticate_user to reduce function length.
+
+        Returns default admin user dict when auth is disabled.
         """
-        Authenticate user with enhanced security measures
+        return {
+            "username": "admin",
+            "role": "admin",
+            "email": "admin@autobot.local",
+            "auth_disabled": True,
+        }
 
-        Returns:
-            Dict with user info if successful, None if failed
+    def _handle_locked_account(self, username: str, ip_address: str) -> None:
+        """Issue #665: Extracted from authenticate_user to reduce function length.
+
+        Handle locked account login attempt - logs and raises auth error.
         """
-        if not self.enable_auth:
-            # Return default admin user when auth is disabled
-            return {
-                "username": "admin",
-                "role": "admin",
-                "email": "admin@autobot.local",
-                "auth_disabled": True,
-            }
+        self.security_layer.audit_log(
+            action="login_attempt_locked_account",
+            user=username,
+            outcome="denied",
+            details={"ip": ip_address, "reason": "account_locked"},
+        )
+        raise_auth_error(
+            "AUTH_0001",
+            "Account is temporarily locked due to excessive failed attempts",
+        )
 
-        # Check if account is locked
-        if self.is_account_locked(username):
-            self.security_layer.audit_log(
-                action="login_attempt_locked_account",
-                user=username,
-                outcome="denied",
-                details={"ip": ip_address, "reason": "account_locked"},
-            )
-            raise_auth_error(
-                "AUTH_0001",
-                "Account is temporarily locked due to excessive failed attempts",
-            )
+    def _handle_failed_login(
+        self, username: str, ip_address: str, reason: str
+    ) -> None:
+        """Issue #665: Extracted from authenticate_user to reduce function length.
 
-        # Get user from configuration
-        allowed_users = self.security_config.get("allowed_users", {})
-        if username not in allowed_users:
-            self.record_failed_attempt(username, ip_address)
-            self.security_layer.audit_log(
-                action="login_attempt",
-                user=username,
-                outcome="denied",
-                details={"ip": ip_address, "reason": "user_not_found"},
-            )
-            return None
+        Record failed login attempt and audit log.
+        """
+        self.record_failed_attempt(username, ip_address)
+        self.security_layer.audit_log(
+            action="login_attempt",
+            user=username,
+            outcome="denied",
+            details={"ip": ip_address, "reason": reason},
+        )
 
-        user_config = allowed_users[username]
-        password_hash = user_config.get("password_hash", "")
+    def _build_successful_auth_response(
+        self, username: str, user_config: Dict, ip_address: str
+    ) -> Dict:
+        """Issue #665: Extracted from authenticate_user to reduce function length.
 
-        # Verify password
-        if not self.verify_password(password, password_hash):
-            self.record_failed_attempt(username, ip_address)
-            self.security_layer.audit_log(
-                action="login_attempt",
-                user=username,
-                outcome="denied",
-                details={"ip": ip_address, "reason": "invalid_password"},
-            )
-            return None
-
-        # Clear failed attempts on successful login
+        Build and return successful authentication response.
+        """
         self.clear_failed_attempts(username)
-
-        # Update last login time (in production, persist this to database)
         user_config["last_login"] = datetime.datetime.now().isoformat()
 
         self.security_layer.audit_log(
@@ -247,6 +237,32 @@ class AuthenticationMiddleware:
             "email": user_config.get("email", f"{username}@autobot.local"),
             "last_login": user_config["last_login"],
         }
+
+    def authenticate_user(
+        self, username: str, password: str, ip_address: str = "unknown"
+    ) -> Optional[Dict]:
+        """Authenticate user with enhanced security measures.
+
+        Returns:
+            Dict with user info if successful, None if failed
+        """
+        if not self.enable_auth:
+            return self._get_auth_disabled_user()
+
+        if self.is_account_locked(username):
+            self._handle_locked_account(username, ip_address)
+
+        allowed_users = self.security_config.get("allowed_users", {})
+        if username not in allowed_users:
+            self._handle_failed_login(username, ip_address, "user_not_found")
+            return None
+
+        user_config = allowed_users[username]
+        if not self.verify_password(password, user_config.get("password_hash", "")):
+            self._handle_failed_login(username, ip_address, "invalid_password")
+            return None
+
+        return self._build_successful_auth_response(username, user_config, ip_address)
 
     def create_jwt_token(self, user_data: Dict) -> str:
         """Create JWT token for authenticated user"""

@@ -677,6 +677,58 @@ class AutoBotMemoryGraph:
             logger.error("Failed to create relation: %s", e)
             raise RuntimeError(f"Relation creation failed: {str(e)}")
 
+    async def _fetch_and_process_relations(
+        self,
+        current_id: str,
+        direction: str,
+        relation_type: Optional[str],
+        depth: int,
+        max_depth: int,
+        queue: List,
+    ) -> List[Dict[str, Any]]:
+        """Issue #665: Extracted from get_related_entities to reduce function length.
+
+        Fetch relations for a direction and process them.
+
+        Args:
+            current_id: Current entity ID in BFS traversal
+            direction: "outgoing", "incoming", or "both"
+            relation_type: Filter by relation type
+            depth: Current traversal depth
+            max_depth: Maximum traversal depth
+            queue: BFS queue to append to
+
+        Returns:
+            List of related entity dicts with relation metadata
+        """
+        need_outgoing = direction in _OUTGOING_DIRECTIONS
+        need_incoming = direction in _INCOMING_DIRECTIONS
+        related = []
+
+        if need_outgoing and need_incoming:
+            outgoing, incoming = await asyncio.gather(
+                self._get_outgoing_relations(current_id),
+                self._get_incoming_relations(current_id),
+            )
+            related.extend(await self._process_direction_relations(
+                outgoing, relation_type, "outgoing", "to", depth, max_depth, queue
+            ))
+            related.extend(await self._process_direction_relations(
+                incoming, relation_type, "incoming", "from", depth, max_depth, queue
+            ))
+        elif need_outgoing:
+            outgoing = await self._get_outgoing_relations(current_id)
+            related.extend(await self._process_direction_relations(
+                outgoing, relation_type, "outgoing", "to", depth, max_depth, queue
+            ))
+        elif need_incoming:
+            incoming = await self._get_incoming_relations(current_id)
+            related.extend(await self._process_direction_relations(
+                incoming, relation_type, "incoming", "from", depth, max_depth, queue
+            ))
+
+        return related
+
     async def get_related_entities(
         self,
         entity_name: str,
@@ -684,8 +736,7 @@ class AutoBotMemoryGraph:
         direction: str = "both",
         max_depth: int = 1,
     ) -> List[Dict[str, Any]]:
-        """
-        Get entities related to specified entity.
+        """Get entities related to specified entity.
 
         Args:
             entity_name: Name of entity
@@ -699,7 +750,6 @@ class AutoBotMemoryGraph:
         self.ensure_initialized()
 
         try:
-            # Get entity
             entity = await self.get_entity(entity_name=entity_name)
             if not entity:
                 return []
@@ -707,48 +757,18 @@ class AutoBotMemoryGraph:
             entity_id = entity["id"]
             related = []
             visited = set()
-
-            # BFS traversal (Issue #298 - uses extracted helper for reduced nesting)
             queue = [(entity_id, 0)]
 
             while queue:
                 current_id, depth = queue.pop(0)
-
                 if current_id in visited or depth > max_depth:
                     continue
                 visited.add(current_id)
 
-                # Issue #619: Parallelize relation fetching when processing both directions
-                need_outgoing = direction in _OUTGOING_DIRECTIONS
-                need_incoming = direction in _INCOMING_DIRECTIONS
-
-                if need_outgoing and need_incoming:
-                    # Fetch both in parallel
-                    outgoing, incoming = await asyncio.gather(
-                        self._get_outgoing_relations(current_id),
-                        self._get_incoming_relations(current_id),
-                    )
-                    # Process sequentially (modifies queue)
-                    outgoing_related = await self._process_direction_relations(
-                        outgoing, relation_type, "outgoing", "to", depth, max_depth, queue
-                    )
-                    related.extend(outgoing_related)
-                    incoming_related = await self._process_direction_relations(
-                        incoming, relation_type, "incoming", "from", depth, max_depth, queue
-                    )
-                    related.extend(incoming_related)
-                elif need_outgoing:
-                    outgoing = await self._get_outgoing_relations(current_id)
-                    outgoing_related = await self._process_direction_relations(
-                        outgoing, relation_type, "outgoing", "to", depth, max_depth, queue
-                    )
-                    related.extend(outgoing_related)
-                elif need_incoming:
-                    incoming = await self._get_incoming_relations(current_id)
-                    incoming_related = await self._process_direction_relations(
-                        incoming, relation_type, "incoming", "from", depth, max_depth, queue
-                    )
-                    related.extend(incoming_related)
+                direction_related = await self._fetch_and_process_relations(
+                    current_id, direction, relation_type, depth, max_depth, queue
+                )
+                related.extend(direction_related)
 
             return related
 

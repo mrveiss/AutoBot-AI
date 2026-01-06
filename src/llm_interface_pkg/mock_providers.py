@@ -43,9 +43,71 @@ class LocalLLM:
                 "Set AUTOBOT_OLLAMA_HOST and AUTOBOT_OLLAMA_PORT for real LLM."
             )
 
-    async def generate(self, prompt: str, model: Optional[str] = None) -> dict:
+    def _create_mock_response(self, prompt: str) -> dict:
+        """Issue #665: Extracted from generate to reduce function length.
+
+        Create a mock response when Ollama is not configured.
+
+        Args:
+            prompt: Input text prompt
+
+        Returns:
+            Dict with mock response in OpenAI-compatible format
         """
-        Generate response using local Ollama model.
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "content": (
+                            "[Mock Response - Ollama not configured] "
+                            f"Prompt received: {prompt[:100]}..."
+                        )
+                    }
+                }
+            ],
+            "_mock": True,
+        }
+
+    def _create_error_response(self, error_message: str) -> dict:
+        """Issue #665: Extracted from generate to reduce function length.
+
+        Create an error response dict.
+
+        Args:
+            error_message: Error message to include
+
+        Returns:
+            Dict with error response in OpenAI-compatible format
+        """
+        return {
+            "choices": [{"message": {"content": error_message}}],
+            "_error": True,
+        }
+
+    def _format_ollama_response(self, result: dict) -> dict:
+        """Issue #665: Extracted from generate to reduce function length.
+
+        Format Ollama API result into OpenAI-compatible response.
+
+        Args:
+            result: Raw Ollama API response
+
+        Returns:
+            Dict with response in OpenAI-compatible format
+        """
+        content = result.get("message", {}).get("content", "")
+        logger.debug("Ollama response received: %d chars", len(content))
+        return {
+            "choices": [{"message": {"content": content}}],
+            "model": result.get("model"),
+            "usage": {
+                "prompt_tokens": result.get("prompt_eval_count", 0),
+                "completion_tokens": result.get("eval_count", 0),
+            },
+        }
+
+    async def generate(self, prompt: str, model: Optional[str] = None) -> dict:
+        """Generate response using local Ollama model.
 
         Falls back to mock response if Ollama is not available.
 
@@ -59,19 +121,7 @@ class LocalLLM:
         if not self._ollama_available:
             logger.debug("Using mock response (Ollama not configured)")
             await asyncio.sleep(0.1)
-            return {
-                "choices": [
-                    {
-                        "message": {
-                            "content": (
-                                "[Mock Response - Ollama not configured] "
-                                f"Prompt received: {prompt[:100]}..."
-                            )
-                        }
-                    }
-                ],
-                "_mock": True,
-            }
+            return self._create_mock_response(prompt)
 
         try:
             import aiohttp
@@ -85,42 +135,19 @@ class LocalLLM:
             async with aiohttp.ClientSession() as session:
                 timeout = aiohttp.ClientTimeout(total=120.0)
                 async with session.post(
-                    f"{self._ollama_url}/api/chat",
-                    json=data,
-                    timeout=timeout,
+                    f"{self._ollama_url}/api/chat", json=data, timeout=timeout
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
                         logger.error("Ollama request failed: HTTP %s - %s", response.status, error_text)
-                        return {
-                            "choices": [
-                                {"message": {"content": f"Error: Ollama returned HTTP {response.status}"}}
-                            ],
-                            "_error": True,
-                        }
-
+                        return self._create_error_response(f"Error: Ollama returned HTTP {response.status}")
                     result = await response.json()
 
-            content = result.get("message", {}).get("content", "")
-            logger.debug("Ollama response received: %d chars", len(content))
-
-            return {
-                "choices": [{"message": {"content": content}}],
-                "model": result.get("model"),
-                "usage": {
-                    "prompt_tokens": result.get("prompt_eval_count", 0),
-                    "completion_tokens": result.get("eval_count", 0),
-                },
-            }
+            return self._format_ollama_response(result)
 
         except Exception as e:
             logger.error("Ollama request failed: %s", e)
-            return {
-                "choices": [
-                    {"message": {"content": f"Error: Local LLM request failed - {str(e)}"}}
-                ],
-                "_error": True,
-            }
+            return self._create_error_response(f"Error: Local LLM request failed - {str(e)}")
 
 
 class MockPalm:
