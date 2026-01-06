@@ -258,20 +258,22 @@ async function refreshStatus() {
       apiClient.get('/api/security/domain-security/stats')
     ])
 
-    if (statusResponse.data) {
-      status.any_service_configured = statusResponse.data.any_service_configured
-      status.virustotal = statusResponse.data.virustotal
-      status.urlvoid = statusResponse.data.urlvoid
-      status.cache_stats = statusResponse.data.cache_stats
+    const statusData = (statusResponse as { data?: Record<string, unknown> }).data
+    if (statusData) {
+      status.any_service_configured = statusData.any_service_configured as boolean
+      status.virustotal = statusData.virustotal as Record<string, unknown> | null
+      status.urlvoid = statusData.urlvoid as Record<string, unknown> | null
+      status.cache_stats = statusData.cache_stats as Record<string, unknown> | null
     }
 
-    if (statsResponse.data?.success) {
-      const stats = statsResponse.data.stats
-      domainStats.whitelist_count = stats.whitelist_count
-      domainStats.blacklist_count = stats.blacklist_count
-      domainStats.suspicious_tlds_count = stats.suspicious_tlds_count
-      domainStats.settings = stats.settings
-      domainStats.threat_intelligence = stats.threat_intelligence
+    const statsData = (statsResponse as { data?: Record<string, unknown> }).data
+    if (statsData?.success) {
+      const stats = (statsData.stats as Record<string, unknown>) || {}
+      domainStats.whitelist_count = (stats.whitelist_count as number) || 0
+      domainStats.blacklist_count = (stats.blacklist_count as number) || 0
+      domainStats.suspicious_tlds_count = (stats.suspicious_tlds_count as number) || 0
+      domainStats.settings = (stats.settings as Record<string, unknown>) || null
+      domainStats.threat_intelligence = (stats.threat_intelligence as Record<string, unknown>) || null
     }
   } catch (error) {
     logger.error('Failed to fetch threat intel status', error)
@@ -291,10 +293,11 @@ async function checkUrl() {
       url: urlToCheck.value
     })
 
-    if (response.data) {
-      checkResult.value = response.data
+    const responseData = (response as { data?: CheckResult }).data
+    if (responseData) {
+      checkResult.value = responseData
       // Add to history (keep last 10)
-      checkHistory.value.unshift(response.data)
+      checkHistory.value.unshift(responseData)
       if (checkHistory.value.length > 10) {
         checkHistory.value.pop()
       }

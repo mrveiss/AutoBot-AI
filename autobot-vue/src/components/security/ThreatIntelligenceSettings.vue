@@ -244,18 +244,21 @@ async function refreshStatus() {
       apiClient.get('/api/security/domain-security/stats')
     ])
 
-    if (statusResponse.data) {
-      status.any_service_configured = statusResponse.data.any_service_configured
-      status.virustotal = statusResponse.data.virustotal
-      status.urlvoid = statusResponse.data.urlvoid
-      status.cache_stats = statusResponse.data.cache_stats
+    const statusData = (statusResponse as { data?: Record<string, unknown> }).data
+    if (statusData) {
+      status.any_service_configured = statusData.any_service_configured as boolean
+      status.virustotal = statusData.virustotal as Record<string, unknown> | null
+      status.urlvoid = statusData.urlvoid as Record<string, unknown> | null
+      status.cache_stats = statusData.cache_stats as Record<string, unknown> | null
     }
 
-    if (statsResponse.data?.success) {
-      const settings = statsResponse.data.stats?.settings || {}
-      domainSettings.requireHttps = settings.require_https ?? true
-      domainSettings.checkDns = settings.check_dns ?? true
-      domainSettings.maxRedirects = settings.max_redirects ?? 5
+    const statsData = (statsResponse as { data?: Record<string, unknown> }).data
+    if (statsData?.success) {
+      const stats = (statsData.stats as Record<string, unknown>) || {}
+      const settings = (stats.settings as Record<string, unknown>) || {}
+      domainSettings.requireHttps = (settings.require_https as boolean) ?? true
+      domainSettings.checkDns = (settings.check_dns as boolean) ?? true
+      domainSettings.maxRedirects = (settings.max_redirects as number) ?? 5
     }
   } catch (error) {
     logger.error('Failed to fetch threat intel status', error)
