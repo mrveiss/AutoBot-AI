@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from src.config.ssot_config import config
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Add scripts path for log forwarder import
@@ -604,15 +605,15 @@ async def get_destination_types() -> Dict[str, Any]:
 @router.get("/known-hosts")
 async def get_known_hosts() -> Dict[str, Any]:
     """Get list of known AutoBot hosts for per-host configuration."""
-    # Return the known AutoBot infrastructure hosts
+    # Return the known AutoBot infrastructure hosts from SSOT config
     return {
         "hosts": [
-            {"hostname": "autobot-main", "ip": "172.16.168.20", "description": "Main Machine (Backend API)"},
-            {"hostname": "autobot-frontend", "ip": "172.16.168.21", "description": "Frontend VM"},
-            {"hostname": "autobot-npu-worker", "ip": "172.16.168.22", "description": "NPU Worker VM"},
-            {"hostname": "autobot-redis", "ip": "172.16.168.23", "description": "Redis VM"},
-            {"hostname": "autobot-ai-stack", "ip": "172.16.168.24", "description": "AI Stack VM"},
-            {"hostname": "autobot-browser", "ip": "172.16.168.25", "description": "Browser VM"},
+            {"hostname": "autobot-main", "ip": config.vm.main, "description": "Main Machine (Backend API)"},
+            {"hostname": "autobot-frontend", "ip": config.vm.frontend, "description": "Frontend VM"},
+            {"hostname": "autobot-npu-worker", "ip": config.vm.npu, "description": "NPU Worker VM"},
+            {"hostname": "autobot-redis", "ip": config.vm.redis, "description": "Redis VM"},
+            {"hostname": "autobot-ai-stack", "ip": config.vm.aistack, "description": "AI Stack VM"},
+            {"hostname": "autobot-browser", "ip": config.vm.browser, "description": "Browser VM"},
         ],
         "current_hostname": socket.gethostname(),
     }
