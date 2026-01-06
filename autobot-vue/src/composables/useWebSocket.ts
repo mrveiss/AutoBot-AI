@@ -244,7 +244,7 @@ export function useWebSocket(
         isConnecting.value = false
         clearTimers()
 
-        logger.info('Closed:', event.code, event.reason)
+        logger.info('Closed:', { code: event.code, reason: event.reason })
         opts.onClose(event)
 
         // Auto-reconnect logic

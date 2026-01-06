@@ -151,7 +151,7 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
 
       ws.onclose = (event) => {
         isConnected.value = false
-        logger.info('Overseer WebSocket closed:', event.code, event.reason)
+        logger.info('Overseer WebSocket closed:', { code: event.code, reason: event.reason })
 
         // Auto-reconnect if not a clean close
         if (event.code !== 1000 && reconnectAttempts < maxReconnectAttempts) {

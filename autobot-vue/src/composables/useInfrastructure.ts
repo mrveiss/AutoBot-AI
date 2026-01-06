@@ -85,7 +85,7 @@ export function useInfrastructure() {
     error.value = null
 
     try {
-      let response: Response
+      let response: any
 
       if (hostData instanceof FormData) {
         response = await api.post('/api/iac/hosts', hostData, {
@@ -95,7 +95,7 @@ export function useInfrastructure() {
         response = await api.post('/api/iac/hosts', hostData)
       }
 
-      const data = await response.json()
+      const data = typeof response.json === 'function' ? await response.json() : response
 
       if (data.id) {
         hosts.value.push(data as Host)
