@@ -13,10 +13,9 @@ Inspired by oVirt's certificate distribution during host deployment.
 
 import asyncio
 import logging
-import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import asyncssh
 
@@ -105,16 +104,73 @@ class CertificateDistributor:
 
         return results
 
+    async def _prepare_remote_directory(
+        self, conn: asyncssh.SSHClientConnection, remote_dir: str
+    ) -> None:
+        """
+        Create remote directory and set initial ownership.
+
+        Issue #665: Extracted from _distribute_to_vm to reduce function length.
+
+        Args:
+            conn: SSH connection
+            remote_dir: Remote directory path
+        """
+        await conn.run(f"sudo mkdir -p {remote_dir}", check=True)
+        await conn.run(
+            f"sudo chown {self.config.ssh_user}:{self.config.ssh_user} {remote_dir}",
+            check=True,
+        )
+
+    async def _copy_certificates(
+        self,
+        conn: asyncssh.SSHClientConnection,
+        vm_info: VMCertificateInfo,
+        remote_dir: str,
+    ) -> List[str]:
+        """
+        Copy all certificate files to remote host.
+
+        Issue #665: Extracted from _distribute_to_vm to reduce function length.
+
+        Args:
+            conn: SSH connection
+            vm_info: VM certificate information
+            remote_dir: Remote directory path
+
+        Returns:
+            List of copied file paths
+        """
+        files_copied = []
+
+        # Copy CA certificate
+        ca_remote = f"{remote_dir}/ca-cert.pem"
+        await self._copy_file(conn, self.config.ca_cert_path, ca_remote, mode="644")
+        files_copied.append(ca_remote)
+
+        # Copy service certificate
+        cert_remote = f"{remote_dir}/server-cert.pem"
+        await self._copy_file(conn, vm_info.cert_path, cert_remote, mode="644")
+        files_copied.append(cert_remote)
+
+        # Copy service key
+        key_remote = f"{remote_dir}/server-key.pem"
+        await self._copy_file(conn, vm_info.key_path, key_remote, mode="600")
+        files_copied.append(key_remote)
+
+        return files_copied
+
     async def _distribute_to_vm(
         self, vm_info: VMCertificateInfo
     ) -> DistributionResult:
-        """Distribute certificates to a single VM."""
+        """
+        Distribute certificates to a single VM.
+
+        Issue #665: Refactored to use extracted helper methods.
+        """
         logger.info(f"Distributing certificates to {vm_info.name} ({vm_info.ip})")
 
-        files_copied = []
-
         try:
-            # Connect via SSH
             async with asyncssh.connect(
                 vm_info.ip,
                 username=self.config.ssh_user,
@@ -122,52 +178,20 @@ class CertificateDistributor:
                 known_hosts=None,  # TODO: Use proper known_hosts in production
                 connect_timeout=10,
             ) as conn:
-
-                # Create remote directory
                 remote_dir = self.config.remote_cert_dir
-                await conn.run(f"sudo mkdir -p {remote_dir}", check=True)
-                await conn.run(
-                    f"sudo chown {self.config.ssh_user}:{self.config.ssh_user} {remote_dir}",
-                    check=True,
-                )
 
-                # Copy CA certificate
-                ca_remote = f"{remote_dir}/ca-cert.pem"
-                await self._copy_file(
-                    conn,
-                    self.config.ca_cert_path,
-                    ca_remote,
-                    mode="644",
-                )
-                files_copied.append(ca_remote)
+                # Prepare directory (Issue #665: uses helper)
+                await self._prepare_remote_directory(conn, remote_dir)
 
-                # Copy service certificate
-                cert_remote = f"{remote_dir}/server-cert.pem"
-                await self._copy_file(
-                    conn,
-                    vm_info.cert_path,
-                    cert_remote,
-                    mode="644",
-                )
-                files_copied.append(cert_remote)
-
-                # Copy service key
-                key_remote = f"{remote_dir}/server-key.pem"
-                await self._copy_file(
-                    conn,
-                    vm_info.key_path,
-                    key_remote,
-                    mode="600",
-                )
-                files_copied.append(key_remote)
+                # Copy all certificates (Issue #665: uses helper)
+                files_copied = await self._copy_certificates(conn, vm_info, remote_dir)
 
                 # Set final ownership to root
-                await conn.run(
-                    f"sudo chown root:root {remote_dir}/*.pem",
-                    check=True,
-                )
+                await conn.run(f"sudo chown root:root {remote_dir}/*.pem", check=True)
 
                 # Verify certificate on remote
+                ca_remote = f"{remote_dir}/ca-cert.pem"
+                cert_remote = f"{remote_dir}/server-cert.pem"
                 verify_result = await conn.run(
                     f"openssl verify -CAfile {ca_remote} {cert_remote}",
                 )

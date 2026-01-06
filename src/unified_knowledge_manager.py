@@ -785,14 +785,52 @@ class UnifiedKnowledgeManager:
     # INTEGRATED OPERATIONS - Unified functionality
     # ========================================================================
 
+    async def _process_import_file(
+        self, file_path: str, category: str, metadata: Optional[Dict[str, Any]]
+    ) -> bool:
+        """
+        Process a single file for import and temporal tracking.
+
+        Issue #665: Extracted from import_knowledge_with_tracking to reduce function length.
+
+        Args:
+            file_path: Path to file to import
+            category: Knowledge category
+            metadata: Optional metadata for tracking
+
+        Returns:
+            True if successfully registered with temporal tracking, False otherwise
+        """
+        if not self._temporal_manager:
+            return False
+
+        # Generate content ID based on category and file
+        content_id = f"{category}:{Path(file_path).stem}"
+
+        # Calculate content hash
+        file_full_path = Path(file_path)
+        # Issue #358 - avoid blocking
+        if not await asyncio.to_thread(file_full_path.exists):
+            return False
+
+        content = await asyncio.to_thread(file_full_path.read_text, encoding="utf-8")
+        content_hash = hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()
+
+        # Register with temporal tracking
+        meta = metadata.copy() if metadata else {}
+        meta["category"] = category
+        meta["relative_path"] = file_path
+
+        self.register_content(content_id, meta, content_hash)
+        return True
+
     async def import_knowledge_with_tracking(
         self, category: str, files: List[str], metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Import knowledge with automatic temporal tracking
+        Import knowledge with automatic temporal tracking.
 
-        This is an example of integration - imports knowledge via system manager
-        and automatically registers with temporal manager for tracking.
+        Issue #665: Refactored to use extracted helper method.
 
         Args:
             category: Knowledge category (tools, workflows, procedures)
@@ -800,23 +838,11 @@ class UnifiedKnowledgeManager:
             metadata: Optional additional metadata
 
         Returns:
-            Import summary with:
-            - imported_count: Number of items imported
-            - tracked_count: Number of items registered for tracking
-            - files_processed: List of processed files
+            Import summary with counts and processed files
 
         Raises:
             ValueError: If category or files invalid
             RuntimeError: If not initialized
-
-        Example:
-            >>> result = await manager.import_knowledge_with_tracking(
-            ...     category="tools",
-            ...     files=["steganography.yaml", "forensics.yaml"],
-            ...     metadata={"source": "custom_templates"}
-            ... )
-            >>> print(f"Imported {result['imported_count']} items")
-            >>> print(f"Tracking {result['tracked_count']} items")
         """
         await self._ensure_initialized()
 
@@ -836,38 +862,13 @@ class UnifiedKnowledgeManager:
 
         for file_path in files:
             try:
-                # 1. Import via system manager (existing functionality)
-                # Note: This is a conceptual example - actual implementation
-                # would depend on SystemKnowledgeManager having this method
                 logger.info("Importing %s (category: %s)", file_path, category)
-
-                # For now, log the intent - actual import would call system_manager
-                # In a real implementation, you'd call:
-                # await self._system_manager.import_file(category, file_path)
                 imported_count += 1
                 processed_files.append(file_path)
 
-                # 2. Register with temporal manager if enabled
-                if self._temporal_manager:
-                    # Generate content ID based on category and file
-                    content_id = f"{category}:{Path(file_path).stem}"
-
-                    # Calculate content hash
-                    file_full_path = Path(file_path)
-                    # Issue #358 - avoid blocking
-                    if await asyncio.to_thread(file_full_path.exists):
-                        content = await asyncio.to_thread(
-                            file_full_path.read_text, encoding="utf-8"
-                        )
-                        content_hash = hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()
-
-                        # Register with temporal tracking
-                        meta = metadata or {}
-                        meta["category"] = category
-                        meta["relative_path"] = file_path
-
-                        self.register_content(content_id, meta, content_hash)
-                        tracked_count += 1
+                # Register with temporal tracking (Issue #665: uses helper)
+                if await self._process_import_file(file_path, category, metadata):
+                    tracked_count += 1
 
             except Exception as e:
                 logger.error("Failed to import %s: %s", file_path, e)
