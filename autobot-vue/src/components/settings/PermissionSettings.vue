@@ -599,7 +599,7 @@ onMounted(async () => {
 }
 
 .form-group.flex-1 {
-  @apply flex-1;
+  flex: 1 1 0%;
 }
 
 .form-label {

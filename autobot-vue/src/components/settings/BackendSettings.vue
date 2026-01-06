@@ -36,13 +36,6 @@
       >
         Agents
       </button>
-      <button
-        :class="{ active: activeBackendSubTab === 'hardware' }"
-        @click="$emit('subtab-changed', 'hardware')"
-        aria-label="Hardware"
-      >
-        Hardware
-      </button>
     </div>
 
     <!-- General Settings Sub-tab -->
@@ -439,122 +432,6 @@
               </option>
             </select>
           </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- NEW: Hardware Settings Sub-tab -->
-    <div v-if="activeBackendSubTab === 'hardware'" class="sub-tab-content">
-      <h3>Hardware Configuration</h3>
-
-      <!-- Hardware Status Overview -->
-      <div class="hardware-status-grid">
-        <div class="hardware-card" :class="hardwareStatus.gpu.status">
-          <div class="hardware-header">
-            <i class="fas fa-microchip"></i>
-            <h4>GPU Acceleration</h4>
-          </div>
-          <div class="hardware-status">
-            <span class="status-indicator" :class="hardwareStatus.gpu.status"></span>
-            {{ hardwareStatus.gpu.message }}
-          </div>
-          <div v-if="hardwareStatus.gpu.details" class="hardware-details">
-            <div class="detail-item">
-              <span>Utilization:</span>
-              <span>{{ hardwareStatus.gpu.details.utilization || 'N/A' }}%</span>
-            </div>
-            <div class="detail-item">
-              <span>Memory:</span>
-              <span>{{ hardwareStatus.gpu.details.memory || 'N/A' }}</span>
-            </div>
-          </div>
-          <button @click="testGPU" :disabled="isTestingGPU" class="test-hardware-btn">
-            <i :class="isTestingGPU ? 'fas fa-spinner fa-spin' : 'fas fa-play'"></i>
-            {{ isTestingGPU ? 'Testing...' : 'Test GPU' }}
-          </button>
-        </div>
-
-        <div class="hardware-card" :class="hardwareStatus.npu.status">
-          <div class="hardware-header">
-            <i class="fas fa-brain"></i>
-            <h4>NPU Acceleration</h4>
-          </div>
-          <div class="hardware-status">
-            <span class="status-indicator" :class="hardwareStatus.npu.status"></span>
-            {{ hardwareStatus.npu.message }}
-          </div>
-          <div v-if="hardwareStatus.npu.details" class="hardware-details">
-            <div class="detail-item">
-              <span>Available:</span>
-              <span>{{ hardwareStatus.npu.details.available ? 'Yes' : 'No' }}</span>
-            </div>
-            <div class="detail-item">
-              <span>WSL Mode:</span>
-              <span>{{ hardwareStatus.npu.details.wsl_limitation ? 'Limited' : 'Full' }}</span>
-            </div>
-          </div>
-          <button @click="testNPU" :disabled="isTestingNPU" class="test-hardware-btn">
-            <i :class="isTestingNPU ? 'fas fa-spinner fa-spin' : 'fas fa-play'"></i>
-            {{ isTestingNPU ? 'Testing...' : 'Test NPU' }}
-          </button>
-        </div>
-
-        <div class="hardware-card" :class="hardwareStatus.memory.status">
-          <div class="hardware-header">
-            <i class="fas fa-memory"></i>
-            <h4>System Memory</h4>
-          </div>
-          <div class="hardware-status">
-            <span class="status-indicator" :class="hardwareStatus.memory.status"></span>
-            {{ hardwareStatus.memory.message }}
-          </div>
-          <div v-if="hardwareStatus.memory.details" class="hardware-details">
-            <div class="detail-item">
-              <span>Total:</span>
-              <span>{{ hardwareStatus.memory.details.total || 'N/A' }}</span>
-            </div>
-            <div class="detail-item">
-              <span>Available:</span>
-              <span>{{ hardwareStatus.memory.details.available || 'N/A' }}</span>
-            </div>
-          </div>
-          <button @click="refreshMemoryStatus" class="test-hardware-btn">
-            <i class="fas fa-sync"></i>
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      <!-- Hardware Settings -->
-      <div class="hardware-settings">
-        <div class="setting-item">
-          <label for="enable-gpu">Enable GPU Acceleration</label>
-          <input
-            id="enable-gpu"
-            type="checkbox"
-            :checked="backendSettings?.hardware?.enable_gpu || false"
-            @change="handleGeneralCheckboxChange('hardware.enable_gpu')"
-          />
-        </div>
-        <div class="setting-item">
-          <label for="enable-npu">Enable NPU Acceleration</label>
-          <input
-            id="enable-npu"
-            type="checkbox"
-            :checked="backendSettings?.hardware?.enable_npu || false"
-            @change="handleGeneralCheckboxChange('hardware.enable_npu')"
-          />
-        </div>
-        <div class="setting-item">
-          <label for="memory-limit">Memory Limit (GB)</label>
-          <input
-            id="memory-limit"
-            type="number"
-            :value="backendSettings?.hardware?.memory_limit || 8"
-            min="1"
-            max="64"
-            @input="handleGeneralNumberInputChange('hardware.memory_limit')"
-          />
         </div>
       </div>
     </div>
