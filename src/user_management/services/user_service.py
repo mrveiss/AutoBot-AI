@@ -112,6 +112,41 @@ class UserService(BaseService):
     # User CRUD Operations
     # -------------------------------------------------------------------------
 
+    async def _check_duplicate_user(
+        self, email: str, username: str, email_lower: str, username_lower: str
+    ) -> None:
+        """Issue #665: Extracted from create_user to reduce function length."""
+        existing = await self._find_by_email_or_username(email, username)
+        if existing:
+            if existing.email.lower() == email_lower:
+                raise DuplicateUserError(f"User with email '{email}' already exists")
+            raise DuplicateUserError(f"User with username '{username}' already exists")
+
+    def _build_user_object(
+        self,
+        email_lower: str,
+        username_lower: str,
+        password: Optional[str],
+        display_name: Optional[str],
+        username: str,
+        effective_org_id: Optional[uuid.UUID],
+        is_platform_admin: bool,
+    ) -> User:
+        """Issue #665: Extracted from create_user to reduce function length."""
+        return User(
+            id=uuid.uuid4(),
+            email=email_lower,
+            username=username_lower,
+            password_hash=self.hash_password(password) if password else None,
+            display_name=display_name or username,
+            org_id=effective_org_id,
+            is_platform_admin=is_platform_admin,
+            is_active=True,
+            is_verified=False,
+            mfa_enabled=False,
+            preferences={},
+        )
+
     async def create_user(
         self,
         email: str,
@@ -140,48 +175,28 @@ class UserService(BaseService):
         Raises:
             DuplicateUserError: If email or username already exists
         """
-        # Check for duplicates - cache lower() values to avoid repeated calls
         email_lower = email.lower()
         username_lower = username.lower()
-        existing = await self._find_by_email_or_username(email, username)
-        if existing:
-            if existing.email.lower() == email_lower:
-                raise DuplicateUserError(f"User with email '{email}' already exists")
-            raise DuplicateUserError(f"User with username '{username}' already exists")
+        await self._check_duplicate_user(email, username, email_lower, username_lower)
 
-        # Use provided org_id or context org_id
         effective_org_id = org_id or self.context.org_id
-
-        # Create user (reuse cached lowercase values)
-        user = User(
-            id=uuid.uuid4(),
-            email=email_lower,
-            username=username_lower,
-            password_hash=self.hash_password(password) if password else None,
-            display_name=display_name or username,
-            org_id=effective_org_id,
-            is_platform_admin=is_platform_admin,
-            is_active=True,
-            is_verified=False,
-            mfa_enabled=False,
-            preferences={},
+        user = self._build_user_object(
+            email_lower, username_lower, password, display_name,
+            username, effective_org_id, is_platform_admin
         )
 
         self.session.add(user)
         await self.session.flush()
 
-        # Assign roles if provided
         if role_ids:
             await self._assign_roles(user.id, role_ids)
 
-        # Audit log
         await self._audit_log(
             action=AuditAction.USER_CREATED,
             resource_type=AuditResourceType.USER,
             resource_id=user.id,
             details={
-                "email": email,
-                "username": username,
+                "email": email, "username": username,
                 "org_id": str(effective_org_id) if effective_org_id else None,
                 "is_platform_admin": is_platform_admin,
             },
@@ -546,6 +561,46 @@ class UserService(BaseService):
     # Authentication
     # -------------------------------------------------------------------------
 
+    async def _log_auth_failure(
+        self,
+        reason: str,
+        ip_address: Optional[str],
+        user_id: Optional[uuid.UUID] = None,
+        username_or_email: Optional[str] = None,
+    ) -> None:
+        """Issue #665: Extracted from authenticate to reduce function length."""
+        details = {"reason": reason, "ip_address": ip_address}
+        if username_or_email:
+            details["username_or_email"] = username_or_email
+        await self._audit_log(
+            action=AuditAction.LOGIN_FAILED,
+            resource_type=AuditResourceType.USER,
+            resource_id=user_id,
+            details=details,
+        )
+
+    async def _lookup_user_for_auth(self, username_or_email: str) -> Optional[User]:
+        """Issue #665: Extracted from authenticate to reduce function length."""
+        user = await self.get_user_by_email(username_or_email)
+        if not user:
+            user = await self.get_user_by_username(username_or_email)
+        return user
+
+    async def _validate_user_can_login(
+        self, user: User, password: str, ip_address: Optional[str]
+    ) -> bool:
+        """Issue #665: Extracted from authenticate to reduce function length."""
+        if not user.is_active:
+            await self._log_auth_failure("account_inactive", ip_address, user.id)
+            return False
+        if not user.password_hash:
+            await self._log_auth_failure("no_password_set", ip_address, user.id)
+            return False
+        if not self.verify_password(password, user.password_hash):
+            await self._log_auth_failure("invalid_password", ip_address, user.id)
+            return False
+        return True
+
     async def authenticate(
         self,
         username_or_email: str,
@@ -563,49 +618,14 @@ class UserService(BaseService):
         Returns:
             User instance if authenticated, None otherwise
         """
-        # Try email first, then username
-        user = await self.get_user_by_email(username_or_email)
+        user = await self._lookup_user_for_auth(username_or_email)
         if not user:
-            user = await self.get_user_by_username(username_or_email)
-
-        if not user:
-            await self._audit_log(
-                action=AuditAction.LOGIN_FAILED,
-                resource_type=AuditResourceType.USER,
-                resource_id=None,
-                details={
-                    "username_or_email": username_or_email,
-                    "reason": "user_not_found",
-                    "ip_address": ip_address,
-                },
+            await self._log_auth_failure(
+                "user_not_found", ip_address, username_or_email=username_or_email
             )
             return None
 
-        if not user.is_active:
-            await self._audit_log(
-                action=AuditAction.LOGIN_FAILED,
-                resource_type=AuditResourceType.USER,
-                resource_id=user.id,
-                details={"reason": "account_inactive", "ip_address": ip_address},
-            )
-            return None
-
-        if not user.password_hash:
-            await self._audit_log(
-                action=AuditAction.LOGIN_FAILED,
-                resource_type=AuditResourceType.USER,
-                resource_id=user.id,
-                details={"reason": "no_password_set", "ip_address": ip_address},
-            )
-            return None
-
-        if not self.verify_password(password, user.password_hash):
-            await self._audit_log(
-                action=AuditAction.LOGIN_FAILED,
-                resource_type=AuditResourceType.USER,
-                resource_id=user.id,
-                details={"reason": "invalid_password", "ip_address": ip_address},
-            )
+        if not await self._validate_user_can_login(user, password, ip_address):
             return None
 
         # Update last login
@@ -618,7 +638,6 @@ class UserService(BaseService):
             resource_id=user.id,
             details={"ip_address": ip_address},
         )
-
         return user
 
     # -------------------------------------------------------------------------

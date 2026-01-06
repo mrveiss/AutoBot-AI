@@ -53,85 +53,85 @@ class MarkdownReferenceSystem:
         logger.info("Docs root: %s", self.docs_root)
         logger.info("Knowledge root: %s", self.knowledge_root)
 
-    def _init_markdown_tables(self):
+    def _create_documents_table(self, conn: sqlite3.Connection) -> None:
+        """Issue #665: Extracted from _init_markdown_tables to reduce function length."""
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS markdown_documents (
+                file_path TEXT PRIMARY KEY,
+                file_name TEXT NOT NULL,
+                directory TEXT NOT NULL,
+                content_hash TEXT NOT NULL,
+                word_count INTEGER,
+                created_at TIMESTAMP NOT NULL,
+                last_modified TIMESTAMP NOT NULL,
+                last_scanned TIMESTAMP NOT NULL,
+                document_type TEXT,
+                tags TEXT,
+                metadata_json TEXT
+            )
+        """
+        )
+
+    def _create_cross_references_table(self, conn: sqlite3.Connection) -> None:
+        """Issue #665: Extracted from _init_markdown_tables to reduce function length."""
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS markdown_cross_references (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_file TEXT NOT NULL,
+                target_file TEXT NOT NULL,
+                reference_type TEXT NOT NULL,
+                context_text TEXT,
+                line_number INTEGER,
+                created_at TIMESTAMP NOT NULL,
+                FOREIGN KEY (source_file) REFERENCES markdown_documents(file_path),
+                FOREIGN KEY (target_file) REFERENCES markdown_documents(file_path)
+            )
+        """
+        )
+
+    def _create_sections_table(self, conn: sqlite3.Connection) -> None:
+        """Issue #665: Extracted from _init_markdown_tables to reduce function length."""
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS markdown_sections (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                file_path TEXT NOT NULL,
+                section_title TEXT NOT NULL,
+                section_level INTEGER NOT NULL,
+                content_text TEXT,
+                content_hash TEXT NOT NULL,
+                start_line INTEGER,
+                end_line INTEGER,
+                created_at TIMESTAMP NOT NULL,
+                FOREIGN KEY (file_path) REFERENCES markdown_documents(file_path)
+            )
+        """
+        )
+
+    def _create_markdown_indexes(self, conn: sqlite3.Connection) -> None:
+        """Issue #665: Extracted from _init_markdown_tables to reduce function length."""
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_markdown_hash ON markdown_documents(content_hash)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_markdown_type ON markdown_documents(document_type)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_cross_ref_source ON markdown_cross_references(source_file)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sections_file ON markdown_sections(file_path)"
+        )
+
+    def _init_markdown_tables(self) -> None:
         """Initialize additional SQLite tables for markdown management"""
         with sqlite3.connect(self.memory_manager.db_path) as conn:
-            # Table for tracking markdown documents
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS markdown_documents (
-                    file_path TEXT PRIMARY KEY,
-                    file_name TEXT NOT NULL,
-                    directory TEXT NOT NULL,
-                    content_hash TEXT NOT NULL,
-                    word_count INTEGER,
-                    created_at TIMESTAMP NOT NULL,
-                    last_modified TIMESTAMP NOT NULL,
-                    last_scanned TIMESTAMP NOT NULL,
-                    document_type TEXT,
-                    tags TEXT,  -- JSON array of tags
-                    metadata_json TEXT
-                )
-            """
-            )
-
-            # Table for cross-references between markdown documents
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS markdown_cross_references (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    source_file TEXT NOT NULL,
-                    target_file TEXT NOT NULL,
-                    reference_type TEXT NOT NULL,  -- link, mention, include, etc.
-                    context_text TEXT,
-                    line_number INTEGER,
-                    created_at TIMESTAMP NOT NULL,
-                    FOREIGN KEY (source_file) REFERENCES markdown_documents(file_path),
-                    FOREIGN KEY (target_file) REFERENCES markdown_documents(file_path)
-                )
-            """
-            )
-
-            # Table for markdown content sections
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS markdown_sections (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    file_path TEXT NOT NULL,
-                    section_title TEXT NOT NULL,
-                    section_level INTEGER NOT NULL,
-                    content_text TEXT,
-                    content_hash TEXT NOT NULL,
-                    start_line INTEGER,
-                    end_line INTEGER,
-                    created_at TIMESTAMP NOT NULL,
-                    FOREIGN KEY (file_path) REFERENCES markdown_documents(file_path)
-                )
-            """
-            )
-
-            # Indexes for performance
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_markdown_hash ON markdown_documents(content_hash)
-            """
-            )
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_markdown_type ON markdown_documents(document_type)
-            """
-            )
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_cross_ref_source ON markdown_cross_references(source_file)
-            """
-            )
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_sections_file ON markdown_sections(file_path)
-            """
-            )
-
+            self._create_documents_table(conn)
+            self._create_cross_references_table(conn)
+            self._create_sections_table(conn)
+            self._create_markdown_indexes(conn)
             conn.commit()
 
     def scan_markdown_directory(

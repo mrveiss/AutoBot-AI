@@ -156,6 +156,55 @@ class NaturalLanguageProcessor:
             "takeover": self._get_takeover_patterns(),
         }
 
+    def _build_analysis_result(
+        self,
+        command_type: VoiceCommand,
+        intent: str,
+        entities: Dict[str, Any],
+        parameters: Dict[str, Any],
+        confidence: float,
+        suggested_actions: List[str],
+        requires_confirmation: bool,
+        context_needed: bool,
+    ) -> VoiceCommandAnalysis:
+        """Issue #665: Extracted from analyze_voice_command to reduce function length."""
+        command_id = f"voice_cmd_{int(time.time())}"
+        return VoiceCommandAnalysis(
+            command_id=command_id,
+            command_type=command_type,
+            intent=intent,
+            entities=entities,
+            parameters=parameters,
+            confidence=confidence,
+            suggested_actions=suggested_actions,
+            requires_confirmation=requires_confirmation,
+            context_needed=context_needed,
+        )
+
+    def _log_analysis_outputs(
+        self,
+        task_context: Any,
+        command_type: VoiceCommand,
+        intent: str,
+        confidence: float,
+        entities: Dict[str, Any],
+        suggested_actions: List[str],
+    ) -> None:
+        """Issue #665: Extracted from analyze_voice_command to reduce function length."""
+        task_context.set_outputs(
+            {
+                "command_type": command_type.value,
+                "intent": intent,
+                "confidence": confidence,
+                "entities_count": len(entities),
+                "actions_count": len(suggested_actions),
+            }
+        )
+        logger.info(
+            f"Voice command analyzed: {command_type.value} - {intent} "
+            f"(confidence: {confidence:.2f})"
+        )
+
     async def analyze_voice_command(
         self, transcription: str, context: Optional[Dict[str, Any]] = None
     ) -> VoiceCommandAnalysis:
@@ -170,67 +219,32 @@ class NaturalLanguageProcessor:
         ) as task_context:
             try:
                 # Step 1: Classify command type first (required for subsequent steps)
-                (
-                    command_type,
-                    classification_confidence,
-                ) = await self._classify_command_type(transcription)
+                command_type, classification_confidence = await self._classify_command_type(transcription)
 
-                # Step 2: Extract intent and entities in parallel (both only need command_type)
+                # Step 2: Extract intent and entities in parallel
                 intent, entities = await asyncio.gather(
                     self._extract_intent(transcription, command_type),
                     self._extract_entities(transcription, command_type),
                 )
 
                 # Step 3: Extract parameters (depends on entities from step 2)
-                parameters = await self._extract_parameters(
-                    transcription, command_type, entities
-                )
+                parameters = await self._extract_parameters(transcription, command_type, entities)
 
-                # Step 4: Run final checks in parallel (all depend on intent/parameters)
-                (
-                    requires_confirmation,
-                    context_needed,
-                    suggested_actions,
-                ) = await asyncio.gather(
+                # Step 4: Run final checks in parallel
+                requires_confirmation, context_needed, suggested_actions = await asyncio.gather(
                     self._requires_confirmation(command_type, intent, parameters),
                     self._needs_context(command_type, intent, parameters, context),
-                    self._generate_suggested_actions(
-                        command_type, intent, entities, parameters
-                    ),
+                    self._generate_suggested_actions(command_type, intent, entities, parameters),
                 )
 
-                # Calculate overall confidence
-                overall_confidence = (
-                    classification_confidence * 0.8
-                )  # Weight by classification confidence
-
-                command_id = f"voice_cmd_{int(time.time())}"
-
-                analysis = VoiceCommandAnalysis(
-                    command_id=command_id,
-                    command_type=command_type,
-                    intent=intent,
-                    entities=entities,
-                    parameters=parameters,
-                    confidence=overall_confidence,
-                    suggested_actions=suggested_actions,
-                    requires_confirmation=requires_confirmation,
-                    context_needed=context_needed,
+                # Build result and log outputs
+                confidence = classification_confidence * 0.8
+                analysis = self._build_analysis_result(
+                    command_type, intent, entities, parameters, confidence,
+                    suggested_actions, requires_confirmation, context_needed,
                 )
-
-                task_context.set_outputs(
-                    {
-                        "command_type": command_type.value,
-                        "intent": intent,
-                        "confidence": overall_confidence,
-                        "entities_count": len(entities),
-                        "actions_count": len(suggested_actions),
-                    }
-                )
-
-                logger.info(
-                    f"Voice command analyzed: {command_type.value} - {intent} "
-                    f"(confidence: {overall_confidence:.2f})"
+                self._log_analysis_outputs(
+                    task_context, command_type, intent, confidence, entities, suggested_actions
                 )
                 return analysis
 

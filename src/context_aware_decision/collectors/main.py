@@ -44,11 +44,66 @@ class ContextCollector:
 
         logger.info("Context Collector initialized")
 
+    async def _gather_all_context_elements(
+        self, decision_type: DecisionType
+    ) -> List[ContextElement]:
+        """Issue #665: Extracted from collect_comprehensive_context to reduce function length.
+
+        Collects context from all sources in parallel and combines them.
+
+        Args:
+            decision_type: Type of decision being made
+
+        Returns:
+            Combined list of all context elements
+        """
+        visual, audio, system, historical, environmental = await asyncio.gather(
+            self.visual_collector.collect(),
+            self.audio_collector.collect(),
+            self.system_collector.collect(),
+            self._collect_historical_context(decision_type),
+            self._collect_environmental_context(),
+        )
+        return [*visual, *audio, *system, *historical, *environmental]
+
+    async def _analyze_context_elements(
+        self, decision_type: DecisionType, context_elements: List[ContextElement]
+    ) -> Dict[str, Any]:
+        """Issue #665: Extracted from collect_comprehensive_context to reduce function length.
+
+        Performs parallel analysis of context elements.
+
+        Args:
+            decision_type: Type of decision being made
+            context_elements: Collected context elements
+
+        Returns:
+            Dict with constraints, available_actions, risk_factors,
+            user_preferences, historical_patterns, system_state
+        """
+        constraints, available_actions, risk_factors = await asyncio.gather(
+            self._identify_constraints(decision_type, context_elements),
+            self._identify_available_actions(decision_type, context_elements),
+            self._assess_risk_factors(context_elements),
+        )
+        user_preferences, historical_patterns, system_state = await asyncio.gather(
+            self._get_user_preferences(decision_type),
+            self._analyze_historical_patterns(decision_type),
+            self._get_current_system_state(),
+        )
+        return {
+            "constraints": constraints,
+            "available_actions": available_actions,
+            "risk_factors": risk_factors,
+            "user_preferences": user_preferences,
+            "historical_patterns": historical_patterns,
+            "system_state": system_state,
+        }
+
     async def collect_comprehensive_context(
         self, decision_type: DecisionType, primary_goal: str
     ) -> DecisionContext:
         """Collect comprehensive context for decision making."""
-
         async with task_tracker.track_task(
             "Context Collection",
             f"Collecting context for {decision_type.value} decision",
@@ -58,77 +113,29 @@ class ContextCollector:
         ) as task_context:
             try:
                 decision_id = f"decision_{self.time_provider.current_timestamp_millis()}"
+                context_elements = await self._gather_all_context_elements(decision_type)
+                analysis = await self._analyze_context_elements(decision_type, context_elements)
 
-                # Issue #619: Parallelize all independent context collection
-                (
-                    visual_context,
-                    audio_context,
-                    system_context,
-                    historical_context,
-                    environmental_context,
-                ) = await asyncio.gather(
-                    self.visual_collector.collect(),
-                    self.audio_collector.collect(),
-                    self.system_collector.collect(),
-                    self._collect_historical_context(decision_type),
-                    self._collect_environmental_context(),
-                )
-
-                # Combine all context elements
-                context_elements = []
-                context_elements.extend(visual_context)
-                context_elements.extend(audio_context)
-                context_elements.extend(system_context)
-                context_elements.extend(historical_context)
-                context_elements.extend(environmental_context)
-
-                # Issue #619: Parallelize independent context analysis operations
-                # First batch: constraints, actions, risk factors (all use context_elements)
-                constraints, available_actions, risk_factors = await asyncio.gather(
-                    self._identify_constraints(decision_type, context_elements),
-                    self._identify_available_actions(decision_type, context_elements),
-                    self._assess_risk_factors(context_elements),
-                )
-
-                # Second batch: user prefs, historical patterns, system state (independent)
-                user_preferences, historical_patterns, system_state = await asyncio.gather(
-                    self._get_user_preferences(decision_type),
-                    self._analyze_historical_patterns(decision_type),
-                    self._get_current_system_state(),
-                )
-
-                # Create decision context
                 decision_context = DecisionContext(
                     decision_id=decision_id,
                     decision_type=decision_type,
                     primary_goal=primary_goal,
                     context_elements=context_elements,
-                    constraints=constraints,
-                    available_actions=available_actions,
-                    risk_factors=risk_factors,
-                    user_preferences=user_preferences,
-                    system_state=system_state,
-                    historical_patterns=historical_patterns,
                     timestamp=self.time_provider.current_timestamp(),
+                    **analysis,
                 )
 
-                # Update context cache
                 self._update_context_cache(context_elements)
-
-                task_context.set_outputs(
-                    {
-                        "context_elements": len(context_elements),
-                        "available_actions": len(available_actions),
-                        "constraints": len(constraints),
-                        "risk_factors": len(risk_factors),
-                    }
-                )
-
+                task_context.set_outputs({
+                    "context_elements": len(context_elements),
+                    "available_actions": len(analysis["available_actions"]),
+                    "constraints": len(analysis["constraints"]),
+                    "risk_factors": len(analysis["risk_factors"]),
+                })
                 logger.info(
                     f"Context collected: {len(context_elements)} elements for decision {decision_id}"
                 )
                 return decision_context
-
             except Exception as e:
                 task_context.set_outputs({"error": str(e)})
                 logger.error("Context collection failed: %s", e)

@@ -48,9 +48,55 @@ _npu_warmup_complete: bool = False
 _npu_warmup_time_ms: float = 0.0
 
 
-async def warmup_npu_connection() -> Dict[str, Any]:
+def _init_warmup_result() -> Dict[str, Any]:
+    """Issue #665: Extracted from warmup_npu_connection to reduce function length.
+
+    Initialize the warmup result dictionary with default values.
+
+    Returns:
+        Dict with default warmup status values
     """
-    Warm up the NPU worker connection by performing a test embedding.
+    return {
+        "status": "skipped",
+        "npu_available": False,
+        "warmup_time_ms": 0.0,
+        "message": "",
+    }
+
+
+def _update_warmup_cache(client: Any, warmup_time: float) -> None:
+    """Issue #665: Extracted from warmup_npu_connection to reduce function length."""
+    global _npu_warmup_complete, _npu_warmup_time_ms
+    global _npu_client_cache, _npu_available_cache, _npu_cache_timestamp
+    import time
+    _npu_warmup_time_ms = warmup_time
+    _npu_warmup_complete = True
+    _npu_client_cache = client
+    _npu_available_cache = True
+    _npu_cache_timestamp = time.time()
+
+
+async def _build_warmup_success_result(
+    embedding: List[float], warmup_time: float, client: Any
+) -> Dict[str, Any]:
+    """Issue #665: Extracted from warmup_npu_connection to reduce function length."""
+    result = {
+        "status": "success", "npu_available": True, "warmup_time_ms": warmup_time,
+        "embedding_dimensions": len(embedding),
+        "message": f"NPU connection warmed up in {warmup_time:.1f}ms",
+    }
+    try:
+        device_info = await client.get_device_info()
+        if device_info:
+            result.update(device=device_info.device_name, is_npu=device_info.is_npu, is_gpu=device_info.is_gpu)
+    except Exception:
+        pass  # Non-critical device info
+    logger.info("NPU warmup complete: %d dimensions in %.1fms", len(embedding), warmup_time)
+    return result
+
+
+async def warmup_npu_connection() -> Dict[str, Any]:
+    """Warm up the NPU worker connection by performing a test embedding.
 
     Issue #165: Called during backend startup (Phase 2) to eliminate
     first-request latency. Pre-initializes the HTTP connection pool
@@ -59,76 +105,29 @@ async def warmup_npu_connection() -> Dict[str, Any]:
     Returns:
         Dict with warmup status and timing information
     """
-    global _npu_warmup_complete, _npu_warmup_time_ms
-    global _npu_client_cache, _npu_available_cache, _npu_cache_timestamp
-
     import time
     start_time = time.time()
-
-    result = {
-        "status": "skipped",
-        "npu_available": False,
-        "warmup_time_ms": 0.0,
-        "message": "",
-    }
+    result = _init_warmup_result()
 
     try:
         from backend.services.npu_client import get_npu_client
-
-        # Get client and check availability
         client = get_npu_client()
-        is_available = await client.is_available(force_check=True)
-
-        if not is_available:
-            result["status"] = "npu_unavailable"
-            result["message"] = "NPU worker not available, will use fallback"
+        if not await client.is_available(force_check=True):
+            result.update(status="npu_unavailable", message="NPU worker not available, will use fallback")
             logger.info("NPU warmup: Worker not available")
             return result
 
-        # Perform test embedding to warm up model and connection
-        test_text = "NPU warmup test embedding for connection initialization"
-        embedding = await client.generate_embedding(test_text)
-
+        embedding = await client.generate_embedding("NPU warmup test embedding for connection initialization")
         warmup_time = (time.time() - start_time) * 1000
-        _npu_warmup_time_ms = warmup_time
-        _npu_warmup_complete = True
-
-        # Update cache with verified availability
-        _npu_client_cache = client
-        _npu_available_cache = True
-        _npu_cache_timestamp = time.time()
+        _update_warmup_cache(client, warmup_time)
 
         if embedding and len(embedding) > 0:
-            result["status"] = "success"
-            result["npu_available"] = True
-            result["warmup_time_ms"] = warmup_time
-            result["embedding_dimensions"] = len(embedding)
-            result["message"] = f"NPU connection warmed up in {warmup_time:.1f}ms"
-
-            # Get device info for diagnostics
-            try:
-                device_info = await client.get_device_info()
-                if device_info:
-                    result["device"] = device_info.device_name
-                    result["is_npu"] = device_info.is_npu
-                    result["is_gpu"] = device_info.is_gpu
-            except Exception:
-                pass  # Non-critical device info
-
-            logger.info(
-                "NPU warmup complete: %d dimensions in %.1fms",
-                len(embedding), warmup_time
-            )
+            result = await _build_warmup_success_result(embedding, warmup_time, client)
         else:
-            result["status"] = "empty_embedding"
-            result["message"] = "NPU returned empty embedding during warmup"
+            result.update(status="empty_embedding", message="NPU returned empty embedding during warmup")
             logger.warning("NPU warmup returned empty embedding")
-
     except Exception as e:
-        warmup_time = (time.time() - start_time) * 1000
-        result["status"] = "error"
-        result["warmup_time_ms"] = warmup_time
-        result["message"] = f"NPU warmup failed: {e}"
+        result.update(status="error", warmup_time_ms=(time.time() - start_time) * 1000, message=f"NPU warmup failed: {e}")
         logger.warning("NPU warmup failed: %s", e)
 
     return result
