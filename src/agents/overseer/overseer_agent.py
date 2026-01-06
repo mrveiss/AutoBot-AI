@@ -36,6 +36,60 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 
+def _build_previous_context(
+    task: AgentTask, completed_results: Dict[str, StepResult]
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Gather context from previous steps for a task.
+
+    Issue #665: Extracted from orchestrate_execution to reduce function length.
+
+    Args:
+        task: The current task being executed
+        completed_results: Results from previously completed steps
+
+    Returns:
+        Dictionary of previous task outputs keyed by task_id
+    """
+    previous_context = {}
+    if task.step_number > 1:
+        for prev_task_id, prev_result in completed_results.items():
+            if prev_result.output:
+                previous_context[prev_task_id] = {
+                    "command": prev_result.command,
+                    "output": prev_result.output,
+                    "return_code": prev_result.return_code,
+                }
+    return previous_context
+
+
+def _build_error_update(
+    plan_id: str, task: AgentTask, error_message: str
+) -> OverseerUpdate:
+    """
+    Build an OverseerUpdate for error conditions.
+
+    Issue #665: Extracted from orchestrate_execution to reduce function length.
+
+    Args:
+        plan_id: The plan ID
+        task: The task that failed
+        error_message: The error message
+
+    Returns:
+        OverseerUpdate with error details
+    """
+    return OverseerUpdate(
+        update_type="error",
+        plan_id=plan_id,
+        task_id=task.task_id,
+        step_number=task.step_number,
+        total_steps=task.total_steps,
+        status="failed",
+        content={"error": error_message},
+    )
+
+
 class OverseerAgent:
     """
     Decomposes user queries into sequential executable tasks.
@@ -304,28 +358,14 @@ Examples:
                         "[OverseerAgent] Step %d has unmet dependencies: %s",
                         task.step_number, missing_deps
                     )
-                    yield OverseerUpdate(
-                        update_type="error",
-                        plan_id=plan.plan_id,
-                        task_id=task.task_id,
-                        step_number=task.step_number,
-                        total_steps=task.total_steps,
-                        status="failed",
-                        content={"error": f"Unmet dependencies: {missing_deps}"},
+                    # Issue #665: Uses helper for error update
+                    yield _build_error_update(
+                        plan.plan_id, task, f"Unmet dependencies: {missing_deps}"
                     )
                     continue
 
-            # Gather context from previous steps for this task
-            previous_context = {}
-            if task.step_number > 1:
-                # Get outputs from all previous steps as context
-                for prev_task_id, prev_result in completed_results.items():
-                    if prev_result.output:
-                        previous_context[prev_task_id] = {
-                            "command": prev_result.command,
-                            "output": prev_result.output,
-                            "return_code": prev_result.return_code,
-                        }
+            # Gather context from previous steps (Issue #665: uses helper)
+            previous_context = _build_previous_context(task, completed_results)
 
             # Yield step start with dependency context
             yield OverseerUpdate(
@@ -377,18 +417,11 @@ Examples:
                         )
 
             except Exception as e:
+                # Issue #665: Uses helper for error update
                 logger.error(
                     "[OverseerAgent] Step %d failed: %s", task.step_number, e
                 )
-                yield OverseerUpdate(
-                    update_type="error",
-                    plan_id=plan.plan_id,
-                    task_id=task.task_id,
-                    step_number=task.step_number,
-                    total_steps=task.total_steps,
-                    status="failed",
-                    content={"error": str(e)},
-                )
+                yield _build_error_update(plan.plan_id, task, str(e))
                 # Continue to next step or abort based on error severity
                 # For now, we continue
 

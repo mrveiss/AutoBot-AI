@@ -78,6 +78,77 @@ SAFE_COMMANDS: Set[str] = {
 }
 
 
+def _build_no_command_result(task: "AgentTask", execution_time: float) -> StepResult:
+    """
+    Build StepResult for steps with no command to execute.
+
+    Issue #665: Extracted from execute_step to reduce function length.
+    """
+    return StepResult(
+        task_id=task.task_id,
+        step_number=task.step_number,
+        total_steps=task.total_steps,
+        status=StepStatus.COMPLETED,
+        command=None,
+        command_explanation=None,
+        output="No command to execute for this step.",
+        output_explanation=OutputExplanation(
+            summary="This step did not require command execution.",
+            key_findings=[task.description],
+        ),
+        execution_time=execution_time,
+    )
+
+
+def _build_blocked_command_result(
+    task: "AgentTask", safety_reason: Optional[str], execution_time: float
+) -> StepResult:
+    """
+    Build StepResult for commands blocked by security validation.
+
+    Issue #665: Extracted from execute_step to reduce function length.
+    """
+    return StepResult(
+        task_id=task.task_id,
+        step_number=task.step_number,
+        total_steps=task.total_steps,
+        status=StepStatus.FAILED,
+        command=task.command,
+        command_explanation=None,
+        output=f"Command blocked: {safety_reason}",
+        output_explanation=OutputExplanation(
+            summary="This command was blocked for security reasons.",
+            key_findings=[safety_reason or "Dangerous operation detected"],
+        ),
+        return_code=-1,
+        execution_time=execution_time,
+        error=safety_reason,
+    )
+
+
+def _build_execution_error_result(
+    task: "AgentTask", error: Exception, execution_time: float
+) -> StepResult:
+    """
+    Build StepResult for command execution failures.
+
+    Issue #665: Extracted from execute_step to reduce function length.
+    """
+    return StepResult(
+        task_id=task.task_id,
+        step_number=task.step_number,
+        total_steps=task.total_steps,
+        status=StepStatus.FAILED,
+        command=task.command,
+        command_explanation=None,
+        output=f"Error: {error}",
+        output_explanation=None,
+        return_code=-1,
+        execution_time=execution_time,
+        error=str(error),
+    )
+
+
 class StepExecutorAgent:
     """
     Executes a single task and provides two-part explanations.
@@ -186,45 +257,17 @@ class StepExecutorAgent:
             task.description,
         )
 
-        # If no command, just return a completed status
+        # If no command, just return a completed status (Issue #665: uses helper)
         if not task.command:
-            yield StepResult(
-                task_id=task.task_id,
-                step_number=task.step_number,
-                total_steps=task.total_steps,
-                status=StepStatus.COMPLETED,
-                command=None,
-                command_explanation=None,
-                output="No command to execute for this step.",
-                output_explanation=OutputExplanation(
-                    summary="This step did not require command execution.",
-                    key_findings=[task.description],
-                ),
-                execution_time=time.time() - start_time,
-            )
+            yield _build_no_command_result(task, time.time() - start_time)
             return
 
-        # Security: Validate command before execution
+        # Security: Validate command before execution (Issue #665: uses helper)
         is_safe, safety_reason = self._validate_command(task.command)
         if not is_safe:
             task.status = StepStatus.FAILED
             task.error = safety_reason
-            yield StepResult(
-                task_id=task.task_id,
-                step_number=task.step_number,
-                total_steps=task.total_steps,
-                status=StepStatus.FAILED,
-                command=task.command,
-                command_explanation=None,
-                output=f"Command blocked: {safety_reason}",
-                output_explanation=OutputExplanation(
-                    summary="This command was blocked for security reasons.",
-                    key_findings=[safety_reason or "Dangerous operation detected"],
-                ),
-                return_code=-1,
-                execution_time=time.time() - start_time,
-                error=safety_reason,
-            )
+            yield _build_blocked_command_result(task, safety_reason, time.time() - start_time)
             return
 
         # Phase 1: Execute command in terminal with streaming output
@@ -257,23 +300,11 @@ class StepExecutorAgent:
                             pass
 
         except Exception as e:
+            # Issue #665: Uses helper for error result
             logger.error("[StepExecutor] Command execution failed: %s", e)
             task.status = StepStatus.FAILED
             task.error = str(e)
-
-            yield StepResult(
-                task_id=task.task_id,
-                step_number=task.step_number,
-                total_steps=task.total_steps,
-                status=StepStatus.FAILED,
-                command=task.command,
-                command_explanation=None,
-                output=f"Error: {e}",
-                output_explanation=None,
-                return_code=-1,
-                execution_time=time.time() - start_time,
-                error=str(e),
-            )
+            yield _build_execution_error_result(task, e, time.time() - start_time)
             return
 
         # Combine all output
