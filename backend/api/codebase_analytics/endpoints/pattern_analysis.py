@@ -476,7 +476,7 @@ async def get_regex_opportunities(
 async def get_complexity_hotspots(
     path: str = Query(default=str(PATH.PROJECT_ROOT), description="Path to analyze"),
     limit: int = Query(default=20, ge=1, le=100, description="Maximum results"),
-    min_complexity: int = Query(default=10, ge=1, description="Minimum cyclomatic complexity"),
+    min_complexity: int = Query(default=QueryDefaults.DEFAULT_SEARCH_LIMIT, ge=1, description="Minimum cyclomatic complexity"),
 ) -> List[Dict[str, Any]]:
     """Get complexity hotspots in the codebase.
 
@@ -777,7 +777,7 @@ async def clear_pattern_storage() -> Dict[str, str]:
 async def search_similar_patterns_endpoint(
     code: str = Query(..., description="Code snippet to find similar patterns for"),
     pattern_type: Optional[str] = Query(None, description="Filter by pattern type"),
-    limit: int = Query(default=10, ge=1, le=50, description="Maximum results"),
+    limit: int = Query(default=QueryDefaults.DEFAULT_SEARCH_LIMIT, ge=1, le=50, description="Maximum results"),
 ) -> List[Dict[str, Any]]:
     """Search for similar patterns using vector similarity.
 

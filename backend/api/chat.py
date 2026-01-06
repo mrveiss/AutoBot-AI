@@ -37,6 +37,7 @@ from backend.utils.chat_utils import (
 # Import shared exception classes (Issue #292 - Eliminate duplicate code)
 from backend.utils.chat_exceptions import get_exceptions_lazy
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.constants.threshold_constants import CategoryDefaults
 
 # Import models - DISABLED: Models don't exist yet
 # from src.models.conversation import ConversationModel
@@ -298,7 +299,7 @@ class ChatMessage(BaseModel):
         ..., min_length=1, max_length=50000, description="Message content"
     )
     role: str = Field(
-        default="user", pattern="^(user|assistant|system)$", description="Message role"
+        default=CategoryDefaults.ROLE_USER, pattern="^(user|assistant|system)$", description="Message role"
     )
     session_id: Optional[str] = Field(None, description="Chat session ID")
     message_type: Optional[str] = Field("text", description="Message type")
@@ -311,7 +312,7 @@ class ChatResponse(BaseModel):
     """Chat response model"""
 
     content: str
-    role: str = "assistant"
+    role: str = CategoryDefaults.ROLE_ASSISTANT
     session_id: str
     message_id: str
     timestamp: datetime

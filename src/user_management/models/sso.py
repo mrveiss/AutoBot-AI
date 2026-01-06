@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from src.constants.threshold_constants import CategoryDefaults
 
 from src.user_management.models.base import Base, TimestampMixin
 
@@ -110,7 +111,7 @@ class SSOProvider(Base, TimestampMixin):
     default_role: Mapped[Optional[str]] = mapped_column(
         String(100),
         nullable=True,
-        default="user",
+        default=CategoryDefaults.ROLE_USER,
     )
 
     # Group/team mapping configuration

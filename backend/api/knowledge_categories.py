@@ -129,7 +129,7 @@ async def create_category(
 @router.get("/categories/tree")
 async def get_category_tree(
     root_id: Optional[str] = Query(default=None, description="Start from specific category"),
-    max_depth: int = Query(default=10, ge=1, le=20, description="Maximum tree depth"),
+    max_depth: int = Query(default=QueryDefaults.DEFAULT_SEARCH_LIMIT, ge=1, le=20, description="Maximum tree depth"),
     include_fact_counts: bool = Query(default=True, description="Include fact counts"),
     req: Request = None,
 ):

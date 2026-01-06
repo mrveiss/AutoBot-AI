@@ -35,6 +35,7 @@ from typing import List, Optional
 from backend.type_defs.common import JSONObject, Metadata
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
+from src.constants.threshold_constants import QueryDefaults
 
 from src.config.ssot_config import PROJECT_ROOT
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
@@ -378,7 +379,7 @@ class GitLogRequest(BaseModel):
         description="Repository path",
     )
     max_count: Optional[int] = Field(
-        default=10,
+        default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
         ge=1,
         le=MAX_LOG_ENTRIES,
         description=f"Maximum number of commits (1-{MAX_LOG_ENTRIES})",

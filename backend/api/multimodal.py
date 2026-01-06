@@ -17,6 +17,7 @@ from backend.type_defs.common import Metadata
 import torch
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
+from src.constants.threshold_constants import QueryDefaults
 
 from src.ai_hardware_accelerator import HardwareDevice, accelerated_embedding_generation
 
@@ -44,7 +45,7 @@ class CrossModalSearchRequest(BaseModel):
         default=None, description="Target modalities to search"
     )
     limit: int = Field(
-        default=10, ge=1, le=100, description="Maximum results per modality"
+        default=QueryDefaults.DEFAULT_SEARCH_LIMIT, ge=1, le=100, description="Maximum results per modality"
     )
     similarity_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
 
