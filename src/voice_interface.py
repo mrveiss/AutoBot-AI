@@ -114,27 +114,57 @@ def _check_vosk_dependencies(vosk_model_path: str, model) -> Optional[Dict[str, 
     return None
 
 
+def _check_vosk_timeout(
+    elapsed: float, timeout: Optional[float], speech_detected: bool
+) -> Optional[Dict[str, Any]]:
+    """Issue #665: Extracted from _vosk_recognize_blocking to reduce function length.
+
+    Check if speech recognition has timed out waiting for speech to start.
+    """
+    if timeout and elapsed > timeout and not speech_detected:
+        return {"status": "timeout", "message": "No speech detected within timeout."}
+    return None
+
+
+def _check_vosk_phrase_limit(
+    elapsed: float, phrase_time_limit: Optional[float], recognizer
+) -> Optional[Dict[str, Any]]:
+    """Issue #665: Extracted from _vosk_recognize_blocking to reduce function length.
+
+    Check phrase time limit and return final result if exceeded.
+    """
+    if phrase_time_limit and elapsed > phrase_time_limit:
+        partial = json.loads(recognizer.FinalResult())
+        text = partial.get("text", "").strip()
+        if text:
+            return {"status": "success", "text": text}
+        return {"status": "no_match", "message": "Could not understand audio."}
+    return None
+
+
+def _process_vosk_audio_data(recognizer, data) -> Optional[Dict[str, Any]]:
+    """Issue #665: Extracted from _vosk_recognize_blocking to reduce function length.
+
+    Process audio data through recognizer and return result if speech recognized.
+    """
+    if recognizer.AcceptWaveform(data):
+        result = json.loads(recognizer.Result())
+        text = result.get("text", "").strip()
+        if text:
+            return {"status": "success", "text": text}
+    return None
+
+
 def _vosk_recognize_blocking(
     model,
     timeout: Optional[float],
     phrase_time_limit: Optional[float],
 ) -> Dict[str, Any]:
-    """
-    Blocking Vosk recognition for use in executor.
-
-    Args:
-        model: Vosk KaldiRecognizer model
-        timeout: Maximum wait time for speech start
-        phrase_time_limit: Maximum phrase duration
-
-    Returns:
-        Recognition result dict
-    """
+    """Issue #665: Refactored blocking Vosk recognition using extracted helpers."""
     import queue
 
     sample_rate = 16000
     block_size = 8000
-
     recognizer = KaldiRecognizer(model, sample_rate)
     audio_queue = queue.Queue()
 
@@ -144,11 +174,8 @@ def _vosk_recognize_blocking(
         audio_queue.put(bytes(indata))
 
     with sd.RawInputStream(
-        samplerate=sample_rate,
-        blocksize=block_size,
-        dtype="int16",
-        channels=1,
-        callback=callback,
+        samplerate=sample_rate, blocksize=block_size,
+        dtype="int16", channels=1, callback=callback,
     ):
         logger.debug("Vosk listening started...")
         start_time = asyncio.get_event_loop().time()
@@ -157,35 +184,19 @@ def _vosk_recognize_blocking(
         while True:
             elapsed = asyncio.get_event_loop().time() - start_time
 
-            # Check timeout
-            if timeout and elapsed > timeout and not speech_detected:
-                return {
-                    "status": "timeout",
-                    "message": "No speech detected within timeout.",
-                }
-
-            # Check phrase time limit
-            if phrase_time_limit and elapsed > phrase_time_limit:
-                partial = json.loads(recognizer.FinalResult())
-                text = partial.get("text", "").strip()
-                if text:
-                    return {"status": "success", "text": text}
-                return {
-                    "status": "no_match",
-                    "message": "Could not understand audio.",
-                }
+            if result := _check_vosk_timeout(elapsed, timeout, speech_detected):
+                return result
+            if result := _check_vosk_phrase_limit(elapsed, phrase_time_limit, recognizer):
+                return result
 
             try:
                 data = audio_queue.get(timeout=0.5)
             except queue.Empty:
                 continue
 
-            if recognizer.AcceptWaveform(data):
-                speech_detected = True
-                result = json.loads(recognizer.Result())
-                text = result.get("text", "").strip()
-                if text:
-                    return {"status": "success", "text": text}
+            if result := _process_vosk_audio_data(recognizer, data):
+                return result
+            speech_detected = True
 
 
 class VoiceInterface:

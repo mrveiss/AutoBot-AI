@@ -181,71 +181,70 @@ class StreamingCommandExecutor:
         timeout: int = 300,
         provide_commentary: bool = True,
     ) -> AsyncGenerator[StreamChunk, None]:
-        """Execute command with real-time streaming output and commentary.
-
-        Issue #281: Refactored to use extracted helpers.
-        """
+        """Issue #665: Refactored to use extracted helpers for reduced line count."""
         process_id = str(uuid.uuid4())
         start_time = time.time()
+        logger.info("Executing command: %s (PID: %s)", command, process_id)
 
-        logger.info("Executing command: %s", command)
-        logger.info("Process ID: %s", process_id)
-
-        # Validate preconditions (Issue #315 - uses helper)
-        error_chunk = self._validate_execution_preconditions(command)
-        if error_chunk:
-            yield error_chunk
+        if error := self._validate_execution_preconditions(command):
+            yield error
             return
 
         try:
-            # Start process (Issue #281 - uses helper)
             yield self._create_status_chunk(command, process_id)
-
-            # Parse command safely (Issue #315 - uses helper)
             cmd_parts, parse_error = self._parse_command_safe(command)
             if parse_error:
                 yield parse_error
                 return
 
-            # Start and track process (Issue #281 - uses helper)
             process = await self._start_process_and_track(
                 cmd_parts, command, user_goal, process_id, start_time
             )
-
-            # Stream output with timeout
-            try:
-                await asyncio.wait_for(
-                    self._stream_process_output(
-                        process, process_id, user_goal, provide_commentary
-                    ),
-                    timeout=timeout,
-                )
-
-                # Wait for process completion
-                return_code = await process.wait()
-                execution_time = time.time() - start_time
-                yield self._build_completion_chunk(return_code, execution_time, process_id)
-
-                # Yield final commentary if enabled
-                if provide_commentary and return_code == 0:
-                    async for chunk in self._provide_completion_commentary(
-                        command, user_goal, execution_time
-                    ):
-                        yield chunk
-
-            except asyncio.TimeoutError:
-                yield self._create_timeout_error_chunk(timeout)
-                await self._terminate_process_safely(process)
-
-            except Exception as e:
-                yield self._create_execution_error_chunk(e)
-
+            async for chunk in self._execute_and_stream_output(
+                process, process_id, command, user_goal, timeout,
+                provide_commentary, start_time
+            ):
+                yield chunk
         except Exception as e:
             yield self._create_startup_error_chunk(e)
-
         finally:
-            if process_id in self.active_processes:
-                del self.active_processes[process_id]
+            self.active_processes.pop(process_id, None)
+
+    async def _execute_and_stream_output(
+        self,
+        process: asyncio.subprocess.Process,
+        process_id: str,
+        command: str,
+        user_goal: str,
+        timeout: int,
+        provide_commentary: bool,
+        start_time: float,
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """Issue #665: Extracted from execute_with_streaming to reduce function length.
+
+        Handle process output streaming, completion, and timeout handling.
+        """
+        try:
+            await asyncio.wait_for(
+                self._stream_process_output(
+                    process, process_id, user_goal, provide_commentary
+                ),
+                timeout=timeout,
+            )
+            return_code = await process.wait()
+            execution_time = time.time() - start_time
+            yield self._build_completion_chunk(return_code, execution_time, process_id)
+
+            if provide_commentary and return_code == 0:
+                async for chunk in self._provide_completion_commentary(
+                    command, user_goal, execution_time
+                ):
+                    yield chunk
+        except asyncio.TimeoutError:
+            yield self._create_timeout_error_chunk(timeout)
+            await self._terminate_process_safely(process)
+        except Exception as e:
+            yield self._create_execution_error_chunk(e)
 
     async def _stream_process_output(
         self,

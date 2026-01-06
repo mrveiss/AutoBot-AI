@@ -1957,6 +1957,102 @@ class AutoBotMemoryGraph:
             logger.error("Failed to get session activities: %s", e)
             return []
 
+    def _secret_matches_filters(
+        self,
+        secret: Dict[str, Any],
+        scope: Optional[str],
+        session_id: Optional[str],
+    ) -> bool:
+        """Issue #665: Extracted from get_user_secrets to reduce function length.
+
+        Check if a secret matches the provided scope and session filters.
+
+        Args:
+            secret: Secret entity to check
+            scope: Filter by scope (user, session, shared)
+            session_id: For session-scoped, which session to check
+
+        Returns:
+            True if secret matches filters, False otherwise
+        """
+        secret_scope = secret.get("metadata", {}).get("scope")
+
+        # Filter by scope if specified
+        if scope and secret_scope != scope:
+            return False
+
+        # For session scope, filter by session_id if specified
+        if secret_scope == "session" and session_id:
+            if secret.get("metadata", {}).get("session_id") != session_id:
+                return False
+
+        return True
+
+    async def _get_owned_secrets(
+        self,
+        user_id: str,
+        scope: Optional[str],
+        session_id: Optional[str],
+    ) -> List[Dict[str, Any]]:
+        """Issue #665: Extracted from get_user_secrets to reduce function length.
+
+        Get secrets owned by a user with optional filtering.
+
+        Args:
+            user_id: User ID to query
+            scope: Filter by scope (user, session, shared)
+            session_id: For session-scoped, which session to check
+
+        Returns:
+            List of owned secret entities matching filters
+        """
+        secrets = []
+        owned_relations = await self.get_relations(
+            entity_id=user_id,
+            relation_types=["has_secret"],
+            direction="outgoing",
+        )
+
+        for rel in owned_relations.get("relations", []):
+            secret = await self.get_entity(rel["to"])
+            if secret and self._secret_matches_filters(secret, scope, session_id):
+                secrets.append(secret)
+
+        return secrets
+
+    async def _get_shared_secrets(
+        self,
+        user_id: str,
+        scope: Optional[str],
+        existing_secrets: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """Issue #665: Extracted from get_user_secrets to reduce function length.
+
+        Get secrets shared with a user (not already in existing list).
+
+        Args:
+            user_id: User ID to query
+            scope: Filter by scope (user, session, shared)
+            existing_secrets: Already found secrets to avoid duplicates
+
+        Returns:
+            List of shared secret entities matching filters
+        """
+        secrets = []
+        shared_search = await self.search_entities(
+            query=user_id,
+            entity_type="secret",
+            limit=100,
+        )
+
+        for secret in shared_search:
+            shared_with = secret.get("metadata", {}).get("shared_with", [])
+            if user_id in shared_with and secret not in existing_secrets:
+                if scope is None or secret.get("metadata", {}).get("scope") == scope:
+                    secrets.append(secret)
+
+        return secrets
+
     async def get_user_secrets(
         self,
         user_id: str,
@@ -1971,6 +2067,8 @@ class AutoBotMemoryGraph:
         - Session-scoped: If user is owner or session participant
         - Shared: If user is owner or in shared_with list
 
+        Issue #665: Refactored to extract helper methods for maintainability.
+
         Args:
             user_id: User ID to query
             scope: Filter by scope (user, session, shared)
@@ -1982,48 +2080,9 @@ class AutoBotMemoryGraph:
         self.ensure_initialized()
 
         try:
-            secrets = []
-
-            # Get owned secrets
-            owned_relations = await self.get_relations(
-                entity_id=user_id,
-                relation_types=["has_secret"],
-                direction="outgoing",
-            )
-
-            for rel in owned_relations.get("relations", []):
-                secret = await self.get_entity(rel["to"])
-                if not secret:
-                    continue
-
-                secret_scope = secret.get("metadata", {}).get("scope")
-
-                # Filter by scope if specified
-                if scope and secret_scope != scope:
-                    continue
-
-                # For session scope, filter by session_id if specified
-                if secret_scope == "session" and session_id:
-                    if secret.get("metadata", {}).get("session_id") != session_id:
-                        continue
-
-                secrets.append(secret)
-
-            # Get shared secrets (where user is in shared_with)
-            # search_entities returns a list
-            shared_search = await self.search_entities(
-                query=user_id,
-                entity_type="secret",
-                limit=100,
-            )
-
-            for secret in shared_search:
-                shared_with = secret.get("metadata", {}).get("shared_with", [])
-                if user_id in shared_with and secret not in secrets:
-                    if scope is None or secret.get("metadata", {}).get("scope") == scope:
-                        secrets.append(secret)
-
-            return secrets
+            owned = await self._get_owned_secrets(user_id, scope, session_id)
+            shared = await self._get_shared_secrets(user_id, scope, owned)
+            return owned + shared
 
         except Exception as e:
             logger.error("Failed to get user secrets: %s", e)

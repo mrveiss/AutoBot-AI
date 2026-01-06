@@ -44,11 +44,50 @@ class VoiceProcessingSystem:
 
         logger.info("Voice Processing System initialized")
 
+    def _build_low_confidence_response(self, speech_result) -> Dict[str, Any]:
+        """Issue #665: Extracted from process_voice_command to reduce function length.
+
+        Build response dict when speech recognition fails or has low confidence.
+        """
+        return {
+            "success": False,
+            "error": "Speech recognition failed or low confidence",
+            "speech_result": speech_result,
+            "suggestions": [
+                "Try speaking more clearly",
+                "Reduce background noise",
+                "Speak closer to microphone",
+            ],
+        }
+
+    def _update_command_history(self, command_analysis: VoiceCommandAnalysis) -> None:
+        """Issue #665: Extracted from process_voice_command to reduce function length.
+
+        Update command history with new analysis, maintaining max history size.
+        """
+        self.voice_command_history.append(command_analysis)
+        if len(self.voice_command_history) > self.max_history:
+            self.voice_command_history = self.voice_command_history[-self.max_history:]
+
+    def _build_task_outputs(
+        self, speech_result, command_analysis: VoiceCommandAnalysis
+    ) -> Dict[str, Any]:
+        """Issue #665: Extracted from process_voice_command to reduce function length.
+
+        Build task context outputs dict from speech and command analysis results.
+        """
+        return {
+            "transcription": speech_result.transcription,
+            "command_type": command_analysis.command_type.value,
+            "confidence": command_analysis.confidence,
+            "requires_confirmation": command_analysis.requires_confirmation,
+            "actions_count": len(command_analysis.suggested_actions),
+        }
+
     async def process_voice_command(
         self, audio_input: AudioInput, context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Complete voice command processing pipeline"""
-
+        """Complete voice command processing pipeline."""
         async with task_tracker.track_task(
             "Voice Command Processing",
             f"Processing voice command: {audio_input.audio_id}",
@@ -62,21 +101,10 @@ class VoiceProcessingSystem:
         ) as task_context:
             try:
                 # Step 1: Speech Recognition
-                speech_result = await self.speech_recognition.transcribe_audio(
-                    audio_input
-                )
+                speech_result = await self.speech_recognition.transcribe_audio(audio_input)
 
                 if not speech_result.transcription or speech_result.confidence < 0.3:
-                    return {
-                        "success": False,
-                        "error": "Speech recognition failed or low confidence",
-                        "speech_result": speech_result,
-                        "suggestions": [
-                            "Try speaking more clearly",
-                            "Reduce background noise",
-                            "Speak closer to microphone",
-                        ],
-                    }
+                    return self._build_low_confidence_response(speech_result)
 
                 # Step 2: Natural Language Processing
                 command_analysis = await self.nlp_processor.analyze_voice_command(
@@ -88,26 +116,15 @@ class VoiceProcessingSystem:
                     command_analysis, speech_result, context
                 )
 
-                # Step 4: Update history
-                self.voice_command_history.append(command_analysis)
-                if len(self.voice_command_history) > self.max_history:
-                    self.voice_command_history = self.voice_command_history[
-                        -self.max_history :
-                    ]
-
+                # Step 4: Update history and set task outputs
+                self._update_command_history(command_analysis)
                 task_context.set_outputs(
-                    {
-                        "transcription": speech_result.transcription,
-                        "command_type": command_analysis.command_type.value,
-                        "confidence": command_analysis.confidence,
-                        "requires_confirmation": command_analysis.requires_confirmation,
-                        "actions_count": len(command_analysis.suggested_actions),
-                    }
+                    self._build_task_outputs(speech_result, command_analysis)
                 )
 
                 logger.info(
-                    f"Voice command processed successfully: "
-                    f"{command_analysis.command_type.value}"
+                    "Voice command processed successfully: %s",
+                    command_analysis.command_type.value,
                 )
                 return response
 

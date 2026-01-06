@@ -252,6 +252,66 @@ class EnhancedMultiAgentOrchestrator:
             self.logger.error("Failed to create workflow plan: %s", e)
             return self._planner.create_simple_workflow_plan(goal)
 
+    async def _handle_workflow_success(
+        self,
+        plan: WorkflowPlan,
+        results: Dict[str, Any],
+        start_time: float,
+    ) -> Dict[str, Any]:
+        """Issue #665: Extracted from execute_workflow to reduce function length.
+
+        Handle successful workflow completion including metrics update and event publishing.
+        """
+        success = self._planner.check_success_criteria(plan, results)
+        execution_time = time.time() - start_time
+
+        await self._update_performance_metrics(plan, results, execution_time)
+
+        await self._publish_workflow_event(
+            plan.plan_id,
+            "workflow_completed",
+            {
+                "success": success,
+                "execution_time": execution_time,
+                "results_summary": self._planner.summarize_results(results),
+            },
+        )
+
+        return {
+            "plan_id": plan.plan_id,
+            "success": success,
+            "results": results,
+            "execution_time": execution_time,
+            "strategy_used": plan.strategy.value,
+        }
+
+    async def _handle_workflow_failure(
+        self,
+        plan: WorkflowPlan,
+        error: Exception,
+        results: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Issue #665: Extracted from execute_workflow to reduce function length.
+
+        Handle workflow failure including fallback plan execution.
+        """
+        self.logger.error("Workflow execution failed: %s", error)
+
+        if plan.fallback_plans:
+            self.logger.info("Attempting fallback plan...")
+            for fallback in plan.fallback_plans:
+                try:
+                    return await self.execute_workflow(fallback)
+                except Exception as fallback_error:
+                    self.logger.error("Fallback plan failed: %s", fallback_error)
+
+        return {
+            "plan_id": plan.plan_id,
+            "success": False,
+            "error": str(error),
+            "results": results,
+        }
+
     async def execute_workflow(self, plan: WorkflowPlan) -> Dict[str, Any]:
         """Execute a workflow plan with intelligent coordination."""
         self.logger.info(
@@ -278,51 +338,11 @@ class EnhancedMultiAgentOrchestrator:
             # Execute using strategy handler
             results = await self._get_strategy_handler().execute_by_strategy(plan)
 
-            # Check success criteria
-            success = self._planner.check_success_criteria(plan, results)
-            execution_time = time.time() - start_time
-
-            # Update performance metrics
-            await self._update_performance_metrics(plan, results, execution_time)
-
-            # Publish completion event
-            await self._publish_workflow_event(
-                plan.plan_id,
-                "workflow_completed",
-                {
-                    "success": success,
-                    "execution_time": execution_time,
-                    "results_summary": self._planner.summarize_results(results),
-                },
-            )
-
-            return {
-                "plan_id": plan.plan_id,
-                "success": success,
-                "results": results,
-                "execution_time": execution_time,
-                "strategy_used": plan.strategy.value,
-            }
+            # Handle success: metrics, events, and return result
+            return await self._handle_workflow_success(plan, results, start_time)
 
         except Exception as e:
-            self.logger.error("Workflow execution failed: %s", e)
-
-            # Try fallback plans
-            if plan.fallback_plans:
-                self.logger.info("Attempting fallback plan...")
-                for fallback in plan.fallback_plans:
-                    try:
-                        return await self.execute_workflow(fallback)
-                    except Exception as fallback_error:
-                        self.logger.error("Fallback plan failed: %s", fallback_error)
-
-            # All plans failed
-            return {
-                "plan_id": plan.plan_id,
-                "success": False,
-                "error": str(e),
-                "results": results,
-            }
+            return await self._handle_workflow_failure(plan, e, results)
 
     async def _execute_single_task(
         self, task: AgentTask, context: Dict[str, Any]
