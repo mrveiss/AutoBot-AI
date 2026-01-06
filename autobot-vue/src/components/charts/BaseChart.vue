@@ -27,10 +27,10 @@
     <apexchart
       v-else
       ref="chartRef"
-      :type="type"
+      :type="(type as any)"
       :height="height"
       :width="width"
-      :options="mergedOptions"
+      :options="(mergedOptions as any)"
       :series="safeSeries"
     />
   </div>
@@ -94,8 +94,8 @@ const hasData = computed(() => {
   })
 })
 
-// AutoBot dark theme colors
-const darkTheme: ApexOptions = {
+// AutoBot dark theme colors (cast as any to allow extended ApexCharts options)
+const darkTheme: any = {
   chart: {
     background: 'transparent',
     foreColor: '#e2e8f0',

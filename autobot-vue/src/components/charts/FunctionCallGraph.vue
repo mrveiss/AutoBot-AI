@@ -42,7 +42,7 @@
         <select v-model="filterModule" class="module-filter">
           <option value="">All Modules</option>
           <option v-for="mod in uniqueModules" :key="mod" :value="mod">
-            {{ truncateModule(mod) }}
+            {{ truncateModule(mod || '') }}
           </option>
         </select>
         <div class="view-toggle">

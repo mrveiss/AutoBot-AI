@@ -58,7 +58,7 @@
             @click="toggleNode(file.path)"
           >
             <span class="expand-icon">
-              {{ file.imports?.length > 0 || file.imported_by?.length > 0 ? (expandedNodes.has(file.path) ? '▼' : '▶') : '•' }}
+              {{ (file.imports?.length ?? 0) > 0 || (file.imported_by?.length ?? 0) > 0 ? (expandedNodes.has(file.path) ? '▼' : '▶') : '•' }}
             </span>
             <span class="file-icon">{{ getFileIcon(file.path) }}</span>
             <span class="file-name" :title="file.path">{{ getFileName(file.path) }}</span>

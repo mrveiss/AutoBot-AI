@@ -10,7 +10,7 @@
     type="bar"
     :height="height"
     :series="chartSeries"
-    :options="chartOptions"
+    :options="(chartOptions as any)"
     :title="title"
     :subtitle="subtitle"
     :loading="loading"
@@ -65,7 +65,7 @@ const chartSeries = computed(() => [
   }
 ])
 
-const chartOptions = computed<ApexOptions>(() => ({
+const chartOptions = computed(() => ({
   chart: {
     type: 'bar'
   },
