@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from backend.knowledge_factory import get_or_create_knowledge_base
 from backend.services.rag_config import get_rag_config, update_rag_config
 from backend.services.rag_service import RAGService
+from src.constants.threshold_constants import QueryDefaults
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -34,7 +35,7 @@ class AdvancedSearchRequest(BaseModel):
     """Request model for advanced RAG search with reranking"""
 
     query: str = Field(..., min_length=1, max_length=1000, description="Search query")
-    max_results: int = Field(default=5, ge=1, le=50, description="Maximum results")
+    max_results: int = Field(default=QueryDefaults.RAG_DEFAULT_RESULTS, ge=1, le=50, description="Maximum results")
     enable_reranking: bool = Field(
         default=True, description="Enable cross-encoder reranking"
     )

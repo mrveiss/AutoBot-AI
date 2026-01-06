@@ -418,7 +418,7 @@ class AdvancedSearchRequest(BaseModel):
 
     query: str = Field(..., min_length=1, max_length=1000, description="Search query")
     max_results: int = Field(
-        default=5, ge=1, le=50, description="Maximum results to return"
+        default=QueryDefaults.RAG_DEFAULT_RESULTS, ge=1, le=50, description="Maximum results to return"
     )
     enable_reranking: bool = Field(
         default=True, description="Enable cross-encoder reranking"
