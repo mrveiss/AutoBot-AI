@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 
 from backend.dependencies import get_config, get_knowledge_base
 from backend.services.ai_stack_client import AIStackError, get_ai_stack_client
-from src.constants.threshold_constants import TimingConstants
+from src.constants.threshold_constants import CategoryDefaults, TimingConstants
 
 # Import reusable chat utilities - Phase 1 Utility Extraction
 from backend.utils.chat_utils import (
@@ -57,7 +57,7 @@ class EnhancedChatMessage(BaseModel):
         ..., min_length=1, max_length=50000, description="Message content"
     )
     role: str = Field(
-        default="user", pattern="^(user|assistant|system)$", description="Message role"
+        default=CategoryDefaults.ROLE_USER, pattern="^(user|assistant|system)$", description="Message role"
     )
     session_id: Optional[str] = Field(None, description="Chat session ID")
     message_type: Optional[str] = Field("text", description="Message type")
