@@ -260,6 +260,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'agents',
         name: 'tools-agents',
+        // @ts-ignore - Component may not have type declarations
         component: () => import('@/components/developer/AgentRegistry.vue'),
         meta: {
           title: 'Agent Registry',

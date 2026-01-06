@@ -605,7 +605,7 @@ class RumAgent {
   // Issue #476: Send metrics to backend
   private sendPrometheusMetrics(metrics: PrometheusRumMetrics): void {
     // Use sendBeacon for reliability (works during page unload)
-    const useBeacon = navigator.sendBeacon && document.visibilityState === 'hidden'
+    const useBeacon = typeof navigator.sendBeacon === 'function' && document.visibilityState === 'hidden'
 
     if (useBeacon) {
       const blob = new Blob([JSON.stringify(metrics)], { type: 'application/json' })

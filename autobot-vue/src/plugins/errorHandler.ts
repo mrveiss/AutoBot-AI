@@ -286,7 +286,7 @@ export default {
     const originalErrorHandler = app.config.errorHandler
 
     app.config.errorHandler = (error, instance, info) => {
-      logger.error('Vue Error:', error, info)
+      logger.error('Vue Error:', { error, info })
 
       // Call original handler (RUM plugin)
       if (originalErrorHandler) {
