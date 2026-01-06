@@ -27,7 +27,7 @@
           ═══════════════════════════════════════════════════════════
           This will restore Python virtual environments from backup.
 
-          Target hosts: backend, ai_stack, npu_workers
+          Target hosts: backend, aiml, npu
           (Frontend is skipped - uses Node.js, not Python)
           ═══════════════════════════════════════════════════════════
 
@@ -36,9 +36,12 @@
         prompt: "Press ENTER to proceed with rollback, or Ctrl+C to abort"
       when: not (auto_confirm | default(false))
 
-# Rollback in reverse order of updates (most dependent first)
-- name: "Rollback Backend Services"
-  hosts: backend
+# Rollback in REVERSE order of updates (most dependent first, then dependencies)
+# Update order: database -> backend -> aiml -> npu -> frontend -> browser
+# Rollback order: npu -> aiml -> backend (reverse, most dependent first)
+
+- name: "Rollback NPU Worker Services"
+  hosts: npu
   become: yes
   serial: 1
   vars:
@@ -50,35 +53,35 @@
         name: dependency_patching
         tasks_from: rollback.yml
   tags:
+    - npu
+
+- name: "Rollback AI/ML Stack Services"
+  hosts: aiml
+  become: yes
+  serial: 1
+  vars:
+    latest_backup: "{{ lookup('pipe', 'ls -t ' ~ backup_base_path | default('/opt/autobot/backups') ~ '/venv-*.tar.gz 2>/dev/null | head -1') | default(omit) }}"
+  tasks:
+    - name: Include rollback tasks
+      ansible.builtin.include_role:
+        name: dependency_patching
+        tasks_from: rollback.yml
+  tags:
+    - aiml
+
+- name: "Rollback Backend Services"
+  hosts: backend
+  become: yes
+  serial: 1
+  vars:
+    latest_backup: "{{ lookup('pipe', 'ls -t ' ~ backup_base_path | default('/opt/autobot/backups') ~ '/venv-*.tar.gz 2>/dev/null | head -1') | default(omit) }}"
+  tasks:
+    - name: Include rollback tasks
+      ansible.builtin.include_role:
+        name: dependency_patching
+        tasks_from: rollback.yml
+  tags:
     - backend
-
-- name: "Rollback AI Stack Services"
-  hosts: ai_stack
-  become: yes
-  serial: 1
-  vars:
-    latest_backup: "{{ lookup('pipe', 'ls -t ' ~ backup_base_path | default('/opt/autobot/backups') ~ '/venv-*.tar.gz 2>/dev/null | head -1') | default(omit) }}"
-  tasks:
-    - name: Include rollback tasks
-      ansible.builtin.include_role:
-        name: dependency_patching
-        tasks_from: rollback.yml
-  tags:
-    - ai_stack
-
-- name: "Rollback NPU Worker Services"
-  hosts: npu_workers
-  become: yes
-  serial: 1
-  vars:
-    latest_backup: "{{ lookup('pipe', 'ls -t ' ~ backup_base_path | default('/opt/autobot/backups') ~ '/venv-*.tar.gz 2>/dev/null | head -1') | default(omit) }}"
-  tasks:
-    - name: Include rollback tasks
-      ansible.builtin.include_role:
-        name: dependency_patching
-        tasks_from: rollback.yml
-  tags:
-    - npu_workers
 
 - name: "Post-Rollback Summary"
   hosts: localhost

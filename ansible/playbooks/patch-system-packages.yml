@@ -87,9 +87,9 @@
     - backend
     - phase2
 
-# Phase 3: AI Stack VMs - depends on backend
-- name: "Phase 3: AI Stack VMs"
-  hosts: ai_stack
+# Phase 3: AI/ML Stack VMs - depends on backend
+- name: "Phase 3: AI/ML Stack VMs"
+  hosts: aiml
   become: yes
   serial: 1
   max_fail_percentage: 0
@@ -99,12 +99,12 @@
         name: dependency_patching
         tasks_from: update-system.yml
   tags:
-    - ai_stack
+    - aiml
     - phase3
 
 # Phase 4: NPU Worker VMs - depends on AI stack
 - name: "Phase 4: NPU Worker VMs"
-  hosts: npu_workers
+  hosts: npu
   become: yes
   serial: 1
   max_fail_percentage: 0
@@ -114,7 +114,7 @@
         name: dependency_patching
         tasks_from: update-system.yml
   tags:
-    - npu_workers
+    - npu
     - phase4
 
 # Phase 5: Frontend VMs - depends on backend API

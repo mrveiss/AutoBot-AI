@@ -76,28 +76,28 @@
     - backend
     - phase2
 
-# Phase 3: Update AI Stack
-- name: "Phase 3: AI Stack Updates"
-  hosts: ai_stack
+# Phase 3: Update AI/ML Stack
+- name: "Phase 3: AI/ML Stack Updates"
+  hosts: aiml
   become: yes
   serial: 1
   max_fail_percentage: 0
   roles:
     - role: dependency_patching
   tags:
-    - ai_stack
+    - aiml
     - phase3
 
 # Phase 4: Update NPU Workers
 - name: "Phase 4: NPU Worker Updates"
-  hosts: npu_workers
+  hosts: npu
   become: yes
   serial: 1
   max_fail_percentage: 0
   roles:
     - role: dependency_patching
   tags:
-    - npu_workers
+    - npu
     - phase4
 
 # Phase 5: Update Frontend (Node.js, not Python)

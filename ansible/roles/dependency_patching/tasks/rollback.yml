@@ -34,22 +34,66 @@
     - current_service.service_name is defined
   ignore_errors: yes
 
-- name: Remove failed venv
-  ansible.builtin.file:
-    path: "{{ current_service.venv_path | default(venv_path) }}"
-    state: absent
+- name: Set venv path variable
+  ansible.builtin.set_fact:
+    target_venv_path: "{{ current_service.venv_path | default(venv_path) }}"
+
+- name: Create temporary restore directory
+  ansible.builtin.tempfile:
+    state: directory
+    prefix: venv_restore_
+  register: temp_restore_dir
   when:
     - backup_exists.stat.exists | default(false)
 
-- name: Restore venv from backup
+- name: Extract backup to temporary location first (safety)
   ansible.builtin.unarchive:
     src: "{{ latest_backup }}"
-    dest: "{{ current_service.venv_path | default(venv_path) | dirname }}"
+    dest: "{{ temp_restore_dir.path }}"
     remote_src: yes
   when:
     - backup_exists.stat.exists | default(false)
-  register: venv_restored
+    - temp_restore_dir.path is defined
+  register: temp_extract
   timeout: "{{ rollback_timeout }}"
+
+- name: Verify extracted venv structure exists
+  ansible.builtin.stat:
+    path: "{{ temp_restore_dir.path }}/venv/bin/python"
+  register: extracted_venv_check
+  when:
+    - temp_extract.changed | default(false)
+
+- name: Fail if extracted backup is invalid
+  ansible.builtin.fail:
+    msg: "CRITICAL: Backup extraction failed or backup is corrupted. Original venv preserved at {{ target_venv_path }}"
+  when:
+    - temp_extract.changed | default(false)
+    - not (extracted_venv_check.stat.exists | default(false))
+
+- name: Remove failed venv (only after backup verified)
+  ansible.builtin.file:
+    path: "{{ target_venv_path }}"
+    state: absent
+  when:
+    - temp_extract.changed | default(false)
+    - extracted_venv_check.stat.exists | default(false)
+
+- name: Move restored venv to target location
+  ansible.builtin.command:
+    cmd: "mv {{ temp_restore_dir.path }}/venv {{ target_venv_path }}"
+  when:
+    - temp_extract.changed | default(false)
+    - extracted_venv_check.stat.exists | default(false)
+  register: venv_restored
+
+- name: Clean up temporary restore directory
+  ansible.builtin.file:
+    path: "{{ temp_restore_dir.path }}"
+    state: absent
+  when:
+    - temp_restore_dir.path is defined
+  ignore_errors: yes
 
 - name: Restart service after rollback
   ansible.builtin.systemd:

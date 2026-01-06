@@ -73,7 +73,7 @@
     - frontend
 
 - name: "Rollback NPU Worker Services"
-  hosts: npu_workers
+  hosts: npu
   become: yes
   serial: 1
   tasks:
@@ -82,10 +82,10 @@
         name: dependency_patching
         tasks_from: rollback-system.yml
   tags:
-    - npu_workers
+    - npu
 
-- name: "Rollback AI Stack Services"
-  hosts: ai_stack
+- name: "Rollback AI/ML Stack Services"
+  hosts: aiml
   become: yes
   serial: 1
   tasks:
@@ -94,7 +94,7 @@
         name: dependency_patching
         tasks_from: rollback-system.yml
   tags:
-    - ai_stack
+    - aiml
 
 - name: "Rollback Backend Services"
   hosts: backend

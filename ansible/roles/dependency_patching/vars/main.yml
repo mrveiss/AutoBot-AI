@@ -21,14 +21,14 @@ service_definitions:
     health_port: 5173
     has_python_venv: false  # Node.js frontend
 
-  ai_stack:
+  aiml:
     service_name: "autobot-aistack"
     health_endpoint: "/health"
     health_port: 8080
     has_python_venv: true
     venv_path: "/opt/autobot/venv"
 
-  npu_workers:
+  npu:
     service_name: "autobot-npu"
     health_endpoint: "/health"
     health_port: 8081
@@ -52,8 +52,8 @@ service_definitions:
 update_order:
   - database
   - backend
-  - ai_stack
-  - npu_workers
+  - aiml
+  - npu
   - frontend
   - browser
 
