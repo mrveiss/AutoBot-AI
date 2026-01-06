@@ -109,7 +109,8 @@ const userFriendlyMessage = computed(() => {
 
 // Capture errors from child components
 onErrorCaptured((error: Error, instance: any, info: string) => {
-  logger.error('Error captured by ErrorBoundary:', error, info)
+  // Combine error and info into a single data object for the logger
+  logger.error('Error captured by ErrorBoundary:', { error, info })
 
   hasError.value = true
   errorInfo.value = {

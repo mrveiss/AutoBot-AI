@@ -525,7 +525,7 @@
               <span class="summary-value">{{ dependencyData.summary.external_dependency_count || 0 }}</span>
               <span class="summary-label">External Packages</span>
             </div>
-            <div class="summary-stat" :class="{ 'race-highlight': dependencyData.summary.circular_dependency_count > 0 }">
+            <div class="summary-stat" :class="{ 'race-highlight': (dependencyData.summary.circular_dependency_count ?? 0) > 0 }">
               <span class="summary-value">{{ dependencyData.summary.circular_dependency_count || 0 }}</span>
               <span class="summary-label">Circular Dependencies</span>
             </div>
@@ -535,7 +535,7 @@
           <div class="charts-row">
             <DependencyTreemap
               v-if="dependencyData.external_dependencies && dependencyData.external_dependencies.length > 0"
-              :data="dependencyData.external_dependencies"
+              :data="(dependencyData.external_dependencies as any)"
               title="External Dependencies"
               subtitle="Package usage across codebase"
               :height="350"
@@ -546,7 +546,7 @@
             </div>
             <ModuleImportsChart
               v-if="dependencyData.modules && dependencyData.modules.length > 0"
-              :data="dependencyData.modules.filter(m => m.import_count > 0)"
+              :data="(dependencyData.modules.filter(m => m.import_count > 0) as any)"
               title="Modules with Most Imports"
               subtitle="Files with highest dependency count"
               :height="350"
@@ -674,7 +674,7 @@
         <div v-else-if="callGraphData && callGraphData.nodes?.length > 0" class="call-graph-content">
           <FunctionCallGraph
             :data="callGraphData"
-            :summary="callGraphSummary"
+            :summary="(callGraphSummary as any)"
             title="Function Call Relationships"
             subtitle="View which functions call which other functions"
             :height="600"
@@ -1230,12 +1230,12 @@
             </div>
 
             <!-- Used Endpoints (matched and working) -->
-            <div v-if="apiEndpointAnalysis.used?.length > 0" class="accordion-group">
+            <div v-if="(apiEndpointAnalysis.used?.length ?? 0) > 0" class="accordion-group">
               <div class="accordion-header success" @click="expandedApiEndpointGroups.used = !expandedApiEndpointGroups.used">
                 <div class="header-info">
                   <i :class="expandedApiEndpointGroups.used ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
                   <span class="header-name">Used Endpoints</span>
-                  <span class="header-count">({{ apiEndpointAnalysis.used.length }})</span>
+                  <span class="header-count">({{ apiEndpointAnalysis.used?.length ?? 0 }})</span>
                 </div>
                 <div class="header-badges">
                   <span class="severity-badge success">Active</span>
@@ -1243,7 +1243,7 @@
               </div>
               <transition name="accordion">
                 <div v-if="expandedApiEndpointGroups.used" class="accordion-items">
-                  <div v-for="(usage, index) in apiEndpointAnalysis.used.slice(0, 30)" :key="'used-' + index" class="list-item item-success">
+                  <div v-for="(usage, index) in apiEndpointAnalysis.used?.slice(0, 30)" :key="'used-' + index" class="list-item item-success">
                     <div class="item-header">
                       <span class="method-badge" :class="usage.endpoint?.method?.toLowerCase()">{{ usage.endpoint?.method }}</span>
                       <span class="item-path">{{ usage.endpoint?.path }}</span>
@@ -1251,8 +1251,8 @@
                     </div>
                     <div class="item-location">📁 {{ usage.endpoint?.file_path }}:{{ usage.endpoint?.line_number }}</div>
                   </div>
-                  <div v-if="apiEndpointAnalysis.used.length > 30" class="show-more">
-                    <span class="muted">Showing 30 of {{ apiEndpointAnalysis.used.length }} used endpoints</span>
+                  <div v-if="(apiEndpointAnalysis.used?.length ?? 0) > 30" class="show-more">
+                    <span class="muted">Showing 30 of {{ apiEndpointAnalysis.used?.length ?? 0 }} used endpoints</span>
                   </div>
                 </div>
               </transition>

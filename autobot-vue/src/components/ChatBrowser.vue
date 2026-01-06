@@ -88,6 +88,15 @@ const props = withDefaults(defineProps<Props>(), {
   autoConnect: true
 })
 
+// Browser session response type for type assertions
+interface BrowserSessionResponse {
+  session_id?: string
+  current_url?: string | null
+  interaction_required?: boolean
+  browser_status?: string
+  status?: string
+}
+
 // Refs
 const browserSessionId = ref<string | null>(null)
 const browserStatus = ref<string>('disconnected') // disconnected, connecting, connected, error
@@ -157,10 +166,11 @@ const connectBrowserSession = async (retry = false) => {
     logger.info('Getting/creating browser session for chat:', props.chatSessionId)
 
     // Get or create browser session for this conversation
-    const response = await apiClient.getOrCreateChatBrowserSession({
+    // Use type assertion for the API call since ApiClient is JavaScript
+    const response = await (apiClient as any).getOrCreateChatBrowserSession({
       conversation_id: props.chatSessionId,
       headless: false
-    })
+    }) as BrowserSessionResponse
 
     if (response && response.session_id) {
       browserSessionId.value = response.session_id
@@ -225,7 +235,8 @@ const disconnectBrowserSession = async () => {
   if (!props.chatSessionId) return
 
   try {
-    await apiClient.deleteChatBrowserSession(props.chatSessionId)
+    // Use type assertion for the API call since ApiClient is JavaScript
+    await (apiClient as any).deleteChatBrowserSession(props.chatSessionId)
     logger.info('Browser session disconnected for chat:', props.chatSessionId)
   } catch (error) {
     logger.warn('Failed to disconnect browser session:', error)

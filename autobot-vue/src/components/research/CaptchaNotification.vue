@@ -74,6 +74,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
+// @ts-ignore - JS module without type declarations
 import { useGlobalWebSocket } from '@/composables/useGlobalWebSocket'
 import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'

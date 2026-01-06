@@ -1,20 +1,20 @@
 <template>
   <div class="web-research-settings">
     <h3>Web Research Settings</h3>
-    
+
     <!-- Status and Main Toggle -->
     <div class="research-status-section">
       <div class="status-indicator" :class="researchStatus.enabled ? 'enabled' : 'disabled'">
         <div class="status-dot"></div>
         <span>{{ researchStatus.enabled ? 'Enabled' : 'Disabled' }}</span>
       </div>
-      
+
       <div class="main-toggle">
         <label class="toggle-label">
           <span>Enable Web Research</span>
-          <input 
-            type="checkbox" 
-            v-model="researchSettings.enabled" 
+          <input
+            type="checkbox"
+            v-model="researchSettings.enabled"
             @change="toggleWebResearch"
             :disabled="isUpdating"
           />
@@ -28,15 +28,15 @@
 
     <!-- Research Settings (only show if enabled) -->
     <div v-if="researchSettings.enabled" class="research-configuration">
-      
+
       <!-- User Confirmation Settings -->
       <div class="setting-group">
         <h4>User Preferences</h4>
-        
+
         <div class="setting-item">
           <label>
-            <input 
-              type="checkbox" 
+            <input
+              type="checkbox"
               v-model="researchSettings.require_user_confirmation"
               @change="updateSettings"
             />
@@ -49,8 +49,8 @@
 
         <div class="setting-item">
           <label>Store high-quality research results in knowledge base</label>
-          <input 
-            type="checkbox" 
+          <input
+            type="checkbox"
             v-model="researchSettings.store_results_in_kb"
             @change="updateSettings"
           />
@@ -63,11 +63,11 @@
       <!-- Performance Settings -->
       <div class="setting-group">
         <h4>Performance & Limits</h4>
-        
+
         <div class="setting-item">
           <label>Research Method</label>
-          <select 
-            v-model="researchSettings.preferred_method" 
+          <select
+            v-model="researchSettings.preferred_method"
             @change="updateSettings"
             class="method-select"
           >
@@ -82,10 +82,10 @@
 
         <div class="setting-item">
           <label>Maximum Results per Query</label>
-          <input 
-            type="number" 
-            v-model="researchSettings.max_results" 
-            min="1" 
+          <input
+            type="number"
+            v-model="researchSettings.max_results"
+            min="1"
             max="10"
             @change="updateSettings"
           />
@@ -94,10 +94,10 @@
 
         <div class="setting-item">
           <label>Research Timeout (seconds)</label>
-          <input 
-            type="number" 
-            v-model="researchSettings.timeout_seconds" 
-            min="10" 
+          <input
+            type="number"
+            v-model="researchSettings.timeout_seconds"
+            min="10"
             max="120"
             @change="updateSettings"
           />
@@ -106,11 +106,11 @@
 
         <div class="setting-item">
           <label>Auto-research Confidence Threshold</label>
-          <input 
-            type="range" 
-            v-model="researchSettings.auto_research_threshold" 
-            min="0" 
-            max="1" 
+          <input
+            type="range"
+            v-model="researchSettings.auto_research_threshold"
+            min="0"
+            max="1"
             step="0.1"
             @change="updateSettings"
           />
@@ -124,13 +124,13 @@
       <!-- Rate Limiting -->
       <div class="setting-group">
         <h4>Rate Limiting</h4>
-        
+
         <div class="setting-item">
           <label>Requests per Window</label>
-          <input 
-            type="number" 
-            v-model="researchSettings.rate_limit_requests" 
-            min="1" 
+          <input
+            type="number"
+            v-model="researchSettings.rate_limit_requests"
+            min="1"
             max="20"
             @change="updateSettings"
           />
@@ -139,10 +139,10 @@
 
         <div class="setting-item">
           <label>Rate Limit Window (seconds)</label>
-          <input 
-            type="number" 
-            v-model="researchSettings.rate_limit_window" 
-            min="30" 
+          <input
+            type="number"
+            v-model="researchSettings.rate_limit_window"
+            min="30"
             max="300"
             @change="updateSettings"
           />
@@ -153,11 +153,11 @@
       <!-- Privacy Settings -->
       <div class="setting-group">
         <h4>Privacy & Safety</h4>
-        
+
         <div class="setting-item">
           <label>
-            <input 
-              type="checkbox" 
+            <input
+              type="checkbox"
               v-model="researchSettings.anonymize_requests"
               @change="updateSettings"
             />
@@ -168,8 +168,8 @@
 
         <div class="setting-item">
           <label>
-            <input 
-              type="checkbox" 
+            <input
+              type="checkbox"
               v-model="researchSettings.filter_adult_content"
               @change="updateSettings"
             />
@@ -183,18 +183,18 @@
     <!-- Status Information -->
     <div class="research-info" v-if="researchStatus.enabled">
       <h4>Current Status</h4>
-      
+
       <div class="status-grid">
         <div class="status-item">
           <span class="status-label">Preferred Method:</span>
           <span class="status-value">{{ researchStatus.preferred_method || 'Not set' }}</span>
         </div>
-        
+
         <div class="status-item" v-if="researchStatus.cache_stats">
           <span class="status-label">Cache Size:</span>
           <span class="status-value">{{ researchStatus.cache_stats.cache_size || 0 }} entries</span>
         </div>
-        
+
         <div class="status-item" v-if="researchStatus.cache_stats">
           <span class="status-label">Rate Limiter:</span>
           <span class="status-value">
@@ -210,12 +210,12 @@
         <i class="fas fa-search"></i>
         Test Web Research
       </button>
-      
+
       <button @click="clearCache" :disabled="isUpdating" class="clear-button">
         <i class="fas fa-trash"></i>
         Clear Cache
       </button>
-      
+
       <button @click="resetCircuitBreakers" :disabled="isUpdating" class="reset-button">
         <i class="fas fa-refresh"></i>
         Reset Circuit Breakers
@@ -253,6 +253,14 @@ interface TestResult {
   [key: string]: any
 }
 
+// Type for API responses with status field
+interface ApiResponseWithStatus {
+  status: string
+  message?: string
+  settings?: Record<string, unknown>
+  [key: string]: unknown
+}
+
 export default {
   name: 'WebResearchSettings',
   setup() {
@@ -281,15 +289,15 @@ export default {
         // ApiClient.get() returns parsed JSON directly
         // Issue #552: Fixed path to match backend /api/web-research-settings/web-research/*
         // Load status
-        const statusData = await apiClient.get('/api/web-research-settings/web-research/status')
+        const statusData = await apiClient.get('/api/web-research-settings/web-research/status') as unknown as ApiResponseWithStatus
         if (statusData.status === 'success') {
-          webResearchStore.updateStatus(statusData)
+          webResearchStore.updateStatus(statusData as unknown as Record<string, unknown>)
         }
 
         // Load settings
-        const settingsData = await apiClient.get('/api/web-research-settings/web-research/settings')
+        const settingsData = await apiClient.get('/api/web-research-settings/web-research/settings') as unknown as ApiResponseWithStatus
         if (settingsData.status === 'success') {
-          webResearchStore.updateSettings(settingsData.settings)
+          webResearchStore.updateSettings((settingsData.settings || {}) as Record<string, unknown>)
         }
       },
       {
@@ -306,12 +314,12 @@ export default {
         const endpoint = researchSettings.enabled
           ? '/api/web-research-settings/web-research/enable'
           : '/api/web-research-settings/web-research/disable'
-        return await apiClient.post(endpoint)
+        return await apiClient.post(endpoint) as unknown as ApiResponseWithStatus
       },
       {
         onSuccess: async (data) => {
           if (data.status === 'success') {
-            showMessage(data.message, 'success')
+            showMessage(data.message || 'Status updated', 'success')
             await loadSettings() // Reload to get updated status
           }
         },
@@ -329,7 +337,7 @@ export default {
       async () => {
         // ApiClient.put() returns parsed JSON directly
         // Issue #552: Fixed path to match backend /api/web-research-settings/web-research/*
-        return await apiClient.put('/api/web-research-settings/web-research/settings', researchSettings)
+        return await apiClient.put('/api/web-research-settings/web-research/settings', researchSettings) as unknown as ApiResponseWithStatus
       },
       {
         debounce: 1000, // Built-in debounce
@@ -351,8 +359,8 @@ export default {
 
         // ApiClient.post() returns parsed JSON directly
         // Issue #552: Fixed path to match backend /api/web-research-settings/web-research/*
-        const data = await apiClient.post('/api/web-research-settings/web-research/test', { query: 'test web research functionality' })
-        testResult.value = data
+        const data = await apiClient.post('/api/web-research-settings/web-research/test', { query: 'test web research functionality' }) as unknown as ApiResponseWithStatus
+        testResult.value = data as TestResult
 
         showMessage('Test completed', data.status === 'success' ? 'success' : 'error')
         return data
@@ -374,7 +382,7 @@ export default {
       async () => {
         // ApiClient.post() returns parsed JSON directly
         // Issue #552: Fixed path to match backend /api/web-research-settings/web-research/*
-        return await apiClient.post('/api/web-research-settings/web-research/clear-cache')
+        return await apiClient.post('/api/web-research-settings/web-research/clear-cache') as unknown as ApiResponseWithStatus
       },
       {
         onSuccess: async (data) => {
@@ -393,7 +401,7 @@ export default {
       async () => {
         // ApiClient.post() returns parsed JSON directly
         // Issue #552: Fixed path to match backend /api/web-research-settings/web-research/*
-        return await apiClient.post('/api/web-research-settings/web-research/reset-circuit-breakers')
+        return await apiClient.post('/api/web-research-settings/web-research/reset-circuit-breakers') as unknown as ApiResponseWithStatus
       },
       {
         onSuccess: async (data) => {
@@ -744,15 +752,15 @@ export default {
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   .status-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .action-buttons {
     flex-direction: column;
   }
-  
+
   .action-buttons button {
     width: 100%;
     justify-content: center;

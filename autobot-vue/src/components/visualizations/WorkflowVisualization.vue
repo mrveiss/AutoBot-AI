@@ -100,7 +100,7 @@
             <path
               v-for="(connection, idx) in connections"
               :key="`conn-${idx}`"
-              :d="getConnectionPath(connection)"
+              :d="getConnectionPath(connection as any)"
               class="connection-line"
               :class="connection.status"
               :marker-end="`url(#arrow-${connection.status || 'default'})`"

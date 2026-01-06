@@ -51,7 +51,7 @@
           :class="message.type"
         >
           <i :class="getMessageIcon(message.type)"></i>
-          <span class="timestamp">{{ formatTime(message.timestamp) }}</span>
+          <span class="timestamp">{{ formatTime(new Date(message.timestamp)) }}</span>
           <span class="message">{{ message.text }}</span>
         </div>
       </div>

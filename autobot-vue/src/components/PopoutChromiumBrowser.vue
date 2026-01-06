@@ -370,6 +370,15 @@ interface ConsoleLogEntry {
   message: string
 }
 
+// Type for Playwright navigation response
+interface PlaywrightNavigationResponse {
+  final_url?: string
+  url?: string
+  title?: string
+  status?: string
+  [key: string]: unknown
+}
+
 export default {
   name: 'PopoutChromiumBrowser',
   components: {
@@ -500,7 +509,8 @@ export default {
       {
         onSuccess: (result) => {
           if (result.sessionData) {
-            currentUrl.value = result.sessionData.url || props.initialUrl
+            const sessionResponse = result.sessionData as unknown as PlaywrightNavigationResponse
+            currentUrl.value = sessionResponse.url || props.initialUrl
             addressBarUrl.value = currentUrl.value
           }
 
@@ -549,14 +559,14 @@ export default {
         isSecure.value = targetUrl.startsWith('https://')
 
         // Try Playwright navigation if available
-        let playwrightResult = null
+        let playwrightResult: PlaywrightNavigationResponse | null = null
         if (playwrightStatus.value === 'connected') {
           try {
             // ApiClient.post() returns parsed JSON directly, throws on error
             playwrightResult = await apiClient.post(`${playwrightApiUrl.value}/navigate`, {
               url: targetUrl,
               session_id: props.sessionId
-            })
+            }) as unknown as PlaywrightNavigationResponse
           } catch (navError) {
             logger.warn('Playwright navigation failed, relying on VNC')
           }
@@ -571,9 +581,10 @@ export default {
       {
         onSuccess: (result) => {
           if (result && result.playwrightResult) {
-            currentUrl.value = result.playwrightResult.final_url || result.targetUrl
-            addressBarUrl.value = result.playwrightResult.final_url || result.targetUrl
-            addConsoleLog('info', `Navigation completed: ${result.playwrightResult.final_url}`)
+            const navResponse = result.playwrightResult
+            currentUrl.value = navResponse.final_url || result.targetUrl
+            addressBarUrl.value = navResponse.final_url || result.targetUrl
+            addConsoleLog('info', `Navigation completed: ${navResponse.final_url}`)
           } else if (result) {
             addConsoleLog('info', `Navigated to: ${result.targetUrl}`)
           }
@@ -610,14 +621,17 @@ export default {
         }
 
         // ApiClient.post() returns parsed JSON directly, throws on error
-        return await apiClient.post('/api/playwright/back')
+        return await apiClient.post('/api/playwright/back') as unknown as PlaywrightNavigationResponse
       },
       {
         onSuccess: (result) => {
-          if (result && result.final_url) {
-            currentUrl.value = result.final_url
-            addressBarUrl.value = result.final_url
-            addConsoleLog('info', `Navigated back to: ${result.final_url}`)
+          if (result) {
+            const navResponse = result as PlaywrightNavigationResponse
+            if (navResponse.final_url) {
+              currentUrl.value = navResponse.final_url
+              addressBarUrl.value = navResponse.final_url
+              addConsoleLog('info', `Navigated back to: ${navResponse.final_url}`)
+            }
           }
         },
         onError: (error) => {
@@ -642,14 +656,17 @@ export default {
         }
 
         // ApiClient.post() returns parsed JSON directly, throws on error
-        return await apiClient.post('/api/playwright/forward')
+        return await apiClient.post('/api/playwright/forward') as unknown as PlaywrightNavigationResponse
       },
       {
         onSuccess: (result) => {
-          if (result && result.final_url) {
-            currentUrl.value = result.final_url
-            addressBarUrl.value = result.final_url
-            addConsoleLog('info', `Navigated forward to: ${result.final_url}`)
+          if (result) {
+            const navResponse = result as PlaywrightNavigationResponse
+            if (navResponse.final_url) {
+              currentUrl.value = navResponse.final_url
+              addressBarUrl.value = navResponse.final_url
+              addConsoleLog('info', `Navigated forward to: ${navResponse.final_url}`)
+            }
           }
         },
         onError: (error) => {
@@ -673,7 +690,7 @@ export default {
         }
 
         // ApiClient.post() returns parsed JSON directly, throws on error
-        return await apiClient.post('/api/playwright/reload')
+        return await apiClient.post('/api/playwright/reload') as unknown as PlaywrightNavigationResponse
       },
       {
         onSuccess: async (result) => {
@@ -682,10 +699,13 @@ export default {
             return
           }
 
-          if (result && result.final_url) {
-            currentUrl.value = result.final_url
-            addressBarUrl.value = result.final_url
-            addConsoleLog('info', `Page refreshed: ${result.final_url}`)
+          if (result && typeof result === 'object') {
+            const navResponse = result as PlaywrightNavigationResponse
+            if (navResponse.final_url) {
+              currentUrl.value = navResponse.final_url
+              addressBarUrl.value = navResponse.final_url
+              addConsoleLog('info', `Page refreshed: ${navResponse.final_url}`)
+            }
           }
         },
         onError: (error) => {

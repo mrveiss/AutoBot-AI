@@ -160,8 +160,9 @@ const sortedFiles = computed(() => {
 const { execute: refreshFiles, loading: isRefreshingFiles } = useAsyncHandler(
   async () => {
     // ApiClient.get() returns parsed JSON directly, not a Response object
-    const data = await apiClient.get(`/api/files/list?path=${encodeURIComponent(currentPath.value)}`)
-    files.value = data.files || []
+    // Use type assertion since ApiClient is JavaScript
+    const data = await apiClient.get(`/api/files/list?path=${encodeURIComponent(currentPath.value)}`) as any
+    files.value = (data as any).files || []
 
     if (viewMode.value === 'tree') {
       await loadDirectoryTree()
@@ -179,8 +180,9 @@ const { execute: refreshFiles, loading: isRefreshingFiles } = useAsyncHandler(
 const { execute: loadDirectoryTree, loading: isLoadingTree } = useAsyncHandler(
   async () => {
     // ApiClient.get() returns parsed JSON directly, not a Response object
-    const data = await apiClient.get('/api/files/tree')
-    directoryTree.value = data.tree || []
+    // Use type assertion since ApiClient is JavaScript
+    const data = await apiClient.get('/api/files/tree') as any
+    directoryTree.value = (data as any).tree || []
   },
   {
     onError: () => {
@@ -266,12 +268,13 @@ const handleFileSelected = async (fileList: FileList) => {
 const { execute: viewFile, loading: isViewingFile } = useAsyncHandler(
   async (file: any) => {
     // ApiClient.get() returns parsed JSON directly, not a Response object
-    const data = await apiClient.get(`/api/files/preview?path=${encodeURIComponent(file.path)}`)
+    // Use type assertion since ApiClient is JavaScript
+    const data = await apiClient.get(`/api/files/preview?path=${encodeURIComponent(file.path)}`) as any
     previewFile.value = {
       name: file.name,
-      type: data.type,
-      url: data.url,
-      content: data.content,
+      type: (data as any).type,
+      url: (data as any).url,
+      content: (data as any).content,
       fileType: getFileType(file.name),
       size: file.size
     }
