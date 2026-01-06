@@ -1155,6 +1155,79 @@ async def worker_heartbeat(heartbeat: WorkerHeartbeat):
         )
 
 
+def _build_worker_redis_config(ssot_config) -> dict:
+    """
+    Build Redis configuration for NPU worker bootstrap.
+
+    Issue #665: Extracted from worker_bootstrap to reduce function length.
+
+    Args:
+        ssot_config: SSOT configuration object
+
+    Returns:
+        Redis configuration dict for workers
+    """
+    return {
+        "host": ssot_config.redis.host,
+        "port": ssot_config.redis.port,
+        "password": ssot_config.redis.password,
+        "db": 0,  # Default db for workers
+        "socket_timeout": 5,
+        "max_connections": 10,
+    }
+
+
+def _build_worker_backend_config(ssot_config) -> dict:
+    """
+    Build backend configuration for NPU worker bootstrap.
+
+    Issue #665: Extracted from worker_bootstrap to reduce function length.
+
+    Args:
+        ssot_config: SSOT configuration object
+
+    Returns:
+        Backend configuration dict for workers
+    """
+    return {
+        "host": ssot_config.backend.host,
+        "port": ssot_config.backend.port,
+        "register_with_backend": True,
+        "health_check_interval": 30,
+    }
+
+
+def _build_worker_models_config() -> dict:
+    """
+    Build model configuration for NPU worker bootstrap.
+
+    Issue #665: Extracted from worker_bootstrap to reduce function length.
+
+    Returns:
+        Model configuration dict for workers
+    """
+    return {
+        "autoload_defaults": True,
+        "default_embedding": "nomic-embed-text",
+        "default_llm": "llama3.2:1b-instruct-q4_K_M",
+    }
+
+
+def _build_worker_logging_config() -> dict:
+    """
+    Build logging configuration for NPU worker bootstrap.
+
+    Issue #665: Extracted from worker_bootstrap to reduce function length.
+
+    Returns:
+        Logging configuration dict for workers
+    """
+    return {
+        "level": "INFO",
+        "format": "structured",
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="worker_bootstrap",
@@ -1170,6 +1243,8 @@ async def worker_bootstrap(request: dict):
 
     Issue #640: If worker provides an existing worker_id, reuse it instead of
     generating a new one. This prevents duplicate registrations on restart.
+
+    Issue #665: Refactored to use extracted helpers for config building.
 
     Args:
         request: Bootstrap request containing:
@@ -1192,7 +1267,6 @@ async def worker_bootstrap(request: dict):
         worker_id = request.get("worker_id", "auto")
         platform = request.get("platform", "unknown")
         worker_url = request.get("url", "")
-        capabilities = request.get("capabilities", [])
 
         # Issue #640: Only generate new ID if "auto" - reuse existing IDs
         if worker_id == "auto" or not worker_id:
@@ -1202,38 +1276,8 @@ async def worker_bootstrap(request: dict):
         else:
             logger.info("Reusing existing worker ID: %s", worker_id)
 
-        # Get Redis configuration from SSOT config
+        # Get configuration from SSOT (Issue #665: uses extracted helpers)
         from src.config.ssot_config import config as ssot_config
-
-        redis_config = {
-            "host": ssot_config.redis.host,
-            "port": ssot_config.redis.port,
-            "password": ssot_config.redis.password,
-            "db": 0,  # Default db for workers
-            "socket_timeout": 5,
-            "max_connections": 10,
-        }
-
-        # Backend config for telemetry
-        backend_config = {
-            "host": ssot_config.backend.host,
-            "port": ssot_config.backend.port,
-            "register_with_backend": True,
-            "health_check_interval": 30,
-        }
-
-        # Model configuration
-        models_config = {
-            "autoload_defaults": True,
-            "default_embedding": "nomic-embed-text",
-            "default_llm": "llama3.2:1b-instruct-q4_K_M",
-        }
-
-        # Logging configuration
-        logging_config = {
-            "level": "INFO",
-            "format": "structured",
-        }
 
         logger.info(
             "Bootstrap config sent to worker %s (%s) at %s",
@@ -1244,10 +1288,10 @@ async def worker_bootstrap(request: dict):
             "success": True,
             "worker_id": worker_id,
             "config": {
-                "redis": redis_config,
-                "backend": backend_config,
-                "models": models_config,
-                "logging": logging_config,
+                "redis": _build_worker_redis_config(ssot_config),
+                "backend": _build_worker_backend_config(ssot_config),
+                "models": _build_worker_models_config(),
+                "logging": _build_worker_logging_config(),
             },
             "server_timestamp": datetime.utcnow().isoformat() + "Z",
             "message": "Bootstrap configuration provided",

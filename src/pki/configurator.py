@@ -27,6 +27,52 @@ from src.pki.config import TLSConfig, VM_DEFINITIONS
 logger = logging.getLogger(__name__)
 
 
+def _build_redis_tls_config(remote_cert_dir: str) -> str:
+    """
+    Build Redis TLS configuration snippet.
+
+    Issue #665: Extracted from configure_redis_tls to reduce function length.
+
+    Args:
+        remote_cert_dir: Remote directory path for certificates
+
+    Returns:
+        Redis TLS configuration string
+    """
+    return f"""
+# TLS Configuration (AutoBot PKI)
+tls-port 6380
+port 6379
+tls-cert-file {remote_cert_dir}/server-cert.pem
+tls-key-file {remote_cert_dir}/server-key.pem
+tls-ca-cert-file {remote_cert_dir}/ca-cert.pem
+tls-auth-clients optional
+"""
+
+
+async def _write_tls_config_to_redis(conn, tls_config: str) -> None:
+    """
+    Write TLS configuration to Redis config file via SFTP.
+
+    Issue #665: Extracted from configure_redis_tls to reduce function length.
+
+    Args:
+        conn: AsyncSSH connection
+        tls_config: TLS configuration content to write
+    """
+    temp_config = "/tmp/redis-tls.conf"
+    async with conn.start_sftp_client() as sftp:
+        async with sftp.open(temp_config, "w") as f:
+            await f.write(tls_config)
+
+    # Append to main config
+    await conn.run(
+        f"sudo cat {temp_config} | sudo tee -a /etc/redis-stack.conf > /dev/null",
+        check=True,
+    )
+    await conn.run(f"rm {temp_config}")
+
+
 @dataclass
 class ConfigurationResult:
     """Result of service configuration."""
@@ -63,9 +109,13 @@ class ServiceConfigurator:
         return results
 
     async def configure_redis_tls(self) -> ConfigurationResult:
-        """Configure Redis Stack for TLS connections."""
+        """
+        Configure Redis Stack for TLS connections.
+
+        Issue #665: Refactored to use extracted helpers for config building
+        and SFTP operations.
+        """
         vm_ip = VM_DEFINITIONS.get("redis", "172.16.168.23")
-        remote_dir = self.config.remote_cert_dir
 
         logger.info("Configuring Redis Stack for TLS")
 
@@ -77,7 +127,6 @@ class ServiceConfigurator:
                 known_hosts=None,
                 connect_timeout=10,
             ) as conn:
-
                 # Check if Redis Stack is running
                 status_result = await conn.run(
                     "systemctl is-active redis-stack-server",
@@ -90,39 +139,17 @@ class ServiceConfigurator:
                         message="Redis Stack is not running",
                     )
 
-                # Create Redis TLS configuration snippet
-                redis_tls_config = f"""
-# TLS Configuration (AutoBot PKI)
-tls-port 6380
-port 6379
-tls-cert-file {remote_dir}/server-cert.pem
-tls-key-file {remote_dir}/server-key.pem
-tls-ca-cert-file {remote_dir}/ca-cert.pem
-tls-auth-clients optional
-"""
-
                 # Check if TLS config already exists
                 check_result = await conn.run(
                     "grep -q 'tls-port' /etc/redis-stack.conf 2>/dev/null || echo 'not_found'"
                 )
 
                 if "not_found" in check_result.stdout:
-                    # Append TLS config to Redis configuration
-                    # Write to temp file first
-                    temp_config = "/tmp/redis-tls.conf"
-                    async with conn.start_sftp_client() as sftp:
-                        async with sftp.open(temp_config, "w") as f:
-                            await f.write(redis_tls_config)
-
-                    # Append to main config
-                    await conn.run(
-                        f"sudo cat {temp_config} | sudo tee -a /etc/redis-stack.conf > /dev/null",
-                        check=True,
-                    )
-                    await conn.run(f"rm {temp_config}")
+                    # Issue #665: Uses extracted helpers
+                    tls_config = _build_redis_tls_config(self.config.remote_cert_dir)
+                    await _write_tls_config_to_redis(conn, tls_config)
 
                     logger.info("Redis TLS configuration added")
-
                     return ConfigurationResult(
                         service_name="redis-stack-server",
                         vm_name="redis",
@@ -130,18 +157,18 @@ tls-auth-clients optional
                         message="TLS configuration added. Redis restart required.",
                         restart_required=True,
                     )
-                else:
-                    logger.info("Redis TLS already configured")
-                    return ConfigurationResult(
-                        service_name="redis-stack-server",
-                        vm_name="redis",
-                        success=True,
-                        message="TLS already configured",
-                        restart_required=False,
-                    )
+
+                logger.info("Redis TLS already configured")
+                return ConfigurationResult(
+                    service_name="redis-stack-server",
+                    vm_name="redis",
+                    success=True,
+                    message="TLS already configured",
+                    restart_required=False,
+                )
 
         except asyncssh.Error as e:
-            logger.error(f"SSH error configuring Redis: {e}")
+            logger.error("SSH error configuring Redis: %s", e)
             return ConfigurationResult(
                 service_name="redis-stack-server",
                 vm_name="redis",
@@ -149,7 +176,7 @@ tls-auth-clients optional
                 message=f"SSH error: {e}",
             )
         except Exception as e:
-            logger.error(f"Error configuring Redis: {e}")
+            logger.error("Error configuring Redis: %s", e)
             return ConfigurationResult(
                 service_name="redis-stack-server",
                 vm_name="redis",
