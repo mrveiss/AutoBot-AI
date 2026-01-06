@@ -401,79 +401,94 @@ class IntelligentAgent:
     async def _handle_complex_goal(
         self, user_input: str
     ) -> AsyncGenerator[StreamChunk, None]:
-        """
-        Handle complex goals that require LLM reasoning.
-
-        Args:
-            user_input: Original user input
-
-        Yields:
-            StreamChunk: Processing results
-        """
+        """Issue #665: Refactored to use extracted helper methods."""
         try:
-            # Create comprehensive system prompt with current context
-            system_prompt = self._build_llm_system_prompt(user_input)
+            yield self._create_analysis_status_chunk()
 
-            yield StreamChunk(
-                timestamp=self._get_timestamp(),
-                chunk_type=ChunkType.STATUS,
-                content="🧠 Analyzing request with AI reasoning...",
-                metadata={"llm_analysis": True},
-            )
+            llm_response = await self._get_llm_analysis(user_input)
+            yield self._create_analysis_result_chunk(llm_response)
 
-            # Use LLM to break down the goal and suggest commands
-            llm_response = await self.llm_interface.generate_response(
-                system_prompt,
-                temperature=0.3,  # Lower temperature for more focused responses
-                max_tokens=500,
-            )
-
-            yield StreamChunk(
-                timestamp=self._get_timestamp(),
-                chunk_type=ChunkType.COMMENTARY,
-                content=f"🎯 AI Analysis: {llm_response}",
-                metadata={"llm_response": True},
-            )
-
-            # Parse LLM response and extract commands
             commands = self._parse_llm_commands(llm_response)
-
-            if commands:
-                # Process commands with safety validation (Issue #315 - reduced nesting)
-                for i, command_info in enumerate(commands, 1):
-                    command = command_info.get("command")
-                    if not command:
-                        continue
-
-                    explanation = command_info.get("explanation", "")
-                    yield StreamChunk(
-                        timestamp=self._get_timestamp(),
-                        chunk_type=ChunkType.COMMENTARY,
-                        content=f"➡️ Step {i}: {explanation}",
-                        metadata={"explanation": True, "step": i},
-                    )
-
-                    async for chunk in self._execute_command_with_safety(command, user_input):
-                        yield chunk
-            else:
-                yield StreamChunk(
-                    timestamp=self._get_timestamp(),
-                    chunk_type=ChunkType.COMMENTARY,
-                    content=(
-                        "🤷 I couldn't determine specific commands for this request. "
-                        "Could you try rephrasing or being more specific?"
-                    ),
-                    metadata={"no_commands_parsed": True},
-                )
+            async for chunk in self._process_parsed_commands(commands, user_input):
+                yield chunk
 
         except Exception as e:
             logger.error("Error in complex goal handling: %s", e)
+            yield self._create_llm_error_chunk(e)
+
+    def _create_analysis_status_chunk(self) -> StreamChunk:
+        """Issue #665: Extracted from _handle_complex_goal to reduce function length."""
+        return StreamChunk(
+            timestamp=self._get_timestamp(),
+            chunk_type=ChunkType.STATUS,
+            content="🧠 Analyzing request with AI reasoning...",
+            metadata={"llm_analysis": True},
+        )
+
+    async def _get_llm_analysis(self, user_input: str) -> str:
+        """Issue #665: Extracted from _handle_complex_goal to reduce function length.
+
+        Get LLM analysis response for a complex goal.
+        """
+        system_prompt = self._build_llm_system_prompt(user_input)
+        return await self.llm_interface.generate_response(
+            system_prompt,
+            temperature=0.3,
+            max_tokens=500,
+        )
+
+    def _create_analysis_result_chunk(self, llm_response: str) -> StreamChunk:
+        """Issue #665: Extracted from _handle_complex_goal to reduce function length."""
+        return StreamChunk(
+            timestamp=self._get_timestamp(),
+            chunk_type=ChunkType.COMMENTARY,
+            content=f"🎯 AI Analysis: {llm_response}",
+            metadata={"llm_response": True},
+        )
+
+    async def _process_parsed_commands(
+        self, commands: List[Dict[str, str]], user_input: str
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """Issue #665: Extracted from _handle_complex_goal to reduce function length.
+
+        Process parsed commands with safety validation and execution.
+        """
+        if not commands:
             yield StreamChunk(
                 timestamp=self._get_timestamp(),
-                chunk_type=ChunkType.ERROR,
-                content=f"❌ Error in AI analysis: {str(e)}",
-                metadata={"llm_error": True},
+                chunk_type=ChunkType.COMMENTARY,
+                content=(
+                    "🤷 I couldn't determine specific commands for this request. "
+                    "Could you try rephrasing or being more specific?"
+                ),
+                metadata={"no_commands_parsed": True},
             )
+            return
+
+        for i, command_info in enumerate(commands, 1):
+            command = command_info.get("command")
+            if not command:
+                continue
+
+            explanation = command_info.get("explanation", "")
+            yield StreamChunk(
+                timestamp=self._get_timestamp(),
+                chunk_type=ChunkType.COMMENTARY,
+                content=f"➡️ Step {i}: {explanation}",
+                metadata={"explanation": True, "step": i},
+            )
+
+            async for chunk in self._execute_command_with_safety(command, user_input):
+                yield chunk
+
+    def _create_llm_error_chunk(self, error: Exception) -> StreamChunk:
+        """Issue #665: Extracted from _handle_complex_goal to reduce function length."""
+        return StreamChunk(
+            timestamp=self._get_timestamp(),
+            chunk_type=ChunkType.ERROR,
+            content=f"❌ Error in AI analysis: {str(error)}",
+            metadata={"llm_error": True},
+        )
 
     async def _execute_command_with_safety(
         self, command: str, user_input: str

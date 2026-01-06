@@ -180,6 +180,61 @@ class OllamaProvider:
             "error": str(error),
         }
 
+    def _create_streaming_timeout(self) -> aiohttp.ClientTimeout:
+        """
+        Issue #665: Extracted from stream_response to reduce function length.
+
+        Create timeout configuration for streaming requests.
+        Issue #551: sock_read=None allows streaming to complete naturally.
+
+        Returns:
+            aiohttp.ClientTimeout configured for streaming
+        """
+        return aiohttp.ClientTimeout(
+            total=None,  # No total timeout for streaming
+            connect=5.0,  # Quick connection timeout
+            sock_read=None,  # CRITICAL: Let streaming complete naturally
+            sock_connect=5.0,
+        )
+
+    async def _process_stream_response(
+        self, response: aiohttp.ClientResponse, request_id: str
+    ) -> dict:
+        """
+        Issue #665: Extracted from stream_response to reduce function length.
+
+        Process the streaming response and return accumulated content.
+
+        Args:
+            response: aiohttp response object
+            request_id: Request identifier
+
+        Returns:
+            Response dictionary with accumulated content
+        """
+        from src.utils.async_stream_processor import process_llm_stream
+
+        accumulated_content, completed_successfully = await process_llm_stream(
+            response,
+            provider="ollama",
+            max_chunks=self.settings.max_chunks,
+            max_buffer_size=10 * 1024 * 1024,  # 10MB protection
+        )
+
+        if not completed_successfully:
+            logger.warning(f"[{request_id}] Stream did not complete properly")
+
+        logger.info(
+            f"[{request_id}] Stream processing completed: "
+            f"{len(accumulated_content)} chars"
+        )
+
+        return {
+            "message": {"role": "assistant", "content": accumulated_content},
+            "done": True,
+            "completed_successfully": completed_successfully,
+        }
+
     async def stream_response(
         self,
         url: str,
@@ -192,8 +247,7 @@ class OllamaProvider:
         Stream Ollama response with comprehensive timeout protection.
 
         Issue #551: Fixed from archived llm_interface_fixed.py
-        - Removed aggressive sock_read timeout that caused premature cancellation
-        - Added proper buffer size protection via process_llm_stream
+        Issue #665: Refactored to use helper methods for reduced complexity.
 
         Args:
             url: Ollama API URL
@@ -209,19 +263,8 @@ class OllamaProvider:
         logger.info("[%s] Starting protected streaming for model %s", request_id, model)
 
         try:
-            from src.utils.async_stream_processor import process_llm_stream
-
             async with self._get_session() as session:
-                # Issue #551: Fixed timeout configuration from llm_interface_fixed.py
-                # CRITICAL: sock_read=None allows streaming to complete naturally
-                # without artificial timeout cutoffs
-                timeout = aiohttp.ClientTimeout(
-                    total=None,  # No total timeout for streaming
-                    connect=5.0,  # Quick connection timeout
-                    sock_read=None,  # CRITICAL: Let streaming complete naturally
-                    sock_connect=5.0,
-                )
-
+                timeout = self._create_streaming_timeout()
                 async with session.post(
                     url, headers=headers, json=data, timeout=timeout
                 ) as response:
@@ -229,42 +272,13 @@ class OllamaProvider:
                         raise aiohttp.ClientError(
                             f"HTTP {response.status}: {await response.text()}"
                         )
-
-                    # Issue #551: process_llm_stream now includes buffer protection
-                    accumulated_content, completed_successfully = (
-                        await process_llm_stream(
-                            response,
-                            provider="ollama",
-                            max_chunks=self.settings.max_chunks,
-                            max_buffer_size=10 * 1024 * 1024,  # 10MB protection
-                        )
-                    )
-
-                    if not completed_successfully:
-                        logger.warning(
-                            f"[{request_id}] Stream did not complete properly"
-                        )
-
-                    logger.info(
-                        f"[{request_id}] Stream processing completed: "
-                        f"{len(accumulated_content)} chars"
-                    )
-
-                    return {
-                        "message": {
-                            "role": "assistant",
-                            "content": accumulated_content,
-                        },
-                        "done": True,
-                        "completed_successfully": completed_successfully,
-                    }
+                    return await self._process_stream_response(response, request_id)
         except asyncio.CancelledError:
-            # Issue #551: Proper cancellation handling from llm_interface_fixed.py
             duration = time.time() - start_time
             logger.info(
                 "[%s] Stream cancelled by user after %.2fs", request_id, duration
             )
-            raise  # Re-raise to preserve cancellation
+            raise
         except Exception as e:
             duration = time.time() - start_time
             logger.error("[%s] Stream error after %.2fs: %s", request_id, duration, e)

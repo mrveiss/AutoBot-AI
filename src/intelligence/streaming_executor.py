@@ -254,75 +254,86 @@ class StreamingCommandExecutor:
         user_goal: str,
         provide_commentary: bool,
     ):
-        """Stream process output in real-time."""
-        stdout_buffer = ""
-        stderr_buffer = ""
-        commentary_counter = 0
+        """Issue #665: Refactored to use extracted stream reader helpers."""
+        # Create stream context for shared state
+        stream_ctx = {"stdout_buffer": "", "stderr_buffer": "", "commentary_counter": 0}
 
-        async def read_stdout():
-            """Async generator yielding stdout chunks with periodic commentary."""
-            nonlocal stdout_buffer, commentary_counter
-
-            while True:
-                try:
-                    data = await process.stdout.read(1024)
-                    if not data:
-                        break
-
-                    text = data.decode("utf-8", errors="replace")
-                    stdout_buffer += text
-
-                    # Yield stdout chunks (Issue #315 - uses helper)
-                    for chunk in self._yield_text_lines_as_chunks(
-                        text, ChunkType.STDOUT, process_id
-                    ):
-                        yield chunk
-
-                    # Provide periodic commentary
-                    commentary_counter += len(text)
-                    if provide_commentary and commentary_counter > 500:
-                        commentary_counter = 0
-                        async for chunk in self._provide_progress_commentary(
-                            stdout_buffer[-200:], user_goal
-                        ):
-                            yield chunk
-
-                except Exception as e:
-                    logger.warning("Error reading stdout: %s", e)
-                    break
-
-        async def read_stderr():
-            """Async generator yielding stderr chunks from process output."""
-            nonlocal stderr_buffer
-
-            while True:
-                try:
-                    data = await process.stderr.read(1024)
-                    if not data:
-                        break
-
-                    text = data.decode("utf-8", errors="replace")
-                    stderr_buffer += text
-
-                    # Yield stderr chunks (Issue #315 - uses helper)
-                    for chunk in self._yield_text_lines_as_chunks(
-                        text, ChunkType.STDERR, process_id
-                    ):
-                        yield chunk
-
-                except Exception as e:
-                    logger.warning("Error reading stderr: %s", e)
-                    break
-
-        # Collect output from both streams
+        # Create tasks for stdout and stderr reading
         tasks = [
-            asyncio.create_task(self._collect_chunks(read_stdout())),
-            asyncio.create_task(self._collect_chunks(read_stderr())),
+            asyncio.create_task(self._collect_chunks(
+                self._read_stdout_stream(process, process_id, user_goal, provide_commentary, stream_ctx)
+            )),
+            asyncio.create_task(self._collect_chunks(
+                self._read_stderr_stream(process, process_id, stream_ctx)
+            )),
         ]
 
-        # Process completed tasks and yield chunks (Issue #315 - restructured)
+        # Process completed tasks and yield chunks
         async for chunk in self._process_stream_tasks(tasks):
             yield chunk
+
+    async def _read_stdout_stream(
+        self,
+        process: asyncio.subprocess.Process,
+        process_id: str,
+        user_goal: str,
+        provide_commentary: bool,
+        stream_ctx: Dict[str, Any],
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """Issue #665: Extracted from _stream_process_output to reduce function length.
+
+        Async generator yielding stdout chunks with periodic commentary.
+        """
+        while True:
+            try:
+                data = await process.stdout.read(1024)
+                if not data:
+                    break
+
+                text = data.decode("utf-8", errors="replace")
+                stream_ctx["stdout_buffer"] += text
+
+                for chunk in self._yield_text_lines_as_chunks(text, ChunkType.STDOUT, process_id):
+                    yield chunk
+
+                # Provide periodic commentary
+                stream_ctx["commentary_counter"] += len(text)
+                if provide_commentary and stream_ctx["commentary_counter"] > 500:
+                    stream_ctx["commentary_counter"] = 0
+                    async for chunk in self._provide_progress_commentary(
+                        stream_ctx["stdout_buffer"][-200:], user_goal
+                    ):
+                        yield chunk
+
+            except Exception as e:
+                logger.warning("Error reading stdout: %s", e)
+                break
+
+    async def _read_stderr_stream(
+        self,
+        process: asyncio.subprocess.Process,
+        process_id: str,
+        stream_ctx: Dict[str, Any],
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """Issue #665: Extracted from _stream_process_output to reduce function length.
+
+        Async generator yielding stderr chunks from process output.
+        """
+        while True:
+            try:
+                data = await process.stderr.read(1024)
+                if not data:
+                    break
+
+                text = data.decode("utf-8", errors="replace")
+                stream_ctx["stderr_buffer"] += text
+
+                for chunk in self._yield_text_lines_as_chunks(text, ChunkType.STDERR, process_id):
+                    yield chunk
+
+            except Exception as e:
+                logger.warning("Error reading stderr: %s", e)
+                break
 
     async def _process_stream_tasks(
         self, tasks: List[asyncio.Task]

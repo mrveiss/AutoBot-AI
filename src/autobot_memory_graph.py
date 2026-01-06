@@ -1362,6 +1362,81 @@ class AutoBotMemoryGraph:
             logger.error("Failed to create user entity: %s", e)
             raise
 
+    def _build_session_metadata(
+        self,
+        session_id: str,
+        owner_id: str,
+        collaborators: Optional[List[str]],
+        metadata: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Issue #665: Extracted from create_chat_session_entity to reduce function length.
+
+        Build metadata dictionary for a chat session entity.
+
+        Args:
+            session_id: Unique session identifier
+            owner_id: User ID of session owner
+            collaborators: List of collaborator user IDs
+            metadata: Optional additional metadata
+
+        Returns:
+            Complete session metadata dictionary
+        """
+        session_metadata = metadata or {}
+        session_metadata.update({
+            "session_id": session_id,
+            "owner_id": owner_id,
+            "mode": "collaborative" if collaborators else "single_user",
+            "collaborators": collaborators or [],
+            "status": "active",
+            "created_at": datetime.utcnow().isoformat(),
+        })
+        return session_metadata
+
+    async def _create_session_owner_relations(
+        self, owner_id: str, entity_id: str
+    ) -> None:
+        """Issue #665: Extracted from create_chat_session_entity to reduce function length.
+
+        Create owner relationships for a chat session entity.
+
+        Args:
+            owner_id: User ID of session owner
+            entity_id: ID of the created session entity
+        """
+        await self.create_relation_by_id(
+            from_entity_id=owner_id,
+            to_entity_id=entity_id,
+            relation_type="owns",
+            metadata={"role": "owner"},
+        )
+        await self.create_relation_by_id(
+            from_entity_id=owner_id,
+            to_entity_id=entity_id,
+            relation_type="has_session",
+        )
+
+    async def _create_collaborator_relations(
+        self, entity_id: str, collaborators: Optional[List[str]]
+    ) -> None:
+        """Issue #665: Extracted from create_chat_session_entity to reduce function length.
+
+        Create collaborator relationships for multi-user sessions.
+
+        Args:
+            entity_id: ID of the session entity
+            collaborators: List of collaborator user IDs
+        """
+        if not collaborators:
+            return
+        for collaborator_id in collaborators:
+            await self.create_relation_by_id(
+                from_entity_id=entity_id,
+                to_entity_id=collaborator_id,
+                relation_type="has_participant",
+                metadata={"role": "collaborator"},
+            )
+
     async def create_chat_session_entity(
         self,
         session_id: str,
@@ -1370,40 +1445,16 @@ class AutoBotMemoryGraph:
         collaborators: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """
-        Create a chat session entity with user ownership tracking.
+        """Create a chat session entity with user ownership tracking.
 
-        Issue #608: Enhanced session entity that supports:
-        - Single user mode (owner only)
-        - Multi-user collaborative mode (owner + collaborators)
-        - Activity tracking (terminal, file, browser, desktop)
-        - Secret scoping
-
-        Args:
-            session_id: Unique session identifier
-            owner_id: User ID of session owner
-            title: Session title
-            collaborators: List of collaborator user IDs (for multi-user mode)
-            metadata: Optional additional metadata
-
-        Returns:
-            Created chat session entity
+        Issue #608/#665: Supports single/multi-user modes, activity tracking, secret scoping.
         """
         self.ensure_initialized()
 
         try:
-            # Build session metadata
-            session_metadata = metadata or {}
-            session_metadata.update({
-                "session_id": session_id,
-                "owner_id": owner_id,
-                "mode": "collaborative" if collaborators else "single_user",
-                "collaborators": collaborators or [],
-                "status": "active",
-                "created_at": datetime.utcnow().isoformat(),
-            })
-
-            # Create session entity
+            session_metadata = self._build_session_metadata(
+                session_id, owner_id, collaborators, metadata
+            )
             entity = await self.create_entity(
                 entity_type="chat_session",
                 name=title or f"Chat Session {session_id[:8]}",
@@ -1411,38 +1462,123 @@ class AutoBotMemoryGraph:
                 metadata=session_metadata,
                 tags=["session", "chat"],
             )
-
-            # Create relationship: User owns Session (using ID-based relation)
-            await self.create_relation_by_id(
-                from_entity_id=owner_id,
-                to_entity_id=entity["id"],
-                relation_type="owns",
-                metadata={"role": "owner"},
-            )
-
-            # Create relationship: User has Session
-            await self.create_relation_by_id(
-                from_entity_id=owner_id,
-                to_entity_id=entity["id"],
-                relation_type="has_session",
-            )
-
-            # Add collaborator relationships if multi-user
-            if collaborators:
-                for collaborator_id in collaborators:
-                    await self.create_relation_by_id(
-                        from_entity_id=entity["id"],
-                        to_entity_id=collaborator_id,
-                        relation_type="has_participant",
-                        metadata={"role": "collaborator"},
-                    )
-
+            await self._create_session_owner_relations(owner_id, entity["id"])
+            await self._create_collaborator_relations(entity["id"], collaborators)
             logger.info("Created chat session entity: %s", session_id)
             return entity
 
         except Exception as e:
             logger.error("Failed to create chat session entity: %s", e)
             raise
+
+    # Valid activity types (Issue #665: module-level constant for validation)
+    _VALID_ACTIVITY_TYPES = frozenset({
+        "terminal_activity",
+        "file_activity",
+        "browser_activity",
+        "desktop_activity",
+    })
+
+    def _validate_activity_type(self, activity_type: str) -> None:
+        """Issue #665: Extracted from create_activity_entity to reduce function length.
+
+        Validate that the activity type is valid.
+
+        Args:
+            activity_type: Activity type to validate
+
+        Raises:
+            ValueError: If activity_type is not valid
+        """
+        if activity_type not in self._VALID_ACTIVITY_TYPES:
+            raise ValueError(
+                f"Invalid activity_type: {activity_type}. "
+                f"Must be one of {self._VALID_ACTIVITY_TYPES}"
+            )
+
+    def _build_activity_metadata(
+        self,
+        session_id: str,
+        user_id: str,
+        secrets_used: Optional[List[str]],
+        metadata: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Issue #665: Extracted from create_activity_entity to reduce function length.
+
+        Build metadata dictionary for an activity entity.
+
+        Args:
+            session_id: Parent chat session ID
+            user_id: User who performed the activity
+            secrets_used: List of secret IDs used
+            metadata: Optional additional metadata
+
+        Returns:
+            Complete activity metadata dictionary
+        """
+        activity_metadata = metadata or {}
+        activity_metadata.update({
+            "session_id": session_id,
+            "user_id": user_id,
+            "secrets_used": secrets_used or [],
+            "timestamp": datetime.utcnow().isoformat(),
+        })
+        return activity_metadata
+
+    async def _create_activity_relations(
+        self, session_id: str, entity_id: str, user_id: str
+    ) -> None:
+        """Issue #665: Extracted from create_activity_entity to reduce function length.
+
+        Create core relationships for an activity entity.
+
+        Args:
+            session_id: Parent chat session ID
+            entity_id: ID of the created activity entity
+            user_id: User who performed the activity
+        """
+        await self.create_relation_by_id(
+            from_entity_id=session_id,
+            to_entity_id=entity_id,
+            relation_type="has_activity",
+        )
+        await self.create_relation_by_id(
+            from_entity_id=entity_id,
+            to_entity_id=user_id,
+            relation_type="performed_by",
+        )
+
+    async def _create_secret_usage_relations(
+        self,
+        entity_id: str,
+        user_id: str,
+        activity_type: str,
+        secrets_used: Optional[List[str]],
+    ) -> None:
+        """Issue #665: Extracted from create_activity_entity to reduce function length.
+
+        Create secret usage relationships and audit trail.
+
+        Args:
+            entity_id: ID of the activity entity
+            user_id: User who performed the activity
+            activity_type: Type of activity
+            secrets_used: List of secret IDs used
+        """
+        if not secrets_used:
+            return
+        for secret_id in secrets_used:
+            await self.create_relation_by_id(
+                from_entity_id=entity_id,
+                to_entity_id=secret_id,
+                relation_type="uses_secret",
+            )
+            await self._create_secret_usage_audit(
+                secret_id=secret_id,
+                user_id=user_id,
+                activity_type=activity_type,
+                activity_id=entity_id,
+            )
 
     async def create_activity_entity(
         self,
@@ -1453,45 +1589,17 @@ class AutoBotMemoryGraph:
         secrets_used: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """
-        Create an activity entity within a chat session.
+        """Create an activity entity within a chat session.
 
-        Issue #608: Activities are tracked with user attribution and secret usage.
-
-        Args:
-            activity_type: One of terminal_activity, file_activity, browser_activity, desktop_activity
-            session_id: Parent chat session ID
-            user_id: User who performed the activity
-            content: Activity content (command, file path, URL, etc.)
-            secrets_used: List of secret IDs used in this activity
-            metadata: Optional additional metadata
-
-        Returns:
-            Created activity entity
+        Issue #608/#665: Activities tracked with user attribution and secret usage.
         """
         self.ensure_initialized()
-
-        valid_activity_types = {
-            "terminal_activity",
-            "file_activity",
-            "browser_activity",
-            "desktop_activity",
-        }
-
-        if activity_type not in valid_activity_types:
-            raise ValueError(f"Invalid activity_type: {activity_type}. Must be one of {valid_activity_types}")
+        self._validate_activity_type(activity_type)
 
         try:
-            # Build activity metadata
-            activity_metadata = metadata or {}
-            activity_metadata.update({
-                "session_id": session_id,
-                "user_id": user_id,
-                "secrets_used": secrets_used or [],
-                "timestamp": datetime.utcnow().isoformat(),
-            })
-
-            # Create activity entity
+            activity_metadata = self._build_activity_metadata(
+                session_id, user_id, secrets_used, metadata
+            )
             entity = await self.create_entity(
                 entity_type=activity_type,
                 name=f"{activity_type.replace('_', ' ').title()} by {user_id[:8]}",
@@ -1499,37 +1607,10 @@ class AutoBotMemoryGraph:
                 metadata=activity_metadata,
                 tags=["activity", activity_type.replace("_activity", "")],
             )
-
-            # Create relationship: Session has Activity (using ID-based relation)
-            await self.create_relation_by_id(
-                from_entity_id=session_id,
-                to_entity_id=entity["id"],
-                relation_type="has_activity",
+            await self._create_activity_relations(session_id, entity["id"], user_id)
+            await self._create_secret_usage_relations(
+                entity["id"], user_id, activity_type, secrets_used
             )
-
-            # Create relationship: Activity performed by User
-            await self.create_relation_by_id(
-                from_entity_id=entity["id"],
-                to_entity_id=user_id,
-                relation_type="performed_by",
-            )
-
-            # Create secret usage relationships
-            if secrets_used:
-                for secret_id in secrets_used:
-                    await self.create_relation_by_id(
-                        from_entity_id=entity["id"],
-                        to_entity_id=secret_id,
-                        relation_type="uses_secret",
-                    )
-                    # Also create secret usage audit entity
-                    await self._create_secret_usage_audit(
-                        secret_id=secret_id,
-                        user_id=user_id,
-                        activity_type=activity_type,
-                        activity_id=entity["id"],
-                    )
-
             logger.info("Created %s entity for session %s", activity_type, session_id)
             return entity
 

@@ -400,6 +400,76 @@ class LLMInterface:
             ),
         )
 
+    async def _execute_chat_request(
+        self,
+        messages: list,
+        llm_type: str,
+        request_id: str,
+        start_time: float,
+        skip_cache: bool,
+        **kwargs,
+    ) -> LLMResponse:
+        """
+        Issue #665: Extracted from chat_completion to reduce function length.
+
+        Execute the chat request with caching, fallback, and metrics.
+
+        Args:
+            messages: List of message dicts
+            llm_type: Type of LLM
+            request_id: Request identifier
+            start_time: Request start time
+            skip_cache: Whether to skip cache lookup
+            **kwargs: Additional parameters
+
+        Returns:
+            LLMResponse object
+        """
+        provider, model_name = self._determine_provider_and_model(llm_type, **kwargs)
+        messages = self._setup_system_prompt(messages, llm_type)
+
+        # Check L1/L2 cache first (unless skip_cache=True)
+        cache_key = None
+        if not skip_cache and not kwargs.get("stream", False):
+            cached_response, cache_key = await self._check_cache(
+                messages, model_name, provider, request_id, start_time, **kwargs
+            )
+            if cached_response:
+                return cached_response
+
+        # Create standardized request and execute with fallback
+        request = LLMRequest(
+            messages=messages,
+            llm_type=llm_type,
+            provider=provider,
+            model_name=model_name,
+            request_id=request_id,
+            **kwargs,
+        )
+        response = await self._execute_with_fallback(request, provider)
+
+        # Update metrics and cache
+        processing_time = time.time() - start_time
+        self._update_metrics(
+            response.provider if response.provider else provider,
+            processing_time,
+            success=not response.error,
+        )
+
+        if cache_key and not response.error and response.content:
+            await self._store_in_cache(cache_key, response, request_id)
+
+        # Track usage for cost optimization (Issue #229)
+        await self._track_llm_usage(
+            messages=messages,
+            model=model_name,
+            response=response,
+            processing_time=processing_time,
+            session_id=kwargs.get("session_id"),
+        )
+
+        return response
+
     # Main chat completion method
     async def chat_completion(
         self, messages: list, llm_type: str = "orchestrator", **kwargs
@@ -408,6 +478,7 @@ class LLMInterface:
         Enhanced chat completion with multi-provider support and intelligent routing.
 
         Issue #551: Added L1/L2 caching and provider fallback chain.
+        Issue #665: Refactored to use helper methods for reduced complexity.
 
         Args:
             messages: List of message dicts
@@ -423,52 +494,9 @@ class LLMInterface:
 
         try:
             self._metrics["total_requests"] += 1
-            provider, model_name = self._determine_provider_and_model(llm_type, **kwargs)
-            messages = self._setup_system_prompt(messages, llm_type)
-
-            # Issue #551: Check L1/L2 cache first (unless skip_cache=True)
-            cache_key = None
-            if not skip_cache and not kwargs.get("stream", False):
-                cached_response, cache_key = await self._check_cache(
-                    messages, model_name, provider, request_id, start_time, **kwargs
-                )
-                if cached_response:
-                    return cached_response
-
-            # Create standardized request and execute with fallback
-            request = LLMRequest(
-                messages=messages,
-                llm_type=llm_type,
-                provider=provider,
-                model_name=model_name,
-                request_id=request_id,
-                **kwargs,
+            return await self._execute_chat_request(
+                messages, llm_type, request_id, start_time, skip_cache, **kwargs
             )
-            response = await self._execute_with_fallback(request, provider)
-
-            # Update metrics
-            processing_time = time.time() - start_time
-            self._update_metrics(
-                response.provider if response.provider else provider,
-                processing_time,
-                success=not response.error,
-            )
-
-            # Issue #551: Cache successful responses
-            if cache_key and not response.error and response.content:
-                await self._store_in_cache(cache_key, response, request_id)
-
-            # Track usage for cost optimization (Issue #229)
-            await self._track_llm_usage(
-                messages=messages,
-                model=model_name,
-                response=response,
-                processing_time=processing_time,
-                session_id=kwargs.get("session_id"),
-            )
-
-            return response
-
         except Exception as e:
             processing_time = time.time() - start_time
             self._update_metrics("unknown", processing_time, success=False)
