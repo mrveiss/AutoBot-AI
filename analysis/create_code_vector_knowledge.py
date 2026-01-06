@@ -17,10 +17,9 @@ from typing import List, Dict, Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# Import canonical Redis client utility
+# Import canonical Redis client utility (Issue #692)
 from src.utils.redis_client import get_redis_client
 from src.knowledge_base import KnowledgeBase
-from src.utils.redis_database_manager import RedisDatabaseManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -30,7 +29,7 @@ class CodeVectorKnowledgeCreator:
     """Creates vector knowledge base from code analytics indexes"""
 
     def __init__(self):
-        self.redis_manager = RedisDatabaseManager()
+        # Issue #692: Removed unused RedisDatabaseManager - use get_redis_client() directly
         self.kb = None
 
     async def initialize(self):
