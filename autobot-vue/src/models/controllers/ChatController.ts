@@ -311,6 +311,15 @@ export class ChatController {
                 metadata: data.metadata || {}
               })
 
+              // Issue #691: Update streaming preview with actual content for real-time feedback
+              // Extract meaningful preview text from the streaming content
+              if (data.content && this.chatStore.isTyping) {
+                const preview = this.extractStreamingPreview(data.content, messageType)
+                if (preview) {
+                  this.chatStore.setStreamingPreview(preview)
+                }
+              }
+
             } catch (e) {
               logger.warn('Failed to parse stream data:', { line, error: e })
             }
@@ -346,6 +355,54 @@ export class ChatController {
     } finally {
       reader.releaseLock()
     }
+  }
+
+  /**
+   * Issue #691: Extract a meaningful preview from streaming content.
+   * Used to display real LLM content in the typing indicator instead of placeholder text.
+   *
+   * @param content - The full streaming content so far
+   * @param messageType - The type of message (thought, planning, response, etc.)
+   * @returns A short preview string (max 80 chars) or empty string if no preview available
+   */
+  private extractStreamingPreview(content: string, messageType?: string): string {
+    if (!content || content.length < 3) return ''
+
+    // Strip internal tags that shouldn't be shown to users
+    let preview = content
+      .replace(/\[THOUGHT\]|\[\/THOUGHT\]|\[PLANNING\]|\[\/PLANNING\]/gi, '')
+      .replace(/<tool_call[^>]*>.*?<\/tool_call>/gs, '')
+      .replace(/<TOOL_CALL[^>]*>.*?<\/TOOL_CALL>/gs, '')
+      .trim()
+
+    if (!preview) return ''
+
+    // Get the last meaningful portion (most recent thinking)
+    // Take the last sentence or last 80 characters
+    // Issue #691: Filter empty sentences to avoid blank preview when content ends with punctuation
+    const sentences = preview.split(/[.!?]\s+/)
+    const lastSentence = sentences.filter(s => s.trim()).pop() || preview
+
+    // Create a concise preview
+    let result = lastSentence.trim()
+    if (result.length > 80) {
+      // Find a good breaking point (word boundary)
+      result = result.substring(0, 77)
+      const lastSpace = result.lastIndexOf(' ')
+      if (lastSpace > 50) {
+        result = result.substring(0, lastSpace)
+      }
+      result += '...'
+    }
+
+    // Add type-specific prefix for context
+    if (messageType === 'thought') {
+      return `💭 ${result}`
+    } else if (messageType === 'planning') {
+      return `📋 ${result}`
+    }
+
+    return result
   }
 
   /**

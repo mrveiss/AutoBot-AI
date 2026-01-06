@@ -6,6 +6,7 @@ import type {
   WorkflowApproval
 } from '@/types/api'
 import apiClient from '@/utils/ApiClient'
+import type { RequestOptions } from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
 // Create scoped logger for ApiService
@@ -24,12 +25,41 @@ class ApiService {
   // Core HTTP methods - ApiClient already returns parsed JSON
   // FIXED: ApiClient.get/post/put/delete return parsed JSON data, NOT Response objects
   // Removed double-parsing (.json() call) that was causing "response.json is not a function" errors
-  async get<T>(endpoint: string): Promise<T> {
-    return await this.client.get(endpoint) as T
+  // Issue #701: Added options parameter to support params and responseType
+  async get<T>(endpoint: string, options?: RequestOptions & { params?: Record<string, unknown> }): Promise<T> {
+    // Handle query params if provided
+    let url = endpoint
+    if (options?.params) {
+      const searchParams = new URLSearchParams()
+      for (const [key, value] of Object.entries(options.params)) {
+        if (value !== undefined && value !== null) {
+          searchParams.append(key, String(value))
+        }
+      }
+      const queryString = searchParams.toString()
+      if (queryString) {
+        url = `${endpoint}${endpoint.includes('?') ? '&' : '?'}${queryString}`
+      }
+    }
+    return await this.client.get(url, options) as T
   }
 
-  async post<T>(endpoint: string, data: unknown): Promise<T> {
-    return await this.client.post(endpoint, data) as T
+  async post<T>(endpoint: string, data: unknown, options?: RequestOptions & { params?: Record<string, unknown> }): Promise<T> {
+    // Handle query params if provided
+    let url = endpoint
+    if (options?.params) {
+      const searchParams = new URLSearchParams()
+      for (const [key, value] of Object.entries(options.params)) {
+        if (value !== undefined && value !== null) {
+          searchParams.append(key, String(value))
+        }
+      }
+      const queryString = searchParams.toString()
+      if (queryString) {
+        url = `${endpoint}${endpoint.includes('?') ? '&' : '?'}${queryString}`
+      }
+    }
+    return await this.client.post(url, data, options) as T
   }
 
   async put<T>(endpoint: string, data: unknown): Promise<T> {

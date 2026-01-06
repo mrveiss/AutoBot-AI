@@ -97,6 +97,8 @@ export const useChatStore = defineStore('chat', () => {
   const sessions = ref<ChatSession[]>([])
   const currentSessionId = ref<string | null>(null)
   const isTyping = ref(false)
+  // Issue #691: Track streaming preview text for real-time feedback
+  const streamingPreview = ref<string>('')
   // Issue #680: Track pending approval state to prevent polling race conditions
   const hasPendingApproval = ref(false)
   const sidebarCollapsed = ref(false)
@@ -388,6 +390,15 @@ export const useChatStore = defineStore('chat', () => {
 
   function setTyping(typing: boolean) {
     isTyping.value = typing
+    // Issue #691: Clear streaming preview when typing stops
+    if (!typing) {
+      streamingPreview.value = ''
+    }
+  }
+
+  // Issue #691: Set streaming preview text for real-time feedback during LLM generation
+  function setStreamingPreview(preview: string) {
+    streamingPreview.value = preview
   }
 
   // Issue #680: Pending approval state management to prevent polling race conditions
@@ -830,6 +841,7 @@ export const useChatStore = defineStore('chat', () => {
     sessions,
     currentSessionId,
     isTyping,
+    streamingPreview,  // Issue #691: Streaming preview text
     hasPendingApproval,  // Issue #680: Pending approval state
     sidebarCollapsed,
     settings,
@@ -858,6 +870,7 @@ export const useChatStore = defineStore('chat', () => {
     updateSettings,
     toggleSidebar,
     setTyping,
+    setStreamingPreview,  // Issue #691: Streaming preview text management
     setPendingApproval,  // Issue #680: Pending approval state management
     // Issue #671: Initialization state management
     setInitializing,
