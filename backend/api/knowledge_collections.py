@@ -25,7 +25,8 @@ Related Issues: #77 (Organization), #412 (Collections)
 import logging
 import re
 
-from fastapi import APIRouter, HTTPException, Path, Query, Request
+from fastapi import APIRouter, HTTPException, Path, Query
+from src.constants.threshold_constants import QueryDefaults, Request
 
 from backend.api.knowledge_models import (
     CollectionFactsRequest,
@@ -118,7 +119,7 @@ async def create_collection(
 @router.get("/collections")
 async def list_collections(
     limit: int = Query(default=100, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
+    offset: int = Query(default=QueryDefaults.DEFAULT_OFFSET, ge=0),
     sort_by: str = Query(default="name", regex="^(name|created_at|fact_count)$"),
     req: Request = None,
 ):
@@ -476,7 +477,7 @@ async def remove_facts_from_collection(
 async def get_facts_in_collection(
     collection_id: str = Path(..., description="Collection UUID"),
     limit: int = Query(default=50, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
+    offset: int = Query(default=QueryDefaults.DEFAULT_OFFSET, ge=0),
     include_content: bool = Query(default=False, description="Include fact content"),
     req: Request = None,
 ):

@@ -539,7 +539,7 @@ async def get_facts_in_category(
     category_id: str = Path(..., description="Category UUID"),
     include_descendants: bool = Query(default=False, description="Include facts from children"),
     limit: int = Query(default=50, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
+    offset: int = Query(default=QueryDefaults.DEFAULT_OFFSET, ge=0),
     req: Request = None,
 ):
     """

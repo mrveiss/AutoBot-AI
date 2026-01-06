@@ -368,7 +368,7 @@ class PaginationRequest(BaseModel):
     """Request model for pagination"""
 
     limit: int = Field(default=100, ge=1, le=1000)
-    offset: int = Field(default=0, ge=0)
+    offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0)
     cursor: Optional[str] = Field(default=None, max_length=255)
     category: Optional[str] = Field(default=None, max_length=100)
 
@@ -569,7 +569,7 @@ class SearchByTagsRequest(BaseModel):
         description="If True, facts must have ALL tags. If False, facts with ANY tag.",
     )
     limit: int = Field(default=50, ge=1, le=500)
-    offset: int = Field(default=0, ge=0)
+    offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0)
     category: Optional[str] = Field(default=None, max_length=100)
 
     @validator("tags", each_item=True)

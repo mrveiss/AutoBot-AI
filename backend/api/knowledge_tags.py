@@ -30,7 +30,8 @@ import logging
 import re
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Path, Query, Request
+from fastapi import APIRouter, HTTPException, Path, Query
+from src.constants.threshold_constants import QueryDefaults, Request
 
 from backend.api.knowledge_models import (
     AddTagsRequest,
@@ -550,7 +551,7 @@ async def merge_tags(
 async def get_facts_by_tag(
     tag_name: str = Path(..., description="Tag name to get facts for"),
     limit: int = Query(default=50, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
+    offset: int = Query(default=QueryDefaults.DEFAULT_OFFSET, ge=0),
     include_content: bool = Query(default=False),
     req: Request = None,
 ):
