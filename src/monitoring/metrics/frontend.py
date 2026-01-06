@@ -24,10 +24,27 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
     """Recorder for frontend Real User Monitoring (RUM) metrics."""
 
     def _init_metrics(self) -> None:
-        """Initialize frontend metrics."""
-        # =========================================================================
-        # Page Performance Metrics
-        # =========================================================================
+        """
+        Initialize frontend metrics.
+
+        Issue #665: Refactored to use helper methods per category to reduce
+        function length from 191 lines to under 50 lines.
+        """
+        self._init_page_performance_metrics()
+        self._init_api_call_metrics()
+        self._init_javascript_error_metrics()
+        self._init_user_interaction_metrics()
+        self._init_session_metrics()
+        self._init_websocket_metrics()
+        self._init_resource_timing_metrics()
+        self._init_critical_issues_metrics()
+
+    def _init_page_performance_metrics(self) -> None:
+        """
+        Initialize page performance metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.page_load_seconds = Histogram(
             "autobot_frontend_page_load_seconds",
             "Page load time in seconds",
@@ -68,9 +85,12 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Frontend API Call Metrics
-        # =========================================================================
+    def _init_api_call_metrics(self) -> None:
+        """
+        Initialize frontend API call metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.api_requests_total = Counter(
             "autobot_frontend_api_requests_total",
             "Total frontend API requests",
@@ -107,9 +127,12 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # JavaScript Error Metrics
-        # =========================================================================
+    def _init_javascript_error_metrics(self) -> None:
+        """
+        Initialize JavaScript error tracking metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.js_errors_total = Counter(
             "autobot_frontend_js_errors_total",
             "Total JavaScript errors",
@@ -131,9 +154,12 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # User Interaction Metrics
-        # =========================================================================
+    def _init_user_interaction_metrics(self) -> None:
+        """
+        Initialize user interaction metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.user_actions_total = Counter(
             "autobot_frontend_user_actions_total",
             "Total user actions/interactions",
@@ -148,9 +174,12 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Session Metrics
-        # =========================================================================
+    def _init_session_metrics(self) -> None:
+        """
+        Initialize session tracking metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.session_duration_seconds = Histogram(
             "autobot_frontend_session_duration_seconds",
             "User session duration in seconds",
@@ -170,9 +199,12 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # WebSocket Metrics (from frontend perspective)
-        # =========================================================================
+    def _init_websocket_metrics(self) -> None:
+        """
+        Initialize WebSocket metrics from frontend perspective.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.ws_connection_events_total = Counter(
             "autobot_frontend_ws_connection_events_total",
             "WebSocket connection events from frontend",
@@ -187,9 +219,12 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Resource Timing Metrics
-        # =========================================================================
+    def _init_resource_timing_metrics(self) -> None:
+        """
+        Initialize resource timing metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.slow_resources_total = Counter(
             "autobot_frontend_slow_resources_total",
             "Total slow resource loads (>1s)",
@@ -205,9 +240,12 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Critical Issues Metrics
-        # =========================================================================
+    def _init_critical_issues_metrics(self) -> None:
+        """
+        Initialize critical issues metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.critical_issues_total = Counter(
             "autobot_frontend_critical_issues_total",
             "Total critical issues reported from frontend",

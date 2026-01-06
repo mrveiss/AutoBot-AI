@@ -120,11 +120,11 @@ def _get_system_commands_data() -> list:
     return _get_fallback_system_commands()
 
 
-def _get_fallback_system_commands() -> list:
+def _get_network_commands() -> list:
     """
-    Fallback system commands data if YAML file is not available.
+    Return network-related system commands (curl, ssh).
 
-    Issue #515: Preserved for backwards compatibility during data migration.
+    Issue #665: Extracted from _get_fallback_system_commands to reduce function length.
     """
     return [
         {
@@ -147,24 +147,6 @@ def _get_fallback_system_commands() -> list:
             ],
         },
         {
-            "command": "grep",
-            "description": "Search text patterns in files",
-            "usage": "grep [options] pattern [file...]",
-            "examples": [
-                "grep 'error' /var/log/syslog",
-                "grep -r 'function' /path/to/code/",
-                "grep -i 'warning' *.log",
-                "ps aux | grep python",
-            ],
-            "options": [
-                "-r: Recursive search",
-                "-i: Case insensitive",
-                "-n: Line numbers",
-                "-v: Invert match",
-                "-l: Files with matches only",
-            ],
-        },
-        {
             "command": "ssh",
             "description": "Secure Shell for remote login and command execution",
             "usage": "ssh [options] [user@]hostname [command]",
@@ -182,6 +164,44 @@ def _get_fallback_system_commands() -> list:
                 "-L: Local port forwarding",
             ],
         },
+    ]
+
+
+def _get_text_processing_commands() -> list:
+    """
+    Return text processing commands (grep).
+
+    Issue #665: Extracted from _get_fallback_system_commands to reduce function length.
+    """
+    return [
+        {
+            "command": "grep",
+            "description": "Search text patterns in files",
+            "usage": "grep [options] pattern [file...]",
+            "examples": [
+                "grep 'error' /var/log/syslog",
+                "grep -r 'function' /path/to/code/",
+                "grep -i 'warning' *.log",
+                "ps aux | grep python",
+            ],
+            "options": [
+                "-r: Recursive search",
+                "-i: Case insensitive",
+                "-n: Line numbers",
+                "-v: Invert match",
+                "-l: Files with matches only",
+            ],
+        },
+    ]
+
+
+def _get_container_commands() -> list:
+    """
+    Return container-related commands (docker).
+
+    Issue #665: Extracted from _get_fallback_system_commands to reduce function length.
+    """
+    return [
         {
             "command": "docker",
             "description": (
@@ -202,6 +222,16 @@ def _get_fallback_system_commands() -> list:
                 "logs: View container logs",
             ],
         },
+    ]
+
+
+def _get_version_control_commands() -> list:
+    """
+    Return version control commands (git).
+
+    Issue #665: Extracted from _get_fallback_system_commands to reduce function length.
+    """
+    return [
         {
             "command": "git",
             "description": "Distributed version control system",
@@ -220,6 +250,16 @@ def _get_fallback_system_commands() -> list:
                 "pull: Download changes",
             ],
         },
+    ]
+
+
+def _get_file_commands() -> list:
+    """
+    Return file operation commands (find, tar, chmod).
+
+    Issue #665: Extracted from _get_fallback_system_commands to reduce function length.
+    """
+    return [
         {
             "command": "find",
             "description": "Search for files and directories",
@@ -257,6 +297,34 @@ def _get_fallback_system_commands() -> list:
             ],
         },
         {
+            "command": "chmod",
+            "description": "Change file permissions",
+            "usage": "chmod [options] mode file...",
+            "examples": [
+                "chmod 755 script.sh",
+                "chmod +x program",
+                "chmod -R 644 /path/to/files/",
+                "chmod u+w,g-w file.txt",
+            ],
+            "options": [
+                "755: rwxr-xr-x (executable)",
+                "644: rw-r--r-- (readable)",
+                "+x: Add execute permission",
+                "-R: Recursive",
+                "u/g/o: user/group/others",
+            ],
+        },
+    ]
+
+
+def _get_system_admin_commands() -> list:
+    """
+    Return system administration commands (systemctl, ps).
+
+    Issue #665: Extracted from _get_fallback_system_commands to reduce function length.
+    """
+    return [
+        {
             "command": "systemctl",
             "description": "Control systemd services",
             "usage": "systemctl [options] COMMAND [service]",
@@ -291,25 +359,25 @@ def _get_fallback_system_commands() -> list:
                 "-C: Processes by command",
             ],
         },
-        {
-            "command": "chmod",
-            "description": "Change file permissions",
-            "usage": "chmod [options] mode file...",
-            "examples": [
-                "chmod 755 script.sh",
-                "chmod +x program",
-                "chmod -R 644 /path/to/files/",
-                "chmod u+w,g-w file.txt",
-            ],
-            "options": [
-                "755: rwxr-xr-x (executable)",
-                "644: rw-r--r-- (readable)",
-                "+x: Add execute permission",
-                "-R: Recursive",
-                "u/g/o: user/group/others",
-            ],
-        },
     ]
+
+
+def _get_fallback_system_commands() -> list:
+    """
+    Fallback system commands data if YAML file is not available.
+
+    Issue #515: Preserved for backwards compatibility during data migration.
+    Issue #665: Refactored to use helper functions per command category
+    to reduce function length from 190 lines to under 50 lines.
+    """
+    commands = []
+    commands.extend(_get_network_commands())
+    commands.extend(_get_text_processing_commands())
+    commands.extend(_get_container_commands())
+    commands.extend(_get_version_control_commands())
+    commands.extend(_get_file_commands())
+    commands.extend(_get_system_admin_commands())
+    return commands
 
 
 async def _store_autobot_config_info(kb_to_use) -> bool:

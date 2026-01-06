@@ -23,10 +23,20 @@ class PerformanceMetricsRecorder(BaseMetricsRecorder):
     """Recorder for GPU/NPU performance and hardware acceleration metrics."""
 
     def _init_metrics(self) -> None:
-        """Initialize performance metrics."""
-        # =========================================================================
-        # GPU Metrics
-        # =========================================================================
+        """Initialize performance metrics by delegating to category-specific helpers."""
+        self._init_gpu_metrics()
+        self._init_npu_metrics()
+        self._init_npu_worker_metrics()
+        self._init_performance_score_metrics()
+        self._init_alert_metrics()
+        self._init_multimodal_metrics()
+
+    def _init_gpu_metrics(self) -> None:
+        """
+        Initialize GPU-related metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.gpu_utilization = Gauge(
             "autobot_gpu_utilization_percent",
             "GPU utilization percentage",
@@ -68,9 +78,12 @@ class PerformanceMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # NPU Metrics
-        # =========================================================================
+    def _init_npu_metrics(self) -> None:
+        """
+        Initialize NPU-related metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.npu_utilization = Gauge(
             "autobot_npu_utilization_percent",
             "NPU utilization percentage",
@@ -102,9 +115,13 @@ class PerformanceMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Per-Worker NPU Metrics (Issue #68)
-        # =========================================================================
+    def _init_npu_worker_metrics(self) -> None:
+        """
+        Initialize per-worker NPU metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        Issue #68: Per-worker NPU metrics for distributed NPU processing.
+        """
         self.npu_worker_status = Gauge(
             "autobot_npu_worker_status",
             "NPU worker status (1=online, 0=offline)",
@@ -155,9 +172,12 @@ class PerformanceMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Performance Metrics
-        # =========================================================================
+    def _init_performance_score_metrics(self) -> None:
+        """
+        Initialize performance score and bottleneck metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.performance_score = Gauge(
             "autobot_performance_score",
             "Overall performance score (0-100)",
@@ -184,9 +204,12 @@ class PerformanceMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Performance Alerts
-        # =========================================================================
+    def _init_alert_metrics(self) -> None:
+        """
+        Initialize performance alert metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.performance_alerts = Counter(
             "autobot_performance_alerts_total",
             "Total performance alerts generated",
@@ -201,9 +224,12 @@ class PerformanceMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Multi-modal Performance
-        # =========================================================================
+    def _init_multimodal_metrics(self) -> None:
+        """
+        Initialize multi-modal processing metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.multimodal_processing_time = Histogram(
             "autobot_multimodal_processing_seconds",
             "Multi-modal processing time in seconds",

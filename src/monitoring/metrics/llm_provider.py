@@ -26,10 +26,23 @@ class LLMProviderMetricsRecorder(BaseMetricsRecorder):
     """Recorder for LLM provider metrics."""
 
     def _init_metrics(self) -> None:
-        """Initialize LLM provider metrics."""
-        # =========================================================================
-        # Request Metrics
-        # =========================================================================
+        """Initialize LLM provider metrics.
+
+        Delegates to helper methods for each metric category.
+        Issue #665: Refactored from 149-line monolithic function.
+        """
+        self._init_request_metrics()
+        self._init_token_metrics()
+        self._init_cost_metrics()
+        self._init_error_metrics()
+        self._init_rate_limit_metrics()
+        self._init_provider_health_metrics()
+
+    def _init_request_metrics(self) -> None:
+        """Initialize request tracking metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.requests_total = Counter(
             "autobot_llm_requests_total",
             "Total LLM requests",
@@ -60,9 +73,11 @@ class LLMProviderMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Token Metrics
-        # =========================================================================
+    def _init_token_metrics(self) -> None:
+        """Initialize token tracking metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.tokens_total = Counter(
             "autobot_llm_tokens_total",
             "Total tokens processed",
@@ -85,9 +100,11 @@ class LLMProviderMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Cost Metrics
-        # =========================================================================
+    def _init_cost_metrics(self) -> None:
+        """Initialize cost tracking metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.cost_dollars = Counter(
             "autobot_llm_cost_dollars_total",
             "Total cost in USD",
@@ -110,9 +127,11 @@ class LLMProviderMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Error Metrics
-        # =========================================================================
+    def _init_error_metrics(self) -> None:
+        """Initialize error tracking metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.errors_total = Counter(
             "autobot_llm_errors_total",
             "Total LLM errors",
@@ -134,9 +153,11 @@ class LLMProviderMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Rate Limiting Metrics
-        # =========================================================================
+    def _init_rate_limit_metrics(self) -> None:
+        """Initialize rate limiting metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.rate_limit_remaining = Gauge(
             "autobot_llm_rate_limit_remaining",
             "Remaining rate limit quota",
@@ -158,9 +179,11 @@ class LLMProviderMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Provider Health Metrics
-        # =========================================================================
+    def _init_provider_health_metrics(self) -> None:
+        """Initialize provider health metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.provider_available = Gauge(
             "autobot_llm_provider_available",
             "Provider availability (1=available, 0=unavailable)",

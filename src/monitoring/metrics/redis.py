@@ -25,10 +25,21 @@ class RedisMetricsRecorder(BaseMetricsRecorder):
     """Recorder for Redis metrics."""
 
     def _init_metrics(self) -> None:
-        """Initialize Redis metrics."""
-        # =========================================================================
-        # Operation Metrics
-        # =========================================================================
+        """Initialize Redis metrics by delegating to category-specific helpers."""
+        self._init_operation_metrics()
+        self._init_connection_pool_metrics()
+        self._init_memory_metrics()
+        self._init_key_space_metrics()
+        self._init_pubsub_metrics()
+        self._init_stream_metrics()
+        self._init_health_metrics()
+
+    def _init_operation_metrics(self) -> None:
+        """
+        Initialize operation-related metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.operations_total = Counter(
             "autobot_redis_operations_total",
             "Total Redis operations",
@@ -59,9 +70,12 @@ class RedisMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Connection Pool Metrics
-        # =========================================================================
+    def _init_connection_pool_metrics(self) -> None:
+        """
+        Initialize connection pool-related metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.connections_active = Gauge(
             "autobot_redis_connections_active",
             "Current number of active connections",
@@ -98,9 +112,12 @@ class RedisMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Memory Metrics
-        # =========================================================================
+    def _init_memory_metrics(self) -> None:
+        """
+        Initialize memory-related metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.memory_used_bytes = Gauge(
             "autobot_redis_memory_used_bytes",
             "Redis memory usage in bytes",
@@ -122,9 +139,12 @@ class RedisMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Key Space Metrics
-        # =========================================================================
+    def _init_key_space_metrics(self) -> None:
+        """
+        Initialize key space-related metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.keys_total = Gauge(
             "autobot_redis_keys_total",
             "Total number of keys",
@@ -160,9 +180,12 @@ class RedisMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Pub/Sub Metrics
-        # =========================================================================
+    def _init_pubsub_metrics(self) -> None:
+        """
+        Initialize pub/sub-related metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.pubsub_channels = Gauge(
             "autobot_redis_pubsub_channels_active",
             "Number of active pub/sub channels",
@@ -191,9 +214,12 @@ class RedisMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Stream Metrics (Redis Streams)
-        # =========================================================================
+    def _init_stream_metrics(self) -> None:
+        """
+        Initialize Redis Streams-related metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.stream_entries = Gauge(
             "autobot_redis_stream_entries",
             "Number of entries in stream",
@@ -215,9 +241,12 @@ class RedisMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Health Metrics
-        # =========================================================================
+    def _init_health_metrics(self) -> None:
+        """
+        Initialize health-related metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.server_available = Gauge(
             "autobot_redis_server_available",
             "Redis server availability (1=available, 0=unavailable)",

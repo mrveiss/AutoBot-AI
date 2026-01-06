@@ -24,10 +24,23 @@ class WebSocketMetricsRecorder(BaseMetricsRecorder):
     """Recorder for WebSocket metrics."""
 
     def _init_metrics(self) -> None:
-        """Initialize WebSocket metrics."""
-        # =========================================================================
-        # Connection Metrics
-        # =========================================================================
+        """Initialize WebSocket metrics.
+
+        Delegates to helper methods for each metric category.
+        Issue #665: Refactored from 149-line monolithic function.
+        """
+        self._init_connection_metrics()
+        self._init_message_metrics()
+        self._init_error_metrics()
+        self._init_latency_metrics()
+        self._init_room_metrics()
+        self._init_throughput_metrics()
+
+    def _init_connection_metrics(self) -> None:
+        """Initialize connection tracking metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.connections_active = Gauge(
             "autobot_websocket_connections_active",
             "Current number of active WebSocket connections",
@@ -57,9 +70,11 @@ class WebSocketMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Message Metrics
-        # =========================================================================
+    def _init_message_metrics(self) -> None:
+        """Initialize message tracking metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.messages_sent = Counter(
             "autobot_websocket_messages_sent_total",
             "Total messages sent to clients",
@@ -89,9 +104,11 @@ class WebSocketMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Error Metrics
-        # =========================================================================
+    def _init_error_metrics(self) -> None:
+        """Initialize error tracking metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.errors_total = Counter(
             "autobot_websocket_errors_total",
             "Total WebSocket errors",
@@ -106,9 +123,11 @@ class WebSocketMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Latency Metrics
-        # =========================================================================
+    def _init_latency_metrics(self) -> None:
+        """Initialize latency tracking metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.message_latency = Histogram(
             "autobot_websocket_message_latency_seconds",
             "Message processing latency in seconds",
@@ -125,9 +144,11 @@ class WebSocketMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Room/Channel Metrics
-        # =========================================================================
+    def _init_room_metrics(self) -> None:
+        """Initialize room/channel tracking metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.rooms_active = Gauge(
             "autobot_websocket_rooms_active",
             "Current number of active rooms/channels",
@@ -149,9 +170,11 @@ class WebSocketMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Throughput Metrics
-        # =========================================================================
+    def _init_throughput_metrics(self) -> None:
+        """Initialize throughput tracking metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.bytes_sent = Counter(
             "autobot_websocket_bytes_sent_total",
             "Total bytes sent",
