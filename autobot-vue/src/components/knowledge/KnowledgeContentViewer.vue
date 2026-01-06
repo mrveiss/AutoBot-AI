@@ -98,7 +98,7 @@ const { formatFileSize, formatDateOnly: formatDate, getFileIcon: getFileIconUtil
 
 const fileIcon = computed(() => {
   if (!props.selectedFile) return 'fas fa-file'
-  return getFileIconUtil(props.selectedFile)
+  return getFileIconUtil(props.selectedFile as any)
 })
 </script>
 

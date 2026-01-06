@@ -450,7 +450,7 @@ const store = useKnowledgeStore()
 // Defensive controller initialization
 let controller: KnowledgeController | null = null
 try {
-  controller = useKnowledgeController()
+  controller = useKnowledgeController() as any
   logger.info('Knowledge controller initialized:', controller)
 } catch (error) {
   logger.error('Failed to initialize knowledge controller:', error)

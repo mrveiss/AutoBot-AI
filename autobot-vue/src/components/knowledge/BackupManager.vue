@@ -298,7 +298,7 @@ const deleteBackup = async (backupName: string) => {
     const response = await apiClient.delete('/api/knowledge-maintenance/backup', {
       body: JSON.stringify({ backup_file: backupName }),
       headers: { 'Content-Type': 'application/json' }
-    })
+    } as any)
 
     const data = await parseApiResponse(response)
 
