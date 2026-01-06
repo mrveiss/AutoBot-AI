@@ -236,6 +236,102 @@ class StepExecutorAgent:
                 self._command_executor = None
         return self._command_executor
 
+    async def _execute_and_stream_command(
+        self, task: AgentTask
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """
+        Execute command and stream output chunks.
+
+        Issue #665: Extracted from execute_step to reduce function length.
+
+        Args:
+            task: The task containing the command to execute
+
+        Yields:
+            StreamChunk objects during execution
+        """
+        # Notify that execution is starting
+        yield StreamChunk(
+            task_id=task.task_id,
+            step_number=task.step_number,
+            chunk_type="execution_start",
+            content=f"Executing: {task.command}",
+            is_final=False,
+        )
+
+        async for chunk in self._execute_command_streaming(task.command):
+            yield chunk
+
+    async def _generate_explanations_for_result(
+        self, task: AgentTask, full_output: str, return_code: int
+    ) -> tuple[CommandExplanation, OutputExplanation]:
+        """
+        Generate both command and output explanations after execution.
+
+        Issue #665: Extracted from execute_step to reduce function length.
+
+        Args:
+            task: The task that was executed
+            full_output: The complete output from command execution
+            return_code: The command's return code
+
+        Returns:
+            Tuple of (command_explanation, output_explanation)
+        """
+        # Notify that we're generating explanations
+        task.status = StepStatus.EXPLAINING
+
+        # Generate BOTH explanations AFTER execution
+        command_explanation = await self._generate_command_explanation(task.command)
+        output_explanation = await self._generate_output_explanation(
+            task.command, full_output, return_code
+        )
+
+        return command_explanation, output_explanation
+
+    async def _build_final_step_result(
+        self,
+        task: AgentTask,
+        full_output: str,
+        return_code: int,
+        command_explanation: CommandExplanation,
+        output_explanation: OutputExplanation,
+        start_time: float,
+    ) -> StepResult:
+        """
+        Build the final StepResult with all explanations.
+
+        Issue #665: Extracted from execute_step to reduce function length.
+
+        Args:
+            task: The completed task
+            full_output: The complete output from execution
+            return_code: The command's return code
+            command_explanation: The generated command explanation
+            output_explanation: The generated output explanation
+            start_time: The execution start time for calculating duration
+
+        Returns:
+            Complete StepResult with all data
+        """
+        task.status = StepStatus.COMPLETED
+        task.completed_at = datetime.now()
+
+        return StepResult(
+            task_id=task.task_id,
+            step_number=task.step_number,
+            total_steps=task.total_steps,
+            status=StepStatus.COMPLETED,
+            command=task.command,
+            command_explanation=command_explanation,
+            output=full_output,
+            output_explanation=output_explanation,
+            return_code=return_code,
+            execution_time=time.time() - start_time,
+            is_streaming=True,
+            stream_complete=True,
+        )
+
     async def execute_step(
         self, task: AgentTask
     ) -> AsyncGenerator[Union[StreamChunk, StepResult], None]:
@@ -271,33 +367,22 @@ class StepExecutorAgent:
             return
 
         # Phase 1: Execute command in terminal with streaming output
-        # User sees command + output in real-time in terminal
         task.status = StepStatus.STREAMING
         output_buffer = []
         return_code = 0
 
-        # Notify that execution is starting
-        yield StreamChunk(
-            task_id=task.task_id,
-            step_number=task.step_number,
-            chunk_type="execution_start",
-            content=f"Executing: {task.command}",
-            is_final=False,
-        )
-
         try:
-            async for chunk in self._execute_command_streaming(task.command):
+            # Issue #665: Uses helper for command execution
+            async for chunk in self._execute_and_stream_command(task):
                 output_buffer.append(chunk.content)
                 yield chunk
 
-                # Check if this is the final chunk
-                if chunk.is_final:
-                    # Extract return code if provided
-                    if chunk.chunk_type == "return_code":
-                        try:
-                            return_code = int(chunk.content)
-                        except ValueError:
-                            pass
+                # Extract return code if this is the final chunk
+                if chunk.is_final and chunk.chunk_type == "return_code":
+                    try:
+                        return_code = int(chunk.content)
+                    except ValueError:
+                        pass
 
         except Exception as e:
             # Issue #665: Uses helper for error result
@@ -307,14 +392,9 @@ class StepExecutorAgent:
             yield _build_execution_error_result(task, e, time.time() - start_time)
             return
 
-        # Combine all output
         full_output = "".join(output_buffer)
 
-        # Phase 2: AFTER command completes and terminal is ready,
-        # generate explanations for what we just did
-        task.status = StepStatus.EXPLAINING
-
-        # Notify that we're now generating explanations
+        # Phase 2: Generate explanations (Issue #665: uses helper)
         yield StreamChunk(
             task_id=task.task_id,
             step_number=task.step_number,
@@ -323,31 +403,15 @@ class StepExecutorAgent:
             is_final=False,
         )
 
-        # Generate BOTH explanations AFTER execution
-        command_explanation = await self._generate_command_explanation(task.command)
-        output_explanation = await self._generate_output_explanation(
-            task.command, full_output, return_code
+        command_explanation, output_explanation = await self._generate_explanations_for_result(
+            task, full_output, return_code
         )
 
-        # Mark complete
-        task.status = StepStatus.COMPLETED
-        task.completed_at = datetime.now()
-
-        # Yield final result with both explanations
-        yield StepResult(
-            task_id=task.task_id,
-            step_number=task.step_number,
-            total_steps=task.total_steps,
-            status=StepStatus.COMPLETED,
-            command=task.command,
-            command_explanation=command_explanation,
-            output=full_output,
-            output_explanation=output_explanation,
-            return_code=return_code,
-            execution_time=time.time() - start_time,
-            is_streaming=True,
-            stream_complete=True,
+        # Build and yield final result (Issue #665: uses helper)
+        result = await self._build_final_step_result(
+            task, full_output, return_code, command_explanation, output_explanation, start_time
         )
+        yield result
 
         logger.info(
             "[StepExecutor] Completed step %d/%d in %.2fs",

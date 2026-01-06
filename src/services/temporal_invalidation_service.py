@@ -383,13 +383,60 @@ class TemporalInvalidationService:
 
         return result
 
+    async def _load_rules_and_facts(
+        self, source_filter: Optional[str]
+    ) -> Tuple[Dict[str, InvalidationRule], List[AtomicFact]]:
+        """
+        Load invalidation rules and facts concurrently.
+
+        Issue #665: Extracted helper for parallel data loading.
+
+        Args:
+            source_filter: Optional source filter for facts
+
+        Returns:
+            Tuple of (rules_dict, facts_list)
+        """
+        # Issue #619: Parallelize rules and facts loading
+        # Both operations are independent - load concurrently for better performance
+        rules, all_facts = await asyncio.gather(
+            self._load_invalidation_rules(),
+            self.fact_extraction_service.get_facts_by_criteria(
+                source=source_filter,
+                active_only=True,
+                limit=10000,  # Large limit to get all facts
+            ),
+        )
+        return rules, all_facts
+
+    async def _execute_invalidation(
+        self, dry_run: bool, facts_to_invalidate: List[AtomicFact],
+        invalidation_reasons: Dict[str, Dict[str, Any]]
+    ) -> int:
+        """
+        Execute invalidation of facts if not dry run.
+
+        Issue #665: Extracted helper for invalidation execution.
+
+        Args:
+            dry_run: Whether this is a dry run
+            facts_to_invalidate: Facts to invalidate
+            invalidation_reasons: Invalidation reasons for each fact
+
+        Returns:
+            Number of facts invalidated
+        """
+        if dry_run or not facts_to_invalidate:
+            return 0
+        return await self._invalidate_facts(facts_to_invalidate, invalidation_reasons)
+
     async def run_invalidation_sweep(
         self, source_filter: Optional[str] = None, dry_run: bool = False
     ) -> Dict[str, Any]:
         """
         Run a comprehensive invalidation sweep.
 
-        Issue #281: Refactored from 129 lines to use extracted helper methods.
+        Issue #665: Refactored from 100 lines to use additional extracted helpers.
 
         Args:
             source_filter: Optional source filter
@@ -408,16 +455,8 @@ class TemporalInvalidationService:
                     "message": "Fact extraction service not available",
                 }
 
-            # Issue #619: Parallelize rules and facts loading
-            # Both operations are independent - load concurrently for better performance
-            rules, all_facts = await asyncio.gather(
-                self._load_invalidation_rules(),
-                self.fact_extraction_service.get_facts_by_criteria(
-                    source=source_filter,
-                    active_only=True,
-                    limit=10000,  # Large limit to get all facts
-                ),
-            )
+            # Load rules and facts (Issue #665: uses helper)
+            rules, all_facts = await self._load_rules_and_facts(source_filter)
 
             if not rules:
                 return {"status": "error", "message": "No invalidation rules available"}
@@ -442,12 +481,10 @@ class TemporalInvalidationService:
 
             processing_time = (datetime.now() - start_time).total_seconds()
 
-            # Invalidate facts if not dry run
-            invalidated_count = 0
-            if not dry_run and facts_to_invalidate:
-                invalidated_count = await self._invalidate_facts(
-                    facts_to_invalidate, invalidation_reasons
-                )
+            # Execute invalidation (Issue #665: uses helper)
+            invalidated_count = await self._execute_invalidation(
+                dry_run, facts_to_invalidate, invalidation_reasons
+            )
 
             # Record invalidation sweep history
             await self._record_invalidation_sweep(

@@ -185,11 +185,99 @@ class ConfigService:
         }
 
     @staticmethod
+    def _build_ui_and_security_config(get) -> Metadata:
+        """
+        Build UI and security configuration sections.
+
+        Issue #665: Extracted helper for UI/security config building.
+
+        Args:
+            get: Config getter function
+
+        Returns:
+            Dict with ui and security configuration sections
+        """
+        return {
+            "ui": {
+                "theme": get("ui.theme", "light"),
+                "font_size": get("ui.font_size", "medium"),
+                "language": get("ui.language", "en"),
+                "animations": get("ui.animations", True),
+                "developer_mode": get("ui.developer_mode", False),
+            },
+            "security": {
+                "enable_encryption": get("security.enable_encryption", False),
+                "session_timeout_minutes": get(
+                    "security.session_timeout_minutes", 30
+                ),
+            },
+        }
+
+    @staticmethod
+    def _build_logging_config(get) -> Metadata:
+        """
+        Build logging configuration section.
+
+        Issue #665: Extracted helper for logging config building.
+        Issue #594: Match frontend LoggingSettings interface field names.
+
+        Args:
+            get: Config getter function
+
+        Returns:
+            Logging configuration dict
+        """
+        return {
+            "level": get("logging.log_level", "info"),
+            "log_levels": ["debug", "info", "warning", "error", "critical"],
+            "console": get("logging.console", True),
+            "file": get("logging.log_to_file", True),
+            "max_file_size": get("logging.max_file_size", 10),
+            "log_requests": get("logging.log_requests", False),
+            "log_sql": get("logging.log_sql", False),
+            "log_file_path": get("logging.log_file_path", "logs/autobot.log"),
+        }
+
+    @staticmethod
+    def _build_other_config_sections(get) -> Metadata:
+        """
+        Build remaining configuration sections (knowledge_base, voice_interface, developer).
+
+        Issue #665: Extracted helper for miscellaneous config building.
+
+        Args:
+            get: Config getter function
+
+        Returns:
+            Dict with knowledge_base, voice_interface, and developer config sections
+        """
+        return {
+            "knowledge_base": {
+                "enabled": get("knowledge_base.enabled", True),
+                "update_frequency_days": get(
+                    "knowledge_base.update_frequency_days", 7
+                ),
+            },
+            "voice_interface": {
+                "enabled": get("voice_interface.enabled", False),
+                "voice": get("voice_interface.voice", "default"),
+                "speech_rate": get("voice_interface.speech_rate", 1.0),
+            },
+            "developer": {
+                "enabled": get("developer.enabled", False),
+                "enhanced_errors": get("developer.enhanced_errors", True),
+                "endpoint_suggestions": get("developer.endpoint_suggestions", True),
+                "debug_logging": get("developer.debug_logging", False),
+            },
+        }
+
+    @staticmethod
     def get_full_config() -> Metadata:
         """
         Get complete application configuration.
 
         Issue #281: Refactored from 145 lines to use extracted helper methods.
+        Issue #665: Further refactored to reduce from 103 lines to below 65 lines.
 
         Returns:
             Complete configuration dictionary
@@ -214,7 +302,10 @@ class ConfigService:
 
             # Build comprehensive config structure matching frontend expectations
             # Note: Prompts section is excluded as it's managed separately
-            # Issue #281: Uses extracted helpers for complex sections
+            # Issue #665: Uses extracted helpers for all config sections
+            ui_security = ConfigService._build_ui_and_security_config(get)
+            other_sections = ConfigService._build_other_config_sections(get)
+
             config_data = {
                 "message_display": {
                     "show_thoughts": get("message_display.show_thoughts", True),
@@ -229,48 +320,13 @@ class ConfigService:
                     "message_retention_days": get("chat.message_retention_days", 30),
                 },
                 "backend": ConfigService._build_backend_config(get, llm_config),
-                "ui": {
-                    "theme": get("ui.theme", "light"),
-                    "font_size": get("ui.font_size", "medium"),
-                    "language": get("ui.language", "en"),
-                    "animations": get("ui.animations", True),
-                    "developer_mode": get("ui.developer_mode", False),
-                },
-                "security": {
-                    "enable_encryption": get("security.enable_encryption", False),
-                    "session_timeout_minutes": get(
-                        "security.session_timeout_minutes", 30
-                    ),
-                },
-                # Issue #594: Match frontend LoggingSettings interface field names
-                "logging": {
-                    "level": get("logging.log_level", "info"),
-                    "log_levels": ["debug", "info", "warning", "error", "critical"],
-                    "console": get("logging.console", True),
-                    "file": get("logging.log_to_file", True),
-                    "max_file_size": get("logging.max_file_size", 10),
-                    "log_requests": get("logging.log_requests", False),
-                    "log_sql": get("logging.log_sql", False),
-                    "log_file_path": get("logging.log_file_path", "logs/autobot.log"),
-                },
-                "knowledge_base": {
-                    "enabled": get("knowledge_base.enabled", True),
-                    "update_frequency_days": get(
-                        "knowledge_base.update_frequency_days", 7
-                    ),
-                },
-                "voice_interface": {
-                    "enabled": get("voice_interface.enabled", False),
-                    "voice": get("voice_interface.voice", "default"),
-                    "speech_rate": get("voice_interface.speech_rate", 1.0),
-                },
+                "ui": ui_security["ui"],
+                "security": ui_security["security"],
+                "logging": ConfigService._build_logging_config(get),
+                "knowledge_base": other_sections["knowledge_base"],
+                "voice_interface": other_sections["voice_interface"],
                 "memory": ConfigService._build_memory_config(get),
-                "developer": {
-                    "enabled": get("developer.enabled", False),
-                    "enhanced_errors": get("developer.enhanced_errors", True),
-                    "endpoint_suggestions": get("developer.endpoint_suggestions", True),
-                    "debug_logging": get("developer.debug_logging", False),
-                },
+                "developer": other_sections["developer"],
             }
 
             # Cache the configuration

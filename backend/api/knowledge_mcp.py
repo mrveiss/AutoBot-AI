@@ -104,107 +104,156 @@ class KnowledgeStatsRequest(BaseModel):
     include_details: bool = Field(False, description="Include detailed statistics")
 
 
+def _create_search_tool() -> MCPTool:
+    """
+    Create MCP tool for knowledge base search.
+
+    Issue #665: Extracted from _get_knowledge_search_tools to reduce function length.
+
+    Returns:
+        MCPTool definition for search_knowledge_base operation
+    """
+    return MCPTool(
+        name="search_knowledge_base",
+        description="Search the AutoBot knowledge base using LlamaIndex and Redis vector store",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query"},
+                "top_k": {
+                    "type": "integer",
+                    "description": "Number of results to return",
+                    "default": 5,
+                },
+                "filters": {
+                    "type": "object",
+                    "description": "Optional filters",
+                    "additionalProperties": True,
+                },
+            },
+            "required": ["query"],
+        },
+    )
+
+
+def _create_add_document_tool() -> MCPTool:
+    """
+    Create MCP tool for adding documents to knowledge base.
+
+    Issue #665: Extracted from _get_knowledge_search_tools to reduce function length.
+
+    Returns:
+        MCPTool definition for add_to_knowledge_base operation
+    """
+    return MCPTool(
+        name="add_to_knowledge_base",
+        description=(
+            "Add new information to the AutoBot knowledge base (stored in Redis"
+            "vectors)"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "description": "Document content to add",
+                },
+                "metadata": {
+                    "type": "object",
+                    "description": "Document metadata",
+                    "additionalProperties": True,
+                },
+                "source": {
+                    "type": "string",
+                    "description": "Document source identifier",
+                },
+            },
+            "required": ["content"],
+        },
+    )
+
+
+def _create_vector_search_tool() -> MCPTool:
+    """
+    Create MCP tool for vector similarity search.
+
+    Issue #665: Extracted from _get_knowledge_search_tools to reduce function length.
+
+    Returns:
+        MCPTool definition for vector_similarity_search operation
+    """
+    return MCPTool(
+        name="vector_similarity_search",
+        description="Perform vector similarity search in Redis using embeddings",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Query text to embed and search",
+                },
+                "top_k": {
+                    "type": "integer",
+                    "description": "Number of similar vectors to return",
+                    "default": 10,
+                },
+                "threshold": {
+                    "type": "number",
+                    "description": "Similarity threshold (0.0-1.0)",
+                    "default": 0.7,
+                },
+            },
+            "required": ["query"],
+        },
+    )
+
+
+def _create_qa_chain_tool() -> MCPTool:
+    """
+    Create MCP tool for LangChain QA chain.
+
+    Issue #665: Extracted from _get_knowledge_search_tools to reduce function length.
+
+    Returns:
+        MCPTool definition for langchain_qa_chain operation
+    """
+    return MCPTool(
+        name="langchain_qa_chain",
+        description="Use LangChain QA chain for comprehensive answers from knowledge base",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "question": {
+                    "type": "string",
+                    "description": "Question to answer using knowledge base",
+                },
+                "context_size": {
+                    "type": "integer",
+                    "description": "Number of context documents to use",
+                    "default": 3,
+                },
+            },
+            "required": ["question"],
+        },
+    )
+
+
 def _get_knowledge_search_tools() -> List[MCPTool]:
     """
     Get MCP tools for knowledge base search and retrieval operations.
 
     Issue #281: Extracted from get_mcp_tools to reduce function length
     and improve maintainability of tool definitions by category.
+    Issue #665: Further refactored to reduce from 102 lines to below 20 lines.
 
     Returns:
         List of MCPTool definitions for search/retrieval operations
     """
     return [
-        MCPTool(
-            name="search_knowledge_base",
-            description="Search the AutoBot knowledge base using LlamaIndex and Redis vector store",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Search query"},
-                    "top_k": {
-                        "type": "integer",
-                        "description": "Number of results to return",
-                        "default": 5,
-                    },
-                    "filters": {
-                        "type": "object",
-                        "description": "Optional filters",
-                        "additionalProperties": True,
-                    },
-                },
-                "required": ["query"],
-            },
-        ),
-        MCPTool(
-            name="add_to_knowledge_base",
-            description=(
-                "Add new information to the AutoBot knowledge base (stored in Redis"
-                "vectors)"
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "content": {
-                        "type": "string",
-                        "description": "Document content to add",
-                    },
-                    "metadata": {
-                        "type": "object",
-                        "description": "Document metadata",
-                        "additionalProperties": True,
-                    },
-                    "source": {
-                        "type": "string",
-                        "description": "Document source identifier",
-                    },
-                },
-                "required": ["content"],
-            },
-        ),
-        MCPTool(
-            name="vector_similarity_search",
-            description="Perform vector similarity search in Redis using embeddings",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "Query text to embed and search",
-                    },
-                    "top_k": {
-                        "type": "integer",
-                        "description": "Number of similar vectors to return",
-                        "default": 10,
-                    },
-                    "threshold": {
-                        "type": "number",
-                        "description": "Similarity threshold (0.0-1.0)",
-                        "default": 0.7,
-                    },
-                },
-                "required": ["query"],
-            },
-        ),
-        MCPTool(
-            name="langchain_qa_chain",
-            description="Use LangChain QA chain for comprehensive answers from knowledge base",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "question": {
-                        "type": "string",
-                        "description": "Question to answer using knowledge base",
-                    },
-                    "context_size": {
-                        "type": "integer",
-                        "description": "Number of context documents to use",
-                        "default": 3,
-                    },
-                },
-                "required": ["question"],
-            },
-        ),
+        _create_search_tool(),
+        _create_add_document_tool(),
+        _create_vector_search_tool(),
+        _create_qa_chain_tool(),
     ]
 
 

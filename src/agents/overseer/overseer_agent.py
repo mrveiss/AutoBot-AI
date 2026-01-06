@@ -312,6 +312,113 @@ Examples:
 
         raise ValueError("Could not extract JSON from response")
 
+    def _validate_task_dependencies(
+        self,
+        task: AgentTask,
+        completed_results: Dict[str, StepResult],
+        plan_id: str,
+    ) -> tuple[bool, Optional[OverseerUpdate]]:
+        """
+        Validate that all task dependencies are met.
+
+        Issue #665: Extracted from orchestrate_execution to reduce function length.
+
+        Args:
+            task: The task to validate dependencies for
+            completed_results: Results from previously completed steps
+            plan_id: The plan ID for error reporting
+
+        Returns:
+            Tuple of (dependencies_satisfied, error_update_or_None)
+        """
+        if not task.dependencies:
+            return True, None
+
+        missing_deps = [
+            dep for dep in task.dependencies if dep not in completed_results
+        ]
+        if missing_deps:
+            logger.error(
+                "[OverseerAgent] Step %d has unmet dependencies: %s",
+                task.step_number,
+                missing_deps,
+            )
+            error_update = _build_error_update(
+                plan_id, task, f"Unmet dependencies: {missing_deps}"
+            )
+            return False, error_update
+
+        return True, None
+
+    async def _execute_single_step(
+        self,
+        task: AgentTask,
+        executor,
+        plan_id: str,
+        previous_context: Dict[str, Dict[str, Any]],
+    ) -> AsyncGenerator[tuple[str, Any], None]:
+        """
+        Execute a single task step and yield progress updates.
+
+        Issue #665: Extracted from orchestrate_execution to reduce function length.
+
+        Args:
+            task: The task to execute
+            executor: StepExecutorAgent instance
+            plan_id: The plan ID
+            previous_context: Context from previous steps
+
+        Yields:
+            Tuples of ("update", OverseerUpdate) or ("result", StepResult)
+        """
+        # Yield step start
+        yield ("update", OverseerUpdate(
+            update_type="step_start",
+            plan_id=plan_id,
+            task_id=task.task_id,
+            step_number=task.step_number,
+            total_steps=task.total_steps,
+            status="executing",
+            content={
+                "description": task.description,
+                "command": task.command,
+                "previous_context": previous_context if previous_context else None,
+            },
+        ))
+
+        try:
+            # Execute the step through the executor
+            async for update in executor.execute_step(task):
+                if isinstance(update, StepResult):
+                    # Step completed - yield result for storage
+                    yield ("update", OverseerUpdate(
+                        update_type="step_complete",
+                        plan_id=plan_id,
+                        task_id=task.task_id,
+                        step_number=task.step_number,
+                        total_steps=task.total_steps,
+                        status=update.status.value,
+                        content=update.to_dict(),
+                    ))
+                    yield ("result", update)
+                else:
+                    # Streaming update
+                    yield ("update", OverseerUpdate(
+                        update_type="stream",
+                        plan_id=plan_id,
+                        task_id=task.task_id,
+                        step_number=task.step_number,
+                        total_steps=task.total_steps,
+                        status="streaming",
+                        content=update.to_dict()
+                        if hasattr(update, "to_dict")
+                        else update,
+                    ))
+
+        except Exception as e:
+            logger.error("[OverseerAgent] Step %d failed: %s", task.step_number, e)
+            yield ("update", _build_error_update(plan_id, task, str(e)))
+
     async def orchestrate_execution(
         self, plan: TaskPlan, executor
     ) -> AsyncGenerator[OverseerUpdate, None]:
@@ -343,87 +450,32 @@ Examples:
             },
         )
 
-        # Execute each step in sequence
         # Track completed step results for dependency resolution
         completed_results: Dict[str, StepResult] = {}
 
         for task in plan.steps:
-            # Check dependencies - ensure all required previous steps completed
-            if task.dependencies:
-                missing_deps = [
-                    dep for dep in task.dependencies if dep not in completed_results
-                ]
-                if missing_deps:
-                    logger.error(
-                        "[OverseerAgent] Step %d has unmet dependencies: %s",
-                        task.step_number, missing_deps
-                    )
-                    # Issue #665: Uses helper for error update
-                    yield _build_error_update(
-                        plan.plan_id, task, f"Unmet dependencies: {missing_deps}"
-                    )
-                    continue
+            # Issue #665: Uses helper for dependency validation
+            deps_valid, error_update = self._validate_task_dependencies(
+                task, completed_results, plan.plan_id
+            )
+            if error_update:
+                yield error_update
+            if not deps_valid:
+                continue
 
             # Gather context from previous steps (Issue #665: uses helper)
             previous_context = _build_previous_context(task, completed_results)
 
-            # Yield step start with dependency context
-            yield OverseerUpdate(
-                update_type="step_start",
-                plan_id=plan.plan_id,
-                task_id=task.task_id,
-                step_number=task.step_number,
-                total_steps=task.total_steps,
-                status="executing",
-                content={
-                    "description": task.description,
-                    "command": task.command,
-                    "previous_context": previous_context if previous_context else None,
-                },
-            )
-
-            step_result: Optional[StepResult] = None
-
-            try:
-                # Execute the step through the executor
-                # The executor will yield stream chunks for long-running commands
-                async for update in executor.execute_step(task):
-                    if isinstance(update, StepResult):
-                        # Step completed - store result for dependencies
-                        step_result = update
-                        completed_results[task.task_id] = update
-
-                        yield OverseerUpdate(
-                            update_type="step_complete",
-                            plan_id=plan.plan_id,
-                            task_id=task.task_id,
-                            step_number=task.step_number,
-                            total_steps=task.total_steps,
-                            status=update.status.value,
-                            content=update.to_dict(),
-                        )
-                    else:
-                        # Streaming update
-                        yield OverseerUpdate(
-                            update_type="stream",
-                            plan_id=plan.plan_id,
-                            task_id=task.task_id,
-                            step_number=task.step_number,
-                            total_steps=task.total_steps,
-                            status="streaming",
-                            content=update.to_dict()
-                            if hasattr(update, "to_dict")
-                            else update,
-                        )
-
-            except Exception as e:
-                # Issue #665: Uses helper for error update
-                logger.error(
-                    "[OverseerAgent] Step %d failed: %s", task.step_number, e
-                )
-                yield _build_error_update(plan.plan_id, task, str(e))
-                # Continue to next step or abort based on error severity
-                # For now, we continue
+            # Issue #665: Uses helper for step execution
+            async for update_type, update_data in self._execute_single_step(
+                task, executor, plan.plan_id, previous_context
+            ):
+                if update_type == "result":
+                    # Store step result for dependencies
+                    completed_results[task.task_id] = update_data
+                else:
+                    # Yield OverseerUpdate
+                    yield update_data
 
         logger.info("[OverseerAgent] Completed execution of plan: %s", plan.plan_id)
 

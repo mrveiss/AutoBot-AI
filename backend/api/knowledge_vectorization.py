@@ -620,13 +620,88 @@ def _create_initial_job_data(job_id: str, fact_id: str) -> Metadata:
     }
 
 
+async def _handle_already_vectorized(
+    kb_instance, job_id: str, job_data: dict, fact_id: str
+) -> None:
+    """
+    Handle case where fact is already vectorized.
+
+    Issue #665: Extracted helper for already-vectorized case.
+
+    Args:
+        kb_instance: KnowledgeBase instance
+        job_id: Job tracking ID
+        job_data: Job data to update
+        fact_id: Fact ID
+    """
+    logger.info(
+        f"Fact {fact_id} already vectorized, skipping (use force=true to re-vectorize)"
+    )
+    job_data.update({
+        "status": "completed",
+        "progress": 100,
+        "completed_at": datetime.now().isoformat(),
+        "result": {
+            "status": "skipped",
+            "message": "Fact already vectorized",
+            "fact_id": fact_id,
+            "vector_indexed": True,
+        },
+    })
+    await _update_job_status(kb_instance, job_id, job_data)
+
+
+async def _perform_vectorization(
+    kb_instance, fact_id: str, job_id: str, job_data: dict
+) -> None:
+    """
+    Perform the actual vectorization and update job status.
+
+    Issue #665: Extracted helper for vectorization execution.
+
+    Args:
+        kb_instance: KnowledgeBase instance
+        fact_id: Fact ID to vectorize
+        job_id: Job tracking ID
+        job_data: Job data to update
+    """
+    # Debug: Log KB state before vectorization
+    logger.debug(
+        f"KB state before vectorization: initialized={getattr(kb_instance, 'initialized', 'N/A')}, "
+        f"vector_store={kb_instance.vector_store is not None}, "
+        f"llama_index_configured={getattr(kb_instance, 'llama_index_configured', 'N/A')}"
+    )
+
+    # Issue #552: vectorize_existing_fact() only takes fact_id
+    # The method retrieves content/metadata internally via _get_fact_for_vectorization
+    result = await kb_instance.vectorize_existing_fact(fact_id=fact_id)
+
+    # Update job with result
+    job_data["progress"] = 90
+    job_data["result"] = result
+
+    if result.get("status") == "success" and result.get("vector_indexed"):
+        job_data["status"] = "completed"
+        job_data["progress"] = 100
+        logger.info("Successfully vectorized fact %s in job %s", fact_id, job_id)
+    else:
+        job_data["status"] = "failed"
+        job_data["error"] = result.get("message", "Unknown error")
+        logger.error(
+            f"Failed to vectorize fact {fact_id} in job {job_id}: {job_data['error']}"
+        )
+
+    job_data["completed_at"] = datetime.now().isoformat()
+    await _update_job_status(kb_instance, job_id, job_data)
+
+
 async def _vectorize_fact_background(
     kb_instance, fact_id: str, job_id: str, force: bool = False
 ):
     """
     Background task to vectorize a single fact and track progress in Redis.
 
-    Issue #281: Refactored from 149 lines to use extracted helper methods.
+    Issue #665: Refactored from 95 lines to use additional extracted helpers.
 
     Args:
         kb_instance: KnowledgeBase instance
@@ -648,57 +723,17 @@ async def _vectorize_fact_background(
         job_data["progress"] = 30
         await _update_job_status(kb_instance, job_id, job_data)
 
-        # Check if already vectorized (Issue #281: uses helper)
+        # Check if already vectorized (Issue #665: uses helper)
         if not force and await _check_already_vectorized(kb_instance, fact_id):
-            logger.info(
-                f"Fact {fact_id} already vectorized, skipping (use force=true to re-vectorize)"
-            )
-            job_data.update({
-                "status": "completed",
-                "progress": 100,
-                "completed_at": datetime.now().isoformat(),
-                "result": {
-                    "status": "skipped",
-                    "message": "Fact already vectorized",
-                    "fact_id": fact_id,
-                    "vector_indexed": True,
-                },
-            })
-            await _update_job_status(kb_instance, job_id, job_data)
+            await _handle_already_vectorized(kb_instance, job_id, job_data, fact_id)
             return
 
         # Update progress to 50%
         job_data["progress"] = 50
         await _update_job_status(kb_instance, job_id, job_data)
 
-        # Debug: Log KB state before vectorization
-        logger.debug(
-            f"KB state before vectorization: initialized={getattr(kb_instance, 'initialized', 'N/A')}, "
-            f"vector_store={kb_instance.vector_store is not None}, "
-            f"llama_index_configured={getattr(kb_instance, 'llama_index_configured', 'N/A')}"
-        )
-
-        # Issue #552: vectorize_existing_fact() only takes fact_id
-        # The method retrieves content/metadata internally via _get_fact_for_vectorization
-        result = await kb_instance.vectorize_existing_fact(fact_id=fact_id)
-
-        # Update job with result
-        job_data["progress"] = 90
-        job_data["result"] = result
-
-        if result.get("status") == "success" and result.get("vector_indexed"):
-            job_data["status"] = "completed"
-            job_data["progress"] = 100
-            logger.info("Successfully vectorized fact %s in job %s", fact_id, job_id)
-        else:
-            job_data["status"] = "failed"
-            job_data["error"] = result.get("message", "Unknown error")
-            logger.error(
-                f"Failed to vectorize fact {fact_id} in job {job_id}: {job_data['error']}"
-            )
-
-        job_data["completed_at"] = datetime.now().isoformat()
-        await _update_job_status(kb_instance, job_id, job_data)
+        # Perform vectorization (Issue #665: uses helper)
+        await _perform_vectorization(kb_instance, fact_id, job_id, job_data)
 
     except Exception as e:
         error_msg = str(e)
