@@ -420,10 +420,8 @@ const sendMessage = async () => {
       // Add user message to chat store directly (appears immediately)
       // The overseer will handle the response via WebSocket
       store.addMessage({
-        id: generateId(),
         content: message,
         sender: 'user',
-        timestamp: new Date(),
         status: 'sent',
         type: 'message'
       })
