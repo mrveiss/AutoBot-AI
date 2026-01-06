@@ -12,6 +12,7 @@ from enum import Enum
 from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field, validator
+from src.constants.threshold_constants import CategoryDefaults, QueryDefaults
 
 from src.constants.network_constants import NetworkConstants
 
@@ -287,7 +288,7 @@ class WorkerHeartbeat(BaseModel):
     """Heartbeat message from NPU worker for active telemetry"""
     worker_id: str = Field(..., description="Worker identifier")
     status: str = Field(default="online", description="Current worker status")
-    platform: str = Field(default="unknown", description="Worker platform (linux, windows, macos)")
+    platform: str = Field(default=CategoryDefaults.UNKNOWN, description="Worker platform (linux, windows, macos)")
     url: str = Field(..., description="Worker's accessible URL for health checks")
     current_load: int = Field(default=0, ge=0, description="Current number of active tasks")
     total_tasks_completed: int = Field(default=0, ge=0, description="Total tasks completed")

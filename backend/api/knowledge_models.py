@@ -392,7 +392,7 @@ class AddTextRequest(BaseModel):
 
     text: str = Field(..., min_length=1, max_length=1000000)
     metadata: Optional[Metadata] = Field(default=None)
-    category: Optional[str] = Field(default="general", max_length=100)
+    category: Optional[str] = Field(default=CategoryDefaults.GENERAL, max_length=100)
 
     @validator("metadata")
     def validate_metadata(cls, v):

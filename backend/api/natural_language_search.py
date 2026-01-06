@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+from src.constants.threshold_constants import QueryDefaults
 
 logger = logging.getLogger(__name__)
 
@@ -928,7 +929,7 @@ class NLSearchRequest(BaseModel):
     """Request model for natural language search."""
 
     query: str = Field(..., description="Natural language query")
-    max_results: int = Field(default=10, description="Maximum results to return")
+    max_results: int = Field(default=QueryDefaults.DEFAULT_SEARCH_LIMIT, description="Maximum results to return")
     include_explanations: bool = Field(
         default=True, description="Include LLM-generated explanations"
     )
