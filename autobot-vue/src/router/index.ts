@@ -489,13 +489,10 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
+        // Redirect data-storage to infrastructure (data-storage is now a subtab)
         path: 'data-storage',
         name: 'settings-data-storage',
-        component: () => import('@/components/settings/DataStorageSettings.vue'),
-        meta: {
-          title: 'Data Storage',
-          parent: 'settings'
-        }
+        redirect: '/settings/infrastructure'
       },
       {
         path: 'prompts',
