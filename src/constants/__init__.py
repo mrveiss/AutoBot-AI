@@ -33,12 +33,15 @@ from .threshold_constants import (  # Issue #318: Threshold and timing constants
     AgentThresholds,
     BatchConfig,
     CacheConfig,
+    CategoryDefaults,  # Issue #694: Category and type defaults
     CircuitBreakerDefaults,
     ComputerVisionThresholds,
     FileWatcherConfig,
     HardwareAcceleratorConfig,
     KnowledgeSyncConfig,
     LLMDefaults,
+    ProtocolDefaults,  # Issue #694: Protocol and endpoint defaults
+    QueryDefaults,  # Issue #694: Search and pagination defaults
     ResourceThresholds,
     RetryConfig,
     SecurityThresholds,
@@ -90,4 +93,8 @@ __all__ = [
     "LLMProvider",
     "OperationOutcome",
     "HealthStatus",
+    # Issue #694: Query, category, and protocol defaults
+    "QueryDefaults",
+    "CategoryDefaults",
+    "ProtocolDefaults",
 ]

@@ -361,3 +361,102 @@ class FileWatcherConfig:
     # Check intervals
     CHECK_INTERVAL_S = 1.0  # Normal check interval
     ERROR_RETRY_INTERVAL_S = 5.0  # Retry interval after error
+
+
+class QueryDefaults:
+    """
+    Default values for search, query, and pagination operations.
+
+    Issue #694: Consolidate duplicate magic numbers for search limits,
+    pagination, and query parameters.
+
+    Usage:
+        from src.constants.threshold_constants import QueryDefaults
+
+        limit = QueryDefaults.DEFAULT_SEARCH_LIMIT
+        offset = QueryDefaults.DEFAULT_OFFSET
+    """
+
+    # Search result limits
+    DEFAULT_SEARCH_LIMIT: int = 10  # Default number of search results
+    DEFAULT_TOP_K: int = 10  # Default top-k for vector searches
+    MAX_SEARCH_LIMIT: int = 100  # Maximum allowed search results
+    EXTENDED_SEARCH_LIMIT: int = 50  # Extended search for facts/documents
+    LARGE_BATCH_LIMIT: int = 100  # Large batch operations
+
+    # Pagination
+    DEFAULT_OFFSET: int = 0  # Default pagination offset
+    DEFAULT_PAGE_SIZE: int = 50  # Default page size for lists
+    MAX_PAGE_SIZE: int = 500  # Maximum page size
+
+    # RAG/Knowledge base specific
+    RAG_DEFAULT_RESULTS: int = 5  # Default RAG retrieval count
+    RAG_MAX_RESULTS: int = 20  # Maximum RAG results per query
+    KNOWLEDGE_DEFAULT_LIMIT: int = 100  # Default for knowledge base queries
+
+
+class CategoryDefaults:
+    """
+    Default category and type values for classification.
+
+    Issue #694: Consolidate duplicate string literals for categories,
+    types, and default classifications.
+
+    Usage:
+        from src.constants.threshold_constants import CategoryDefaults
+
+        category = CategoryDefaults.GENERAL
+        search_mode = CategoryDefaults.SEARCH_MODE_HYBRID
+    """
+
+    # General categories
+    GENERAL: str = "general"
+    IMPORTED: str = "imported"
+    UNKNOWN: str = "unknown"
+
+    # Search modes
+    SEARCH_MODE_HYBRID: str = "hybrid"
+    SEARCH_MODE_SEMANTIC: str = "semantic"
+    SEARCH_MODE_KEYWORD: str = "keyword"
+
+    # Query types
+    QUERY_TYPE_GENERAL: str = "general"
+    QUERY_TYPE_TECHNICAL: str = "technical"
+    QUERY_TYPE_CODE: str = "code"
+
+    # Context types
+    CONTEXT_TYPE_GENERAL: str = "general"
+    CONTEXT_TYPE_SECURITY: str = "security"
+    CONTEXT_TYPE_RESEARCH: str = "research"
+
+    # Message roles
+    ROLE_USER: str = "user"
+    ROLE_ASSISTANT: str = "assistant"
+    ROLE_SYSTEM: str = "system"
+
+    # Environment modes
+    MODE_DEVELOPMENT: str = "development"
+    MODE_PRODUCTION: str = "production"
+    MODE_TESTING: str = "testing"
+
+
+class ProtocolDefaults:
+    """
+    Default protocol and endpoint values.
+
+    Issue #694: Consolidate duplicate protocol strings and endpoint patterns.
+    """
+
+    # Protocols
+    HTTP: str = "http"
+    HTTPS: str = "https"
+    WS: str = "ws"
+    WSS: str = "wss"
+    TCP: str = "tcp"
+
+    # Health endpoints
+    HEALTH_ENDPOINT: str = "/health"
+    API_HEALTH_ENDPOINT: str = "/api/health"
+
+    # API version
+    API_VERSION: str = "1.0"

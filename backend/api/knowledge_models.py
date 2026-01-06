@@ -41,6 +41,7 @@ from typing import List, Optional
 
 from backend.type_defs.common import Metadata
 from pydantic import BaseModel, Field, validator
+from src.constants.threshold_constants import CategoryDefaults, QueryDefaults
 from src.utils.path_validation import contains_path_traversal
 
 # Issue #380: Module-level frozenset for tag operations
@@ -82,7 +83,7 @@ class SearchRequest(BaseModel):
     """Request model for search endpoints"""
 
     query: str = Field(..., min_length=1, max_length=1000)
-    limit: int = Field(default=10, ge=1, le=100)
+    limit: int = Field(default=QueryDefaults.DEFAULT_SEARCH_LIMIT, ge=1, le=100)
     category: Optional[str] = Field(default=None, max_length=100)
 
     @validator("category")
@@ -97,8 +98,8 @@ class EnhancedSearchRequest(BaseModel):
     """Enhanced search request with tag filtering and hybrid mode (Issue #78)"""
 
     query: str = Field(..., min_length=1, max_length=1000, description="Search query")
-    limit: int = Field(default=10, ge=1, le=100, description="Max results to return")
-    offset: int = Field(default=0, ge=0, description="Pagination offset")
+    limit: int = Field(default=QueryDefaults.DEFAULT_SEARCH_LIMIT, ge=1, le=100, description="Max results to return")
+    offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset")
     category: Optional[str] = Field(default=None, max_length=100)
     tags: Optional[List[str]] = Field(
         default=None,
@@ -110,7 +111,7 @@ class EnhancedSearchRequest(BaseModel):
         description="If True, match facts with ANY tag. If False (default), match ALL tags.",
     )
     mode: str = Field(
-        default="hybrid",
+        default=CategoryDefaults.SEARCH_MODE_HYBRID,
         description="Search mode: 'semantic' (vector only), 'keyword' (text only), "
         "'hybrid' (both)",
     )
@@ -206,14 +207,14 @@ class ConsolidatedSearchRequest(BaseModel):
 
     # Core search parameters
     query: str = Field(..., min_length=1, max_length=1000, description="Search query")
-    top_k: int = Field(default=10, ge=1, le=100, description="Maximum results to return")
+    top_k: int = Field(default=QueryDefaults.DEFAULT_TOP_K, ge=1, le=100, description="Maximum results to return")
     category: Optional[str] = Field(
         default=None, max_length=100, description="Filter by category"
     )
 
     # Search mode
     mode: str = Field(
-        default="hybrid",
+        default=CategoryDefaults.SEARCH_MODE_HYBRID,
         description="Search mode: 'semantic' (vector only), 'keyword' (text only), "
         "'hybrid' (both, default), 'auto' (intelligent selection)",
     )
@@ -254,7 +255,7 @@ class ConsolidatedSearchRequest(BaseModel):
     )
 
     # Pagination
-    offset: int = Field(default=0, ge=0, description="Pagination offset")
+    offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset")
 
     # Advanced filtering (Issue #78 v2 features)
     created_after: Optional[str] = Field(
@@ -649,7 +650,7 @@ class GetFactsByTagRequest(BaseModel):
     """Request model for getting facts by tag with pagination."""
 
     limit: int = Field(default=50, ge=1, le=500, description="Max facts to return")
-    offset: int = Field(default=0, ge=0, description="Pagination offset")
+    offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset")
     include_content: bool = Field(
         default=False,
         description="Include fact content in response",

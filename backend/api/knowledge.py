@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field, field_validator
 from backend.knowledge_factory import get_or_create_knowledge_base
 from src.exceptions import InternalError
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.constants.threshold_constants import CategoryDefaults
 from src.utils.path_validation import contains_path_traversal
 
 
@@ -30,7 +31,7 @@ class AddFactsRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=100000, description="Text content")
     title: str = Field(default="", max_length=500, description="Document title")
     source: str = Field(default="Manual Entry", max_length=500, description="Content source")
-    category: str = Field(default="general", max_length=100, description="Category")
+    category: str = Field(default=CategoryDefaults.GENERAL, max_length=100, description="Category")
     tags: List[str] = Field(default_factory=list, description="Tags for the content")
 
     @field_validator("tags")
