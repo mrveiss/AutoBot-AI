@@ -196,95 +196,114 @@ class OpenAIStreamProcessor(StreamProcessor):
         return False, None
 
 
-async def _process_stream_loop(
-    response,
-    processor: StreamProcessor,
+def _check_stream_limits(
+    chunk_count: int,
     max_chunks: int,
-    max_buffer_size: int = 10 * 1024 * 1024,  # 10MB default limit
-) -> Tuple[List[str], int, Optional[StreamCompletionSignal]]:
-    """
-    Process stream chunks in a loop until completion or limit.
+    current_buffer_size: int,
+    max_buffer_size: int,
+) -> Optional[StreamCompletionSignal]:
+    """Issue #665: Extracted from _process_stream_loop to reduce function length.
 
-    Issue #281: Extracted from process_llm_stream to reduce function length
-    and improve testability of the core streaming logic.
-
-    Issue #551: Added buffer size protection to prevent memory exhaustion
-    during streaming responses.
-
-    Args:
-        response: HTTP response object with streaming content
-        processor: Provider-specific stream processor
-        max_chunks: Maximum chunks to process (safety limit)
-        max_buffer_size: Maximum buffer size in bytes (default 10MB)
+    Check if stream has exceeded chunk or buffer limits.
 
     Returns:
-        Tuple of (content_parts, chunk_count, completion_signal)
+        StreamCompletionSignal if limit exceeded, None otherwise.
     """
-    content_parts = []
+    if chunk_count > max_chunks:
+        logger.warning("⚠️ Reached maximum chunk limit (%s)", max_chunks)
+        return StreamCompletionSignal.MAX_CHUNKS_REACHED
+
+    if current_buffer_size > max_buffer_size:
+        logger.warning(
+            "⚠️ Response exceeds buffer limit (%d bytes), truncating stream",
+            max_buffer_size,
+        )
+        return StreamCompletionSignal.MAX_CHUNKS_REACHED
+
+    return None
+
+
+def _decode_chunk(chunk_bytes: bytes, chunk_count: int) -> Optional[str]:
+    """Issue #665: Extracted from _process_stream_loop to reduce function length.
+
+    Decode chunk bytes to string with error handling.
+
+    Returns:
+        Decoded string or None if decode fails or empty.
+    """
+    try:
+        chunk_data = chunk_bytes.decode("utf-8")
+    except UnicodeDecodeError as e:
+        logger.warning("Unicode decode error in chunk %s: %s", chunk_count, e)
+        return None
+
+    if not chunk_data.strip():
+        return None
+
+    return chunk_data
+
+
+def _determine_completion_signal(
+    processor: StreamProcessor, chunk_data: str, content_parts: List[str], chunk_count: int
+) -> StreamCompletionSignal:
+    """Issue #665: Extracted from _process_stream_loop to reduce function length."""
+    accumulated_content = "".join(content_parts)
+    if processor.is_natural_completion(chunk_data, accumulated_content):
+        logger.info("✅ Stream completed naturally after %d chunks", chunk_count)
+        return StreamCompletionSignal.DONE_CHUNK_RECEIVED
+    logger.info("✅ Stream completed (provider signal) after %d chunks", chunk_count)
+    return StreamCompletionSignal.PROVIDER_SPECIFIC
+
+
+def _check_error_condition(processor: StreamProcessor, chunk_data: str) -> Optional[StreamCompletionSignal]:
+    """Issue #665: Extracted from _process_stream_loop to reduce function length."""
+    error = processor.detect_error_condition(chunk_data)
+    if error:
+        logger.error("❌ Stream error detected: %s", error)
+        return StreamCompletionSignal.ERROR_CONDITION
+    return None
+
+
+async def _process_stream_loop(
+    response, processor: StreamProcessor, max_chunks: int, max_buffer_size: int = 10 * 1024 * 1024
+) -> Tuple[List[str], int, Optional[StreamCompletionSignal]]:
+    """Process stream chunks until completion or limit (Issue #281, #551, #665)."""
+    content_parts: List[str] = []
     chunk_count = 0
-    completion_signal = None
+    completion_signal: Optional[StreamCompletionSignal] = None
     current_buffer_size = 0
 
     async for chunk_bytes in response.content:
         chunk_count += 1
-
-        # Safety limit to prevent infinite loops
-        if chunk_count > max_chunks:
-            logger.warning("⚠️ Reached maximum chunk limit (%s)", max_chunks)
-            completion_signal = StreamCompletionSignal.MAX_CHUNKS_REACHED
-            break
-
-        # Issue #551: Buffer size protection to prevent memory exhaustion
         current_buffer_size += len(chunk_bytes)
-        if current_buffer_size > max_buffer_size:
-            logger.warning(
-                "⚠️ Response exceeds buffer limit (%d bytes), truncating stream",
-                max_buffer_size,
-            )
-            completion_signal = StreamCompletionSignal.MAX_CHUNKS_REACHED
+
+        # Check stream limits
+        limit_signal = _check_stream_limits(chunk_count, max_chunks, current_buffer_size, max_buffer_size)
+        if limit_signal:
+            completion_signal = limit_signal
             break
 
         # Decode chunk
-        try:
-            chunk_data = chunk_bytes.decode("utf-8")
-        except UnicodeDecodeError as e:
-            logger.warning("Unicode decode error in chunk %s: %s", chunk_count, e)
-            continue
-
-        if not chunk_data.strip():
+        chunk_data = _decode_chunk(chunk_bytes, chunk_count)
+        if chunk_data is None:
             continue
 
         # Check for error conditions
-        error = processor.detect_error_condition(chunk_data)
-        if error:
-            completion_signal = StreamCompletionSignal.ERROR_CONDITION
-            logger.error("❌ Stream error detected: %s", error)
+        error_signal = _check_error_condition(processor, chunk_data)
+        if error_signal:
+            completion_signal = error_signal
             break
 
-        # Process chunk through provider-specific processor
+        # Process chunk and check completion
         is_complete, content_to_add = await processor.process_chunk(chunk_data)
-
-        # Add content if available
         if content_to_add:
             content_parts.append(content_to_add)
-
-        # Check for completion
         if is_complete:
-            accumulated_content = "".join(content_parts)
-            if processor.is_natural_completion(chunk_data, accumulated_content):
-                completion_signal = StreamCompletionSignal.DONE_CHUNK_RECEIVED
-                logger.info(
-                    f"✅ Stream completed naturally after {chunk_count} chunks"
-                )
-            else:
-                completion_signal = StreamCompletionSignal.PROVIDER_SPECIFIC
-                logger.info(
-                    f"✅ Stream completed (provider signal) after {chunk_count} chunks"
-                )
+            completion_signal = _determine_completion_signal(processor, chunk_data, content_parts, chunk_count)
             break
 
-        # Brief yield to prevent blocking
-        if chunk_count % 10 == 0:  # Every 10 chunks
+        # Brief yield to prevent blocking every 10 chunks
+        if chunk_count % 10 == 0:
             await asyncio.sleep(0)
 
     return content_parts, chunk_count, completion_signal

@@ -76,26 +76,54 @@ class LLMInterface:
     """
 
     def __init__(self, settings: Optional[LLMSettings] = None):
-        """Initialize LLM interface with optional settings and configure providers."""
-        # Initialize settings
+        """
+        Initialize LLM interface with optional settings and configure providers.
+
+        Issue #665: Refactored from 101 lines to under 50 using helper methods.
+        """
+        # Initialize core settings and configuration
         self.settings = settings or LLMSettings()
-
-        # Error boundary manager for enhanced error tracking
         self.error_manager = get_error_boundary_manager()
+        self._init_configuration()
 
-        # Use unified configuration - NO HARDCODED VALUES
+        # Initialize hardware and prompts
+        self.hardware_priority = self._init_hardware_detector()
+        self._initialize_prompts()
+
+        # Initialize async components and caching
+        self._init_async_components()
+
+        # Initialize metrics and fallback chain
+        self._metrics = self._init_metrics()
+        self._provider_priority = ["ollama", "openai", "vllm", "transformers", "mock"]
+        self._fallback_enabled = config.get("llm.fallback.enabled", True)
+
+        # Initialize streaming and providers
+        self._streaming_manager = StreamingManager()
+        self._init_providers()
+        self._init_provider_routing()
+
+        # Request queue and backward compatibility
+        self.request_queue = asyncio.Queue(maxsize=50)
+        self.active_requests = set()
+        self._init_backward_compatibility()
+
+        logger.info("LLM Interface initialized with all provider support")
+
+    def _init_configuration(self) -> None:
+        """
+        Issue #665: Extracted from __init__ to reduce function length.
+
+        Initialize configuration values from unified config.
+        """
         self.ollama_host = config.get_service_url("ollama")
-
-        # Configuration setup using unified config
         self.openai_api_key = config.get(
             "openai.api_key", os.getenv("OPENAI_API_KEY", "")
         )
-
         self.ollama_models = config.get(
             "llm.fallback_models", [ModelConstants.DEFAULT_OLLAMA_MODEL]
         )
 
-        # Use unified configuration for LLM models
         selected_model = config.get(
             "llm.fallback_models.0", ModelConstants.DEFAULT_OLLAMA_MODEL
         )
@@ -105,28 +133,45 @@ class LLMInterface:
         self.orchestrator_llm_settings = config.get("llm.orchestrator_settings", {})
         self.task_llm_settings = config.get("llm.task_settings", {})
 
-        # Initialize hardware detector
+    def _init_hardware_detector(self) -> list:
+        """
+        Issue #665: Extracted from __init__ to reduce function length.
+
+        Initialize hardware detector with acceleration priority.
+
+        Returns:
+            Hardware acceleration priority list
+        """
         hardware_priority = config.get(
             "hardware.acceleration.priority",
             ["openvino_npu", "openvino", "cuda", "cpu"],
         )
         self._hardware_detector = HardwareDetector(priority=hardware_priority)
+        return hardware_priority
 
-        # Initialize prompts
-        self._initialize_prompts()
+    def _init_async_components(self) -> None:
+        """
+        Issue #665: Extracted from __init__ to reduce function length.
 
-        # Initialize async components
+        Initialize async components including HTTP client and caching.
+        """
         self._http_client = get_http_client()
         self._models_cache: Optional[List[str]] = None
         self._models_cache_time: float = 0
         self._lock = asyncio.Lock()
-
         # Issue #551: L1/L2 dual-tier caching system
-        # Restored from archived async_llm_interface.py
         self._response_cache = get_llm_cache()
 
-        # Performance metrics tracking
-        self._metrics = {
+    def _init_metrics(self) -> Dict[str, Any]:
+        """
+        Issue #665: Extracted from __init__ to reduce function length.
+
+        Initialize performance metrics tracking dictionary.
+
+        Returns:
+            Initialized metrics dictionary
+        """
+        return {
             "total_requests": 0,
             "cache_hits": 0,
             "memory_cache_hits": 0,
@@ -138,16 +183,12 @@ class LLMInterface:
             "fallback_count": 0,
         }
 
-        # Issue #551: Provider fallback chain configuration
-        # Restored from archived llm_interface_unified.py
-        # Lower numbers = higher priority
-        self._provider_priority = ["ollama", "openai", "vllm", "transformers", "mock"]
-        self._fallback_enabled = config.get("llm.fallback.enabled", True)
+    def _init_providers(self) -> None:
+        """
+        Issue #665: Extracted from __init__ to reduce function length.
 
-        # Initialize streaming manager
-        self._streaming_manager = StreamingManager()
-
-        # Initialize providers
+        Initialize all LLM provider handlers.
+        """
         self._ollama_provider = OllamaProvider(self.settings, self._streaming_manager)
         self._openai_provider = OpenAIProvider(self.openai_api_key)
         self._transformers_provider = TransformersProvider()
@@ -155,7 +196,12 @@ class LLMInterface:
         self._mock_handler = MockHandler()
         self._local_handler = LocalHandler()
 
-        # Provider routing map for extensibility
+    def _init_provider_routing(self) -> None:
+        """
+        Issue #665: Extracted from __init__ to reduce function length.
+
+        Initialize provider routing map for extensibility.
+        """
         self.provider_routing = {
             "ollama": self._handle_ollama_request,
             "openai": self._handle_openai_request,
@@ -165,17 +211,15 @@ class LLMInterface:
             "local": self._handle_local_request,
         }
 
-        # Request queue for proper async handling
-        self.request_queue = asyncio.Queue(maxsize=50)
-        self.active_requests = set()
+    def _init_backward_compatibility(self) -> None:
+        """
+        Issue #665: Extracted from __init__ to reduce function length.
 
-        # Backward compatibility attributes
+        Initialize backward compatibility attributes for streaming manager.
+        """
         self.streaming_failures = self._streaming_manager.streaming_failures
         self.streaming_failure_threshold = self._streaming_manager.failure_threshold
         self.streaming_reset_time = self._streaming_manager.reset_time
-        self.hardware_priority = hardware_priority
-
-        logger.info("LLM Interface initialized with all provider support")
 
     def reload_ollama_configuration(self):
         """Runtime reload of Ollama configuration."""

@@ -558,6 +558,164 @@ class SecureCommandExecutor:
             "security": security_info,
         }
 
+    def _build_permission_deny_result(
+        self, command: str, rule_info: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Issue #665: Extracted from run_shell_command to reduce function length.
+
+        Build result dict for permission rule denied commands.
+
+        Args:
+            command: The denied command
+            rule_info: Permission rule info dict
+
+        Returns:
+            Result dict with error status and permission info
+        """
+        logger.warning(f"Command denied by permission rule: {command}")
+        return {
+            "stdout": "",
+            "stderr": f"Command denied by permission rule: {rule_info.get('description', 'Denied')}",
+            "return_code": 1,
+            "status": "error",
+            "security": {
+                "risk": "forbidden",
+                "reasons": [rule_info.get("description", "Denied by rule")],
+                "blocked": True,
+                "permission_rule": rule_info,
+            },
+        }
+
+    def _build_auto_approved_log_entry(
+        self,
+        command: str,
+        risk: CommandRisk,
+        reasons: List[str],
+        rule_info: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Issue #665: Extracted from run_shell_command to reduce function length.
+
+        Build log entry for auto-approved commands.
+
+        Args:
+            command: The command being executed
+            risk: Risk level of command
+            reasons: Risk assessment reasons
+            rule_info: Optional permission rule info
+
+        Returns:
+            Log entry dict for command history
+        """
+        auto_approved_by = "permission_rule"
+        if rule_info and rule_info.get("from_memory"):
+            auto_approved_by = "approval_memory"
+
+        return {
+            "command": command,
+            "risk": risk.value,
+            "reasons": reasons,
+            "timestamp": asyncio.get_event_loop().time(),
+            "approved": True,
+            "executed": False,
+            "auto_approved_by": auto_approved_by,
+        }
+
+    def _build_standard_log_entry(
+        self, command: str, risk: CommandRisk, reasons: List[str]
+    ) -> Dict[str, Any]:
+        """
+        Issue #665: Extracted from run_shell_command to reduce function length.
+
+        Build standard log entry for risk-based assessment.
+
+        Args:
+            command: The command being executed
+            risk: Risk level of command
+            reasons: Risk assessment reasons
+
+        Returns:
+            Log entry dict for command history
+        """
+        return {
+            "command": command,
+            "risk": risk.value,
+            "reasons": reasons,
+            "timestamp": asyncio.get_event_loop().time(),
+            "approved": False,
+            "executed": False,
+        }
+
+    async def _handle_forbidden_command(
+        self, command: str, risk: CommandRisk, reasons: List[str], log_entry: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Issue #665: Extracted from run_shell_command to reduce function length.
+
+        Handle forbidden commands by logging and returning blocked result.
+
+        Args:
+            command: The forbidden command
+            risk: Risk level (should be FORBIDDEN)
+            reasons: List of risk reasons
+            log_entry: Log entry dict to update
+
+        Returns:
+            Blocked result dict
+        """
+        logger.error("Forbidden command blocked: %s", command)
+        log_entry["error"] = "Command forbidden by security policy"
+        self.command_history.append(log_entry)
+        return self._build_blocked_result(
+            risk, reasons, f"Command forbidden: {'; '.join(reasons)}"
+        )
+
+    async def _handle_approval_flow(
+        self,
+        command: str,
+        risk: CommandRisk,
+        reasons: List[str],
+        log_entry: Dict[str, Any],
+        force_approval: bool,
+        permission_action: Optional[str],
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Issue #665: Extracted from run_shell_command to reduce function length.
+
+        Handle approval flow for commands that need user approval.
+
+        Args:
+            command: The command to approve
+            risk: Risk level of command
+            reasons: Risk assessment reasons
+            log_entry: Log entry dict to update
+            force_approval: Whether to force approval
+            permission_action: Permission action from rule check
+
+        Returns:
+            Blocked result dict if denied, None if approved
+        """
+        needs_approval = (
+            force_approval
+            or permission_action == "ask"
+            or risk in {CommandRisk.HIGH, CommandRisk.MODERATE}
+        )
+
+        if needs_approval:
+            approved = await self._request_approval(command, risk, reasons)
+            log_entry["approved"] = approved
+
+            if not approved:
+                logger.warning("Command denied by user: %s", command)
+                log_entry["error"] = "User denied execution"
+                self.command_history.append(log_entry)
+                return self._build_blocked_result(
+                    risk, reasons, "Command execution denied by user"
+                )
+
+        return None
+
     async def _execute_command(
         self,
         command: str,
@@ -635,12 +793,8 @@ class SecureCommandExecutor:
         """
         Securely execute a shell command with risk assessment and sandboxing.
 
-        Issue #281: Refactored from 111 lines to use extracted helper methods.
-
-        When permission_v2 is enabled, the order is:
-        1. Check permission rules (DENY > ASK > ALLOW)
-        2. Check approval memory (per-project remembered approvals)
-        3. Fall back to risk-based assessment (DEFAULT case)
+        Issue #665: Refactored to under 50 lines using extracted helper methods.
+        Permission v2 order: DENY > ASK > ALLOW rules, then risk-based assessment.
 
         Args:
             command: The shell command to execute
@@ -650,89 +804,30 @@ class SecureCommandExecutor:
         Returns:
             Dictionary containing execution results and security info
         """
-        # Step 1: Check permission rules FIRST (when v2 enabled)
         permission_action, rule_info = await self.check_permission_rules(command, tool)
 
-        # Handle permission rule results
         if permission_action == "deny":
-            # DENY rule matched - block immediately
-            logger.warning(f"Command denied by permission rule: {command}")
-            return {
-                "stdout": "",
-                "stderr": f"Command denied by permission rule: {rule_info.get('description', 'Denied')}",
-                "return_code": 1,
-                "status": "error",
-                "security": {
-                    "risk": "forbidden",
-                    "reasons": [rule_info.get("description", "Denied by rule")],
-                    "blocked": True,
-                    "permission_rule": rule_info,
-                },
-            }
+            return self._build_permission_deny_result(command, rule_info)
 
         if permission_action == "allow":
-            # ALLOW rule matched - auto-approve, skip risk assessment approval flow
             logger.info(f"Command auto-approved by permission rule: {command[:50]}...")
-            # Still do risk assessment for logging/sandboxing decisions
             risk, reasons = self.assess_command_risk(command)
+            log_entry = self._build_auto_approved_log_entry(command, risk, reasons, rule_info)
+            return await self._execute_command(command, risk, reasons, log_entry, rule_info)
 
-            log_entry = {
-                "command": command,
-                "risk": risk.value,
-                "reasons": reasons,
-                "timestamp": asyncio.get_event_loop().time(),
-                "approved": True,
-                "executed": False,
-                "auto_approved_by": "permission_rule" if not rule_info.get("from_memory") else "approval_memory",
-            }
-
-            # Execute command (skip approval flow)
-            return await self._execute_command(
-                command, risk, reasons, log_entry, rule_info
-            )
-
-        # Step 2: Fall through to risk-based assessment
+        # Risk-based assessment fallback
         risk, reasons = self.assess_command_risk(command)
+        log_entry = self._build_standard_log_entry(command, risk, reasons)
 
-        log_entry = {
-            "command": command,
-            "risk": risk.value,
-            "reasons": reasons,
-            "timestamp": asyncio.get_event_loop().time(),
-            "approved": False,
-            "executed": False,
-        }
-
-        # Handle forbidden commands (Issue #281: uses helper)
         if risk == CommandRisk.FORBIDDEN:
-            logger.error("Forbidden command blocked: %s", command)
-            log_entry["error"] = "Command forbidden by security policy"
-            self.command_history.append(log_entry)
-            return self._build_blocked_result(
-                risk, reasons, f"Command forbidden: {'; '.join(reasons)}"
-            )
+            return await self._handle_forbidden_command(command, risk, reasons, log_entry)
 
-        # Handle approval flow
-        # ASK rule forces approval even for SAFE commands
-        needs_approval = (
-            force_approval
-            or permission_action == "ask"
-            or risk in {CommandRisk.HIGH, CommandRisk.MODERATE}
+        denial_result = await self._handle_approval_flow(
+            command, risk, reasons, log_entry, force_approval, permission_action
         )
+        if denial_result:
+            return denial_result
 
-        if needs_approval:
-            approved = await self._request_approval(command, risk, reasons)
-            log_entry["approved"] = approved
-
-            if not approved:
-                logger.warning("Command denied by user: %s", command)
-                log_entry["error"] = "User denied execution"
-                self.command_history.append(log_entry)
-                return self._build_blocked_result(
-                    risk, reasons, "Command execution denied by user"
-                )
-
-        # Execute using the shared helper
         return await self._execute_command(command, risk, reasons, log_entry)
 
     def get_command_history(self, limit: int = 100) -> List[Dict[str, Any]]:

@@ -96,6 +96,94 @@ class AutoBotSemanticChunker:
 
         logger.info("SemanticChunker initialized with model: %s", embedding_model)
 
+    def _check_gpu_availability(self) -> bool:
+        """Issue #665: Extracted from _compute_sentence_embeddings_async to reduce function length."""
+        import torch
+
+        return (
+            torch.cuda.is_available()
+            and hasattr(self, "_embedding_model")
+            and self._embedding_model is not None
+            and next(self._embedding_model.parameters()).device.type == "cuda"
+        )
+
+    def _get_system_info_for_batching(self) -> tuple[int, float, bool]:
+        """Issue #665: Extracted from _compute_sentence_embeddings_async to reduce function length."""
+        import os
+
+        import psutil
+
+        cpu_count = os.cpu_count() or 4
+        cpu_load = psutil.cpu_percent(interval=0.1)
+        has_gpu = self._check_gpu_availability()
+        return cpu_count, cpu_load, has_gpu
+
+    async def _process_embedding_batches(
+        self, sentences: List[str], batch_size: int, max_workers: int
+    ) -> List[np.ndarray]:
+        """Issue #665: Extracted from _compute_sentence_embeddings_async to reduce function length.
+
+        Process sentences in batches and return list of embedding arrays.
+
+        Args:
+            sentences: List of sentence strings to embed.
+            batch_size: Number of sentences per batch.
+            max_workers: Maximum number of worker threads.
+
+        Returns:
+            List of numpy arrays containing embeddings for each batch.
+        """
+        import asyncio
+        import concurrent.futures
+
+        all_embeddings = []
+
+        for i in range(0, len(sentences), batch_size):
+            batch_sentences = sentences[i : i + batch_size]
+
+            # Run embedding computation in thread pool to avoid blocking event loop
+            loop = asyncio.get_event_loop()
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=max_workers
+            ) as executor:
+                embeddings = await loop.run_in_executor(
+                    executor,
+                    lambda: self._embedding_model.encode(
+                        batch_sentences,
+                        convert_to_tensor=False,
+                        show_progress_bar=False,
+                    ),
+                )
+                all_embeddings.append(embeddings)
+
+            # Yield control to event loop after each batch
+            await asyncio.sleep(0.001)  # Allow other coroutines to run
+
+            # Log progress for large batches
+            if len(sentences) > 20:
+                progress = min(100, int((i + batch_size) / len(sentences) * 100))
+                logger.debug("Embedding progress: %d%%", progress)
+
+        return all_embeddings
+
+    def _create_fallback_embeddings(self, num_sentences: int) -> np.ndarray:
+        """Issue #665: Extracted from _compute_sentence_embeddings_async to reduce function length.
+
+        Create zero embeddings as fallback when embedding computation fails.
+
+        Args:
+            num_sentences: Number of sentences to create embeddings for.
+
+        Returns:
+            numpy array of zero embeddings with appropriate dimensions.
+        """
+        try:
+            dim = self._embedding_model.get_sentence_embedding_dimension()
+            return np.zeros((num_sentences, dim))
+        except Exception:
+            # Fallback dimension if model access fails
+            return np.zeros((num_sentences, 384))
+
     def _get_adaptive_batch_params(
         self, num_sentences: int, cpu_load: float, cpu_count: int, has_gpu: bool
     ) -> tuple[int, int]:
@@ -369,41 +457,15 @@ class AutoBotSemanticChunker:
     async def _compute_sentence_embeddings_async(
         self, sentences: List[str]
     ) -> np.ndarray:
-        """
-        Compute embeddings for a list of sentences asynchronously and non-blocking.
-
-        Issue #281: Refactored from 111 lines to use extracted _get_adaptive_batch_params helper.
-
-        Args:
-            sentences: List of sentence strings
-
-        Returns:
-            numpy array of embeddings
-        """
-        import asyncio
-        import concurrent.futures
-        import os
-
-        import psutil
-        import torch
-
+        """Compute embeddings for sentences asynchronously (Issue #665: refactored to <50 lines)."""
         # Ensure model is loaded before use
         await self._initialize_model()
 
         try:
-            # Get CPU count and current load for adaptive batching
-            cpu_count = os.cpu_count() or 4
-            cpu_load = psutil.cpu_percent(interval=0.1)
+            # Get system info using extracted helper (Issue #665)
+            cpu_count, cpu_load, has_gpu = self._get_system_info_for_batching()
 
-            # Check if we have GPU acceleration
-            has_gpu = (
-                torch.cuda.is_available()
-                and hasattr(self, "_embedding_model")
-                and self._embedding_model is not None
-                and next(self._embedding_model.parameters()).device.type == "cuda"
-            )
-
-            # Get adaptive batch parameters (Issue #281: uses extracted helper)
+            # Get adaptive batch parameters (Issue #281)
             max_workers, batch_size = self._get_adaptive_batch_params(
                 len(sentences), cpu_load, cpu_count, has_gpu
             )
@@ -413,50 +475,19 @@ class AutoBotSemanticChunker:
                 f"batch_size={batch_size}, CPU load={cpu_load}%"
             )
 
-            # Process in batches to avoid blocking
-            all_embeddings = []
-
-            for i in range(0, len(sentences), batch_size):
-                batch_sentences = sentences[i : i + batch_size]
-
-                # Run embedding computation in thread pool to avoid blocking event loop
-                loop = asyncio.get_event_loop()
-                with concurrent.futures.ThreadPoolExecutor(
-                    max_workers=max_workers
-                ) as executor:
-                    embeddings = await loop.run_in_executor(
-                        executor,
-                        lambda: self._embedding_model.encode(
-                            batch_sentences,
-                            convert_to_tensor=False,
-                            show_progress_bar=False,
-                        ),
-                    )
-                    all_embeddings.append(embeddings)
-
-                # Yield control to event loop after each batch
-                await asyncio.sleep(0.001)  # Allow other coroutines to run
-
-                # Log progress for large batches
-                if len(sentences) > 20:
-                    progress = min(100, int((i + batch_size) / len(sentences) * 100))
-                    logger.debug("Embedding progress: %d%%", progress)
+            # Process batches using extracted helper (Issue #665)
+            all_embeddings = await self._process_embedding_batches(
+                sentences, batch_size, max_workers
+            )
 
             # Combine all batch results
             if len(all_embeddings) == 1:
                 return np.array(all_embeddings[0])
-            else:
-                return np.vstack(all_embeddings)
+            return np.vstack(all_embeddings)
 
         except Exception as e:
             logger.error("Error computing sentence embeddings: %s", e)
-            # Return zero embeddings as fallback
-            try:
-                dim = self._embedding_model.get_sentence_embedding_dimension()
-                return np.zeros((len(sentences), dim))
-            except Exception:
-                # Fallback dimension if model access fails
-                return np.zeros((len(sentences), 384))
+            return self._create_fallback_embeddings(len(sentences))
 
     def _compute_sentence_embeddings(self, sentences: List[str]) -> np.ndarray:
         """

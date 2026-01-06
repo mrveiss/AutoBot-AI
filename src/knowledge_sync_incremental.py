@@ -397,88 +397,36 @@ class IncrementalKnowledgeSync:
         return changed_files + new_files, removed_files, new_files
 
     async def _process_file_with_gpu_chunking(self, file_path: Path) -> FileMetadata:
-        """Process a single file with GPU-accelerated semantic chunking."""
+        """Process file with GPU-accelerated chunking (Issue #665: refactored to <50 lines)."""
         try:
             relative_path = file_path.relative_to(self.project_root)
 
-            # Read file content
-            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                content = await f.read()
-
-            if not content.strip():
-                logger.warning("Empty file: %s", relative_path)
+            # Read and validate file content using extracted helper (Issue #665)
+            result = await self._read_and_validate_file_content(file_path)
+            if result is None:
                 return None
+            content, file_stat = result
 
-            # Issue #358 - avoid blocking
-            file_stat = await asyncio.to_thread(file_path.stat)
             content_hash = self._compute_content_hash(content)
-
-            # GPU-accelerated semantic chunking
             start_time = time.time()
 
-            # Create base metadata for chunking
-            base_metadata = {
-                "source": "project-documentation",
-                "relative_path": str(relative_path),
-                "filename": file_path.name,
-                "file_size": len(content),
-                "sync_time": self.current_sync_time,
-            }
-
-            # Determine category for better organization
-            category = self._determine_category(relative_path)
-            base_metadata["category"] = category
-
-            # Use GPU semantic chunker
+            # Create metadata and chunk using extracted helpers (Issue #665)
+            base_metadata = self._create_chunk_base_metadata(file_path, relative_path, content)
             chunks = await self.semantic_chunker.chunk_text(content, base_metadata)
-
             processing_time = time.time() - start_time
 
-            # Store chunks in knowledge base
-            vector_ids = []
-            fact_ids = []
-
-            for i, chunk in enumerate(chunks):
-                # Enhanced searchable text
-                chunk_text = f"FILE: {relative_path}\nSECTION: {i+1}/{len(chunks)}\nCONTENT:\n{chunk.content}"
-
-                # Enhanced metadata
-                chunk_metadata = {
-                    **base_metadata,
-                    "chunk_index": i,
-                    "total_chunks": len(chunks),
-                    "semantic_score": chunk.semantic_score,
-                    "sentence_count": len(chunk.sentences),
-                    "character_count": len(chunk.content),
-                    "gpu_optimized": True,
-                }
-
-                # Store as fact for searchability
-                result = await self.kb.store_fact(chunk_text, chunk_metadata)
-                if result["status"] == "success":
-                    fact_ids.append(result["fact_id"])
-
-                # Also store in vector store for advanced RAG
-                # This would require integration with the vector store
-                # For now, we focus on fact-based storage
-
-            # Create file metadata
-            metadata = FileMetadata(
-                path=str(file_path),
-                relative_path=str(relative_path),
-                content_hash=content_hash,
-                size=file_stat.st_size,
-                modified_time=file_stat.st_mtime,
-                sync_time=self.current_sync_time,
-                vector_ids=vector_ids,
-                fact_ids=fact_ids,
-                chunk_count=len(chunks),
-                processing_time=processing_time,
+            # Store chunks using extracted helper (Issue #665)
+            vector_ids, fact_ids = await self._store_chunks_in_knowledge_base(
+                chunks, relative_path, base_metadata
             )
 
-            logger.info(
-                "Processed: %s → %d chunks in %.3fs", relative_path, len(chunks), processing_time
+            # Create file metadata using extracted helper (Issue #665)
+            metadata = self._create_file_metadata(
+                file_path, relative_path, content_hash, file_stat,
+                vector_ids, fact_ids, len(chunks), processing_time
             )
+
+            logger.info("Processed: %s -> %d chunks in %.3fs", relative_path, len(chunks), processing_time)
             return metadata
 
         except OSError as e:
@@ -487,6 +435,109 @@ class IncrementalKnowledgeSync:
         except Exception as e:
             logger.error("Failed to process %s: %s", file_path, e)
             return None
+
+    async def _read_and_validate_file_content(
+        self, file_path: Path
+    ) -> Optional[Tuple[str, Any]]:
+        """Issue #665: Extracted from _process_file_with_gpu_chunking to reduce function length.
+
+        Read file content and validate it's not empty.
+
+        Args:
+            file_path: Path to the file to read.
+
+        Returns:
+            Tuple of (content, file_stat) if valid, None otherwise.
+        """
+        async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+            content = await f.read()
+
+        if not content.strip():
+            relative_path = file_path.relative_to(self.project_root)
+            logger.warning("Empty file: %s", relative_path)
+            return None
+
+        # Issue #358 - avoid blocking
+        file_stat = await asyncio.to_thread(file_path.stat)
+        return content, file_stat
+
+    def _create_chunk_base_metadata(
+        self, file_path: Path, relative_path: Path, content: str
+    ) -> Dict[str, Any]:
+        """Issue #665: Extracted from _process_file_with_gpu_chunking to reduce function length.
+
+        Create base metadata for chunking.
+
+        Args:
+            file_path: Absolute path to the file.
+            relative_path: Path relative to project root.
+            content: File content string.
+
+        Returns:
+            Dictionary of base metadata.
+        """
+        base_metadata = {
+            "source": "project-documentation",
+            "relative_path": str(relative_path),
+            "filename": file_path.name,
+            "file_size": len(content),
+            "sync_time": self.current_sync_time,
+        }
+
+        # Determine category for better organization
+        category = self._determine_category(relative_path)
+        base_metadata["category"] = category
+
+        return base_metadata
+
+    async def _store_chunks_in_knowledge_base(
+        self, chunks: List[Any], relative_path: Path, base_metadata: Dict[str, Any]
+    ) -> Tuple[List[str], List[str]]:
+        """Issue #665: Extracted from _process_file_with_gpu_chunking to reduce function length."""
+        vector_ids = []
+        fact_ids = []
+
+        for i, chunk in enumerate(chunks):
+            chunk_text = f"FILE: {relative_path}\nSECTION: {i+1}/{len(chunks)}\nCONTENT:\n{chunk.content}"
+            chunk_metadata = {
+                **base_metadata,
+                "chunk_index": i,
+                "total_chunks": len(chunks),
+                "semantic_score": chunk.semantic_score,
+                "sentence_count": len(chunk.sentences),
+                "character_count": len(chunk.content),
+                "gpu_optimized": True,
+            }
+            result = await self.kb.store_fact(chunk_text, chunk_metadata)
+            if result["status"] == "success":
+                fact_ids.append(result["fact_id"])
+
+        return vector_ids, fact_ids
+
+    def _create_file_metadata(
+        self,
+        file_path: Path,
+        relative_path: Path,
+        content_hash: str,
+        file_stat: Any,
+        vector_ids: List[str],
+        fact_ids: List[str],
+        chunk_count: int,
+        processing_time: float,
+    ) -> FileMetadata:
+        """Issue #665: Extracted from _process_file_with_gpu_chunking to reduce function length."""
+        return FileMetadata(
+            path=str(file_path),
+            relative_path=str(relative_path),
+            content_hash=content_hash,
+            size=file_stat.st_size,
+            modified_time=file_stat.st_mtime,
+            sync_time=self.current_sync_time,
+            vector_ids=vector_ids,
+            fact_ids=fact_ids,
+            chunk_count=chunk_count,
+            processing_time=processing_time,
+        )
 
     def _get_category_keywords(self) -> dict:
         """Get keyword mappings for category determination (Issue #315)."""

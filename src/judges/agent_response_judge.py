@@ -77,24 +77,18 @@ class AgentResponseJudge(BaseLLMJudge):
             subject=response, criteria=criteria, context=eval_context
         )
 
-    async def _prepare_judgment_prompt(
+    def _build_request_context_section(
         self,
-        subject: Any,
-        criteria: List[JudgmentDimension],
-        context: Dict[str, Any],
-        alternatives: Optional[List[Any]] = None,
-        **kwargs,
+        agent_type: str,
+        request: Dict[str, Any],
+        response: Any,
+        agent_context: Dict[str, Any],
+        expected_capabilities: List[str],
+        user_satisfaction: Optional[float],
     ) -> str:
-        """Prepare the prompt for agent response evaluation"""
-
-        response = subject
-        request = context.get("request", {})
-        agent_type = context.get("agent_type", "unknown")
-        agent_context = context.get("context", {})
-        expected_capabilities = context.get("expected_capabilities", [])
-        user_satisfaction = context.get("user_satisfaction")
-
-        prompt = f"""
+        """Issue #665: Extracted from _prepare_judgment_prompt to reduce function length."""
+        satisfaction_str = user_satisfaction if user_satisfaction else "Not provided"
+        return f"""
 Please evaluate the following agent response for quality and effectiveness:
 
 AGENT TYPE: {agent_type}
@@ -111,8 +105,12 @@ CONTEXT:
 EXPECTED AGENT CAPABILITIES:
 {json.dumps(expected_capabilities, indent=2)}
 
-USER SATISFACTION SCORE: {user_satisfaction if user_satisfaction else "Not provided"}
+USER SATISFACTION SCORE: {satisfaction_str}
+"""
 
+    def _build_evaluation_criteria_section(self) -> str:
+        """Issue #665: Extracted from _prepare_judgment_prompt to reduce function length."""
+        return """
 EVALUATION CRITERIA:
 Please evaluate this response on the following dimensions (score 0.0 to 1.0):
 
@@ -145,7 +143,15 @@ Please evaluate this response on the following dimensions (score 0.0 to 1.0):
    - Is the response appropriately concise or detailed?
    - Does it avoid unnecessary complexity?
    - Is the effort proportional to the request?
+"""
 
+    def _build_agent_specific_section(
+        self, agent_type: str, context: Dict[str, Any]
+    ) -> str:
+        """Issue #665: Extracted from _prepare_judgment_prompt to reduce function length."""
+        relevance_threshold = context.get("relevance_threshold", 0.8)
+        quality_threshold = context.get("quality_threshold", 0.7)
+        return f"""
 AGENT-SPECIFIC EVALUATION FACTORS:
 
 For {agent_type} agents, also consider:
@@ -156,8 +162,8 @@ For {agent_type} agents, also consider:
 - Security and safety considerations
 
 BENCHMARKS:
-- Relevance score must be ≥ {context.get('relevance_threshold', 0.8)} for good response
-- Quality score must be ≥ {context.get('quality_threshold', 0.7)} for good response
+- Relevance score must be >= {relevance_threshold} for good response
+- Quality score must be >= {quality_threshold} for good response
 
 Please provide your evaluation in the required JSON format with:
 - Detailed reasoning for each criterion score
@@ -169,7 +175,37 @@ Please provide your evaluation in the required JSON format with:
 Focus on practical assessment that helps improve agent performance and user experience.
 """
 
-        return prompt.strip()
+    async def _prepare_judgment_prompt(
+        self,
+        subject: Any,
+        criteria: List[JudgmentDimension],
+        context: Dict[str, Any],
+        alternatives: Optional[List[Any]] = None,
+        **kwargs,
+    ) -> str:
+        """Prepare the prompt for agent response evaluation."""
+        response = subject
+        request = context.get("request", {})
+        agent_type = context.get("agent_type", "unknown")
+        agent_context = context.get("context", {})
+        expected_capabilities = context.get("expected_capabilities", [])
+        user_satisfaction = context.get("user_satisfaction")
+
+        # Issue #665: Build prompt from extracted helper methods
+        prompt_parts = [
+            self._build_request_context_section(
+                agent_type,
+                request,
+                response,
+                agent_context,
+                expected_capabilities,
+                user_satisfaction,
+            ),
+            self._build_evaluation_criteria_section(),
+            self._build_agent_specific_section(agent_type, context),
+        ]
+
+        return "".join(prompt_parts).strip()
 
     async def assess_response_quality(
         self,
