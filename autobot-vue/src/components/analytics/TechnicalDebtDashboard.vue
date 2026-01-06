@@ -809,7 +809,8 @@ function showFixDetails(item: DebtItem): void {
 
 function navigateToFile(item: DebtItem): void {
   // Emit event for parent to handle file navigation
-  logger.debug('Navigate to:', item.file_path, item.line_number);
+  // Issue #701: Fixed logger.debug call - use object for context
+  logger.debug('Navigate to:', { filePath: item.file_path, lineNumber: item.line_number });
   selectedItem.value = null;
 }
 

@@ -351,6 +351,16 @@ import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('CodeReviewDashboard')
 
+// Issue #701: Type for API response with data property
+interface ApiDataResponse {
+  data?: any
+  issues?: ReviewIssue[]
+  reviews?: ReviewHistory[]
+  patterns?: Pattern[]
+  path?: string
+  [key: string]: any
+}
+
 // Types
 interface ReviewIssue {
   id: string
@@ -557,14 +567,16 @@ async function runAnalysis() {
   hasAnalyzed.value = false
 
   try {
-    const response = await api.get('/api/code-review/analyze', {
+    // Issue #701: Fixed api.get call to use params option and type assertion
+    const response = await api.get<ApiDataResponse>('/api/code-review/analyze', {
       params: {
         path: selectedPath.value,
         languages: selectedLanguages.value.join(',')
       }
     })
 
-    issues.value = response.data.issues || []
+    // Issue #701: Response is returned directly, access .issues or .data.issues
+    issues.value = (response as ApiDataResponse).issues || (response as ApiDataResponse).data?.issues || []
     hasAnalyzed.value = true
 
     if (issues.value.length === 0) {
@@ -586,8 +598,9 @@ async function runAnalysis() {
 
 async function loadHistory() {
   try {
-    const response = await api.get('/api/code-review/history')
-    reviewHistory.value = response.data.reviews || []
+    // Issue #701: Added type assertion for response
+    const response = await api.get<ApiDataResponse>('/api/code-review/history')
+    reviewHistory.value = (response as ApiDataResponse).reviews || (response as ApiDataResponse).data?.reviews || []
   } catch (error) {
     logger.warn('Failed to load review history:', error)
     reviewHistory.value = []
@@ -596,9 +609,10 @@ async function loadHistory() {
 
 async function loadReview(reviewId: string) {
   try {
-    const response = await api.get(`/api/code-review/review/${reviewId}`)
-    issues.value = response.data.issues || []
-    selectedPath.value = response.data.path || ''
+    // Issue #701: Added type assertion for response
+    const response = await api.get<ApiDataResponse>(`/api/code-review/review/${reviewId}`)
+    issues.value = (response as ApiDataResponse).issues || (response as ApiDataResponse).data?.issues || []
+    selectedPath.value = (response as ApiDataResponse).path || (response as ApiDataResponse).data?.path || ''
     hasAnalyzed.value = true
   } catch (error) {
     logger.error('Failed to load review:', error)
@@ -609,8 +623,9 @@ async function loadReview(reviewId: string) {
 async function loadPatterns() {
   showPatterns.value = true
   try {
-    const response = await api.get('/api/code-review/patterns')
-    patterns.value = response.data.patterns || []
+    // Issue #701: Added type assertion for response
+    const response = await api.get<ApiDataResponse>('/api/code-review/patterns')
+    patterns.value = (response as ApiDataResponse).patterns || (response as ApiDataResponse).data?.patterns || []
   } catch (error) {
     logger.warn('Failed to load patterns:', error)
     patterns.value = []
@@ -623,7 +638,7 @@ async function togglePattern(pattern: Pattern) {
     // Issue #552: Backend doesn't have /patterns/toggle endpoint yet
     // Pattern state is managed client-side only for now
     // TODO: Implement backend endpoint for persistent pattern preferences
-    logger.debug('Pattern toggled (client-side only):', pattern.id, pattern.enabled)
+    logger.debug('Pattern toggled (client-side only):', { id: pattern.id, enabled: pattern.enabled })
   } catch (error) {
     logger.warn('Failed to toggle pattern:', error)
     pattern.enabled = !pattern.enabled

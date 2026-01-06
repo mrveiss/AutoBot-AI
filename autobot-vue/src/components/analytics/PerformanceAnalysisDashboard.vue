@@ -359,6 +359,14 @@ import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('PerformanceAnalysisDashboard')
 
+// Issue #701: Type for API response with data property
+interface ApiDataResponse {
+  data?: any
+  total_issues?: number
+  issues?: PerformanceIssue[]
+  [key: string]: any
+}
+
 // Types
 interface PerformanceIssue {
   id: string
@@ -522,15 +530,18 @@ async function runAnalysis() {
 
   loading.value = true
   try {
-    const response = await api.get('/api/performance/analyze', {
+    // Issue #701: Fixed api.get call to use params option and type assertion
+    const response = await api.get<ApiDataResponse>('/api/performance/analyze', {
       params: { path: selectedPath.value }
     })
-    lastResult.value = response.data
+    // Issue #701: Response is returned directly, handle both response structures
+    lastResult.value = (response as ApiDataResponse).data || response as unknown as AnalysisResult
 
-    if (response.data.total_issues === 0) {
+    const totalIssues = (response as ApiDataResponse).total_issues ?? (response as ApiDataResponse).data?.total_issues ?? 0
+    if (totalIssues === 0) {
       showToast('No performance issues found!', 'success')
     } else {
-      showToast(`Found ${response.data.total_issues} issues`, 'info')
+      showToast(`Found ${totalIssues} issues`, 'info')
     }
 
     await loadHotspots()
@@ -544,8 +555,10 @@ async function runAnalysis() {
 
 async function loadPatterns() {
   try {
-    const response = await api.get('/api/performance/patterns')
-    patterns.value = response.data
+    // Issue #701: Added type assertion for response
+    const response = await api.get<Pattern[] | ApiDataResponse>('/api/performance/patterns')
+    // Issue #701: Response could be array directly or wrapped in data
+    patterns.value = Array.isArray(response) ? response : ((response as ApiDataResponse).data || [])
   } catch (error) {
     logger.warn('Failed to load patterns:', error)
     patterns.value = []
@@ -554,8 +567,10 @@ async function loadPatterns() {
 
 async function loadHotspots() {
   try {
-    const response = await api.get('/api/performance/hotspots')
-    hotspots.value = response.data
+    // Issue #701: Added type assertion for response
+    const response = await api.get<Hotspot[] | ApiDataResponse>('/api/performance/hotspots')
+    // Issue #701: Response could be array directly or wrapped in data
+    hotspots.value = Array.isArray(response) ? response : ((response as ApiDataResponse).data || [])
   } catch (error) {
     logger.warn('Failed to load hotspots:', error)
     hotspots.value = []
@@ -565,9 +580,8 @@ async function loadHotspots() {
 async function togglePattern(pattern: Pattern) {
   const newState = !pattern.enabled
   try {
-    await api.post(`/api/performance/patterns/${pattern.id}/toggle`, null, {
-      params: { enabled: newState }
-    })
+    // Issue #701: Fixed api.post call - data should be second arg, options third
+    await api.post(`/api/performance/patterns/${pattern.id}/toggle`, { enabled: newState })
     pattern.enabled = newState
   } catch (error) {
     logger.warn('Failed to toggle pattern:', error)

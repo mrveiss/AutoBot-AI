@@ -135,7 +135,7 @@
                 v-for="(point, idx) in timelineData"
                 :key="metric + '-' + idx"
                 :cx="getX(idx)"
-                :cy="getY(point[metric])"
+                :cy="getY((point as any)[metric])"
                 r="4"
                 :fill="getMetricColor(metric)"
                 class="data-point"
@@ -209,6 +209,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+// @ts-ignore - Component may not have type declarations
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { useToast } from '@/composables/useToast'
 

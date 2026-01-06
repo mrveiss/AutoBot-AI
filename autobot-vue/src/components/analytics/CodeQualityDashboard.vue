@@ -898,15 +898,15 @@ function formatShortDate(dateStr: string): string {
 // Directive for click outside
 const vClickOutside = {
   mounted(el: HTMLElement, binding: any) {
-    el._clickOutside = (event: Event) => {
+    (el as any)._clickOutside = (event: Event) => {
       if (!(el === event.target || el.contains(event.target as Node))) {
         binding.value();
       }
     };
-    document.addEventListener('click', el._clickOutside);
+    document.addEventListener('click', (el as any)._clickOutside);
   },
   unmounted(el: HTMLElement) {
-    document.removeEventListener('click', el._clickOutside);
+    document.removeEventListener('click', (el as any)._clickOutside);
   },
 };
 

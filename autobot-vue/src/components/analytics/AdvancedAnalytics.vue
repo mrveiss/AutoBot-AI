@@ -329,6 +329,12 @@ import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('AdvancedAnalytics')
 
+// Issue #701: Type for API response with data property
+interface ApiDataResponse {
+  data?: any
+  [key: string]: any
+}
+
 // State
 const loading = ref(false)
 const activeTab = ref('cost')
@@ -401,14 +407,15 @@ const getSeverityIcon = (severity: string): string => {
 const fetchCostData = async () => {
   try {
     // Issue #552: Fixed missing /api prefix in analytics endpoints
+    // Issue #701: Added type assertions for Promise.all results
     const [summaryRes, trendsRes, modelsRes] = await Promise.all([
-      api.get('/api/analytics/cost/summary'),
-      api.get('/api/analytics/cost/trends'),
-      api.get('/api/analytics/cost/by-model')
+      api.get<ApiDataResponse>('/api/analytics/cost/summary'),
+      api.get<ApiDataResponse>('/api/analytics/cost/trends'),
+      api.get<ApiDataResponse>('/api/analytics/cost/by-model')
     ])
-    costSummary.value = summaryRes.data
-    costTrends.value = trendsRes.data
-    modelCosts.value = modelsRes.data?.models || []
+    costSummary.value = (summaryRes as ApiDataResponse).data
+    costTrends.value = (trendsRes as ApiDataResponse).data
+    modelCosts.value = (modelsRes as ApiDataResponse).data?.models || []
   } catch (error) {
     logger.error('Failed to fetch cost data:', error)
   }
@@ -417,12 +424,13 @@ const fetchCostData = async () => {
 const fetchAgentData = async () => {
   try {
     // Issue #552: Fixed missing /api prefix in analytics endpoints
+    // Issue #701: Added type assertions for Promise.all results
     const [metricsRes, recsRes] = await Promise.all([
-      api.get('/api/analytics/agents/performance'),
-      api.get('/api/analytics/agents/recommendations')
+      api.get<ApiDataResponse>('/api/analytics/agents/performance'),
+      api.get<ApiDataResponse>('/api/analytics/agents/recommendations')
     ])
-    agentMetrics.value = metricsRes.data
-    recommendations.value = recsRes.data
+    agentMetrics.value = (metricsRes as ApiDataResponse).data
+    recommendations.value = (recsRes as ApiDataResponse).data
   } catch (error) {
     logger.error('Failed to fetch agent data:', error)
   }
@@ -431,8 +439,9 @@ const fetchAgentData = async () => {
 const fetchExportFormats = async () => {
   try {
     // Issue #552: Fixed missing /api prefix in analytics endpoints
-    const res = await api.get('/api/analytics/export/formats')
-    exportFormats.value = res.data?.formats || []
+    // Issue #701: Added type assertion for response
+    const res = await api.get<ApiDataResponse>('/api/analytics/export/formats')
+    exportFormats.value = (res as ApiDataResponse).data?.formats || []
     // Add icons
     exportFormats.value.forEach((f: any) => {
       if (f.format === 'CSV') f.icon = 'fas fa-file-csv'
@@ -449,14 +458,15 @@ const fetchExportFormats = async () => {
 const fetchBehaviorData = async () => {
   try {
     // Issue #552: Fixed missing /api prefix in analytics endpoints
+    // Issue #701: Added type assertions for Promise.all results
     const [engagementRes, featuresRes, heatmapRes] = await Promise.all([
-      api.get('/api/analytics/behavior/engagement'),
-      api.get('/api/analytics/behavior/features'),
-      api.get('/api/analytics/behavior/stats/heatmap')
+      api.get<ApiDataResponse>('/api/analytics/behavior/engagement'),
+      api.get<ApiDataResponse>('/api/analytics/behavior/features'),
+      api.get<ApiDataResponse>('/api/analytics/behavior/stats/heatmap')
     ])
-    engagementMetrics.value = engagementRes.data
-    behaviorMetrics.value = featuresRes.data
-    usageHeatmap.value = heatmapRes.data
+    engagementMetrics.value = (engagementRes as ApiDataResponse).data
+    behaviorMetrics.value = (featuresRes as ApiDataResponse).data
+    usageHeatmap.value = (heatmapRes as ApiDataResponse).data
   } catch (error) {
     logger.error('Failed to fetch behavior data:', error)
   }
@@ -471,8 +481,9 @@ const getPopularityWidth = (views: number): string => {
 
 const downloadExport = async (path: string) => {
   try {
-    const response = await api.get(path, { responseType: 'blob' })
-    const url = window.URL.createObjectURL(new Blob([response.data]))
+    // Issue #701: Fixed api.get call - use responseType option properly
+    const response = await api.get<Blob>(path, { responseType: 'blob' })
+    const url = window.URL.createObjectURL(new Blob([response as unknown as BlobPart]))
     const link = document.createElement('a')
     link.href = url
     // Extract filename from path

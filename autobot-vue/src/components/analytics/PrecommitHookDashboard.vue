@@ -299,6 +299,12 @@ import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('PrecommitHookDashboard')
 
+// Issue #701: Type for API response with data property
+interface ApiDataResponse {
+  data?: any
+  [key: string]: any
+}
+
 // Types
 interface CheckResult {
   check_id: string
@@ -469,8 +475,10 @@ function getIssueBarWidth(count: number): string {
 
 async function loadStatus() {
   try {
-    const response = await api.get('/api/precommit/status')
-    hookStatus.value = response.data
+    // Issue #701: Added type assertion for response
+    const response = await api.get<HookStatus | ApiDataResponse>('/api/precommit/status')
+    // Issue #701: Response could be data directly or wrapped
+    hookStatus.value = (response as ApiDataResponse).data || response as HookStatus
   } catch (error) {
     logger.warn('Failed to load status:', error)
     hookStatus.value = { installed: false }
@@ -479,8 +487,10 @@ async function loadStatus() {
 
 async function loadChecks() {
   try {
-    const response = await api.get('/api/precommit/checks')
-    checks.value = response.data
+    // Issue #701: Added type assertion for response
+    const response = await api.get<Check[] | ApiDataResponse>('/api/precommit/checks')
+    // Issue #701: Response could be array directly or wrapped in data
+    checks.value = Array.isArray(response) ? response : ((response as ApiDataResponse).data || [])
   } catch (error) {
     logger.warn('Failed to load checks:', error)
     checks.value = []
@@ -489,8 +499,10 @@ async function loadChecks() {
 
 async function loadHistory() {
   try {
-    const response = await api.get('/api/precommit/history')
-    checkHistory.value = response.data
+    // Issue #701: Added type assertion for response
+    const response = await api.get<CommitCheckResult[] | ApiDataResponse>('/api/precommit/history')
+    // Issue #701: Response could be array directly or wrapped in data
+    checkHistory.value = Array.isArray(response) ? response : ((response as ApiDataResponse).data || [])
   } catch (error) {
     logger.warn('Failed to load history:', error)
     checkHistory.value = []
@@ -499,8 +511,10 @@ async function loadHistory() {
 
 async function loadSummary() {
   try {
-    const response = await api.get('/api/precommit/summary')
-    summary.value = response.data
+    // Issue #701: Added type assertion for response
+    const response = await api.get<Summary | ApiDataResponse>('/api/precommit/summary')
+    // Issue #701: Response could be data directly or wrapped
+    summary.value = (response as ApiDataResponse).data || response as Summary
   } catch (error) {
     logger.warn('Failed to load summary:', error)
     // Keep default empty summary state
@@ -510,7 +524,8 @@ async function loadSummary() {
 async function installHooks() {
   installing.value = true
   try {
-    await api.post('/api/precommit/install')
+    // Issue #701: api.post requires data argument
+    await api.post('/api/precommit/install', {})
     await loadStatus()
     showToast('Pre-commit hooks installed successfully', 'success')
   } catch (error) {
@@ -524,7 +539,8 @@ async function installHooks() {
 async function uninstallHooks() {
   installing.value = true
   try {
-    await api.post('/api/precommit/uninstall')
+    // Issue #701: api.post requires data argument
+    await api.post('/api/precommit/uninstall', {})
     await loadStatus()
     showToast('Pre-commit hooks uninstalled', 'info')
   } catch (error) {
@@ -538,15 +554,18 @@ async function uninstallHooks() {
 async function runCheck() {
   checking.value = true
   try {
-    const response = await api.get('/api/precommit/check')
-    lastResult.value = response.data
+    // Issue #701: Added type assertion for response
+    const response = await api.get<CommitCheckResult | ApiDataResponse>('/api/precommit/check')
+    // Issue #701: Response could be data directly or wrapped
+    lastResult.value = (response as ApiDataResponse).data || response as CommitCheckResult
     await loadHistory()
     await loadSummary()
 
-    if (response.data.passed) {
+    const result = lastResult.value
+    if (result?.passed) {
       showToast('All checks passed!', 'success')
     } else {
-      showToast(`Found ${response.data.failed_checks} issues`, 'warning')
+      showToast(`Found ${result?.failed_checks || 0} issues`, 'warning')
     }
   } catch (error) {
     logger.error('Failed to run check:', error)
@@ -559,9 +578,8 @@ async function runCheck() {
 async function toggleCheck(check: Check) {
   const newState = !check.enabled
   try {
-    await api.post(`/api/precommit/checks/${check.id}/toggle`, null, {
-      params: { enabled: newState }
-    })
+    // Issue #701: Fixed api.post call - data should be second arg
+    await api.post(`/api/precommit/checks/${check.id}/toggle`, { enabled: newState })
     check.enabled = newState
   } catch (error) {
     logger.warn('Failed to toggle check:', error)
