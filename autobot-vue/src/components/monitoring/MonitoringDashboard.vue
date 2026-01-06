@@ -304,7 +304,7 @@
             :class="['recommendation-card', rec.priority]"
           >
             <div class="rec-header">
-              <StatusBadge :variant="getPriorityVariant(rec.priority)" size="small">{{ rec.priority }}</StatusBadge>
+              <StatusBadge :variant="(getPriorityVariant(rec.priority) as any)" size="small">{{ rec.priority }}</StatusBadge>
               <span class="category">{{ rec.category.toUpperCase() }}</span>
             </div>
             <div class="rec-content">
@@ -339,7 +339,7 @@
           :class="['alert-item', alert.severity]"
         >
           <div class="alert-header">
-            <StatusBadge :variant="getSeverityVariant(alert.severity)" size="small">{{ alert.severity }}</StatusBadge>
+            <StatusBadge :variant="(getSeverityVariant(alert.severity) as any)" size="small">{{ alert.severity }}</StatusBadge>
             <span class="category">{{ alert.category }}</span>
             <span class="timestamp">{{ formatTimestamp(alert.timestamp) }}</span>
           </div>

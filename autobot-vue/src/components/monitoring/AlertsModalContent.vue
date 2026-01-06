@@ -7,7 +7,7 @@
         :class="['alert-item', alert.severity]"
       >
         <div class="alert-header">
-          <StatusBadge :variant="getSeverityVariant(alert.severity)" size="small">
+          <StatusBadge :variant="(getSeverityVariant(alert.severity) as any)" size="small">
             {{ alert.severity }}
           </StatusBadge>
           <span class="category">{{ alert.category }}</span>

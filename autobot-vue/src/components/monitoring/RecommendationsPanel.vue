@@ -20,7 +20,7 @@
         :class="['recommendation-card', rec.priority]"
       >
         <div class="rec-header">
-          <StatusBadge :variant="getPriorityVariant(rec.priority)" size="small">
+          <StatusBadge :variant="(getPriorityVariant(rec.priority) as any)" size="small">
             {{ rec.priority }}
           </StatusBadge>
           <span class="category">{{ rec.category.toUpperCase() }}</span>
