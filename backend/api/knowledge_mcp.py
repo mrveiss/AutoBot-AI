@@ -20,7 +20,7 @@ from src.knowledge_base import KnowledgeBase
 from src.langchain_agent_orchestrator import LangChainAgentOrchestrator
 from src.unified_config_manager import config as global_config_manager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.redis_client import RedisDatabase, RedisDatabaseManager
+from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["knowledge_mcp", "mcp", "langchain"])
@@ -28,9 +28,7 @@ router = APIRouter(tags=["knowledge_mcp", "mcp", "langchain"])
 # Initialize components with thread-safe locks (Issue #395)
 knowledge_base = None
 langchain_orchestrator = None
-redis_manager = None
 _knowledge_base_lock = threading.Lock()
-_redis_manager_lock = threading.Lock()
 _langchain_orchestrator_lock = threading.Lock()
 
 
@@ -48,18 +46,12 @@ def get_knowledge_base():
     return knowledge_base
 
 
-def get_redis_manager():
-    """Get Redis database manager for vector operations.
+def get_vectors_redis_client():
+    """Get Redis client for vector operations.
 
-    Issue #395: Added thread-safe lazy initialization with double-check locking.
+    Issue #692: Migrated from deprecated RedisDatabaseManager to get_redis_client().
     """
-    global redis_manager
-    if redis_manager is None:
-        with _redis_manager_lock:
-            # Double-check after acquiring lock to prevent race condition
-            if redis_manager is None:
-                redis_manager = RedisDatabaseManager()
-    return redis_manager
+    return get_redis_client(database="vectors")
 
 
 def get_langchain_orchestrator():
@@ -576,7 +568,7 @@ async def _vector_op_info(kb, redis_mgr, params: dict) -> dict:
     }
 
 
-async def _vector_op_flush(kb, redis_mgr, params: dict) -> dict:
+async def _vector_op_flush(kb, vectors_client, params: dict) -> dict:
     """Handle vector flush operation. (Issue #315 - extracted)"""
     if not params.get("confirm", False):
         return {
@@ -584,12 +576,13 @@ async def _vector_op_flush(kb, redis_mgr, params: dict) -> dict:
             "operation": "flush",
             "error": "Confirmation required (set params.confirm = true)",
         }
-    vector_db = redis_mgr.get_connection(RedisDatabase.VECTORS)
-    await asyncio.to_thread(vector_db.flushdb)
+    if not vectors_client:
+        return {"success": False, "operation": "flush", "error": "Redis not available"}
+    await asyncio.to_thread(vectors_client.flushdb)
     return {"success": True, "operation": "flush", "message": "Vector database flushed"}
 
 
-async def _vector_op_reindex(kb, redis_mgr, params: dict) -> dict:
+async def _vector_op_reindex(kb, vectors_client, params: dict) -> dict:
     """Handle vector reindex operation. (Issue #315 - extracted)"""
     if kb and hasattr(kb, "index"):
         return {
@@ -604,7 +597,7 @@ async def _vector_op_reindex(kb, redis_mgr, params: dict) -> dict:
     }
 
 
-async def _vector_op_backup(kb, redis_mgr, params: dict) -> dict:
+async def _vector_op_backup(kb, vectors_client, params: dict) -> dict:
     """Handle vector backup operation. (Issue #315 - extracted)"""
     return {
         "success": True,
@@ -635,12 +628,12 @@ async def mcp_redis_vector_operations(request: Metadata):
         params = request.get("params", {})
 
         kb = get_knowledge_base()
-        redis_mgr = get_redis_manager()
+        vectors_client = get_vectors_redis_client()
 
         # Use dispatch table (Issue #315 - reduced depth)
         handler = _VECTOR_OPERATIONS.get(operation)
         if handler:
-            return await handler(kb, redis_mgr, params)
+            return await handler(kb, vectors_client, params)
         return {"success": False, "error": f"Unknown operation: {operation}"}
 
     except Exception as e:

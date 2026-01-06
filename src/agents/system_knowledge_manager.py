@@ -146,13 +146,9 @@ class SystemKnowledgeManager:
     async def _load_file_state_cache(self) -> Optional[Dict[str, str]]:
         """Load cached file states from Redis"""
         try:
-            from src.utils.redis_client import (
-                RedisDatabase,
-                RedisDatabaseManager,
-            )
+            from src.utils.redis_client import get_redis_client
 
-            db_manager = RedisDatabaseManager()
-            redis_client = db_manager.get_connection(RedisDatabase.KNOWLEDGE)
+            redis_client = get_redis_client(database="knowledge")
 
             if not redis_client:
                 return None
@@ -174,13 +170,9 @@ class SystemKnowledgeManager:
     async def _update_system_knowledge_cache(self):
         """Update the cached file states in Redis"""
         try:
-            from src.utils.redis_client import (
-                RedisDatabase,
-                RedisDatabaseManager,
-            )
+            from src.utils.redis_client import get_redis_client
 
-            db_manager = RedisDatabaseManager()
-            redis_client = db_manager.get_connection(RedisDatabase.KNOWLEDGE)
+            redis_client = get_redis_client(database="knowledge")
 
             if not redis_client:
                 logger.warning("Redis not available for system knowledge caching")

@@ -394,13 +394,9 @@ class PromptManager:
     def _load_prompt_change_cache(self) -> Optional[Dict[str, str]]:
         """Load cached prompt file states from Redis"""
         try:
-            from src.utils.redis_client import (
-                RedisDatabase,
-                RedisDatabaseManager,
-            )
+            from src.utils.redis_client import get_redis_client
 
-            db_manager = RedisDatabaseManager()
-            redis_client = db_manager.get_connection(RedisDatabase.PROMPTS)
+            redis_client = get_redis_client(database="prompts")
 
             if not redis_client:
                 return None
@@ -420,13 +416,9 @@ class PromptManager:
     def _update_prompt_change_cache(self):
         """Update the cached prompt file states in Redis"""
         try:
-            from src.utils.redis_client import (
-                RedisDatabase,
-                RedisDatabaseManager,
-            )
+            from src.utils.redis_client import get_redis_client
 
-            db_manager = RedisDatabaseManager()
-            redis_client = db_manager.get_connection(RedisDatabase.PROMPTS)
+            redis_client = get_redis_client(database="prompts")
 
             if not redis_client:
                 return
@@ -475,13 +467,9 @@ class PromptManager:
     def _load_from_redis_cache(self, cache_key: str) -> Optional[Dict]:
         """Load prompts from Redis cache using dedicated prompts database"""
         try:
-            from src.utils.redis_client import (
-                RedisDatabase,
-                RedisDatabaseManager,
-            )
+            from src.utils.redis_client import get_redis_client
 
-            db_manager = RedisDatabaseManager()
-            redis_client = db_manager.get_connection(RedisDatabase.PROMPTS)
+            redis_client = get_redis_client(database="prompts")
             if not redis_client:
                 return None
 
@@ -496,13 +484,9 @@ class PromptManager:
     def _save_to_redis_cache(self, cache_key: str, data: Dict) -> None:
         """Save prompts to Redis cache using dedicated prompts database"""
         try:
-            from src.utils.redis_client import (
-                RedisDatabase,
-                RedisDatabaseManager,
-            )
+            from src.utils.redis_client import get_redis_client
 
-            db_manager = RedisDatabaseManager()
-            redis_client = db_manager.get_connection(RedisDatabase.PROMPTS)
+            redis_client = get_redis_client(database="prompts")
             if not redis_client:
                 return
 

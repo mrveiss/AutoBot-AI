@@ -31,7 +31,7 @@ from src.constants import PATH
 from backend.api.analytics_models import CodeAnalysisRequest, CommunicationPattern
 from src.constants.threshold_constants import TimingConstants
 from src.unified_config_manager import UnifiedConfigManager
-from src.utils.redis_client import RedisDatabase, RedisDatabaseManager
+from src.utils.redis_client import RedisDatabase, get_redis_client
 from src.utils.system_metrics import get_metrics_collector
 
 # Import existing monitoring infrastructure
@@ -76,7 +76,6 @@ class AnalyticsController:
 
     def __init__(self):
         """Initialize analytics controller with Redis, metrics, and tracking."""
-        self.redis_manager = RedisDatabaseManager()
         self.metrics_collector = get_metrics_collector()
         self.code_analysis_path = PATH.PROJECT_ROOT / "tools" / "code-analysis-suite"
         self.code_index_path = PATH.PROJECT_ROOT / "mcp-tools" / "code-index-mcp"
@@ -95,7 +94,8 @@ class AnalyticsController:
     async def get_redis_connection(self, database: RedisDatabase) -> redis.Redis:
         """Get Redis connection for specific database"""
         try:
-            return await self.redis_manager.get_async_connection(database)
+            db_name = database.name.lower() if isinstance(database, RedisDatabase) else database
+            return await get_redis_client(async_client=True, database=db_name)
         except Exception as e:
             logger.error("Failed to get Redis connection for %s: %s", database, e)
             return None
