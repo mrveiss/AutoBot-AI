@@ -25,10 +25,22 @@ class KnowledgeBaseMetricsRecorder(BaseMetricsRecorder):
     """Recorder for knowledge base and vector store metrics."""
 
     def _init_metrics(self) -> None:
-        """Initialize knowledge base metrics."""
-        # =========================================================================
-        # Document Metrics
-        # =========================================================================
+        """Initialize knowledge base metrics.
+
+        Issue #665: Refactored to delegate to category-specific helper methods
+        to reduce function length from 140 lines to under 50 lines.
+        """
+        self._init_document_metrics()
+        self._init_embedding_metrics()
+        self._init_search_metrics()
+        self._init_indexing_metrics()
+        self._init_cache_metrics()
+
+    def _init_document_metrics(self) -> None:
+        """Initialize document-related metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.documents_total = Gauge(
             "autobot_knowledge_documents_total",
             "Total number of documents in knowledge base",
@@ -51,9 +63,11 @@ class KnowledgeBaseMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Vector Embedding Metrics
-        # =========================================================================
+    def _init_embedding_metrics(self) -> None:
+        """Initialize vector embedding metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.vectors_total = Gauge(
             "autobot_knowledge_vectors_total",
             "Total number of vector embeddings",
@@ -83,9 +97,11 @@ class KnowledgeBaseMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Search Metrics
-        # =========================================================================
+    def _init_search_metrics(self) -> None:
+        """Initialize search-related metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.search_requests = Counter(
             "autobot_knowledge_search_requests_total",
             "Total search requests",
@@ -109,9 +125,11 @@ class KnowledgeBaseMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Indexing Metrics
-        # =========================================================================
+    def _init_indexing_metrics(self) -> None:
+        """Initialize indexing-related metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.indexing_duration = Histogram(
             "autobot_knowledge_indexing_duration_seconds",
             "Indexing duration in seconds",
@@ -134,9 +152,11 @@ class KnowledgeBaseMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        # =========================================================================
-        # Cache Metrics
-        # =========================================================================
+    def _init_cache_metrics(self) -> None:
+        """Initialize cache-related metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        """
         self.cache_hits = Counter(
             "autobot_knowledge_cache_hits_total",
             "Total cache hits",

@@ -1606,7 +1606,7 @@ def _build_correlation_section(
 
     if overlap:
         lines.extend([
-            "**⚠️ Priority Files (Issues + High Bug Risk):**",
+            "**Priority Files (Issues + High Bug Risk):**",
             "",
             "| File | Issue Count | Risk Score | Risk Level |",
             "|------|-------------|------------|------------|",
@@ -1646,6 +1646,110 @@ def _build_correlation_section(
         lines.append("")
 
     return lines
+
+
+def _insert_correlation_into_bug_risk(
+    bug_risk_lines: List[str],
+    correlation_lines: List[str],
+) -> List[str]:
+    """
+    Insert correlation data into the bug risk section.
+
+    Issue #665: Extracted from _generate_markdown_report to reduce function length.
+
+    Args:
+        bug_risk_lines: Lines from _generate_bug_risk_section
+        correlation_lines: Lines from _build_correlation_section
+
+    Returns:
+        Modified bug_risk_lines with correlation data inserted
+    """
+    if not correlation_lines:
+        return bug_risk_lines
+
+    # Find where to insert correlation (at the "Correlation with Detected Issues" header)
+    insert_idx = None
+    for i, line in enumerate(bug_risk_lines):
+        if line == "### Correlation with Detected Issues":
+            insert_idx = i
+            break
+
+    if insert_idx is not None:
+        # Remove placeholder and insert real data
+        # Keep header + blank + note, then insert correlation, then final --- and blank
+        return (
+            bug_risk_lines[:insert_idx + 3] +
+            correlation_lines +
+            bug_risk_lines[-2:]
+        )
+
+    return bug_risk_lines
+
+
+def _build_analysis_sections(
+    api_endpoint_analysis: Optional[APIEndpointAnalysis],
+    duplicate_analysis: Optional[DuplicateAnalysis],
+    cross_language_analysis: Optional[CrossLanguageAnalysis],
+    pattern_analysis: Optional[PatternAnalysisReport],
+) -> List[str]:
+    """
+    Build all analysis sections for the report.
+
+    Issue #665: Extracted from _generate_markdown_report to reduce function length.
+
+    Args:
+        api_endpoint_analysis: API endpoint analysis result
+        duplicate_analysis: Duplicate code analysis result
+        cross_language_analysis: Cross-language pattern analysis result
+        pattern_analysis: Code pattern analysis result
+
+    Returns:
+        List of markdown lines for all analysis sections
+    """
+    lines = []
+
+    # Add API endpoint analysis section (Issue #527)
+    if api_endpoint_analysis:
+        lines.extend(_generate_api_endpoint_section(api_endpoint_analysis))
+
+    # Add duplicate code analysis section (Issue #528)
+    if duplicate_analysis:
+        lines.extend(_generate_duplicate_code_section(duplicate_analysis))
+
+    # Add cross-language pattern analysis section (Issue #244)
+    if cross_language_analysis:
+        lines.extend(_generate_cross_language_section(cross_language_analysis))
+
+    # Add code pattern analysis section (Issue #208)
+    if pattern_analysis:
+        lines.extend(_generate_pattern_analysis_section(pattern_analysis))
+
+    return lines
+
+
+def _build_bug_prediction_section(
+    bug_prediction: Optional[PredictionResult],
+    problems: List[Dict],
+) -> List[str]:
+    """
+    Build bug prediction section with correlation data.
+
+    Issue #665: Extracted from _generate_markdown_report to reduce function length.
+
+    Args:
+        bug_prediction: Bug prediction analysis result
+        problems: List of detected code issues
+
+    Returns:
+        List of markdown lines for bug prediction section
+    """
+    if not bug_prediction:
+        return []
+
+    bug_risk_lines = _generate_bug_risk_section(bug_prediction)
+    correlation_lines = _build_correlation_section(problems, bug_prediction)
+
+    return _insert_correlation_into_bug_risk(bug_risk_lines, correlation_lines)
 
 
 def _generate_markdown_report(

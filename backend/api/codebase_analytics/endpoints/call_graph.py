@@ -123,8 +123,117 @@ def _calculate_metrics(unique_edges: List[Dict]) -> tuple:
     return top_callers, top_called
 
 
+def _get_decorator_name(decorator) -> str:
+    """
+    Extract decorator name from AST node.
+
+    Issue #665: Extracted from _create_function_visitor to reduce function length.
+
+    Args:
+        decorator: AST node representing a decorator
+
+    Returns:
+        Name of the decorator or "unknown" if cannot be determined
+    """
+    if isinstance(decorator, ast.Name):
+        return decorator.id
+    if isinstance(decorator, ast.Attribute):
+        return decorator.attr
+    if isinstance(decorator, ast.Call):
+        func = decorator.func
+        if isinstance(func, ast.Name):
+            return func.id
+        if isinstance(func, ast.Attribute):
+            return func.attr
+    return "unknown"
+
+
+def _resolve_callee_id(
+    callee_name: str,
+    module_path: str,
+    current_class: str,
+    functions: Dict,
+) -> str:
+    """
+    Resolve a callee name to its full function ID.
+
+    Issue #665: Extracted from _create_function_visitor to reduce function length.
+
+    Args:
+        callee_name: Name of the called function
+        module_path: Current module path
+        current_class: Current class context (or None)
+        functions: Dictionary of registered functions
+
+    Returns:
+        Resolved function ID or None if not found
+    """
+    # Try module-level function first
+    possible_id = f"{module_path}.{callee_name}"
+    if possible_id in functions:
+        return possible_id
+
+    # Try class method if in class context
+    if current_class:
+        possible_id = f"{module_path}.{current_class}.{callee_name}"
+        if possible_id in functions:
+            return possible_id
+
+    return None
+
+
+def _build_function_info(
+    node,
+    func_id: str,
+    full_name: str,
+    file_path: str,
+    module_path: str,
+    current_class: str,
+) -> Dict:
+    """
+    Build function information dictionary from AST node.
+
+    Issue #665: Extracted from _create_function_visitor to reduce function length.
+
+    Args:
+        node: AST function definition node
+        func_id: Full function identifier
+        full_name: Display name of the function
+        file_path: Source file path
+        module_path: Module path
+        current_class: Current class context (or None)
+
+    Returns:
+        Dictionary containing function metadata
+    """
+    return {
+        "id": func_id,
+        "name": node.name,
+        "full_name": full_name,
+        "file": file_path,
+        "module": module_path,
+        "class": current_class,
+        "line": node.lineno,
+        "is_async": isinstance(node, ast.AsyncFunctionDef),
+        "args": len(node.args.args),
+        "decorators": [_get_decorator_name(d) for d in node.decorator_list],
+    }
+
+
 def _create_function_visitor(functions: Dict, call_edges: List):
-    """Create FunctionCallVisitor class for AST analysis (Issue #281: extracted)."""
+    """
+    Create FunctionCallVisitor class for AST analysis.
+
+    Issue #281: Extracted from get_call_graph.
+    Issue #665: Refactored to use extracted helpers for reduced function length.
+
+    Args:
+        functions: Dictionary to populate with function definitions
+        call_edges: List to populate with call relationships
+
+    Returns:
+        FunctionCallVisitor class for use with ast.NodeVisitor
+    """
 
     class FunctionCallVisitor(ast.NodeVisitor):
         """AST visitor to extract function definitions and calls."""
@@ -161,18 +270,10 @@ def _create_function_visitor(functions: Dict, call_edges: List):
                 func_id = f"{self.module_path}.{node.name}"
                 full_name = node.name
 
-            functions[func_id] = {
-                "id": func_id,
-                "name": node.name,
-                "full_name": full_name,
-                "file": self.file_path,
-                "module": self.module_path,
-                "class": self.current_class,
-                "line": node.lineno,
-                "is_async": isinstance(node, ast.AsyncFunctionDef),
-                "args": len(node.args.args),
-                "decorators": [self._get_decorator_name(d) for d in node.decorator_list],
-            }
+            functions[func_id] = _build_function_info(
+                node, func_id, full_name,
+                self.file_path, self.module_path, self.current_class
+            )
 
             old_function = self.current_function
             self.current_function = func_id
@@ -180,20 +281,6 @@ def _create_function_visitor(functions: Dict, call_edges: List):
             self.generic_visit(node)
             self.function_stack.pop() if self.function_stack else None
             self.current_function = old_function
-
-        def _get_decorator_name(self, decorator):
-            """Extract decorator name from AST node."""
-            if isinstance(decorator, ast.Name):
-                return decorator.id
-            if isinstance(decorator, ast.Attribute):
-                return decorator.attr
-            if isinstance(decorator, ast.Call):
-                func = decorator.func
-                if isinstance(func, ast.Name):
-                    return func.id
-                if isinstance(func, ast.Attribute):
-                    return func.attr
-            return "unknown"
 
         def visit_Call(self, node):
             """Visit function call and record caller-callee relationship."""
@@ -208,16 +295,9 @@ def _create_function_visitor(functions: Dict, call_edges: List):
                 callee_name = node.func.attr
 
             if callee_name and callee_name not in BUILTIN_FUNCS:
-                callee_id = None
-                possible_id = f"{self.module_path}.{callee_name}"
-                if possible_id in functions:
-                    callee_id = possible_id
-
-                if not callee_id and self.current_class:
-                    possible_id = f"{self.module_path}.{self.current_class}.{callee_name}"
-                    if possible_id in functions:
-                        callee_id = possible_id
-
+                callee_id = _resolve_callee_id(
+                    callee_name, self.module_path, self.current_class, functions
+                )
                 call_edges.append({
                     "from": self.current_function,
                     "to": callee_id or callee_name,

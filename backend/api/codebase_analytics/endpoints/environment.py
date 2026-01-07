@@ -226,6 +226,101 @@ def _get_environment_analyzer():
         return None
 
 
+def _build_error_response(message: str, status: str = "error") -> dict:
+    """
+    Build a standard error response for environment analysis.
+
+    Issue #665: Extracted from get_environment_analysis to reduce function length.
+    """
+    return {
+        "status": status,
+        "message": message,
+        "total_hardcoded_values": 0,
+        "categories": {},
+        "recommendations_count": 0,
+    }
+
+
+async def _check_env_analysis_cache(
+    use_llm_filter: bool, refresh: bool
+) -> Optional[JSONResponse]:
+    """
+    Check if cached environment analysis is available and valid.
+
+    Issue #665: Extracted from get_environment_analysis to reduce function length.
+
+    Returns:
+        JSONResponse with cached data if valid, None if cache miss or refresh needed.
+    """
+    global _env_analysis_cache
+
+    # Issue #633: LLM filter results are dynamic, don't use cache
+    cache_valid = not use_llm_filter
+
+    async with _env_analysis_cache_lock:
+        if _env_analysis_cache and not refresh and cache_valid:
+            logger.info(
+                "Returning cached environment analysis (%d hardcoded values)",
+                _env_analysis_cache.get("total_hardcoded_values", 0)
+            )
+            return JSONResponse(_env_analysis_cache)
+
+    return None
+
+
+async def _execute_env_analysis(
+    analyzer,
+    path: str,
+    pattern_list: list,
+    use_llm_filter: bool,
+    llm_model: str,
+    filter_priority: str,
+) -> Optional[dict]:
+    """
+    Execute environment analysis with optional LLM filtering.
+
+    Issue #665: Extracted from get_environment_analysis to reduce function length.
+
+    Returns:
+        Analysis result dict, or None if timed out.
+    """
+    if use_llm_filter:
+        # Issue #633: Convert 'all' to None for the filter
+        priority = None if filter_priority == "all" else filter_priority
+        return await _run_llm_filtered_analysis(
+            analyzer, path, pattern_list, llm_model, priority
+        )
+    else:
+        return await _run_environment_analysis(analyzer, path, pattern_list)
+
+
+async def _cache_env_analysis_results(
+    result: dict, full_result: dict, use_llm_filter: bool
+) -> None:
+    """
+    Cache environment analysis results (thread-safe).
+
+    Issue #665: Extracted from get_environment_analysis to reduce function length.
+    Issue #633: Only cache non-LLM-filtered results (LLM filtering is dynamic).
+    """
+    global _env_analysis_cache, _env_analysis_full_cache
+
+    if not use_llm_filter:
+        async with _env_analysis_cache_lock:
+            _env_analysis_cache = result
+            _env_analysis_full_cache = full_result
+
+
+def _add_llm_filtering_metadata(result: dict, analysis: dict, use_llm_filter: bool) -> None:
+    """
+    Add LLM filtering metadata to result if applicable.
+
+    Issue #665: Extracted from get_environment_analysis to reduce function length.
+    """
+    if use_llm_filter and "llm_filtering" in analysis:
+        result["llm_filtering"] = analysis["llm_filtering"]
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_environment_analysis",
@@ -242,47 +337,18 @@ async def get_environment_analysis(
 ):
     """
     Analyze codebase for hardcoded values and environment variable opportunities (Issue #538).
-
-    Uses the EnvironmentAnalyzer to detect:
-    - Hardcoded file paths
-    - Hardcoded URLs and hostnames
-    - Hardcoded ports and connection strings
-    - API keys and secrets
-    - Configuration values that should be externalized
-
-    Issue #633: Optional LLM filtering to reduce false positives by 90%+.
-
-    Args:
-        path: Root path to analyze (defaults to project root)
-        refresh: Force fresh analysis instead of using cached results
-        patterns: Comma-separated glob patterns for files to scan
-        use_llm_filter: Enable LLM-based false positive filtering
-        llm_model: Ollama model to use for filtering (default: llama3.2:1b)
-        filter_priority: Which severity level to filter ('high', 'medium', 'low', 'all')
-
-    Returns:
-        JSON with hardcoded values, recommendations, and metrics
+    Issue #665: Refactored to use extracted helpers for cache, analysis, and result building.
     """
-    global _env_analysis_cache
+    # Check cache first (Issue #559: thread-safe, Issue #633: LLM filter bypass)
+    cached = await _check_env_analysis_cache(use_llm_filter, refresh)
+    if cached:
+        return cached
 
-    # Issue #633: Include LLM filter state in cache key consideration
-    # If LLM filter is enabled, we need fresh results
-    cache_valid = not use_llm_filter
-
-    # Use cached results if available and not refreshing (thread-safe, Issue #559)
-    async with _env_analysis_cache_lock:
-        if _env_analysis_cache and not refresh and cache_valid:
-            logger.info(
-                "Returning cached environment analysis (%d hardcoded values)",
-                _env_analysis_cache.get("total_hardcoded_values", 0)
-            )
-            return JSONResponse(_env_analysis_cache)
-
+    # Setup path and validate security
     project_root = _get_project_root()
     if not path:
         path = project_root
 
-    # Security validation
     error_response = _validate_env_path_security(path, project_root)
     if error_response:
         return error_response
@@ -290,53 +356,33 @@ async def get_environment_analysis(
     pattern_list = [p.strip() for p in patterns.split(",")]
 
     try:
+        # Get analyzer instance
         analyzer = _get_environment_analyzer()
         if not analyzer:
-            return JSONResponse({
-                "status": "error",
-                "message": "EnvironmentAnalyzer not available. Check tools installation.",
-                "total_hardcoded_values": 0,
-                "categories": {},
-                "recommendations_count": 0,
-            })
+            return JSONResponse(_build_error_response(
+                "EnvironmentAnalyzer not available. Check tools installation."
+            ))
 
-        # Issue #633: Use LLM-filtered analysis if requested
-        if use_llm_filter:
-            # Convert 'all' to None for the filter
-            priority = None if filter_priority == "all" else filter_priority
-            analysis = await _run_llm_filtered_analysis(
-                analyzer, path, pattern_list, llm_model, priority
-            )
-        else:
-            analysis = await _run_environment_analysis(analyzer, path, pattern_list)
+        # Execute analysis
+        analysis = await _execute_env_analysis(
+            analyzer, path, pattern_list, use_llm_filter, llm_model, filter_priority
+        )
 
         if analysis is None:
-            return JSONResponse({
-                "status": "partial",
-                "message": "Analysis timed out after 120s. Try with fewer patterns.",
-                "total_hardcoded_values": 0,
-                "categories": {},
-                "recommendations_count": 0,
-            })
+            return JSONResponse(_build_error_response(
+                "Analysis timed out after 120s. Try with fewer patterns.",
+                status="partial"
+            ))
 
+        # Build results
         result = _build_environment_result(analysis, path, for_display=True)
-
-        # Issue #633: Include LLM filtering metadata in result
-        if use_llm_filter and "llm_filtering" in analysis:
-            result["llm_filtering"] = analysis["llm_filtering"]
-
-        # Issue #631: Build full result for export (no truncation)
         full_result = _build_environment_result(analysis, path, for_display=False)
-        if use_llm_filter and "llm_filtering" in analysis:
-            full_result["llm_filtering"] = analysis["llm_filtering"]
 
-        # Cache the results (thread-safe, Issue #559)
-        # Issue #633: Only cache non-LLM-filtered results (LLM filtering is dynamic)
-        if not use_llm_filter:
-            async with _env_analysis_cache_lock:
-                global _env_analysis_full_cache
-                _env_analysis_cache = result
-                _env_analysis_full_cache = full_result
+        _add_llm_filtering_metadata(result, analysis, use_llm_filter)
+        _add_llm_filtering_metadata(full_result, analysis, use_llm_filter)
+
+        # Cache results (Issue #559, #633)
+        await _cache_env_analysis_results(result, full_result, use_llm_filter)
 
         logger.info(
             "Environment analysis complete: %d hardcoded values, %d recommendations%s",
@@ -349,13 +395,9 @@ async def get_environment_analysis(
 
     except Exception as e:
         logger.error("Environment analysis failed: %s", e, exc_info=True)
-        return JSONResponse({
-            "status": "error",
-            "message": f"Environment analysis failed: {str(e)}",
-            "total_hardcoded_values": 0,
-            "categories": {},
-            "recommendations_count": 0,
-        })
+        return JSONResponse(_build_error_response(
+            f"Environment analysis failed: {str(e)}"
+        ))
 
 
 @with_error_handling(

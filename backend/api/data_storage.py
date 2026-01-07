@@ -105,126 +105,147 @@ def get_dir_size(path: Path) -> tuple[int, int]:
     return total_size, file_count
 
 
-def get_storage_categories() -> list[StorageCategory]:
-    """Get all storage categories with their details."""
-    categories = [
+# =============================================================================
+# Storage Category Definitions (Issue #665)
+# =============================================================================
+
+
+def _get_protected_categories() -> list[dict]:
+    """
+    Get protected storage categories (cannot be cleaned up).
+
+    Issue #665: Extracted from get_storage_categories to reduce function length.
+    These are critical system data stores that should not be modified.
+    """
+    return [
         {
             "name": "ChromaDB Vectors",
             "path": "chromadb",
             "description": "Vector embeddings database for semantic search",
-            "can_cleanup": False,
-            "cleanup_type": "protected",
         },
         {
             "name": "Knowledge Base ChromaDB",
             "path": "chromadb_kb",
             "description": "Knowledge base vector embeddings",
-            "can_cleanup": False,
-            "cleanup_type": "protected",
-        },
-        {
-            "name": "Conversation Transcripts",
-            "path": "conversation_transcripts",
-            "description": "Saved conversation history transcripts",
-            "can_cleanup": True,
-            "cleanup_type": "manual",
-        },
-        {
-            "name": "Chat Sessions",
-            "path": "chats",
-            "description": "Chat sessions and terminal transcripts",
-            "can_cleanup": True,
-            "cleanup_type": "manual",
-        },
-        {
-            "name": "Conversation Files",
-            "path": "conversation_files",
-            "description": "Files attached to conversations",
-            "can_cleanup": True,
-            "cleanup_type": "manual",
         },
         {
             "name": "Knowledge Files",
             "path": "knowledge",
             "description": "Knowledge base configuration files",
-            "can_cleanup": False,
-            "cleanup_type": "protected",
         },
         {
             "name": "Knowledge Base Data",
             "path": "knowledge_base",
             "description": "Knowledge base documents and embeddings",
-            "can_cleanup": False,
-            "cleanup_type": "protected",
         },
         {
             "name": "System Knowledge",
             "path": "system_knowledge",
             "description": "System procedures, workflows, and tools",
-            "can_cleanup": False,
-            "cleanup_type": "protected",
-        },
-        {
-            "name": "Anti-Pattern Reports",
-            "path": "anti_pattern_reports",
-            "description": "Code anti-pattern detection reports",
-            "can_cleanup": True,
-            "cleanup_type": "manual",
-        },
-        {
-            "name": "Reports",
-            "path": "reports",
-            "description": "Generated analysis reports",
-            "can_cleanup": True,
-            "cleanup_type": "manual",
         },
         {
             "name": "Memory Storage",
             "path": "memory",
             "description": "Agent memory and context storage",
-            "can_cleanup": False,
-            "cleanup_type": "protected",
         },
         {
             "name": "MCP Tools",
             "path": "mcp_tools",
             "description": "MCP tool configurations",
-            "can_cleanup": False,
-            "cleanup_type": "protected",
+        },
+    ]
+
+
+def _get_cleanable_categories() -> list[dict]:
+    """
+    Get cleanable storage categories (can be manually cleaned up).
+
+    Issue #665: Extracted from get_storage_categories to reduce function length.
+    These are user data and reports that can be safely removed.
+    """
+    return [
+        {
+            "name": "Conversation Transcripts",
+            "path": "conversation_transcripts",
+            "description": "Saved conversation history transcripts",
+        },
+        {
+            "name": "Chat Sessions",
+            "path": "chats",
+            "description": "Chat sessions and terminal transcripts",
+        },
+        {
+            "name": "Conversation Files",
+            "path": "conversation_files",
+            "description": "Files attached to conversations",
+        },
+        {
+            "name": "Anti-Pattern Reports",
+            "path": "anti_pattern_reports",
+            "description": "Code anti-pattern detection reports",
+        },
+        {
+            "name": "Reports",
+            "path": "reports",
+            "description": "Generated analysis reports",
         },
         {
             "name": "File Manager Root",
             "path": "file_manager_root",
             "description": "File manager sandbox root directory",
-            "can_cleanup": True,
-            "cleanup_type": "manual",
         },
         {
             "name": "Security Data",
             "path": "security",
             "description": "Security scan results and configurations",
-            "can_cleanup": True,
-            "cleanup_type": "manual",
         },
     ]
 
-    result = []
-    for cat in categories:
-        dir_path = DATA_DIR / cat["path"]
-        size_bytes, file_count = get_dir_size(dir_path)
 
-        result.append(
-            StorageCategory(
-                name=cat["name"],
-                path=cat["path"],
-                size_bytes=size_bytes,
-                size_human=format_size(size_bytes),
-                file_count=file_count,
-                description=cat["description"],
-                can_cleanup=cat["can_cleanup"],
-                cleanup_type=cat["cleanup_type"],
-            )
-        )
+def _build_storage_category(cat_def: dict, can_cleanup: bool) -> StorageCategory:
+    """
+    Build a StorageCategory from a category definition.
+
+    Issue #665: Extracted from get_storage_categories to reduce function length.
+
+    Args:
+        cat_def: Category definition dict with name, path, description
+        can_cleanup: Whether this category can be cleaned up
+
+    Returns:
+        StorageCategory with computed size and file count
+    """
+    dir_path = DATA_DIR / cat_def["path"]
+    size_bytes, file_count = get_dir_size(dir_path)
+
+    return StorageCategory(
+        name=cat_def["name"],
+        path=cat_def["path"],
+        size_bytes=size_bytes,
+        size_human=format_size(size_bytes),
+        file_count=file_count,
+        description=cat_def["description"],
+        can_cleanup=can_cleanup,
+        cleanup_type="manual" if can_cleanup else "protected",
+    )
+
+
+def get_storage_categories() -> list[StorageCategory]:
+    """
+    Get all storage categories with their details.
+
+    Issue #665: Refactored to use extracted helpers for category definitions.
+    Categories are grouped by type (protected vs cleanable) for maintainability.
+    """
+    result = []
+
+    # Add protected categories (can_cleanup=False)
+    for cat_def in _get_protected_categories():
+        result.append(_build_storage_category(cat_def, can_cleanup=False))
+
+    # Add cleanable categories (can_cleanup=True)
+    for cat_def in _get_cleanable_categories():
+        result.append(_build_storage_category(cat_def, can_cleanup=True))
 
     return result
 
