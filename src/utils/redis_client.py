@@ -333,5 +333,36 @@ class RedisDatabaseManager:
         return await get_redis_client(async_client=True, database=db_name)
 
 
-# Global instance for backward compatibility
-redis_db_manager = RedisDatabaseManager()
+# Global instance for backward compatibility (lazy-loaded)
+# Issue #665: Use lazy initialization to avoid deprecation warning at import time
+_redis_db_manager_instance: Optional[RedisDatabaseManager] = None
+
+
+def _get_redis_db_manager() -> RedisDatabaseManager:
+    """
+    Get the deprecated RedisDatabaseManager instance (lazy-loaded).
+
+    Issue #665: Lazy initialization prevents deprecation warning at module import.
+    Warning only shows when deprecated functionality is actually used.
+    """
+    global _redis_db_manager_instance
+    if _redis_db_manager_instance is None:
+        _redis_db_manager_instance = RedisDatabaseManager()
+    return _redis_db_manager_instance
+
+
+class _LazyRedisDatabaseManager:
+    """
+    Lazy proxy for RedisDatabaseManager to defer deprecation warning.
+
+    Issue #665: This proxy delays instantiation until first access,
+    preventing the deprecation warning from appearing at import time.
+    """
+
+    def __getattr__(self, name: str):
+        """Proxy attribute access to the real manager."""
+        return getattr(_get_redis_db_manager(), name)
+
+
+# Export as the original name for backward compatibility
+redis_db_manager = _LazyRedisDatabaseManager()

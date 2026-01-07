@@ -548,6 +548,47 @@ async def download_conversation_file(request: Request, session_id: str, file_id:
         raise HTTPException(status_code=500, detail=f"Error downloading file: {str(e)}")
 
 
+async def _generate_file_preview(
+    file_info: ConversationFileInfo,
+) -> tuple[Optional[str], str, bool]:
+    """
+    Generate preview content based on file type.
+
+    Issue #665: Extracted from preview_conversation_file to improve maintainability.
+    Handles text file reading and image type detection for preview generation.
+
+    Args:
+        file_info: File information including path and MIME type.
+
+    Returns:
+        Tuple of (preview_content, preview_type, preview_available).
+        - preview_content: Text content for text files, None otherwise
+        - preview_type: "text", "image", or "metadata_only"
+        - preview_available: True if preview can be shown
+    """
+    file_path = Path(file_info.file_path)
+    preview_content = None
+    preview_type = "metadata_only"
+    preview_available = False
+
+    if file_info.mime_type and file_info.mime_type.startswith("text/"):
+        try:
+            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                # Read first 10KB for preview
+                preview_content = await f.read(10240)
+                preview_type = "text"
+                preview_available = True
+        except (UnicodeDecodeError, OSError, IOError) as e:
+            # File is binary or unreadable
+            logger.debug("File is binary or unreadable, skipping preview: %s", e)
+    elif file_info.mime_type and file_info.mime_type.startswith("image/"):
+        preview_type = "image"
+        preview_available = True
+        # Image preview would return URL or base64 in production
+
+    return preview_content, preview_type, preview_available
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="preview_conversation_file",
@@ -558,7 +599,9 @@ async def download_conversation_file(request: Request, session_id: str, file_id:
 )
 async def preview_conversation_file(request: Request, session_id: str, file_id: str):
     """
-    Preview a file or get its metadata
+    Preview a file or get its metadata.
+
+    Issue #665: Refactored to use _generate_file_preview helper.
 
     Args:
         session_id: Conversation session ID
@@ -600,27 +643,11 @@ async def preview_conversation_file(request: Request, session_id: str, file_id: 
             raise HTTPException(status_code=404, detail="File not found")
 
         file_info = ConversationFileInfo(**file_info_dict)
-        file_path = Path(file_info.file_path)
 
-        # Try to generate preview for text files
-        preview_content = None
-        preview_type = "metadata_only"
-        preview_available = False
-
-        if file_info.mime_type and file_info.mime_type.startswith("text/"):
-            try:
-                async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                    # Read first 10KB for preview
-                    preview_content = await f.read(10240)
-                    preview_type = "text"
-                    preview_available = True
-            except (UnicodeDecodeError, OSError, IOError) as e:
-                # File is binary or unreadable
-                logger.debug("File is binary or unreadable, skipping preview: %s", e)
-        elif file_info.mime_type and file_info.mime_type.startswith("image/"):
-            preview_type = "image"
-            preview_available = True
-            # Image preview would return URL or base64 in production
+        # Generate preview (Issue #665: use extracted helper)
+        preview_content, preview_type, preview_available = await _generate_file_preview(
+            file_info
+        )
 
         return FilePreviewResponse(
             file_info=file_info,

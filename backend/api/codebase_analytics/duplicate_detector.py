@@ -27,11 +27,15 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 # Issue #659: MinHash LSH for O(n) expected duplicate detection
+# Issue #665: Provide type stubs when datasketch not installed for helper signatures
 try:
     from datasketch import MinHash, MinHashLSH
     LSH_AVAILABLE = True
 except ImportError:
     LSH_AVAILABLE = False
+    # Provide placeholder types for function signatures when datasketch not installed
+    MinHash = Any  # type: ignore[misc, assignment]
+    MinHashLSH = Any  # type: ignore[misc, assignment]
 
 from src.utils.file_categorization import (
     PYTHON_EXTENSIONS,
@@ -422,6 +426,103 @@ def _build_minhash(token_set: Set[str], num_perm: int = LSH_NUM_PERMUTATIONS) ->
     return m
 
 
+def _build_minhash_signatures(
+    blocks: List[CodeBlock],
+    num_perm: int,
+) -> Dict[int, MinHash]:
+    """
+    Build MinHash signatures for all code blocks.
+
+    Issue #665: Extracted from _find_lsh_candidates to improve maintainability.
+
+    Args:
+        blocks: List of code blocks
+        num_perm: Number of MinHash permutations
+
+    Returns:
+        Dictionary mapping block index to MinHash signature
+    """
+    minhashes: Dict[int, MinHash] = {}
+    for idx, block in enumerate(blocks):
+        token_set = block.token_set if block.token_set else set(block.normalized_content.split())
+        if token_set:
+            minhashes[idx] = _build_minhash(token_set, num_perm)
+    return minhashes
+
+
+def _build_lsh_index(
+    minhashes: Dict[int, MinHash],
+    threshold: float,
+    num_perm: int,
+) -> MinHashLSH:
+    """
+    Create LSH index and insert all MinHash signatures.
+
+    Issue #665: Extracted from _find_lsh_candidates to improve maintainability.
+
+    Args:
+        minhashes: Dictionary of MinHash signatures
+        threshold: Minimum Jaccard similarity threshold
+        num_perm: Number of MinHash permutations
+
+    Returns:
+        Populated MinHashLSH index
+    """
+    lsh = MinHashLSH(threshold=threshold, num_perm=num_perm)
+    for idx, mh in minhashes.items():
+        try:
+            lsh.insert(str(idx), mh)
+        except ValueError:
+            # Duplicate key - skip (can happen if blocks are identical)
+            pass
+    return lsh
+
+
+def _query_lsh_candidates(
+    blocks: List[CodeBlock],
+    minhashes: Dict[int, MinHash],
+    lsh: MinHashLSH,
+) -> List[Tuple[int, int, float]]:
+    """
+    Query LSH index for candidate duplicate pairs.
+
+    Issue #665: Extracted from _find_lsh_candidates to improve maintainability.
+
+    Args:
+        blocks: List of code blocks
+        minhashes: Dictionary of MinHash signatures
+        lsh: Populated LSH index
+
+    Returns:
+        List of (idx1, idx2, exact_similarity) tuples
+    """
+    candidates: List[Tuple[int, int, float]] = []
+    seen_pairs: Set[Tuple[int, int]] = set()
+
+    for idx, mh in minhashes.items():
+        result = lsh.query(mh)
+
+        for candidate_key in result:
+            candidate_idx = int(candidate_key)
+
+            # Skip self-matches
+            if candidate_idx == idx:
+                continue
+
+            # Create ordered pair key to avoid duplicates
+            pair_key = (min(idx, candidate_idx), max(idx, candidate_idx))
+            if pair_key in seen_pairs:
+                continue
+            seen_pairs.add(pair_key)
+
+            # Compute exact similarity for candidates (filter false positives)
+            exact_sim = _compute_similarity(blocks[idx], blocks[candidate_idx])
+            if exact_sim >= LOW_SIMILARITY_THRESHOLD:
+                candidates.append((idx, candidate_idx, exact_sim))
+
+    return candidates
+
+
 def _find_lsh_candidates(
     blocks: List[CodeBlock],
     threshold: float = LSH_SIMILARITY_THRESHOLD,
@@ -431,6 +532,7 @@ def _find_lsh_candidates(
     Find candidate duplicate pairs using Locality-Sensitive Hashing.
 
     Issue #659: O(n) expected complexity vs O(n²) for brute force.
+    Issue #665: Refactored to use extracted helpers for each phase.
 
     Algorithm:
     1. Build MinHash signatures for all blocks - O(n)
@@ -460,47 +562,14 @@ def _find_lsh_candidates(
     logger.info("Building LSH index for %d blocks (num_perm=%d, threshold=%.2f)",
                 len(blocks), num_perm, threshold)
 
-    # Build MinHash signatures for all blocks - O(n)
-    minhashes: Dict[int, MinHash] = {}
-    for idx, block in enumerate(blocks):
-        token_set = block.token_set if block.token_set else set(block.normalized_content.split())
-        if token_set:
-            minhashes[idx] = _build_minhash(token_set, num_perm)
+    # Phase 1: Build MinHash signatures - O(n) (Issue #665: uses helper)
+    minhashes = _build_minhash_signatures(blocks, num_perm)
 
-    # Create LSH index and insert all signatures - O(n)
-    lsh = MinHashLSH(threshold=threshold, num_perm=num_perm)
-    for idx, mh in minhashes.items():
-        try:
-            lsh.insert(str(idx), mh)
-        except ValueError:
-            # Duplicate key - skip (can happen if blocks are identical)
-            pass
+    # Phase 2: Create LSH index - O(n) (Issue #665: uses helper)
+    lsh = _build_lsh_index(minhashes, threshold, num_perm)
 
-    # Query for candidates - O(n) expected
-    candidates: List[Tuple[int, int, float]] = []
-    seen_pairs: Set[Tuple[int, int]] = set()
-
-    for idx, mh in minhashes.items():
-        # Get candidate indices from LSH
-        result = lsh.query(mh)
-
-        for candidate_key in result:
-            candidate_idx = int(candidate_key)
-
-            # Skip self-matches
-            if candidate_idx == idx:
-                continue
-
-            # Create ordered pair key to avoid duplicates
-            pair_key = (min(idx, candidate_idx), max(idx, candidate_idx))
-            if pair_key in seen_pairs:
-                continue
-            seen_pairs.add(pair_key)
-
-            # Compute exact similarity for candidates (filter false positives)
-            exact_sim = _compute_similarity(blocks[idx], blocks[candidate_idx])
-            if exact_sim >= LOW_SIMILARITY_THRESHOLD:
-                candidates.append((idx, candidate_idx, exact_sim))
+    # Phase 3: Query for candidates - O(n) expected (Issue #665: uses helper)
+    candidates = _query_lsh_candidates(blocks, minhashes, lsh)
 
     logger.info("LSH found %d candidate pairs from %d blocks", len(candidates), len(blocks))
     return candidates

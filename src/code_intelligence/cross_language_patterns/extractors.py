@@ -506,10 +506,103 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
 
         return patterns
 
+    def _handle_line_comment(
+        self,
+        char: str,
+        next_char: str,
+        in_string: bool,
+        in_block_comment: bool,
+        in_line_comment: bool,
+    ) -> tuple[bool, int]:
+        """
+        Handle line comment detection and state transition.
+
+        Issue #665: Extracted from _find_matching_brace to improve maintainability.
+
+        Args:
+            char: Current character
+            next_char: Next character
+            in_string: Whether currently in a string
+            in_block_comment: Whether currently in a block comment
+            in_line_comment: Whether currently in a line comment
+
+        Returns:
+            Tuple of (new_in_line_comment, chars_to_skip)
+        """
+        # Start of line comment
+        if not in_string and not in_block_comment and char == "/" and next_char == "/":
+            return True, 2
+        # End of line comment
+        if in_line_comment and char == "\n":
+            return False, 1
+        return in_line_comment, 0
+
+    def _handle_block_comment(
+        self,
+        char: str,
+        next_char: str,
+        in_string: bool,
+        in_line_comment: bool,
+        in_block_comment: bool,
+    ) -> tuple[bool, int]:
+        """
+        Handle block comment detection and state transition.
+
+        Issue #665: Extracted from _find_matching_brace to improve maintainability.
+
+        Args:
+            char: Current character
+            next_char: Next character
+            in_string: Whether currently in a string
+            in_line_comment: Whether currently in a line comment
+            in_block_comment: Whether currently in a block comment
+
+        Returns:
+            Tuple of (new_in_block_comment, chars_to_skip)
+        """
+        # Start of block comment
+        if not in_string and not in_line_comment and char == "/" and next_char == "*":
+            return True, 2
+        # End of block comment
+        if in_block_comment and char == "*" and next_char == "/":
+            return False, 2
+        return in_block_comment, 0
+
+    def _handle_string_char(
+        self,
+        char: str,
+        prev_char: str,
+        in_string: bool,
+        string_char: Optional[str],
+    ) -> tuple[bool, Optional[str]]:
+        """
+        Handle string delimiter detection and state transition.
+
+        Issue #665: Extracted from _find_matching_brace to improve maintainability.
+
+        Args:
+            char: Current character
+            prev_char: Previous character (for escape detection)
+            in_string: Whether currently in a string
+            string_char: Current string delimiter character
+
+        Returns:
+            Tuple of (new_in_string, new_string_char)
+        """
+        if char in ('"', "'", "`") and prev_char != "\\":
+            if not in_string:
+                return True, char
+            elif char == string_char:
+                return False, None
+        return in_string, string_char
+
     def _find_matching_brace(self, start_pos: int) -> Optional[int]:
         """
         Find the matching closing brace, properly handling nested structures,
         strings, and comments.
+
+        Issue #665: Refactored to use extracted helpers for comment and
+        string handling.
 
         Args:
             start_pos: Position to start searching from
@@ -520,7 +613,7 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
         code = self.source_code[start_pos:]
         brace_count = 0
         in_string = False
-        string_char = None
+        string_char: Optional[str] = None
         in_line_comment = False
         in_block_comment = False
         i = 0
@@ -529,29 +622,24 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
         while i < length:
             char = code[i]
             next_char = code[i + 1] if i + 1 < length else ""
+            prev_char = code[i - 1] if i > 0 else ""
 
-            # Handle line comments
-            if not in_string and not in_block_comment and char == "/" and next_char == "/":
-                in_line_comment = True
-                i += 2
+            # Handle line comments (Issue #665: uses helper)
+            new_line_comment, skip = self._handle_line_comment(
+                char, next_char, in_string, in_block_comment, in_line_comment
+            )
+            if skip:
+                in_line_comment = new_line_comment
+                i += skip
                 continue
 
-            # End of line comment
-            if in_line_comment and char == "\n":
-                in_line_comment = False
-                i += 1
-                continue
-
-            # Handle block comments
-            if not in_string and not in_line_comment and char == "/" and next_char == "*":
-                in_block_comment = True
-                i += 2
-                continue
-
-            # End of block comment
-            if in_block_comment and char == "*" and next_char == "/":
-                in_block_comment = False
-                i += 2
+            # Handle block comments (Issue #665: uses helper)
+            new_block_comment, skip = self._handle_block_comment(
+                char, next_char, in_string, in_line_comment, in_block_comment
+            )
+            if skip:
+                in_block_comment = new_block_comment
+                i += skip
                 continue
 
             # Skip if in comment
@@ -559,14 +647,13 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
                 i += 1
                 continue
 
-            # Handle strings (single, double, backtick)
-            if char in ('"', "'", "`") and (i == 0 or code[i - 1] != "\\"):
-                if not in_string:
-                    in_string = True
-                    string_char = char
-                elif char == string_char:
-                    in_string = False
-                    string_char = None
+            # Handle strings (Issue #665: uses helper)
+            new_in_string, new_string_char = self._handle_string_char(
+                char, prev_char, in_string, string_char
+            )
+            if new_in_string != in_string or new_string_char != string_char:
+                in_string = new_in_string
+                string_char = new_string_char
                 i += 1
                 continue
 

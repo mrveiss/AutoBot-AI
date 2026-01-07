@@ -475,6 +475,71 @@ async def get_update_task_status(
         raise_server_error("UPDATES_0002", f"Error getting task status: {str(e)}")
 
 
+def _check_celery_worker_available() -> tuple[bool, str]:
+    """
+    Check if Celery workers are available to process tasks.
+
+    Issue #705: Helper to detect worker availability before queuing tasks.
+
+    Returns:
+        Tuple of (is_available, error_message)
+    """
+    try:
+        # Ping Celery workers with a short timeout
+        inspector = celery_app.control.inspect(timeout=2.0)
+        active_workers = inspector.active_queues()
+
+        if not active_workers:
+            return False, (
+                "No Celery workers available. Please start the Celery worker with: "
+                "bash scripts/start-celery-worker.sh"
+            )
+
+        # Check if deployments queue is being consumed
+        deployments_handled = False
+        for worker_name, queues in active_workers.items():
+            for queue in queues:
+                if queue.get("name") == "deployments":
+                    deployments_handled = True
+                    break
+            if deployments_handled:
+                break
+
+        if not deployments_handled:
+            return False, (
+                "Celery worker running but not listening on 'deployments' queue. "
+                "Restart worker with: bash scripts/start-celery-worker.sh"
+            )
+
+        return True, ""
+    except Exception as e:
+        logger.warning("Celery worker check failed: %s", str(e))
+        return False, f"Cannot verify worker status: {str(e)}"
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_celery_health",
+    error_code_prefix="UPDATES",
+)
+@router.get("/updates/worker-status")
+async def check_celery_worker_status(
+    _: None = Depends(check_admin_permission),
+):
+    """
+    Check if Celery workers are available (Issue #705).
+
+    Returns:
+        available: Whether workers can process tasks
+        message: Status message or error details
+    """
+    is_available, error_msg = _check_celery_worker_available()
+    return {
+        "available": is_available,
+        "message": "Workers ready" if is_available else error_msg,
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_available_updates",
@@ -498,6 +563,19 @@ async def check_updates_endpoint(
     try:
         logger.info("Update check requested")
 
+        # Issue #705: Check worker availability before queuing
+        is_available, error_msg = _check_celery_worker_available()
+        if not is_available:
+            logger.warning("Update check rejected: %s", error_msg)
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "worker_unavailable",
+                    "message": error_msg,
+                    "hint": "Start the Celery worker to enable system updates",
+                },
+            )
+
         # Queue the Celery task
         task = check_available_updates.delay()
 
@@ -507,6 +585,8 @@ async def check_updates_endpoint(
             "message": "Update check task queued",
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error queuing update check: %s", str(e))
         raise_server_error("UPDATES_0003", f"Error queuing update check: {str(e)}")

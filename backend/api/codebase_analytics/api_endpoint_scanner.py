@@ -820,23 +820,26 @@ class EndpointMatcher:
 
         return True
 
-    def analyze(self) -> APIEndpointAnalysis:
+    def _match_calls_to_endpoints(
+        self,
+        used_endpoints: List[EndpointUsageItem],
+        missing_endpoints: List[EndpointMismatchItem],
+    ) -> Set[int]:
         """
-        Perform full endpoint analysis.
+        Match API calls to backend endpoints.
+
+        Issue #665: Extracted from analyze() to improve maintainability.
+
+        Args:
+            used_endpoints: List to accumulate used endpoint items
+            missing_endpoints: List to accumulate missing endpoint items
 
         Returns:
-            APIEndpointAnalysis with all results
+            Set of endpoint indices that were matched
         """
-        used_endpoints: List[EndpointUsageItem] = []
-        orphaned_endpoints: List[EndpointMismatchItem] = []
-        missing_endpoints: List[EndpointMismatchItem] = []
-
-        # Track which endpoints are used
         used_endpoint_ids: Set[int] = set()
-        matched_call_ids: Set[int] = set()
 
-        # Match each call to endpoints
-        for call_idx, call in enumerate(self.calls):
+        for call in self.calls:
             matched = False
             for ep_idx, ep in enumerate(self.endpoints):
                 if call.method != "UNKNOWN" and call.method != ep.method:
@@ -845,7 +848,6 @@ class EndpointMatcher:
                 if self._paths_match(ep.path, call.path):
                     matched = True
                     used_endpoint_ids.add(ep_idx)
-                    matched_call_ids.add(call_idx)
 
                     # Find or create usage item
                     usage_item = next(
@@ -864,7 +866,6 @@ class EndpointMatcher:
                     break
 
             if not matched and not call.is_dynamic:
-                # This is a missing endpoint
                 missing_endpoints.append(EndpointMismatchItem(
                     type="missing",
                     method=call.method,
@@ -874,10 +875,28 @@ class EndpointMatcher:
                     details="Called but no backend endpoint found",
                 ))
 
-        # Find orphaned endpoints
+        return used_endpoint_ids
+
+    def _find_orphaned_endpoints(
+        self,
+        used_endpoint_ids: Set[int],
+    ) -> List[EndpointMismatchItem]:
+        """
+        Find backend endpoints with no frontend calls.
+
+        Issue #665: Extracted from analyze() to improve maintainability.
+
+        Args:
+            used_endpoint_ids: Set of endpoint indices that were matched
+
+        Returns:
+            List of orphaned endpoint items
+        """
+        orphaned: List[EndpointMismatchItem] = []
+
         for ep_idx, ep in enumerate(self.endpoints):
             if ep_idx not in used_endpoint_ids:
-                orphaned_endpoints.append(EndpointMismatchItem(
+                orphaned.append(EndpointMismatchItem(
                     type="orphaned",
                     method=ep.method,
                     path=ep.path,
@@ -885,6 +904,29 @@ class EndpointMatcher:
                     line_number=ep.line_number,
                     details="Defined but no frontend calls found",
                 ))
+
+        return orphaned
+
+    def analyze(self) -> APIEndpointAnalysis:
+        """
+        Perform full endpoint analysis.
+
+        Issue #665: Refactored to use extracted helpers for call matching
+        and orphan detection.
+
+        Returns:
+            APIEndpointAnalysis with all results
+        """
+        used_endpoints: List[EndpointUsageItem] = []
+        missing_endpoints: List[EndpointMismatchItem] = []
+
+        # Match calls to endpoints (Issue #665: uses helper)
+        used_endpoint_ids = self._match_calls_to_endpoints(
+            used_endpoints, missing_endpoints
+        )
+
+        # Find orphaned endpoints (Issue #665: uses helper)
+        orphaned_endpoints = self._find_orphaned_endpoints(used_endpoint_ids)
 
         # Calculate coverage
         total_endpoints = len(self.endpoints)

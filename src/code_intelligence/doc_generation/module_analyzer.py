@@ -321,55 +321,117 @@ class ModuleAnalyzer:
             attr_name, attr_value = self._DECORATOR_ATTR_MAP[dec_name]
             setattr(func_doc, attr_name, attr_value)
 
-    def _extract_parameters(
-        self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]
-    ) -> List[ParameterDoc]:
-        """Extract parameter documentation from function definition."""
-        params = []
-        args = node.args
+    def _create_parameter(
+        self,
+        arg: ast.arg,
+        is_positional_only: bool = False,
+        is_keyword_only: bool = False,
+    ) -> ParameterDoc:
+        """
+        Create a ParameterDoc from an ast.arg node.
 
-        # Regular arguments
+        Issue #665: Extracted from _extract_parameters to reduce duplication.
+
+        Args:
+            arg: AST argument node
+            is_positional_only: Whether this is a positional-only parameter
+            is_keyword_only: Whether this is a keyword-only parameter
+
+        Returns:
+            ParameterDoc instance
+        """
+        return ParameterDoc(
+            name=arg.arg,
+            type_hint=helpers.get_node_name(arg.annotation) if arg.annotation else None,
+            is_positional_only=is_positional_only,
+            is_keyword_only=is_keyword_only,
+        )
+
+    def _extract_regular_args(
+        self, args: ast.arguments
+    ) -> List[ParameterDoc]:
+        """
+        Extract regular (non-keyword-only, non-positional-only) arguments.
+
+        Issue #665: Extracted from _extract_parameters to improve maintainability.
+
+        Args:
+            args: AST arguments node
+
+        Returns:
+            List of ParameterDoc for regular arguments
+        """
+        params = []
         defaults_offset = len(args.args) - len(args.defaults)
 
         for i, arg in enumerate(args.args):
             if arg.arg in _SELF_CLS_ARGS:
                 continue
 
-            param = ParameterDoc(
-                name=arg.arg,
-                type_hint=helpers.get_node_name(arg.annotation) if arg.annotation else None,
-            )
+            param = self._create_parameter(arg)
 
             # Check for default value
             default_idx = i - defaults_offset
-            if default_idx >= 0 and default_idx < len(args.defaults):
+            if 0 <= default_idx < len(args.defaults):
                 param.default_value = helpers.get_node_value(args.defaults[default_idx])
                 param.is_optional = True
 
             params.append(param)
 
-        # Positional-only arguments (Python 3.8+)
-        for arg in args.posonlyargs:
-            param = ParameterDoc(
-                name=arg.arg,
-                type_hint=helpers.get_node_name(arg.annotation) if arg.annotation else None,
-                is_positional_only=True,
-            )
-            params.append(param)
+        return params
 
-        # Keyword-only arguments
+    def _extract_keyword_only_args(
+        self, args: ast.arguments
+    ) -> List[ParameterDoc]:
+        """
+        Extract keyword-only arguments.
+
+        Issue #665: Extracted from _extract_parameters to improve maintainability.
+
+        Args:
+            args: AST arguments node
+
+        Returns:
+            List of ParameterDoc for keyword-only arguments
+        """
+        params = []
         kw_defaults_map = {i: d for i, d in enumerate(args.kw_defaults) if d is not None}
 
         for i, arg in enumerate(args.kwonlyargs):
-            param = ParameterDoc(
-                name=arg.arg,
-                type_hint=helpers.get_node_name(arg.annotation) if arg.annotation else None,
-                is_keyword_only=True,
-            )
+            param = self._create_parameter(arg, is_keyword_only=True)
             if i in kw_defaults_map:
                 param.default_value = helpers.get_node_value(kw_defaults_map[i])
                 param.is_optional = True
             params.append(param)
+
+        return params
+
+    def _extract_parameters(
+        self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]
+    ) -> List[ParameterDoc]:
+        """
+        Extract parameter documentation from function definition.
+
+        Issue #665: Refactored to use extracted helpers for each parameter type.
+
+        Args:
+            node: Function AST node
+
+        Returns:
+            List of ParameterDoc for all parameters
+        """
+        args = node.args
+        params = []
+
+        # Regular arguments (Issue #665: use helper)
+        params.extend(self._extract_regular_args(args))
+
+        # Positional-only arguments (Python 3.8+)
+        for arg in args.posonlyargs:
+            params.append(self._create_parameter(arg, is_positional_only=True))
+
+        # Keyword-only arguments (Issue #665: use helper)
+        params.extend(self._extract_keyword_only_args(args))
 
         return params
 

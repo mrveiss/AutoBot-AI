@@ -434,10 +434,18 @@ class MarkdownGenerator:
             completeness_score=md_doc.completeness_score,
         )
 
-    def _markdown_to_html(self, markdown: str) -> str:
-        """Simple Markdown to HTML conversion."""
-        html = markdown
+    def _apply_markdown_substitutions(self, html: str) -> str:
+        """
+        Apply regex-based markdown substitutions for headers, code, bold, etc.
 
+        Issue #665: Extracted from _markdown_to_html to improve maintainability.
+
+        Args:
+            html: HTML string with markdown formatting
+
+        Returns:
+            HTML string with markdown converted to HTML tags
+        """
         # Headers (use pre-compiled patterns)
         html = _MD_H5_RE.sub(r"<h5>\1</h5>", html)
         html = _MD_H4_RE.sub(r"<h4>\1</h4>", html)
@@ -460,10 +468,24 @@ class MarkdownGenerator:
         # Horizontal rules
         html = _MD_HR_RE.sub(r"<hr>", html)
 
-        # Paragraphs (simple approach)
+        return html
+
+    def _wrap_list_items(self, html: str) -> str:
+        """
+        Wrap consecutive <li> elements in <ul> tags.
+
+        Issue #665: Extracted from _markdown_to_html to improve maintainability.
+
+        Args:
+            html: HTML string with <li> elements
+
+        Returns:
+            HTML string with <li> elements wrapped in <ul> tags
+        """
         lines = html.split("\n")
         result = []
         in_list = False
+
         for line in lines:
             if line.startswith("<li>"):
                 if not in_list:
@@ -475,10 +497,26 @@ class MarkdownGenerator:
                     result.append("</ul>")
                     in_list = False
                 result.append(line)
+
         if in_list:
             result.append("</ul>")
 
         return "\n".join(result)
+
+    def _markdown_to_html(self, markdown: str) -> str:
+        """
+        Simple Markdown to HTML conversion.
+
+        Issue #665: Refactored to use extracted helpers.
+
+        Args:
+            markdown: Markdown formatted string
+
+        Returns:
+            HTML formatted string
+        """
+        html = self._apply_markdown_substitutions(markdown)
+        return self._wrap_list_items(html)
 
     def generate_module_overview(
         self,

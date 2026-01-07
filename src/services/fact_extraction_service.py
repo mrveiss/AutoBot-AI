@@ -147,6 +147,70 @@ class FactExtractionService:
             logger.error("Error in fact extraction and storage: %s", e)
             return {"status": "error", "message": str(e), "facts_extracted": 0, "facts_stored": 0}
 
+    def _build_extraction_success_response(
+        self,
+        extraction_result: Any,
+        storage_results: Dict[str, Any],
+        chunks_count: int,
+    ) -> Dict[str, Any]:
+        """
+        Build success response for fact extraction.
+
+        Issue #665: Extracted from extract_facts_from_chunks to reduce function length.
+
+        Args:
+            extraction_result: Result from extraction agent
+            storage_results: Results from storing facts
+            chunks_count: Number of chunks processed
+
+        Returns:
+            Success response dictionary
+        """
+        return {
+            "status": "success",
+            "facts_extracted": len(extraction_result.facts),
+            "facts_stored": storage_results["stored_count"],
+            "storage_errors": storage_results["error_count"],
+            "chunks_processed": chunks_count,
+            "successful_chunks": extraction_result.extraction_metadata.get(
+                "successful_chunks", 0
+            ),
+            "processing_time": extraction_result.processing_time,
+            "average_confidence": extraction_result.average_confidence,
+            "fact_distributions": {
+                "by_type": extraction_result.fact_type_distribution,
+                "by_temporal": extraction_result.temporal_type_distribution,
+                "by_confidence": extraction_result.confidence_distribution,
+            },
+        }
+
+    async def _process_extracted_facts(
+        self,
+        extraction_result: Any,
+    ) -> Any:
+        """
+        Process extracted facts with deduplication and entity resolution.
+
+        Issue #665: Extracted from extract_facts_from_chunks to reduce function length.
+
+        Args:
+            extraction_result: Result from extraction agent (modified in place)
+
+        Returns:
+            Processed extraction result
+        """
+        if self.enable_deduplication:
+            extraction_result.facts = await self._deduplicate_facts(
+                extraction_result.facts
+            )
+
+        if self.enable_entity_resolution:
+            extraction_result.facts = await entity_resolver.resolve_facts_entities(
+                extraction_result.facts
+            )
+
+        return extraction_result
+
     async def extract_facts_from_chunks(
         self,
         chunks: List[Dict[str, Any]],
@@ -155,6 +219,9 @@ class FactExtractionService:
     ) -> Dict[str, Any]:
         """
         Extract facts from semantic chunks and store them.
+
+        Issue #665: Refactored to use extracted helpers for processing
+        and response building.
 
         Args:
             chunks: List of semantic chunks with text and metadata
@@ -181,16 +248,8 @@ class FactExtractionService:
                     "message": "No facts found in chunks",
                 }
 
-            # Deduplicate and resolve entities
-            if self.enable_deduplication:
-                extraction_result.facts = await self._deduplicate_facts(
-                    extraction_result.facts
-                )
-
-            if self.enable_entity_resolution:
-                extraction_result.facts = await entity_resolver.resolve_facts_entities(
-                    extraction_result.facts
-                )
+            # Process facts (Issue #665: uses helper)
+            extraction_result = await self._process_extracted_facts(extraction_result)
 
             storage_results = await self._store_facts(extraction_result.facts, metadata)
 
@@ -201,23 +260,10 @@ class FactExtractionService:
 
             logger.info("Processed %s chunks, extracted %s facts", len(chunks), len(extraction_result.facts))
 
-            return {
-                "status": "success",
-                "facts_extracted": len(extraction_result.facts),
-                "facts_stored": storage_results["stored_count"],
-                "storage_errors": storage_results["error_count"],
-                "chunks_processed": len(chunks),
-                "successful_chunks": extraction_result.extraction_metadata.get(
-                    "successful_chunks", 0
-                ),
-                "processing_time": extraction_result.processing_time,
-                "average_confidence": extraction_result.average_confidence,
-                "fact_distributions": {
-                    "by_type": extraction_result.fact_type_distribution,
-                    "by_temporal": extraction_result.temporal_type_distribution,
-                    "by_confidence": extraction_result.confidence_distribution,
-                },
-            }
+            # Build response (Issue #665: uses helper)
+            return self._build_extraction_success_response(
+                extraction_result, storage_results, len(chunks)
+            )
 
         except Exception as e:
             logger.error("Error processing chunks for fact extraction: %s", e)

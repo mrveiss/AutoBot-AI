@@ -38,9 +38,12 @@ class LocalLLM:
             self._ollama_url = f"http://{self._ollama_host}:{self._ollama_port}"
             logger.info("LocalLLM initialized with Ollama at %s", self._ollama_url)
         else:
-            logger.warning(
-                "Ollama not configured - LocalLLM will use mock responses. "
-                "Set AUTOBOT_OLLAMA_HOST and AUTOBOT_OLLAMA_PORT for real LLM."
+            # Issue #665: More informative warning - LocalLLM is optional
+            logger.debug(
+                "LocalLLM (Ollama) not configured - this provider will use mock responses. "
+                "This only affects the 'local' LLM provider. Other providers (OpenAI, Anthropic, "
+                "Google) work independently. To enable local Ollama: set AUTOBOT_OLLAMA_HOST "
+                "and AUTOBOT_OLLAMA_PORT in .env file."
             )
 
     def _create_mock_response(self, prompt: str) -> dict:
@@ -163,10 +166,11 @@ class MockPalm:
         pass
 
     def __init__(self):
-        """Initialize MockPalm with warning about mock usage."""
-        logger.warning(
-            "MockPalm instantiated - this is for testing only. "
-            "Use real Google AI provider in production."
+        """Initialize MockPalm with debug message about mock usage."""
+        # Issue #665: Changed to debug - MockPalm is a fallback, not an error condition
+        logger.debug(
+            "MockPalm provider instantiated (mock fallback). "
+            "For real Google AI, configure GOOGLE_API_KEY in .env file."
         )
 
     async def get_quota_status(self):

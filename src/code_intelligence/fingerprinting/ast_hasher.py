@@ -482,22 +482,16 @@ class ASTHasher:
 
         return features
 
-    def _count_features(
-        self, node: ast.AST, features: Dict[str, Any], depth: int
-    ) -> None:
+    def _count_node_types(self, node: ast.AST, features: Dict[str, Any]) -> None:
         """
-        Recursively count features in an AST node.
+        Count specific node types and update feature counters.
+
+        Issue #665: Extracted from _count_features to improve maintainability.
 
         Args:
-            node: AST node to analyze
+            node: AST node to check
             features: Dictionary to accumulate feature counts
-            depth: Current recursion depth
         """
-        features["node_count"] += 1
-        features["depth"] = max(features["depth"], depth)
-        features["node_types"].add(type(node).__name__)
-
-        # Count specific node types - Issue #380: Use module-level constants
         if isinstance(node, _EXPRESSION_TYPES):
             features["expression_count"] += 1
         if isinstance(node, _CONTROL_FLOW_TYPES):
@@ -511,16 +505,47 @@ class ASTHasher:
         if isinstance(node, _DEFINITION_TYPES):
             features["statement_count"] += 1
 
-        # Track operator types
+    def _track_operator_types(self, node: ast.AST, features: Dict[str, Any]) -> None:
+        """
+        Track operator types from various operator nodes.
+
+        Issue #665: Extracted from _count_features to improve maintainability.
+
+        Args:
+            node: AST node to check for operators
+            features: Dictionary with operator_types set to update
+        """
         if isinstance(node, ast.BinOp):
             features["operator_types"].add(type(node.op).__name__)
-        if isinstance(node, ast.Compare):
+        elif isinstance(node, ast.Compare):
             for op in node.ops:
                 features["operator_types"].add(type(op).__name__)
-        if isinstance(node, ast.BoolOp):
+        elif isinstance(node, ast.BoolOp):
             features["operator_types"].add(type(node.op).__name__)
-        if isinstance(node, ast.UnaryOp):
+        elif isinstance(node, ast.UnaryOp):
             features["operator_types"].add(type(node.op).__name__)
+
+    def _count_features(
+        self, node: ast.AST, features: Dict[str, Any], depth: int
+    ) -> None:
+        """
+        Recursively count features in an AST node.
+
+        Issue #665: Refactored to use extracted helpers for node type
+        counting and operator tracking.
+
+        Args:
+            node: AST node to analyze
+            features: Dictionary to accumulate feature counts
+            depth: Current recursion depth
+        """
+        features["node_count"] += 1
+        features["depth"] = max(features["depth"], depth)
+        features["node_types"].add(type(node).__name__)
+
+        # Issue #380: Use module-level constants for type checking
+        self._count_node_types(node, features)
+        self._track_operator_types(node, features)
 
         # Recurse into children
         for child in ast.iter_child_nodes(node):

@@ -127,6 +127,33 @@ def _get_active_indexing_task() -> Optional[dict]:
     return None
 
 
+def _build_indexing_response(
+    message: str,
+    active_task: dict,
+    stats: Optional[dict] = None,
+) -> JSONResponse:
+    """
+    Build standardized indexing-in-progress response.
+
+    Issue #665: Extracted from get_codebase_stats to reduce code duplication.
+    The function previously had 3 similar blocks building indexing responses.
+
+    Args:
+        message: Status message to display
+        active_task: Active indexing task info
+        stats: Optional existing stats to include
+
+    Returns:
+        JSONResponse with indexing status
+    """
+    return JSONResponse({
+        "status": "indexing",
+        "message": message,
+        "indexing": active_task,
+        "stats": stats,
+    })
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_codebase_stats",
@@ -139,6 +166,7 @@ async def get_codebase_stats():
 
     Issue #540: Returns indexing status when indexing is in progress,
     along with any available stats from the previous indexing run.
+    Issue #665: Refactored to use _build_indexing_response helper.
     """
     # Issue #540: Check if indexing is in progress
     active_task = _get_active_indexing_task()
@@ -146,40 +174,31 @@ async def get_codebase_stats():
     code_collection = get_code_collection()
 
     if not code_collection:
-        # Issue #540: Even if ChromaDB fails, show indexing status if available
+        # Issue #540, #665: Even if ChromaDB fails, show indexing status if available
         if active_task:
-            return JSONResponse({
-                "status": "indexing",
-                "message": "Indexing in progress. ChromaDB connection pending.",
-                "indexing": active_task,
-                "stats": None,
-            })
+            return _build_indexing_response(
+                "Indexing in progress. ChromaDB connection pending.",
+                active_task,
+            )
         return _no_data_response("ChromaDB connection failed.")
 
     try:
         results = code_collection.get(ids=["codebase_stats"], include=["metadatas"])
     except Exception as chroma_error:
         logger.warning("ChromaDB stats query failed: %s", chroma_error)
-        # Issue #540: Show indexing status even on query failure
+        # Issue #540, #665: Show indexing status even on query failure
         if active_task:
-            return JSONResponse({
-                "status": "indexing",
-                "message": "Indexing in progress.",
-                "indexing": active_task,
-                "stats": None,
-            })
+            return _build_indexing_response("Indexing in progress.", active_task)
         return _no_data_response()
 
     # Check if we have data
     if not results.get("metadatas") or len(results["metadatas"]) == 0:
-        # Issue #540: Show indexing status when no stats yet
+        # Issue #540, #665: Show indexing status when no stats yet
         if active_task:
-            return JSONResponse({
-                "status": "indexing",
-                "message": "Indexing in progress. Stats will be available when complete.",
-                "indexing": active_task,
-                "stats": None,
-            })
+            return _build_indexing_response(
+                "Indexing in progress. Stats will be available when complete.",
+                active_task,
+            )
         return _no_data_response()
 
     # Parse and return stats (Issue #315 - use extracted helper)

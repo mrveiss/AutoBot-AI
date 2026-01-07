@@ -211,6 +211,72 @@ class DispensableDetector:
     # Unused Import Detection (Simple Heuristic)
     # =========================================================================
 
+    def _collect_imported_names(self, tree: ast.AST) -> dict[str, int]:
+        """
+        Collect all imported names from an AST tree.
+
+        Issue #665: Extracted from detect_unused_imports to reduce complexity.
+
+        Args:
+            tree: AST tree to analyze
+
+        Returns:
+            Dictionary mapping imported names to their line numbers
+        """
+        imported_names: dict[str, int] = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    name = alias.asname or alias.name.split(".")[0]
+                    imported_names[name] = node.lineno
+            elif isinstance(node, ast.ImportFrom):
+                for alias in node.names:
+                    name = alias.asname or alias.name
+                    if name != "*":
+                        imported_names[name] = node.lineno
+        return imported_names
+
+    def _extract_root_name(self, node: ast.Attribute) -> str | None:
+        """
+        Extract root name from an attribute chain (e.g., 'os' from 'os.path.join').
+
+        Issue #665: Extracted from detect_unused_imports to reduce complexity.
+
+        Args:
+            node: AST Attribute node
+
+        Returns:
+            Root name string or None if not a Name node at root
+        """
+        current = node.value
+        while isinstance(current, ast.Attribute):
+            current = current.value
+        if isinstance(current, ast.Name):
+            return current.id
+        return None
+
+    def _collect_used_names(self, tree: ast.AST) -> set[str]:
+        """
+        Collect all names used in an AST tree.
+
+        Issue #665: Extracted from detect_unused_imports to reduce complexity.
+
+        Args:
+            tree: AST tree to analyze
+
+        Returns:
+            Set of used name strings
+        """
+        used_names: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name):
+                used_names.add(node.id)
+            elif isinstance(node, ast.Attribute):
+                root_name = self._extract_root_name(node)
+                if root_name:
+                    used_names.add(root_name)
+        return used_names
+
     def detect_unused_imports(
         self,
         tree: ast.AST,
@@ -218,6 +284,8 @@ class DispensableDetector:
     ) -> List[AntiPatternResult]:
         """
         Detect potentially unused imports (simple heuristic).
+
+        Issue #665: Refactored to use extracted helpers for collection logic.
 
         Note: This is a simple heuristic that may have false positives.
         For more accurate detection, use specialized tools like flake8.
@@ -231,31 +299,9 @@ class DispensableDetector:
         """
         patterns: List[AntiPatternResult] = []
 
-        # Collect all imported names
-        imported_names: dict[str, int] = {}
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    name = alias.asname or alias.name.split(".")[0]
-                    imported_names[name] = node.lineno
-            elif isinstance(node, ast.ImportFrom):
-                for alias in node.names:
-                    name = alias.asname or alias.name
-                    if name != "*":
-                        imported_names[name] = node.lineno
-
-        # Collect all used names
-        used_names: set[str] = set()
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Name):
-                used_names.add(node.id)
-            elif isinstance(node, ast.Attribute):
-                # Get the root name (e.g., "os" from "os.path")
-                current = node.value
-                while isinstance(current, ast.Attribute):
-                    current = current.value
-                if isinstance(current, ast.Name):
-                    used_names.add(current.id)
+        # Collect imports and used names (Issue #665: use helpers)
+        imported_names = self._collect_imported_names(tree)
+        used_names = self._collect_used_names(tree)
 
         # Find potentially unused imports
         for name, line in imported_names.items():

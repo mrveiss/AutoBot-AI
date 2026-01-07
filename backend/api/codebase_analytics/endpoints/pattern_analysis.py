@@ -589,11 +589,73 @@ async def get_pattern_storage_stats() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _build_empty_pattern_summary() -> Dict[str, Any]:
+    """
+    Build empty pattern summary response.
+
+    Issue #665: Extracted from get_cached_pattern_summary to reduce duplication.
+    """
+    return {
+        "status": "empty",
+        "total_patterns": 0,
+        "severity_distribution": {},
+        "pattern_type_distribution": {},
+        "has_cached_data": False,
+    }
+
+
+def _aggregate_pattern_metadata(metadatas: List[Dict]) -> Dict[str, Any]:
+    """
+    Aggregate statistics from pattern metadata.
+
+    Issue #665: Extracted from get_cached_pattern_summary for maintainability.
+
+    Args:
+        metadatas: List of metadata dictionaries from ChromaDB
+
+    Returns:
+        Aggregated statistics dict with type counts, severity counts,
+        LOC reduction, and file count.
+    """
+    type_counts: Dict[str, int] = {}
+    severity_counts: Dict[str, int] = {}
+    total_loc_reduction = 0
+    files_seen: set = set()
+
+    for meta in metadatas:
+        # Count pattern types
+        ptype = meta.get("pattern_type", "unknown")
+        type_counts[ptype] = type_counts.get(ptype, 0) + 1
+
+        # Count severities
+        severity = meta.get("severity", "info")
+        severity_counts[severity] = severity_counts.get(severity, 0) + 1
+
+        # Track LOC reduction potential
+        if "code_reduction_potential" in meta:
+            try:
+                total_loc_reduction += int(meta["code_reduction_potential"])
+            except (ValueError, TypeError):
+                pass
+
+        # Track unique files
+        if "file_path" in meta:
+            files_seen.add(meta["file_path"])
+
+    return {
+        "type_counts": type_counts,
+        "severity_counts": severity_counts,
+        "total_loc_reduction": total_loc_reduction,
+        "files_count": len(files_seen),
+    }
+
+
 @router.get("/patterns/cached-summary")
 async def get_cached_pattern_summary() -> Dict[str, Any]:
     """Get cached pattern summary from ChromaDB without re-analyzing.
 
     Issue #208: Fast loading endpoint for already indexed patterns.
+    Issue #665: Refactored to use extracted helpers.
     Returns summary data from stored patterns, not requiring full analysis.
     """
     try:
@@ -603,23 +665,11 @@ async def get_cached_pattern_summary() -> Dict[str, Any]:
 
         collection = await get_pattern_collection_async()
         if collection is None:
-            return {
-                "status": "empty",
-                "total_patterns": 0,
-                "severity_distribution": {},
-                "pattern_type_distribution": {},
-                "has_cached_data": False,
-            }
+            return _build_empty_pattern_summary()
 
         count = await collection.count()
         if count == 0:
-            return {
-                "status": "empty",
-                "total_patterns": 0,
-                "severity_distribution": {},
-                "pattern_type_distribution": {},
-                "has_cached_data": False,
-            }
+            return _build_empty_pattern_summary()
 
         # Get all metadata for aggregation (limit to 2000 for performance)
         sample_size = min(count, 2000)
@@ -628,47 +678,104 @@ async def get_cached_pattern_summary() -> Dict[str, Any]:
             include=["metadatas"],
         )
 
-        # Aggregate statistics
-        type_counts = {}
-        severity_counts = {}
-        total_loc_reduction = 0
-        files_seen = set()
+        # Aggregate statistics (Issue #665: use helper)
+        if not sample.get("metadatas"):
+            return _build_empty_pattern_summary()
 
-        if sample.get("metadatas"):
-            for meta in sample["metadatas"]:
-                # Count pattern types
-                ptype = meta.get("pattern_type", "unknown")
-                type_counts[ptype] = type_counts.get(ptype, 0) + 1
-
-                # Count severities
-                severity = meta.get("severity", "info")
-                severity_counts[severity] = severity_counts.get(severity, 0) + 1
-
-                # Track LOC reduction potential
-                if "code_reduction_potential" in meta:
-                    try:
-                        total_loc_reduction += int(meta["code_reduction_potential"])
-                    except (ValueError, TypeError):
-                        pass
-
-                # Track unique files
-                if "file_path" in meta:
-                    files_seen.add(meta["file_path"])
+        stats = _aggregate_pattern_metadata(sample["metadatas"])
 
         return {
             "status": "success",
             "total_patterns": count,
             "sampled_patterns": sample_size,
-            "severity_distribution": severity_counts,
-            "pattern_type_distribution": type_counts,
-            "potential_loc_reduction": total_loc_reduction,
-            "files_analyzed": len(files_seen),
+            "severity_distribution": stats["severity_counts"],
+            "pattern_type_distribution": stats["type_counts"],
+            "potential_loc_reduction": stats["total_loc_reduction"],
+            "files_analyzed": stats["files_count"],
             "has_cached_data": True,
         }
 
     except Exception as e:
         logger.error("Cached summary failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _build_empty_patterns_response() -> Dict[str, Any]:
+    """
+    Build empty patterns response for when no data exists.
+
+    Issue #665: Extracted from get_cached_patterns to reduce duplication.
+
+    Returns:
+        Empty patterns response dictionary.
+    """
+    return {
+        "status": "empty",
+        "patterns": [],
+        "total": 0,
+    }
+
+
+def _build_chromadb_where_filter(
+    pattern_type: Optional[str],
+    severity: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    """
+    Build ChromaDB where filter from optional parameters.
+
+    Issue #665: Extracted from get_cached_patterns to improve maintainability.
+
+    Args:
+        pattern_type: Optional pattern type filter.
+        severity: Optional severity filter.
+
+    Returns:
+        ChromaDB-compatible where filter dict, or None if no filters.
+    """
+    if not pattern_type and not severity:
+        return None
+
+    conditions = []
+    if pattern_type:
+        conditions.append({"pattern_type": pattern_type})
+    if severity:
+        conditions.append({"severity": severity})
+
+    if len(conditions) == 1:
+        return conditions[0]
+
+    return {"$and": conditions}
+
+
+def _format_pattern_results(
+    results: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """
+    Format ChromaDB results into pattern response list.
+
+    Issue #665: Extracted from get_cached_patterns to improve maintainability.
+
+    Args:
+        results: Raw ChromaDB query results with ids, metadatas, documents.
+
+    Returns:
+        List of formatted pattern dictionaries.
+    """
+    patterns = []
+    if not results.get("ids"):
+        return patterns
+
+    for i, pattern_id in enumerate(results["ids"]):
+        pattern = {
+            "id": pattern_id,
+            "metadata": results["metadatas"][i] if results.get("metadatas") else {},
+            "code_snippet": (
+                results["documents"][i][:500] if results.get("documents") else ""
+            ),
+        }
+        patterns.append(pattern)
+
+    return patterns
 
 
 @router.get("/patterns/cached-patterns")
@@ -681,6 +788,7 @@ async def get_cached_patterns(
     """Get cached patterns from ChromaDB with filtering and pagination.
 
     Issue #208: Fast loading of already indexed patterns without re-analysis.
+    Issue #665: Refactored to use extracted helpers.
     Supports filtering by pattern_type and severity, with pagination.
     """
     try:
@@ -690,33 +798,14 @@ async def get_cached_patterns(
 
         collection = await get_pattern_collection_async()
         if collection is None:
-            return {
-                "status": "empty",
-                "patterns": [],
-                "total": 0,
-            }
+            return _build_empty_patterns_response()
 
         count = await collection.count()
         if count == 0:
-            return {
-                "status": "empty",
-                "patterns": [],
-                "total": 0,
-            }
+            return _build_empty_patterns_response()
 
-        # Build where filter
-        where_filter = None
-        if pattern_type or severity:
-            conditions = []
-            if pattern_type:
-                conditions.append({"pattern_type": pattern_type})
-            if severity:
-                conditions.append({"severity": severity})
-
-            if len(conditions) == 1:
-                where_filter = conditions[0]
-            else:
-                where_filter = {"$and": conditions}
+        # Build where filter (Issue #665: use extracted helper)
+        where_filter = _build_chromadb_where_filter(pattern_type, severity)
 
         # Query with filters
         results = await collection.get(
@@ -726,18 +815,8 @@ async def get_cached_patterns(
             include=["metadatas", "documents"],
         )
 
-        # Format results
-        patterns = []
-        if results.get("ids"):
-            for i, pattern_id in enumerate(results["ids"]):
-                pattern = {
-                    "id": pattern_id,
-                    "metadata": results["metadatas"][i] if results.get("metadatas") else {},
-                    "code_snippet": (
-                        results["documents"][i][:500] if results.get("documents") else ""
-                    ),
-                }
-                patterns.append(pattern)
+        # Format results (Issue #665: use extracted helper)
+        patterns = _format_pattern_results(results)
 
         return {
             "status": "success",
