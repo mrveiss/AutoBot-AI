@@ -30,10 +30,11 @@ const loadData = () => operation.execute(() => api.get('/endpoint'))
 ### 1. Simple GET Request
 
 ```typescript
-const users = useAsyncOperation({ errorMessage: 'Failed to load users' })
+// Example using /api/llm/models - a real endpoint that returns a list
+const models = useAsyncOperation({ errorMessage: 'Failed to load models' })
 
-const fetchUsers = () => users.execute(async () => {
-  const response = await fetch('/api/users')
+const fetchModels = () => models.execute(async () => {
+  const response = await fetch('/api/llm/models')
   return response.json()
 })
 ```
@@ -302,11 +303,12 @@ const users = useAsyncOperation<User[]>()
 ```typescript
 const operation = useAsyncOperation()
 
-const loadUsers = () => operation.execute(async (): Promise<User[]> => {
-  const response = await fetch('/api/users')
+// Example using /api/llm/models - demonstrates type inference with real endpoint
+const loadModels = () => operation.execute(async (): Promise<LLMModel[]> => {
+  const response = await fetch('/api/llm/models')
   return response.json()
 })
-// operation.data.value is inferred as User[] | null
+// operation.data.value is inferred as LLMModel[] | null
 ```
 
 ### Generic Callbacks

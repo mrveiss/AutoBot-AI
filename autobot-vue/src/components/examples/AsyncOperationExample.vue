@@ -406,7 +406,8 @@ const loadUsers = async () => {
   usersLoading.value = true
   usersError.value = null
   try {
-    const response = await fetch(`${BACKEND_URL}/api/users`)
+    // Note: Using /api/llm/models as example - returns a list similar to hypothetical /api/users
+    const response = await fetch(`${BACKEND_URL}/api/llm/models`)
     usersData.value = await response.json()
   } catch (err) {
     usersError.value = err instanceof Error ? err : new Error(String(err))
@@ -445,7 +446,7 @@ const ops = createAsyncOperations({
 })
 
 const loadUsers = () => ops.users.execute(async () => {
-  const response = await fetch(`${BACKEND_URL}/api/users`)
+  const response = await fetch(`${BACKEND_URL}/api/llm/models`)
   return response.json()
 })
 
@@ -721,7 +722,7 @@ const ops = createAsyncOperations({
 })
 
 const loadUsers = () => ops.users.execute(async () => {
-  const response = await fetch(`${BACKEND_URL}/api/users`)
+  const response = await fetch(`${BACKEND_URL}/api/llm/models`)
   return response.json()
 })
 

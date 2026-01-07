@@ -255,16 +255,17 @@ const systemInfoError = ref<Error | null>(null)
 const systemInfoData = ref(null)
 
 // Duplicate async pattern for operation 1
-const loadUsers = async () => {
-  usersLoading.value = true
-  usersError.value = null
+// Example: Load LLM models (real endpoint that returns a list)
+const loadModels = async () => {
+  modelsLoading.value = true
+  modelsError.value = null
   try {
-    const response = await fetch('http://172.16.168.20:8001/api/users')
-    usersData.value = await response.json()
+    const response = await fetch('http://172.16.168.20:8001/api/llm/models')
+    modelsData.value = await response.json()
   } catch (err) {
-    usersError.value = err instanceof Error ? err : new Error(String(err))
+    modelsError.value = err instanceof Error ? err : new Error(String(err))
   } finally {
-    usersLoading.value = false
+    modelsLoading.value = false
   }
 }
 
@@ -303,13 +304,13 @@ import { createAsyncOperations } from '@/composables/useAsyncOperation'
 
 // Single declaration for multiple operations
 const ops = createAsyncOperations({
-  users: { errorMessage: 'Failed to load users' },
+  models: { errorMessage: 'Failed to load models' },
   systemInfo: { errorMessage: 'Failed to load system info' }
 })
 
-// Clean operation 1
-const loadUsers = () => ops.users.execute(async () => {
-  const response = await fetch('http://172.16.168.20:8001/api/users')
+// Clean operation 1 - using real endpoint /api/llm/models
+const loadModels = () => ops.models.execute(async () => {
+  const response = await fetch('http://172.16.168.20:8001/api/llm/models')
   return response.json()
 })
 
