@@ -49,6 +49,21 @@
           <span class="stat-label">Failed</span>
         </div>
       </div>
+      <!-- Issue #553: Auto-start toggle -->
+      <div class="auto-start-row">
+        <label class="auto-start-label">
+          <input
+            type="checkbox"
+            v-model="autoStart"
+            @change="toggleAutoStart"
+            :disabled="isTogglingAutoStart"
+          />
+          <span>Auto-start on backend startup</span>
+        </label>
+        <span v-if="isTogglingAutoStart" class="saving-indicator">
+          <i class="fas fa-spinner fa-spin"></i> Saving...
+        </span>
+      </div>
     </div>
 
     <!-- Destinations List -->
@@ -429,6 +444,8 @@ const isSaving = ref(false)
 const isDeleting = ref(false)
 const isTesting = ref(false)
 const isToggling = ref(false)
+const isTogglingAutoStart = ref(false)  // Issue #553: Auto-start toggle state
+const autoStart = ref(false)  // Issue #553: Auto-start value
 const showAddModal = ref(false)
 const showDeleteModal = ref(false)
 const editingDestination = ref<any>(null)
@@ -568,6 +585,40 @@ const testAllDestinations = async () => {
   }
 }
 
+// Issue #553: Toggle auto-start setting
+const toggleAutoStart = async () => {
+  isTogglingAutoStart.value = true
+  try {
+    const response = await fetch(`${getBackendUrl()}/api/log-forwarding/auto-start?enabled=${autoStart.value}`, {
+      method: 'PUT',
+    })
+    if (!response.ok) {
+      // Revert on failure
+      autoStart.value = !autoStart.value
+      logger.error('Failed to update auto-start setting')
+    }
+  } catch (error) {
+    // Revert on error
+    autoStart.value = !autoStart.value
+    logger.error('Error updating auto-start:', error)
+  } finally {
+    isTogglingAutoStart.value = false
+  }
+}
+
+// Issue #553: Fetch auto-start setting
+const fetchAutoStart = async () => {
+  try {
+    const response = await fetch(`${getBackendUrl()}/api/log-forwarding/auto-start`)
+    if (response.ok) {
+      const data = await response.json()
+      autoStart.value = data.auto_start || false
+    }
+  } catch (error) {
+    logger.debug('Failed to fetch auto-start setting:', error)
+  }
+}
+
 const testDestination = async (name: string) => {
   try {
     const response = await fetch(`${getBackendUrl()}/api/log-forwarding/destinations/${name}/test`, {
@@ -695,7 +746,7 @@ const deleteDestination = async () => {
 
 // Lifecycle
 onMounted(async () => {
-  await Promise.all([fetchStatus(), fetchDestinations()])
+  await Promise.all([fetchStatus(), fetchDestinations(), fetchAutoStart()])
 })
 </script>
 
@@ -806,6 +857,36 @@ onMounted(async () => {
 .stats-row {
   display: flex;
   gap: 24px;
+}
+
+/* Issue #553: Auto-start toggle */
+.auto-start-row {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e9ecef;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.auto-start-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #495057;
+}
+
+.auto-start-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.saving-indicator {
+  font-size: 12px;
+  color: #6c757d;
 }
 
 .stat {

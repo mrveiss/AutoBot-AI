@@ -834,6 +834,7 @@ class LogForwarder:
         self.threads: List[threading.Thread] = []
         self.docker_client = None
         self.hostname = socket.gethostname()
+        self.auto_start = False  # Issue #553: Auto-start on backend startup
 
         # Setup logging
         logging.basicConfig(
@@ -860,6 +861,9 @@ class LogForwarder:
                 with open(self.config_path, "r", encoding="utf-8") as f:
                     config = json.load(f)
 
+                # Issue #553: Load auto_start setting
+                self.auto_start = config.get("auto_start", False)
+
                 for dest_config in config.get("destinations", []):
                     dest = create_destination(DestinationConfig.from_dict(dest_config))
                     self.destinations[dest.config.name] = dest
@@ -873,6 +877,7 @@ class LogForwarder:
     def save_config(self):
         """Save current configuration."""
         config = {
+            "auto_start": self.auto_start,  # Issue #553: Persist auto_start setting
             "destinations": [dest.config.to_dict() for dest in self.destinations.values()]
         }
 

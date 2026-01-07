@@ -207,6 +207,53 @@
             </BasePanel>
           </div>
         </div>
+
+        <!-- Log Forwarding Status Row (Issue #553) -->
+        <div class="row mt-3">
+          <div class="col-md-4">
+            <BasePanel variant="elevated" size="small">
+              <template #header>
+                <h5>
+                  <i class="fas fa-share-alt"></i>
+                  Log Forwarding
+                </h5>
+              </template>
+              <div v-if="logForwardingStatus">
+                <div class="metric-row">
+                  <span>Status</span>
+                  <span :class="['metric-value', logForwardingStatus.running ? 'text-success' : 'text-muted']">
+                    {{ logForwardingStatus.running ? 'Running' : 'Stopped' }}
+                  </span>
+                </div>
+                <div class="metric-row">
+                  <span>Destinations</span>
+                  <span class="metric-value">
+                    {{ logForwardingStatus.healthy_count }}/{{ logForwardingStatus.total_count }} healthy
+                  </span>
+                </div>
+                <div class="metric-row">
+                  <span>Sent</span>
+                  <span class="metric-value">{{ formatNumber(logForwardingStatus.total_sent) }}</span>
+                </div>
+                <div class="metric-row">
+                  <span>Failed</span>
+                  <span :class="['metric-value', logForwardingStatus.total_failed > 0 ? 'text-warning' : '']">
+                    {{ formatNumber(logForwardingStatus.total_failed) }}
+                  </span>
+                </div>
+                <div v-if="logForwardingStatus.total_failed > 0" class="throttle-warning">
+                  <i class="fas fa-exclamation-triangle"></i> Check destination health
+                </div>
+              </div>
+              <EmptyState
+                v-else
+                icon="fas fa-share-alt"
+                message="Log forwarding not configured"
+                compact
+              />
+            </BasePanel>
+          </div>
+        </div>
       </div>
 
       <!-- Performance Charts - Grafana Embeds -->
@@ -422,6 +469,43 @@ const monitoringActive = ref(false)
 const showAlertsModal = ref(false)
 const useGrafanaEmbed = ref(false)
 
+// Issue #553: Log Forwarding status
+interface LogForwardingStatus {
+  running: boolean
+  total_count: number
+  healthy_count: number
+  total_sent: number
+  total_failed: number
+}
+const logForwardingStatus = ref<LogForwardingStatus | null>(null)
+
+// Issue #553: Fetch log forwarding status
+async function fetchLogForwardingStatus() {
+  try {
+    const response = await fetch('/api/log-forwarding/status')
+    if (response.ok) {
+      const data = await response.json()
+      logForwardingStatus.value = {
+        running: data.running || false,
+        total_count: data.destinations?.length || 0,
+        healthy_count: data.destinations?.filter((d: { healthy: boolean }) => d.healthy).length || 0,
+        total_sent: data.destinations?.reduce((sum: number, d: { sent_count: number }) => sum + (d.sent_count || 0), 0) || 0,
+        total_failed: data.destinations?.reduce((sum: number, d: { failed_count: number }) => sum + (d.failed_count || 0), 0) || 0
+      }
+    }
+  } catch (err) {
+    logger.debug('Log forwarding status not available:', err)
+    logForwardingStatus.value = null
+  }
+}
+
+// Issue #553: Format large numbers
+function formatNumber(num: number): string {
+  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`
+  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`
+  return num.toString()
+}
+
 // Computed properties
 const connectionStatusClass = computed(() => {
   if (isConnected.value) return 'connected'
@@ -534,6 +618,9 @@ onMounted(async () => {
   } catch (err) {
     logger.warn('Could not check monitoring status:', err)
   }
+
+  // Issue #553: Fetch log forwarding status
+  await fetchLogForwardingStatus()
 })
 
 onUnmounted(() => {

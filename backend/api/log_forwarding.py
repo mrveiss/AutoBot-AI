@@ -617,3 +617,36 @@ async def get_known_hosts() -> Dict[str, Any]:
         ],
         "current_hostname": socket.gethostname(),
     }
+
+
+# Issue #553: Auto-start configuration
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_auto_start",
+    error_code_prefix="LOGFWD",
+)
+@router.get("/auto-start")
+async def get_auto_start() -> Dict[str, Any]:
+    """Get auto-start configuration."""
+    forwarder = await get_forwarder()
+    return {
+        "auto_start": forwarder.auto_start,
+        "message": "Auto-start is enabled" if forwarder.auto_start else "Auto-start is disabled"
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="set_auto_start",
+    error_code_prefix="LOGFWD",
+)
+@router.put("/auto-start")
+async def set_auto_start(enabled: bool = Query(..., description="Enable or disable auto-start")) -> Dict[str, Any]:
+    """Set auto-start configuration."""
+    forwarder = await get_forwarder()
+    forwarder.auto_start = enabled
+    forwarder.save_config()
+    return {
+        "auto_start": forwarder.auto_start,
+        "message": f"Auto-start {'enabled' if enabled else 'disabled'}"
+    }

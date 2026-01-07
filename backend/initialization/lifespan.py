@@ -297,6 +297,40 @@ async def _init_documentation_watcher():
         logger.warning("Documentation watcher failed: %s", watcher_error)
 
 
+async def _init_log_forwarding():
+    """
+    Initialize log forwarding service if auto-start is enabled (NON-CRITICAL).
+
+    Issue #553: Auto-starts log forwarding on backend startup if configured
+    via the GUI settings.
+    """
+    logger.info("✅ [ 86%] Log Forwarding: Checking auto-start configuration...")
+    try:
+        from backend.api.log_forwarding import get_forwarder
+
+        forwarder = await get_forwarder()
+
+        if forwarder.auto_start and forwarder.destinations:
+            logger.info("✅ [ 86%] Log Forwarding: Auto-start enabled, starting service...")
+            success = forwarder.start()
+            if success:
+                logger.info(
+                    "✅ [ 86%] Log Forwarding: Started with %d destination(s)",
+                    len(forwarder.destinations)
+                )
+            else:
+                logger.warning("⚠️ [ 86%] Log Forwarding: Failed to start (non-critical)")
+        elif forwarder.auto_start:
+            logger.info("✅ [ 86%] Log Forwarding: Auto-start enabled but no destinations configured")
+        else:
+            logger.info("✅ [ 86%] Log Forwarding: Auto-start disabled, skipping")
+
+    except ImportError as import_error:
+        logger.debug("Log forwarding not available: %s", import_error)
+    except Exception as log_fwd_error:
+        logger.warning("Log forwarding initialization failed: %s", log_fwd_error)
+
+
 async def _init_graph_rag_service(app: FastAPI, memory_graph):
     """
     Initialize Graph-RAG service (depends on knowledge base and memory graph).
@@ -463,6 +497,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_memory_graph(app)
         await _init_background_llm_sync(app)
         await _init_documentation_watcher()  # Issue #165: Real-time doc sync
+        await _init_log_forwarding()  # Issue #553: Auto-start log forwarding if configured
 
         await update_app_state_multi(
             initialization_status="ready",
