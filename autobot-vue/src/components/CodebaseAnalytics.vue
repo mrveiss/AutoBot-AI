@@ -5568,6 +5568,8 @@ const generateSectionMarkdown = (section: SectionType, data: unknown): string =>
     }
     case 'environment': {
       // Issue #631: Updated to handle new export format with hardcoded_values
+      // Issue #XXX: Fixed field names to match backend API response
+      // Backend returns 'file' and 'line', not 'file_path' and 'line_number'
       interface EnvExportData {
         total_in_export?: number
         total_in_analysis?: number
@@ -5578,9 +5580,12 @@ const generateSectionMarkdown = (section: SectionType, data: unknown): string =>
           type: string
           severity: string
           value: string
-          file_path?: string
-          line_number?: number
+          file?: string           // Backend returns 'file', not 'file_path'
+          line?: number           // Backend returns 'line', not 'line_number'
+          variable_name?: string
+          suggested_env_var?: string
           context?: string
+          current_usage?: string
         }>
         recommendations?: Array<{
           priority?: string
@@ -5632,7 +5637,7 @@ const generateSectionMarkdown = (section: SectionType, data: unknown): string =>
           md += `|------|-------|------|------|\n`
           byPriority.high.forEach(v => {
             const val = String(v.value).substring(0, 50) + (String(v.value).length > 50 ? '...' : '')
-            md += `| ${v.type} | \`${val}\` | ${v.file_path || '-'} | ${v.line_number || '-'} |\n`
+            md += `| ${v.type} | \`${val}\` | ${v.file || '-'} | ${v.line || '-'} |\n`
           })
           md += `\n`
         }
@@ -5643,7 +5648,7 @@ const generateSectionMarkdown = (section: SectionType, data: unknown): string =>
           md += `|------|-------|------|------|\n`
           byPriority.medium.forEach(v => {
             const val = String(v.value).substring(0, 50) + (String(v.value).length > 50 ? '...' : '')
-            md += `| ${v.type} | \`${val}\` | ${v.file_path || '-'} | ${v.line_number || '-'} |\n`
+            md += `| ${v.type} | \`${val}\` | ${v.file || '-'} | ${v.line || '-'} |\n`
           })
           md += `\n`
         }
@@ -5654,7 +5659,7 @@ const generateSectionMarkdown = (section: SectionType, data: unknown): string =>
           md += `|------|-------|------|------|\n`
           byPriority.low.forEach(v => {
             const val = String(v.value).substring(0, 50) + (String(v.value).length > 50 ? '...' : '')
-            md += `| ${v.type} | \`${val}\` | ${v.file_path || '-'} | ${v.line_number || '-'} |\n`
+            md += `| ${v.type} | \`${val}\` | ${v.file || '-'} | ${v.line || '-'} |\n`
           })
           md += `\n`
         }

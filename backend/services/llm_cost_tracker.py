@@ -229,6 +229,104 @@ class LLMCostTracker:
 
         return round(input_cost + output_cost, 6)
 
+    def _extract_usage_params(
+        self,
+        request: Optional["TrackUsageRequest"],
+        provider: Optional[str],
+        model: Optional[str],
+        input_tokens: Optional[int],
+        output_tokens: Optional[int],
+        session_id: Optional[str],
+        user_id: Optional[str],
+        endpoint: Optional[str],
+        latency_ms: Optional[float],
+        success: bool,
+        error_message: Optional[str],
+        metadata: Optional[Dict[str, Any]],
+    ) -> tuple:
+        """
+        Extract usage parameters from request object or individual args.
+
+        Issue #665: Extracted from track_usage to reduce function length.
+
+        Args:
+            request: Optional TrackUsageRequest object
+            Other args: Individual parameters (used if request is None)
+
+        Returns:
+            Tuple of all extracted parameters
+
+        Raises:
+            ValueError: If required parameters are missing
+        """
+        if request is not None:
+            return (
+                request.provider,
+                request.model,
+                request.input_tokens,
+                request.output_tokens,
+                request.session_id,
+                request.user_id,
+                request.endpoint,
+                request.latency_ms,
+                request.success,
+                request.error_message,
+                request.metadata,
+            )
+
+        if provider is None or model is None or input_tokens is None or output_tokens is None:
+            raise ValueError(
+                "Either 'request' object or 'provider', 'model', "
+                "'input_tokens', 'output_tokens' are required"
+            )
+
+        return (
+            provider, model, input_tokens, output_tokens, session_id,
+            user_id, endpoint, latency_ms, success, error_message, metadata
+        )
+
+    def _create_usage_record(
+        self,
+        provider: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        cost: float,
+        session_id: Optional[str],
+        user_id: Optional[str],
+        endpoint: Optional[str],
+        latency_ms: Optional[float],
+        success: bool,
+        error_message: Optional[str],
+        metadata: Optional[Dict[str, Any]],
+    ) -> "LLMUsageRecord":
+        """
+        Create LLMUsageRecord with all parameters.
+
+        Issue #665: Extracted from track_usage to reduce function length.
+
+        Args:
+            All usage record parameters
+
+        Returns:
+            LLMUsageRecord instance
+        """
+        return LLMUsageRecord(
+            provider=provider,
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd=cost,
+            timestamp=datetime.utcnow().isoformat(),
+            session_id=session_id,
+            user_id=user_id,
+            endpoint=endpoint,
+            latency_ms=latency_ms,
+            success=success,
+            error_message=error_message,
+            metadata=metadata or {},
+        )
+
     async def track_usage(
         self,
         request: Optional[TrackUsageRequest] = None,
@@ -249,6 +347,7 @@ class LLMCostTracker:
         Track an LLM API usage event.
 
         Issue #375: Supports both request object and individual parameters.
+        Issue #665: Refactored to use _extract_usage_params and _create_usage_record.
 
         Args:
             request: TrackUsageRequest object (preferred, reduces param count)
@@ -267,54 +366,32 @@ class LLMCostTracker:
         Returns:
             LLMUsageRecord with calculated cost
         """
-        # Issue #375: Extract from request object if provided
-        if request is not None:
-            provider = request.provider
-            model = request.model
-            input_tokens = request.input_tokens
-            output_tokens = request.output_tokens
-            session_id = request.session_id
-            user_id = request.user_id
-            endpoint = request.endpoint
-            latency_ms = request.latency_ms
-            success = request.success
-            error_message = request.error_message
-            metadata = request.metadata
-        elif provider is None or model is None or input_tokens is None or output_tokens is None:
-            raise ValueError(
-                "Either 'request' object or 'provider', 'model', "
-                "'input_tokens', 'output_tokens' are required"
-            )
+        # Extract parameters using helper (Issue #665)
+        (
+            provider, model, input_tokens, output_tokens, session_id,
+            user_id, endpoint, latency_ms, success, error_message, metadata
+        ) = self._extract_usage_params(
+            request, provider, model, input_tokens, output_tokens,
+            session_id, user_id, endpoint, latency_ms, success, error_message, metadata
+        )
 
         cost = self.calculate_cost(model, input_tokens, output_tokens)
-        timestamp = datetime.utcnow().isoformat()
 
-        record = LLMUsageRecord(
-            provider=provider,
-            model=model,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            cost_usd=cost,
-            timestamp=timestamp,
-            session_id=session_id,
-            user_id=user_id,
-            endpoint=endpoint,
-            latency_ms=latency_ms,
-            success=success,
-            error_message=error_message,
-            metadata=metadata or {},
+        # Create record using helper (Issue #665)
+        record = self._create_usage_record(
+            provider, model, input_tokens, output_tokens, cost,
+            session_id, user_id, endpoint, latency_ms, success, error_message, metadata
         )
 
         # Issue #379: Parallelize independent tracking operations
-        # _store_usage_record persists to Redis, _check_budget_alerts evaluates limits
         await asyncio.gather(
             self._store_usage_record(record),
             self._check_budget_alerts(cost),
         )
 
         logger.debug(
-            f"Tracked LLM usage: {provider}/{model} - "
-            f"{input_tokens}in/{output_tokens}out = ${cost:.6f}"
+            "Tracked LLM usage: %s/%s - %din/%dout = $%.6f",
+            provider, model, input_tokens, output_tokens, cost
         )
 
         return record

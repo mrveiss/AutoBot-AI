@@ -144,13 +144,73 @@ class CodeChunker:
             "end_line": end_line,
         }
 
+    def _append_chunk_if_valid(
+        self,
+        chunks: List[Dict[str, Any]],
+        lines_list: List[str],
+        chunk_type: str,
+        start_line: int,
+        end_line: int,
+    ) -> None:
+        """
+        Create and append chunk to list if valid.
+
+        Issue #665: Extracted from chunk_python_file to reduce function length.
+
+        Args:
+            chunks: List to append chunk to
+            lines_list: Lines to create chunk from
+            chunk_type: Type of chunk
+            start_line: Starting line number
+            end_line: Ending line number
+        """
+        chunk = self._create_chunk_dict(lines_list, chunk_type, start_line, end_line)
+        if chunk:
+            chunks.append(chunk)
+
+    def _collect_definition_block(
+        self, lines: List[str], start_idx: int, base_indent: int
+    ) -> tuple[List[str], int]:
+        """
+        Collect all lines belonging to a function/class definition.
+
+        Issue #665: Extracted from chunk_python_file to reduce function length.
+
+        Args:
+            lines: All file lines
+            start_idx: Index after the definition line
+            base_indent: Indentation level of the definition
+
+        Returns:
+            Tuple of (collected lines, next index to process)
+        """
+        collected = []
+        i = start_idx
+        while i < len(lines):
+            next_line = lines[i]
+            next_indent = (
+                len(next_line) - len(next_line.lstrip())
+                if next_line.strip()
+                else base_indent + 1
+            )
+            # Continue if still inside the block or blank line
+            if not next_line.strip() or next_indent > base_indent:
+                collected.append(next_line)
+                i += 1
+            else:
+                break
+        return collected, i
+
     def chunk_python_file(self, content: str, file_path: str) -> List[Dict[str, Any]]:
-        """Chunk Python files by functions, classes, and logical blocks"""
+        """
+        Chunk Python files by functions, classes, and logical blocks.
+
+        Issue #665: Refactored to use _append_chunk_if_valid and _collect_definition_block.
+        """
         chunks = []
         lines = content.split("\n")
         current_chunk = []
         current_chunk_type = "general"
-        current_indent = 0
 
         i = 0
         while i < len(lines):
@@ -159,49 +219,24 @@ class CodeChunker:
 
             # Detect function or class definitions
             if stripped_line.startswith(_CODE_DEF_PREFIXES):
-                # Issue #281: Use helper to save previous chunk if it exists
+                # Save previous chunk if it exists (Issue #665: uses helper)
                 if current_chunk:
-                    chunk = self._create_chunk_dict(
-                        current_chunk,
-                        current_chunk_type,
-                        i - len(current_chunk) + 1,
-                        i,
+                    self._append_chunk_if_valid(
+                        chunks, current_chunk, current_chunk_type, i - len(current_chunk) + 1, i
                     )
-                    if chunk:
-                        chunks.append(chunk)
 
-                # Start new chunk
-                current_chunk = [line]
+                # Start new chunk and collect entire definition block
                 current_chunk_type = "function" if "def " in stripped_line else "class"
                 current_indent = len(line) - len(line.lstrip())
 
-                # Include the complete function/class
-                i += 1
-                while i < len(lines):
-                    next_line = lines[i]
-                    next_indent = (
-                        len(next_line) - len(next_line.lstrip())
-                        if next_line.strip()
-                        else current_indent + 1
-                    )
+                # Collect block using helper (Issue #665)
+                block_lines, i = self._collect_definition_block(lines, i + 1, current_indent)
+                full_block = [line] + block_lines
 
-                    # Continue if we're still inside the function/class or if it's a blank line
-                    if not next_line.strip() or next_indent > current_indent:
-                        current_chunk.append(next_line)
-                        i += 1
-                    else:
-                        break
-
-                # Issue #281: Use helper to save the function/class chunk
-                chunk = self._create_chunk_dict(
-                    current_chunk,
-                    current_chunk_type,
-                    i - len(current_chunk),
-                    i - 1,
+                # Save the function/class chunk (Issue #665: uses helper)
+                self._append_chunk_if_valid(
+                    chunks, full_block, current_chunk_type, i - len(full_block), i - 1
                 )
-                if chunk:
-                    chunks.append(chunk)
-
                 current_chunk = []
                 current_chunk_type = "general"
                 continue
@@ -210,28 +245,18 @@ class CodeChunker:
             current_chunk.append(line)
             i += 1
 
-            # Issue #281: Check if chunk is getting too large, use helper
+            # Check if chunk is too large (Issue #665: uses helper)
             if len("\n".join(current_chunk)) > self.max_chunk_size:
-                chunk = self._create_chunk_dict(
-                    current_chunk,
-                    current_chunk_type,
-                    i - len(current_chunk) + 1,
-                    i,
+                self._append_chunk_if_valid(
+                    chunks, current_chunk, current_chunk_type, i - len(current_chunk) + 1, i
                 )
-                if chunk:
-                    chunks.append(chunk)
                 current_chunk = []
 
-        # Issue #281: Use helper to save final chunk
+        # Save final chunk (Issue #665: uses helper)
         if current_chunk:
-            chunk = self._create_chunk_dict(
-                current_chunk,
-                current_chunk_type,
-                len(lines) - len(current_chunk) + 1,
-                len(lines),
+            self._append_chunk_if_valid(
+                chunks, current_chunk, current_chunk_type, len(lines) - len(current_chunk) + 1, len(lines)
             )
-            if chunk:
-                chunks.append(chunk)
 
         return chunks
 

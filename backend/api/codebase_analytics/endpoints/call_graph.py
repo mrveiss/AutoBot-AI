@@ -148,6 +148,54 @@ def _get_decorator_name(decorator) -> str:
     return "unknown"
 
 
+def _extract_callee_name(node) -> str | None:
+    """
+    Extract callee name from Call AST node.
+
+    Issue #665: Extracted from visit_Call to reduce nested class method size.
+
+    Args:
+        node: ast.Call node
+
+    Returns:
+        Callee name string or None if cannot be determined
+    """
+    if isinstance(node.func, ast.Name):
+        return node.func.id
+    elif isinstance(node.func, ast.Attribute):
+        return node.func.attr
+    return None
+
+
+def _build_call_edge(
+    caller_func: str,
+    callee_name: str,
+    callee_id: str | None,
+    line: int,
+) -> Dict:
+    """
+    Build call edge dictionary.
+
+    Issue #665: Extracted from visit_Call to reduce nested class method size.
+
+    Args:
+        caller_func: ID of the calling function
+        callee_name: Name of the called function
+        callee_id: Resolved ID of callee or None
+        line: Line number of the call
+
+    Returns:
+        Call edge dictionary
+    """
+    return {
+        "from": caller_func,
+        "to": callee_id or callee_name,
+        "to_name": callee_name,
+        "resolved": callee_id is not None,
+        "line": line,
+    }
+
+
 def _resolve_callee_id(
     callee_name: str,
     module_path: str,
@@ -283,28 +331,23 @@ def _create_function_visitor(functions: Dict, call_edges: List):
             self.current_function = old_function
 
         def visit_Call(self, node):
-            """Visit function call and record caller-callee relationship."""
+            """
+            Visit function call and record caller-callee relationship.
+
+            Issue #665: Refactored to use _extract_callee_name and _build_call_edge helpers.
+            """
             if not self.current_function:
                 self.generic_visit(node)
                 return
 
-            callee_name = None
-            if isinstance(node.func, ast.Name):
-                callee_name = node.func.id
-            elif isinstance(node.func, ast.Attribute):
-                callee_name = node.func.attr
-
+            callee_name = _extract_callee_name(node)
             if callee_name and callee_name not in BUILTIN_FUNCS:
                 callee_id = _resolve_callee_id(
                     callee_name, self.module_path, self.current_class, functions
                 )
-                call_edges.append({
-                    "from": self.current_function,
-                    "to": callee_id or callee_name,
-                    "to_name": callee_name,
-                    "resolved": callee_id is not None,
-                    "line": node.lineno,
-                })
+                call_edges.append(_build_call_edge(
+                    self.current_function, callee_name, callee_id, node.lineno
+                ))
 
             self.generic_visit(node)
 

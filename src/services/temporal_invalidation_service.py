@@ -430,13 +430,49 @@ class TemporalInvalidationService:
             return 0
         return await self._invalidate_facts(facts_to_invalidate, invalidation_reasons)
 
+    def _build_sweep_error_response(
+        self, message: str, processing_time: Optional[float] = None
+    ) -> Dict[str, Any]:
+        """
+        Build error response for invalidation sweep.
+
+        Issue #665: Extracted from run_invalidation_sweep to reduce function length.
+
+        Args:
+            message: Error message
+            processing_time: Optional processing time in seconds
+
+        Returns:
+            Error response dictionary
+        """
+        response: Dict[str, Any] = {"status": "error", "message": message}
+        if processing_time is not None:
+            response["processing_time"] = processing_time
+        return response
+
+    def _build_no_facts_response(self) -> Dict[str, Any]:
+        """
+        Build response for when no facts are found.
+
+        Issue #665: Extracted from run_invalidation_sweep to reduce function length.
+
+        Returns:
+            Success response with zero counts
+        """
+        return {
+            "status": "success",
+            "message": "No facts found to process",
+            "facts_processed": 0,
+            "facts_invalidated": 0,
+        }
+
     async def run_invalidation_sweep(
         self, source_filter: Optional[str] = None, dry_run: bool = False
     ) -> Dict[str, Any]:
         """
         Run a comprehensive invalidation sweep.
 
-        Issue #665: Refactored from 100 lines to use additional extracted helpers.
+        Issue #665: Refactored to use _build_sweep_error_response and _build_no_facts_response.
 
         Args:
             source_filter: Optional source filter
@@ -450,27 +486,19 @@ class TemporalInvalidationService:
 
         try:
             if not self.fact_extraction_service:
-                return {
-                    "status": "error",
-                    "message": "Fact extraction service not available",
-                }
+                return self._build_sweep_error_response("Fact extraction service not available")
 
             # Load rules and facts (Issue #665: uses helper)
             rules, all_facts = await self._load_rules_and_facts(source_filter)
 
             if not rules:
-                return {"status": "error", "message": "No invalidation rules available"}
+                return self._build_sweep_error_response("No invalidation rules available")
 
             enabled_rules = {k: v for k, v in rules.items() if v.enabled}
             logger.info("Using %s enabled invalidation rules", len(enabled_rules))
 
             if not all_facts:
-                return {
-                    "status": "success",
-                    "message": "No facts found to process",
-                    "facts_processed": 0,
-                    "facts_invalidated": 0,
-                }
+                return self._build_no_facts_response()
 
             logger.info("Processing %s active facts", len(all_facts))
 
@@ -515,11 +543,8 @@ class TemporalInvalidationService:
 
         except Exception as e:
             logger.error("Error in invalidation sweep: %s", e)
-            return {
-                "status": "error",
-                "message": str(e),
-                "processing_time": (datetime.now() - start_time).total_seconds(),
-            }
+            processing_time = (datetime.now() - start_time).total_seconds()
+            return self._build_sweep_error_response(str(e), processing_time)
 
     def _prepare_fact_for_invalidation(
         self, pipe, fact: AtomicFact, reasons: Dict[str, Dict[str, Any]]
