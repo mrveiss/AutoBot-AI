@@ -503,24 +503,43 @@ const relationCount = computed(() => graphEdges.value.length)
 // ============================================================================
 
 /**
+ * Gets a CSS variable value from the document root
+ * Issue #704: Use design tokens for theming
+ * @param name - CSS variable name (e.g., '--chart-blue')
+ * @param fallback - Fallback value if variable is not defined
+ * @returns The CSS variable value or fallback
+ */
+function getCssVar(name: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+}
+
+/**
  * Returns the color associated with an entity type for graph visualization
+ * Issue #704: Uses CSS design tokens for theming support
  * @param type - The entity type (e.g., 'conversation', 'bug_fix')
  * @returns Hex color code for the entity type, defaults to gray
  */
 function getNodeColor(type: string): string {
-  const colors: Record<string, string> = {
-    conversation: '#3b82f6',
-    bug_fix: '#ef4444',
-    feature: '#10b981',
-    decision: '#f59e0b',
-    task: '#8b5cf6',
-    user_preference: '#ec4899',
-    context: '#6366f1',
-    learning: '#14b8a6',
-    research: '#f97316',
-    implementation: '#06b6d4'
+  // Issue #704: Map entity types to design token colors
+  const colorMap: Record<string, string> = {
+    // Knowledge Base types
+    category: getCssVar('--color-primary', '#6366f1'),
+    fact: getCssVar('--color-success', '#10b981'),
+    // Memory entity types - using chart colors for variety
+    conversation: getCssVar('--chart-blue', '#3b82f6'),
+    bug_fix: getCssVar('--color-error', '#ef4444'),
+    feature: getCssVar('--chart-green', '#22c55e'),
+    decision: getCssVar('--color-warning', '#f59e0b'),
+    task: getCssVar('--chart-purple', '#8b5cf6'),
+    user_preference: getCssVar('--chart-pink', '#ec4899'),
+    context: getCssVar('--color-primary', '#6366f1'),
+    learning: getCssVar('--chart-teal', '#14b8a6'),
+    research: getCssVar('--chart-orange', '#f97316'),
+    implementation: getCssVar('--chart-cyan', '#06b6d4'),
+    chat_session: getCssVar('--chart-blue', '#3b82f6')
   }
-  return colors[type] || '#6b7280'
+  return colorMap[type] || getCssVar('--text-tertiary', '#6b7280')
 }
 
 /**
@@ -530,6 +549,10 @@ function getNodeColor(type: string): string {
  */
 function getEntityIcon(type: string): string {
   const icons: Record<string, string> = {
+    // Knowledge Base types
+    category: '📁',
+    fact: '💡',
+    // Memory entity types
     conversation: '💬',
     bug_fix: '🐛',
     feature: '✨',
@@ -539,7 +562,8 @@ function getEntityIcon(type: string): string {
     context: '📌',
     learning: '📚',
     research: '🔬',
-    implementation: '💻'
+    implementation: '💻',
+    chat_session: '💬'
   }
   return icons[type] || '📄'
 }
@@ -627,7 +651,19 @@ function initCytoscape(): void {
   logger.debug('Cytoscape initialized')
 }
 
+/**
+ * Returns Cytoscape graph styles using design tokens
+ * Issue #704: All colors now use CSS custom properties for theming
+ */
 function getCytoscapeStyles(): cytoscape.StylesheetStyle[] {
+  // Issue #704: Read colors from design tokens at style creation time
+  const textPrimary = getCssVar('--text-primary', '#e2e8f0')
+  const bgSecondary = getCssVar('--bg-secondary', '#1e293b')
+  const bgTertiary = getCssVar('--bg-tertiary', '#334155')
+  const textSecondary = getCssVar('--text-secondary', '#94a3b8')
+  const borderDefault = getCssVar('--border-default', '#64748b')
+  const colorWarning = getCssVar('--color-warning', '#fbbf24')
+
   return [
     {
       selector: 'node',
@@ -640,11 +676,11 @@ function getCytoscapeStyles(): cytoscape.StylesheetStyle[] {
         'text-valign': 'bottom',
         'text-halign': 'center',
         'text-margin-y': 8,
-        'color': '#e2e8f0',
-        'text-outline-color': '#1e293b',
+        'color': textPrimary,
+        'text-outline-color': bgSecondary,
         'text-outline-width': 2,
         'border-width': 2,
-        'border-color': '#334155',
+        'border-color': bgTertiary,
         'text-max-width': '100px',
         'text-wrap': 'ellipsis'
       }
@@ -660,7 +696,7 @@ function getCytoscapeStyles(): cytoscape.StylesheetStyle[] {
       selector: 'node.highlighted',
       style: {
         'border-width': 3,
-        'border-color': '#fbbf24'
+        'border-color': colorWarning
       }
     },
     {
@@ -673,16 +709,16 @@ function getCytoscapeStyles(): cytoscape.StylesheetStyle[] {
       selector: 'edge',
       style: {
         'width': 2,
-        'line-color': '#64748b',
-        'target-arrow-color': '#64748b',
+        'line-color': borderDefault,
+        'target-arrow-color': borderDefault,
         'target-arrow-shape': 'triangle',
         'curve-style': 'bezier',
         'label': 'data(label)',
         'font-size': '9px',
         'text-rotation': 'autorotate',
         'text-margin-y': -10,
-        'color': '#94a3b8',
-        'text-outline-color': '#1e293b',
+        'color': textSecondary,
+        'text-outline-color': bgSecondary,
         'text-outline-width': 1,
         'opacity': 0.6
       }
@@ -690,8 +726,8 @@ function getCytoscapeStyles(): cytoscape.StylesheetStyle[] {
     {
       selector: 'edge.highlighted',
       style: {
-        'line-color': '#fbbf24',
-        'target-arrow-color': '#fbbf24',
+        'line-color': colorWarning,
+        'target-arrow-color': colorWarning,
         'width': 3,
         'opacity': 1
       }
@@ -820,18 +856,35 @@ async function refreshGraph(): Promise<void> {
   errorMessage.value = ''
 
   try {
-    const entitiesResponse = await apiClient.get('/api/memory/entities/all')
-    const parsedResponse = await parseApiResponse(entitiesResponse)
+    // Fetch from unified knowledge graph endpoint (includes categories + facts)
+    const unifiedResponse = await apiClient.get('/api/knowledge/unified/graph?max_facts=100&include_categories=true')
+    const unifiedData = await parseApiResponse(unifiedResponse)
 
-    const entitiesData = parsedResponse?.data || parsedResponse
+    // Also fetch memory entities for backward compatibility
+    const memoryResponse = await apiClient.get('/api/memory/entities/all')
+    const memoryData = await parseApiResponse(memoryResponse)
 
-    if (entitiesData?.entities) {
-      entities.value = entitiesData.entities
-    } else if (Array.isArray(entitiesData)) {
-      entities.value = entitiesData
+    // Merge entities from both sources
+    const unifiedEntities = unifiedData?.data?.entities || []
+    const memoryEntities = memoryData?.data?.entities || memoryData?.entities || []
+
+    // Combine entities, avoiding duplicates by ID
+    const entityMap = new Map<string, Entity>()
+    for (const entity of [...unifiedEntities, ...memoryEntities]) {
+      if (entity.id && !entityMap.has(entity.id)) {
+        entityMap.set(entity.id, entity)
+      }
     }
+    entities.value = Array.from(entityMap.values())
 
-    await fetchRelations()
+    // Get relations from unified endpoint
+    const unifiedRelations = unifiedData?.data?.relations || []
+    relations.value = unifiedRelations
+
+    // Also fetch memory relations if we have memory entities
+    if (memoryEntities.length > 0) {
+      await fetchMemoryRelations(memoryEntities)
+    }
 
     // Wait for DOM to render the graph container (it's conditionally rendered)
     await nextTick()
@@ -849,6 +902,8 @@ async function refreshGraph(): Promise<void> {
       relations: relations.value.length
     })
 
+    logger.info(`Loaded unified graph: ${entities.value.length} entities, ${relations.value.length} relations`)
+
   } catch (error) {
     logger.error('Failed to fetch graph data:', error)
     errorMessage.value = error instanceof Error ? error.message : 'Failed to load graph'
@@ -858,15 +913,15 @@ async function refreshGraph(): Promise<void> {
 }
 
 /**
- * Fetches relations for all entities using parallel requests
+ * Fetches relations for memory entities using parallel requests
  * Uses Promise.allSettled to handle partial failures gracefully
  * Deduplicates relations to avoid duplicate edges in the graph
  */
-async function fetchRelations(): Promise<void> {
-  const allRelations: Relation[] = []
+async function fetchMemoryRelations(memoryEntities: Entity[]): Promise<void> {
+  const allRelations: Relation[] = [...relations.value] // Keep existing relations
 
   const relationResults = await Promise.allSettled(
-    entities.value.map(async (entity) => {
+    memoryEntities.map(async (entity) => {
       const response = await apiClient.get(`/api/memory/entities/${entity.id}/relations`)
       const parsedResponse = await parseApiResponse(response)
       return { entity, parsedResponse }
@@ -1157,12 +1212,17 @@ watch(layoutMode, () => {
 </script>
 
 <style scoped>
+/**
+ * Issue #704: CSS Design System - Using design tokens
+ * All colors reference CSS custom properties from design-tokens.css
+ */
 .knowledge-graph {
-  padding: 1.5rem;
+  padding: var(--spacing-lg);
   height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--spacing-md);
+  background: var(--bg-primary);
 }
 
 /* Header */
@@ -1170,52 +1230,53 @@ watch(layoutMode, () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .header-content h3 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #1f2937;
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-sm);
 }
 
 .header-content h3 i {
-  color: #667eea;
+  color: var(--color-primary);
 }
 
 .header-description {
-  color: #6b7280;
-  font-size: 0.875rem;
-  margin-top: 0.25rem;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  margin-top: var(--spacing-xs);
 }
 
 .header-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--spacing-sm);
 }
 
 /* Action Buttons */
 .action-btn {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  border: 1px solid #d1d5db;
-  background: white;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 500;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .action-btn:hover:not(:disabled) {
-  background: #f3f4f6;
-  border-color: #9ca3af;
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
 }
 
 .action-btn:disabled {
@@ -1224,43 +1285,43 @@ watch(layoutMode, () => {
 }
 
 .action-btn.primary {
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
   color: white;
   border-color: transparent;
 }
 
 .action-btn.primary:hover:not(:disabled) {
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: var(--shadow-primary);
 }
 
 .action-btn.refresh {
-  border-color: #667eea;
-  color: #667eea;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 .action-btn.cleanup {
-  border-color: #f59e0b;
-  color: #f59e0b;
+  border-color: var(--color-warning);
+  color: var(--color-warning);
 }
 
 .action-btn.cleanup:hover:not(:disabled) {
-  background: #fffbeb;
+  background: var(--color-warning-bg);
 }
 
 .action-btn.cleanup.active {
-  background: #f59e0b;
+  background: var(--color-warning);
   color: white;
 }
 
 /* Cleanup Panel */
 .cleanup-panel-wrapper {
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-md);
 }
 
 /* Slide down transition */
 .slide-down-enter-active,
 .slide-down-leave-active {
-  transition: all 0.3s ease;
+  transition: all var(--duration-300) ease;
   overflow: hidden;
 }
 
@@ -1282,31 +1343,32 @@ watch(layoutMode, () => {
 .error-notification {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-left: 4px solid #ef4444;
-  border-radius: 0.5rem;
-  color: #991b1b;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
+  border-left: 4px solid var(--color-error);
+  border-radius: var(--radius-md);
+  color: var(--color-error-text);
 }
 
 .error-notification i.fa-exclamation-circle {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .error-notification span {
   flex: 1;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .close-btn {
   background: none;
   border: none;
-  padding: 0.25rem;
+  padding: var(--spacing-xs);
   cursor: pointer;
+  color: var(--text-secondary);
   opacity: 0.7;
-  transition: opacity 0.2s;
+  transition: opacity var(--duration-200);
 }
 
 .close-btn:hover {
@@ -1317,23 +1379,24 @@ watch(layoutMode, () => {
 .graph-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: var(--spacing-md);
   align-items: center;
-  padding: 1rem;
-  background: #f9fafb;
-  border-radius: 0.75rem;
+  padding: var(--spacing-md);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
 }
 
 .control-group {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 }
 
 .control-group label {
-  font-size: 0.875rem;
-  color: #6b7280;
-  font-weight: 500;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  font-weight: var(--font-medium);
 }
 
 .search-group {
@@ -1341,59 +1404,65 @@ watch(layoutMode, () => {
   min-width: 200px;
   max-width: 300px;
   position: relative;
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  padding: 0.5rem 0.75rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm) var(--spacing-sm);
 }
 
 .search-group input {
   flex: 1;
   border: none;
   outline: none;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   width: 100%;
   background: transparent;
+  color: var(--text-primary);
+}
+
+.search-group input::placeholder {
+  color: var(--text-tertiary);
 }
 
 .search-group .clear-btn {
   position: absolute;
-  right: 0.5rem;
+  right: var(--spacing-sm);
   top: 50%;
   transform: translateY(-50%);
-  font-size: 0.75rem;
-  color: #9ca3af;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 
 .control-group select {
-  padding: 0.375rem 0.75rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  background: white;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
   cursor: pointer;
 }
 
 .stats-summary {
   margin-left: auto;
   display: flex;
-  gap: 1rem;
+  gap: var(--spacing-md);
 }
 
 .stats-summary .stat {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  color: #6b7280;
+  gap: var(--spacing-sm);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .node-icon {
-  color: #667eea;
+  color: var(--color-primary);
 }
 
 .edge-icon {
-  color: #9ca3af;
+  color: var(--text-tertiary);
 }
 
 /* Loading State */
@@ -1403,13 +1472,13 @@ watch(layoutMode, () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
-  color: #6b7280;
+  gap: var(--spacing-md);
+  color: var(--text-secondary);
 }
 
 .loading-state .spinner {
   font-size: 2rem;
-  color: #667eea;
+  color: var(--color-primary);
 }
 
 /* Empty State */
@@ -1419,8 +1488,8 @@ watch(layoutMode, () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
-  padding: 3rem;
+  gap: var(--spacing-md);
+  padding: var(--spacing-xl);
   text-align: center;
 }
 
@@ -1428,33 +1497,34 @@ watch(layoutMode, () => {
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea20, #764ba220);
+  background: linear-gradient(135deg, var(--color-primary-bg), var(--color-primary-bg-hover));
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 2rem;
-  color: #667eea;
+  color: var(--color-primary);
 }
 
 .empty-state h4 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #1f2937;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .empty-state p {
-  color: #6b7280;
-  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 /* Graph Container */
 .graph-container {
   flex: 1;
   position: relative;
-  background: var(--color-bg-tertiary, #0f172a);
-  border-radius: 0.75rem;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
   overflow: hidden;
   min-height: 500px;
+  border: 1px solid var(--border-subtle);
 }
 
 .cytoscape-container {
@@ -1469,39 +1539,40 @@ watch(layoutMode, () => {
 /* Zoom Controls */
 .zoom-controls {
   position: absolute;
-  bottom: 1rem;
-  right: 1rem;
+  bottom: var(--spacing-md);
+  right: var(--spacing-md);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  background: white;
-  padding: 0.5rem;
-  border-radius: 0.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  gap: var(--spacing-sm);
+  background: var(--bg-card);
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-subtle);
 }
 
 .zoom-controls button {
   width: 32px;
   height: 32px;
-  border: 1px solid #e5e7eb;
-  background: white;
-  border-radius: 0.375rem;
+  border: 1px solid var(--border-default);
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #6b7280;
-  transition: all 0.2s;
+  color: var(--text-secondary);
+  transition: all var(--duration-200);
 }
 
 .zoom-controls button:hover {
-  background: #f3f4f6;
-  color: #1f2937;
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .zoom-level {
-  font-size: 0.75rem;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
   min-width: 40px;
   text-align: center;
 }
@@ -1509,33 +1580,34 @@ watch(layoutMode, () => {
 /* Details Panel */
 .details-panel {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
+  top: var(--spacing-md);
+  right: var(--spacing-md);
   width: 320px;
   max-height: calc(100% - 2rem);
-  background: white;
-  border-radius: 0.75rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  border: 1px solid var(--border-subtle);
 }
 
 .panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  padding: var(--spacing-md);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
   color: white;
 }
 
 .panel-header h4 {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  font-size: 1rem;
-  font-weight: 600;
+  gap: var(--spacing-sm);
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
 }
 
 .entity-icon {
@@ -1553,57 +1625,58 @@ watch(layoutMode, () => {
 }
 
 .panel-content {
-  padding: 1rem;
+  padding: var(--spacing-md);
   overflow-y: auto;
   flex: 1;
 }
 
 .info-section {
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-md);
 }
 
 .info-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid #f3f4f6;
+  padding: var(--spacing-sm) 0;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .info-row label {
-  font-size: 0.75rem;
-  color: #6b7280;
-  font-weight: 500;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  font-weight: var(--font-medium);
 }
 
 .info-row code {
-  font-size: 0.75rem;
-  background: #f3f4f6;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
+  font-size: var(--text-xs);
+  background: var(--bg-secondary);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
 }
 
 .type-badge {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: white;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
 }
 
 .observations-section,
 .relations-section {
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-md);
 }
 
 .observations-section h5,
 .relations-section h5 {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 0.5rem;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-sm);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 }
 
 .observations-list {
@@ -1613,12 +1686,12 @@ watch(layoutMode, () => {
 }
 
 .observations-list li {
-  font-size: 0.8125rem;
-  color: #6b7280;
-  padding: 0.5rem;
-  background: #f9fafb;
-  border-radius: 0.375rem;
-  margin-bottom: 0.5rem;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  padding: var(--spacing-sm);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--spacing-sm);
 }
 
 .relations-list {
@@ -1630,91 +1703,93 @@ watch(layoutMode, () => {
 .relations-list li {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8125rem;
-  padding: 0.5rem;
-  background: #f9fafb;
-  border-radius: 0.375rem;
-  margin-bottom: 0.5rem;
+  gap: var(--spacing-sm);
+  font-size: var(--text-sm);
+  padding: var(--spacing-sm);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--spacing-sm);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background var(--duration-200);
 }
 
 .relations-list li:hover {
-  background: #e5e7eb;
+  background: var(--bg-hover);
 }
 
 .relation-type {
-  background: #667eea20;
-  color: #667eea;
-  padding: 0.125rem 0.5rem;
-  border-radius: 0.25rem;
-  font-size: 0.75rem;
-  font-weight: 500;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  padding: 2px var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
 }
 
 .relation-target {
-  color: #374151;
+  color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--spacing-xs);
 }
 
 .relation-target i {
-  font-size: 0.625rem;
-  color: #9ca3af;
+  font-size: 10px;
+  color: var(--text-tertiary);
 }
 
 .panel-actions {
   display: flex;
-  gap: 0.5rem;
-  padding-top: 1rem;
-  border-top: 1px solid #f3f4f6;
+  gap: var(--spacing-sm);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .panel-actions .action-btn {
   flex: 1;
   justify-content: center;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 /* Modal */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--overlay-bg);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .modal-content {
-  background: white;
-  border-radius: 0.75rem;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
   width: 90%;
   max-width: 480px;
   max-height: 90vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-xl);
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
   color: white;
 }
 
 .modal-header h4 {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  font-size: 1.125rem;
-  font-weight: 600;
+  gap: var(--spacing-sm);
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
 }
 
 .modal-header .close-btn {
@@ -1722,87 +1797,91 @@ watch(layoutMode, () => {
 }
 
 .entity-form {
-  padding: 1.5rem;
+  padding: var(--spacing-lg);
 }
 
 .form-group {
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-md);
 }
 
 .form-group label {
   display: block;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #374151;
-  margin-bottom: 0.375rem;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-xs);
 }
 
 .form-group input,
 .form-group select,
 .form-group textarea {
   width: 100%;
-  padding: 0.625rem 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  transition: border-color 0.2s;
+  padding: var(--spacing-sm) var(--spacing-sm);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  transition: border-color var(--duration-200);
 }
 
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus);
 }
 
 .form-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 1.5rem;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-lg);
 }
 
 /* Legend */
 .graph-legend {
-  padding: 1rem;
-  background: white;
-  border-radius: 0.75rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: var(--spacing-md);
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-subtle);
 }
 
 .graph-legend h5 {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 0.75rem;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-sm);
 }
 
 .legend-items {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: var(--spacing-sm);
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.75rem;
-  background: #f9fafb;
-  border-radius: 1rem;
-  font-size: 0.75rem;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
+  border: 1px solid transparent;
 }
 
 .legend-item:hover {
-  background: #f3f4f6;
+  background: var(--bg-hover);
 }
 
 .legend-item.active {
-  background: #667eea20;
-  border: 1px solid #667eea;
+  background: var(--color-primary-bg);
+  border-color: var(--color-primary);
 }
 
 .legend-color {
@@ -1812,13 +1891,13 @@ watch(layoutMode, () => {
 }
 
 .legend-label {
-  color: #374151;
+  color: var(--text-primary);
 }
 
 /* Transitions */
 .slide-enter-active,
 .slide-leave-active {
-  transition: all 0.3s ease;
+  transition: all var(--duration-300) ease;
 }
 
 .slide-enter-from,
@@ -1831,7 +1910,7 @@ watch(layoutMode, () => {
 @media (max-width: 768px) {
   .graph-header {
     flex-direction: column;
-    gap: 1rem;
+    gap: var(--spacing-md);
     align-items: flex-start;
   }
 
@@ -1856,7 +1935,7 @@ watch(layoutMode, () => {
     bottom: 0;
     right: 0;
     left: 0;
-    border-radius: 0.75rem 0.75rem 0 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     max-height: 50%;
   }
 }
@@ -1870,10 +1949,10 @@ watch(layoutMode, () => {
   bottom: 0 !important;
   width: 100vw !important;
   height: 100vh !important;
-  z-index: 9999 !important;
+  z-index: var(--z-maximum) !important;
   border-radius: 0 !important;
   margin: 0 !important;
-  background: white;
+  background: var(--bg-primary);
 }
 
 .knowledge-graph.fullscreen .graph-container {
@@ -1886,7 +1965,7 @@ watch(layoutMode, () => {
 }
 
 .control-separator {
-  color: #d1d5db;
+  color: var(--border-default);
   font-size: 14px;
   margin: 0 4px;
 }

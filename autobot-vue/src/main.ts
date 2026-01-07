@@ -16,9 +16,18 @@ import '@fontsource/inter/latin-400.css'
 import '@fontsource/inter/latin-500.css'
 import '@fontsource/inter/latin-600.css'
 import '@fontsource/inter/latin-700.css'
-// Import centralized theme system (Issue #548)
+
+// Import CSS Design System (Issue #704) - SSOT for all design tokens
+// This provides centralized theming with dark/light mode support
+import './assets/css/index.css'
+
+// Import legacy theme system (Issue #548) - will be migrated to design system
 import './assets/styles/theme.css'
 import './assets/styles/view.css'
+
+// Initialize theme early to prevent flash of unstyled content
+import { initializeTheme } from '@/composables/useTheme'
+initializeTheme()
 // Import xterm CSS globally to avoid dependency resolution issues
 import '@xterm/xterm/css/xterm.css'
 

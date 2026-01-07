@@ -94,12 +94,22 @@ const hasData = computed(() => {
   })
 })
 
-// AutoBot dark theme colors (cast as any to allow extended ApexCharts options)
+/**
+ * Get CSS variable value from the document
+ * Issue #704: Use design tokens for theming
+ */
+const getCssVar = (name: string, fallback: string): string => {
+  if (typeof document === 'undefined') return fallback
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+}
+
+// AutoBot theme colors using CSS custom properties (Issue #704)
+// These values are read from design-tokens.css and adapt to dark/light theme
 const darkTheme: any = {
   chart: {
     background: 'transparent',
-    foreColor: '#e2e8f0',
-    fontFamily: 'Inter, system-ui, sans-serif',
+    foreColor: getCssVar('--text-primary', '#e2e8f0'),
+    fontFamily: getCssVar('--font-sans', 'Inter, system-ui, sans-serif'),
     toolbar: {
       show: true,
       tools: {
@@ -134,21 +144,22 @@ const darkTheme: any = {
     mode: 'dark',
     palette: 'palette1'
   },
+  // Chart colors from design tokens (Issue #704)
   colors: [
-    '#3b82f6', // Blue (primary)
-    '#10b981', // Green (success)
-    '#f59e0b', // Amber (warning)
-    '#ef4444', // Red (error)
-    '#8b5cf6', // Purple
-    '#06b6d4', // Cyan
-    '#ec4899', // Pink
-    '#f97316', // Orange
-    '#84cc16', // Lime
-    '#6366f1'  // Indigo
+    getCssVar('--chart-blue', '#3b82f6'),
+    getCssVar('--chart-green', '#22c55e'),
+    getCssVar('--chart-yellow', '#f59e0b'),
+    getCssVar('--chart-red', '#ef4444'),
+    getCssVar('--chart-purple', '#8b5cf6'),
+    getCssVar('--chart-cyan', '#06b6d4'),
+    getCssVar('--chart-pink', '#ec4899'),
+    getCssVar('--chart-orange', '#f97316'),
+    getCssVar('--chart-teal', '#14b8a6'),
+    getCssVar('--chart-indigo', '#6366f1')
   ],
   grid: {
     show: true,
-    borderColor: '#334155',
+    borderColor: getCssVar('--bg-tertiary', '#334155'),
     strokeDashArray: 3,
     position: 'back',
     xaxis: {
@@ -171,23 +182,23 @@ const darkTheme: any = {
   xaxis: {
     labels: {
       style: {
-        colors: '#94a3b8',
+        colors: getCssVar('--text-secondary', '#94a3b8'),
         fontSize: '12px'
       }
     },
     axisBorder: {
       show: true,
-      color: '#475569'
+      color: getCssVar('--border-default', '#475569')
     },
     axisTicks: {
       show: true,
-      color: '#475569'
+      color: getCssVar('--border-default', '#475569')
     }
   },
   yaxis: {
     labels: {
       style: {
-        colors: '#94a3b8',
+        colors: getCssVar('--text-secondary', '#94a3b8'),
         fontSize: '12px'
       }
     }
@@ -429,13 +440,17 @@ watch(
 </script>
 
 <style scoped>
+/**
+ * Issue #704: CSS Design System - Using design tokens
+ * All colors reference CSS custom properties from design-tokens.css
+ */
 .base-chart {
   position: relative;
   width: 100%;
-  background: rgba(30, 41, 59, 0.5);
-  border-radius: 8px;
-  padding: 16px;
-  border: 1px solid rgba(71, 85, 105, 0.5);
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  border: 1px solid var(--border-subtle);
 }
 
 .chart-loading {
@@ -443,22 +458,22 @@ watch(
 }
 
 .chart-header {
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid rgba(71, 85, 105, 0.5);
+  margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .chart-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #e2e8f0;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
   margin: 0;
 }
 
 .chart-subtitle {
-  font-size: 12px;
-  color: #94a3b8;
-  margin-top: 4px;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-top: var(--spacing-1);
   display: block;
 }
 
@@ -470,8 +485,8 @@ watch(
   align-items: center;
   justify-content: center;
   min-height: 200px;
-  gap: 12px;
-  color: #94a3b8;
+  gap: var(--spacing-sm);
+  color: var(--text-secondary);
 }
 
 .chart-loading-overlay i,
@@ -481,33 +496,33 @@ watch(
 }
 
 .chart-error {
-  color: #f87171;
+  color: var(--color-error-light);
 }
 
 .chart-error i {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .chart-no-data i {
-  color: #64748b;
+  color: var(--text-tertiary);
 }
 
-/* Deep styles for ApexCharts */
+/* Deep styles for ApexCharts - using design tokens */
 :deep(.apexcharts-canvas) {
   background: transparent !important;
 }
 
 :deep(.apexcharts-tooltip) {
-  background: #1e293b !important;
-  border: 1px solid #475569 !important;
-  border-radius: 6px !important;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3) !important;
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border-default) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-lg) !important;
 }
 
 :deep(.apexcharts-tooltip-title) {
-  background: #334155 !important;
-  border-bottom: 1px solid #475569 !important;
-  color: #e2e8f0 !important;
+  background: var(--bg-tertiary) !important;
+  border-bottom: 1px solid var(--border-default) !important;
+  color: var(--text-primary) !important;
 }
 
 :deep(.apexcharts-tooltip-series-group) {
@@ -515,27 +530,27 @@ watch(
 }
 
 :deep(.apexcharts-tooltip-text) {
-  color: #e2e8f0 !important;
+  color: var(--text-primary) !important;
 }
 
 :deep(.apexcharts-xaxistooltip),
 :deep(.apexcharts-yaxistooltip) {
-  background: #1e293b !important;
-  border: 1px solid #475569 !important;
-  color: #e2e8f0 !important;
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border-default) !important;
+  color: var(--text-primary) !important;
 }
 
 :deep(.apexcharts-menu) {
-  background: #1e293b !important;
-  border: 1px solid #475569 !important;
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border-default) !important;
 }
 
 :deep(.apexcharts-menu-item:hover) {
-  background: #334155 !important;
+  background: var(--bg-tertiary) !important;
 }
 
 :deep(.apexcharts-toolbar) {
-  z-index: 10;
+  z-index: var(--z-10);
 }
 
 :deep(.apexcharts-zoom-icon),
@@ -545,7 +560,7 @@ watch(
 :deep(.apexcharts-pan-icon),
 :deep(.apexcharts-selection-icon),
 :deep(.apexcharts-menu-icon) {
-  color: #94a3b8 !important;
+  color: var(--text-secondary) !important;
 }
 
 :deep(.apexcharts-zoom-icon:hover),
@@ -555,12 +570,12 @@ watch(
 :deep(.apexcharts-pan-icon:hover),
 :deep(.apexcharts-selection-icon:hover),
 :deep(.apexcharts-menu-icon:hover) {
-  color: #e2e8f0 !important;
+  color: var(--text-primary) !important;
 }
 
 :deep(.apexcharts-zoom-icon.apexcharts-selected),
 :deep(.apexcharts-pan-icon.apexcharts-selected),
 :deep(.apexcharts-selection-icon.apexcharts-selected) {
-  color: #3b82f6 !important;
+  color: var(--color-primary) !important;
 }
 </style>

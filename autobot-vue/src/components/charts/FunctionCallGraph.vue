@@ -500,7 +500,27 @@ function initCytoscape() {
   })
 }
 
+/**
+ * Gets a CSS variable value from the document root
+ * Issue #704: Use design tokens for theming
+ */
+function getCssVar(name: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+}
+
+/**
+ * Returns Cytoscape graph styles using design tokens
+ * Issue #704: All colors now use CSS custom properties for theming
+ */
 function getCytoscapeStyles(): cytoscape.StylesheetStyle[] {
+  // Issue #704: Read colors from design tokens at style creation time
+  const textPrimary = getCssVar('--text-primary', '#e2e8f0')
+  const bgSecondary = getCssVar('--bg-secondary', '#1e293b')
+  const bgTertiary = getCssVar('--bg-tertiary', '#334155')
+  const colorPrimary = getCssVar('--color-primary', '#3b82f6')
+  const colorSuccess = getCssVar('--color-success', '#10b981')
+
   return [
     {
       selector: 'node',
@@ -513,11 +533,11 @@ function getCytoscapeStyles(): cytoscape.StylesheetStyle[] {
         'text-valign': 'bottom',
         'text-halign': 'center',
         'text-margin-y': 6,
-        'color': '#e2e8f0',
-        'text-outline-color': '#1e293b',
+        'color': textPrimary,
+        'text-outline-color': bgSecondary,
         'text-outline-width': 2,
         'border-width': 2,
-        'border-color': '#334155',
+        'border-color': bgTertiary,
         'text-max-width': '80px',
         'text-wrap': 'ellipsis'
       }
@@ -526,14 +546,14 @@ function getCytoscapeStyles(): cytoscape.StylesheetStyle[] {
       selector: 'node:selected',
       style: {
         'border-width': 3,
-        'border-color': '#3b82f6'
+        'border-color': colorPrimary
       }
     },
     {
       selector: 'node.highlighted',
       style: {
         'border-width': 3,
-        'border-color': '#10b981'
+        'border-color': colorSuccess
       }
     },
     {
@@ -558,8 +578,8 @@ function getCytoscapeStyles(): cytoscape.StylesheetStyle[] {
       style: {
         'opacity': 1,
         'width': 3,
-        'line-color': '#10b981',
-        'target-arrow-color': '#10b981'
+        'line-color': colorSuccess,
+        'target-arrow-color': colorSuccess
       }
     },
     {
@@ -584,19 +604,19 @@ function updateCytoscapeElements() {
     const totalCalls = outgoing + incoming
     const size = 20 + Math.min(totalCalls * 2, 30)
 
-    // Color based on call ratio
-    let color = '#6b7280' // Default gray
+    // Issue #704: Color based on call ratio - using design tokens
+    let color = getCssVar('--text-tertiary', '#6b7280') // Default gray
     if (outgoing > incoming) {
-      color = '#10b981' // Green for callers
+      color = getCssVar('--color-success', '#10b981') // Green for callers
     } else if (incoming > outgoing) {
-      color = '#8b5cf6' // Purple for called
+      color = getCssVar('--chart-purple', '#8b5cf6') // Purple for called
     } else if (totalCalls > 0) {
-      color = '#3b82f6' // Blue for balanced
+      color = getCssVar('--color-primary', '#3b82f6') // Blue for balanced
     }
 
     // Async functions get special color
     if (node.is_async) {
-      color = '#f59e0b'
+      color = getCssVar('--color-warning', '#f59e0b')
     }
 
     elements.push({
@@ -618,7 +638,10 @@ function updateCytoscapeElements() {
       const target = edge.to || edge.target
 
       if (source && target && nodeIds.has(source) && nodeIds.has(target)) {
-        const edgeColor = edge.resolved === false ? '#fb923c' : '#64748b'
+        // Issue #704: Edge colors using design tokens
+        const edgeColor = edge.resolved === false
+          ? getCssVar('--chart-orange', '#fb923c')
+          : getCssVar('--text-tertiary', '#64748b')
         const edgeWidth = Math.min(1 + (edge.count || 1) * 0.5, 5)
 
         elements.push({
@@ -784,8 +807,8 @@ function getClusterCytoscapeStyles(): cytoscape.StylesheetStyle[] {
         'text-valign': 'bottom',
         'text-halign': 'center',
         'text-margin-y': 8,
-        'color': '#e2e8f0',
-        'text-outline-color': '#1e293b',
+        'color': getCssVar('--text-secondary', '#e2e8f0'),
+        'text-outline-color': getCssVar('--bg-secondary', '#1e293b'),
         'text-outline-width': 2,
         'border-width': 3,
         'border-color': 'data(borderColor)',
@@ -797,14 +820,14 @@ function getClusterCytoscapeStyles(): cytoscape.StylesheetStyle[] {
       selector: 'node:selected',
       style: {
         'border-width': 4,
-        'border-color': '#ffffff'
+        'border-color': getCssVar('--text-primary', '#ffffff')
       }
     },
     {
       selector: 'node.highlighted',
       style: {
         'border-width': 4,
-        'border-color': '#fbbf24'
+        'border-color': getCssVar('--color-warning-light', '#fbbf24')
       }
     },
     {
@@ -829,8 +852,8 @@ function getClusterCytoscapeStyles(): cytoscape.StylesheetStyle[] {
       style: {
         'opacity': 1,
         'width': 4,
-        'line-color': '#fbbf24',
-        'target-arrow-color': '#fbbf24'
+        'line-color': getCssVar('--color-warning-light', '#fbbf24'),
+        'target-arrow-color': getCssVar('--color-warning-light', '#fbbf24')
       }
     },
     {
@@ -878,18 +901,18 @@ function updateClusterElements() {
     )
     const size = 30 + (maxCount / maxPossible) * 40
 
-    // Color based on type
+    // Issue #704: Color based on type - using design tokens
     let color: string
     let borderColor: string
     if (isHub) {
-      color = '#f59e0b' // Amber for hubs (both caller and called)
-      borderColor = '#fbbf24'
+      color = getCssVar('--color-warning', '#f59e0b') // Amber for hubs (both caller and called)
+      borderColor = getCssVar('--color-warning-light', '#fbbf24')
     } else if (isCaller) {
-      color = '#10b981' // Green for callers
-      borderColor = '#34d399'
+      color = getCssVar('--color-success', '#10b981') // Green for callers
+      borderColor = getCssVar('--color-success-light', '#34d399')
     } else {
-      color = '#8b5cf6' // Purple for called
-      borderColor = '#a78bfa'
+      color = getCssVar('--chart-purple', '#8b5cf6') // Purple for called
+      borderColor = getCssVar('--chart-purple-light', '#a78bfa')
     }
 
     // Get short name for label
@@ -918,7 +941,10 @@ function updateClusterElements() {
 
       if (source && target && allFunctions.has(source) && allFunctions.has(target)) {
         const edgeWidth = Math.min(1 + (edge.count || 1) * 0.5, 5)
-        const edgeColor = edge.resolved === false ? '#fb923c' : '#64748b'
+        // Issue #704: Edge colors using design tokens
+        const edgeColor = edge.resolved === false
+          ? getCssVar('--chart-orange', '#fb923c')
+          : getCssVar('--text-tertiary', '#64748b')
 
         elements.push({
           data: {
@@ -1138,27 +1164,31 @@ watch(viewMode, async (newMode) => {
 </script>
 
 <style scoped>
+/**
+ * Issue #704: CSS Design System - Using design tokens
+ * All colors reference CSS custom properties from design-tokens.css
+ */
 .function-call-graph {
-  background: var(--color-bg-secondary, #1e293b);
-  border-radius: 12px;
-  padding: 20px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
   position: relative;
 }
 
 .chart-header {
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-md);
 }
 
 .chart-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-text-primary, #e2e8f0);
-  margin: 0 0 4px 0;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-1) 0;
 }
 
 .chart-subtitle {
-  font-size: 12px;
-  color: var(--color-text-secondary, #94a3b8);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .chart-loading-overlay,
@@ -1169,15 +1199,15 @@ watch(viewMode, async (newMode) => {
   align-items: center;
   justify-content: center;
   min-height: 200px;
-  color: var(--color-text-secondary, #94a3b8);
-  gap: 12px;
+  color: var(--text-secondary);
+  gap: var(--spacing-sm);
 }
 
 .loading-spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid var(--color-border, #475569);
-  border-top-color: var(--color-primary, #3b82f6);
+  border: 3px solid var(--border-default);
+  border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -1192,11 +1222,11 @@ watch(viewMode, async (newMode) => {
   justify-content: center;
   width: 40px;
   height: 40px;
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
+  background: var(--color-error-bg);
+  color: var(--color-error);
   border-radius: 50%;
-  font-size: 20px;
-  font-weight: bold;
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
 }
 
 .graph-container {
@@ -1207,18 +1237,18 @@ watch(viewMode, async (newMode) => {
 .graph-controls {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
 }
 
 .graph-search,
 .module-filter {
-  padding: 8px 12px;
-  background: var(--color-bg-tertiary, #0f172a);
-  border: 1px solid var(--color-border, #334155);
-  border-radius: 6px;
-  color: var(--color-text-primary, #e2e8f0);
-  font-size: 13px;
+  padding: var(--spacing-2) var(--spacing-3);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
 }
 
 .graph-search {
@@ -1232,37 +1262,38 @@ watch(viewMode, async (newMode) => {
 .graph-search:focus,
 .module-filter:focus {
   outline: none;
-  border-color: var(--color-primary, #3b82f6);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus);
 }
 
 .view-toggle {
   display: flex;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .view-toggle button {
-  padding: 8px 12px;
-  background: var(--color-bg-tertiary, #0f172a);
-  border: 1px solid var(--color-border, #334155);
-  border-radius: 6px;
-  color: var(--color-text-secondary, #94a3b8);
+  padding: var(--spacing-2) var(--spacing-3);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) ease;
 }
 
 .view-toggle button.active {
-  background: var(--color-primary, #3b82f6);
-  color: white;
-  border-color: var(--color-primary, #3b82f6);
+  background: var(--color-primary);
+  color: var(--text-on-primary);
+  border-color: var(--color-primary);
 }
 
 .stats-bar {
   display: flex;
-  gap: 24px;
-  margin-bottom: 16px;
-  padding: 12px 16px;
-  background: var(--color-bg-tertiary, #0f172a);
-  border-radius: 8px;
+  gap: var(--spacing-xl);
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-3) var(--spacing-4);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
 }
 
 .stat {
@@ -1271,14 +1302,14 @@ watch(viewMode, async (newMode) => {
 }
 
 .stat-value {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--color-primary, #3b82f6);
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--color-primary);
 }
 
 .stat-label {
-  font-size: 11px;
-  color: var(--color-text-tertiary, #64748b);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
   text-transform: uppercase;
 }
 
@@ -1286,41 +1317,41 @@ watch(viewMode, async (newMode) => {
 .stat-resolved,
 .stat-unresolved {
   cursor: pointer;
-  padding: 8px 12px;
-  border-radius: 6px;
-  transition: all 0.2s ease;
+  padding: var(--spacing-2) var(--spacing-3);
+  border-radius: var(--radius-md);
+  transition: all var(--duration-200) ease;
   border: 1px solid transparent;
 }
 
 .stat-resolved:hover,
 .stat-unresolved:hover {
-  background: rgba(59, 130, 246, 0.1);
+  background: var(--color-primary-bg);
 }
 
 .stat-resolved.active {
-  background: rgba(16, 185, 129, 0.15);
-  border-color: rgba(16, 185, 129, 0.3);
+  background: var(--color-success-bg);
+  border-color: var(--color-success-border);
 }
 
 .stat-resolved.active .stat-value {
-  color: #10b981;
+  color: var(--color-success);
 }
 
 .stat-resolved.active .stat-label {
-  color: #34d399;
+  color: var(--color-success-light);
 }
 
 .stat-unresolved.active {
-  background: rgba(251, 146, 60, 0.15);
-  border-color: rgba(251, 146, 60, 0.3);
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
 }
 
 .stat-unresolved.active .stat-value {
-  color: #fb923c;
+  color: var(--color-warning);
 }
 
 .stat-unresolved.active .stat-label {
-  color: #fdba74;
+  color: var(--color-warning-light);
 }
 
 /* Network View (Cytoscape) */
@@ -1328,8 +1359,8 @@ watch(viewMode, async (newMode) => {
   flex: 1;
   position: relative;
   min-height: 400px;
-  background: var(--color-bg-tertiary, #0f172a);
-  border-radius: 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
@@ -1341,40 +1372,40 @@ watch(viewMode, async (newMode) => {
 
 .network-controls {
   position: absolute;
-  bottom: 12px;
-  right: 12px;
+  bottom: var(--spacing-3);
+  right: var(--spacing-3);
   display: flex;
   align-items: center;
-  gap: 6px;
-  background: var(--color-bg-secondary, #1e293b);
-  padding: 6px 10px;
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  gap: var(--spacing-1);
+  background: var(--bg-secondary);
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
 }
 
 .network-controls button {
   width: 28px;
   height: 28px;
-  border: 1px solid var(--color-border, #334155);
-  background: var(--color-bg-tertiary, #0f172a);
-  border-radius: 4px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-text-secondary, #94a3b8);
-  transition: all 0.2s;
+  color: var(--text-secondary);
+  transition: all var(--duration-200);
 }
 
 .network-controls button:hover {
-  background: var(--color-primary, #3b82f6);
-  color: white;
-  border-color: var(--color-primary, #3b82f6);
+  background: var(--color-primary);
+  color: var(--text-on-primary);
+  border-color: var(--color-primary);
 }
 
 .zoom-level {
-  font-size: 11px;
-  color: var(--color-text-tertiary, #64748b);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
   min-width: 36px;
   text-align: center;
 }
@@ -1388,154 +1419,154 @@ watch(viewMode, async (newMode) => {
 .function-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .function-item {
-  background: var(--color-bg-tertiary, #0f172a);
-  border-radius: 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
 .func-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-3);
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background var(--duration-200) ease;
 }
 
 .func-header:hover {
-  background: rgba(59, 130, 246, 0.1);
+  background: var(--color-primary-bg);
 }
 
 .function-item.expanded > .func-header {
-  background: rgba(59, 130, 246, 0.15);
+  background: var(--color-primary-bg-hover);
 }
 
 .expand-icon {
   width: 16px;
-  font-size: 10px;
-  color: var(--color-text-tertiary, #64748b);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 
 .async-badge {
-  padding: 2px 6px;
-  font-size: 10px;
-  background: rgba(139, 92, 246, 0.2);
-  color: #a78bfa;
-  border-radius: 4px;
+  padding: var(--spacing-px) var(--spacing-1);
+  font-size: var(--text-xs);
+  background: var(--chart-purple-bg);
+  color: var(--chart-purple-light);
+  border-radius: var(--radius-sm);
 }
 
 .class-badge {
-  padding: 2px 6px;
-  font-size: 10px;
-  background: rgba(16, 185, 129, 0.2);
-  color: #34d399;
-  border-radius: 4px;
+  padding: var(--spacing-px) var(--spacing-1);
+  font-size: var(--text-xs);
+  background: var(--color-success-bg);
+  color: var(--color-success-light);
+  border-radius: var(--radius-sm);
 }
 
 .func-name {
   flex: 1;
-  font-family: 'Fira Code', 'Monaco', monospace;
-  font-size: 13px;
-  color: var(--color-text-primary, #e2e8f0);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
 }
 
 .call-counts {
   display: flex;
-  gap: 8px;
-  font-size: 12px;
+  gap: var(--spacing-2);
+  font-size: var(--text-xs);
 }
 
 .call-counts .outgoing {
-  color: #10b981;
+  color: var(--color-success);
 }
 
 .call-counts .incoming {
-  color: #8b5cf6;
+  color: var(--chart-purple);
 }
 
 .func-details {
-  padding: 12px;
-  border-top: 1px solid var(--color-border, #334155);
-  background: rgba(30, 41, 59, 0.5);
+  padding: var(--spacing-3);
+  border-top: 1px solid var(--border-default);
+  background: var(--bg-secondary-alpha);
 }
 
 .func-location {
-  font-size: 12px;
-  color: var(--color-text-secondary, #94a3b8);
-  margin-bottom: 12px;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-3);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .calls-section {
-  margin-top: 12px;
+  margin-top: var(--spacing-3);
 }
 
 .section-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-secondary, #94a3b8);
-  margin-bottom: 8px;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-2);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1);
 }
 
 .section-label .arrow {
-  color: #10b981;
+  color: var(--color-success);
 }
 
 .call-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  padding-left: 16px;
+  gap: var(--spacing-1);
+  padding-left: var(--spacing-4);
 }
 
 .call-item {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  background: rgba(51, 65, 85, 0.5);
-  border-radius: 4px;
-  font-size: 12px;
+  gap: var(--spacing-1);
+  padding: var(--spacing-1) var(--spacing-2);
+  background: var(--bg-tertiary-alpha);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
 }
 
 .call-item.resolved {
-  color: #e2e8f0;
+  color: var(--text-primary);
 }
 
 .call-item.unresolved {
-  color: #94a3b8;
-  border: 1px dashed #475569;
+  color: var(--text-secondary);
+  border: 1px dashed var(--border-default);
 }
 
 .call-name {
-  font-family: 'Fira Code', 'Monaco', monospace;
+  font-family: var(--font-mono);
 }
 
 .call-count {
-  color: #60a5fa;
-  font-size: 10px;
+  color: var(--chart-blue-light);
+  font-size: var(--text-xs);
 }
 
 .unresolved-badge {
   font-size: 9px;
-  padding: 1px 4px;
-  background: rgba(251, 146, 60, 0.2);
-  color: #fb923c;
+  padding: 1px var(--spacing-1);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
   border-radius: 3px;
 }
 
 .more-calls {
-  font-size: 11px;
-  color: var(--color-text-tertiary, #64748b);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
   font-style: italic;
 }
 
@@ -1551,30 +1582,30 @@ watch(viewMode, async (newMode) => {
 .graph-info {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
-  background: rgba(59, 130, 246, 0.1);
-  border-radius: 8px;
-  margin-bottom: 12px;
-  font-size: 13px;
-  color: #60a5fa;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3);
+  background: var(--color-info-bg);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-3);
+  font-size: var(--text-sm);
+  color: var(--color-info);
 }
 
 .cluster-legend {
   display: flex;
-  gap: 20px;
-  margin-bottom: 12px;
-  padding: 8px 12px;
-  background: var(--color-bg-tertiary, #0f172a);
-  border-radius: 6px;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-3);
+  padding: var(--spacing-2) var(--spacing-3);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--color-text-secondary, #94a3b8);
+  gap: var(--spacing-1);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .legend-item .dot {
@@ -1584,69 +1615,69 @@ watch(viewMode, async (newMode) => {
 }
 
 .legend-item.caller .dot {
-  background: #10b981;
-  border: 2px solid #34d399;
+  background: var(--color-success);
+  border: 2px solid var(--color-success-light);
 }
 
 .legend-item.called .dot {
-  background: #8b5cf6;
-  border: 2px solid #a78bfa;
+  background: var(--chart-purple);
+  border: 2px solid var(--chart-purple-light);
 }
 
 .legend-item.hub .dot {
-  background: #f59e0b;
-  border: 2px solid #fbbf24;
+  background: var(--color-warning);
+  border: 2px solid var(--color-warning-light);
 }
 
 .cluster-container {
   flex: 1;
   min-height: 350px;
-  background: var(--color-bg-tertiary, #0f172a);
-  border-radius: 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
 .cluster-controls {
   position: absolute;
-  bottom: 12px;
-  right: 12px;
+  bottom: var(--spacing-3);
+  right: var(--spacing-3);
 }
 
 .control-separator {
-  color: var(--color-border, #334155);
-  font-size: 14px;
+  color: var(--border-default);
+  font-size: var(--text-sm);
 }
 
 /* Node Detail Panel */
 .node-detail-panel {
   position: absolute;
-  top: 12px;
-  left: 12px;
+  top: var(--spacing-3);
+  left: var(--spacing-3);
   width: 320px;
   max-width: calc(100% - 24px);
-  background: var(--color-bg-secondary, #1e293b);
-  border: 1px solid var(--color-border, #334155);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  z-index: 10;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-10);
   overflow: hidden;
 }
 
 .detail-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 14px;
-  background: var(--color-bg-tertiary, #0f172a);
-  border-bottom: 1px solid var(--color-border, #334155);
+  gap: var(--spacing-2);
+  padding: var(--spacing-3) var(--spacing-3);
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .detail-name {
   flex: 1;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text-primary, #e2e8f0);
-  font-family: 'Fira Code', 'Monaco', monospace;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1657,29 +1688,29 @@ watch(viewMode, async (newMode) => {
   height: 24px;
   border: none;
   background: transparent;
-  color: var(--color-text-secondary, #94a3b8);
+  color: var(--text-secondary);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .close-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .detail-content {
-  padding: 12px 14px;
+  padding: var(--spacing-3);
 }
 
 .detail-row {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin-bottom: 10px;
+  gap: var(--spacing-px);
+  margin-bottom: var(--spacing-2);
 }
 
 .detail-row:last-child {
@@ -1687,38 +1718,38 @@ watch(viewMode, async (newMode) => {
 }
 
 .detail-label {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--color-text-tertiary, #64748b);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .detail-value {
-  font-size: 13px;
-  color: var(--color-text-primary, #e2e8f0);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
 }
 
 .detail-value.path-value {
-  font-family: 'Fira Code', 'Monaco', monospace;
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
   word-break: break-all;
-  padding: 6px 8px;
-  background: var(--color-bg-tertiary, #0f172a);
-  border-radius: 4px;
-  margin-top: 2px;
+  padding: var(--spacing-1) var(--spacing-2);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  margin-top: var(--spacing-px);
 }
 
 .detail-value.class-value {
-  color: #34d399;
+  color: var(--color-success-light);
 }
 
 .detail-value.calls-out {
-  color: #10b981;
+  color: var(--color-success);
 }
 
 .detail-value.calls-in {
-  color: #8b5cf6;
+  color: var(--chart-purple);
 }
 
 /* Fullscreen mode */
@@ -1730,10 +1761,10 @@ watch(viewMode, async (newMode) => {
   bottom: 0 !important;
   width: 100vw !important;
   height: 100vh !important;
-  z-index: 9999 !important;
+  z-index: var(--z-maximum) !important;
   border-radius: 0 !important;
   margin: 0 !important;
-  padding: 16px !important;
+  padding: var(--spacing-md) !important;
 }
 
 .function-call-graph.fullscreen .graph-container {

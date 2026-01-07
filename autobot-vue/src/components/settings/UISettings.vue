@@ -1,24 +1,35 @@
 <template>
   <div v-if="uiSettings && isSettingsLoaded" class="settings-section">
     <h3>User Interface Settings</h3>
-    <div class="setting-item">
-      <label for="theme-select">Theme</label>
-      <select
-        id="theme-select"
-        :value="uiSettings.theme"
-        @change="handleSelectChange('theme')"
-      >
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-        <option value="auto">Auto</option>
-      </select>
+
+    <!-- Theme Selection - Issue #704: CSS Design System -->
+    <div class="setting-item setting-item--theme">
+      <div class="setting-label">
+        <label for="theme-select">
+          <i class="fas fa-palette"></i>
+          Theme
+        </label>
+        <span class="setting-hint">Choose your preferred color theme</span>
+      </div>
+      <div class="theme-options">
+        <button
+          v-for="themeOption in availableThemes"
+          :key="themeOption"
+          :class="['theme-btn', { 'theme-btn--active': currentTheme === themeOption }]"
+          :title="themeLabels[themeOption]"
+          @click="handleThemeChange(themeOption)"
+        >
+          <i :class="getThemeIcon(themeOption)"></i>
+          <span>{{ themeLabels[themeOption] }}</span>
+        </button>
+      </div>
     </div>
     <div class="setting-item">
       <label for="language-select">Language</label>
       <select
         id="language-select"
         :value="uiSettings.language"
-        @change="handleSelectChange('language')"
+        @change="handleSelectChange('language', $event)"
       >
         <option value="en">English</option>
         <option value="es">Spanish</option>
@@ -31,7 +42,7 @@
         id="show-timestamps"
         type="checkbox"
         :checked="uiSettings.show_timestamps"
-        @change="handleCheckboxChange('show_timestamps')"
+        @change="handleCheckboxChange('show_timestamps', $event)"
       />
     </div>
     <div class="setting-item">
@@ -40,7 +51,7 @@
         id="show-status-bar"
         type="checkbox"
         :checked="uiSettings.show_status_bar"
-        @change="handleCheckboxChange('show_status_bar')"
+        @change="handleCheckboxChange('show_status_bar', $event)"
       />
     </div>
     <div class="setting-item">
@@ -51,13 +62,15 @@
         :value="uiSettings.auto_refresh_interval"
         min="5"
         max="300"
-        @input="handleNumberInputChange('auto_refresh_interval')"
+        @input="handleNumberInputChange('auto_refresh_interval', $event)"
       />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { useTheme, type Theme } from '@/composables/useTheme'
+
 interface UISettings {
   theme: 'light' | 'dark' | 'auto'
   language: string
@@ -78,53 +91,83 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
+// Issue #704: Use the design system theme composable
+const { theme: currentTheme, setTheme, availableThemes, themeLabels } = useTheme()
+
 const updateSetting = (key: string, value: any) => {
   emit('setting-changed', key, value)
 }
 
+/**
+ * Handle theme change - Issue #704
+ * Updates both the design system theme and emits setting change
+ */
+const handleThemeChange = (themeOption: Theme) => {
+  setTheme(themeOption)
+  // Also emit to parent for persistence in backend settings
+  updateSetting('theme', themeOption === 'system' ? 'auto' : themeOption)
+}
+
+/**
+ * Get icon class for theme option
+ */
+const getThemeIcon = (themeOption: Theme): string => {
+  const icons: Record<Theme, string> = {
+    dark: 'fas fa-moon',
+    light: 'fas fa-sun',
+    system: 'fas fa-desktop'
+  }
+  return icons[themeOption]
+}
+
 // Issue #156 Fix: Typed event handlers to replace inline $event.target usage
-const handleSelectChange = (key: string) => (event: Event) => {
+// Issue #704 Fix: Refactored to accept event directly instead of returning curried function
+const handleSelectChange = (key: string, event: Event) => {
   const target = event.target as HTMLSelectElement
   updateSetting(key, target.value)
 }
 
-const handleCheckboxChange = (key: string) => (event: Event) => {
+const handleCheckboxChange = (key: string, event: Event) => {
   const target = event.target as HTMLInputElement
   updateSetting(key, target.checked)
 }
 
-const handleNumberInputChange = (key: string) => (event: Event) => {
+const handleNumberInputChange = (key: string, event: Event) => {
   const target = event.target as HTMLInputElement
   updateSetting(key, parseInt(target.value))
 }
 </script>
 
 <style scoped>
+/**
+ * Issue #704: CSS Design System - Using design tokens
+ * All colors reference CSS custom properties from design-tokens.css
+ */
 .settings-section {
-  margin-bottom: 30px;
-  background: #ffffff;
-  border: 1px solid #e1e5e9;
-  border-radius: 8px;
-  padding: 24px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: var(--spacing-lg);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .settings-section h3 {
-  margin: 0 0 20px 0;
-  color: #2c3e50;
-  font-weight: 600;
-  font-size: 18px;
-  border-bottom: 2px solid #3498db;
-  padding-bottom: 8px;
+  margin: 0 0 var(--spacing-lg) 0;
+  color: var(--text-primary);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-lg);
+  border-bottom: 2px solid var(--color-primary);
+  padding-bottom: var(--spacing-sm);
 }
 
 .setting-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  padding: 12px 0;
-  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-sm) 0;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .setting-item:last-child {
@@ -133,21 +176,24 @@ const handleNumberInputChange = (key: string) => (event: Event) => {
 }
 
 .setting-item label {
-  font-weight: 500;
-  color: #34495e;
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
   flex: 1;
-  margin-right: 16px;
+  margin-right: var(--spacing-md);
   cursor: pointer;
 }
 
 .setting-item input,
 .setting-item select {
   min-width: 150px;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-  transition: border-color 0.2s ease;
+  padding: var(--spacing-sm) var(--spacing-sm);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  transition: border-color var(--duration-150) ease,
+              box-shadow var(--duration-150) ease;
 }
 
 .setting-item input[type="checkbox"] {
@@ -155,77 +201,123 @@ const handleNumberInputChange = (key: string) => (event: Event) => {
   width: 20px;
   height: 20px;
   cursor: pointer;
-  accent-color: #007acc;
+  accent-color: var(--color-primary);
 }
 
 .setting-item input:focus,
 .setting-item select:focus {
   outline: none;
-  border-color: #007acc;
-  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus);
 }
 
 .setting-item input:invalid {
-  border-color: #e74c3c;
-  box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.2);
+  border-color: var(--color-error);
+  box-shadow: var(--shadow-focus-error);
 }
 
-/* Dark theme support */
-@media (prefers-color-scheme: dark) {
-  .settings-section {
-    background: #2d2d2d;
-    border-color: #404040;
-  }
+/* Theme selector styles - Issue #704 */
+.setting-item--theme {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+}
 
-  .settings-section h3 {
-    color: #ffffff;
-    border-bottom-color: #4fc3f7;
-  }
+.setting-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
 
-  .setting-item {
-    border-bottom-color: #404040;
-  }
+.setting-label label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
 
-  .setting-item label {
-    color: #e0e0e0;
-  }
+.setting-label label i {
+  color: var(--color-primary);
+}
 
-  .setting-item input,
-  .setting-item select {
-    background: #404040;
-    border-color: #555;
-    color: #ffffff;
-  }
+.setting-hint {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
 
-  .setting-item input:focus,
-  .setting-item select:focus {
-    border-color: #4fc3f7;
-    box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.2);
-  }
+.theme-options {
+  display: flex;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.theme-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  transition: all var(--duration-150) ease;
+}
+
+.theme-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+.theme-btn--active {
+  background: var(--color-primary-bg);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.theme-btn--active:hover {
+  background: var(--color-primary-bg-hover);
+}
+
+.theme-btn i {
+  font-size: var(--text-base);
 }
 
 /* Mobile responsive */
 @media (max-width: 768px) {
   .settings-section {
-    padding: 16px;
-    margin-bottom: 20px;
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
   }
 
   .setting-item {
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--spacing-sm);
   }
 
   .setting-item label {
     margin-right: 0;
-    margin-bottom: 4px;
+    margin-bottom: var(--spacing-xs);
   }
 
   .setting-item input,
   .setting-item select {
     min-width: auto;
     width: 100%;
+  }
+
+  .theme-options {
+    width: 100%;
+  }
+
+  .theme-btn {
+    flex: 1;
+    justify-content: center;
   }
 }
 </style>

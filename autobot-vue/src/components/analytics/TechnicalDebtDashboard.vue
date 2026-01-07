@@ -77,7 +77,7 @@
           <div v-if="categoryView === 'chart'" class="category-chart">
             <svg viewBox="0 0 200 200" class="donut-chart">
               <g transform="translate(100, 100)">
-                <circle r="70" fill="none" stroke="#2a2a3e" stroke-width="30" />
+                <circle r="70" fill="none" class="donut-bg" stroke-width="30" />
                 <circle
                   v-for="(segment, index) in categorySegments"
                   :key="segment.category"
@@ -92,10 +92,10 @@
                   @mouseenter="hoveredCategory = segment.category"
                   @mouseleave="hoveredCategory = null"
                 />
-                <text class="center-value" text-anchor="middle" dy="0.1em" font-size="24" fill="#fff">
+                <text class="center-value donut-text-primary" text-anchor="middle" dy="0.1em" font-size="24">
                   {{ summary.total_items }}
                 </text>
-                <text class="center-label" text-anchor="middle" dy="1.5em" font-size="10" fill="#888">
+                <text class="center-label donut-text-secondary" text-anchor="middle" dy="1.5em" font-size="10">
                   Total Items
                 </text>
               </g>
@@ -213,12 +213,12 @@
           <svg viewBox="0 0 800 200" class="line-chart" preserveAspectRatio="xMidYMid meet">
             <!-- Grid Lines -->
             <g class="grid-lines">
-              <line v-for="i in 5" :key="'h' + i" :x1="50" :x2="780" :y1="i * 35 + 10" :y2="i * 35 + 10" stroke="#333" stroke-dasharray="2,2" />
+              <line v-for="i in 5" :key="'h' + i" :x1="50" :x2="780" :y1="i * 35 + 10" :y2="i * 35 + 10" class="chart-grid-line" stroke-dasharray="2,2" />
             </g>
 
             <!-- Y-Axis Labels -->
             <g class="y-axis">
-              <text v-for="(label, i) in yAxisLabels" :key="'y' + i" :x="45" :y="i * 35 + 15" text-anchor="end" fill="#888" font-size="10">
+              <text v-for="(label, i) in yAxisLabels" :key="'y' + i" :x="45" :y="i * 35 + 15" text-anchor="end" class="chart-axis-label" font-size="10">
                 {{ label }}
               </text>
             </g>
@@ -231,7 +231,7 @@
                 :x="50 + i * 73"
                 y="195"
                 text-anchor="middle"
-                fill="#888"
+                class="chart-axis-label"
                 font-size="9"
               >
                 {{ formatTrendDate(point.date) }}
@@ -239,7 +239,7 @@
             </g>
 
             <!-- Trend Line -->
-            <path v-if="trendLinePath" :d="trendLinePath" fill="none" stroke="#3b82f6" stroke-width="2" class="trend-line" />
+            <path v-if="trendLinePath" :d="trendLinePath" fill="none" class="chart-trend-stroke" stroke-width="2" />
 
             <!-- Data Points -->
             <g class="data-points">
@@ -249,8 +249,7 @@
                 :cx="point.x"
                 :cy="point.y"
                 r="4"
-                fill="#3b82f6"
-                class="data-point"
+                class="data-point chart-data-point"
                 @mouseenter="hoveredPoint = point"
                 @mouseleave="hoveredPoint = null"
               />
@@ -258,11 +257,11 @@
 
             <!-- Tooltip -->
             <g v-if="hoveredPoint" class="tooltip">
-              <rect :x="hoveredPoint.x - 40" :y="hoveredPoint.y - 45" width="80" height="35" rx="4" fill="#1a1a2e" />
-              <text :x="hoveredPoint.x" :y="hoveredPoint.y - 32" text-anchor="middle" fill="#fff" font-size="11">
+              <rect :x="hoveredPoint.x - 40" :y="hoveredPoint.y - 45" width="80" height="35" rx="4" class="chart-tooltip-bg" />
+              <text :x="hoveredPoint.x" :y="hoveredPoint.y - 32" text-anchor="middle" class="chart-tooltip-text-primary" font-size="11">
                 {{ hoveredPoint.count }} items
               </text>
-              <text :x="hoveredPoint.x" :y="hoveredPoint.y - 18" text-anchor="middle" fill="#888" font-size="9">
+              <text :x="hoveredPoint.x" :y="hoveredPoint.y - 18" text-anchor="middle" class="chart-tooltip-text-secondary" font-size="9">
                 {{ hoveredPoint.date }}
               </text>
             </g>
@@ -510,19 +509,33 @@ const sortDirection = ref<'asc' | 'desc'>('desc');
 const currentPage = ref(1);
 const itemsPerPage = 10;
 
-// Category colors
-const categoryColors: Record<string, string> = {
-  code_complexity: '#ef4444',
-  code_duplication: '#f97316',
-  missing_tests: '#eab308',
-  missing_docs: '#84cc16',
-  anti_patterns: '#22c55e',
-  security_issues: '#14b8a6',
-  performance_issues: '#06b6d4',
-  outdated_dependencies: '#3b82f6',
-  hardcoded_values: '#8b5cf6',
-  dead_code: '#a855f7',
-};
+/**
+ * Issue #704: Helper to read CSS custom properties from design tokens
+ */
+function getCssVar(name: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+}
+
+/**
+ * Issue #704: Category colors using design tokens
+ * These map debt categories to our chart color palette
+ */
+const getCategoryColors = (): Record<string, string> => ({
+  code_complexity: getCssVar('--color-error', '#ef4444'),
+  code_duplication: getCssVar('--chart-orange', '#f97316'),
+  missing_tests: getCssVar('--color-warning', '#eab308'),
+  missing_docs: getCssVar('--chart-green', '#84cc16'),
+  anti_patterns: getCssVar('--color-success', '#22c55e'),
+  security_issues: getCssVar('--chart-teal', '#14b8a6'),
+  performance_issues: getCssVar('--chart-cyan', '#06b6d4'),
+  outdated_dependencies: getCssVar('--chart-blue', '#3b82f6'),
+  hardcoded_values: getCssVar('--chart-purple', '#8b5cf6'),
+  dead_code: getCssVar('--chart-pink', '#a855f7'),
+})
+
+// Category colors - computed on access to get current theme values
+const categoryColors = getCategoryColors();
 
 // Category icons
 const categoryIcons: Record<string, string> = {
@@ -601,7 +614,7 @@ const categorySegments = computed(() => {
       category: cat.category,
       count: cat.count,
       percentage: percentage * 100,
-      color: categoryColors[cat.category] || '#666',
+      color: categoryColors[cat.category] || getCssVar('--text-muted', '#666'),
       dashArray: `${dashLength} ${circumference - dashLength}`,
       offset: -offset,
       rotation: -90,
@@ -911,11 +924,15 @@ watch(selectedPeriod, () => {
 </script>
 
 <style scoped>
+/**
+ * Issue #704: CSS Design System - Using design tokens
+ * All colors reference CSS custom properties from design-tokens.css
+ */
 .technical-debt-dashboard {
-  padding: 1.5rem;
-  background: #0a0a0f;
+  padding: var(--spacing-lg);
+  background: var(--bg-primary);
   min-height: 100vh;
-  color: #e0e0e0;
+  color: var(--text-primary);
 }
 
 /* Header */
@@ -923,48 +940,48 @@ watch(selectedPeriod, () => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-lg);
 }
 
 .dashboard-title {
-  font-size: 1.75rem;
-  font-weight: 600;
-  color: #fff;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
   margin: 0;
 }
 
 .dashboard-subtitle {
-  color: #888;
-  margin: 0.25rem 0 0;
-  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: var(--spacing-1) 0 0;
+  font-size: var(--text-sm);
 }
 
 .header-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--spacing-sm);
 }
 
 .btn-refresh,
 .btn-export {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  font-size: 0.875rem;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .btn-refresh {
-  background: #1a1a2e;
-  border: 1px solid #333;
-  color: #e0e0e0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
 }
 
 .btn-refresh:hover:not(:disabled) {
-  background: #252540;
-  border-color: #444;
+  background: var(--bg-tertiary);
+  border-color: var(--border-strong);
 }
 
 .btn-refresh:disabled {
@@ -973,39 +990,39 @@ watch(selectedPeriod, () => {
 }
 
 .btn-export {
-  background: #3b82f6;
+  background: var(--color-primary);
   border: none;
-  color: #fff;
+  color: var(--text-on-primary);
 }
 
 .btn-export:hover {
-  background: #2563eb;
+  background: var(--color-primary-hover);
 }
 
 .icon {
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 /* Summary Cards */
 .summary-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
 }
 
 .summary-card {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16162a 100%);
-  border: 1px solid #2a2a3e;
-  border-radius: 12px;
-  padding: 1.25rem;
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
   display: flex;
   align-items: flex-start;
-  gap: 1rem;
+  gap: var(--spacing-md);
 }
 
 .card-icon {
-  font-size: 2rem;
+  font-size: var(--text-2xl);
 }
 
 .card-content {
@@ -1015,86 +1032,86 @@ watch(selectedPeriod, () => {
 }
 
 .card-value {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: #fff;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
 }
 
 .card-label {
-  font-size: 0.8rem;
-  color: #888;
-  margin-top: 0.25rem;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  margin-top: var(--spacing-xs);
 }
 
 .card-trend {
-  font-size: 0.875rem;
-  font-weight: 600;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
 }
 
 .card-trend.positive {
-  background: rgba(34, 197, 94, 0.2);
-  color: #22c55e;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .card-trend.negative {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .card-trend.neutral {
-  background: rgba(156, 163, 175, 0.2);
-  color: #9ca3af;
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
 }
 
 .card-cost {
-  font-size: 0.875rem;
-  color: #f59e0b;
-  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--color-warning);
+  font-weight: var(--font-semibold);
 }
 
 .card-priority {
-  font-size: 0.75rem;
-  color: #ef4444;
+  font-size: var(--text-xs);
+  color: var(--color-error);
 }
 
 .health-bar {
   width: 100%;
   height: 6px;
-  background: #2a2a3e;
-  border-radius: 3px;
+  background: var(--border-subtle);
+  border-radius: var(--radius-sm);
   overflow: hidden;
-  margin-top: 0.5rem;
+  margin-top: var(--spacing-sm);
 }
 
 .health-fill {
   height: 100%;
-  transition: width 0.5s ease;
+  transition: width var(--duration-300) ease;
 }
 
 .health-fill.healthy {
-  background: #22c55e;
+  background: var(--color-success);
 }
 
 .health-fill.moderate {
-  background: #eab308;
+  background: var(--color-warning);
 }
 
 .health-fill.warning {
-  background: #f97316;
+  background: var(--chart-orange);
 }
 
 .health-fill.critical {
-  background: #ef4444;
+  background: var(--color-error);
 }
 
 /* Content Grid */
 .content-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-  margin-bottom: 1.5rem;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
 }
 
 @media (max-width: 1200px) {
@@ -1105,9 +1122,9 @@ watch(selectedPeriod, () => {
 
 /* Panels */
 .panel {
-  background: #12121a;
-  border: 1px solid #2a2a3e;
-  border-radius: 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
@@ -1115,55 +1132,55 @@ watch(selectedPeriod, () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid #2a2a3e;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .panel-header h3 {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #fff;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .panel-info {
-  font-size: 0.75rem;
-  color: #666;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
 }
 
 .panel-content {
-  padding: 1.25rem;
+  padding: var(--spacing-lg);
 }
 
 .view-toggle {
   display: flex;
-  gap: 0.25rem;
-  background: #1a1a2e;
-  border-radius: 6px;
-  padding: 0.25rem;
+  gap: var(--spacing-xs);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-xs);
 }
 
 .view-toggle button {
-  padding: 0.375rem 0.75rem;
+  padding: var(--spacing-xs) var(--spacing-sm);
   border: none;
   background: transparent;
-  color: #888;
-  border-radius: 4px;
-  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-150);
 }
 
 .view-toggle button.active {
-  background: #3b82f6;
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 /* Category Chart */
 .category-chart {
   display: flex;
   align-items: flex-start;
-  gap: 1.5rem;
+  gap: var(--spacing-lg);
 }
 
 .donut-chart {
@@ -1173,7 +1190,7 @@ watch(selectedPeriod, () => {
 }
 
 .donut-segment {
-  transition: opacity 0.2s;
+  transition: opacity var(--duration-150);
   cursor: pointer;
 }
 
@@ -1182,150 +1199,194 @@ watch(selectedPeriod, () => {
 }
 
 .center-value {
-  font-weight: 700;
+  font-weight: var(--font-bold);
 }
 
 .center-label {
   text-transform: uppercase;
 }
 
+/* Issue #704: SVG styling using CSS variables */
+.donut-bg {
+  stroke: var(--border-subtle);
+}
+
+.donut-text-primary {
+  fill: var(--text-primary);
+}
+
+.donut-text-secondary {
+  fill: var(--text-tertiary);
+}
+
+/* Chart grid and axes */
+.chart-grid-line {
+  stroke: var(--border-default);
+}
+
+.chart-axis-label {
+  fill: var(--text-tertiary);
+}
+
+/* Trend line and data points */
+.chart-trend-stroke {
+  stroke: var(--color-primary);
+}
+
+.chart-data-point {
+  fill: var(--color-primary);
+}
+
+/* Chart tooltip */
+.chart-tooltip-bg {
+  fill: var(--bg-secondary);
+}
+
+.chart-tooltip-text-primary {
+  fill: var(--text-primary);
+}
+
+.chart-tooltip-text-secondary {
+  fill: var(--text-tertiary);
+}
+
 .chart-legend {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.375rem;
-  border-radius: 4px;
-  transition: background 0.2s;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs);
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-150);
 }
 
 .legend-item.highlighted {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-hover);
 }
 
 .legend-color {
   width: 12px;
   height: 12px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 
 .legend-label {
   flex: 1;
-  font-size: 0.8rem;
-  color: #ccc;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .legend-value {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #fff;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 /* Category List */
 .category-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-sm);
 }
 
 .category-item {
-  background: #1a1a2e;
-  border: 1px solid #2a2a3e;
-  border-radius: 8px;
-  padding: 0.875rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-150);
 }
 
 .category-item:hover {
-  border-color: #3b82f6;
-  background: #1e1e35;
+  border-color: var(--color-primary);
+  background: var(--bg-hover);
 }
 
 .category-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
 }
 
 .category-icon {
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 .category-name {
-  font-weight: 500;
-  color: #fff;
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
 }
 
 .category-stats {
   display: flex;
-  gap: 1rem;
-  font-size: 0.75rem;
-  margin-bottom: 0.5rem;
+  gap: var(--spacing-md);
+  font-size: var(--text-xs);
+  margin-bottom: var(--spacing-sm);
 }
 
 .stat-count {
-  color: #888;
+  color: var(--text-tertiary);
 }
 
 .stat-hours {
-  color: #f59e0b;
+  color: var(--color-warning);
 }
 
 .stat-severity {
-  padding: 0.125rem 0.375rem;
-  border-radius: 3px;
+  padding: 0.125rem var(--spacing-xs);
+  border-radius: var(--radius-sm);
   text-transform: uppercase;
   font-size: 0.65rem;
-  font-weight: 600;
+  font-weight: var(--font-semibold);
 }
 
 .stat-severity.critical {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .stat-severity.high {
-  background: rgba(249, 115, 22, 0.2);
-  color: #f97316;
+  background: var(--chart-orange-bg);
+  color: var(--chart-orange);
 }
 
 .stat-severity.medium {
-  background: rgba(234, 179, 8, 0.2);
-  color: #eab308;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .stat-severity.low {
-  background: rgba(34, 197, 94, 0.2);
-  color: #22c55e;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .category-bar {
   height: 4px;
-  background: #2a2a3e;
-  border-radius: 2px;
+  background: var(--border-subtle);
+  border-radius: var(--radius-xs);
   overflow: hidden;
 }
 
 .bar-fill {
   height: 100%;
-  border-radius: 2px;
-  transition: width 0.3s ease;
+  border-radius: var(--radius-xs);
+  transition: width var(--duration-200) ease;
 }
 
 /* Priority List */
 .priority-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-sm);
   max-height: 400px;
   overflow-y: auto;
 }
@@ -1333,16 +1394,16 @@ watch(selectedPeriod, () => {
 .priority-item {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
-  background: #1a1a2e;
-  border: 1px solid #2a2a3e;
-  border-radius: 8px;
-  padding: 0.875rem;
+  gap: var(--spacing-sm);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
 }
 
 .priority-item.top-priority {
-  border-color: #3b82f6;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, #1a1a2e 100%);
+  border-color: var(--color-primary);
+  background: linear-gradient(135deg, var(--color-primary-bg) 0%, var(--bg-secondary) 100%);
 }
 
 .priority-rank {
@@ -1351,16 +1412,16 @@ watch(selectedPeriod, () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #2a2a3e;
+  background: var(--border-subtle);
   border-radius: 50%;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: #fff;
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
   flex-shrink: 0;
 }
 
 .top-priority .priority-rank {
-  background: #3b82f6;
+  background: var(--color-primary);
 }
 
 .priority-content {
@@ -1371,46 +1432,46 @@ watch(selectedPeriod, () => {
 .priority-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.25rem;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-xs);
 }
 
 .priority-file {
-  font-size: 0.8rem;
-  color: #3b82f6;
-  font-family: monospace;
+  font-size: var(--text-sm);
+  color: var(--color-primary);
+  font-family: var(--font-mono);
 }
 
 .priority-category {
   font-size: 0.65rem;
-  padding: 0.125rem 0.375rem;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #888;
+  padding: 0.125rem var(--spacing-xs);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
 }
 
 .priority-description {
-  font-size: 0.8rem;
-  color: #ccc;
-  margin-bottom: 0.5rem;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-sm);
 }
 
 .priority-metrics {
   display: flex;
-  gap: 1rem;
-  font-size: 0.7rem;
+  gap: var(--spacing-md);
+  font-size: var(--text-xs);
 }
 
 .metric {
-  color: #888;
+  color: var(--text-tertiary);
 }
 
 .metric strong {
-  color: #aaa;
+  color: var(--text-muted);
 }
 
 .metric.roi {
-  color: #22c55e;
+  color: var(--color-success);
 }
 
 .priority-action {
@@ -1418,19 +1479,19 @@ watch(selectedPeriod, () => {
 }
 
 .btn-fix {
-  padding: 0.375rem 0.75rem;
-  background: #22c55e;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--color-success);
   border: none;
-  border-radius: 4px;
-  color: #fff;
-  font-size: 0.75rem;
-  font-weight: 600;
+  border-radius: var(--radius-sm);
+  color: var(--text-on-success);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background var(--duration-150);
 }
 
 .btn-fix:hover {
-  background: #16a34a;
+  background: var(--color-success-dark);
 }
 
 /* Empty State */
@@ -1439,50 +1500,50 @@ watch(selectedPeriod, () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 2rem;
-  color: #666;
+  padding: var(--spacing-xl);
+  color: var(--text-muted);
 }
 
 .empty-icon {
-  font-size: 2rem;
-  margin-bottom: 0.5rem;
+  font-size: var(--text-2xl);
+  margin-bottom: var(--spacing-sm);
 }
 
 .empty-text {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 /* Trends Panel */
 .trends-panel {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-lg);
 }
 
 .period-selector {
   display: flex;
-  gap: 0.25rem;
-  background: #1a1a2e;
-  border-radius: 6px;
-  padding: 0.25rem;
+  gap: var(--spacing-xs);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-xs);
 }
 
 .period-selector button {
-  padding: 0.375rem 0.75rem;
+  padding: var(--spacing-xs) var(--spacing-sm);
   border: none;
   background: transparent;
-  color: #888;
-  border-radius: 4px;
-  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-150);
 }
 
 .period-selector button.active {
-  background: #3b82f6;
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .trends-chart {
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-md);
 }
 
 .line-chart {
@@ -1497,7 +1558,7 @@ watch(selectedPeriod, () => {
 
 .data-point {
   cursor: pointer;
-  transition: r 0.2s;
+  transition: r var(--duration-150);
 }
 
 .data-point:hover {
@@ -1506,55 +1567,55 @@ watch(selectedPeriod, () => {
 
 .trend-summary {
   display: flex;
-  gap: 2rem;
-  padding: 1rem;
-  background: #1a1a2e;
-  border-radius: 8px;
+  gap: var(--spacing-xl);
+  padding: var(--spacing-md);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
 }
 
 .trend-stat {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-xs);
 }
 
 .stat-label {
-  font-size: 0.75rem;
-  color: #666;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
 }
 
 .stat-value {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #fff;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .stat-value.positive {
-  color: #22c55e;
+  color: var(--color-success);
 }
 
 .stat-value.negative {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 /* Table Panel */
 .table-panel {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-lg);
 }
 
 .table-filters {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--spacing-sm);
 }
 
 .table-filters select,
 .table-filters input {
-  padding: 0.5rem 0.75rem;
-  background: #1a1a2e;
-  border: 1px solid #333;
-  border-radius: 6px;
-  color: #e0e0e0;
-  font-size: 0.8rem;
+  padding: var(--spacing-sm) var(--spacing-sm);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 .table-filters input {
@@ -1564,7 +1625,7 @@ watch(selectedPeriod, () => {
 .table-filters select:focus,
 .table-filters input:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: var(--color-primary);
 }
 
 .debt-table-container {
@@ -1574,73 +1635,73 @@ watch(selectedPeriod, () => {
 .debt-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
 }
 
 .debt-table th {
   text-align: left;
-  padding: 0.75rem;
-  background: #1a1a2e;
-  color: #888;
-  font-weight: 600;
-  border-bottom: 1px solid #2a2a3e;
+  padding: var(--spacing-sm);
+  background: var(--bg-secondary);
+  color: var(--text-tertiary);
+  font-weight: var(--font-semibold);
+  border-bottom: 1px solid var(--border-subtle);
   cursor: pointer;
   white-space: nowrap;
 }
 
 .debt-table th:hover {
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .debt-table td {
-  padding: 0.75rem;
-  border-bottom: 1px solid #1a1a2e;
-  color: #ccc;
+  padding: var(--spacing-sm);
+  border-bottom: 1px solid var(--bg-secondary);
+  color: var(--text-secondary);
 }
 
 .debt-table tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--bg-hover);
 }
 
 .severity-badge,
 .category-badge {
   display: inline-block;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.7rem;
-  font-weight: 600;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
   text-transform: uppercase;
 }
 
 .severity-badge.critical {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .severity-badge.high {
-  background: rgba(249, 115, 22, 0.2);
-  color: #f97316;
+  background: var(--chart-orange-bg);
+  color: var(--chart-orange);
 }
 
 .severity-badge.medium {
-  background: rgba(234, 179, 8, 0.2);
-  color: #eab308;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .severity-badge.low {
-  background: rgba(34, 197, 94, 0.2);
-  color: #22c55e;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .category-badge {
-  background: rgba(255, 255, 255, 0.1);
-  color: #aaa;
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
   text-transform: none;
 }
 
 .file-cell {
-  font-family: monospace;
-  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
   max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1648,7 +1709,7 @@ watch(selectedPeriod, () => {
 }
 
 .line-number {
-  color: #666;
+  color: var(--text-muted);
 }
 
 .description-cell {
@@ -1659,53 +1720,53 @@ watch(selectedPeriod, () => {
 }
 
 .hours-cell {
-  color: #f59e0b;
-  font-weight: 500;
+  color: var(--color-warning);
+  font-weight: var(--font-medium);
 }
 
 .roi-badge {
   display: inline-block;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 600;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
 }
 
 .roi-badge.excellent {
-  background: rgba(34, 197, 94, 0.2);
-  color: #22c55e;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .roi-badge.good {
-  background: rgba(59, 130, 246, 0.2);
-  color: #3b82f6;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
 }
 
 .roi-badge.moderate {
-  background: rgba(234, 179, 8, 0.2);
-  color: #eab308;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .roi-badge.low {
-  background: rgba(156, 163, 175, 0.2);
-  color: #9ca3af;
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
 }
 
 .btn-view {
-  padding: 0.25rem 0.5rem;
+  padding: var(--spacing-xs) var(--spacing-sm);
   background: transparent;
-  border: 1px solid #333;
-  border-radius: 4px;
-  color: #888;
-  font-size: 0.7rem;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-150);
 }
 
 .btn-view:hover {
-  background: #1a1a2e;
-  border-color: #3b82f6;
-  color: #3b82f6;
+  background: var(--bg-secondary);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 /* Pagination */
@@ -1713,26 +1774,26 @@ watch(selectedPeriod, () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 1rem;
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid #2a2a3e;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .pagination button {
-  padding: 0.5rem 1rem;
-  background: #1a1a2e;
-  border: 1px solid #333;
-  border-radius: 6px;
-  color: #e0e0e0;
-  font-size: 0.8rem;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-150);
 }
 
 .pagination button:hover:not(:disabled) {
-  background: #252540;
-  border-color: #3b82f6;
+  background: var(--bg-hover);
+  border-color: var(--color-primary);
 }
 
 .pagination button:disabled {
@@ -1741,8 +1802,8 @@ watch(selectedPeriod, () => {
 }
 
 .page-info {
-  font-size: 0.8rem;
-  color: #888;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
 }
 
 /* Modal */
@@ -1752,17 +1813,17 @@ watch(selectedPeriod, () => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--overlay-backdrop);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .modal-content {
-  background: #12121a;
-  border: 1px solid #2a2a3e;
-  border-radius: 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
   width: 90%;
   max-width: 600px;
   max-height: 90vh;
@@ -1773,14 +1834,14 @@ watch(selectedPeriod, () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid #2a2a3e;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .modal-header h3 {
   margin: 0;
-  font-size: 1.1rem;
-  color: #fff;
+  font-size: var(--text-lg);
+  color: var(--text-primary);
 }
 
 .btn-close {
@@ -1791,24 +1852,24 @@ watch(selectedPeriod, () => {
   justify-content: center;
   background: transparent;
   border: none;
-  color: #888;
-  font-size: 1.5rem;
+  color: var(--text-tertiary);
+  font-size: var(--text-xl);
   cursor: pointer;
-  transition: color 0.2s;
+  transition: color var(--duration-150);
 }
 
 .btn-close:hover {
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .modal-body {
-  padding: 1.5rem;
+  padding: var(--spacing-lg);
 }
 
 .detail-row {
   display: flex;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
 }
 
 .detail-row.full-width {
@@ -1818,70 +1879,70 @@ watch(selectedPeriod, () => {
 .detail-label {
   flex-shrink: 0;
   width: 120px;
-  color: #888;
-  font-size: 0.875rem;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
 }
 
 .detail-value {
-  color: #e0e0e0;
-  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 .detail-value.file-path {
-  font-family: monospace;
-  color: #3b82f6;
+  font-family: var(--font-mono);
+  color: var(--color-primary);
   word-break: break-all;
 }
 
 .suggested-fix {
-  background: #1a1a2e;
-  border: 1px solid #2a2a3e;
-  border-radius: 6px;
-  padding: 1rem;
-  font-family: monospace;
-  font-size: 0.8rem;
-  color: #ccc;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
   overflow-x: auto;
   white-space: pre-wrap;
-  margin-top: 0.5rem;
+  margin-top: var(--spacing-sm);
 }
 
 .modal-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 1rem 1.5rem;
-  border-top: 1px solid #2a2a3e;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .btn-secondary {
-  padding: 0.5rem 1rem;
-  background: #1a1a2e;
-  border: 1px solid #333;
-  border-radius: 6px;
-  color: #e0e0e0;
-  font-size: 0.875rem;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-150);
 }
 
 .btn-secondary:hover {
-  background: #252540;
-  border-color: #444;
+  background: var(--bg-hover);
+  border-color: var(--border-emphasis);
 }
 
 .btn-primary {
-  padding: 0.5rem 1rem;
-  background: #3b82f6;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-primary);
   border: none;
-  border-radius: 6px;
-  color: #fff;
-  font-size: 0.875rem;
+  border-radius: var(--radius-md);
+  color: var(--text-on-primary);
+  font-size: var(--text-sm);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background var(--duration-150);
 }
 
 .btn-primary:hover {
-  background: #2563eb;
+  background: var(--color-primary-dark);
 }
 </style>
