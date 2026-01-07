@@ -49,7 +49,7 @@ from src.config.ssot_config import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/permissions", tags=["permissions"])
+router = APIRouter(prefix="/permissions", tags=["permissions"])
 
 
 # =============================================================================

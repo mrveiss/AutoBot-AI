@@ -145,6 +145,11 @@ export const useChatStore = defineStore('chat', () => {
     sessions.value.unshift(newSession)
     currentSessionId.value = sessionId
 
+    // Issue #709: Reset typing state when creating new session
+    // This prevents stale typing indicator from previous session
+    isTyping.value = false
+    streamingPreview.value = ''
+
     return sessionId
   }
 
@@ -155,6 +160,11 @@ export const useChatStore = defineStore('chat', () => {
       sessions.value.forEach(s => { s.isActive = false })
       session.isActive = true
       currentSessionId.value = sessionId
+
+      // Issue #709: Reset typing state when switching sessions
+      // This prevents stale typing indicator from previous session
+      isTyping.value = false
+      streamingPreview.value = ''
     }
   }
 
@@ -483,6 +493,11 @@ export const useChatStore = defineStore('chat', () => {
         }
       }
     })
+
+    // Issue #709: Reset typing state after sync to clear any stale state
+    // This ensures a clean state on page load/refresh
+    isTyping.value = false
+    streamingPreview.value = ''
 
     logger.debug(`✅ Session sync complete: ${sessions.value.length} sessions in store`)
   }
