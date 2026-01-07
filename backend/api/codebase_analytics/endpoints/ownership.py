@@ -185,6 +185,92 @@ def _build_ownership_error_response(message: str, include_lists: bool = True) ->
     return response
 
 
+def _build_expertise_response(
+    scores: list, total: int, source: str, status: str = "success"
+) -> dict:
+    """Build response for expertise scores endpoint.
+
+    Issue #665: Extracted from get_expertise_scores to reduce function length.
+
+    Args:
+        scores: List of expertise scores
+        total: Total number of scores
+        source: Data source (cache or live_analysis)
+        status: Response status
+
+    Returns:
+        Response dictionary
+    """
+    return {
+        "status": status,
+        "expertise_scores": scores,
+        "total": total,
+        "source": source,
+    }
+
+
+def _build_expertise_error(message: str) -> dict:
+    """Build error response for expertise scores endpoint.
+
+    Issue #665: Extracted from get_expertise_scores to reduce function length.
+
+    Args:
+        message: Error message
+
+    Returns:
+        Error response dictionary
+    """
+    return {
+        "status": "error",
+        "message": message,
+        "expertise_scores": [],
+        "total": 0,
+    }
+
+
+def _build_knowledge_gaps_response(
+    gaps: list, total: int, source: str, status: str = "success"
+) -> dict:
+    """Build response for knowledge gaps endpoint.
+
+    Issue #665: Extracted from get_knowledge_gaps to reduce function length.
+
+    Args:
+        gaps: List of knowledge gaps
+        total: Total number of gaps
+        source: Data source (cache or live_analysis)
+        status: Response status
+
+    Returns:
+        Response dictionary
+    """
+    return {
+        "status": status,
+        "knowledge_gaps": gaps,
+        "total": total,
+        "source": source,
+    }
+
+
+def _build_knowledge_gaps_error(message: str) -> dict:
+    """Build error response for knowledge gaps endpoint.
+
+    Issue #665: Extracted from get_knowledge_gaps to reduce function length.
+
+    Args:
+        message: Error message
+
+    Returns:
+        Error response dictionary
+    """
+    return {
+        "status": "error",
+        "message": message,
+        "knowledge_gaps": [],
+        "total": 0,
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_ownership_analysis",
@@ -287,81 +373,45 @@ async def get_expertise_scores(
 ):
     """
     Get contributor expertise scores for a codebase (Issue #248).
+    Issue #665: Refactored to use extracted helpers for response building.
 
     Returns expertise rankings based on:
     - Lines of code authored
     - Commit frequency
     - Recency of contributions
     - Number of files/directories owned
-
-    Args:
-        path: Root path to analyze
-
-    Returns:
-        JSON with expertise scores for all contributors
     """
-    # Check cache first (no global needed for read-only access)
+    # Check cache first
     async with _ownership_analysis_cache_lock:
         if _ownership_analysis_cache and _ownership_analysis_cache.get("expertise_scores"):
-            return JSONResponse({
-                "status": "success",
-                "expertise_scores": _ownership_analysis_cache["expertise_scores"],
-                "total": len(_ownership_analysis_cache["expertise_scores"]),
-                "source": "cache",
-            })
+            scores = _ownership_analysis_cache["expertise_scores"]
+            return JSONResponse(_build_expertise_response(scores, len(scores), "cache"))
 
     # Run fresh analysis if no cache
-    project_root = str(Path(__file__).resolve().parents[4])
+    project_root = _get_project_root()
     if not path:
         path = project_root
 
     # Security: Validate path is within project root
-    try:
-        resolved_path = Path(path).resolve()
-        if not str(resolved_path).startswith(project_root):
-            logger.warning("Path traversal attempt blocked: %s", path)
-            return JSONResponse({
-                "status": "error",
-                "message": "Invalid path: must be within project root",
-                "expertise_scores": [],
-                "total": 0,
-            }, status_code=400)
-    except Exception as e:
-        return JSONResponse({
-            "status": "error",
-            "message": f"Invalid path: {str(e)}",
-            "expertise_scores": [],
-            "total": 0,
-        }, status_code=400)
+    error_response = _validate_path_security(path, project_root)
+    if error_response:
+        return error_response
 
     try:
         analyzer = _get_ownership_analyzer()
         if not analyzer:
-            return JSONResponse({
-                "status": "error",
-                "message": "OwnershipAnalyzer not available",
-                "expertise_scores": [],
-                "total": 0,
-            })
+            return JSONResponse(_build_expertise_error("OwnershipAnalyzer not available"))
 
         analysis = await analyzer.analyze_ownership(path)
         expertise_scores = analysis.get("expertise_scores", [])
 
-        return JSONResponse({
-            "status": "success",
-            "expertise_scores": expertise_scores[:20],
-            "total": len(expertise_scores),
-            "source": "live_analysis",
-        })
+        return JSONResponse(_build_expertise_response(
+            expertise_scores[:20], len(expertise_scores), "live_analysis"
+        ))
 
     except Exception as e:
         logger.error("Failed to get expertise scores: %s", e, exc_info=True)
-        return JSONResponse({
-            "status": "error",
-            "message": str(e),
-            "expertise_scores": [],
-            "total": 0,
-        })
+        return JSONResponse(_build_expertise_error(str(e)))
 
 
 @with_error_handling(
@@ -376,65 +426,35 @@ async def get_knowledge_gaps(
 ):
     """
     Get knowledge gaps in the codebase (Issue #248).
+    Issue #665: Refactored to use extracted helpers for response building.
 
     Detects areas with:
     - Single contributor (bus factor = 1)
     - Inactive maintainers
     - High ownership concentration
-
-    Args:
-        path: Root path to analyze
-        risk_level: Optional filter by risk level
-
-    Returns:
-        JSON with knowledge gaps and recommendations
     """
-    # Check cache first (no global needed for read-only access)
+    # Check cache first
     async with _ownership_analysis_cache_lock:
         if _ownership_analysis_cache and _ownership_analysis_cache.get("knowledge_gaps"):
             gaps = _ownership_analysis_cache["knowledge_gaps"]
             if risk_level:
                 gaps = [g for g in gaps if g.get("risk_level") == risk_level]
-            return JSONResponse({
-                "status": "success",
-                "knowledge_gaps": gaps,
-                "total": len(gaps),
-                "source": "cache",
-            })
+            return JSONResponse(_build_knowledge_gaps_response(gaps, len(gaps), "cache"))
 
     # Run fresh analysis if no cache
-    project_root = str(Path(__file__).resolve().parents[4])
+    project_root = _get_project_root()
     if not path:
         path = project_root
 
     # Security: Validate path is within project root
-    try:
-        resolved_path = Path(path).resolve()
-        if not str(resolved_path).startswith(project_root):
-            logger.warning("Path traversal attempt blocked: %s", path)
-            return JSONResponse({
-                "status": "error",
-                "message": "Invalid path: must be within project root",
-                "knowledge_gaps": [],
-                "total": 0,
-            }, status_code=400)
-    except Exception as e:
-        return JSONResponse({
-            "status": "error",
-            "message": f"Invalid path: {str(e)}",
-            "knowledge_gaps": [],
-            "total": 0,
-        }, status_code=400)
+    error_response = _validate_path_security(path, project_root)
+    if error_response:
+        return error_response
 
     try:
         analyzer = _get_ownership_analyzer()
         if not analyzer:
-            return JSONResponse({
-                "status": "error",
-                "message": "OwnershipAnalyzer not available",
-                "knowledge_gaps": [],
-                "total": 0,
-            })
+            return JSONResponse(_build_knowledge_gaps_error("OwnershipAnalyzer not available"))
 
         analysis = await analyzer.analyze_ownership(path)
         gaps = analysis.get("knowledge_gaps", [])
@@ -442,18 +462,8 @@ async def get_knowledge_gaps(
         if risk_level:
             gaps = [g for g in gaps if g.get("risk_level") == risk_level]
 
-        return JSONResponse({
-            "status": "success",
-            "knowledge_gaps": gaps[:30],
-            "total": len(gaps),
-            "source": "live_analysis",
-        })
+        return JSONResponse(_build_knowledge_gaps_response(gaps[:30], len(gaps), "live_analysis"))
 
     except Exception as e:
         logger.error("Failed to get knowledge gaps: %s", e, exc_info=True)
-        return JSONResponse({
-            "status": "error",
-            "message": str(e),
-            "knowledge_gaps": [],
-            "total": 0,
-        })
+        return JSONResponse(_build_knowledge_gaps_error(str(e)))

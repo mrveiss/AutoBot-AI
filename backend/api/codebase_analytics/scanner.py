@@ -54,7 +54,7 @@ from src.utils.file_categorization import (
 )
 
 from .analyzers import analyze_python_file, analyze_javascript_vue_file, analyze_documentation_file
-from .storage import get_code_collection_async, get_redis_connection
+from .storage import get_code_collection_async, get_redis_connection_async
 
 logger = logging.getLogger(__name__)
 
@@ -760,20 +760,35 @@ async def _clear_redis_codebase_cache(task_id: str) -> None:
     Clear Redis cache entries for codebase data.
 
     Issue #398: Extracted from _initialize_chromadb_collection to reduce method length.
+    Issue #XXX: Fixed thread pool exhaustion by using native async Redis client.
+               Previous implementation used sync client + asyncio.to_thread() which
+               blocked indefinitely when the default ThreadPoolExecutor was saturated
+               by concurrent analytics operations. No errors were logged because the
+               code blocked BEFORE reaching any logging statements.
     """
     try:
-        from .storage import get_redis_connection
-        redis_client = await get_redis_connection()
+        logger.info("[Task %s] Getting async Redis connection...", task_id)
+        redis_client = await get_redis_connection_async()
+        logger.info("[Task %s] Redis client: %s", task_id, type(redis_client) if redis_client else None)
         if redis_client:
-            # Issue #666: Wrap blocking Redis calls in asyncio.to_thread
-            keys_to_delete = await asyncio.to_thread(
-                lambda: [key for key in redis_client.scan_iter(match="codebase:*")]
-            )
+            # Native async Redis scan - no thread pool dependency
+            logger.info("[Task %s] Starting async scan for codebase:* keys...", task_id)
+            keys_to_delete = []
+            cursor = 0
+            while True:
+                cursor, keys = await redis_client.scan(cursor=cursor, match="codebase:*", count=100)
+                keys_to_delete.extend(keys)
+                if cursor == 0:
+                    break
+            logger.info("[Task %s] Async scan completed, found %d keys", task_id, len(keys_to_delete))
             if keys_to_delete:
-                await asyncio.to_thread(redis_client.delete, *keys_to_delete)
+                # Native async delete
+                await redis_client.delete(*keys_to_delete)
                 logger.info("[Task %s] Cleared %s Redis cache entries", task_id, len(keys_to_delete))
+        else:
+            logger.info("[Task %s] No Redis client available, skipping cache clear", task_id)
     except Exception as e:
-        logger.warning("[Task %s] Error clearing Redis cache: %s", task_id, e)
+        logger.error("[Task %s] Error clearing Redis cache: %s", task_id, e, exc_info=True)
 
 
 async def _clear_chromadb_collection(code_collection, task_id: str) -> None:

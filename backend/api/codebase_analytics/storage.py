@@ -24,18 +24,43 @@ _PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 
 async def get_redis_connection():
     """
-    Get Redis connection for codebase analytics using canonical utility
+    Get Redis connection for codebase analytics using canonical utility.
 
     This follows CLAUDE.md "🔴 REDIS CLIENT USAGE" policy.
     Uses DB 11 (analytics) for codebase indexing and analysis.
+
+    Returns a SYNC Redis client for use with asyncio.to_thread().
+    For async operations, use get_redis_connection_async() instead.
     """
-    # Use canonical Redis utility instead of direct instantiation
+    # Use canonical Redis utility - returns sync client
     from src.utils.redis_client import get_redis_client
 
-    redis_client = get_redis_client(database="analytics")
+    redis_client = get_redis_client(database="analytics", async_client=False)
     if redis_client is None:
         logger.warning(
             "Redis client initialization returned None, using in-memory storage"
+        )
+        return None
+
+    return redis_client
+
+
+async def get_redis_connection_async():
+    """
+    Get async Redis connection for codebase analytics.
+
+    This follows CLAUDE.md "🔴 REDIS CLIENT USAGE" policy.
+    Uses DB 11 (analytics) for codebase indexing and analysis.
+
+    Returns an ASYNC Redis client for native async operations.
+    Use this when you want to avoid thread pool blocking.
+    """
+    from src.utils.redis_client import get_redis_client
+
+    redis_client = await get_redis_client(database="analytics", async_client=True)
+    if redis_client is None:
+        logger.warning(
+            "Async Redis client initialization returned None"
         )
         return None
 

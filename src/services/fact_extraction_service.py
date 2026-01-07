@@ -586,9 +586,83 @@ class FactExtractionService:
             logger.error("Error retrieving facts: %s", e)
             return []
 
+    def _aggregate_history_entry(
+        self,
+        history: Dict[str, Any],
+        totals: Dict[str, Any],
+    ) -> None:
+        """Aggregate a single history entry into totals.
+
+        Issue #665: Extracted from get_extraction_statistics to reduce function length.
+
+        Args:
+            history: Parsed history entry dictionary
+            totals: Dictionary of running totals (modified in place)
+        """
+        totals["processing_time"] += history.get("processing_time", 0)
+        totals["facts_extracted"] += history.get("facts_extracted", 0)
+        totals["facts_stored"] += history.get("facts_stored", 0)
+
+        # Aggregate fact type distribution
+        fact_dist = history.get("distributions", {}).get("fact_types", {})
+        for fact_type, count in fact_dist.items():
+            totals["fact_types"][fact_type] = (
+                totals["fact_types"].get(fact_type, 0) + count
+            )
+
+        # Aggregate temporal type distribution
+        temporal_dist = history.get("distributions", {}).get("temporal_types", {})
+        for temporal_type, count in temporal_dist.items():
+            totals["temporal_types"][temporal_type] = (
+                totals["temporal_types"].get(temporal_type, 0) + count
+            )
+
+    def _build_statistics_response(
+        self,
+        total_facts: int,
+        totals: Dict[str, Any],
+        extraction_count: int,
+    ) -> Dict[str, Any]:
+        """Build statistics response from aggregated totals.
+
+        Issue #665: Extracted from get_extraction_statistics to reduce function length.
+
+        Args:
+            total_facts: Total facts in storage
+            totals: Aggregated totals from history
+            extraction_count: Number of extractions processed
+
+        Returns:
+            Statistics response dictionary
+        """
+        avg_processing_time = (
+            totals["processing_time"] / extraction_count if extraction_count > 0 else 0
+        )
+        avg_facts_per_extraction = (
+            totals["facts_extracted"] / extraction_count if extraction_count > 0 else 0
+        )
+        success_rate = (
+            (totals["facts_stored"] / totals["facts_extracted"] * 100)
+            if totals["facts_extracted"] > 0
+            else 0
+        )
+
+        return {
+            "total_facts_stored": total_facts,
+            "recent_extractions": extraction_count,
+            "total_facts_extracted": totals["facts_extracted"],
+            "total_facts_stored_recent": totals["facts_stored"],
+            "average_processing_time": round(avg_processing_time, 2),
+            "average_facts_per_extraction": round(avg_facts_per_extraction, 1),
+            "fact_type_distribution": totals["fact_types"],
+            "temporal_type_distribution": totals["temporal_types"],
+            "extraction_success_rate": round(success_rate, 1),
+        }
+
     async def get_extraction_statistics(self) -> Dict[str, Any]:
         """
         Get statistics about fact extraction operations.
+        Issue #665: Refactored to use extracted helpers for aggregation and response building.
 
         Returns:
             Dictionary with extraction statistics
@@ -605,69 +679,26 @@ class FactExtractionService:
                 self.extraction_history_key, 0, 99
             )
 
-            # Calculate statistics from history
-            total_extractions = len(recent_history)
-            total_processing_time = 0
-            total_facts_extracted = 0
-            total_facts_stored = 0
+            # Initialize totals for aggregation
+            totals = {
+                "processing_time": 0,
+                "facts_extracted": 0,
+                "facts_stored": 0,
+                "fact_types": {},
+                "temporal_types": {},
+            }
 
-            fact_type_totals = {}
-            temporal_type_totals = {}
-
+            # Aggregate history entries
             for history_json in recent_history:
                 try:
                     history = json.loads(history_json)
-                    total_processing_time += history.get("processing_time", 0)
-                    total_facts_extracted += history.get("facts_extracted", 0)
-                    total_facts_stored += history.get("facts_stored", 0)
-
-                    # Aggregate distributions
-                    fact_dist = history.get("distributions", {}).get("fact_types", {})
-                    for fact_type, count in fact_dist.items():
-                        fact_type_totals[fact_type] = (
-                            fact_type_totals.get(fact_type, 0) + count
-                        )
-
-                    temporal_dist = history.get("distributions", {}).get(
-                        "temporal_types", {}
-                    )
-                    for temporal_type, count in temporal_dist.items():
-                        temporal_type_totals[temporal_type] = (
-                            temporal_type_totals.get(temporal_type, 0) + count
-                        )
-
+                    self._aggregate_history_entry(history, totals)
                 except json.JSONDecodeError:
                     continue
 
-            avg_processing_time = (
-                total_processing_time / total_extractions
-                if total_extractions > 0
-                else 0
+            return self._build_statistics_response(
+                total_facts, totals, len(recent_history)
             )
-            avg_facts_per_extraction = (
-                total_facts_extracted / total_extractions
-                if total_extractions > 0
-                else 0
-            )
-
-            return {
-                "total_facts_stored": total_facts,
-                "recent_extractions": total_extractions,
-                "total_facts_extracted": total_facts_extracted,
-                "total_facts_stored_recent": total_facts_stored,
-                "average_processing_time": round(avg_processing_time, 2),
-                "average_facts_per_extraction": round(avg_facts_per_extraction, 1),
-                "fact_type_distribution": fact_type_totals,
-                "temporal_type_distribution": temporal_type_totals,
-                "extraction_success_rate": round(
-                    (
-                        (total_facts_stored / total_facts_extracted * 100)
-                        if total_facts_extracted > 0
-                        else 0
-                    ),
-                    1,
-                ),
-            }
 
         except Exception as e:
             logger.error("Error getting extraction statistics: %s", e)
