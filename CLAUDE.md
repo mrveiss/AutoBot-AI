@@ -142,6 +142,109 @@ git config user.email "mrveiss@example.com"
 
 ---
 
+## 📏 FUNCTION LENGTH STANDARDS (MANDATORY)
+
+**⚠️ MANDATORY RULE: KEEP FUNCTIONS UNDER 50 LINES**
+
+### **The Problem with Long Functions:**
+
+- **Hard to understand** - Large functions require excessive mental load
+- **Hard to test** - Multiple responsibilities make unit testing difficult
+- **Hard to maintain** - Changes risk unintended side effects
+- **Hard to reuse** - Tightly coupled logic can't be shared
+- **Code smell** - Often indicates violation of Single Responsibility Principle
+
+### **Line Length Limits:**
+
+| Severity | Lines | Action Required |
+|----------|-------|-----------------|
+| ✅ Good | ≤30 | Ideal function length |
+| ⚠️ Warning | 31-50 | Consider refactoring |
+| 🔴 Violation | 51-65 | Must refactor before merge |
+| ❌ Critical | >65 | Immediate refactoring required |
+
+### **✅ CORRECT Approach - Extract Method Pattern:**
+
+When a function exceeds 50 lines, use **Extract Method** refactoring:
+
+```python
+# ❌ BAD - Long function with multiple responsibilities
+def process_data(data):
+    # 80+ lines of validation, transformation, and storage
+    ...
+
+# ✅ GOOD - Extracted helper functions
+def _validate_data(data: dict) -> bool:
+    """Validate input data structure."""
+    ...
+
+def _transform_data(data: dict) -> dict:
+    """Transform data to required format."""
+    ...
+
+def _store_data(data: dict) -> str:
+    """Store processed data and return ID."""
+    ...
+
+def process_data(data: dict) -> str:
+    """Process data through validation, transformation, and storage."""
+    if not _validate_data(data):
+        raise ValueError("Invalid data")
+    transformed = _transform_data(data)
+    return _store_data(transformed)
+```
+
+### **Extraction Guidelines:**
+
+1. **Identify logical blocks** - Find code that does one specific thing
+2. **Name descriptively** - Helper names should describe what they do
+3. **Use underscore prefix** - Private helpers start with `_`
+4. **Add docstrings** - Include "Issue #XXX: Extracted from..." reference
+5. **Keep related code together** - Group helpers near their parent function
+
+### **Docstring Template for Extracted Helpers:**
+
+```python
+def _helper_function(args):
+    """Brief description of what this helper does.
+
+    Issue #XXX: Extracted from parent_function to reduce function length.
+
+    Args:
+        args: Description of arguments
+
+    Returns:
+        Description of return value
+    """
+```
+
+### **When to Extract:**
+
+- **Nested loops** - Extract inner loop logic
+- **Conditional blocks** - Extract complex if/else branches
+- **Data transformations** - Extract mapping/filtering operations
+- **Validation logic** - Extract validation into dedicated helpers
+- **Initialization code** - Extract setup/configuration logic
+- **Cleanup code** - Extract resource cleanup
+
+### **❌ FORBIDDEN:**
+
+- **Functions >65 lines** - Must be refactored immediately
+- **Nested functions >30 lines** - Extract to module-level helpers
+- **Ignoring length warnings** - Address during development, not later
+- **"I'll refactor later"** - Refactor NOW, before commit
+
+### **Pre-Commit Enforcement:**
+
+A function length check runs as part of the pre-commit validation:
+- Functions >65 lines will trigger warnings
+- Address all warnings before committing
+- Use `python scripts/analyze_function_lengths.py` to check
+
+**THIS POLICY PREVENTS TECHNICAL DEBT FROM ACCUMULATING - NO EXCEPTIONS**
+
+---
+
 ## 📛 FILE NAMING STANDARDS (MANDATORY)
 
 **⚠️ MANDATORY RULE: NO TEMPORARY OR VERSIONED FILE NAMES**
@@ -1092,6 +1195,7 @@ gh issue comment <issue-number> --body "Task complete ✅"
 | **GitHub Issue Tracking** | ✅ MANDATORY - ALL work must be tied to GitHub issue/task in https://github.com/mrveiss/AutoBot-AI |
 | **Issue Completion** | ✅ MANDATORY - Issue ONLY done when: code committed, acceptance criteria met, issue closed with summary |
 | **Temporary Fixes** | ❌ NEVER - Always fix root causes (NO EXCEPTIONS) |
+| **Function Length** | ✅ MANDATORY - Keep functions under 50 lines, >65 lines requires immediate refactoring |
 | **File Naming** | ❌ FORBIDDEN - No _fix, _v2, _optimized, _new, _temp suffixes |
 | **Consolidation** | ✅ MANDATORY - Preserve ALL features, choose BEST implementation |
 | **Subtask Execution** | ✅ MANDATORY - Break down every task into subtasks |
@@ -1120,6 +1224,7 @@ gh issue comment <issue-number> --body "Task complete ✅"
 - Will code be reviewed? ✓
 - Am I fixing root cause (not workaround)? ✓
 - Did I use permanent file names (no _fix, _v2, _temp)? ✓
+- Are my functions under 50 lines? (>65 requires immediate refactoring) ✓
 - If consolidating: Did I preserve ALL features and choose BEST implementation? ✓
 - Did I update GitHub issue with progress? ✓
 - If feature needs integration: Did I implement BOTH frontend AND backend? ✓
