@@ -157,6 +157,34 @@ def _build_ownership_result(analysis: dict, path: str) -> dict:
     }
 
 
+def _build_ownership_error_response(message: str, include_lists: bool = True) -> dict:
+    """Build error response for ownership analysis.
+
+    Issue #665: Extracted from get_ownership_analysis to reduce function length.
+
+    Args:
+        message: Error message to include
+        include_lists: Whether to include empty list fields
+
+    Returns:
+        Error response dictionary
+    """
+    response = {
+        "status": "error",
+        "message": message,
+        "summary": {},
+    }
+    if include_lists:
+        response.update({
+            "file_ownership": [],
+            "directory_ownership": [],
+            "expertise_scores": [],
+            "knowledge_gaps": [],
+            "metrics": {},
+        })
+    return response
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_ownership_analysis",
@@ -215,16 +243,9 @@ async def get_ownership_analysis(
     try:
         analyzer = _get_ownership_analyzer()
         if not analyzer:
-            return JSONResponse({
-                "status": "error",
-                "message": "OwnershipAnalyzer not available. Check tools installation.",
-                "summary": {},
-                "file_ownership": [],
-                "directory_ownership": [],
-                "expertise_scores": [],
-                "knowledge_gaps": [],
-                "metrics": {},
-            })
+            return JSONResponse(_build_ownership_error_response(
+                "OwnershipAnalyzer not available. Check tools installation."
+            ))
 
         analysis = await _run_ownership_analysis(analyzer, path, pattern_list, days)
         if analysis is None:
@@ -250,11 +271,9 @@ async def get_ownership_analysis(
 
     except Exception as e:
         logger.error("Ownership analysis failed: %s", e, exc_info=True)
-        return JSONResponse({
-            "status": "error",
-            "message": f"Ownership analysis failed: {str(e)}",
-            "summary": {},
-        })
+        return JSONResponse(_build_ownership_error_response(
+            f"Ownership analysis failed: {str(e)}", include_lists=False
+        ))
 
 
 @with_error_handling(

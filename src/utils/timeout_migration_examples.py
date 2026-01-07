@@ -48,6 +48,142 @@ _SEQUENCE_TYPES = (list, tuple)
 _PATH_TYPES = (str, Path)
 
 
+# =============================================================================
+# Helper Functions for migrate_knowledge_base_indexing (Issue #665)
+# =============================================================================
+
+
+async def _get_indexing_resume_state(
+    context: "OperationExecutionContext",
+) -> tuple[List[Dict[str, Any]], int]:
+    """Get resume state for indexing operation.
+
+    Issue #665: Extracted from migrate_knowledge_base_indexing to reduce function length.
+
+    Args:
+        context: Operation execution context
+
+    Returns:
+        Tuple of (processed_files, start_index)
+    """
+    if context.should_resume():
+        checkpoint_data = context.get_resume_data()
+        processed_files = checkpoint_data.intermediate_results.get(
+            "processed_files", []
+        )
+        start_index = len(processed_files)
+        logger.info("Resuming indexing from file %s", start_index)
+    else:
+        processed_files = []
+        start_index = 0
+    return processed_files, start_index
+
+
+def _build_indexing_result(
+    indexed_files: List[Dict[str, Any]],
+    resumed: bool,
+) -> Dict[str, Any]:
+    """Build final result for indexing operation.
+
+    Issue #665: Extracted from migrate_knowledge_base_indexing to reduce function length.
+
+    Args:
+        indexed_files: List of indexed file information
+        resumed: Whether operation was resumed from checkpoint
+
+    Returns:
+        Final result dictionary
+    """
+    return {
+        "total_files_processed": len(indexed_files),
+        "files": indexed_files,
+        "completed_at": datetime.now().isoformat(),
+        "resumed_from_checkpoint": resumed,
+    }
+
+
+# =============================================================================
+# Helper Functions for migrate_security_scan_operation (Issue #665)
+# =============================================================================
+
+
+def _collect_security_scan_files(scan_paths: List[Path]) -> List[Path]:
+    """Collect files to scan for security issues.
+
+    Issue #665: Extracted from migrate_security_scan_operation to reduce function length.
+
+    Args:
+        scan_paths: List of paths to scan
+
+    Returns:
+        List of file paths to scan
+    """
+    files_to_scan = []
+    patterns = [
+        "*.py", "*.js", "*.json", "*.yaml", "*.yml",
+        "*.env", "*.con", "*.config",
+    ]
+    for scan_path in scan_paths:
+        if scan_path.exists():
+            for pattern in patterns:
+                files_to_scan.extend(scan_path.rglob(pattern))
+    return files_to_scan
+
+
+async def _get_security_scan_resume_state(
+    context: "OperationExecutionContext",
+) -> tuple[List[Dict[str, Any]], int]:
+    """Get resume state for security scan operation.
+
+    Issue #665: Extracted from migrate_security_scan_operation to reduce function length.
+
+    Args:
+        context: Operation execution context
+
+    Returns:
+        Tuple of (scan_results, start_index)
+    """
+    if context.should_resume():
+        checkpoint_data = context.get_resume_data()
+        scan_results = checkpoint_data.intermediate_results.get("scan_results", [])
+        start_index = len(scan_results)
+        logger.info("Resuming security scan from file %s", start_index)
+    else:
+        scan_results = []
+        start_index = 0
+    return scan_results, start_index
+
+
+def _build_security_scan_result(
+    scan_results: List[Dict[str, Any]],
+    scan_types: List[str],
+    resumed: bool,
+) -> Dict[str, Any]:
+    """Build final result for security scan operation.
+
+    Issue #665: Extracted from migrate_security_scan_operation to reduce function length.
+
+    Args:
+        scan_results: List of scan results
+        scan_types: Types of scans performed
+        resumed: Whether operation was resumed from checkpoint
+
+    Returns:
+        Final result dictionary
+    """
+    total_vulnerabilities = sum(
+        len(result.get("vulnerabilities", [])) for result in scan_results
+    )
+    return {
+        "total_files_scanned": len(scan_results),
+        "total_vulnerabilities": total_vulnerabilities,
+        "scan_results": scan_results,
+        "scan_types": scan_types,
+        "completed_at": datetime.now().isoformat(),
+        "resumed_from_checkpoint": resumed,
+    }
+
+
 class ExistingOperationMigrator:
     """
     Utility class to help migrate existing operations to the long-running framework
@@ -84,8 +220,10 @@ class ExistingOperationMigrator:
         #     return {"error": "Indexing timed out"}  # Work lost!
 
         async def enhanced_indexing_operation(context: OperationExecutionContext):
-            """Enhanced indexing with proper progress tracking and checkpoints"""
+            """Enhanced indexing with proper progress tracking and checkpoints.
 
+            Issue #665: Refactored to use extracted helper functions.
+            """
             codebase_path = Path(PATH.PROJECT_ROOT)
             file_patterns = ["*.py", "*.js", "*.vue", "*.ts", "*.jsx", "*.tsx"]
 
@@ -97,43 +235,24 @@ class ExistingOperationMigrator:
             total_files = len(all_files)
             await context.update_progress("File discovery", 0, total_files)
 
-            # Check if resuming from checkpoint
-            if context.should_resume():
-                checkpoint_data = context.get_resume_data()
-                processed_files = checkpoint_data.intermediate_results.get(
-                    "processed_files", []
-                )
-                start_index = len(processed_files)
-                logger.info("Resuming indexing from file %s", start_index)
-            else:
-                processed_files = []
-                start_index = 0
-
+            # Get resume state using helper (Issue #665)
+            processed_files, start_index = await _get_indexing_resume_state(context)
             indexed_files = []
 
             try:
                 for i, file_path in enumerate(all_files[start_index:], start_index):
                     try:
-                        # Process file with proper error handling
                         file_info = await self._process_file_for_indexing(file_path)
                         indexed_files.append(file_info)
 
                         # Update progress
+                        elapsed = (datetime.now() - context.operation.started_at).total_seconds()
                         await context.update_progress(
                             f"Indexing {file_path.name}",
                             i + 1,
                             total_files,
                             {
-                                "files_per_second": (
-                                    len(indexed_files)
-                                    / max(
-                                        1,
-                                        (
-                                            datetime.now()
-                                            - context.operation.started_at
-                                        ).total_seconds(),
-                                    )
-                                ),
+                                "files_per_second": len(indexed_files) / max(1, elapsed),
                                 "current_file": str(file_path),
                             },
                             f"Processed {i + 1} of {total_files} files",
@@ -149,22 +268,13 @@ class ExistingOperationMigrator:
 
                     except Exception as e:
                         logger.warning("Failed to process %s: %s", file_path, e)
-                        # Continue processing other files
 
-                return {
-                    "total_files_processed": len(indexed_files),
-                    "files": indexed_files,
-                    "completed_at": datetime.now().isoformat(),
-                    "resumed_from_checkpoint": context.should_resume(),
-                }
+                # Build result using helper (Issue #665)
+                return _build_indexing_result(indexed_files, context.should_resume())
 
             except Exception as e:
-                # Save checkpoint before failing
                 await context.save_checkpoint(
-                    {
-                        "processed_files": processed_files + indexed_files,
-                        "error": str(e),
-                    },
+                    {"processed_files": processed_files + indexed_files, "error": str(e)},
                     "error_recovery",
                 )
                 raise
@@ -412,47 +522,20 @@ class ExistingOperationMigrator:
         """
 
         async def enhanced_security_scan_operation(context: OperationExecutionContext):
-            """Enhanced security scan with checkpointing and progress tracking"""
+            """Enhanced security scan with checkpointing and progress tracking.
 
+            Issue #665: Refactored to use extracted helper functions.
+            """
             scan_paths = [Path(PATH.PROJECT_ROOT)]
             scan_types = ["vulnerability", "dependency", "secrets"]
 
-            # Collect files to scan
-            files_to_scan = []
-            for scan_path in scan_paths:
-                if scan_path.exists():
-                    # Include various file types for security scanning
-                    patterns = [
-                        "*.py",
-                        "*.js",
-                        "*.json",
-                        "*.yaml",
-                        "*.yml",
-                        "*.env",
-                        "*.con",
-                        "*.config",
-                    ]
-                    for pattern in patterns:
-                        files_to_scan.extend(scan_path.rglob(pattern))
-
+            # Collect files using helper (Issue #665)
+            files_to_scan = _collect_security_scan_files(scan_paths)
             total_files = len(files_to_scan)
-            await context.update_progress(
-                "File discovery for security scan", 0, total_files
-            )
+            await context.update_progress("File discovery for security scan", 0, total_files)
 
-            # Check if resuming
-            if context.should_resume():
-                checkpoint_data = context.get_resume_data()
-                scan_results = checkpoint_data.intermediate_results.get(
-                    "scan_results", []
-                )
-                start_index = len(scan_results)
-                logger.info("Resuming security scan from file %s", start_index)
-            else:
-                scan_results = []
-                start_index = 0
-
-            # Perform security scanning
+            # Get resume state using helper (Issue #665)
+            scan_results, start_index = await _get_security_scan_resume_state(context)
             vulnerability_count = 0
 
             for i, file_path in enumerate(files_to_scan[start_index:], start_index):
@@ -469,10 +552,7 @@ class ExistingOperationMigrator:
                         f"Scanned {i + 1} of {total_files} files",
                     )
 
-                    # Simulate security scanning
-                    file_scan_result = await self._scan_file_for_security(
-                        file_path, scan_types
-                    )
+                    file_scan_result = await self._scan_file_for_security(file_path, scan_types)
                     scan_results.append(file_scan_result)
 
                     if file_scan_result.get("vulnerabilities"):
@@ -480,26 +560,13 @@ class ExistingOperationMigrator:
 
                     # Checkpoint every 50 files
                     if (i + 1) % 50 == 0:
-                        await context.save_checkpoint(
-                            {"scan_results": scan_results}, f"file_{i + 1}"
-                        )
+                        await context.save_checkpoint({"scan_results": scan_results}, f"file_{i + 1}")
 
                 except Exception as e:
                     logger.warning("Failed to scan %s: %s", file_path, e)
 
-            # Generate summary
-            total_vulnerabilities = sum(
-                len(result.get("vulnerabilities", [])) for result in scan_results
-            )
-
-            return {
-                "total_files_scanned": len(scan_results),
-                "total_vulnerabilities": total_vulnerabilities,
-                "scan_results": scan_results,
-                "scan_types": scan_types,
-                "completed_at": datetime.now().isoformat(),
-                "resumed_from_checkpoint": context.should_resume(),
-            }
+            # Build result using helper (Issue #665)
+            return _build_security_scan_result(scan_results, scan_types, context.should_resume())
 
         operation_id = await self.manager.create_operation(
             operation_type=OperationType.SECURITY_SCAN,
