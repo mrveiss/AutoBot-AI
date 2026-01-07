@@ -19,9 +19,9 @@ Endpoints:
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Optional, Set
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from backend.knowledge_factory import get_or_create_knowledge_base
@@ -582,3 +582,321 @@ async def documentation_stats():
             "success": False,
             "message": str(e),
         }
+
+
+# ============================================================================
+# Unified Knowledge Graph Endpoint (for KnowledgeGraph.vue)
+# ============================================================================
+
+
+class GraphRequest(BaseModel):
+    """Request model for unified knowledge graph."""
+
+    max_facts: int = Field(50, ge=1, le=200, description="Maximum facts to include")
+    max_depth: int = Field(2, ge=1, le=3, description="Maximum relation depth")
+    include_categories: bool = Field(True, description="Include category nodes")
+    include_relations: bool = Field(True, description="Include fact relations")
+    category_filter: Optional[str] = Field(None, description="Filter by category path")
+
+
+def _create_category_node(category: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a graph node from a category.
+
+    Issue #707: Extracted helper for unified graph building.
+    """
+    return {
+        "id": f"cat_{category.get('id', category.get('name', 'unknown'))}",
+        "name": category.get("name", "Unknown"),
+        "type": "category",
+        "observations": [category.get("description", "Knowledge category")],
+        "metadata": {
+            "path": category.get("path", ""),
+            "fact_count": category.get("fact_count", 0),
+            "icon": category.get("icon", "folder"),
+            "color": category.get("color", "#6366f1"),
+        },
+        "created_at": int(category.get("created_at", 0)),
+    }
+
+
+def _create_fact_node(fact: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a graph node from a fact.
+
+    Issue #707: Extracted helper for unified graph building.
+    """
+    content = fact.get("content", "")
+    # Truncate long content for node label
+    label = content[:100] + "..." if len(content) > 100 else content
+
+    return {
+        "id": fact.get("id") or fact.get("fact_id", f"fact_{hash(content)}"),
+        "name": label,
+        "type": "fact",
+        "observations": [content],
+        "metadata": {
+            "category": fact.get("category", "general"),
+            "source": fact.get("source", "knowledge_base"),
+            "confidence": fact.get("confidence", 1.0),
+        },
+        "created_at": int(fact.get("created_at", 0)),
+    }
+
+
+def _process_category_tree(
+    tree: List[Dict[str, Any]], nodes: List[Dict], edges: List[Dict], parent_id: Optional[str] = None
+) -> None:
+    """Recursively process category tree into nodes and edges.
+
+    Issue #707: Extracted helper for unified graph building.
+    """
+    for category in tree:
+        node = _create_category_node(category)
+        nodes.append(node)
+
+        # Add edge from parent category if exists
+        if parent_id:
+            edges.append({
+                "from": parent_id,
+                "to": node["id"],
+                "type": "contains",
+                "strength": 1.0,
+            })
+
+        # Process children recursively
+        children = category.get("children", [])
+        if children:
+            _process_category_tree(children, nodes, edges, node["id"])
+
+
+async def _get_facts_for_graph(
+    kb: Any, category_filter: Optional[str], max_facts: int
+) -> List[Dict[str, Any]]:
+    """Get facts for the graph with optional category filtering.
+
+    Issue #707: Extracted helper for unified graph building.
+    """
+    if category_filter:
+        # Get facts from specific category
+        result = await kb.get_facts_in_category(
+            category_id=category_filter, include_descendants=True, limit=max_facts
+        )
+        return result.get("facts", []) if result.get("success") else []
+    else:
+        # Search for recent facts
+        result = await kb.search("*", top_k=max_facts)
+        return result.get("results", [])
+
+
+async def _get_fact_relations_for_graph(
+    kb: Any, fact_ids: List[str], max_relations: int = 100
+) -> List[Dict[str, Any]]:
+    """Get relations between facts for the graph.
+
+    Issue #707: Extracted helper for unified graph building.
+    """
+    relations = []
+    relation_set = set()
+
+    for fact_id in fact_ids[:20]:  # Limit to first 20 to avoid too many queries
+        try:
+            result = await kb.get_fact_relations(
+                fact_id, direction="both", include_fact_details=False
+            )
+            if not result.get("success"):
+                continue
+
+            for rel in result.get("outgoing", [])[:5]:  # Limit per fact
+                target_id = rel.get("target_id")
+                if not target_id or target_id not in fact_ids:
+                    continue
+                key = f"{fact_id}-{target_id}"
+                if key not in relation_set:
+                    relation_set.add(key)
+                    relations.append({
+                        "from": fact_id,
+                        "to": target_id,
+                        "type": rel.get("relation_type", "relates_to"),
+                        "strength": rel.get("strength", 0.8),
+                    })
+
+            if len(relations) >= max_relations:
+                break
+        except Exception:
+            continue
+
+    return relations
+
+
+def _create_dynamic_category_nodes(
+    facts: List[Dict[str, Any]], nodes: List[Dict], edges: List[Dict]
+) -> Dict[str, str]:
+    """Create category nodes dynamically from fact categories.
+
+    Issue #707: Creates category nodes based on unique category values in facts.
+    Returns mapping of category name to node ID.
+    """
+    category_colors = {
+        "general": "#6b7280",
+        "system_commands": "#10b981",
+        "developer": "#3b82f6",
+        "agents": "#8b5cf6",
+        "architecture": "#f59e0b",
+        "implementation": "#06b6d4",
+        "autobot-documentation": "#3b82f6",
+        "system-knowledge": "#10b981",
+        "user-knowledge": "#f59e0b",
+    }
+
+    category_map: Dict[str, str] = {}
+    seen_categories: Set[str] = set()
+
+    for fact in facts:
+        category = fact.get("category", "general")
+        if category and category not in seen_categories:
+            seen_categories.add(category)
+            node_id = f"cat_{category}"
+            category_map[category] = node_id
+            nodes.append({
+                "id": node_id,
+                "name": category.replace("-", " ").replace("_", " ").title(),
+                "type": "category",
+                "observations": [f"Knowledge category: {category}"],
+                "metadata": {
+                    "path": category,
+                    "fact_count": 0,
+                    "icon": "folder",
+                    "color": category_colors.get(category, "#6366f1"),
+                },
+                "created_at": 0,
+            })
+
+    return category_map
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_unified_graph",
+    error_code_prefix="KNOWLEDGE_UNIFIED",
+)
+@router.post("/graph")
+async def get_unified_graph(req: Request, body: GraphRequest):
+    """
+    Get unified knowledge graph combining categories, facts, and relations.
+
+    This endpoint is designed for the KnowledgeGraph.vue component to visualize
+    all knowledge sources in a single graph. It returns:
+
+    - Category nodes (from hierarchical tree OR dynamically from facts)
+    - Fact nodes (sampled from knowledge base)
+    - Edges: category->fact, fact->fact relations
+
+    The response format matches what Cytoscape.js expects:
+    - entities: List of nodes with id, name, type, observations
+    - relations: List of edges with from, to, type, strength
+    """
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+    nodes: List[Dict[str, Any]] = []
+    edges: List[Dict[str, Any]] = []
+    fact_ids: List[str] = []
+    category_map: Dict[str, str] = {}
+
+    # Get category tree if requested
+    if body.include_categories and kb is not None:
+        try:
+            tree_result = await kb.get_category_tree(
+                root_id=None, max_depth=body.max_depth, include_fact_counts=True
+            )
+            if tree_result.get("success") and tree_result.get("tree"):
+                _process_category_tree(tree_result.get("tree", []), nodes, edges)
+                # Build category map from tree
+                for node in nodes:
+                    if node["type"] == "category":
+                        cat_name = node.get("metadata", {}).get("path", "").split("/")[-1]
+                        if cat_name:
+                            category_map[cat_name] = node["id"]
+        except Exception as e:
+            logger.warning("Failed to get category tree: %s", e)
+
+    # Get facts
+    facts: List[Dict[str, Any]] = []
+    if kb is not None:
+        try:
+            facts = await _get_facts_for_graph(kb, body.category_filter, body.max_facts)
+        except Exception as e:
+            logger.warning("Failed to get facts: %s", e)
+
+    # If no category nodes from tree, create them dynamically from facts
+    if body.include_categories and not category_map and facts:
+        category_map = _create_dynamic_category_nodes(facts, nodes, edges)
+
+    # Process facts into nodes
+    for fact in facts:
+        node = _create_fact_node(fact)
+        nodes.append(node)
+        fact_ids.append(node["id"])
+
+        # Create edge from category to fact
+        category = fact.get("category", "general")
+        cat_node_id = category_map.get(category)
+        if cat_node_id:
+            edges.append({
+                "from": cat_node_id,
+                "to": node["id"],
+                "type": "contains",
+                "strength": 0.6,
+            })
+
+    # Update category fact counts
+    for node in nodes:
+        if node["type"] == "category":
+            cat_path = node.get("metadata", {}).get("path", "")
+            cat_name = cat_path.split("/")[-1] if cat_path else node["id"].replace("cat_", "")
+            count = sum(1 for f in facts if f.get("category") == cat_name)
+            node["metadata"]["fact_count"] = count
+
+    # Get fact relations if requested
+    if body.include_relations and kb is not None and fact_ids:
+        try:
+            fact_relations = await _get_fact_relations_for_graph(kb, fact_ids)
+            edges.extend(fact_relations)
+        except Exception as e:
+            logger.warning("Failed to get fact relations: %s", e)
+
+    return {
+        "success": True,
+        "data": {
+            "entities": nodes,
+            "relations": edges,
+        },
+        "stats": {
+            "total_entities": len(nodes),
+            "total_relations": len(edges),
+            "categories": len([n for n in nodes if n["type"] == "category"]),
+            "facts": len([n for n in nodes if n["type"] == "fact"]),
+        },
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_unified_graph_simple",
+    error_code_prefix="KNOWLEDGE_UNIFIED",
+)
+@router.get("/graph")
+async def get_unified_graph_simple(
+    req: Request,
+    max_facts: int = Query(50, ge=1, le=200, description="Maximum facts to include"),
+    include_categories: bool = Query(True, description="Include category nodes"),
+):
+    """
+    GET version of unified graph for simple requests.
+
+    Returns a unified knowledge graph with default settings.
+    For more control, use POST /unified/graph with GraphRequest body.
+    """
+    body = GraphRequest(
+        max_facts=max_facts,
+        include_categories=include_categories,
+    )
+    return await get_unified_graph(req, body)
