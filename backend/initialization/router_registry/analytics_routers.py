@@ -33,13 +33,13 @@ ANALYTICS_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("backend.api.analytics_precommit", "/precommit", ["precommit", "analytics"], "analytics_precommit"),  # Issue #570: Fix prefix
     # AI/ML analytics
     ("backend.api.analytics_bug_prediction", "/analytics", ["bug-prediction", "analytics"], "analytics_bug_prediction"),
-    ("backend.api.analytics_llm_patterns", "", ["llm-patterns", "analytics"], "analytics_llm_patterns"),
+    ("backend.api.analytics_llm_patterns", "/llm-patterns", ["llm-patterns", "analytics"], "analytics_llm_patterns"),  # Issue #710: Fix prefix to match frontend
     ("backend.api.analytics_code_generation", "/code-generation", ["code-generation", "analytics"], "analytics_code_generation"),  # Issue #570: Fix prefix
     ("backend.api.analytics_embedding_patterns", "/embedding-analytics", ["embedding-analytics", "analytics"], "analytics_embedding_patterns"),
-    # Performance and logging
-    ("backend.api.analytics_performance", "", ["performance", "analytics"], "analytics_performance"),
-    ("backend.api.analytics_log_patterns", "", ["log-patterns", "analytics"], "analytics_log_patterns"),
-    ("backend.api.analytics_conversation", "", ["conversation-flow", "analytics"], "analytics_conversation"),
+    # Performance and logging - Issue #710: Fix prefixes to match frontend
+    ("backend.api.analytics_performance", "/performance", ["performance", "analytics"], "analytics_performance"),
+    ("backend.api.analytics_log_patterns", "/log-patterns", ["log-patterns", "analytics"], "analytics_log_patterns"),
+    ("backend.api.analytics_conversation", "/conversation-flow", ["conversation-flow", "analytics"], "analytics_conversation"),
     # Advanced analysis
     ("backend.api.analytics_cfg", "/cfg-analytics", ["cfg", "analytics"], "analytics_cfg"),
     ("backend.api.analytics_dfa", "/dfa-analytics", ["dfa", "analytics"], "analytics_dfa"),
