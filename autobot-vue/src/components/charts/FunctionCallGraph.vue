@@ -4,9 +4,10 @@
   Author: mrveiss
 
   FunctionCallGraph.vue - Interactive function call graph visualization
+  Issue #707: Added Cytoscape.js network view as default
 -->
 <template>
-  <div class="function-call-graph" :class="{ 'chart-loading': loading }">
+  <div class="function-call-graph" :class="{ 'chart-loading': loading, 'fullscreen': isFullscreen }">
     <div v-if="title" class="chart-header">
       <h3 class="chart-title">{{ title }}</h3>
       <span v-if="subtitle" class="chart-subtitle">{{ subtitle }}</span>
@@ -38,14 +39,22 @@
           type="text"
           placeholder="Search functions..."
           class="graph-search"
+          @input="handleSearch"
         />
-        <select v-model="filterModule" class="module-filter">
+        <select v-model="filterModule" class="module-filter" @change="handleModuleFilter">
           <option value="">All Modules</option>
           <option v-for="mod in uniqueModules" :key="mod" :value="mod">
             {{ truncateModule(mod || '') }}
           </option>
         </select>
         <div class="view-toggle">
+          <button
+            :class="{ active: viewMode === 'network' }"
+            @click="viewMode = 'network'"
+            title="Network View (Cytoscape)"
+          >
+            <i class="fas fa-project-diagram"></i>
+          </button>
           <button
             :class="{ active: viewMode === 'list' }"
             @click="viewMode = 'list'"
@@ -54,11 +63,11 @@
             <i class="fas fa-list"></i>
           </button>
           <button
-            :class="{ active: viewMode === 'graph' }"
-            @click="viewMode = 'graph'"
-            title="Graph View"
+            :class="{ active: viewMode === 'stats' }"
+            @click="viewMode = 'stats'"
+            title="Cluster View"
           >
-            <i class="fas fa-project-diagram"></i>
+            <i class="fas fa-circle-nodes"></i>
           </button>
         </div>
       </div>
@@ -80,6 +89,67 @@
         <div class="stat stat-unresolved" :class="{ active: resolvedFilter === 'unresolved' }" @click="toggleResolvedFilter('unresolved')">
           <span class="stat-value">{{ unresolvedCount }}</span>
           <span class="stat-label">Unresolved</span>
+        </div>
+      </div>
+
+      <!-- Network view (Cytoscape) - DEFAULT -->
+      <div v-show="viewMode === 'network'" class="network-view">
+        <div ref="cytoscapeContainer" class="cytoscape-container"></div>
+        <div class="network-controls">
+          <button @click="zoomIn" title="Zoom in">
+            <i class="fas fa-plus"></i>
+          </button>
+          <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
+          <button @click="zoomOut" title="Zoom out">
+            <i class="fas fa-minus"></i>
+          </button>
+          <button @click="fitGraph" title="Fit to view">
+            <i class="fas fa-expand"></i>
+          </button>
+          <button @click="toggleLayout" title="Toggle layout">
+            <i class="fas fa-th"></i>
+          </button>
+          <span class="control-separator">|</span>
+          <button @click="toggleFullscreen" :title="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'">
+            <i :class="isFullscreen ? 'fas fa-compress' : 'fas fa-expand-arrows-alt'"></i>
+          </button>
+        </div>
+
+        <!-- Node Detail Panel -->
+        <div v-if="selectedNodeInfo" class="node-detail-panel">
+          <div class="detail-header">
+            <span v-if="selectedNodeInfo.isAsync" class="async-badge">async</span>
+            <span class="detail-name">{{ selectedNodeInfo.name }}</span>
+            <button class="close-btn" @click="selectedNodeInfo = null" title="Close">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="detail-content">
+            <div class="detail-row">
+              <span class="detail-label">Full Name:</span>
+              <span class="detail-value path-value">{{ selectedNodeInfo.fullName }}</span>
+            </div>
+            <div v-if="selectedNodeInfo.module" class="detail-row">
+              <span class="detail-label">Module:</span>
+              <span class="detail-value">{{ selectedNodeInfo.module }}</span>
+            </div>
+            <div v-if="selectedNodeInfo.className" class="detail-row">
+              <span class="detail-label">Class:</span>
+              <span class="detail-value class-value">{{ selectedNodeInfo.className }}</span>
+            </div>
+            <div v-if="selectedNodeInfo.file" class="detail-row">
+              <span class="detail-label">File:</span>
+              <span class="detail-value path-value">{{ selectedNodeInfo.file }}:{{ selectedNodeInfo.line }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Outgoing Calls:</span>
+              <span class="detail-value calls-out">{{ selectedNodeInfo.outgoingCalls }} function{{ selectedNodeInfo.outgoingCalls !== 1 ? 's' : '' }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Incoming Calls:</span>
+              <span class="detail-value calls-in">{{ selectedNodeInfo.incomingCalls }} caller{{ selectedNodeInfo.incomingCalls !== 1 ? 's' : '' }}</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -163,57 +233,32 @@
         </div>
       </div>
 
-      <!-- Graph view (simplified network representation) -->
-      <div v-else class="graph-view">
+      <!-- Stats/Cluster view (network visualization) -->
+      <div v-show="viewMode === 'stats'" class="cluster-view">
         <div class="graph-info">
           <i class="fas fa-info-circle"></i>
-          <span>Graph view shows top callers and most called functions</span>
+          <span>Top callers (green) and most called functions (purple) as clusters</span>
         </div>
-
-        <!-- Top Callers -->
-        <div class="graph-section">
-          <h4><i class="fas fa-arrow-right"></i> Top Callers</h4>
-          <div class="bar-chart">
-            <div
-              v-for="item in summary?.top_callers || []"
-              :key="item.function"
-              class="bar-item"
-            >
-              <div class="bar-label" :title="item.function">
-                {{ truncateFunc(item.function) }}
-              </div>
-              <div class="bar-container">
-                <div
-                  class="bar-fill caller"
-                  :style="{ width: getBarWidth(item.calls, maxOutgoing) + '%' }"
-                ></div>
-                <span class="bar-value">{{ item.calls }}</span>
-              </div>
-            </div>
-          </div>
+        <div class="cluster-legend">
+          <span class="legend-item caller"><span class="dot"></span> Top Callers</span>
+          <span class="legend-item called"><span class="dot"></span> Most Called</span>
+          <span class="legend-item hub"><span class="dot"></span> Hub (Both)</span>
         </div>
-
-        <!-- Most Called -->
-        <div class="graph-section">
-          <h4><i class="fas fa-arrow-left"></i> Most Called</h4>
-          <div class="bar-chart">
-            <div
-              v-for="item in summary?.most_called || []"
-              :key="item.function"
-              class="bar-item"
-            >
-              <div class="bar-label" :title="item.function">
-                {{ truncateFunc(item.function) }}
-              </div>
-              <div class="bar-container">
-                <div
-                  class="bar-fill called"
-                  :style="{ width: getBarWidth(item.calls, maxIncoming) + '%' }"
-                ></div>
-                <span class="bar-value">{{ item.calls }}</span>
-              </div>
-            </div>
-          </div>
+        <div ref="clusterContainer" class="cluster-container"></div>
+        <div class="network-controls cluster-controls">
+          <button @click="zoomInCluster" title="Zoom in">
+            <i class="fas fa-plus"></i>
+          </button>
+          <span class="zoom-level">{{ Math.round(clusterZoomLevel * 100) }}%</span>
+          <button @click="zoomOutCluster" title="Zoom out">
+            <i class="fas fa-minus"></i>
+          </button>
+          <button @click="fitClusterGraph" title="Fit to view">
+            <i class="fas fa-expand"></i>
+          </button>
+          <button @click="toggleClusterLayout" title="Toggle layout">
+            <i class="fas fa-th"></i>
+          </button>
         </div>
       </div>
     </div>
@@ -221,7 +266,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import cytoscape, { type Core, type NodeSingular } from 'cytoscape'
+// @ts-expect-error - cytoscape-fcose has no type declarations
+import fcose from 'cytoscape-fcose'
+
+// Register fcose layout
+cytoscape.use(fcose)
 
 // Flexible interface to support multiple data formats
 interface GraphNode {
@@ -288,9 +339,32 @@ const emit = defineEmits<{
 const searchQuery = ref('')
 const filterModule = ref('')
 const resolvedFilter = ref<'all' | 'resolved' | 'unresolved'>('all')
-const viewMode = ref<'list' | 'graph'>('list')
+const viewMode = ref<'network' | 'list' | 'stats'>('network') // Default to network view
 const expandedFuncs = ref<Set<string>>(new Set())
 const selectedFunc = ref<string | null>(null)
+const zoomLevel = ref(1)
+const layoutMode = ref<'force' | 'grid'>('force')
+
+// Cytoscape instances
+const cytoscapeContainer = ref<HTMLElement | null>(null)
+const clusterContainer = ref<HTMLElement | null>(null)
+let cy: Core | null = null
+let clusterCy: Core | null = null
+const clusterZoomLevel = ref(1)
+const clusterLayoutMode = ref<'force' | 'grid'>('force')
+const isFullscreen = ref(false)
+const selectedNodeInfo = ref<{
+  id: string
+  name: string
+  fullName: string
+  module: string
+  file: string
+  line: number
+  isAsync: boolean
+  className: string | null
+  outgoingCalls: number
+  incomingCalls: number
+} | null>(null)
 
 // Computed
 const containerHeight = computed(() => {
@@ -342,10 +416,8 @@ const filteredNodes = computed(() => {
     nodes = nodes.filter(n => {
       const outgoingCalls = getOutgoingCalls(n.id)
       if (showResolved) {
-        // Show functions that have at least one resolved outgoing call
         return outgoingCalls.some(e => e.resolved)
       } else {
-        // Show functions that have at least one unresolved outgoing call
         return outgoingCalls.some(e => !e.resolved)
       }
     })
@@ -359,24 +431,596 @@ const filteredNodes = computed(() => {
   })
 })
 
-const maxOutgoing = computed(() => {
-  if (!props.summary?.top_callers?.length) return 1
-  return Math.max(...props.summary.top_callers.map(c => c.calls))
-})
 
-const maxIncoming = computed(() => {
-  if (!props.summary?.most_called?.length) return 1
-  return Math.max(...props.summary.most_called.map(c => c.calls))
-})
+// ============================================================================
+// Cytoscape Methods
+// ============================================================================
 
-// Methods
+function initCytoscape() {
+  if (!cytoscapeContainer.value) return
 
-// Helper to get edge source - supports both 'from' and 'source' formats
+  cy = cytoscape({
+    container: cytoscapeContainer.value,
+    style: getCytoscapeStyles(),
+    elements: [],
+    minZoom: 0.1,
+    maxZoom: 3,
+    wheelSensitivity: 0.3,
+    boxSelectionEnabled: false
+  })
+
+  // Event handlers
+  cy.on('tap', 'node', (evt) => {
+    const node = evt.target as NodeSingular
+    const funcId = node.id()
+    selectedFunc.value = funcId
+
+    // Get node data for detail panel
+    const graphNode = props.data?.nodes?.find(n => n.id === funcId)
+    if (graphNode) {
+      selectedNodeInfo.value = {
+        id: funcId,
+        name: graphNode.name,
+        fullName: graphNode.full_name || funcId,
+        module: graphNode.module || '',
+        file: graphNode.file || '',
+        line: graphNode.line || 0,
+        isAsync: graphNode.is_async || false,
+        className: graphNode.class || null,
+        outgoingCalls: getOutgoingCalls(funcId).length,
+        incomingCalls: getIncomingCalls(funcId).length
+      }
+    }
+
+    emit('select', funcId)
+    highlightConnected(node)
+  })
+
+  cy.on('tap', (evt) => {
+    if (evt.target === cy) {
+      selectedFunc.value = null
+      selectedNodeInfo.value = null
+      clearHighlight()
+    }
+  })
+
+  cy.on('mouseover', 'node', (evt) => {
+    const node = evt.target as NodeSingular
+    highlightConnected(node)
+  })
+
+  cy.on('mouseout', 'node', () => {
+    if (!selectedFunc.value) {
+      clearHighlight()
+    }
+  })
+
+  cy.on('zoom', () => {
+    zoomLevel.value = cy?.zoom() || 1
+  })
+}
+
+function getCytoscapeStyles(): cytoscape.StylesheetStyle[] {
+  return [
+    {
+      selector: 'node',
+      style: {
+        'background-color': 'data(color)',
+        'label': 'data(label)',
+        'width': 'data(size)',
+        'height': 'data(size)',
+        'font-size': '10px',
+        'text-valign': 'bottom',
+        'text-halign': 'center',
+        'text-margin-y': 6,
+        'color': '#e2e8f0',
+        'text-outline-color': '#1e293b',
+        'text-outline-width': 2,
+        'border-width': 2,
+        'border-color': '#334155',
+        'text-max-width': '80px',
+        'text-wrap': 'ellipsis'
+      }
+    },
+    {
+      selector: 'node:selected',
+      style: {
+        'border-width': 3,
+        'border-color': '#3b82f6'
+      }
+    },
+    {
+      selector: 'node.highlighted',
+      style: {
+        'border-width': 3,
+        'border-color': '#10b981'
+      }
+    },
+    {
+      selector: 'node.dimmed',
+      style: {
+        'opacity': 0.2
+      }
+    },
+    {
+      selector: 'edge',
+      style: {
+        'width': 'data(width)',
+        'line-color': 'data(color)',
+        'target-arrow-color': 'data(color)',
+        'target-arrow-shape': 'triangle',
+        'curve-style': 'bezier',
+        'opacity': 0.6
+      }
+    },
+    {
+      selector: 'edge.highlighted',
+      style: {
+        'opacity': 1,
+        'width': 3,
+        'line-color': '#10b981',
+        'target-arrow-color': '#10b981'
+      }
+    },
+    {
+      selector: 'edge.dimmed',
+      style: {
+        'opacity': 0.1
+      }
+    }
+  ]
+}
+
+function updateCytoscapeElements() {
+  if (!cy) return
+
+  const elements: cytoscape.ElementDefinition[] = []
+  const nodeIds = new Set(filteredNodes.value.map(n => n.id))
+
+  // Add nodes
+  for (const node of filteredNodes.value) {
+    const outgoing = getOutgoingCalls(node.id).length
+    const incoming = getIncomingCalls(node.id).length
+    const totalCalls = outgoing + incoming
+    const size = 20 + Math.min(totalCalls * 2, 30)
+
+    // Color based on call ratio
+    let color = '#6b7280' // Default gray
+    if (outgoing > incoming) {
+      color = '#10b981' // Green for callers
+    } else if (incoming > outgoing) {
+      color = '#8b5cf6' // Purple for called
+    } else if (totalCalls > 0) {
+      color = '#3b82f6' // Blue for balanced
+    }
+
+    // Async functions get special color
+    if (node.is_async) {
+      color = '#f59e0b'
+    }
+
+    elements.push({
+      data: {
+        id: node.id,
+        label: node.name,
+        color,
+        size,
+        module: node.module,
+        isAsync: node.is_async
+      }
+    })
+  }
+
+  // Add edges (only between visible nodes)
+  if (props.data?.edges) {
+    for (const edge of props.data.edges) {
+      const source = edge.from || edge.source
+      const target = edge.to || edge.target
+
+      if (source && target && nodeIds.has(source) && nodeIds.has(target)) {
+        const edgeColor = edge.resolved === false ? '#fb923c' : '#64748b'
+        const edgeWidth = Math.min(1 + (edge.count || 1) * 0.5, 5)
+
+        elements.push({
+          data: {
+            id: `${source}-${target}`,
+            source,
+            target,
+            color: edgeColor,
+            width: edgeWidth,
+            resolved: edge.resolved
+          }
+        })
+      }
+    }
+  }
+
+  // Update graph
+  cy.elements().remove()
+  cy.add(elements)
+
+  // Run layout
+  runLayout()
+}
+
+function runLayout() {
+  if (!cy || cy.nodes().length === 0) return
+
+  const layoutOptions = layoutMode.value === 'force'
+    ? {
+        name: 'fcose',
+        animate: true,
+        animationDuration: 400,
+        fit: true,
+        padding: 30,
+        nodeDimensionsIncludeLabels: true,
+        idealEdgeLength: 100,
+        nodeRepulsion: 5000,
+        gravity: 0.3
+      }
+    : {
+        name: 'grid',
+        animate: true,
+        animationDuration: 300,
+        fit: true,
+        padding: 30,
+        avoidOverlap: true
+      }
+
+  cy.layout(layoutOptions as cytoscape.LayoutOptions).run()
+}
+
+function highlightConnected(node: NodeSingular) {
+  if (!cy) return
+  const neighborhood = node.neighborhood().add(node)
+  cy.elements().addClass('dimmed')
+  neighborhood.removeClass('dimmed').addClass('highlighted')
+}
+
+function clearHighlight() {
+  if (!cy) return
+  cy.elements().removeClass('dimmed').removeClass('highlighted')
+}
+
+function zoomIn() {
+  if (!cy) return
+  cy.zoom(cy.zoom() * 1.25)
+  cy.center()
+}
+
+function zoomOut() {
+  if (!cy) return
+  cy.zoom(cy.zoom() * 0.8)
+  cy.center()
+}
+
+function fitGraph() {
+  if (!cy) return
+  cy.fit(undefined, 30)
+  zoomLevel.value = cy.zoom()
+}
+
+function toggleLayout() {
+  layoutMode.value = layoutMode.value === 'force' ? 'grid' : 'force'
+  runLayout()
+}
+
+function toggleFullscreen() {
+  isFullscreen.value = !isFullscreen.value
+  // Re-fit the graph after transition
+  nextTick(() => {
+    setTimeout(() => {
+      if (cy) {
+        cy.resize()
+        fitGraph()
+      }
+      if (clusterCy) {
+        clusterCy.resize()
+        fitClusterGraph()
+      }
+    }, 100)
+  })
+}
+
+// ============================================================================
+// Cluster View Cytoscape Methods
+// ============================================================================
+
+function initClusterCytoscape() {
+  if (!clusterContainer.value) return
+
+  clusterCy = cytoscape({
+    container: clusterContainer.value,
+    style: getClusterCytoscapeStyles(),
+    elements: [],
+    minZoom: 0.1,
+    maxZoom: 3,
+    wheelSensitivity: 0.3,
+    boxSelectionEnabled: false
+  })
+
+  // Event handlers
+  clusterCy.on('tap', 'node', (evt) => {
+    const node = evt.target as NodeSingular
+    const funcId = node.id()
+    selectedFunc.value = funcId
+    emit('select', funcId)
+    highlightClusterConnected(node)
+  })
+
+  clusterCy.on('tap', (evt) => {
+    if (evt.target === clusterCy) {
+      selectedFunc.value = null
+      clearClusterHighlight()
+    }
+  })
+
+  clusterCy.on('mouseover', 'node', (evt) => {
+    const node = evt.target as NodeSingular
+    highlightClusterConnected(node)
+  })
+
+  clusterCy.on('mouseout', 'node', () => {
+    if (!selectedFunc.value) {
+      clearClusterHighlight()
+    }
+  })
+
+  clusterCy.on('zoom', () => {
+    clusterZoomLevel.value = clusterCy?.zoom() || 1
+  })
+}
+
+function getClusterCytoscapeStyles(): cytoscape.StylesheetStyle[] {
+  return [
+    {
+      selector: 'node',
+      style: {
+        'background-color': 'data(color)',
+        'label': 'data(label)',
+        'width': 'data(size)',
+        'height': 'data(size)',
+        'font-size': '11px',
+        'text-valign': 'bottom',
+        'text-halign': 'center',
+        'text-margin-y': 8,
+        'color': '#e2e8f0',
+        'text-outline-color': '#1e293b',
+        'text-outline-width': 2,
+        'border-width': 3,
+        'border-color': 'data(borderColor)',
+        'text-max-width': '100px',
+        'text-wrap': 'ellipsis'
+      }
+    },
+    {
+      selector: 'node:selected',
+      style: {
+        'border-width': 4,
+        'border-color': '#ffffff'
+      }
+    },
+    {
+      selector: 'node.highlighted',
+      style: {
+        'border-width': 4,
+        'border-color': '#fbbf24'
+      }
+    },
+    {
+      selector: 'node.dimmed',
+      style: {
+        'opacity': 0.15
+      }
+    },
+    {
+      selector: 'edge',
+      style: {
+        'width': 'data(width)',
+        'line-color': 'data(color)',
+        'target-arrow-color': 'data(color)',
+        'target-arrow-shape': 'triangle',
+        'curve-style': 'bezier',
+        'opacity': 0.5
+      }
+    },
+    {
+      selector: 'edge.highlighted',
+      style: {
+        'opacity': 1,
+        'width': 4,
+        'line-color': '#fbbf24',
+        'target-arrow-color': '#fbbf24'
+      }
+    },
+    {
+      selector: 'edge.dimmed',
+      style: {
+        'opacity': 0.05
+      }
+    }
+  ]
+}
+
+function updateClusterElements() {
+  if (!clusterCy) return
+
+  const elements: cytoscape.ElementDefinition[] = []
+  const topCallers = new Set((props.summary?.top_callers || []).map(c => c.function))
+  const mostCalled = new Set((props.summary?.most_called || []).map(c => c.function))
+
+  // Create a map to track function call counts
+  const callerCounts = new Map<string, number>()
+  const calledCounts = new Map<string, number>()
+
+  for (const item of props.summary?.top_callers || []) {
+    callerCounts.set(item.function, item.calls)
+  }
+  for (const item of props.summary?.most_called || []) {
+    calledCounts.set(item.function, item.calls)
+  }
+
+  // Add nodes for top callers and most called
+  const allFunctions = new Set([...topCallers, ...mostCalled])
+
+  for (const funcName of allFunctions) {
+    const isCaller = topCallers.has(funcName)
+    const isCalled = mostCalled.has(funcName)
+    const isHub = isCaller && isCalled
+
+    // Calculate size based on call count
+    const callerCount = callerCounts.get(funcName) || 0
+    const calledCount = calledCounts.get(funcName) || 0
+    const maxCount = Math.max(callerCount, calledCount, 1)
+    const maxPossible = Math.max(
+      ...(props.summary?.top_callers?.map(c => c.calls) || [1]),
+      ...(props.summary?.most_called?.map(c => c.calls) || [1])
+    )
+    const size = 30 + (maxCount / maxPossible) * 40
+
+    // Color based on type
+    let color: string
+    let borderColor: string
+    if (isHub) {
+      color = '#f59e0b' // Amber for hubs (both caller and called)
+      borderColor = '#fbbf24'
+    } else if (isCaller) {
+      color = '#10b981' // Green for callers
+      borderColor = '#34d399'
+    } else {
+      color = '#8b5cf6' // Purple for called
+      borderColor = '#a78bfa'
+    }
+
+    // Get short name for label
+    const shortName = funcName.split('.').slice(-2).join('.')
+
+    elements.push({
+      data: {
+        id: funcName,
+        label: shortName,
+        fullName: funcName,
+        color,
+        borderColor,
+        size,
+        callerCount,
+        calledCount,
+        isHub
+      }
+    })
+  }
+
+  // Add edges between related functions
+  if (props.data?.edges) {
+    for (const edge of props.data.edges) {
+      const source = edge.from || edge.source
+      const target = edge.to || edge.target
+
+      if (source && target && allFunctions.has(source) && allFunctions.has(target)) {
+        const edgeWidth = Math.min(1 + (edge.count || 1) * 0.5, 5)
+        const edgeColor = edge.resolved === false ? '#fb923c' : '#64748b'
+
+        elements.push({
+          data: {
+            id: `cluster-${source}-${target}`,
+            source,
+            target,
+            color: edgeColor,
+            width: edgeWidth
+          }
+        })
+      }
+    }
+  }
+
+  // Update graph
+  clusterCy.elements().remove()
+  clusterCy.add(elements)
+
+  // Run layout
+  runClusterLayout()
+}
+
+function runClusterLayout() {
+  if (!clusterCy || clusterCy.nodes().length === 0) return
+
+  const layoutOptions = clusterLayoutMode.value === 'force'
+    ? {
+        name: 'fcose',
+        animate: true,
+        animationDuration: 500,
+        fit: true,
+        padding: 40,
+        nodeDimensionsIncludeLabels: true,
+        idealEdgeLength: 150,
+        nodeRepulsion: 8000,
+        gravity: 0.25,
+        gravityRange: 3.8
+      }
+    : {
+        name: 'grid',
+        animate: true,
+        animationDuration: 300,
+        fit: true,
+        padding: 40,
+        avoidOverlap: true,
+        avoidOverlapPadding: 20
+      }
+
+  clusterCy.layout(layoutOptions as cytoscape.LayoutOptions).run()
+}
+
+function highlightClusterConnected(node: NodeSingular) {
+  if (!clusterCy) return
+  const neighborhood = node.neighborhood().add(node)
+  clusterCy.elements().addClass('dimmed')
+  neighborhood.removeClass('dimmed').addClass('highlighted')
+}
+
+function clearClusterHighlight() {
+  if (!clusterCy) return
+  clusterCy.elements().removeClass('dimmed').removeClass('highlighted')
+}
+
+function zoomInCluster() {
+  if (!clusterCy) return
+  clusterCy.zoom(clusterCy.zoom() * 1.25)
+  clusterCy.center()
+}
+
+function zoomOutCluster() {
+  if (!clusterCy) return
+  clusterCy.zoom(clusterCy.zoom() * 0.8)
+  clusterCy.center()
+}
+
+function fitClusterGraph() {
+  if (!clusterCy) return
+  clusterCy.fit(undefined, 40)
+  clusterZoomLevel.value = clusterCy.zoom()
+}
+
+function toggleClusterLayout() {
+  clusterLayoutMode.value = clusterLayoutMode.value === 'force' ? 'grid' : 'force'
+  runClusterLayout()
+}
+
+function handleSearch() {
+  updateCytoscapeElements()
+}
+
+function handleModuleFilter() {
+  updateCytoscapeElements()
+}
+
+// ============================================================================
+// List View Methods
+// ============================================================================
+
 function getEdgeSource(edge: GraphEdge): string | undefined {
   return edge.from ?? edge.source
 }
 
-// Helper to get edge target - supports both 'to' and 'target' formats
 function getEdgeTarget(edge: GraphEdge): string | undefined {
   return edge.to ?? edge.target
 }
@@ -413,6 +1057,7 @@ function toggleResolvedFilter(filter: 'resolved' | 'unresolved') {
   } else {
     resolvedFilter.value = filter
   }
+  updateCytoscapeElements()
 }
 
 function truncateModule(mod: string): string {
@@ -427,13 +1072,40 @@ function truncateFunc(funcId: string): string {
   return parts.slice(-2).join('.')
 }
 
-function getBarWidth(value: number, max: number): number {
-  return Math.max(5, (value / max) * 100)
-}
 
-// Auto-expand top functions
-watch(() => props.data, (newData) => {
+// ============================================================================
+// Lifecycle
+// ============================================================================
+
+onMounted(async () => {
+  await nextTick()
+  if (cytoscapeContainer.value && props.data?.nodes?.length) {
+    initCytoscape()
+    updateCytoscapeElements()
+  }
+})
+
+onUnmounted(() => {
+  if (cy) {
+    cy.destroy()
+    cy = null
+  }
+  if (clusterCy) {
+    clusterCy.destroy()
+    clusterCy = null
+  }
+})
+
+// Watch for data changes
+watch(() => props.data, async (newData) => {
   if (newData?.nodes?.length) {
+    await nextTick()
+    if (!cy && cytoscapeContainer.value) {
+      initCytoscape()
+    }
+    updateCytoscapeElements()
+
+    // Auto-expand top functions in list view
     const sorted = [...newData.nodes].sort((a, b) => {
       const aCount = getOutgoingCalls(a.id).length + getIncomingCalls(a.id).length
       const bCount = getOutgoingCalls(b.id).length + getIncomingCalls(b.id).length
@@ -446,6 +1118,23 @@ watch(() => props.data, (newData) => {
     })
   }
 }, { immediate: true })
+
+// Watch for view mode changes - init cytoscape when switching to network or cluster
+watch(viewMode, async (newMode) => {
+  if (newMode === 'network') {
+    await nextTick()
+    if (!cy && cytoscapeContainer.value) {
+      initCytoscape()
+      updateCytoscapeElements()
+    }
+  } else if (newMode === 'stats') {
+    await nextTick()
+    if (!clusterCy && clusterContainer.value) {
+      initClusterCytoscape()
+    }
+    updateClusterElements()
+  }
+})
 </script>
 
 <style scoped>
@@ -634,6 +1323,62 @@ watch(() => props.data, (newData) => {
   color: #fdba74;
 }
 
+/* Network View (Cytoscape) */
+.network-view {
+  flex: 1;
+  position: relative;
+  min-height: 400px;
+  background: var(--color-bg-tertiary, #0f172a);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.cytoscape-container {
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+}
+
+.network-controls {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-bg-secondary, #1e293b);
+  padding: 6px 10px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.network-controls button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-border, #334155);
+  background: var(--color-bg-tertiary, #0f172a);
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary, #94a3b8);
+  transition: all 0.2s;
+}
+
+.network-controls button:hover {
+  background: var(--color-primary, #3b82f6);
+  color: white;
+  border-color: var(--color-primary, #3b82f6);
+}
+
+.zoom-level {
+  font-size: 11px;
+  color: var(--color-text-tertiary, #64748b);
+  min-width: 36px;
+  text-align: center;
+}
+
 /* List View */
 .list-view {
   flex: 1;
@@ -794,10 +1539,13 @@ watch(() => props.data, (newData) => {
   font-style: italic;
 }
 
-/* Graph View */
-.graph-view {
+/* Cluster View */
+.cluster-view {
   flex: 1;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  min-height: 400px;
 }
 
 .graph-info {
@@ -807,75 +1555,198 @@ watch(() => props.data, (newData) => {
   padding: 12px;
   background: rgba(59, 130, 246, 0.1);
   border-radius: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   font-size: 13px;
   color: #60a5fa;
 }
 
-.graph-section {
-  margin-bottom: 24px;
+.cluster-legend {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: var(--color-bg-tertiary, #0f172a);
+  border-radius: 6px;
 }
 
-.graph-section h4 {
-  margin: 0 0 12px 0;
-  font-size: 14px;
-  color: var(--color-text-primary, #e2e8f0);
+.legend-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-}
-
-.graph-section h4 i {
-  color: #60a5fa;
-}
-
-.bar-chart {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.bar-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.bar-label {
-  width: 200px;
+  gap: 6px;
   font-size: 12px;
-  font-family: 'Fira Code', 'Monaco', monospace;
   color: var(--color-text-secondary, #94a3b8);
+}
+
+.legend-item .dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.legend-item.caller .dot {
+  background: #10b981;
+  border: 2px solid #34d399;
+}
+
+.legend-item.called .dot {
+  background: #8b5cf6;
+  border: 2px solid #a78bfa;
+}
+
+.legend-item.hub .dot {
+  background: #f59e0b;
+  border: 2px solid #fbbf24;
+}
+
+.cluster-container {
+  flex: 1;
+  min-height: 350px;
+  background: var(--color-bg-tertiary, #0f172a);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.cluster-controls {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+}
+
+.control-separator {
+  color: var(--color-border, #334155);
+  font-size: 14px;
+}
+
+/* Node Detail Panel */
+.node-detail-panel {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 320px;
+  max-width: calc(100% - 24px);
+  background: var(--color-bg-secondary, #1e293b);
+  border: 1px solid var(--color-border, #334155);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+  overflow: hidden;
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--color-bg-tertiary, #0f172a);
+  border-bottom: 1px solid var(--color-border, #334155);
+}
+
+.detail-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary, #e2e8f0);
+  font-family: 'Fira Code', 'Monaco', monospace;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.bar-container {
-  flex: 1;
+.close-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary, #94a3b8);
+  cursor: pointer;
+  border-radius: 4px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  transition: all 0.2s;
 }
 
-.bar-fill {
-  height: 20px;
-  border-radius: 4px;
-  transition: width 0.3s ease;
+.close-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
 }
 
-.bar-fill.caller {
-  background: linear-gradient(90deg, #10b981, #34d399);
+.detail-content {
+  padding: 12px 14px;
 }
 
-.bar-fill.called {
-  background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+.detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
 }
 
-.bar-value {
-  font-size: 12px;
-  font-weight: 600;
+.detail-row:last-child {
+  margin-bottom: 0;
+}
+
+.detail-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-tertiary, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.detail-value {
+  font-size: 13px;
   color: var(--color-text-primary, #e2e8f0);
-  min-width: 30px;
+}
+
+.detail-value.path-value {
+  font-family: 'Fira Code', 'Monaco', monospace;
+  font-size: 12px;
+  word-break: break-all;
+  padding: 6px 8px;
+  background: var(--color-bg-tertiary, #0f172a);
+  border-radius: 4px;
+  margin-top: 2px;
+}
+
+.detail-value.class-value {
+  color: #34d399;
+}
+
+.detail-value.calls-out {
+  color: #10b981;
+}
+
+.detail-value.calls-in {
+  color: #8b5cf6;
+}
+
+/* Fullscreen mode */
+.function-call-graph.fullscreen {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 9999 !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  padding: 16px !important;
+}
+
+.function-call-graph.fullscreen .graph-container {
+  height: calc(100vh - 100px) !important;
+}
+
+.function-call-graph.fullscreen .network-view,
+.function-call-graph.fullscreen .cluster-view {
+  min-height: calc(100vh - 220px);
+}
+
+.function-call-graph.fullscreen .cytoscape-container,
+.function-call-graph.fullscreen .cluster-container {
+  min-height: calc(100vh - 260px);
 }
 </style>

@@ -1,5 +1,5 @@
 <template>
-  <div class="knowledge-graph">
+  <div class="knowledge-graph" :class="{ 'fullscreen': isFullscreen }">
     <!-- Header Section -->
     <div class="graph-header">
       <div class="header-content">
@@ -23,6 +23,14 @@
         >
           <i class="fas fa-th"></i>
           {{ layoutMode === 'force' ? 'Grid' : 'Force' }}
+        </button>
+        <button
+          @click="fitGraph"
+          class="action-btn"
+          title="Fit graph to view"
+        >
+          <i class="fas fa-expand"></i>
+          Fit
         </button>
         <button
           @click="showCleanupPanel = !showCleanupPanel"
@@ -131,107 +139,9 @@
       </button>
     </div>
 
-    <!-- Graph Visualization -->
-    <div v-else class="graph-container" ref="graphContainer">
-      <!-- SVG Canvas for Graph -->
-      <svg
-        ref="graphSvg"
-        class="graph-svg"
-        :viewBox="viewBox"
-        @mousedown="startPan"
-        @mousemove="handlePan"
-        @mouseup="endPan"
-        @mouseleave="endPan"
-        @wheel.prevent="handleZoom"
-      >
-        <defs>
-          <!-- Arrow marker for directed edges -->
-          <marker
-            id="arrowhead"
-            markerWidth="10"
-            markerHeight="7"
-            refX="10"
-            refY="3.5"
-            orient="auto"
-          >
-            <polygon points="0 0, 10 3.5, 0 7" fill="#9ca3af" />
-          </marker>
-          <!-- Gradient for nodes -->
-          <linearGradient id="nodeGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
-            <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
-          </linearGradient>
-        </defs>
-
-        <g :transform="`translate(${panOffset.x}, ${panOffset.y}) scale(${zoomLevel})`">
-          <!-- Edges (Relations) -->
-          <g class="edges">
-            <g
-              v-for="edge in graphEdges"
-              :key="`edge-${edge.from}-${edge.to}`"
-              class="edge-group"
-            >
-              <line
-                :x1="getNodePosition(edge.from).x"
-                :y1="getNodePosition(edge.from).y"
-                :x2="getNodePosition(edge.to).x"
-                :y2="getNodePosition(edge.to).y"
-                class="edge"
-                :class="{ highlighted: isEdgeHighlighted(edge) }"
-                marker-end="url(#arrowhead)"
-              />
-              <text
-                :x="(getNodePosition(edge.from).x + getNodePosition(edge.to).x) / 2"
-                :y="(getNodePosition(edge.from).y + getNodePosition(edge.to).y) / 2 - 5"
-                class="edge-label"
-              >
-                {{ edge.type }}
-              </text>
-            </g>
-          </g>
-
-          <!-- Nodes (Entities) -->
-          <g class="nodes">
-            <g
-              v-for="entity in filteredEntities"
-              :key="entity.id"
-              class="node-group"
-              :class="{
-                selected: selectedEntity?.id === entity.id,
-                highlighted: highlightedEntities.includes(entity.id),
-                dimmed: highlightedEntities.length > 0 && !highlightedEntities.includes(entity.id)
-              }"
-              :transform="`translate(${getNodePosition(entity.id).x}, ${getNodePosition(entity.id).y})`"
-              @click="selectEntity(entity)"
-              @mouseenter="highlightConnected(entity)"
-              @mouseleave="clearHighlight"
-            >
-              <!-- Node circle -->
-              <circle
-                :r="getNodeRadius(entity)"
-                :fill="getNodeColor(entity.type)"
-                class="node-circle"
-              />
-              <!-- Node icon -->
-              <text
-                dy="0.35em"
-                class="node-icon"
-                text-anchor="middle"
-              >
-                {{ getEntityIcon(entity.type) }}
-              </text>
-              <!-- Node label -->
-              <text
-                :y="getNodeRadius(entity) + 15"
-                class="node-label"
-                text-anchor="middle"
-              >
-                {{ truncateText(entity.name, 15) }}
-              </text>
-            </g>
-          </g>
-        </g>
-      </svg>
+    <!-- Cytoscape Graph Container -->
+    <div v-else class="graph-container">
+      <div ref="cytoscapeContainer" class="cytoscape-container"></div>
 
       <!-- Zoom Controls -->
       <div class="zoom-controls">
@@ -242,8 +152,12 @@
         <button @click="zoomOut" title="Zoom out">
           <i class="fas fa-minus"></i>
         </button>
-        <button @click="resetView" title="Reset view">
+        <button @click="fitGraph" title="Fit to view">
           <i class="fas fa-expand"></i>
+        </button>
+        <span class="control-separator">|</span>
+        <button @click="toggleFullscreen" :title="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'">
+          <i :class="isFullscreen ? 'fas fa-compress' : 'fas fa-expand-arrows-alt'"></i>
         </button>
       </div>
     </div>
@@ -316,9 +230,9 @@
               <i class="fas fa-crosshairs"></i>
               Focus
             </button>
-            <button @click="expandEntity(selectedEntity)" class="action-btn">
+            <button @click="highlightNeighbors(selectedEntity)" class="action-btn">
               <i class="fas fa-expand-arrows-alt"></i>
-              Expand
+              Neighbors
             </button>
           </div>
         </div>
@@ -405,13 +319,64 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+/**
+ * KnowledgeGraph - Interactive visualization of memory entities and their relationships
+ *
+ * @description Provides a Cytoscape.js-powered force-directed graph for visualizing
+ * knowledge entities, their types, observations, and inter-entity relationships.
+ *
+ * @features
+ * - Interactive graph visualization with zoom, pan, and node selection
+ * - Entity search with debounced input for performance
+ * - Filter by entity type with visual legend
+ * - Depth control for relationship traversal (1-3 levels)
+ * - Entity CRUD operations (create via modal)
+ * - Memory orphan cleanup integration (Issue #547)
+ * - Responsive layout with grid/force-directed toggle
+ *
+ * @see Issue #707 - Migrated from custom SVG to Cytoscape.js
+ * @see Issue #547 - Memory orphan cleanup integration
+ *
+ * @author mrveiss
+ * @copyright (c) 2025 mrveiss
+ */
+
+// AutoBot - AI-Powered Automation Platform
+// Copyright (c) 2025 mrveiss
+// Author: mrveiss
+
+import { ref, shallowRef, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import cytoscape, { type Core, type NodeSingular } from 'cytoscape'
+// @ts-expect-error - cytoscape-fcose has no type declarations
+import fcose from 'cytoscape-fcose'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import MemoryOrphanManager from '@/components/knowledge/MemoryOrphanManager.vue'
 
+// Register fcose layout
+cytoscape.use(fcose)
+
 const logger = createLogger('KnowledgeGraph')
+
+// ============================================================================
+// Component Events
+// ============================================================================
+
+/**
+ * Emitted events from this component
+ * @event entity-selected - Fired when user selects an entity node
+ * @event graph-refreshed - Fired after graph data is refreshed
+ * @event entity-created - Fired when a new entity is created
+ */
+const emit = defineEmits<{
+  /** Emitted when user clicks on an entity node */
+  (e: 'entity-selected', entity: Entity | null): void
+  /** Emitted after graph data refresh completes */
+  (e: 'graph-refreshed', stats: { entities: number; relations: number }): void
+  /** Emitted when a new entity is successfully created */
+  (e: 'entity-created', entity: Entity): void
+}>()
 
 // ============================================================================
 // Types
@@ -434,11 +399,6 @@ interface Relation {
   strength?: number
 }
 
-interface NodePosition {
-  x: number
-  y: number
-}
-
 interface NewEntity {
   name: string
   type: string
@@ -455,13 +415,14 @@ const errorMessage = ref('')
 const entities = ref<Entity[]>([])
 const relations = ref<Relation[]>([])
 const selectedEntity = ref<Entity | null>(null)
-const highlightedEntities = ref<string[]>([])
 const searchQuery = ref('')
 const selectedType = ref('')
 const graphDepth = ref(2)
 const layoutMode = ref<'force' | 'grid'>('force')
 const showCreateModal = ref(false)
 const showCleanupPanel = ref(false)
+const zoomLevel = ref(1)
+const isFullscreen = ref(false)
 
 // New entity form
 const newEntity = ref<NewEntity>({
@@ -470,17 +431,35 @@ const newEntity = ref<NewEntity>({
   observations: ''
 })
 
-// Viewport state
-const graphContainer = ref<HTMLElement | null>(null)
-const graphSvg = ref<SVGElement | null>(null)
-const zoomLevel = ref(1)
-const panOffset = ref({ x: 0, y: 0 })
-const isPanning = ref(false)
-const lastPanPoint = ref({ x: 0, y: 0 })
-const viewBox = ref('0 0 1000 600')
+// Cytoscape instance - using shallowRef for non-reactive external library instance
+const cytoscapeContainer = ref<HTMLElement | null>(null)
+const cy = shallowRef<Core | null>(null)
 
-// Node positions cache
-const nodePositions = ref<Map<string, NodePosition>>(new Map())
+// ============================================================================
+// Utilities
+// ============================================================================
+
+/**
+ * Creates a debounced version of a function
+ * @param fn - Function to debounce
+ * @param delay - Delay in milliseconds
+ * @returns Debounced function
+ */
+function debounce<T extends (...args: Parameters<T>) => void>(
+  fn: T,
+  delay: number
+): (...args: Parameters<T>) => void {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
+  return (...args: Parameters<T>) => {
+    if (timeoutId) clearTimeout(timeoutId)
+    timeoutId = setTimeout(() => fn(...args), delay)
+  }
+}
+
+/** Debounced graph update for search performance (300ms delay) */
+const debouncedUpdateGraph = debounce(() => {
+  updateCytoscapeElements()
+}, 300)
 
 // ============================================================================
 // Computed
@@ -520,25 +499,330 @@ const graphEdges = computed(() => {
 const relationCount = computed(() => graphEdges.value.length)
 
 // ============================================================================
-// Methods - Data Fetching
+// Node Colors & Icons
 // ============================================================================
 
-function handleCleanupComplete() {
-  // Refresh the graph after cleanup to show updated entities
+/**
+ * Returns the color associated with an entity type for graph visualization
+ * @param type - The entity type (e.g., 'conversation', 'bug_fix')
+ * @returns Hex color code for the entity type, defaults to gray
+ */
+function getNodeColor(type: string): string {
+  const colors: Record<string, string> = {
+    conversation: '#3b82f6',
+    bug_fix: '#ef4444',
+    feature: '#10b981',
+    decision: '#f59e0b',
+    task: '#8b5cf6',
+    user_preference: '#ec4899',
+    context: '#6366f1',
+    learning: '#14b8a6',
+    research: '#f97316',
+    implementation: '#06b6d4'
+  }
+  return colors[type] || '#6b7280'
+}
+
+/**
+ * Returns the emoji icon associated with an entity type
+ * @param type - The entity type
+ * @returns Emoji icon for the entity type, defaults to document icon
+ */
+function getEntityIcon(type: string): string {
+  const icons: Record<string, string> = {
+    conversation: '💬',
+    bug_fix: '🐛',
+    feature: '✨',
+    decision: '⚖️',
+    task: '📋',
+    user_preference: '👤',
+    context: '📌',
+    learning: '📚',
+    research: '🔬',
+    implementation: '💻'
+  }
+  return icons[type] || '📄'
+}
+
+/**
+ * Formats a snake_case type name to Title Case for display
+ * @param type - The snake_case type name
+ * @returns Formatted type name (e.g., 'bug_fix' -> 'Bug Fix')
+ */
+function formatTypeName(type: string): string {
+  return type
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
+/**
+ * Formats a Unix timestamp to a human-readable date string
+ * @param timestamp - Unix timestamp in seconds
+ * @returns Formatted date string (e.g., 'Jan 7, 2026')
+ */
+function formatDate(timestamp: number): string {
+  return new Date(timestamp * 1000).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  })
+}
+
+// ============================================================================
+// Cytoscape Initialization
+// ============================================================================
+
+/**
+ * Initializes the Cytoscape.js graph instance
+ * Sets up event handlers for node selection, hover effects, and zoom tracking
+ */
+function initCytoscape(): void {
+  if (!cytoscapeContainer.value) return
+
+  cy.value = cytoscape({
+    container: cytoscapeContainer.value,
+    style: getCytoscapeStyles(),
+    elements: [],
+    minZoom: 0.2,
+    maxZoom: 3,
+    wheelSensitivity: 0.3,
+    boxSelectionEnabled: false
+  })
+
+  const cyInstance = cy.value
+
+  // Event handlers
+  cyInstance.on('tap', 'node', (evt: cytoscape.EventObject) => {
+    const node = evt.target as NodeSingular
+    const entityId = node.id()
+    const entity = entities.value.find(e => e.id === entityId)
+    if (entity) {
+      selectedEntity.value = entity
+      emit('entity-selected', entity)
+    }
+  })
+
+  cyInstance.on('tap', (evt: cytoscape.EventObject) => {
+    if (evt.target === cyInstance) {
+      selectedEntity.value = null
+      emit('entity-selected', null)
+      clearHighlight()
+    }
+  })
+
+  cyInstance.on('mouseover', 'node', (evt: cytoscape.EventObject) => {
+    const node = evt.target as NodeSingular
+    highlightConnectedNodes(node)
+  })
+
+  cyInstance.on('mouseout', 'node', () => {
+    clearHighlight()
+  })
+
+  cyInstance.on('zoom', () => {
+    zoomLevel.value = cy.value?.zoom() || 1
+  })
+
+  logger.debug('Cytoscape initialized')
+}
+
+function getCytoscapeStyles(): cytoscape.StylesheetStyle[] {
+  return [
+    {
+      selector: 'node',
+      style: {
+        'background-color': 'data(color)',
+        'label': 'data(label)',
+        'width': 'data(size)',
+        'height': 'data(size)',
+        'font-size': '11px',
+        'text-valign': 'bottom',
+        'text-halign': 'center',
+        'text-margin-y': 8,
+        'color': '#e2e8f0',
+        'text-outline-color': '#1e293b',
+        'text-outline-width': 2,
+        'border-width': 2,
+        'border-color': '#334155',
+        'text-max-width': '100px',
+        'text-wrap': 'ellipsis'
+      }
+    },
+    {
+      selector: 'node:selected',
+      style: {
+        'border-width': 4,
+        'border-color': '#ffffff'
+      }
+    },
+    {
+      selector: 'node.highlighted',
+      style: {
+        'border-width': 3,
+        'border-color': '#fbbf24'
+      }
+    },
+    {
+      selector: 'node.dimmed',
+      style: {
+        'opacity': 0.15
+      }
+    },
+    {
+      selector: 'edge',
+      style: {
+        'width': 2,
+        'line-color': '#64748b',
+        'target-arrow-color': '#64748b',
+        'target-arrow-shape': 'triangle',
+        'curve-style': 'bezier',
+        'label': 'data(label)',
+        'font-size': '9px',
+        'text-rotation': 'autorotate',
+        'text-margin-y': -10,
+        'color': '#94a3b8',
+        'text-outline-color': '#1e293b',
+        'text-outline-width': 1,
+        'opacity': 0.6
+      }
+    },
+    {
+      selector: 'edge.highlighted',
+      style: {
+        'line-color': '#fbbf24',
+        'target-arrow-color': '#fbbf24',
+        'width': 3,
+        'opacity': 1
+      }
+    },
+    {
+      selector: 'edge.dimmed',
+      style: {
+        'opacity': 0.1
+      }
+    }
+  ]
+}
+
+// ============================================================================
+// Graph Data Management
+// ============================================================================
+
+/**
+ * Updates Cytoscape graph elements based on filtered entities and relations
+ * Rebuilds nodes and edges, then runs the layout algorithm
+ */
+function updateCytoscapeElements(): void {
+  if (!cy.value) return
+
+  const elements: cytoscape.ElementDefinition[] = []
+
+  // Add nodes
+  for (const entity of filteredEntities.value) {
+    const obsCount = entity.observations?.length || 0
+    const size = 40 + Math.min(obsCount * 3, 20)
+
+    elements.push({
+      data: {
+        id: entity.id,
+        label: truncateText(entity.name, 15),
+        color: getNodeColor(entity.type),
+        size: size,
+        type: entity.type
+      }
+    })
+  }
+
+  // Add edges
+  for (const edge of graphEdges.value) {
+    elements.push({
+      data: {
+        id: `${edge.from}-${edge.to}`,
+        source: edge.from,
+        target: edge.to,
+        label: edge.type
+      }
+    })
+  }
+
+  // Update graph
+  cy.value.elements().remove()
+  cy.value.add(elements)
+
+  // Run layout
+  runLayout()
+}
+
+/**
+ * Runs the graph layout algorithm (force-directed or grid)
+ * Uses fcose for force-directed layout with customized physics settings
+ */
+function runLayout(): void {
+  if (!cy.value) return
+
+  const layoutOptions = layoutMode.value === 'force'
+    ? {
+        name: 'fcose',
+        animate: true,
+        animationDuration: 500,
+        fit: true,
+        padding: 50,
+        nodeDimensionsIncludeLabels: true,
+        idealEdgeLength: 150,
+        nodeRepulsion: 8000,
+        gravity: 0.25,
+        gravityRange: 1.5
+      }
+    : {
+        name: 'grid',
+        animate: true,
+        animationDuration: 300,
+        fit: true,
+        padding: 50,
+        avoidOverlap: true,
+        nodeDimensionsIncludeLabels: true
+      }
+
+  cy.value.layout(layoutOptions as cytoscape.LayoutOptions).run()
+}
+
+/**
+ * Truncates text to a maximum length, adding ellipsis if needed
+ * @param text - The text to truncate
+ * @param maxLength - Maximum allowed length
+ * @returns Truncated text with ellipsis or original text if shorter
+ */
+function truncateText(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text
+  return text.slice(0, maxLength - 1) + '…'
+}
+
+// ============================================================================
+// Data Fetching
+// ============================================================================
+
+/**
+ * Handles cleanup completion from MemoryOrphanManager
+ * Hides the cleanup panel and refreshes the graph
+ */
+function handleCleanupComplete(): void {
   showCleanupPanel.value = false
   refreshGraph()
 }
 
-async function refreshGraph() {
+/**
+ * Refreshes the knowledge graph by fetching entities and relations from the API
+ * Emits 'graph-refreshed' event on successful load with entity/relation counts
+ */
+async function refreshGraph(): Promise<void> {
   isLoading.value = true
   errorMessage.value = ''
 
   try {
-    // Fetch all entities
     const entitiesResponse = await apiClient.get('/api/memory/entities/all')
     const parsedResponse = await parseApiResponse(entitiesResponse)
 
-    // Handle standard API response format: { success: true, data: { entities: [...] } }
     const entitiesData = parsedResponse?.data || parsedResponse
 
     if (entitiesData?.entities) {
@@ -547,11 +831,23 @@ async function refreshGraph() {
       entities.value = entitiesData
     }
 
-    // Calculate node positions
-    calculateLayout()
-
-    // Fetch relations for each entity
     await fetchRelations()
+
+    // Wait for DOM to render the graph container (it's conditionally rendered)
+    await nextTick()
+
+    // Initialize Cytoscape if not already done (container now exists)
+    if (!cy.value && cytoscapeContainer.value) {
+      initCytoscape()
+    }
+
+    updateCytoscapeElements()
+
+    // Emit refresh event with statistics
+    emit('graph-refreshed', {
+      entities: entities.value.length,
+      relations: relations.value.length
+    })
 
   } catch (error) {
     logger.error('Failed to fetch graph data:', error)
@@ -561,10 +857,14 @@ async function refreshGraph() {
   }
 }
 
-async function fetchRelations() {
+/**
+ * Fetches relations for all entities using parallel requests
+ * Uses Promise.allSettled to handle partial failures gracefully
+ * Deduplicates relations to avoid duplicate edges in the graph
+ */
+async function fetchRelations(): Promise<void> {
   const allRelations: Relation[] = []
 
-  // Fetch relations for all entities in parallel - eliminates N+1 sequential API calls
   const relationResults = await Promise.allSettled(
     entities.value.map(async (entity) => {
       const response = await apiClient.get(`/api/memory/entities/${entity.id}/relations`)
@@ -573,20 +873,15 @@ async function fetchRelations() {
     })
   )
 
-  // Process results
   for (const result of relationResults) {
     if (result.status === 'rejected') {
-      continue // Skip failed requests
+      continue
     }
 
     const { entity, parsedResponse } = result.value
-
-    // Handle standard API response format: { success: true, data: { related_entities: [...] } }
     const responseData = parsedResponse?.data || parsedResponse
 
-    // Backend returns related_entities with relation metadata
     if (responseData?.related_entities) {
-      // Transform related_entities into Relation objects
       for (const relatedEntity of responseData.related_entities) {
         allRelations.push({
           from: entity.id,
@@ -596,12 +891,11 @@ async function fetchRelations() {
         })
       }
     } else if (responseData?.relations) {
-      // Fallback: backend might return relations directly
       allRelations.push(...responseData.relations)
     }
   }
 
-  // Deduplicate relations
+  // Deduplicate relations using Set for O(1) lookups
   const relationSet = new Set<string>()
   relations.value = allRelations.filter(r => {
     const key = `${r.from}-${r.to}-${r.type}`
@@ -611,7 +905,11 @@ async function fetchRelations() {
   })
 }
 
-async function createEntity() {
+/**
+ * Creates a new entity via the API
+ * Validates required fields and emits 'entity-created' event on success
+ */
+async function createEntity(): Promise<void> {
   if (!newEntity.value.name || !newEntity.value.type || !newEntity.value.observations) {
     errorMessage.value = 'Please fill in all required fields'
     return
@@ -633,18 +931,22 @@ async function createEntity() {
     })
 
     const parsedResponse = await parseApiResponse(response)
-
-    // Handle standard API response format: { success: true, data: {...entity...} }
     const responseData = parsedResponse?.data || parsedResponse
 
-    // Backend returns the entity directly in data field
+    let createdEntity: Entity | null = null
     if (responseData?.id && responseData?.name) {
-      entities.value.push(responseData)
-      calculateLayout()
+      createdEntity = responseData as Entity
+      entities.value.push(createdEntity)
     } else if (responseData?.entity) {
-      // Fallback: entity might be nested
-      entities.value.push(responseData.entity)
-      calculateLayout()
+      createdEntity = responseData.entity as Entity
+      entities.value.push(createdEntity)
+    }
+
+    updateCytoscapeElements()
+
+    // Emit entity created event
+    if (createdEntity) {
+      emit('entity-created', createdEntity)
     }
 
     showCreateModal.value = false
@@ -658,256 +960,178 @@ async function createEntity() {
 }
 
 // ============================================================================
-// Methods - Layout
+// Interactions
 // ============================================================================
 
-function calculateLayout() {
-  const width = 1000
-  const height = 600
-  const padding = 80
+/**
+ * Highlights a node and its connected neighbors, dimming all other elements
+ * @param node - The Cytoscape node to highlight
+ */
+function highlightConnectedNodes(node: NodeSingular): void {
+  if (!cy.value) return
 
-  if (layoutMode.value === 'grid') {
-    calculateGridLayout(width, height, padding)
-  } else {
-    calculateForceLayout(width, height, padding)
+  const neighborhood = node.neighborhood().add(node)
+  cy.value.elements().addClass('dimmed')
+  neighborhood.removeClass('dimmed').addClass('highlighted')
+}
+
+/**
+ * Highlights an entity's neighbors in the graph
+ * @param entity - The entity whose neighbors to highlight
+ */
+function highlightNeighbors(entity: Entity): void {
+  if (!cy.value) return
+
+  const node = cy.value.getElementById(entity.id)
+  if (node.length) {
+    highlightConnectedNodes(node as NodeSingular)
   }
 }
 
-function calculateGridLayout(width: number, height: number, padding: number) {
-  const count = filteredEntities.value.length
-  if (count === 0) return
+/**
+ * Clears all highlight effects from the graph
+ */
+function clearHighlight(): void {
+  if (!cy.value) return
+  cy.value.elements().removeClass('dimmed').removeClass('highlighted')
+}
 
-  const cols = Math.ceil(Math.sqrt(count))
-  const rows = Math.ceil(count / cols)
-  const cellWidth = (width - 2 * padding) / cols
-  const cellHeight = (height - 2 * padding) / rows
+/**
+ * Centers and zooms the graph on a specific entity
+ * @param entity - The entity to focus on
+ */
+function focusOnEntity(entity: Entity): void {
+  if (!cy.value) return
 
-  filteredEntities.value.forEach((entity, idx) => {
-    const col = idx % cols
-    const row = Math.floor(idx / cols)
-    nodePositions.value.set(entity.id, {
-      x: padding + cellWidth * (col + 0.5),
-      y: padding + cellHeight * (row + 0.5)
+  const node = cy.value.getElementById(entity.id)
+  if (node.length) {
+    cy.value.animate({
+      center: { eles: node },
+      zoom: 1.5
+    }, {
+      duration: 300
     })
-  })
-}
-
-function calculateForceLayout(width: number, height: number, padding: number) {
-  const count = filteredEntities.value.length
-  if (count === 0) return
-
-  // Simple circular layout as fallback (proper force simulation would require d3)
-  const centerX = width / 2
-  const centerY = height / 2
-  const radius = Math.min(width, height) / 2 - padding
-
-  filteredEntities.value.forEach((entity, idx) => {
-    const angle = (2 * Math.PI * idx) / count - Math.PI / 2
-    nodePositions.value.set(entity.id, {
-      x: centerX + radius * Math.cos(angle),
-      y: centerY + radius * Math.sin(angle)
-    })
-  })
-}
-
-function toggleLayout() {
-  layoutMode.value = layoutMode.value === 'force' ? 'grid' : 'force'
-  calculateLayout()
-}
-
-function getNodePosition(entityId: string): NodePosition {
-  return nodePositions.value.get(entityId) || { x: 500, y: 300 }
-}
-
-function getNodeRadius(entity: Entity): number {
-  // Size based on number of observations
-  const baseRadius = 25
-  const obsCount = entity.observations?.length || 0
-  return baseRadius + Math.min(obsCount * 2, 15)
-}
-
-// ============================================================================
-// Methods - Visualization
-// ============================================================================
-
-function getNodeColor(type: string): string {
-  const colors: Record<string, string> = {
-    conversation: '#3b82f6',
-    bug_fix: '#ef4444',
-    feature: '#10b981',
-    decision: '#f59e0b',
-    task: '#8b5cf6',
-    user_preference: '#ec4899',
-    context: '#6366f1',
-    learning: '#14b8a6',
-    research: '#f97316',
-    implementation: '#06b6d4'
   }
-  return colors[type] || '#6b7280'
 }
 
-function getEntityIcon(type: string): string {
-  const icons: Record<string, string> = {
-    conversation: '💬',
-    bug_fix: '🐛',
-    feature: '✨',
-    decision: '⚖️',
-    task: '📋',
-    user_preference: '👤',
-    context: '📌',
-    learning: '📚',
-    research: '🔬',
-    implementation: '💻'
-  }
-  return icons[type] || '📄'
-}
-
-function formatTypeName(type: string): string {
-  return type
-    .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ')
-}
-
-function truncateText(text: string, maxLength: number): string {
-  if (text.length <= maxLength) return text
-  return text.slice(0, maxLength - 1) + '…'
-}
-
-function formatDate(timestamp: number): string {
-  return new Date(timestamp * 1000).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
-}
-
-// ============================================================================
-// Methods - Interactions
-// ============================================================================
-
-function selectEntity(entity: Entity) {
-  selectedEntity.value = selectedEntity.value?.id === entity.id ? null : entity
-}
-
-function highlightConnected(entity: Entity) {
-  const connected = new Set<string>([entity.id])
-
-  relations.value.forEach(r => {
-    if (r.from === entity.id) connected.add(r.to)
-    if (r.to === entity.id) connected.add(r.from)
-  })
-
-  highlightedEntities.value = Array.from(connected)
-}
-
-function clearHighlight() {
-  highlightedEntities.value = []
-}
-
-function isEdgeHighlighted(edge: Relation): boolean {
-  return highlightedEntities.value.includes(edge.from) &&
-         highlightedEntities.value.includes(edge.to)
-}
-
+/**
+ * Gets all relations involving a specific entity
+ * @param entityId - The entity ID to find relations for
+ * @returns Array of relations where the entity is either source or target
+ */
 function getEntityRelations(entityId: string): Relation[] {
   return relations.value.filter(r => r.from === entityId || r.to === entityId)
 }
 
+/**
+ * Gets the display name for an entity by ID
+ * @param entityId - The entity ID to look up
+ * @returns Entity name or the ID if entity not found
+ */
 function getEntityName(entityId: string): string {
   const entity = entities.value.find(e => e.id === entityId)
   return entity?.name || entityId
 }
 
-function navigateToEntity(relation: Relation) {
+/**
+ * Navigates to the other entity in a relation and focuses on it
+ * @param relation - The relation to navigate through
+ */
+function navigateToEntity(relation: Relation): void {
   const targetId = relation.from === selectedEntity.value?.id ? relation.to : relation.from
   const target = entities.value.find(e => e.id === targetId)
   if (target) {
-    selectEntity(target)
+    selectedEntity.value = target
+    emit('entity-selected', target)
     focusOnEntity(target)
   }
 }
 
-function focusOnEntity(entity: Entity) {
-  const pos = getNodePosition(entity.id)
-  panOffset.value = {
-    x: 500 - pos.x * zoomLevel.value,
-    y: 300 - pos.y * zoomLevel.value
-  }
-}
-
-function expandEntity(entity: Entity) {
-  // Placeholder for expanding to show more connected entities
-  logger.debug('Expand entity:', entity.id)
-}
-
 // ============================================================================
-// Methods - Search & Filter
+// Controls
 // ============================================================================
 
-function handleSearch() {
-  // Debounced search handled by computed
+/**
+ * Handles search input with debouncing for performance
+ * Uses 300ms delay to avoid excessive graph updates during typing
+ */
+function handleSearch(): void {
+  debouncedUpdateGraph()
 }
 
-function clearSearch() {
+/**
+ * Clears the search query and updates the graph immediately
+ */
+function clearSearch(): void {
   searchQuery.value = ''
+  updateCytoscapeElements()
 }
 
-function filterEntities() {
-  // Filtering handled by computed
-  calculateLayout()
+/**
+ * Filters entities by type and updates the graph
+ */
+function filterEntities(): void {
+  updateCytoscapeElements()
 }
 
-function filterByType(type: string) {
+/**
+ * Toggles type filter - selecting same type again clears the filter
+ * @param type - The entity type to filter by
+ */
+function filterByType(type: string): void {
   selectedType.value = selectedType.value === type ? '' : type
-  calculateLayout()
+  updateCytoscapeElements()
 }
 
-// ============================================================================
-// Methods - Pan & Zoom
-// ============================================================================
-
-function startPan(event: MouseEvent) {
-  if (event.button !== 0) return
-  isPanning.value = true
-  lastPanPoint.value = { x: event.clientX, y: event.clientY }
+/**
+ * Toggles between force-directed and grid layout modes
+ */
+function toggleLayout(): void {
+  layoutMode.value = layoutMode.value === 'force' ? 'grid' : 'force'
+  runLayout()
 }
 
-function handlePan(event: MouseEvent) {
-  if (!isPanning.value) return
-
-  const dx = event.clientX - lastPanPoint.value.x
-  const dy = event.clientY - lastPanPoint.value.y
-
-  panOffset.value = {
-    x: panOffset.value.x + dx,
-    y: panOffset.value.y + dy
-  }
-
-  lastPanPoint.value = { x: event.clientX, y: event.clientY }
+/**
+ * Zooms the graph in by 25%
+ */
+function zoomIn(): void {
+  if (!cy.value) return
+  cy.value.zoom(cy.value.zoom() * 1.25)
+  cy.value.center()
 }
 
-function endPan() {
-  isPanning.value = false
+/**
+ * Zooms the graph out by 20%
+ */
+function zoomOut(): void {
+  if (!cy.value) return
+  cy.value.zoom(cy.value.zoom() * 0.8)
+  cy.value.center()
 }
 
-function handleZoom(event: WheelEvent) {
-  const delta = event.deltaY > 0 ? -0.1 : 0.1
-  const newZoom = Math.max(0.2, Math.min(3, zoomLevel.value + delta))
-  zoomLevel.value = newZoom
+/**
+ * Fits the entire graph within the viewport with 50px padding
+ */
+function fitGraph(): void {
+  if (!cy.value) return
+  cy.value.fit(undefined, 50)
+  zoomLevel.value = cy.value.zoom()
 }
 
-function zoomIn() {
-  zoomLevel.value = Math.min(3, zoomLevel.value + 0.2)
-}
-
-function zoomOut() {
-  zoomLevel.value = Math.max(0.2, zoomLevel.value - 0.2)
-}
-
-function resetView() {
-  zoomLevel.value = 1
-  panOffset.value = { x: 0, y: 0 }
+/**
+ * Toggles fullscreen mode for the graph visualization
+ */
+function toggleFullscreen(): void {
+  isFullscreen.value = !isFullscreen.value
+  // Re-fit the graph after transition
+  nextTick(() => {
+    setTimeout(() => {
+      if (cy.value) {
+        cy.value.resize()
+        fitGraph()
+      }
+    }, 100)
+  })
 }
 
 // ============================================================================
@@ -915,12 +1139,20 @@ function resetView() {
 // ============================================================================
 
 onMounted(() => {
+  // Don't init Cytoscape here - container may not exist yet (conditionally rendered)
+  // It will be initialized in refreshGraph() after data loads
   refreshGraph()
 })
 
-// Watch for layout mode changes
+onUnmounted(() => {
+  if (cy.value) {
+    cy.value.destroy()
+    cy.value = null
+  }
+})
+
 watch(layoutMode, () => {
-  calculateLayout()
+  runLayout()
 })
 </script>
 
@@ -1219,79 +1451,19 @@ watch(layoutMode, () => {
 .graph-container {
   flex: 1;
   position: relative;
-  background: linear-gradient(135deg, #f0f4ff, #faf5ff);
+  background: var(--color-bg-tertiary, #0f172a);
   border-radius: 0.75rem;
   overflow: hidden;
+  min-height: 500px;
+}
+
+.cytoscape-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   min-height: 400px;
-}
-
-.graph-svg {
-  width: 100%;
-  height: 100%;
-  cursor: grab;
-}
-
-.graph-svg:active {
-  cursor: grabbing;
-}
-
-/* Edges */
-.edge {
-  stroke: #d1d5db;
-  stroke-width: 2;
-  fill: none;
-}
-
-.edge.highlighted {
-  stroke: #667eea;
-  stroke-width: 3;
-}
-
-.edge-label {
-  font-size: 10px;
-  fill: #9ca3af;
-  text-anchor: middle;
-}
-
-/* Nodes */
-.node-group {
-  cursor: pointer;
-}
-
-.node-group:hover .node-circle {
-  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.25));
-}
-
-.node-group.selected .node-circle {
-  stroke: #1f2937;
-  stroke-width: 3;
-}
-
-.node-group.dimmed {
-  opacity: 0.3;
-}
-
-.node-group.highlighted {
-  opacity: 1;
-}
-
-.node-circle {
-  stroke: white;
-  stroke-width: 2;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
-}
-
-.node-icon {
-  font-size: 16px;
-  fill: white;
-  pointer-events: none;
-}
-
-.node-label {
-  font-size: 11px;
-  fill: #374151;
-  font-weight: 500;
-  pointer-events: none;
 }
 
 /* Zoom Controls */
@@ -1687,5 +1859,35 @@ watch(layoutMode, () => {
     border-radius: 0.75rem 0.75rem 0 0;
     max-height: 50%;
   }
+}
+
+/* Fullscreen mode */
+.knowledge-graph.fullscreen {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 9999 !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  background: white;
+}
+
+.knowledge-graph.fullscreen .graph-container {
+  flex: 1;
+  min-height: calc(100vh - 250px);
+}
+
+.knowledge-graph.fullscreen .cytoscape-container {
+  min-height: calc(100vh - 300px);
+}
+
+.control-separator {
+  color: #d1d5db;
+  font-size: 14px;
+  margin: 0 4px;
 }
 </style>
