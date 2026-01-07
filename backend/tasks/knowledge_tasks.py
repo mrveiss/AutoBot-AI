@@ -365,6 +365,61 @@ def scan_man_page_changes(self, limit: int | None = None) -> Metadata:
         }
 
 
+async def _execute_full_man_page_index(
+    machine_id: str,
+    limit: int | None,
+    sections: list[str] | None,
+) -> dict:
+    """Execute full man page indexing asynchronously.
+
+    Issue #665: Extracted from full_man_page_index to reduce function length.
+
+    Args:
+        machine_id: Host identifier
+        limit: Optional limit on pages to process
+        sections: Optional filter to specific sections
+
+    Returns:
+        Dict with indexing results
+    """
+    from src.utils.redis_client import get_redis_client
+    from backend.services.fast_document_scanner import FastDocumentScanner
+    from src.knowledge import get_knowledge_base
+    from src.constants.threshold_constants import TimingConstants
+
+    # Get system context
+    try:
+        from src.utils.system_context import get_system_context
+        system_context = get_system_context()
+    except ImportError:
+        system_context = {"machine_id": machine_id}
+
+    # Get scanner and KB
+    redis_client = get_redis_client(async_client=False, database="main")
+    scanner = FastDocumentScanner(redis_client)
+    kb = await get_knowledge_base()
+
+    # Get all man pages
+    man_pages = scanner.get_all_man_pages_for_indexing(
+        limit=limit,
+        sections=sections,
+        system_context=system_context,
+    )
+
+    # Store using extracted helper (Issue #398)
+    items_added, items_failed = await _store_man_pages_to_kb(
+        kb, man_pages, TimingConstants.MICRO_DELAY
+    )
+
+    return {
+        "status": "success",
+        "items_added": items_added,
+        "items_failed": items_failed,
+        "total_scanned": len(man_pages),
+        "machine_id": machine_id,
+    }
+
+
 @celery_app.task(bind=True, name="tasks.full_man_page_index")
 def full_man_page_index(
     self,
@@ -375,6 +430,7 @@ def full_man_page_index(
     Perform a full index of all system man pages.
 
     Issue #424: Celery task for complete man page indexing.
+    Issue #665: Refactored to use extracted async helper.
 
     This is a longer-running operation that indexes all man pages (or a subset).
     Use for initial population or periodic full refresh.
@@ -405,46 +461,10 @@ def full_man_page_index(
             f"(limit={limit}, sections={sections})..."
         )
 
-        # Run the async indexing (Issue #398: refactored to use helper)
-        async def _full_index():
-            from src.utils.redis_client import get_redis_client
-            from backend.services.fast_document_scanner import FastDocumentScanner
-            from src.knowledge import get_knowledge_base
-            from src.constants.threshold_constants import TimingConstants
-
-            # Get system context
-            try:
-                from src.utils.system_context import get_system_context
-                system_context = get_system_context()
-            except ImportError:
-                system_context = {"machine_id": machine_id}
-
-            # Get scanner and KB
-            redis_client = get_redis_client(async_client=False, database="main")
-            scanner = FastDocumentScanner(redis_client)
-            kb = await get_knowledge_base()
-
-            # Get all man pages
-            man_pages = scanner.get_all_man_pages_for_indexing(
-                limit=limit,
-                sections=sections,
-                system_context=system_context,
-            )
-
-            # Store using extracted helper (Issue #398)
-            items_added, items_failed = await _store_man_pages_to_kb(
-                kb, man_pages, TimingConstants.MICRO_DELAY
-            )
-
-            return {
-                "status": "success",
-                "items_added": items_added,
-                "items_failed": items_failed,
-                "total_scanned": len(man_pages),
-                "machine_id": machine_id,
-            }
-
-        result = _run_async_in_loop(_full_index())
+        # Run async indexing using extracted helper (Issue #665)
+        result = _run_async_in_loop(
+            _execute_full_man_page_index(machine_id, limit, sections)
+        )
 
         logger.info(
             f"Full man page index complete: {result.get('items_added', 0)} added, "

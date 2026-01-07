@@ -78,6 +78,137 @@ __all__ = [
 ]
 
 
+# =============================================================================
+# Helper Functions for execute_codebase_indexing (Issue #665)
+# =============================================================================
+
+
+async def _discover_indexing_files(path: Path, patterns: List[str]) -> List[Path]:
+    """Discover files for indexing based on glob patterns.
+
+    Issue #665: Extracted from execute_codebase_indexing to reduce function length.
+
+    Args:
+        path: Root path to scan
+        patterns: List of glob patterns to match
+
+    Returns:
+        List of discovered file paths
+    """
+    all_files: List[Path] = []
+    for pattern in patterns:
+        pattern_files = await asyncio.to_thread(
+            lambda p=pattern: list(path.rglob(p))
+        )
+        all_files.extend(pattern_files)
+    return all_files
+
+
+async def _process_index_file(
+    file_path: Path,
+) -> Dict[str, Any]:
+    """Process a single file for indexing.
+
+    Issue #665: Extracted from execute_codebase_indexing to reduce function length.
+
+    Args:
+        file_path: Path to the file to process
+
+    Returns:
+        File information dictionary
+    """
+    file_stat = await asyncio.to_thread(file_path.stat)
+    return {
+        "path": str(file_path),
+        "size": file_stat.st_size,
+        "indexed_at": datetime.now().isoformat(),
+    }
+
+
+# =============================================================================
+# Helper Functions for execute_comprehensive_test_suite (Issue #665)
+# =============================================================================
+
+
+async def _discover_test_files(path: Path, patterns: List[str]) -> List[Path]:
+    """Discover test files based on glob patterns.
+
+    Issue #665: Extracted from execute_comprehensive_test_suite to reduce function length.
+
+    Args:
+        path: Root path to scan
+        patterns: List of glob patterns for test files
+
+    Returns:
+        List of discovered test file paths
+    """
+    test_files: List[Path] = []
+    for pattern in patterns:
+        pattern_files = await asyncio.to_thread(
+            lambda p=pattern: list(path.rglob(p))
+        )
+        test_files.extend(pattern_files)
+    return test_files
+
+
+def _create_test_result(
+    test_file: Path,
+    test_passed: bool,
+    duration: float,
+) -> Dict[str, Any]:
+    """Create a test result dictionary.
+
+    Issue #665: Extracted from execute_comprehensive_test_suite to reduce function length.
+
+    Args:
+        test_file: Path to the test file
+        test_passed: Whether the test passed
+        duration: Test execution duration
+
+    Returns:
+        Test result dictionary
+    """
+    return {
+        "file": str(test_file),
+        "status": "PASS" if test_passed else "FAIL",
+        "duration": duration,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+def _calculate_test_summary(
+    total_tests: int,
+    passed: int,
+    failed: int,
+    results: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Calculate test suite summary statistics.
+
+    Issue #665: Extracted from execute_comprehensive_test_suite to reduce function length.
+
+    Args:
+        total_tests: Total number of tests
+        passed: Number of passed tests
+        failed: Number of failed tests
+        results: List of test result dictionaries
+
+    Returns:
+        Test suite summary dictionary
+    """
+    return {
+        "total_tests": total_tests,
+        "passed": passed,
+        "failed": failed,
+        "results": results,
+        "success_rate": (passed / total_tests) * 100 if total_tests > 0 else 0,
+    }
+
+
+# =============================================================================
+# Convenience Functions for Common Operations
+# =============================================================================
+
+
 # Convenience functions for common operations
 async def execute_codebase_indexing(
     codebase_path: str,
@@ -96,18 +227,15 @@ async def execute_codebase_indexing(
     """
 
     async def indexing_operation(context: OperationExecutionContext) -> Dict[str, Any]:
-        """Index files in codebase with progress tracking and checkpoints."""
+        """Index files in codebase with progress tracking and checkpoints.
+
+        Issue #665: Refactored to use extracted helper functions.
+        """
         path = Path(codebase_path)
         patterns = file_patterns or ["*.py", "*.js", "*.vue", "*.ts", "*.jsx", "*.tsx"]
 
-        # Count total files first
-        all_files: List[Path] = []
-        for pattern in patterns:
-            pattern_files = await asyncio.to_thread(
-                lambda p=pattern: list(path.rglob(p))
-            )
-            all_files.extend(pattern_files)
-
+        # Discover files using helper (Issue #665)
+        all_files = await _discover_indexing_files(path, patterns)
         total_files = len(all_files)
         await context.update_progress("Scanning files", 0, total_files)
 
@@ -116,16 +244,8 @@ async def execute_codebase_indexing(
 
         for i, file_path in enumerate(all_files):
             try:
-                # Simulate file processing
-                await asyncio.sleep(0.1)
-
-                # Process file
-                file_stat = await asyncio.to_thread(file_path.stat)
-                file_info = {
-                    "path": str(file_path),
-                    "size": file_stat.st_size,
-                    "indexed_at": datetime.now().isoformat(),
-                }
+                await asyncio.sleep(0.1)  # Simulate processing
+                file_info = await _process_index_file(file_path)
                 results.append(file_info)
 
                 # Update progress
@@ -183,18 +303,15 @@ async def execute_comprehensive_test_suite(
     import random
 
     async def test_suite_operation(context: OperationExecutionContext) -> Dict[str, Any]:
-        """Run test suite with progress tracking and checkpoint support."""
+        """Run test suite with progress tracking and checkpoint support.
+
+        Issue #665: Refactored to use extracted helper functions.
+        """
         path = Path(test_suite_path)
         patterns = test_patterns or ["test_*.py", "*_test.py"]
 
-        # Find all test files
-        test_files: List[Path] = []
-        for pattern in patterns:
-            pattern_files = await asyncio.to_thread(
-                lambda p=pattern: list(path.rglob(p))
-            )
-            test_files.extend(pattern_files)
-
+        # Discover test files using helper (Issue #665)
+        test_files = await _discover_test_files(path, patterns)
         total_tests = len(test_files)
         await context.update_progress("Initializing test suite", 0, total_tests)
 
@@ -212,18 +329,11 @@ async def execute_comprehensive_test_suite(
                     f"Test {i + 1} of {total_tests}: {test_file.name}",
                 )
 
-                # Run test (placeholder - would use actual test runner)
-                await asyncio.sleep(0.5)
-
-                # Simulate test result
+                await asyncio.sleep(0.5)  # Simulate test execution
                 test_passed = random.random() > 0.1  # 90% pass rate
 
-                test_result = {
-                    "file": str(test_file),
-                    "status": "PASS" if test_passed else "FAIL",
-                    "duration": 0.5,
-                    "timestamp": datetime.now().isoformat(),
-                }
+                # Create result using helper (Issue #665)
+                test_result = _create_test_result(test_file, test_passed, 0.5)
                 results.append(test_result)
 
                 if test_passed:
@@ -242,13 +352,8 @@ async def execute_comprehensive_test_suite(
                 context.logger.error("Failed to run test %s: %s", test_file, e)
                 failed += 1
 
-        return {
-            "total_tests": total_tests,
-            "passed": passed,
-            "failed": failed,
-            "results": results,
-            "success_rate": (passed / total_tests) * 100 if total_tests > 0 else 0,
-        }
+        # Return summary using helper (Issue #665)
+        return _calculate_test_summary(total_tests, passed, failed, results)
 
     return await manager.create_operation(
         OperationType.COMPREHENSIVE_TEST_SUITE,
