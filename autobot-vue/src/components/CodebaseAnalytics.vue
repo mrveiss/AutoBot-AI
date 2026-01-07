@@ -2257,6 +2257,7 @@
                 (showing {{ environmentAnalysis.hardcoded_values.length }} of {{ environmentAnalysis.total_hardcoded_values.toLocaleString() }} - use Export for full data)
               </span>
             </h4>
+            <!-- Issue #706: Fixed field names to match backend API (file/line/type/suggested_env_var) -->
             <div
               v-for="(hv, index) in environmentAnalysis.hardcoded_values.slice(0, 8)"
               :key="'hv-' + index"
@@ -2264,15 +2265,15 @@
               :class="'severity-' + hv.severity"
             >
               <div class="hv-location">
-                <span class="file-path">{{ hv.file_path }}</span>
-                <span class="line-number">:{{ hv.line_number }}</span>
+                <span class="file-path">{{ hv.file }}</span>
+                <span class="line-number">:{{ hv.line }}</span>
               </div>
               <div class="hv-value">
                 <code>{{ truncateValue(hv.value, 60) }}</code>
-                <span class="value-type">{{ hv.value_type }}</span>
+                <span class="value-type">{{ hv.type }}</span>
               </div>
-              <div v-if="hv.suggestion" class="hv-suggestion">
-                <i class="fas fa-lightbulb"></i> Use: <code>{{ hv.suggestion }}</code>
+              <div v-if="hv.suggested_env_var" class="hv-suggestion">
+                <i class="fas fa-lightbulb"></i> Use: <code>{{ hv.suggested_env_var }}</code>
               </div>
             </div>
           </div>
@@ -2729,14 +2730,18 @@ interface Declaration {
   is_exported?: boolean
 }
 
+// Issue #706: Fixed field names to match backend API response
+// Backend returns 'file' and 'line', not 'file_path' and 'line_number'
 interface HardcodedValue {
-  file_path: string
-  line_number: number
+  file: string              // Backend returns 'file', not 'file_path'
+  line: number              // Backend returns 'line', not 'line_number'
   variable_name?: string
   value: string
-  value_type: string
+  type: string              // Backend returns 'type', aliased to value_type in display
   severity: string
-  suggestion: string
+  suggested_env_var: string // Backend returns 'suggested_env_var', not 'suggestion'
+  context?: string
+  current_usage?: string
 }
 
 interface RefactoringSuggestion {
@@ -3221,14 +3226,17 @@ const loadingRedisOptimizations = ref(false)
 const showRedisDetails = ref(false)
 
 // Issue #538: Environment Analysis data
+// Issue #706: Fixed field names to match backend API response
 interface HardcodedValue {
-  file_path: string
-  line_number: number
+  file: string              // Backend returns 'file', not 'file_path'
+  line: number              // Backend returns 'line', not 'line_number'
   variable_name?: string
   value: string
-  value_type: string
+  type: string              // Backend returns 'type', not 'value_type'
   severity: string
-  suggestion: string
+  suggested_env_var: string // Backend returns 'suggested_env_var', not 'suggestion'
+  context?: string
+  current_usage?: string
 }
 interface EnvRecommendation {
   env_var_name: string
@@ -5568,7 +5576,7 @@ const generateSectionMarkdown = (section: SectionType, data: unknown): string =>
     }
     case 'environment': {
       // Issue #631: Updated to handle new export format with hardcoded_values
-      // Issue #XXX: Fixed field names to match backend API response
+      // Issue #706: Fixed field names to match backend API response
       // Backend returns 'file' and 'line', not 'file_path' and 'line_number'
       interface EnvExportData {
         total_in_export?: number
