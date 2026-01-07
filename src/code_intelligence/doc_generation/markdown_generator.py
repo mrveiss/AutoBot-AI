@@ -41,6 +41,71 @@ _MD_BOLD_RE: Pattern[str] = re.compile(r"\*\*([^*]+)\*\*")
 _MD_LIST_ITEM_RE: Pattern[str] = re.compile(r"^- (.+)$", re.MULTILINE)
 _MD_HR_RE: Pattern[str] = re.compile(r"^---$", re.MULTILINE)
 
+# Completeness score mapping (Issue #665: extracted for reuse)
+_COMPLETENESS_SCORES = {
+    DocCompleteness.NONE: 0,
+    DocCompleteness.MINIMAL: 25,
+    DocCompleteness.PARTIAL: 50,
+    DocCompleteness.COMPLETE: 75,
+    DocCompleteness.COMPREHENSIVE: 100,
+}
+
+
+def _calculate_avg_completeness(modules: List[ModuleDoc]) -> float:
+    """Calculate average completeness score from modules.
+
+    Issue #665: Extracted from _generate_markdown_api to reduce function length.
+
+    Args:
+        modules: List of module documentation objects
+
+    Returns:
+        Average completeness percentage (0-100)
+    """
+    if not modules:
+        return 0
+    all_completeness = [m.completeness for m in modules]
+    return sum(_COMPLETENESS_SCORES[c] for c in all_completeness) / len(all_completeness)
+
+
+def _generate_module_header_lines(module: ModuleDoc) -> List[str]:
+    """Generate header lines for a module section.
+
+    Issue #665: Extracted from _generate_markdown_api to reduce function length.
+
+    Args:
+        module: Module documentation object
+
+    Returns:
+        List of markdown lines for module header
+    """
+    lines = [f"## Module: `{module.name}`", ""]
+    if module.file_path:
+        lines.extend([f"**File:** `{module.file_path}`", ""])
+    if module.description:
+        lines.extend([module.description, ""])
+    return lines
+
+
+def _generate_constants_section(constants: dict) -> List[str]:
+    """Generate constants section for a module.
+
+    Issue #665: Extracted from _generate_markdown_api to reduce function length.
+
+    Args:
+        constants: Dictionary of constant names to values
+
+    Returns:
+        List of markdown lines for constants section
+    """
+    if not constants:
+        return []
+    lines = ["### Constants", ""]
+    for name, value in constants.items():
+        lines.append(f"- `{name}` = `{value}`")
+    lines.append("")
+    return lines
+
 
 class MarkdownGenerator:
     """
@@ -93,79 +158,44 @@ class MarkdownGenerator:
         include_toc: bool,
         include_diagrams: bool,
     ) -> GeneratedDoc:
-        """Generate Markdown API documentation."""
+        """Generate Markdown API documentation.
+
+        Issue #665: Refactored to use extracted helper functions.
+        """
         lines = [f"# {title}", ""]
 
-        # Table of contents
         if include_toc:
             lines.extend(self._generate_toc(modules))
             lines.append("")
 
         diagrams = []
 
-        # Process each module
+        # Process each module using helpers (Issue #665)
         for module in modules:
-            lines.append(f"## Module: `{module.name}`")
-            lines.append("")
-
-            if module.file_path:
-                lines.append(f"**File:** `{module.file_path}`")
-                lines.append("")
-
-            if module.description:
-                lines.append(module.description)
-                lines.append("")
-
-            # Module-level constants
-            if module.constants:
-                lines.append("### Constants")
-                lines.append("")
-                for name, value in module.constants.items():
-                    lines.append(f"- `{name}` = `{value}`")
-                lines.append("")
+            lines.extend(_generate_module_header_lines(module))
+            lines.extend(_generate_constants_section(module.constants))
 
             # Generate class diagram
             if include_diagrams and module.classes:
                 diagram = self._generate_class_diagram(module)
                 diagrams.append(diagram)
-                lines.append("### Class Diagram")
-                lines.append("")
-                lines.append("```mermaid")
-                lines.append(diagram.to_mermaid())
-                lines.append("```")
-                lines.append("")
+                lines.extend([
+                    "### Class Diagram", "",
+                    "```mermaid", diagram.to_mermaid(), "```", ""
+                ])
 
-            # Classes
+            # Classes and functions
             for class_doc in module.classes:
                 lines.extend(self._generate_class_markdown(class_doc))
 
-            # Functions
             if module.functions:
-                lines.append("### Functions")
-                lines.append("")
+                lines.extend(["### Functions", ""])
                 for func_doc in module.functions:
                     lines.extend(self._generate_function_markdown(func_doc))
 
-            lines.append("---")
-            lines.append("")
+            lines.extend(["---", ""])
 
         content = "\n".join(lines)
-        word_count = len(content.split())
-
-        # Calculate overall completeness
-        all_completeness = [m.completeness for m in modules]
-        completeness_map = {
-            DocCompleteness.NONE: 0,
-            DocCompleteness.MINIMAL: 25,
-            DocCompleteness.PARTIAL: 50,
-            DocCompleteness.COMPLETE: 75,
-            DocCompleteness.COMPREHENSIVE: 100,
-        }
-        avg_completeness = (
-            sum(completeness_map[c] for c in all_completeness) / len(all_completeness)
-            if all_completeness
-            else 0
-        )
 
         return GeneratedDoc(
             title=title,
@@ -174,8 +204,8 @@ class MarkdownGenerator:
             sections=[DocSection.API_REFERENCE],
             source_files=[m.file_path for m in modules],
             diagrams=diagrams,
-            word_count=word_count,
-            completeness_score=avg_completeness,
+            word_count=len(content.split()),
+            completeness_score=_calculate_avg_completeness(modules),
         )
 
     def _generate_toc(self, modules: List[ModuleDoc]) -> List[str]:

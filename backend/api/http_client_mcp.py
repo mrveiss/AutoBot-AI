@@ -28,7 +28,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from backend.type_defs.common import JSONObject, Metadata
 from urllib.parse import urlparse
@@ -112,6 +112,79 @@ def _try_parse_json(body: Optional[str]) -> Optional[JSONObject]:
     except json.JSONDecodeError:
         logger.debug("Response body is not JSON, keeping as text")
         return None
+
+
+def _build_request_kwargs(
+    url: str,
+    headers: Dict[str, str],
+    timeout: int,
+    params: Optional[Dict[str, str]] = None,
+    json_body: Optional[JSONObject] = None,
+    form_data: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
+    """
+    Build request kwargs dictionary for aiohttp session.request.
+
+    Issue #665: Extracted from execute_http_request to reduce function length.
+
+    Args:
+        url: Target URL
+        headers: Request headers
+        timeout: Timeout in seconds
+        params: Optional query parameters
+        json_body: Optional JSON body
+        form_data: Optional form data
+
+    Returns:
+        Dictionary of kwargs for session.request
+    """
+    request_kwargs = {
+        "url": url,
+        "headers": headers,
+        "timeout": aiohttp.ClientTimeout(total=timeout),
+        "ssl": True,  # Enforce SSL verification
+    }
+
+    if params:
+        request_kwargs["params"] = params
+    if json_body:
+        request_kwargs["json"] = json_body
+    if form_data:
+        request_kwargs["data"] = form_data
+
+    return request_kwargs
+
+
+def _build_http_response(
+    response,
+    method: str,
+    body: Optional[str],
+    json_response: Optional[JSONObject],
+) -> JSONObject:
+    """
+    Build standardized HTTP response dictionary.
+
+    Issue #665: Extracted from execute_http_request to reduce function length.
+
+    Args:
+        response: aiohttp response object
+        method: HTTP method used
+        body: Response body text
+        json_response: Parsed JSON body (if applicable)
+
+    Returns:
+        Standardized response dictionary
+    """
+    return {
+        "success": True,
+        "status_code": response.status,
+        "headers": dict(response.headers),
+        "body": json_response if json_response else body,
+        "is_json": json_response is not None,
+        "url": str(response.url),
+        "method": method,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 async def _read_response_body_chunked(response, chunk_size: int = 8192) -> str:
@@ -548,41 +621,27 @@ async def execute_http_request(
     timeout: int = DEFAULT_TIMEOUT,
 ) -> JSONObject:
     """
-    Execute HTTP request with security controls
+    Execute HTTP request with security controls.
+
+    Issue #665: Refactored to use _build_request_kwargs and _build_http_response helpers.
 
     This is the core HTTP execution layer with:
-    - Domain validation
-    - Header filtering
-    - Rate limiting
     - Timeout management
     - Response size limits
     - Comprehensive error handling
     """
     try:
-        # Prepare headers
+        # Prepare headers with default User-Agent
         request_headers = headers or {}
-
-        # Add default headers
         if "User-Agent" not in request_headers:
             request_headers["User-Agent"] = "AutoBot-HTTP-Client/1.0"
 
-        # Execute request using singleton HTTP client
+        # Build request kwargs (Issue #665: uses extracted helper)
         http_client = get_http_client()
         session = await http_client.get_session()
-        request_kwargs = {
-            "url": url,
-            "headers": request_headers,
-            "timeout": aiohttp.ClientTimeout(total=timeout),
-            "ssl": True,  # Enforce SSL verification
-        }
-
-        # Add method-specific parameters
-        if params:
-            request_kwargs["params"] = params
-        if json_body:
-            request_kwargs["json"] = json_body
-        if form_data:
-            request_kwargs["data"] = form_data
+        request_kwargs = _build_request_kwargs(
+            url, request_headers, timeout, params, json_body, form_data
+        )
 
         # Execute the request
         async with session.request(method, **request_kwargs) as response:
@@ -591,44 +650,22 @@ async def execute_http_request(
             if content_length and int(content_length) > MAX_RESPONSE_SIZE:
                 raise HTTPException(
                     status_code=413,
-                    detail=(
-                        f"Response too large: {content_length} bytes (max:"
-                        f"{MAX_RESPONSE_SIZE})"
-                    )
+                    detail=f"Response too large: {content_length} bytes (max: {MAX_RESPONSE_SIZE})"
                 )
 
-            # Read response body with size limit enforcement (Issue #315 - uses helper)
-            if method.upper() == "HEAD":
-                body = None
-            else:
-                body = await _read_response_body_chunked(response)
-
-            # Try to parse as JSON if applicable (Issue #315 - uses helper)
+            # Read response body (Issue #315 - uses helper)
+            body = None if method.upper() == "HEAD" else await _read_response_body_chunked(response)
             json_response = _try_parse_json(body)
 
-            return {
-                "success": True,
-                "status_code": response.status,
-                "headers": dict(response.headers),
-                "body": json_response if json_response else body,
-                "is_json": json_response is not None,
-                "url": str(response.url),
-                "method": method,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }
+            # Build response (Issue #665: uses extracted helper)
+            return _build_http_response(response, method, body, json_response)
 
     except asyncio.TimeoutError:
         logger.error("HTTP request timed out after %s seconds: %s", timeout, url)
-        raise HTTPException(
-            status_code=504,
-            detail=f"Request timed out after {timeout} seconds",
-        )
+        raise HTTPException(status_code=504, detail=f"Request timed out after {timeout} seconds")
     except aiohttp.ClientError as e:
         logger.error("HTTP client error: %s", e)
-        raise HTTPException(
-            status_code=502,
-            detail=f"HTTP request failed: {str(e)}",
-        )
+        raise HTTPException(status_code=502, detail=f"HTTP request failed: {str(e)}")
 
 
 @with_error_handling(

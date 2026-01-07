@@ -25,6 +25,87 @@ from .text_extraction import TextExtractor
 logger = logging.getLogger(__name__)
 
 
+def _build_tool_document_content(tool_info: Dict[str, Any], tool_name: str) -> str:
+    """
+    Build document content string for tool storage.
+
+    Issue #665: Extracted from store_tool_knowledge to reduce function length.
+
+    Args:
+        tool_info: Tool information dictionary
+        tool_name: Name of the tool
+
+    Returns:
+        Formatted document content string
+    """
+    return f"""
+TOOL DOCUMENTATION: {tool_name}
+==================================================
+
+BASIC INFORMATION:
+- Name: {tool_name}
+- Type: {tool_info.get('type', 'command-line tool')}
+- Category: {tool_info.get('category', 'general')}
+- Platform: {tool_info.get('platform', 'linux')}
+- Purpose: {tool_info.get('purpose', 'N/A')}
+
+INSTALLATION:
+{tool_info.get('installation', 'No installation information available')}
+
+SYSTEM REQUIREMENTS:
+{tool_info.get('requirements', 'Standard Linux system')}
+
+BASIC USAGE:
+{tool_info.get('usage', 'No usage information available')}
+
+COMMAND SYNTAX:
+{tool_info.get('syntax', 'See man page for syntax')}
+
+COMMON COMMANDS & EXAMPLES:
+{ToolInfoFormatter.format_command_examples(tool_info.get('command_examples', []))}
+
+ADVANCED USAGE:
+{tool_info.get('advanced_usage', 'See documentation for advanced features')}
+
+TROUBLESHOOTING:
+{tool_info.get('troubleshooting', 'Check man page and documentation for issues')}
+
+OUTPUT FORMATS:
+{tool_info.get('output_formats', 'Standard text output')}
+
+INTEGRATION WITH OTHER TOOLS:
+{tool_info.get('integrations', 'Can be used with standard Unix tools via pipes')}
+
+SECURITY CONSIDERATIONS:
+{tool_info.get('security_notes', 'Use with appropriate permissions')}
+
+ERROR CODES & MEANINGS:
+{tool_info.get('error_codes', 'Standard Unix exit codes')}
+
+PERFORMANCE NOTES:
+{tool_info.get('performance', 'Performance varies with input size')}
+
+KNOWN LIMITATIONS:
+{tool_info.get('limitations', 'See documentation for limitations')}
+
+RELATED TOOLS:
+{tool_info.get('related_tools', [])}
+
+EXTERNAL RESOURCES:
+- Official Documentation: {tool_info.get('documentation_url', 'N/A')}
+- Source Code: {tool_info.get('source_url', 'N/A')}
+- Tutorial Links: {tool_info.get('tutorials', [])}
+- Community Forums: {tool_info.get('forums', [])}
+
+METADATA:
+- Added: {datetime.now().isoformat()}
+- Last Updated: {datetime.now().isoformat()}
+- Verification Status: {tool_info.get('verified', 'unverified')}
+- Usage Count: 0
+- Success Rate: N/A
+"""
+
+
 class EnhancedKBLibrarian:
     """
     Librarian that can search KB and coordinate with other agents for tool
@@ -144,75 +225,13 @@ class EnhancedKBLibrarian:
         return detailed_tools
 
     async def store_tool_knowledge(self, tool_info: Dict[str, Any]):
-        """Store comprehensive tool information and documentation in KB."""
+        """
+        Store comprehensive tool information and documentation in KB.
+
+        Issue #665: Refactored to use _build_tool_document_content helper.
+        """
         tool_name = tool_info.get("name", "unknown")
-
-        document_content = f"""
-TOOL DOCUMENTATION: {tool_name}
-==================================================
-
-BASIC INFORMATION:
-- Name: {tool_name}
-- Type: {tool_info.get('type', 'command-line tool')}
-- Category: {tool_info.get('category', 'general')}
-- Platform: {tool_info.get('platform', 'linux')}
-- Purpose: {tool_info.get('purpose', 'N/A')}
-
-INSTALLATION:
-{tool_info.get('installation', 'No installation information available')}
-
-SYSTEM REQUIREMENTS:
-{tool_info.get('requirements', 'Standard Linux system')}
-
-BASIC USAGE:
-{tool_info.get('usage', 'No usage information available')}
-
-COMMAND SYNTAX:
-{tool_info.get('syntax', 'See man page for syntax')}
-
-COMMON COMMANDS & EXAMPLES:
-{ToolInfoFormatter.format_command_examples(tool_info.get('command_examples', []))}
-
-ADVANCED USAGE:
-{tool_info.get('advanced_usage', 'See documentation for advanced features')}
-
-TROUBLESHOOTING:
-{tool_info.get('troubleshooting', 'Check man page and documentation for issues')}
-
-OUTPUT FORMATS:
-{tool_info.get('output_formats', 'Standard text output')}
-
-INTEGRATION WITH OTHER TOOLS:
-{tool_info.get('integrations', 'Can be used with standard Unix tools via pipes')}
-
-SECURITY CONSIDERATIONS:
-{tool_info.get('security_notes', 'Use with appropriate permissions')}
-
-ERROR CODES & MEANINGS:
-{tool_info.get('error_codes', 'Standard Unix exit codes')}
-
-PERFORMANCE NOTES:
-{tool_info.get('performance', 'Performance varies with input size')}
-
-KNOWN LIMITATIONS:
-{tool_info.get('limitations', 'See documentation for limitations')}
-
-RELATED TOOLS:
-{tool_info.get('related_tools', [])}
-
-EXTERNAL RESOURCES:
-- Official Documentation: {tool_info.get('documentation_url', 'N/A')}
-- Source Code: {tool_info.get('source_url', 'N/A')}
-- Tutorial Links: {tool_info.get('tutorials', [])}
-- Community Forums: {tool_info.get('forums', [])}
-
-METADATA:
-- Added: {datetime.now().isoformat()}
-- Last Updated: {datetime.now().isoformat()}
-- Verification Status: {tool_info.get('verified', 'unverified')}
-- Usage Count: 0
-- Success Rate: N/A
-"""
+        document_content = _build_tool_document_content(tool_info, tool_name)
 
         metadata = {
             "tool_name": tool_name,
@@ -223,7 +242,6 @@ METADATA:
         }
 
         await self.knowledge_base.store_fact(document_content, metadata=metadata)
-
         logger.info("Stored knowledge for tool: %s", tool_name)
 
         await event_manager.publish(
