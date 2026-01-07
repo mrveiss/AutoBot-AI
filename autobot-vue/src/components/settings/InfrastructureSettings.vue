@@ -46,10 +46,20 @@
 
     <!-- System Updates Tab -->
     <div v-show="activeSubTab === 'updates'">
-    <!-- System Updates (Admin Only) - Issue #544 -->
+    <!-- System Updates (Admin Only) - Issue #544, #705 -->
     <div v-if="userStore.isAdmin" class="settings-section">
       <h4>System Updates</h4>
       <div class="updates-settings">
+        <!-- Issue #705: Worker unavailable warning -->
+        <div v-if="workerAvailable === false" class="alert alert-warning worker-warning">
+          <i class="fas fa-exclamation-triangle"></i>
+          <div>
+            <strong>Celery Worker Not Running</strong>
+            <p>{{ workerError || 'System updates require a running Celery worker.' }}</p>
+            <code>bash scripts/start-celery-worker.sh</code>
+          </div>
+        </div>
+
         <div class="updates-status">
           <div class="status-indicator" :class="updatesStatus.hasUpdates ? 'has-updates' : 'up-to-date'">
             <i :class="updatesStatus.hasUpdates ? 'fas fa-arrow-circle-up' : 'fas fa-check-circle'"></i>
@@ -246,7 +256,7 @@ const emit = defineEmits<{
   'change': []
 }>()
 
-// System Updates State (Issue #544)
+// System Updates State (Issue #544, #705)
 const MAX_UPDATE_POLL_ATTEMPTS = 300 // 5 minutes max polling (300 * 1000ms)
 const showUpdateModal = ref(false)
 const isCheckingUpdates = ref(false)
@@ -256,6 +266,9 @@ const updateTaskStatus = ref('')
 const updatePollAttempts = ref(0)
 const updateProgressInfo = ref<{ task_name?: string; host?: string } | null>(null)
 const updateResult = ref<{ success: boolean; message: string } | null>(null)
+// Issue #705: Track worker availability
+const workerAvailable = ref<boolean | null>(null)
+const workerError = ref<string | null>(null)
 const updatesStatus = reactive({
   hasUpdates: false,
   message: 'Click "Check for Updates" to scan for available updates',
@@ -285,13 +298,14 @@ const updateStatusMessage = computed(() => {
   }
 })
 
-// System Updates Methods (Issue #544)
+// System Updates Methods (Issue #544, #705)
 const resetUpdateState = () => {
   updateTaskId.value = null
   updateTaskStatus.value = ''
   updatePollAttempts.value = 0
   updateProgressInfo.value = null
   updateResult.value = null
+  workerError.value = null  // Issue #705: Reset worker error on state reset
 }
 
 // Track polling attempts for update check
@@ -303,6 +317,7 @@ const checkForUpdates = async () => {
 
   isCheckingUpdates.value = true
   updatesStatus.message = 'Checking for updates...'
+  workerError.value = null
 
   try {
     // Trigger the check task
@@ -316,8 +331,17 @@ const checkForUpdates = async () => {
 
     if (response.ok) {
       const data = await response.json()
+      workerAvailable.value = true
       // Poll for results
       await pollUpdateCheckStatus(data.task_id)
+    } else if (response.status === 503) {
+      // Issue #705: Handle worker unavailable error
+      const errorData = await response.json()
+      workerAvailable.value = false
+      workerError.value = errorData.detail?.message || 'Celery worker not available'
+      updatesStatus.message = 'Worker unavailable - start Celery worker first'
+      logger.warn('Worker unavailable: %s', workerError.value)
+      isCheckingUpdates.value = false
     } else {
       updatesStatus.message = 'Failed to start update check'
       isCheckingUpdates.value = false
@@ -387,6 +411,7 @@ const runSystemUpdate = async () => {
 
   resetUpdateState()
   isRunningUpdate.value = true
+  workerError.value = null
 
   try {
     const response = await fetch(`${getBackendUrl()}/api/settings/updates/run`, {
@@ -406,14 +431,26 @@ const runSystemUpdate = async () => {
       const data = await response.json()
       updateTaskId.value = data.task_id
       updateTaskStatus.value = 'PENDING'
+      workerAvailable.value = true
 
       // Start polling for task status
       pollUpdateTaskStatus()
+    } else if (response.status === 503) {
+      // Issue #705: Handle worker unavailable error
+      const errorData = await response.json()
+      workerAvailable.value = false
+      workerError.value = errorData.detail?.message || 'Celery worker not available'
+      updateResult.value = {
+        success: false,
+        message: `Worker unavailable: ${workerError.value}`,
+      }
+      logger.warn('Worker unavailable for update: %s', workerError.value)
+      isRunningUpdate.value = false
     } else {
       const error = await response.json()
       updateResult.value = {
         success: false,
-        message: error.detail || 'Failed to start system update',
+        message: error.detail?.message || error.detail || 'Failed to start system update',
       }
       isRunningUpdate.value = false
     }
@@ -861,6 +898,28 @@ onMounted(async () => {
 button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* Issue #705: Worker warning styling */
+.worker-warning {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  border-left: 4px solid #fd7e14;
+}
+
+.worker-warning p {
+  margin: 4px 0 8px 0;
+  font-size: 14px;
+}
+
+.worker-warning code {
+  display: block;
+  background: rgba(0, 0, 0, 0.1);
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 13px;
 }
 
 /* Dark theme support */

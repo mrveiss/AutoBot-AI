@@ -408,6 +408,19 @@ async def run_system_update_endpoint(
             request.target_groups,
         )
 
+        # Issue #705: Check worker availability before queuing
+        is_available, error_msg = _check_celery_worker_available()
+        if not is_available:
+            logger.warning("System update rejected: %s", error_msg)
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "worker_unavailable",
+                    "message": error_msg,
+                    "hint": "Start the Celery worker to enable system updates",
+                },
+            )
+
         # Queue the Celery task
         task = run_system_update.delay(
             update_type=request.update_type,
@@ -423,6 +436,8 @@ async def run_system_update_endpoint(
             "dry_run": request.dry_run,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error queuing system update: %s", str(e))
         raise_server_error("UPDATES_0001", f"Error queuing system update: {str(e)}")
