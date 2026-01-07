@@ -214,64 +214,66 @@ const selectDocumentation = () => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to design tokens */
+
 .doc-category-filter {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.5rem;
-  padding: 0.75rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-3);
 }
 
 .filter-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--spacing-3);
 }
 
 .filter-title {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #475569;
+  gap: var(--spacing-1-5);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--text-tertiary);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--tracking-wider);
   margin: 0;
 }
 
 .clear-btn {
   font-size: 0.6875rem;
-  color: #3b82f6;
+  color: var(--color-info);
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
-  transition: all 0.15s ease;
+  padding: var(--spacing-0-5) var(--spacing-1-5);
+  border-radius: var(--radius-default);
+  transition: all var(--duration-150) var(--ease-in-out);
 }
 
 .clear-btn:hover {
-  background: #dbeafe;
+  background: var(--color-info-bg);
 }
 
 .loading-state,
 .error-state {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  font-size: 0.75rem;
-  color: #64748b;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 
 .error-state {
-  color: #dc2626;
+  color: var(--color-error);
 }
 
 .retry-btn {
   font-size: 0.6875rem;
-  color: #3b82f6;
+  color: var(--color-info);
   background: none;
   border: none;
   cursor: pointer;
@@ -281,7 +283,7 @@ const selectDocumentation = () => {
 .category-list {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
   max-height: 300px;
   overflow-y: auto;
 }
@@ -289,38 +291,77 @@ const selectDocumentation = () => {
 .category-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   width: 100%;
-  padding: 0.5rem 0.625rem;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.375rem;
+  padding: var(--spacing-2) var(--spacing-2-5);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-150) var(--ease-in-out);
   text-align: left;
 }
 
 .category-item:hover {
-  border-color: #cbd5e1;
-  background: #f1f5f9;
+  border-color: var(--border-emphasis);
+  background: var(--bg-hover);
 }
 
 .category-item.selected {
-  border-color: #3b82f6;
-  background: #eff6ff;
+  border-color: var(--color-info);
+  background: var(--color-info-bg);
 }
 
 /* Category-specific selected colors */
-.category-item.selected.category-architecture { border-color: #8b5cf6; background: #f5f3ff; }
-.category-item.selected.category-developer { border-color: #3b82f6; background: #eff6ff; }
-.category-item.selected.category-api { border-color: #10b981; background: #ecfdf5; }
-.category-item.selected.category-troubleshooting { border-color: #f59e0b; background: #fffbeb; }
-.category-item.selected.category-deployment { border-color: #ef4444; background: #fef2f2; }
-.category-item.selected.category-security { border-color: #6366f1; background: #eef2ff; }
-.category-item.selected.category-features { border-color: #f97316; background: #fff7ed; }
-.category-item.selected.category-testing { border-color: #14b8a6; background: #f0fdfa; }
-.category-item.selected.category-workflow { border-color: #8b5cf6; background: #f5f3ff; }
-.category-item.selected.category-guides { border-color: #0ea5e9; background: #f0f9ff; }
+.category-item.selected.category-architecture {
+  border-color: var(--chart-purple);
+  background: var(--chart-purple-bg);
+}
+
+.category-item.selected.category-developer {
+  border-color: var(--color-info);
+  background: var(--color-info-bg);
+}
+
+.category-item.selected.category-api {
+  border-color: var(--color-success);
+  background: var(--color-success-bg);
+}
+
+.category-item.selected.category-troubleshooting {
+  border-color: var(--color-warning);
+  background: var(--color-warning-bg);
+}
+
+.category-item.selected.category-deployment {
+  border-color: var(--color-error);
+  background: var(--color-error-bg);
+}
+
+.category-item.selected.category-security {
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
+}
+
+.category-item.selected.category-features {
+  border-color: var(--chart-orange);
+  background: var(--chart-orange-bg);
+}
+
+.category-item.selected.category-testing {
+  border-color: var(--chart-teal);
+  background: var(--chart-green-bg);
+}
+
+.category-item.selected.category-workflow {
+  border-color: var(--chart-purple);
+  background: var(--chart-purple-bg);
+}
+
+.category-item.selected.category-guides {
+  border-color: var(--chart-cyan);
+  background: var(--chart-blue-bg);
+}
 
 .category-icon {
   display: flex;
@@ -329,7 +370,7 @@ const selectDocumentation = () => {
   width: 1.25rem;
   height: 1.25rem;
   font-size: 0.6875rem;
-  color: #64748b;
+  color: var(--text-tertiary);
   flex-shrink: 0;
 }
 
@@ -340,17 +381,17 @@ const selectDocumentation = () => {
 .category-name {
   flex: 1;
   font-size: 0.8125rem;
-  font-weight: 500;
-  color: #334155;
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
 }
 
 .category-count {
   font-size: 0.6875rem;
-  font-weight: 600;
-  color: #94a3b8;
-  background: #f1f5f9;
-  padding: 0.125rem 0.375rem;
-  border-radius: 9999px;
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  padding: var(--spacing-0-5) var(--spacing-1-5);
+  border-radius: var(--radius-full);
 }
 
 .category-item.selected .category-count {
@@ -360,34 +401,34 @@ const selectDocumentation = () => {
 
 .quick-filters {
   display: flex;
-  gap: 0.375rem;
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid #e2e8f0;
+  gap: var(--spacing-1-5);
+  margin-top: var(--spacing-3);
+  padding-top: var(--spacing-3);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .quick-filter-btn {
   flex: 1;
-  padding: 0.375rem 0.5rem;
+  padding: var(--spacing-1-5) var(--spacing-2);
   font-size: 0.6875rem;
-  font-weight: 600;
-  color: #64748b;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.25rem;
+  font-weight: var(--font-semibold);
+  color: var(--text-tertiary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-default);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-150) var(--ease-in-out);
 }
 
 .quick-filter-btn:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
+  background: var(--bg-hover);
+  border-color: var(--border-emphasis);
 }
 
 .quick-filter-btn.active {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  color: #ffffff;
+  background: var(--color-info);
+  border-color: var(--color-info);
+  color: var(--text-on-primary);
 }
 
 /* Scrollbar styling */
@@ -396,16 +437,16 @@ const selectDocumentation = () => {
 }
 
 .category-list::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 2px;
+  background: var(--scrollbar-track);
+  border-radius: var(--radius-xs);
 }
 
 .category-list::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 2px;
+  background: var(--scrollbar-thumb);
+  border-radius: var(--radius-xs);
 }
 
 .category-list::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--scrollbar-thumb-hover);
 }
 </style>

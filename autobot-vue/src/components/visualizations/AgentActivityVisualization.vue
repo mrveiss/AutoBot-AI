@@ -184,6 +184,14 @@ import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('AgentActivityVisualization')
 
+/**
+ * Helper to retrieve CSS custom property values from design tokens.
+ * Issue #704: Design token migration helper
+ */
+function getCssVar(varName: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
+}
+
 // Types
 interface Agent {
   id: string
@@ -517,77 +525,83 @@ onUnmounted(() => {
 
 // Expose
 defineExpose({
-  refresh: () => Promise.all([fetchAgents(), fetchEvents()])
+  refresh: () => Promise.all([fetchAgents(), fetchEvents()]),
+  getCssVar
 })
 </script>
 
 <style scoped>
+/**
+ * Issue #704: Migrated to design tokens
+ * All hardcoded colors replaced with CSS custom properties from design-tokens.css
+ */
+
 .agent-activity-viz {
-  background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
-  padding: 20px;
-  border: 1px solid rgba(71, 85, 105, 0.5);
+  background: var(--bg-secondary-alpha);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-5);
+  border: 1px solid var(--border-subtle);
 }
 
 .viz-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid rgba(71, 85, 105, 0.5);
+  margin-bottom: var(--spacing-5);
+  padding-bottom: var(--spacing-4);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .viz-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #e2e8f0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
   margin: 0;
 }
 
 .header-controls {
   display: flex;
-  gap: 16px;
+  gap: var(--spacing-4);
   align-items: center;
 }
 
 .view-toggle {
   display: flex;
-  background: rgba(51, 65, 85, 0.5);
-  border-radius: 6px;
+  background: var(--bg-tertiary-alpha);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
 .view-toggle button {
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   background: transparent;
   border: none;
-  color: #64748b;
+  color: var(--text-tertiary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .view-toggle button:hover {
-  color: #94a3b8;
+  color: var(--text-secondary);
 }
 
 .view-toggle button.active {
-  background: #3b82f6;
-  color: white;
+  background: var(--color-info);
+  color: var(--text-on-primary);
 }
 
 .status-summary {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .active-count {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: #10b981;
+  gap: var(--spacing-1-5);
+  font-size: var(--text-sm);
+  color: var(--color-success);
 }
 
 .active-count i.pulse {
@@ -604,17 +618,17 @@ defineExpose({
 .agents-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
 }
 
 .agent-card {
   background: rgba(15, 23, 42, 0.5);
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-4);
   border: 1px solid rgba(71, 85, 105, 0.3);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .agent-card:hover {
@@ -623,50 +637,50 @@ defineExpose({
 }
 
 .agent-card.working {
-  border-left: 3px solid #3b82f6;
+  border-left: 3px solid var(--color-info);
 }
 
 .agent-card.idle {
-  border-left: 3px solid #64748b;
+  border-left: 3px solid var(--text-tertiary);
 }
 
 .agent-card.error {
-  border-left: 3px solid #ef4444;
+  border-left: 3px solid var(--color-error);
 }
 
 .agent-card.paused {
-  border-left: 3px solid #f59e0b;
+  border-left: 3px solid var(--color-warning);
 }
 
 .agent-avatar {
   width: 48px;
   height: 48px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
 }
 
 .agent-avatar.orchestrator {
-  background: linear-gradient(135deg, #8b5cf6, #6366f1);
+  background: linear-gradient(135deg, var(--chart-purple), var(--chart-indigo));
 }
 
 .agent-avatar.worker {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  background: linear-gradient(135deg, var(--chart-blue), var(--color-info-dark));
 }
 
 .agent-avatar.monitor {
-  background: linear-gradient(135deg, #10b981, #059669);
+  background: linear-gradient(135deg, var(--color-success), var(--color-success-dark));
 }
 
 .agent-avatar.analyzer {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
+  background: linear-gradient(135deg, var(--color-warning), var(--color-warning-hover));
 }
 
 .agent-avatar.executor {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
+  background: linear-gradient(135deg, var(--color-error), var(--color-error-hover));
 }
 
 .avatar-icon {
@@ -683,25 +697,25 @@ defineExpose({
   right: -2px;
   width: 14px;
   height: 14px;
-  border-radius: 50%;
-  border: 2px solid #0f172a;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--bg-primary);
 }
 
 .status-ring.working {
-  background: #3b82f6;
+  background: var(--color-info);
   animation: blink 1s infinite;
 }
 
 .status-ring.idle {
-  background: #64748b;
+  background: var(--text-tertiary);
 }
 
 .status-ring.error {
-  background: #ef4444;
+  background: var(--color-error);
 }
 
 .status-ring.paused {
-  background: #f59e0b;
+  background: var(--color-warning);
 }
 
 @keyframes blink {
@@ -710,61 +724,61 @@ defineExpose({
 }
 
 .agent-info {
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
 }
 
 .agent-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: #e2e8f0;
-  margin: 0 0 4px 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-1) 0;
 }
 
 .agent-type {
-  font-size: 11px;
-  color: #64748b;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 
 .current-activity {
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   background: rgba(51, 65, 85, 0.3);
-  border-radius: 6px;
-  margin-bottom: 12px;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-3);
 }
 
 .activity-indicator {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .activity-pulse {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
-  background: #3b82f6;
+  border-radius: var(--radius-full);
+  background: var(--color-info);
   animation: pulse 1.5s infinite;
 }
 
 .activity-text {
-  font-size: 12px;
-  color: #94a3b8;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .activity-idle,
 .activity-error {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
+  gap: var(--spacing-2);
+  font-size: var(--text-xs);
 }
 
 .activity-idle {
-  color: #64748b;
+  color: var(--text-tertiary);
 }
 
 .activity-error {
-  color: #f87171;
+  color: var(--color-error-light);
 }
 
 .agent-metrics {
@@ -778,84 +792,84 @@ defineExpose({
 
 .metric-value {
   display: block;
-  font-size: 16px;
-  font-weight: 600;
-  color: #e2e8f0;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .metric-label {
   font-size: 10px;
-  color: #64748b;
+  color: var(--text-tertiary);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: var(--tracking-wide);
 }
 
 /* Expanded Details */
 .expanded-details {
-  margin-top: 16px;
-  padding-top: 16px;
+  margin-top: var(--spacing-4);
+  padding-top: var(--spacing-4);
   border-top: 1px solid rgba(71, 85, 105, 0.3);
 }
 
 .detail-section h5 {
-  font-size: 12px;
-  font-weight: 600;
-  color: #94a3b8;
-  margin: 0 0 8px 0;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
+  margin: 0 0 var(--spacing-2) 0;
 }
 
 .task-list {
   list-style: none;
   padding: 0;
-  margin: 0 0 12px 0;
+  margin: 0 0 var(--spacing-3) 0;
 }
 
 .task-list li {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 8px;
+  padding: var(--spacing-1-5) var(--spacing-2);
   background: rgba(51, 65, 85, 0.3);
-  border-radius: 4px;
-  margin-bottom: 4px;
-  font-size: 11px;
+  border-radius: var(--radius-default);
+  margin-bottom: var(--spacing-1);
+  font-size: var(--text-xs);
 }
 
 .task-list li.completed {
-  border-left: 2px solid #10b981;
+  border-left: 2px solid var(--color-success);
 }
 
 .task-list li.failed {
-  border-left: 2px solid #ef4444;
+  border-left: 2px solid var(--color-error);
 }
 
 .task-name {
-  color: #e2e8f0;
+  color: var(--text-primary);
 }
 
 .task-time {
-  color: #64748b;
+  color: var(--text-tertiary);
 }
 
 .detail-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .action-btn {
   flex: 1;
-  padding: 8px;
-  background: rgba(59, 130, 246, 0.2);
+  padding: var(--spacing-2);
+  background: var(--color-info-bg);
   border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 6px;
-  color: #60a5fa;
-  font-size: 12px;
+  border-radius: var(--radius-md);
+  color: var(--chart-blue-light);
+  font-size: var(--text-xs);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .action-btn:hover:not(:disabled) {
@@ -869,11 +883,11 @@ defineExpose({
 
 /* Timeline View */
 .activity-timeline {
-  margin-bottom: 24px;
+  margin-bottom: var(--spacing-6);
 }
 
 .timeline-header {
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .time-labels {
@@ -883,14 +897,14 @@ defineExpose({
 }
 
 .time-label {
-  font-size: 11px;
-  color: #64748b;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 
 .timeline-content {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .timeline-row {
@@ -904,13 +918,13 @@ defineExpose({
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-right: 10px;
+  gap: var(--spacing-2);
+  padding-right: var(--spacing-2-5);
 }
 
 .agent-label .name {
-  font-size: 12px;
-  color: #e2e8f0;
+  font-size: var(--text-xs);
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -920,7 +934,7 @@ defineExpose({
   flex: 1;
   height: 24px;
   background: rgba(51, 65, 85, 0.3);
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   position: relative;
   overflow: hidden;
 }
@@ -928,12 +942,12 @@ defineExpose({
 .activity-bar {
   position: absolute;
   height: 100%;
-  border-radius: 3px;
-  transition: all 0.3s;
+  border-radius: var(--radius-sm);
+  transition: all var(--duration-300);
 }
 
 .activity-bar.working {
-  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  background: linear-gradient(90deg, var(--color-info), var(--chart-blue-light));
 }
 
 .activity-bar.idle {
@@ -941,28 +955,28 @@ defineExpose({
 }
 
 .activity-bar.error {
-  background: linear-gradient(90deg, #ef4444, #f87171);
+  background: linear-gradient(90deg, var(--color-error), var(--color-error-light));
 }
 
 /* Activity Feed */
 .activity-feed {
   background: rgba(15, 23, 42, 0.5);
-  border-radius: 8px;
-  padding: 16px;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
 }
 
 .activity-feed h4 {
-  font-size: 14px;
-  font-weight: 600;
-  color: #e2e8f0;
-  margin: 0 0 12px 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-3) 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .activity-feed h4 i {
-  color: #f59e0b;
+  color: var(--color-warning);
 }
 
 .feed-items {
@@ -973,12 +987,12 @@ defineExpose({
 .feed-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px;
+  gap: var(--spacing-2-5);
+  padding: var(--spacing-2-5);
   background: rgba(51, 65, 85, 0.3);
-  border-radius: 6px;
-  margin-bottom: 6px;
-  font-size: 12px;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-1-5);
+  font-size: var(--text-xs);
 }
 
 .event-icon {
@@ -986,26 +1000,26 @@ defineExpose({
 }
 
 .event-agent {
-  color: #60a5fa;
-  font-weight: 500;
+  color: var(--chart-blue-light);
+  font-weight: var(--font-medium);
   flex-shrink: 0;
 }
 
 .event-message {
-  color: #94a3b8;
+  color: var(--text-secondary);
   flex: 1;
 }
 
 .event-time {
-  color: #64748b;
-  font-size: 11px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
   flex-shrink: 0;
 }
 
 /* Transitions */
 .expand-enter-active,
 .expand-leave-active {
-  transition: all 0.3s ease;
+  transition: all var(--duration-300) var(--ease-in-out);
 }
 
 .expand-enter-from,
@@ -1022,7 +1036,7 @@ defineExpose({
 
 .feed-enter-active,
 .feed-leave-active {
-  transition: all 0.3s ease;
+  transition: all var(--duration-300) var(--ease-in-out);
 }
 
 .feed-enter-from {
@@ -1039,7 +1053,7 @@ defineExpose({
 @media (max-width: 768px) {
   .viz-header {
     flex-direction: column;
-    gap: 12px;
+    gap: var(--spacing-3);
     align-items: stretch;
   }
 
@@ -1054,12 +1068,12 @@ defineExpose({
   .timeline-row {
     flex-direction: column;
     height: auto;
-    gap: 4px;
+    gap: var(--spacing-1);
   }
 
   .agent-label {
     width: 100%;
-    padding-bottom: 4px;
+    padding-bottom: var(--spacing-1);
   }
 
   .activity-bars {

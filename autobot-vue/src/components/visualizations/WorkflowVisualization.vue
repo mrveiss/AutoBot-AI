@@ -6,6 +6,7 @@
   WorkflowVisualization.vue - Interactive workflow execution flowchart
   Displays workflow steps, status, and execution flow
   Issue #62: Enhanced Visualizations
+  Issue #704: Migrated to CSS design tokens
 -->
 <template>
   <div class="workflow-visualization">
@@ -49,7 +50,7 @@
             refY="3.5"
             orient="auto"
           >
-            <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
+            <polygon points="0 0, 10 3.5, 0 7" :fill="getCssVar('--text-tertiary', '#64748b')" />
           </marker>
           <marker
             id="arrow-active"
@@ -59,7 +60,7 @@
             refY="3.5"
             orient="auto"
           >
-            <polygon points="0 0, 10 3.5, 0 7" fill="#3b82f6" />
+            <polygon points="0 0, 10 3.5, 0 7" :fill="getCssVar('--chart-blue', '#3b82f6')" />
           </marker>
           <marker
             id="arrow-success"
@@ -69,7 +70,7 @@
             refY="3.5"
             orient="auto"
           >
-            <polygon points="0 0, 10 3.5, 0 7" fill="#10b981" />
+            <polygon points="0 0, 10 3.5, 0 7" :fill="getCssVar('--color-success', '#10b981')" />
           </marker>
           <marker
             id="arrow-error"
@@ -79,13 +80,13 @@
             refY="3.5"
             orient="auto"
           >
-            <polygon points="0 0, 10 3.5, 0 7" fill="#ef4444" />
+            <polygon points="0 0, 10 3.5, 0 7" :fill="getCssVar('--color-error', '#ef4444')" />
           </marker>
 
           <!-- Glow filters -->
           <filter id="glow-active" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur stdDeviation="3" result="blur" />
-            <feFlood flood-color="#3b82f6" flood-opacity="0.5" />
+            <feFlood :flood-color="getCssVar('--chart-blue', '#3b82f6')" flood-opacity="0.5" />
             <feComposite in2="blur" operator="in" />
             <feMerge>
               <feMergeNode />
@@ -261,7 +262,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('WorkflowVisualization')
@@ -327,6 +328,15 @@ const nodeWidth = 140
 const nodeHeight = 60
 const nodeSpacingX = 180
 const nodeSpacingY = 100
+
+/**
+ * Get CSS variable value from document root.
+ * Issue #704: Helper for design token access in JavaScript
+ */
+function getCssVar(name: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+}
 
 // Computed
 const nodes = computed(() => {
@@ -458,7 +468,6 @@ function getConnectionPath(conn: Connection): string {
 
   // Calculate control points for curved path
   const midX = (fromX + toX) / 2
-  const dx = Math.abs(toX - fromX)
 
   if (Math.abs(toY - fromY) < 10) {
     // Straight horizontal line
@@ -471,12 +480,12 @@ function getConnectionPath(conn: Connection): string {
 
 function getNodeIcon(node: WorkflowNode): string {
   switch (node.type) {
-    case 'start': return '▶'
-    case 'end': return '⏹'
-    case 'decision': return '◇'
-    case 'parallel': return '⫴'
-    case 'task': return '📋'
-    default: return '⚙'
+    case 'start': return '\u25B6'
+    case 'end': return '\u23F9'
+    case 'decision': return '\u25C7'
+    case 'parallel': return '\u2AEC'
+    case 'task': return '\uD83D\uDCCB'
+    default: return '\u2699'
   }
 }
 
@@ -501,7 +510,7 @@ function formatTime(timestamp: number): string {
 
 function truncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text
-  return text.slice(0, maxLength - 1) + '…'
+  return text.slice(0, maxLength - 1) + '\u2026'
 }
 
 function selectNode(node: WorkflowNode) {
@@ -570,11 +579,16 @@ defineExpose({
 </script>
 
 <style scoped>
+/**
+ * Issue #704: Migrated to CSS design tokens
+ * All hardcoded colors replaced with var(--token-name) references
+ */
+
 .workflow-visualization {
-  background: rgba(30, 41, 59, 0.5);
+  background: var(--bg-secondary-alpha);
   border-radius: 12px;
   padding: 20px;
-  border: 1px solid rgba(71, 85, 105, 0.5);
+  border: 1px solid var(--border-subtle);
   position: relative;
 }
 
@@ -584,19 +598,19 @@ defineExpose({
   align-items: center;
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 1px solid rgba(71, 85, 105, 0.5);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .header-info h3 {
   font-size: 18px;
   font-weight: 600;
-  color: #e2e8f0;
+  color: var(--text-primary);
   margin: 0;
 }
 
 .workflow-id {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-tertiary);
 }
 
 .header-actions {
@@ -616,41 +630,41 @@ defineExpose({
 }
 
 .status-badge.pending {
-  background: rgba(100, 116, 139, 0.2);
-  color: #94a3b8;
+  background: var(--color-secondary-bg, rgba(100, 116, 139, 0.2));
+  color: var(--text-secondary);
 }
 
 .status-badge.running {
-  background: rgba(59, 130, 246, 0.2);
-  color: #60a5fa;
+  background: var(--color-info-bg);
+  color: var(--color-info-light);
 }
 
 .status-badge.completed {
-  background: rgba(16, 185, 129, 0.2);
-  color: #34d399;
+  background: var(--color-success-bg);
+  color: var(--color-success-light);
 }
 
 .status-badge.failed {
-  background: rgba(239, 68, 68, 0.2);
-  color: #f87171;
+  background: var(--color-error-bg);
+  color: var(--color-error-light);
 }
 
 .layout-btn,
 .fit-btn {
   padding: 8px 10px;
   background: transparent;
-  border: 1px solid rgba(71, 85, 105, 0.5);
+  border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  color: #94a3b8;
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .layout-btn:hover,
 .fit-btn:hover {
-  background: rgba(59, 130, 246, 0.1);
-  border-color: #3b82f6;
-  color: #3b82f6;
+  background: var(--color-info-bg);
+  border-color: var(--chart-blue);
+  color: var(--chart-blue);
 }
 
 .workflow-container {
@@ -674,23 +688,23 @@ defineExpose({
 /* Connections */
 .connection-line {
   fill: none;
-  stroke: #475569;
+  stroke: var(--text-muted);
   stroke-width: 2;
   transition: stroke 0.3s;
 }
 
 .connection-line.active {
-  stroke: #3b82f6;
+  stroke: var(--chart-blue);
   stroke-width: 3;
   animation: pulse 1.5s infinite;
 }
 
 .connection-line.success {
-  stroke: #10b981;
+  stroke: var(--color-success);
 }
 
 .connection-line.error {
-  stroke: #ef4444;
+  stroke: var(--color-error);
 }
 
 @keyframes pulse {
@@ -704,74 +718,74 @@ defineExpose({
 }
 
 .workflow-node .node-bg {
-  fill: #1e293b;
-  stroke: #475569;
+  fill: var(--bg-secondary);
+  stroke: var(--text-muted);
   stroke-width: 2;
   transition: all 0.2s;
 }
 
 .workflow-node:hover .node-bg {
-  stroke: #3b82f6;
+  stroke: var(--chart-blue);
 }
 
 .workflow-node.selected .node-bg {
-  stroke: #3b82f6;
+  stroke: var(--chart-blue);
   stroke-width: 3;
 }
 
 .workflow-node.running .node-bg {
-  stroke: #3b82f6;
+  stroke: var(--chart-blue);
   filter: url(#glow-active);
 }
 
 .workflow-node.completed .node-bg {
-  stroke: #10b981;
+  stroke: var(--color-success);
 }
 
 .workflow-node.failed .node-bg {
-  stroke: #ef4444;
+  stroke: var(--color-error);
 }
 
 .workflow-node.start .node-bg,
 .workflow-node.end .node-bg {
-  fill: #334155;
+  fill: var(--bg-tertiary);
 }
 
 .node-icon {
   font-size: 18px;
-  fill: #e2e8f0;
+  fill: var(--text-primary);
 }
 
 .node-label {
   font-size: 12px;
-  fill: #94a3b8;
+  fill: var(--text-secondary);
   font-weight: 500;
 }
 
 .status-indicator {
-  stroke: #0f172a;
+  stroke: var(--bg-primary);
   stroke-width: 2;
 }
 
 .status-indicator.pending {
-  fill: #64748b;
+  fill: var(--text-tertiary);
 }
 
 .status-indicator.running {
-  fill: #3b82f6;
+  fill: var(--chart-blue);
   animation: blink 1s infinite;
 }
 
 .status-indicator.completed {
-  fill: #10b981;
+  fill: var(--color-success);
 }
 
 .status-indicator.failed {
-  fill: #ef4444;
+  fill: var(--color-error);
 }
 
 .status-indicator.skipped {
-  fill: #94a3b8;
+  fill: var(--text-secondary);
 }
 
 @keyframes blink {
@@ -781,7 +795,7 @@ defineExpose({
 
 .duration-badge {
   font-size: 10px;
-  fill: #64748b;
+  fill: var(--text-tertiary);
 }
 
 /* Zoom controls */
@@ -795,16 +809,16 @@ defineExpose({
   background: rgba(30, 41, 59, 0.9);
   padding: 8px;
   border-radius: 8px;
-  border: 1px solid rgba(71, 85, 105, 0.5);
+  border: 1px solid var(--border-subtle);
 }
 
 .zoom-controls button {
   width: 28px;
   height: 28px;
-  border: 1px solid rgba(71, 85, 105, 0.5);
+  border: 1px solid var(--border-subtle);
   background: transparent;
   border-radius: 4px;
-  color: #94a3b8;
+  color: var(--text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -813,13 +827,13 @@ defineExpose({
 }
 
 .zoom-controls button:hover {
-  background: rgba(59, 130, 246, 0.2);
-  color: #3b82f6;
+  background: var(--color-info-bg);
+  color: var(--chart-blue);
 }
 
 .zoom-level {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-tertiary);
   min-width: 40px;
   text-align: center;
 }
@@ -833,13 +847,13 @@ defineExpose({
   height: 24px;
   background: rgba(30, 41, 59, 0.9);
   border-radius: 12px;
-  border: 1px solid rgba(71, 85, 105, 0.5);
+  border: 1px solid var(--border-subtle);
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #3b82f6, #10b981);
+  background: linear-gradient(90deg, var(--chart-blue), var(--color-success));
   transition: width 0.3s ease;
 }
 
@@ -849,7 +863,7 @@ defineExpose({
   left: 50%;
   transform: translate(-50%, -50%);
   font-size: 11px;
-  color: #e2e8f0;
+  color: var(--text-primary);
   font-weight: 500;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
@@ -860,9 +874,9 @@ defineExpose({
   top: 80px;
   right: 20px;
   width: 280px;
-  background: #1e293b;
+  background: var(--bg-secondary);
   border-radius: 12px;
-  border: 1px solid rgba(71, 85, 105, 0.5);
+  border: 1px solid var(--border-subtle);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   overflow: hidden;
 }
@@ -872,8 +886,8 @@ defineExpose({
   align-items: center;
   gap: 12px;
   padding: 16px;
-  background: rgba(51, 65, 85, 0.5);
-  border-bottom: 1px solid rgba(71, 85, 105, 0.5);
+  background: var(--bg-tertiary-alpha);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .details-icon {
@@ -884,19 +898,19 @@ defineExpose({
   align-items: center;
   justify-content: center;
   font-size: 18px;
-  background: rgba(59, 130, 246, 0.2);
+  background: var(--color-info-bg);
 }
 
 .details-icon.running {
-  background: rgba(59, 130, 246, 0.2);
+  background: var(--color-info-bg);
 }
 
 .details-icon.completed {
-  background: rgba(16, 185, 129, 0.2);
+  background: var(--color-success-bg);
 }
 
 .details-icon.failed {
-  background: rgba(239, 68, 68, 0.2);
+  background: var(--color-error-bg);
 }
 
 .details-title {
@@ -907,27 +921,27 @@ defineExpose({
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: #e2e8f0;
+  color: var(--text-primary);
 }
 
 .node-type {
   font-size: 11px;
-  color: #64748b;
+  color: var(--text-tertiary);
 }
 
 .close-btn {
   padding: 6px;
   background: transparent;
   border: none;
-  color: #64748b;
+  color: var(--text-tertiary);
   cursor: pointer;
   border-radius: 4px;
   transition: all 0.2s;
 }
 
 .close-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
-  color: #f87171;
+  background: var(--color-error-bg);
+  color: var(--color-error-light);
 }
 
 .details-content {
@@ -948,17 +962,17 @@ defineExpose({
 
 .detail-row .label {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-tertiary);
 }
 
 .detail-row .value {
   font-size: 12px;
-  color: #e2e8f0;
+  color: var(--text-primary);
   font-weight: 500;
 }
 
 .detail-row .value.error {
-  color: #f87171;
+  color: var(--color-error-light);
 }
 
 .detail-row .output {

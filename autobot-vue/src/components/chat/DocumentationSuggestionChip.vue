@@ -38,6 +38,7 @@
  * to quickly insert or search for documentation content.
  *
  * Issue #165: Chat Documentation UI Integration
+ * Issue #704: Migrated to design tokens for SSOT theming
  */
 
 import { computed } from 'vue'
@@ -133,17 +134,19 @@ const handleClick = () => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to design tokens for SSOT theming */
+
 .doc-suggestion-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.25rem 0.625rem;
-  background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
-  border: 1px solid #cbd5e1;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  color: #475569;
-  transition: all 0.15s ease;
+  gap: var(--spacing-1-5);
+  padding: var(--spacing-1) var(--spacing-2-5);
+  background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--border-emphasis) 100%);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  transition: all var(--duration-150) var(--ease-in-out);
   max-width: 100%;
 }
 
@@ -152,102 +155,102 @@ const handleClick = () => {
 }
 
 .doc-suggestion-chip.clickable:hover {
-  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
-  border-color: #94a3b8;
+  background: linear-gradient(135deg, var(--border-emphasis) 0%, var(--border-strong) 100%);
+  border-color: var(--color-secondary-light);
   transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .doc-suggestion-chip.selected {
-  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-  border-color: #3b82f6;
-  color: #1e40af;
+  background: linear-gradient(135deg, var(--color-info-bg) 0%, rgba(59, 130, 246, 0.2) 100%);
+  border-color: var(--color-info);
+  color: var(--color-info-dark);
 }
 
 .chip-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1rem;
-  height: 1rem;
+  width: var(--spacing-4);
+  height: var(--spacing-4);
   font-size: 0.625rem;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   flex-shrink: 0;
 }
 
-/* Category-specific icon colors */
-.chip-icon.category-architecture { color: #8b5cf6; }
-.chip-icon.category-developer { color: #3b82f6; }
-.chip-icon.category-api { color: #10b981; }
-.chip-icon.category-troubleshooting { color: #f59e0b; }
-.chip-icon.category-deployment { color: #ef4444; }
-.chip-icon.category-security { color: #6366f1; }
-.chip-icon.category-features { color: #f97316; }
-.chip-icon.category-testing { color: #14b8a6; }
-.chip-icon.category-workflow { color: #8b5cf6; }
-.chip-icon.category-guides { color: #0ea5e9; }
-.chip-icon.category-implementation { color: #64748b; }
-.chip-icon.category-agents { color: #a855f7; }
-.chip-icon.category-general { color: #6b7280; }
+/* Category-specific icon colors - using design token chart colors */
+.chip-icon.category-architecture { color: var(--chart-purple); }
+.chip-icon.category-developer { color: var(--chart-blue); }
+.chip-icon.category-api { color: var(--color-success); }
+.chip-icon.category-troubleshooting { color: var(--color-warning); }
+.chip-icon.category-deployment { color: var(--color-error); }
+.chip-icon.category-security { color: var(--color-primary); }
+.chip-icon.category-features { color: var(--chart-orange); }
+.chip-icon.category-testing { color: var(--chart-teal); }
+.chip-icon.category-workflow { color: var(--chart-purple); }
+.chip-icon.category-guides { color: var(--chart-cyan); }
+.chip-icon.category-implementation { color: var(--text-tertiary); }
+.chip-icon.category-agents { color: var(--chart-purple-light); }
+.chip-icon.category-general { color: var(--text-muted); }
 
 .chip-label {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-weight: 500;
+  font-weight: var(--font-medium);
 }
 
 .chip-score {
   font-size: 0.625rem;
-  font-weight: 600;
-  padding: 0.125rem 0.375rem;
-  border-radius: 9999px;
+  font-weight: var(--font-semibold);
+  padding: var(--spacing-0-5) var(--spacing-1-5);
+  border-radius: var(--radius-full);
   flex-shrink: 0;
 }
 
 .chip-score.score-excellent {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--color-success-bg);
+  color: var(--color-success-dark);
 }
 
 .chip-score.score-good {
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--color-info-bg);
+  color: var(--color-info-dark);
 }
 
 .chip-score.score-fair {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-dark);
 }
 
 .chip-score.score-low {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--bg-hover);
+  color: var(--text-muted);
 }
 
 .chip-dismiss {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1rem;
-  height: 1rem;
+  width: var(--spacing-4);
+  height: var(--spacing-4);
   padding: 0;
   background: none;
   border: none;
-  border-radius: 50%;
-  color: #94a3b8;
+  border-radius: var(--radius-full);
+  color: var(--color-secondary-light);
   cursor: pointer;
   flex-shrink: 0;
-  transition: all 0.15s ease;
+  transition: all var(--duration-150) var(--ease-in-out);
 }
 
 .chip-dismiss:hover {
-  background: #fee2e2;
-  color: #dc2626;
+  background: var(--color-error-bg);
+  color: var(--color-error-hover);
 }
 
 .chip-dismiss:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid var(--color-info);
   outline-offset: 1px;
 }
 </style>

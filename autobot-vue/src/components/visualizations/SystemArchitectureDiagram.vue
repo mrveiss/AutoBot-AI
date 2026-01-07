@@ -82,7 +82,7 @@
         @wheel.prevent="handleZoom"
       >
         <defs>
-          <!-- Arrow markers -->
+          <!-- Arrow markers - using computed colors from design tokens -->
           <marker
             id="arrow-data"
             markerWidth="10"
@@ -91,7 +91,7 @@
             refY="3.5"
             orient="auto"
           >
-            <polygon points="0 0, 10 3.5, 0 7" fill="#10b981" />
+            <polygon points="0 0, 10 3.5, 0 7" :fill="arrowColors.data" />
           </marker>
           <marker
             id="arrow-api"
@@ -101,7 +101,7 @@
             refY="3.5"
             orient="auto"
           >
-            <polygon points="0 0, 10 3.5, 0 7" fill="#3b82f6" />
+            <polygon points="0 0, 10 3.5, 0 7" :fill="arrowColors.api" />
           </marker>
           <marker
             id="arrow-event"
@@ -111,29 +111,29 @@
             refY="3.5"
             orient="auto"
           >
-            <polygon points="0 0, 10 3.5, 0 7" fill="#f59e0b" />
+            <polygon points="0 0, 10 3.5, 0 7" :fill="arrowColors.event" />
           </marker>
 
-          <!-- Gradients -->
+          <!-- Gradients - using computed colors from design tokens -->
           <linearGradient id="grad-frontend" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" style="stop-color:#667eea" />
-            <stop offset="100%" style="stop-color:#764ba2" />
+            <stop offset="0%" :style="`stop-color:${gradientColors.frontend.start}`" />
+            <stop offset="100%" :style="`stop-color:${gradientColors.frontend.end}`" />
           </linearGradient>
           <linearGradient id="grad-backend" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" style="stop-color:#10b981" />
-            <stop offset="100%" style="stop-color:#059669" />
+            <stop offset="0%" :style="`stop-color:${gradientColors.backend.start}`" />
+            <stop offset="100%" :style="`stop-color:${gradientColors.backend.end}`" />
           </linearGradient>
           <linearGradient id="grad-database" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" style="stop-color:#f59e0b" />
-            <stop offset="100%" style="stop-color:#d97706" />
+            <stop offset="0%" :style="`stop-color:${gradientColors.database.start}`" />
+            <stop offset="100%" :style="`stop-color:${gradientColors.database.end}`" />
           </linearGradient>
           <linearGradient id="grad-ai" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" style="stop-color:#8b5cf6" />
-            <stop offset="100%" style="stop-color:#7c3aed" />
+            <stop offset="0%" :style="`stop-color:${gradientColors.ai.start}`" />
+            <stop offset="100%" :style="`stop-color:${gradientColors.ai.end}`" />
           </linearGradient>
           <linearGradient id="grad-infrastructure" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" style="stop-color:#6366f1" />
-            <stop offset="100%" style="stop-color:#4f46e5" />
+            <stop offset="0%" :style="`stop-color:${gradientColors.infrastructure.start}`" />
+            <stop offset="100%" :style="`stop-color:${gradientColors.infrastructure.end}`" />
           </linearGradient>
 
           <!-- Filters -->
@@ -159,9 +159,7 @@
               y1="0"
               :x2="i * 80"
               y2="800"
-              stroke="#374151"
-              stroke-opacity="0.1"
-              stroke-dasharray="4"
+              class="grid-line"
             />
             <line
               v-for="i in 10"
@@ -170,9 +168,7 @@
               :y1="i * 80"
               x2="1600"
               :y2="i * 80"
-              stroke="#374151"
-              stroke-opacity="0.1"
-              stroke-dasharray="4"
+              class="grid-line"
             />
           </g>
 
@@ -302,8 +298,7 @@
                   width="50"
                   height="16"
                   rx="8"
-                  fill="#1f2937"
-                  fill-opacity="0.9"
+                  class="metrics-badge-bg"
                 />
                 <text
                   :x="comp.width / 2"
@@ -356,8 +351,7 @@
             :width="200 / zoomLevel"
             :height="120 / zoomLevel"
             fill="none"
-            stroke="#667eea"
-            stroke-width="2"
+            class="viewport-indicator"
           />
         </svg>
       </div>
@@ -468,23 +462,23 @@
         <span class="legend-title">Components:</span>
         <div class="legend-items">
           <div class="legend-item">
-            <span class="legend-color" style="background: linear-gradient(135deg, #667eea, #764ba2)"></span>
+            <span class="legend-color legend-color-frontend"></span>
             <span>Frontend</span>
           </div>
           <div class="legend-item">
-            <span class="legend-color" style="background: linear-gradient(135deg, #10b981, #059669)"></span>
+            <span class="legend-color legend-color-backend"></span>
             <span>Backend</span>
           </div>
           <div class="legend-item">
-            <span class="legend-color" style="background: linear-gradient(135deg, #f59e0b, #d97706)"></span>
+            <span class="legend-color legend-color-database"></span>
             <span>Database</span>
           </div>
           <div class="legend-item">
-            <span class="legend-color" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed)"></span>
+            <span class="legend-color legend-color-ai"></span>
             <span>AI/ML</span>
           </div>
           <div class="legend-item">
-            <span class="legend-color" style="background: linear-gradient(135deg, #6366f1, #4f46e5)"></span>
+            <span class="legend-color legend-color-infrastructure"></span>
             <span>Infrastructure</span>
           </div>
         </div>
@@ -493,15 +487,15 @@
         <span class="legend-title">Connections:</span>
         <div class="legend-items">
           <div class="legend-item">
-            <span class="legend-line" style="background: #3b82f6"></span>
+            <span class="legend-line legend-line-api"></span>
             <span>API</span>
           </div>
           <div class="legend-item">
-            <span class="legend-line" style="background: #10b981"></span>
+            <span class="legend-line legend-line-data"></span>
             <span>Data</span>
           </div>
           <div class="legend-item">
-            <span class="legend-line dashed" style="background: #f59e0b"></span>
+            <span class="legend-line legend-line-event dashed"></span>
             <span>Event</span>
           </div>
         </div>
@@ -525,6 +519,19 @@ const logger = createLogger('SystemArchitectureDiagram')
 
 // Get SSOT config for VM IPs and ports
 const config = getConfig()
+
+// ============================================================================
+// Issue #704: CSS Design System - Helper to get CSS custom property values
+// ============================================================================
+
+/**
+ * Get CSS custom property value from document root.
+ * Falls back to provided default if property is not defined or SSR context.
+ */
+function getCssVar(name: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+}
 
 // ============================================================================
 // Types
@@ -625,6 +632,48 @@ const viewModes: ViewMode[] = [
   { id: 'logical', label: 'Logical', icon: 'fas fa-project-diagram' },
   { id: 'dataflow', label: 'Data Flow', icon: 'fas fa-exchange-alt' }
 ]
+
+// ============================================================================
+// Issue #704: Computed colors for SVG elements using design tokens
+// ============================================================================
+
+/**
+ * Arrow marker colors computed from design tokens.
+ * SVG marker fill attributes cannot use CSS variables directly,
+ * so we compute them at runtime.
+ */
+const arrowColors = computed(() => ({
+  data: getCssVar('--color-success', '#10b981'),
+  api: getCssVar('--chart-blue', '#3b82f6'),
+  event: getCssVar('--color-warning', '#f59e0b')
+}))
+
+/**
+ * Gradient colors for component categories.
+ * SVG gradient stops cannot use CSS variables directly.
+ */
+const gradientColors = computed(() => ({
+  frontend: {
+    start: getCssVar('--color-primary', '#6366f1'),
+    end: '#764ba2' // Darker variant for gradient
+  },
+  backend: {
+    start: getCssVar('--color-success', '#10b981'),
+    end: getCssVar('--color-success-dark', '#059669')
+  },
+  database: {
+    start: getCssVar('--color-warning', '#f59e0b'),
+    end: getCssVar('--color-warning-hover', '#d97706')
+  },
+  ai: {
+    start: getCssVar('--chart-purple', '#8b5cf6'),
+    end: '#7c3aed' // Darker variant for gradient
+  },
+  infrastructure: {
+    start: getCssVar('--color-primary', '#6366f1'),
+    end: getCssVar('--color-primary-hover', '#4f46e5')
+  }
+}))
 
 // ============================================================================
 // Computed
@@ -933,13 +982,13 @@ function generateArchitecture(serviceHealth: Record<string, unknown>) {
     { from: 'loki', to: 'fastapi-backend', type: 'data', label: 'Logs' }
   ]
 
-  // Define component groups
+  // Define component groups - using design token colors via getCssVar
   const groups: ComponentGroup[] = [
-    { id: 'presentation', label: 'Presentation Layer', x: 180, y: 30, width: 360, height: 120, bgColor: '#667eea' },
-    { id: 'services', label: 'Service Layer', x: 180, y: 180, width: 540, height: 120, bgColor: '#10b981' },
-    { id: 'data', label: 'Data Layer', x: 180, y: 330, width: 540, height: 120, bgColor: '#f59e0b' },
-    { id: 'ai', label: 'AI/ML Layer', x: 180, y: 480, width: 540, height: 120, bgColor: '#8b5cf6' },
-    { id: 'monitoring', label: 'Monitoring', x: 740, y: 180, width: 160, height: 290, bgColor: '#6366f1' }
+    { id: 'presentation', label: 'Presentation Layer', x: 180, y: 30, width: 360, height: 120, bgColor: getCssVar('--color-primary', '#6366f1') },
+    { id: 'services', label: 'Service Layer', x: 180, y: 180, width: 540, height: 120, bgColor: getCssVar('--color-success', '#10b981') },
+    { id: 'data', label: 'Data Layer', x: 180, y: 330, width: 540, height: 120, bgColor: getCssVar('--color-warning', '#f59e0b') },
+    { id: 'ai', label: 'AI/ML Layer', x: 180, y: 480, width: 540, height: 120, bgColor: getCssVar('--chart-purple', '#8b5cf6') },
+    { id: 'monitoring', label: 'Monitoring', x: 740, y: 180, width: 160, height: 290, bgColor: getCssVar('--color-primary', '#6366f1') }
   ]
 
   allComponents.value = components
@@ -957,7 +1006,7 @@ function getServiceStatus(services: Record<string, unknown>, key: string): 'heal
 }
 
 // ============================================================================
-// Methods - Visualization
+// Methods - Visualization (Issue #704: Using design tokens)
 // ============================================================================
 
 function getConnectionPath(conn: Connection): string {
@@ -986,34 +1035,43 @@ function getConnectionMidpoint(conn: Connection): { x: number; y: number } {
   }
 }
 
+/**
+ * Issue #704: Get connection color using design tokens
+ */
 function getConnectionColor(type: string): string {
   const colors: Record<string, string> = {
-    api: '#3b82f6',
-    data: '#10b981',
-    event: '#f59e0b'
+    api: getCssVar('--chart-blue', '#3b82f6'),
+    data: getCssVar('--color-success', '#10b981'),
+    event: getCssVar('--color-warning', '#f59e0b')
   }
-  return colors[type] || '#6b7280'
+  return colors[type] || getCssVar('--text-muted', '#475569')
 }
 
+/**
+ * Issue #704: Get status color using design tokens
+ */
 function getStatusColor(status: string): string {
   const colors: Record<string, string> = {
-    healthy: '#10b981',
-    warning: '#f59e0b',
-    error: '#ef4444',
-    unknown: '#6b7280'
+    healthy: getCssVar('--color-success', '#10b981'),
+    warning: getCssVar('--color-warning', '#f59e0b'),
+    error: getCssVar('--color-error', '#ef4444'),
+    unknown: getCssVar('--text-muted', '#475569')
   }
-  return colors[status] || '#6b7280'
+  return colors[status] || getCssVar('--text-muted', '#475569')
 }
 
+/**
+ * Issue #704: Get component category color using design tokens
+ */
 function getComponentCategoryColor(category: string): string {
   const colors: Record<string, string> = {
-    frontend: '#667eea',
-    backend: '#10b981',
-    database: '#f59e0b',
-    ai: '#8b5cf6',
-    infrastructure: '#6366f1'
+    frontend: getCssVar('--color-primary', '#6366f1'),
+    backend: getCssVar('--color-success', '#10b981'),
+    database: getCssVar('--color-warning', '#f59e0b'),
+    ai: getCssVar('--chart-purple', '#8b5cf6'),
+    infrastructure: getCssVar('--color-primary', '#6366f1')
   }
-  return colors[category] || '#6b7280'
+  return colors[category] || getCssVar('--text-muted', '#475569')
 }
 
 function formatMetric(metric: string | undefined): string {
@@ -1167,13 +1225,18 @@ watch(() => currentView.value, () => {
 </script>
 
 <style scoped>
+/**
+ * Issue #704: CSS Design System - Using design tokens
+ * All colors reference CSS custom properties from design-tokens.css
+ */
+
 .system-architecture-diagram {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #0f172a;
-  color: #f8fafc;
-  border-radius: 12px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
@@ -1182,53 +1245,53 @@ watch(() => currentView.value, () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
-  background: linear-gradient(135deg, #1e293b, #0f172a);
-  border-bottom: 1px solid #334155;
+  padding: var(--spacing-4) var(--spacing-6);
+  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-primary));
+  border-bottom: 1px solid var(--bg-tertiary);
 }
 
 .header-content h3 {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #f8fafc;
+  gap: var(--spacing-3);
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .header-content h3 i {
-  color: #667eea;
+  color: var(--color-primary);
 }
 
 .header-description {
-  color: #94a3b8;
-  font-size: 0.875rem;
-  margin-top: 0.25rem;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  margin-top: var(--spacing-1);
 }
 
 .header-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 /* Action Buttons */
 .action-btn {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: #1e293b;
-  border: 1px solid #334155;
-  color: #e2e8f0;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-4);
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-tertiary);
+  color: var(--text-primary);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition-all);
 }
 
 .action-btn:hover:not(:disabled) {
-  background: #334155;
-  border-color: #475569;
+  background: var(--bg-tertiary);
+  border-color: var(--border-default);
 }
 
 .action-btn:disabled {
@@ -1240,63 +1303,63 @@ watch(() => currentView.value, () => {
 .view-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 1.5rem;
-  padding: 1rem 1.5rem;
-  background: #1e293b;
-  border-bottom: 1px solid #334155;
+  gap: var(--spacing-6);
+  padding: var(--spacing-4) var(--spacing-6);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--bg-tertiary);
 }
 
 .control-group {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .control-group label {
-  color: #94a3b8;
-  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 .view-toggle {
   display: flex;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  border: 1px solid #334155;
+  border: 1px solid var(--bg-tertiary);
 }
 
 .view-toggle button {
-  padding: 0.5rem 1rem;
+  padding: var(--spacing-2) var(--spacing-4);
   background: transparent;
   border: none;
-  color: #94a3b8;
+  color: var(--text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  transition: all 0.2s;
+  gap: var(--spacing-2);
+  font-size: var(--text-sm);
+  transition: var(--transition-all);
 }
 
 .view-toggle button:hover {
-  background: #334155;
+  background: var(--bg-tertiary);
 }
 
 .view-toggle button.active {
-  background: #667eea;
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .control-group select {
-  padding: 0.5rem 0.75rem;
-  background: #0f172a;
-  border: 1px solid #334155;
-  border-radius: 0.375rem;
-  color: #e2e8f0;
-  font-size: 0.875rem;
+  padding: var(--spacing-2) var(--spacing-3);
+  background: var(--bg-primary);
+  border: 1px solid var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
 }
 
 .control-group input[type="checkbox"] {
-  accent-color: #667eea;
+  accent-color: var(--color-primary);
 }
 
 /* Loading State */
@@ -1306,13 +1369,13 @@ watch(() => currentView.value, () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
-  color: #94a3b8;
+  gap: var(--spacing-4);
+  color: var(--text-secondary);
 }
 
 .spinner {
-  font-size: 2rem;
-  color: #667eea;
+  font-size: var(--text-3xl);
+  color: var(--color-primary);
 }
 
 /* Diagram Container */
@@ -1326,11 +1389,18 @@ watch(() => currentView.value, () => {
   width: 100%;
   height: 100%;
   cursor: grab;
-  background: radial-gradient(circle at 50% 50%, #1e293b 0%, #0f172a 100%);
+  background: radial-gradient(circle at 50% 50%, var(--bg-secondary) 0%, var(--bg-primary) 100%);
 }
 
 .diagram-svg:active {
   cursor: grabbing;
+}
+
+/* Grid lines */
+.grid-line {
+  stroke: var(--bg-tertiary);
+  stroke-opacity: 0.3;
+  stroke-dasharray: 4;
 }
 
 /* Connections */
@@ -1344,15 +1414,15 @@ watch(() => currentView.value, () => {
 
 .connection-label {
   font-size: 10px;
-  fill: #94a3b8;
+  fill: var(--text-secondary);
 }
 
 /* Component Groups */
 .group-label {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: var(--font-semibold);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--tracking-wide);
 }
 
 /* Components */
@@ -1366,7 +1436,7 @@ watch(() => currentView.value, () => {
 }
 
 .component.selected rect {
-  stroke: #f8fafc;
+  stroke: var(--text-primary);
   stroke-width: 3;
 }
 
@@ -1380,62 +1450,67 @@ watch(() => currentView.value, () => {
 
 .component-icon {
   font-size: 24px;
-  fill: white;
+  fill: var(--text-on-primary);
 }
 
 .component-label {
   font-size: 12px;
-  font-weight: 500;
-  fill: white;
+  font-weight: var(--font-medium);
+  fill: var(--text-on-primary);
+}
+
+.metrics-badge-bg {
+  fill: var(--bg-secondary);
+  fill-opacity: 0.9;
 }
 
 .metrics-text {
   font-size: 10px;
-  fill: #94a3b8;
+  fill: var(--text-secondary);
 }
 
 /* Zoom Controls */
 .zoom-controls {
   position: absolute;
-  bottom: 1rem;
-  right: 1rem;
+  bottom: var(--spacing-4);
+  right: var(--spacing-4);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  background: #1e293b;
-  padding: 0.5rem;
-  border-radius: 0.5rem;
-  border: 1px solid #334155;
+  gap: var(--spacing-2);
+  background: var(--bg-secondary);
+  padding: var(--spacing-2);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--bg-tertiary);
 }
 
 .zoom-controls button {
   width: 32px;
   height: 32px;
-  background: #0f172a;
-  border: 1px solid #334155;
-  border-radius: 0.375rem;
-  color: #94a3b8;
+  background: var(--bg-primary);
+  border: 1px solid var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: var(--transition-all);
 }
 
 .zoom-controls button:hover {
-  background: #334155;
-  color: #f8fafc;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .zoom-controls button.active {
-  background: #667eea;
-  border-color: #667eea;
-  color: white;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .zoom-level {
-  font-size: 0.75rem;
-  color: #94a3b8;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
   min-width: 40px;
   text-align: center;
 }
@@ -1443,13 +1518,13 @@ watch(() => currentView.value, () => {
 /* Mini Map */
 .mini-map {
   position: absolute;
-  bottom: 1rem;
-  left: 1rem;
+  bottom: var(--spacing-4);
+  left: var(--spacing-4);
   width: 200px;
   height: 120px;
-  background: #1e293b;
-  border-radius: 0.5rem;
-  border: 1px solid #334155;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--bg-tertiary);
   overflow: hidden;
 }
 
@@ -1458,16 +1533,21 @@ watch(() => currentView.value, () => {
   height: 100%;
 }
 
+.viewport-indicator {
+  stroke: var(--color-primary);
+  stroke-width: 2;
+}
+
 /* Details Panel */
 .details-panel {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
+  top: var(--spacing-4);
+  right: var(--spacing-4);
   width: 320px;
-  max-height: calc(100% - 2rem);
-  background: #1e293b;
-  border-radius: 0.75rem;
-  border: 1px solid #334155;
+  max-height: calc(100% - var(--spacing-8));
+  background: var(--bg-secondary);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--bg-tertiary);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -1477,24 +1557,24 @@ watch(() => currentView.value, () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
-  background: linear-gradient(135deg, #334155, #1e293b);
-  border-bottom: 1px solid #334155;
+  padding: var(--spacing-4);
+  background: linear-gradient(135deg, var(--bg-tertiary), var(--bg-secondary));
+  border-bottom: 1px solid var(--bg-tertiary);
 }
 
 .panel-header h4 {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #f8fafc;
+  gap: var(--spacing-3);
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .component-icon-badge {
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1504,128 +1584,128 @@ watch(() => currentView.value, () => {
 .close-btn {
   background: none;
   border: none;
-  color: #94a3b8;
+  color: var(--text-secondary);
   cursor: pointer;
-  padding: 0.25rem;
+  padding: var(--spacing-1);
 }
 
 .close-btn:hover {
-  color: #f8fafc;
+  color: var(--text-primary);
 }
 
 .panel-content {
-  padding: 1rem;
+  padding: var(--spacing-4);
   overflow-y: auto;
   flex: 1;
 }
 
 .info-section {
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .info-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid #334155;
+  padding: var(--spacing-2) 0;
+  border-bottom: 1px solid var(--bg-tertiary);
 }
 
 .info-row label {
-  font-size: 0.75rem;
-  color: #94a3b8;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .info-row code {
-  font-size: 0.75rem;
-  background: #0f172a;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
-  color: #e2e8f0;
+  font-size: var(--text-xs);
+  background: var(--bg-primary);
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-default);
+  color: var(--text-primary);
 }
 
 .type-badge {
-  font-size: 0.75rem;
-  color: white;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
+  font-size: var(--text-xs);
+  color: var(--text-on-primary);
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-default);
 }
 
 .status-badge {
-  font-size: 0.75rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
+  font-size: var(--text-xs);
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-default);
   text-transform: capitalize;
 }
 
 .status-badge.status-healthy {
-  background: #10b98120;
-  color: #10b981;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .status-badge.status-warning {
-  background: #f59e0b20;
-  color: #f59e0b;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .status-badge.status-error {
-  background: #ef444420;
-  color: #ef4444;
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .status-badge.status-unknown {
-  background: #6b728020;
-  color: #6b7280;
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
 }
 
 .description-section,
 .metrics-section,
 .connections-section {
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .description-section h5,
 .metrics-section h5,
 .connections-section h5 {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #e2e8f0;
-  margin-bottom: 0.5rem;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-2);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .description-section p {
-  font-size: 0.8125rem;
-  color: #94a3b8;
-  line-height: 1.5;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: var(--leading-relaxed);
 }
 
 .metrics-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .metric-item {
-  background: #0f172a;
-  padding: 0.5rem;
-  border-radius: 0.375rem;
+  background: var(--bg-primary);
+  padding: var(--spacing-2);
+  border-radius: var(--radius-md);
 }
 
 .metric-label {
-  font-size: 0.625rem;
-  color: #64748b;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
   text-transform: uppercase;
   display: block;
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--spacing-1);
 }
 
 .metric-value {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #e2e8f0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .connections-list {
@@ -1637,42 +1717,42 @@ watch(() => currentView.value, () => {
 .connections-list li {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem;
-  background: #0f172a;
-  border-radius: 0.375rem;
-  margin-bottom: 0.5rem;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2);
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-2);
   cursor: pointer;
   transition: background 0.2s;
 }
 
 .connections-list li:hover {
-  background: #334155;
+  background: var(--bg-tertiary);
 }
 
 .conn-type {
-  font-size: 0.625rem;
-  padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
-  color: white;
+  font-size: var(--text-xs);
+  padding: var(--spacing-0-5) var(--spacing-1-5);
+  border-radius: var(--radius-default);
+  color: var(--text-on-primary);
   text-transform: uppercase;
 }
 
 .conn-direction {
-  color: #64748b;
-  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
 }
 
 .conn-target {
-  font-size: 0.8125rem;
-  color: #e2e8f0;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
 }
 
 .panel-actions {
   display: flex;
-  gap: 0.5rem;
-  padding-top: 1rem;
-  border-top: 1px solid #334155;
+  gap: var(--spacing-2);
+  padding-top: var(--spacing-4);
+  border-top: 1px solid var(--bg-tertiary);
 }
 
 .panel-actions .action-btn {
@@ -1682,49 +1762,70 @@ watch(() => currentView.value, () => {
 
 /* Legend */
 .diagram-legend {
-  padding: 1rem 1.5rem;
-  background: #1e293b;
-  border-top: 1px solid #334155;
+  padding: var(--spacing-4) var(--spacing-6);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--bg-tertiary);
 }
 
 .diagram-legend h5 {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #e2e8f0;
-  margin-bottom: 0.75rem;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-3);
 }
 
 .legend-section {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 0.5rem;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-2);
 }
 
 .legend-title {
-  font-size: 0.75rem;
-  color: #64748b;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
   min-width: 80px;
 }
 
 .legend-items {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  font-size: 0.75rem;
-  color: #94a3b8;
+  gap: var(--spacing-1-5);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .legend-color {
   width: 12px;
   height: 12px;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
+}
+
+/* Legend colors using design tokens */
+.legend-color-frontend {
+  background: linear-gradient(135deg, var(--color-primary), #764ba2);
+}
+
+.legend-color-backend {
+  background: linear-gradient(135deg, var(--color-success), var(--color-success-dark));
+}
+
+.legend-color-database {
+  background: linear-gradient(135deg, var(--color-warning), var(--color-warning-hover));
+}
+
+.legend-color-ai {
+  background: linear-gradient(135deg, var(--chart-purple), #7c3aed);
+}
+
+.legend-color-infrastructure {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
 }
 
 .legend-line {
@@ -1733,14 +1834,32 @@ watch(() => currentView.value, () => {
   border-radius: 1px;
 }
 
+.legend-line-api {
+  background: var(--chart-blue);
+}
+
+.legend-line-data {
+  background: var(--color-success);
+}
+
+.legend-line-event {
+  background: var(--color-warning);
+}
+
 .legend-line.dashed {
-  background: repeating-linear-gradient(90deg, currentColor, currentColor 4px, transparent 4px, transparent 8px);
+  background: repeating-linear-gradient(
+    90deg,
+    var(--color-warning),
+    var(--color-warning) 4px,
+    transparent 4px,
+    transparent 8px
+  );
 }
 
 /* Transitions */
 .slide-enter-active,
 .slide-leave-active {
-  transition: all 0.3s ease;
+  transition: all var(--duration-300) var(--ease-out);
 }
 
 .slide-enter-from,
@@ -1753,7 +1872,7 @@ watch(() => currentView.value, () => {
 @media (max-width: 768px) {
   .diagram-header {
     flex-direction: column;
-    gap: 1rem;
+    gap: var(--spacing-4);
   }
 
   .view-controls {
@@ -1767,7 +1886,7 @@ watch(() => currentView.value, () => {
     bottom: 0;
     right: 0;
     left: 0;
-    border-radius: 0.75rem 0.75rem 0 0;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
     max-height: 50%;
   }
 

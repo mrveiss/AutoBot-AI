@@ -210,95 +210,97 @@ const openDocument = () => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to design tokens */
+
 .doc-result-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.5rem;
-  padding: 0.875rem;
-  transition: all 0.2s ease;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-3-5);
+  transition: all var(--duration-200) var(--ease-in-out);
   cursor: pointer;
 }
 
 .doc-result-card:hover {
-  border-color: #cbd5e1;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-sm);
 }
 
 .doc-result-card.highlighted {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--color-info);
+  box-shadow: var(--shadow-focus);
 }
 
 .doc-result-card.expanded {
-  background: #f8fafc;
+  background: var(--bg-secondary);
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .category-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.125rem 0.5rem;
-  font-size: 0.625rem;
-  font-weight: 600;
+  gap: var(--spacing-1);
+  padding: var(--spacing-0-5) var(--spacing-2);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
   text-transform: uppercase;
-  letter-spacing: 0.025em;
-  border-radius: 9999px;
-  background: #f1f5f9;
-  color: #475569;
+  letter-spacing: var(--tracking-wide);
+  border-radius: var(--radius-full);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
 }
 
 /* Category-specific badge colors */
-.category-badge.category-architecture { background: #ede9fe; color: #6d28d9; }
-.category-badge.category-developer { background: #dbeafe; color: #1d4ed8; }
-.category-badge.category-api { background: #d1fae5; color: #047857; }
-.category-badge.category-troubleshooting { background: #fef3c7; color: #b45309; }
-.category-badge.category-deployment { background: #fee2e2; color: #b91c1c; }
-.category-badge.category-security { background: #e0e7ff; color: #4338ca; }
-.category-badge.category-features { background: #ffedd5; color: #c2410c; }
-.category-badge.category-testing { background: #ccfbf1; color: #0f766e; }
-.category-badge.category-workflow { background: #f3e8ff; color: #7c3aed; }
-.category-badge.category-guides { background: #e0f2fe; color: #0369a1; }
-.category-badge.category-implementation { background: #f1f5f9; color: #475569; }
-.category-badge.category-agents { background: #fae8ff; color: #a21caf; }
+.category-badge.category-architecture { background: var(--chart-purple-bg); color: var(--chart-purple); }
+.category-badge.category-developer { background: var(--color-info-bg); color: var(--color-info-dark); }
+.category-badge.category-api { background: var(--color-success-bg); color: var(--color-success-dark); }
+.category-badge.category-troubleshooting { background: var(--color-warning-bg); color: var(--color-warning-dark); }
+.category-badge.category-deployment { background: var(--color-error-bg); color: var(--color-error-dark); }
+.category-badge.category-security { background: var(--color-primary-bg); color: var(--color-primary-dark); }
+.category-badge.category-features { background: var(--chart-orange-bg); color: var(--chart-orange); }
+.category-badge.category-testing { background: var(--chart-green-bg); color: var(--chart-teal); }
+.category-badge.category-workflow { background: var(--chart-purple-bg); color: var(--chart-purple); }
+.category-badge.category-guides { background: var(--color-info-bg); color: var(--color-info); }
+.category-badge.category-implementation { background: var(--bg-tertiary); color: var(--text-secondary); }
+.category-badge.category-agents { background: var(--chart-pink-bg, rgba(236, 72, 153, 0.2)); color: var(--chart-pink); }
 
 .section-label {
-  font-size: 0.75rem;
-  color: #64748b;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .relevance-score {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
+  gap: var(--spacing-1);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  padding: var(--spacing-0-5) var(--spacing-1-5);
+  border-radius: var(--radius-default);
 }
 
-.relevance-score.score-excellent { background: #dcfce7; color: #166534; }
-.relevance-score.score-good { background: #dbeafe; color: #1e40af; }
-.relevance-score.score-fair { background: #fef3c7; color: #92400e; }
-.relevance-score.score-low { background: #f3f4f6; color: #6b7280; }
+.relevance-score.score-excellent { background: var(--color-success-bg); color: var(--color-success-dark); }
+.relevance-score.score-good { background: var(--color-info-bg); color: var(--color-info-dark); }
+.relevance-score.score-fair { background: var(--color-warning-bg); color: var(--color-warning-dark); }
+.relevance-score.score-low { background: var(--bg-tertiary); color: var(--text-tertiary); }
 
 .expand-btn {
   display: flex;
@@ -309,27 +311,27 @@ const openDocument = () => {
   padding: 0;
   background: none;
   border: none;
-  border-radius: 0.25rem;
-  color: #64748b;
+  border-radius: var(--radius-default);
+  color: var(--text-tertiary);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-150) var(--ease-in-out);
 }
 
 .expand-btn:hover {
-  background: #f1f5f9;
-  color: #334155;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
 }
 
 .card-title {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0 0 0.5rem 0;
-  line-height: 1.4;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-2) 0;
+  line-height: var(--leading-snug);
 }
 
 .card-content {
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--spacing-3);
 }
 
 .card-content.truncated .content-preview {
@@ -341,8 +343,8 @@ const openDocument = () => {
 
 .content-preview {
   font-size: 0.8125rem;
-  color: #475569;
-  line-height: 1.6;
+  color: var(--text-secondary);
+  line-height: var(--leading-relaxed);
   margin: 0;
   white-space: pre-wrap;
 }
@@ -351,8 +353,8 @@ const openDocument = () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-top: 0.5rem;
-  border-top: 1px solid #f1f5f9;
+  padding-top: var(--spacing-2);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .footer-left {
@@ -363,10 +365,10 @@ const openDocument = () => {
 .file-path {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
   font-size: 0.6875rem;
-  color: #94a3b8;
-  font-family: ui-monospace, monospace;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -376,7 +378,7 @@ const openDocument = () => {
 .footer-right {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .action-btn {
@@ -388,24 +390,24 @@ const openDocument = () => {
   padding: 0;
   background: none;
   border: 1px solid transparent;
-  border-radius: 0.25rem;
-  color: #64748b;
+  border-radius: var(--radius-default);
+  color: var(--text-tertiary);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-150) var(--ease-in-out);
 }
 
 .action-btn:hover {
-  background: #f1f5f9;
-  border-color: #e2e8f0;
-  color: #334155;
+  background: var(--bg-tertiary);
+  border-color: var(--border-subtle);
+  color: var(--text-secondary);
 }
 
-.action-btn.copy-btn:hover { color: #3b82f6; }
-.action-btn.insert-btn:hover { color: #10b981; }
-.action-btn.open-btn:hover { color: #8b5cf6; }
+.action-btn.copy-btn:hover { color: var(--color-info); }
+.action-btn.insert-btn:hover { color: var(--color-success); }
+.action-btn.open-btn:hover { color: var(--chart-purple); }
 
 .action-btn:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid var(--color-info);
   outline-offset: 1px;
 }
 </style>

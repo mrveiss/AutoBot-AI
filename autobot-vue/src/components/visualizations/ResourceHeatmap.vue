@@ -116,6 +116,13 @@ const chartRef = ref<InstanceType<typeof VueApexCharts> | null>(null)
 // Data
 const heatmapData = ref<Array<{ name: string; data: Array<{ x: string; y: number }> }>>([])
 
+/**
+ * Issue #704: Helper to get CSS custom property values from design tokens
+ */
+function getCssVar(name: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+}
+
 // Computed
 const chartSeries = computed(() => heatmapData.value)
 
@@ -155,8 +162,8 @@ const chartOptions = computed<ApexOptions>(() => ({
   chart: {
     type: 'heatmap',
     background: 'transparent',
-    foreColor: '#e2e8f0',
-    fontFamily: 'Inter, system-ui, sans-serif',
+    foreColor: getCssVar('--text-primary'),
+    fontFamily: getCssVar('--font-sans'),
     toolbar: {
       show: true,
       tools: {
@@ -184,7 +191,7 @@ const chartOptions = computed<ApexOptions>(() => ({
   dataLabels: {
     enabled: false
   },
-  colors: ['#3b82f6'],
+  colors: [getCssVar('--chart-blue')],
   plotOptions: {
     heatmap: {
       shadeIntensity: 0.5,
@@ -192,24 +199,24 @@ const chartOptions = computed<ApexOptions>(() => ({
       useFillColorAsStroke: false,
       colorScale: {
         ranges: [
-          { from: 0, to: 20, color: '#1e3a5f', name: 'Low' },
-          { from: 21, to: 40, color: '#2563eb', name: 'Moderate' },
-          { from: 41, to: 60, color: '#3b82f6', name: 'Medium' },
-          { from: 61, to: 80, color: '#f59e0b', name: 'High' },
-          { from: 81, to: 100, color: '#ef4444', name: 'Critical' }
+          { from: 0, to: 20, color: getCssVar('--color-info-dark'), name: 'Low' },
+          { from: 21, to: 40, color: getCssVar('--color-info-hover'), name: 'Moderate' },
+          { from: 41, to: 60, color: getCssVar('--chart-blue'), name: 'Medium' },
+          { from: 61, to: 80, color: getCssVar('--color-warning'), name: 'High' },
+          { from: 81, to: 100, color: getCssVar('--color-error'), name: 'Critical' }
         ]
       }
     }
   },
   stroke: {
     width: 1,
-    colors: ['#1e293b']
+    colors: [getCssVar('--bg-secondary')]
   },
   xaxis: {
     type: 'category',
     labels: {
       style: {
-        colors: '#94a3b8',
+        colors: getCssVar('--text-secondary'),
         fontSize: '11px'
       },
       rotate: -45,
@@ -217,13 +224,13 @@ const chartOptions = computed<ApexOptions>(() => ({
     },
     axisBorder: {
       show: true,
-      color: '#475569'
+      color: getCssVar('--border-default')
     }
   },
   yaxis: {
     labels: {
       style: {
-        colors: '#94a3b8',
+        colors: getCssVar('--text-secondary'),
         fontSize: '12px'
       }
     }
@@ -437,68 +444,69 @@ defineExpose({
 })
 </script>
 
+<!-- Issue #704: Migrated to design tokens -->
 <style scoped>
 .resource-heatmap {
-  background: rgba(30, 41, 59, 0.5);
-  border-radius: 12px;
-  padding: 20px;
-  border: 1px solid rgba(71, 85, 105, 0.5);
+  background: var(--bg-secondary-alpha);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-5);
+  border: 1px solid var(--border-subtle);
 }
 
 .heatmap-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid rgba(71, 85, 105, 0.5);
+  margin-bottom: var(--spacing-5);
+  padding-bottom: var(--spacing-4);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .heatmap-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #e2e8f0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
   margin: 0;
 }
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
   align-items: center;
 }
 
 .metric-select,
 .time-select {
-  padding: 8px 12px;
-  background: rgba(51, 65, 85, 0.5);
-  border: 1px solid rgba(71, 85, 105, 0.5);
-  border-radius: 6px;
-  color: #e2e8f0;
-  font-size: 13px;
+  padding: var(--spacing-2) var(--spacing-3);
+  background: var(--bg-tertiary-alpha);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
   cursor: pointer;
-  transition: border-color 0.2s;
+  transition: border-color var(--duration-200);
 }
 
 .metric-select:focus,
 .time-select:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: var(--chart-blue);
 }
 
 .refresh-btn {
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   background: transparent;
-  border: 1px solid rgba(71, 85, 105, 0.5);
-  border-radius: 6px;
-  color: #94a3b8;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .refresh-btn:hover:not(:disabled) {
-  background: rgba(59, 130, 246, 0.1);
-  border-color: #3b82f6;
-  color: #3b82f6;
+  background: var(--color-info-bg);
+  border-color: var(--chart-blue);
+  color: var(--chart-blue);
 }
 
 .refresh-btn:disabled {
@@ -513,23 +521,23 @@ defineExpose({
   align-items: center;
   justify-content: center;
   min-height: 200px;
-  gap: 12px;
-  color: #94a3b8;
+  gap: var(--spacing-3);
+  color: var(--text-secondary);
 }
 
 .error-state {
-  color: #f87171;
+  color: var(--color-error-light);
 }
 
 .retry-btn {
-  margin-top: 8px;
-  padding: 8px 16px;
-  background: rgba(59, 130, 246, 0.2);
-  border: 1px solid #3b82f6;
-  border-radius: 6px;
-  color: #3b82f6;
+  margin-top: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-4);
+  background: var(--color-info-bg-hover);
+  border: 1px solid var(--chart-blue);
+  border-radius: var(--radius-md);
+  color: var(--chart-blue);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background var(--duration-200);
 }
 
 .retry-btn:hover {
@@ -544,35 +552,35 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  margin-top: 16px;
+  gap: var(--spacing-3);
+  margin-top: var(--spacing-4);
 }
 
 .legend-label {
-  font-size: 12px;
-  color: #94a3b8;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .legend-gradient {
   width: 200px;
   height: 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: linear-gradient(
     90deg,
-    #1e3a5f 0%,
-    #2563eb 25%,
-    #3b82f6 50%,
-    #f59e0b 75%,
-    #ef4444 100%
+    var(--color-info-dark) 0%,
+    var(--color-info-hover) 25%,
+    var(--chart-blue) 50%,
+    var(--color-warning) 75%,
+    var(--color-error) 100%
   );
 }
 
 .heatmap-stats {
   display: flex;
   justify-content: center;
-  gap: 32px;
-  margin-top: 20px;
-  padding-top: 16px;
+  gap: var(--spacing-8);
+  margin-top: var(--spacing-5);
+  padding-top: var(--spacing-4);
   border-top: 1px solid rgba(71, 85, 105, 0.3);
 }
 
@@ -580,85 +588,85 @@ defineExpose({
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .stat-label {
-  font-size: 12px;
-  color: #64748b;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: var(--tracking-wide);
 }
 
 .stat-value {
-  font-size: 20px;
-  font-weight: 600;
-  color: #e2e8f0;
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .stat-value.peak {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .stat-value.low {
-  color: #10b981;
+  color: var(--color-success);
 }
 
 /* Tooltip styles */
 :deep(.heatmap-tooltip) {
-  background: #1e293b;
-  border: 1px solid #475569;
-  border-radius: 8px;
-  padding: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-3);
   min-width: 150px;
 }
 
 :deep(.tooltip-header) {
-  font-weight: 600;
-  color: #e2e8f0;
-  margin-bottom: 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #475569;
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-2);
+  padding-bottom: var(--spacing-2);
+  border-bottom: 1px solid var(--border-default);
 }
 
 :deep(.tooltip-row) {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-1);
 }
 
 :deep(.tooltip-label) {
-  color: #94a3b8;
-  font-size: 12px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
 }
 
 :deep(.tooltip-value) {
-  font-weight: 500;
-  color: #e2e8f0;
-  font-size: 12px;
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+  font-size: var(--text-xs);
 }
 
 :deep(.tooltip-value.critical) {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 :deep(.tooltip-value.high) {
-  color: #f59e0b;
+  color: var(--color-warning);
 }
 
 :deep(.tooltip-value.medium) {
-  color: #3b82f6;
+  color: var(--chart-blue);
 }
 
 :deep(.tooltip-value.low) {
-  color: #10b981;
+  color: var(--color-success);
 }
 
 /* Responsive */
 @media (max-width: 768px) {
   .heatmap-header {
     flex-direction: column;
-    gap: 12px;
+    gap: var(--spacing-3);
     align-items: stretch;
   }
 
@@ -673,11 +681,11 @@ defineExpose({
   }
 
   .heatmap-stats {
-    gap: 16px;
+    gap: var(--spacing-4);
   }
 
   .stat-value {
-    font-size: 16px;
+    font-size: var(--text-base);
   }
 }
 </style>
