@@ -12,21 +12,14 @@ across the AutoBot platform. Supports both dark (GitHub-style) and light themes.
 from typing import Any, Dict, List, Optional
 
 
-def get_dark_theme_css() -> str:
+def _get_dark_base_styles() -> str:
     """
-    Return GitHub-style dark theme CSS for dashboards.
+    Generate base reset and body styles for dark theme.
 
-    This theme uses GitHub's color palette:
-    - Background: #0d1117
-    - Cards/containers: #161b22
-    - Borders: #30363d
-    - Primary accent: #58a6ff
-    - Success: #238636
-    - Warning: #d29922
-    - Error: #da3633
+    Issue #665: Extracted from get_dark_theme_css
 
     Returns:
-        str: Complete CSS stylesheet for dark theme
+        str: CSS for base styles including reset and body
     """
     return """
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -35,7 +28,19 @@ def get_dark_theme_css() -> str:
             background: #0d1117;
             color: #c9d1d9;
             line-height: 1.6;
-        }
+        }"""
+
+
+def _get_dark_header_styles() -> str:
+    """
+    Generate header and status indicator styles for dark theme.
+
+    Issue #665: Extracted from get_dark_theme_css
+
+    Returns:
+        str: CSS for header, title, and status indicators
+    """
+    return """
         .header {
             background: #161b22;
             border-bottom: 1px solid #30363d;
@@ -53,7 +58,19 @@ def get_dark_theme_css() -> str:
         }
         .status-healthy { background: #238636; color: #fff; }
         .status-warning { background: #d29922; color: #fff; }
-        .status-error { background: #da3633; color: #fff; }
+        .status-error { background: #da3633; color: #fff; }"""
+
+
+def _get_dark_component_styles() -> str:
+    """
+    Generate component styles for dark theme (cards, metrics, charts).
+
+    Issue #665: Extracted from get_dark_theme_css
+
+    Returns:
+        str: CSS for containers, metric cards, and chart containers
+    """
+    return """
         .container {
             max-width: 1400px;
             margin: 0 auto;
@@ -101,8 +118,30 @@ def get_dark_theme_css() -> str:
             text-align: center;
             padding: 2rem;
             color: #8b949e;
-        }
+        }"""
+
+
+def get_dark_theme_css() -> str:
     """
+    Return GitHub-style dark theme CSS for dashboards.
+
+    This theme uses GitHub's color palette:
+    - Background: #0d1117
+    - Cards/containers: #161b22
+    - Borders: #30363d
+    - Primary accent: #58a6ff
+    - Success: #238636
+    - Warning: #d29922
+    - Error: #da3633
+
+    Returns:
+        str: Complete CSS stylesheet for dark theme
+    """
+    base_styles = _get_dark_base_styles()
+    header_styles = _get_dark_header_styles()
+    component_styles = _get_dark_component_styles()
+
+    return f"{base_styles}\n{header_styles}\n{component_styles}\n    """
 
 
 def get_light_theme_css() -> str:

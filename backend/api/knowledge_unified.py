@@ -773,6 +773,104 @@ def _create_dynamic_category_nodes(
     return category_map
 
 
+async def _process_category_tree_for_graph(
+    kb: Any, body: GraphRequest, nodes: List[Dict], edges: List[Dict]
+) -> Dict[str, str]:
+    """Process category tree and build category map.
+
+    Issue #665: Extracted from get_unified_graph.
+
+    Args:
+        kb: Knowledge base instance
+        body: Graph request parameters
+        nodes: List to append category nodes to
+        edges: List to append category edges to
+
+    Returns:
+        Dict mapping category names to node IDs
+    """
+    category_map: Dict[str, str] = {}
+
+    if not body.include_categories or kb is None:
+        return category_map
+
+    try:
+        tree_result = await kb.get_category_tree(
+            root_id=None, max_depth=body.max_depth, include_fact_counts=True
+        )
+        if tree_result.get("success") and tree_result.get("tree"):
+            _process_category_tree(tree_result.get("tree", []), nodes, edges)
+            # Build category map from tree
+            for node in nodes:
+                if node["type"] == "category":
+                    cat_name = node.get("metadata", {}).get("path", "").split("/")[-1]
+                    if cat_name:
+                        category_map[cat_name] = node["id"]
+    except Exception as e:
+        logger.warning("Failed to get category tree: %s", e)
+
+    return category_map
+
+
+def _process_facts_into_nodes(
+    facts: List[Dict[str, Any]],
+    nodes: List[Dict],
+    edges: List[Dict],
+    category_map: Dict[str, str]
+) -> List[str]:
+    """Process facts into graph nodes and create category edges.
+
+    Issue #665: Extracted from get_unified_graph.
+
+    Args:
+        facts: List of fact dictionaries
+        nodes: List to append fact nodes to
+        edges: List to append category-fact edges to
+        category_map: Mapping of category names to node IDs
+
+    Returns:
+        List of fact IDs for relation lookups
+    """
+    fact_ids: List[str] = []
+
+    for fact in facts:
+        node = _create_fact_node(fact)
+        nodes.append(node)
+        fact_ids.append(node["id"])
+
+        # Create edge from category to fact
+        category = fact.get("category", "general")
+        cat_node_id = category_map.get(category)
+        if cat_node_id:
+            edges.append({
+                "from": cat_node_id,
+                "to": node["id"],
+                "type": "contains",
+                "strength": 0.6,
+            })
+
+    return fact_ids
+
+
+def _update_category_fact_counts(
+    nodes: List[Dict], facts: List[Dict[str, Any]]
+) -> None:
+    """Update fact counts in category nodes.
+
+    Issue #665: Extracted from get_unified_graph.
+
+    Args:
+        nodes: List of graph nodes
+        facts: List of facts to count per category
+    """
+    for node in nodes:
+        if node["type"] == "category":
+            cat_path = node.get("metadata", {}).get("path", "")
+            cat_name = cat_path.split("/")[-1] if cat_path else node["id"].replace("cat_", "")
+            count = sum(1 for f in facts if f.get("category") == cat_name)
+            node["metadata"]["fact_count"] = count
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_unified_graph",
@@ -798,27 +896,11 @@ async def get_unified_graph(req: Request, body: GraphRequest):
 
     nodes: List[Dict[str, Any]] = []
     edges: List[Dict[str, Any]] = []
-    fact_ids: List[str] = []
-    category_map: Dict[str, str] = {}
 
-    # Get category tree if requested
-    if body.include_categories and kb is not None:
-        try:
-            tree_result = await kb.get_category_tree(
-                root_id=None, max_depth=body.max_depth, include_fact_counts=True
-            )
-            if tree_result.get("success") and tree_result.get("tree"):
-                _process_category_tree(tree_result.get("tree", []), nodes, edges)
-                # Build category map from tree
-                for node in nodes:
-                    if node["type"] == "category":
-                        cat_name = node.get("metadata", {}).get("path", "").split("/")[-1]
-                        if cat_name:
-                            category_map[cat_name] = node["id"]
-        except Exception as e:
-            logger.warning("Failed to get category tree: %s", e)
+    # Process category tree and get category map
+    category_map = await _process_category_tree_for_graph(kb, body, nodes, edges)
 
-    # Get facts
+    # Get facts for the graph
     facts: List[Dict[str, Any]] = []
     if kb is not None:
         try:
@@ -830,30 +912,11 @@ async def get_unified_graph(req: Request, body: GraphRequest):
     if body.include_categories and not category_map and facts:
         category_map = _create_dynamic_category_nodes(facts, nodes, edges)
 
-    # Process facts into nodes
-    for fact in facts:
-        node = _create_fact_node(fact)
-        nodes.append(node)
-        fact_ids.append(node["id"])
-
-        # Create edge from category to fact
-        category = fact.get("category", "general")
-        cat_node_id = category_map.get(category)
-        if cat_node_id:
-            edges.append({
-                "from": cat_node_id,
-                "to": node["id"],
-                "type": "contains",
-                "strength": 0.6,
-            })
+    # Process facts into nodes and create category-fact edges
+    fact_ids = _process_facts_into_nodes(facts, nodes, edges, category_map)
 
     # Update category fact counts
-    for node in nodes:
-        if node["type"] == "category":
-            cat_path = node.get("metadata", {}).get("path", "")
-            cat_name = cat_path.split("/")[-1] if cat_path else node["id"].replace("cat_", "")
-            count = sum(1 for f in facts if f.get("category") == cat_name)
-            node["metadata"]["fact_count"] = count
+    _update_category_fact_counts(nodes, facts)
 
     # Get fact relations if requested
     if body.include_relations and kb is not None and fact_ids:

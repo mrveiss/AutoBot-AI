@@ -53,6 +53,24 @@ _PATH_TYPES = (str, Path)
 # =============================================================================
 
 
+def _collect_indexing_files(codebase_path: Path) -> List[Path]:
+    """Collect files to index from codebase.
+
+    Issue #665: Extracted from migrate_knowledge_base_indexing to reduce function length.
+
+    Args:
+        codebase_path: Path to codebase root directory
+
+    Returns:
+        List of file paths to index
+    """
+    file_patterns = ["*.py", "*.js", "*.vue", "*.ts", "*.jsx", "*.tsx"]
+    all_files = []
+    for pattern in file_patterns:
+        all_files.extend(codebase_path.rglob(pattern))
+    return all_files
+
+
 async def _get_indexing_resume_state(
     context: "OperationExecutionContext",
 ) -> tuple[List[Dict[str, Any]], int]:
@@ -77,6 +95,63 @@ async def _get_indexing_resume_state(
         processed_files = []
         start_index = 0
     return processed_files, start_index
+
+
+async def _process_and_checkpoint_files(
+    context: "OperationExecutionContext",
+    all_files: List[Path],
+    total_files: int,
+    start_index: int,
+    processed_files: List[Dict[str, Any]],
+    file_processor,
+) -> List[Dict[str, Any]]:
+    """Process files with progress tracking and checkpointing.
+
+    Issue #665: Extracted from migrate_knowledge_base_indexing to reduce function length.
+
+    Args:
+        context: Operation execution context
+        all_files: List of all files to process
+        total_files: Total number of files
+        start_index: Index to start processing from
+        processed_files: Previously processed files (if resuming)
+        file_processor: Callable to process individual files
+
+    Returns:
+        List of newly indexed file information
+    """
+    indexed_files = []
+
+    for i, file_path in enumerate(all_files[start_index:], start_index):
+        try:
+            file_info = await file_processor(file_path)
+            indexed_files.append(file_info)
+
+            # Update progress
+            elapsed = (datetime.now() - context.operation.started_at).total_seconds()
+            await context.update_progress(
+                f"Indexing {file_path.name}",
+                i + 1,
+                total_files,
+                {
+                    "files_per_second": len(indexed_files) / max(1, elapsed),
+                    "current_file": str(file_path),
+                },
+                f"Processed {i + 1} of {total_files} files",
+            )
+
+            # Checkpoint every 100 files
+            if (i + 1) % 100 == 0:
+                await context.save_checkpoint(
+                    {"processed_files": processed_files + indexed_files},
+                    f"file_{i + 1}",
+                )
+                logger.info("Checkpoint saved at file %s", i + 1)
+
+        except Exception as e:
+            logger.warning("Failed to process %s: %s", file_path, e)
+
+    return indexed_files
 
 
 def _build_indexing_result(
@@ -225,13 +300,9 @@ class ExistingOperationMigrator:
             Issue #665: Refactored to use extracted helper functions.
             """
             codebase_path = Path(PATH.PROJECT_ROOT)
-            file_patterns = ["*.py", "*.js", "*.vue", "*.ts", "*.jsx", "*.tsx"]
 
-            # Count files first for accurate progress
-            all_files = []
-            for pattern in file_patterns:
-                all_files.extend(codebase_path.rglob(pattern))
-
+            # Collect files using helper (Issue #665)
+            all_files = _collect_indexing_files(codebase_path)
             total_files = len(all_files)
             await context.update_progress("File discovery", 0, total_files)
 
@@ -240,34 +311,15 @@ class ExistingOperationMigrator:
             indexed_files = []
 
             try:
-                for i, file_path in enumerate(all_files[start_index:], start_index):
-                    try:
-                        file_info = await self._process_file_for_indexing(file_path)
-                        indexed_files.append(file_info)
-
-                        # Update progress
-                        elapsed = (datetime.now() - context.operation.started_at).total_seconds()
-                        await context.update_progress(
-                            f"Indexing {file_path.name}",
-                            i + 1,
-                            total_files,
-                            {
-                                "files_per_second": len(indexed_files) / max(1, elapsed),
-                                "current_file": str(file_path),
-                            },
-                            f"Processed {i + 1} of {total_files} files",
-                        )
-
-                        # Checkpoint every 100 files
-                        if (i + 1) % 100 == 0:
-                            await context.save_checkpoint(
-                                {"processed_files": processed_files + indexed_files},
-                                f"file_{i + 1}",
-                            )
-                            logger.info("Checkpoint saved at file %s", i + 1)
-
-                    except Exception as e:
-                        logger.warning("Failed to process %s: %s", file_path, e)
+                # Process files using helper (Issue #665)
+                indexed_files = await _process_and_checkpoint_files(
+                    context,
+                    all_files,
+                    total_files,
+                    start_index,
+                    processed_files,
+                    self._process_file_for_indexing,
+                )
 
                 # Build result using helper (Issue #665)
                 return _build_indexing_result(indexed_files, context.should_resume())

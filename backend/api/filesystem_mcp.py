@@ -371,74 +371,111 @@ def _get_write_operation_tools() -> List[MCPTool]:
     ]
 
 
+def _create_directory_tool() -> MCPTool:
+    """
+    Create MCP tool definition for directory creation.
+
+    Issue #665: Extracted from _get_directory_management_tools
+
+    Returns:
+        MCPTool for create_directory operation
+    """
+    return MCPTool(
+        name="create_directory",
+        description=(
+            "Create directory with automatic parent directory creation (recursive"
+            "mkdir)"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Absolute path to directory",
+                }
+            },
+            "required": ["path"],
+        },
+    )
+
+
+def _list_directory_tool() -> MCPTool:
+    """
+    Create MCP tool definition for listing directory contents.
+
+    Issue #665: Extracted from _get_directory_management_tools
+
+    Returns:
+        MCPTool for list_directory operation
+    """
+    return MCPTool(
+        name="list_directory",
+        description=(
+            "List directory contents with [FILE] and [DIR] prefixes for"
+            "easy identification"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Absolute path to directory",
+                }
+            },
+            "required": ["path"],
+        },
+    )
+
+
+def _list_directory_with_sizes_tool() -> MCPTool:
+    """
+    Create MCP tool definition for listing directory with size information.
+
+    Issue #665: Extracted from _get_directory_management_tools
+
+    Returns:
+        MCPTool for list_directory_with_sizes operation
+    """
+    return MCPTool(
+        name="list_directory_with_sizes",
+        description=(
+            "List directory contents with detailed size information and"
+            "sortable metrics"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Absolute path to directory",
+                },
+                "sort_by": {
+                    "type": "string",
+                    "enum": ["name", "size"],
+                    "description": "Sort entries by name or size",
+                    "default": "name",
+                },
+            },
+            "required": ["path"],
+        },
+    )
+
+
 def _get_directory_management_tools() -> List[MCPTool]:
     """
     Get MCP tools for directory management operations.
 
     Issue #281: Extracted from get_filesystem_mcp_tools to reduce function length
     and improve maintainability of tool definitions by category.
+    Issue #665: Further refactored to extract individual tool creation helpers.
 
     Returns:
         List of MCPTool definitions for directory operations
     """
     return [
-        MCPTool(
-            name="create_directory",
-            description=(
-                "Create directory with automatic parent directory creation (recursive"
-                "mkdir)"
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Absolute path to directory",
-                    }
-                },
-                "required": ["path"],
-            },
-        ),
-        MCPTool(
-            name="list_directory",
-            description=(
-                "List directory contents with [FILE] and [DIR] prefixes for"
-                "easy identification"
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Absolute path to directory",
-                    }
-                },
-                "required": ["path"],
-            },
-        ),
-        MCPTool(
-            name="list_directory_with_sizes",
-            description=(
-                "List directory contents with detailed size information and"
-                "sortable metrics"
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Absolute path to directory",
-                    },
-                    "sort_by": {
-                        "type": "string",
-                        "enum": ["name", "size"],
-                        "description": "Sort entries by name or size",
-                        "default": "name",
-                    },
-                },
-                "required": ["path"],
-            },
-        ),
+        _create_directory_tool(),
+        _list_directory_tool(),
+        _list_directory_with_sizes_tool(),
         MCPTool(
             name="move_file",
             description="Move or rename files and directories to new location",

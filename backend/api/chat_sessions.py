@@ -431,14 +431,28 @@ async def update_session(
 
 
 # =============================================================================
-# Helper Functions for delete_session (Issue #281)
+# Helper Functions for delete_session (Issue #281, #665)
 # =============================================================================
 
 
 def _validate_delete_session_params(
     session_id: str, file_action: str, file_options: Optional[str]
 ) -> dict:
-    """Validate and parse delete_session parameters (Issue #281: extracted)."""
+    """Validate and parse delete_session parameters.
+
+    Issue #281: Extracted from delete_session for better organization.
+
+    Args:
+        session_id: Chat session ID to validate
+        file_action: Action to take on files ("delete", "transfer_kb", "transfer_shared")
+        file_options: Optional JSON string with file handling options
+
+    Returns:
+        Parsed file options dictionary
+
+    Raises:
+        ValidationError: If session_id, file_action, or file_options are invalid
+    """
     # Validate session ID
     if not validate_chat_session_id(session_id):
         (
@@ -484,7 +498,19 @@ def _validate_delete_session_params(
 async def _handle_conversation_files(
     request: Request, session_id: str, file_action: str, parsed_file_options: dict
 ) -> dict:
-    """Handle conversation files during session deletion (Issue #281: extracted)."""
+    """Handle conversation files during session deletion.
+
+    Issue #281: Extracted from delete_session for better organization.
+
+    Args:
+        request: FastAPI request object with app state
+        session_id: Chat session ID being deleted
+        file_action: Action to take ("delete", "transfer_kb", "transfer_shared")
+        parsed_file_options: Parsed options for transfer operations
+
+    Returns:
+        Dict with file handling results including success status and counts
+    """
     file_deletion_result = {"files_handled": False, "action_taken": file_action}
     conversation_file_manager = getattr(
         request.app.state, "conversation_file_manager", None
@@ -512,7 +538,17 @@ async def _handle_conversation_files(
 
 
 async def _cleanup_terminal_sessions(request: Request, session_id: str) -> dict:
-    """Clean up associated terminal sessions (Issue #281: extracted)."""
+    """Clean up associated terminal sessions.
+
+    Issue #281: Extracted from delete_session for better organization.
+
+    Args:
+        request: FastAPI request object with app state
+        session_id: Chat session ID being deleted
+
+    Returns:
+        Dict with cleanup statistics including sessions closed and approvals cleared
+    """
     terminal_cleanup_result = {
         "terminal_sessions_closed": 0,
         "pending_approvals_cleared": 0,
@@ -674,6 +710,74 @@ async def _cleanup_conversation_transcript(session_id: str) -> dict:
     return result
 
 
+async def _perform_all_session_cleanup(
+    request: Request,
+    session_id: str,
+    file_action: str,
+    parsed_file_options: dict,
+) -> tuple[dict, dict, dict, dict]:
+    """Perform all cleanup operations for session deletion.
+
+    Issue #665: Extracted from delete_session to reduce function complexity.
+
+    Args:
+        request: FastAPI request object with app state
+        session_id: Chat session ID being deleted
+        file_action: How to handle conversation files
+        parsed_file_options: Parsed options for file transfer
+
+    Returns:
+        Tuple of (file_result, terminal_result, kb_result, transcript_result)
+    """
+    # Handle conversation files
+    file_deletion_result = await _handle_conversation_files(
+        request, session_id, file_action, parsed_file_options
+    )
+
+    # Clean up terminal sessions
+    terminal_cleanup_result = await _cleanup_terminal_sessions(request, session_id)
+
+    # Clean up knowledge base facts
+    kb_cleanup_result = await _cleanup_knowledge_base_facts(request, session_id)
+
+    # Clean up conversation transcript
+    transcript_cleanup_result = await _cleanup_conversation_transcript(session_id)
+
+    return (
+        file_deletion_result,
+        terminal_cleanup_result,
+        kb_cleanup_result,
+        transcript_cleanup_result,
+    )
+
+
+async def _delete_session_and_verify(
+    chat_history_manager, session_id: str
+) -> None:
+    """Delete session from chat history and verify success.
+
+    Issue #665: Extracted from delete_session to reduce function complexity.
+
+    Args:
+        chat_history_manager: Chat history manager instance
+        session_id: Chat session ID being deleted
+
+    Raises:
+        ResourceNotFoundError: If session doesn't exist or deletion failed
+    """
+    deleted = await chat_history_manager.delete_session(session_id)
+
+    if not deleted:
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ResourceNotFoundError(f"Session {session_id} not found")
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_session",
@@ -689,11 +793,11 @@ async def delete_session(
     file_action: str = "delete",
     file_options: Optional[str] = None,
 ):
-    """
-    Delete a chat session with optional file handling.
+    """Delete a chat session with comprehensive cleanup.
 
     Issue #281: Refactored from 176 lines to use extracted helper methods.
     Issue #547: Added knowledge base facts cleanup to prevent orphaned data.
+    Issue #665: Further refactored to reduce function below 50 lines.
 
     Args:
         session_id: Chat session ID to delete
@@ -706,42 +810,28 @@ async def delete_session(
     request_id = generate_request_id()
     log_request_context(request, "delete_session", request_id)
 
-    # Validate parameters (Issue #281: uses helper)
+    # Validate parameters and parse options
     parsed_file_options = _validate_delete_session_params(
         session_id, file_action, file_options
     )
 
-    # Get dependencies from request state
+    # Get chat history manager
     chat_history_manager = get_chat_history_manager(request)
 
-    # Handle conversation files (Issue #281: uses helper)
-    file_deletion_result = await _handle_conversation_files(
+    # Perform all cleanup operations (Issue #665: orchestration via helper)
+    (
+        file_deletion_result,
+        terminal_cleanup_result,
+        kb_cleanup_result,
+        transcript_cleanup_result,
+    ) = await _perform_all_session_cleanup(
         request, session_id, file_action, parsed_file_options
     )
 
-    # Clean up terminal sessions (Issue #281: uses helper)
-    terminal_cleanup_result = await _cleanup_terminal_sessions(request, session_id)
+    # Delete session and verify success (Issue #665: verification via helper)
+    await _delete_session_and_verify(chat_history_manager, session_id)
 
-    # Issue #547: Clean up knowledge base facts created during this session
-    kb_cleanup_result = await _cleanup_knowledge_base_facts(request, session_id)
-
-    # Clean up conversation transcript (duplicate storage from ChatWorkflowManager)
-    transcript_cleanup_result = await _cleanup_conversation_transcript(session_id)
-
-    # Delete session from chat history
-    # FIX: delete_session is async - must await it
-    deleted = await chat_history_manager.delete_session(session_id)
-
-    if not deleted:
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise ResourceNotFoundError(f"Session {session_id} not found")
-
+    # Log deletion event with all cleanup results
     log_chat_event(
         "session_deleted",
         session_id,

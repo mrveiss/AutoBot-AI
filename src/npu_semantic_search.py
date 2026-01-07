@@ -891,6 +891,91 @@ class NPUSemanticSearch:
             logger.error("Failed to initialize ChromaDB: %s", e)
             self.chroma_client = None
 
+    def _prepare_document_metadata(
+        self, content: Any, modality: str, metadata: Optional[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Prepare metadata dictionary for document storage.
+
+        Issue #665: Extracted from store_multimodal_embedding
+
+        Args:
+            content: The content being stored
+            modality: Type of content ('text', 'image', 'audio')
+            metadata: Additional metadata to merge
+
+        Returns:
+            Dict containing prepared metadata with modality, timestamp, and preview
+        """
+        return {
+            "modality": modality,
+            "timestamp": time.time(),
+            "content_preview": (
+                str(content)[:200]
+                if isinstance(content, str)
+                else f"{modality}_content"
+            ),
+            **(metadata or {}),
+        }
+
+    def _generate_document_id(self, modality: str, doc_id: Optional[str]) -> str:
+        """Generate or validate document ID for storage.
+
+        Issue #665: Extracted from store_multimodal_embedding
+
+        Args:
+            modality: Type of content ('text', 'image', 'audio')
+            doc_id: Optional document ID (auto-generated if None)
+
+        Returns:
+            Document ID string
+        """
+        if doc_id is None:
+            return f"{modality}_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
+        return doc_id
+
+    async def _store_in_multimodal_collection(
+        self,
+        embedding: np.ndarray,
+        content: Any,
+        doc_metadata: Dict[str, Any],
+        doc_id: str,
+        modality: str,
+    ) -> None:
+        """Store embedding in fused multimodal collection.
+
+        Issue #665: Extracted from store_multimodal_embedding
+
+        Args:
+            embedding: Generated embedding vector
+            content: Original content
+            doc_metadata: Base metadata dictionary
+            doc_id: Document ID
+            modality: Source modality type
+
+        Returns:
+            None
+        """
+        if modality == "multimodal" or not self.ai_accelerator:
+            return
+
+        try:
+            fused_metadata = {
+                **doc_metadata,
+                "source_modality": modality,
+                "fusion_type": "single_modal_to_unified",
+            }
+
+            multimodal_collection = self.collections.get("multimodal")
+            if multimodal_collection:
+                multimodal_collection.add(
+                    embeddings=[embedding.tolist()],
+                    metadatas=[fused_metadata],
+                    documents=[str(content)],
+                    ids=[f"fused_{doc_id}"],
+                )
+        except Exception as e:
+            logger.warning("Failed to store in multimodal collection: %s", e)
+
     async def store_multimodal_embedding(
         self,
         content: Any,
@@ -898,8 +983,7 @@ class NPUSemanticSearch:
         metadata: Optional[Dict[str, Any]] = None,
         doc_id: Optional[str] = None,
     ) -> bool:
-        """
-        Store multi-modal content with embeddings in appropriate ChromaDB collection.
+        """Store multi-modal content with embeddings in appropriate ChromaDB collection.
 
         Args:
             content: The content to store (text, image path, audio data, etc.)
@@ -922,21 +1006,9 @@ class NPUSemanticSearch:
                 content=content, modality=modality, preferred_device=HardwareDevice.GPU
             )
 
-            # Prepare metadata
-            doc_metadata = {
-                "modality": modality,
-                "timestamp": time.time(),
-                "content_preview": (
-                    str(content)[:200]
-                    if isinstance(content, str)
-                    else f"{modality}_content"
-                ),
-                **(metadata or {}),
-            }
-
-            # Generate document ID if not provided
-            if doc_id is None:
-                doc_id = f"{modality}_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
+            # Prepare metadata and document ID
+            doc_metadata = self._prepare_document_metadata(content, modality, metadata)
+            doc_id = self._generate_document_id(modality, doc_id)
 
             # Store in appropriate collection
             collection = self.collections[modality]
@@ -947,29 +1019,10 @@ class NPUSemanticSearch:
                 ids=[doc_id],
             )
 
-            # Also store in fused collection if we have multi-modal fusion capability
-            if modality != "multimodal" and self.ai_accelerator:
-                try:
-                    # Generate fused embedding (this would use the fusion engine)
-                    fused_metadata = {
-                        **doc_metadata,
-                        "source_modality": modality,
-                        "fusion_type": "single_modal_to_unified",
-                    }
-
-                    multimodal_collection = self.collections.get("multimodal")
-                    if multimodal_collection:
-                        multimodal_collection.add(
-                            embeddings=[
-                                embedding.tolist()
-                            ],  # Use same embedding for now
-                            metadatas=[fused_metadata],
-                            documents=[str(content)],
-                            ids=[f"fused_{doc_id}"],
-                        )
-
-                except Exception as e:
-                    logger.warning("Failed to store in multimodal collection: %s", e)
+            # Store in fused multimodal collection
+            await self._store_in_multimodal_collection(
+                embedding, content, doc_metadata, doc_id, modality
+            )
 
             logger.info("✅ Stored %s content with ID: %s", modality, doc_id)
             return True
