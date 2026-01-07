@@ -379,71 +379,41 @@ class SecurityMemoryIntegration:
                 relation_type="relates_to",
             )
 
-    async def create_vulnerability_entity(
+    async def _store_vulnerability_in_memory(
         self,
-        request: Optional[VulnerabilityRequest] = None,
-        *,  # Force keyword-only args for backwards compatibility
-        assessment_id: Optional[str] = None,
-        host_ip: Optional[str] = None,
-        cve_id: Optional[str] = None,
-        title: str = "",
-        severity: str = "unknown",
-        description: str = "",
-        affected_port: Optional[int] = None,
-        affected_service: Optional[str] = None,
-        references: Optional[list[str]] = None,
-        metadata: Optional[dict[str, Any]] = None,
+        entity_name: str,
+        observations: list[str],
+        assessment_id: str,
+        host_ip: str,
+        cve_id: Optional[str],
+        title: str,
+        severity: str,
+        affected_port: Optional[int],
+        affected_service: Optional[str],
+        metadata: Optional[dict[str, Any]],
     ) -> dict[str, Any]:
         """
-        Create a memory entity for a discovered vulnerability.
+        Store vulnerability entity in memory graph.
 
-        Issue #281: Refactored from 110 lines to use extracted helper methods.
-        Issue #319: Supports both request object and individual parameters.
+        Issue #665: Extracted from create_vulnerability_entity to reduce function length.
+        Handles the actual memory graph entity creation with all metadata.
 
         Args:
-            request: VulnerabilityRequest object (preferred, reduces param count)
-            assessment_id: Parent assessment ID (legacy, use request instead)
-            host_ip: Affected host IP (legacy, use request instead)
-            cve_id: CVE identifier
-            title: Vulnerability title
-            severity: Severity level (critical/high/medium/low/info)
-            description: Vulnerability description
-            affected_port: Affected port number
-            affected_service: Affected service name
-            references: Reference URLs
-            metadata: Additional metadata
+            entity_name: Name for the vulnerability entity.
+            observations: List of observation strings for the entity.
+            assessment_id: Parent assessment ID.
+            host_ip: Affected host IP address.
+            cve_id: CVE identifier if available.
+            title: Vulnerability title.
+            severity: Severity level (critical/high/medium/low/info).
+            affected_port: Affected port number if applicable.
+            affected_service: Affected service name if applicable.
+            metadata: Additional metadata dictionary.
 
         Returns:
-            Created entity data
+            dict[str, Any]: Created entity data from memory graph.
         """
-        # Extract from request object if provided
-        if request is not None:
-            assessment_id = request.assessment_id
-            host_ip = request.host_ip
-            cve_id = request.cve_id
-            title = request.title
-            severity = request.severity
-            description = request.description
-            affected_port = request.affected_port
-            affected_service = request.affected_service
-            references = request.references
-            metadata = request.metadata
-        elif assessment_id is None or host_ip is None:
-            raise ValueError(
-                "Either 'request' object or 'assessment_id' and 'host_ip' required"
-            )
-
-        await self.ensure_initialized()
-
-        vuln_name = cve_id or title or "Unknown Vulnerability"
-        entity_name = f"Vuln: {vuln_name} on {host_ip}"
-
-        observations = self._build_vuln_observations(
-            vuln_name, severity, host_ip, description,
-            affected_port, affected_service, references
-        )
-
-        entity = await self._memory_graph.create_entity(
+        return await self._memory_graph.create_entity(
             entity_type="bug_fix",
             name=entity_name,
             observations=observations,
@@ -461,6 +431,115 @@ class SecurityMemoryIntegration:
             tags=["security", "vulnerability", severity, cve_id or "no-cve"],
         )
 
+    def _extract_vulnerability_params(
+        self,
+        request: Optional[VulnerabilityRequest],
+        assessment_id: Optional[str],
+        host_ip: Optional[str],
+        cve_id: Optional[str],
+        title: str,
+        severity: str,
+        description: str,
+        affected_port: Optional[int],
+        affected_service: Optional[str],
+        references: Optional[list[str]],
+        metadata: Optional[dict[str, Any]],
+    ) -> tuple[str, str, Optional[str], str, str, str, Optional[int], Optional[str], Optional[list[str]], Optional[dict[str, Any]]]:
+        """
+        Extract and validate vulnerability parameters from request or kwargs.
+
+        Issue #665: Extracted from create_vulnerability_entity to reduce function length.
+        Handles both request object pattern and legacy keyword arguments.
+
+        Args:
+            request: VulnerabilityRequest object if provided.
+            assessment_id: Parent assessment ID (legacy pattern).
+            host_ip: Affected host IP (legacy pattern).
+            cve_id: CVE identifier.
+            title: Vulnerability title.
+            severity: Severity level.
+            description: Vulnerability description.
+            affected_port: Affected port number.
+            affected_service: Affected service name.
+            references: Reference URLs.
+            metadata: Additional metadata.
+
+        Returns:
+            tuple: Extracted parameters in order (assessment_id, host_ip, cve_id,
+                title, severity, description, affected_port, affected_service,
+                references, metadata).
+
+        Raises:
+            ValueError: If neither request nor required kwargs provided.
+        """
+        if request is not None:
+            return (
+                request.assessment_id,
+                request.host_ip,
+                request.cve_id,
+                request.title,
+                request.severity,
+                request.description,
+                request.affected_port,
+                request.affected_service,
+                request.references,
+                request.metadata,
+            )
+        if assessment_id is None or host_ip is None:
+            raise ValueError(
+                "Either 'request' object or 'assessment_id' and 'host_ip' required"
+            )
+        return (
+            assessment_id,
+            host_ip,
+            cve_id,
+            title,
+            severity,
+            description,
+            affected_port,
+            affected_service,
+            references,
+            metadata,
+        )
+
+    async def create_vulnerability_entity(
+        self, request: Optional[VulnerabilityRequest] = None, *,
+        assessment_id: Optional[str] = None, host_ip: Optional[str] = None,
+        cve_id: Optional[str] = None, title: str = "", severity: str = "unknown",
+        description: str = "", affected_port: Optional[int] = None,
+        affected_service: Optional[str] = None, references: Optional[list[str]] = None,
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        """
+        Create a memory entity for a discovered vulnerability.
+
+        Issue #665: Refactored using helpers (_extract_vulnerability_params,
+        _store_vulnerability_in_memory, _build_vuln_observations, _create_vuln_relations).
+
+        Args:
+            request: VulnerabilityRequest object (preferred over individual params).
+            assessment_id: Parent assessment ID. host_ip: Affected host IP.
+            cve_id: CVE ID. title: Title. severity: Level. description: Details.
+            affected_port: Port. affected_service: Service. references: URLs.
+            metadata: Additional metadata dict.
+
+        Returns:
+            dict[str, Any]: Created entity data.
+        """
+        (assessment_id, host_ip, cve_id, title, severity, description,
+         affected_port, affected_service, references, metadata) = \
+            self._extract_vulnerability_params(
+                request, assessment_id, host_ip, cve_id, title, severity,
+                description, affected_port, affected_service, references, metadata)
+        await self.ensure_initialized()
+        vuln_name = cve_id or title or "Unknown Vulnerability"
+        entity_name = f"Vuln: {vuln_name} on {host_ip}"
+        observations = self._build_vuln_observations(
+            vuln_name, severity, host_ip, description,
+            affected_port, affected_service, references)
+        entity = await self._store_vulnerability_in_memory(
+            entity_name, observations, assessment_id, host_ip, cve_id,
+            title, severity, affected_port, affected_service, metadata)
         await self._create_vuln_relations(host_ip, entity_name, affected_port, affected_service)
         logger.info("Created vulnerability entity: %s", entity_name)
         return entity

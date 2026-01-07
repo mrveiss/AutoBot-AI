@@ -438,6 +438,82 @@ class ChatKnowledgeService:
 
         return enhanced_query
 
+    def _should_skip_retrieval(
+        self,
+        intent_result: QueryIntentResult,
+        force_retrieval: bool,
+    ) -> bool:
+        """
+        Check if knowledge retrieval should be skipped based on intent.
+
+        Issue #665: Extracted from conversation_aware_retrieve for clarity.
+
+        Args:
+            intent_result: Detected query intent
+            force_retrieval: If True, never skip retrieval
+
+        Returns:
+            True if retrieval should be skipped, False otherwise
+        """
+        if force_retrieval:
+            return False
+        if not intent_result.should_use_knowledge:
+            logger.info(
+                "[Conversation RAG] Skipping - intent=%s, confidence=%.2f",
+                intent_result.intent.value,
+                intent_result.confidence
+            )
+            return True
+        return False
+
+    def _get_effective_categories(
+        self,
+        intent_result: QueryIntentResult,
+        query: str,
+        categories: Optional[List[str]],
+        enable_smart_categories: bool,
+    ) -> Optional[List[str]]:
+        """
+        Determine effective categories for retrieval.
+
+        Issue #665: Extracted from conversation_aware_retrieve for clarity.
+
+        Args:
+            intent_result: Detected query intent
+            query: Original query string
+            categories: Explicitly provided categories (takes priority)
+            enable_smart_categories: Whether to auto-select categories
+
+        Returns:
+            List of categories to use, or None for all categories
+        """
+        if categories is not None:
+            return categories
+        if enable_smart_categories:
+            return self._select_categories_for_intent(intent_result, query)
+        return None
+
+    def _get_search_query(
+        self,
+        query: str,
+        enhanced_query: EnhancedQuery,
+    ) -> str:
+        """
+        Get the search query to use for retrieval.
+
+        Issue #665: Extracted from conversation_aware_retrieve for clarity.
+
+        Args:
+            query: Original query string
+            enhanced_query: Enhanced query result from context enhancer
+
+        Returns:
+            Enhanced query if enhancement was applied, otherwise original
+        """
+        if enhanced_query.enhancement_applied:
+            return enhanced_query.enhanced_query
+        return query
+
     async def conversation_aware_retrieve(
         self,
         query: str,
@@ -448,65 +524,28 @@ class ChatKnowledgeService:
         categories: Optional[List[str]] = None,
         enable_smart_categories: bool = True,
     ) -> Tuple[str, List[Dict], QueryIntentResult, Optional[EnhancedQuery]]:
-        """
-        Conversation-aware knowledge retrieval with context enhancement.
+        """Conversation-aware knowledge retrieval with context enhancement.
 
-        Issue #249 Phase 3: Uses conversation history to enhance queries
-        before performing RAG retrieval. Combines intent detection (Phase 2)
-        with context enhancement for optimal results.
-
-        Issue #556: Added categories parameter and smart category selection.
-        Issue #665: Extracted _enhance_query_with_context helper.
-
-        Args:
-            query: User's chat message/query
-            conversation_history: List of conversation exchanges
-                Format: [{"user": "msg", "assistant": "response"}, ...]
-            top_k: Maximum number of knowledge facts to retrieve
-            score_threshold: Minimum relevance score (0.0-1.0) to include
-            force_retrieval: If True, bypass intent detection and always retrieve
-            categories: Optional list of categories to filter results
-            enable_smart_categories: If True, automatically select categories
-                                    based on query intent
-
-        Returns:
-            Tuple of (context_string, citations, intent_result, enhanced_query)
-            - context_string: Knowledge context for LLM prompt (empty if skipped)
-            - citations: List of citation dicts (empty if skipped)
-            - intent_result: The intent detection result
-            - enhanced_query: The enhanced query result (None if not enhanced)
+        Issue #249 Phase 3, #556, #665: Uses conversation history to enhance
+        queries before RAG retrieval. Combines intent detection with context
+        enhancement. Returns (context_string, citations, intent_result,
+        enhanced_query).
         """
         start_time = time.time()
-
-        # Step 1: Detect query intent
         intent_result = self.intent_detector.detect_intent(query)
 
-        # Step 2: Check if we should skip retrieval
-        if not force_retrieval and not intent_result.should_use_knowledge:
-            logger.info(
-                "[Conversation RAG] Skipping - intent=%s, confidence=%.2f",
-                intent_result.intent.value,
-                intent_result.confidence
-            )
+        # Check if we should skip retrieval (Issue #665: uses helper)
+        if self._should_skip_retrieval(intent_result, force_retrieval):
             return "", [], intent_result, None
 
-        # Step 3: Enhance query with context (Issue #665: uses helper)
+        # Enhance query and determine categories (Issue #665: uses helpers)
         enhanced_query = self._enhance_query_with_context(query, conversation_history)
-
-        # Step 4: Smart category selection if not explicitly provided
-        effective_categories = categories
-        if effective_categories is None and enable_smart_categories:
-            effective_categories = self._select_categories_for_intent(
-                intent_result, query
-            )
-
-        # Step 5: Perform retrieval with enhanced query
-        search_query = (
-            enhanced_query.enhanced_query
-            if enhanced_query.enhancement_applied
-            else query
+        effective_categories = self._get_effective_categories(
+            intent_result, query, categories, enable_smart_categories
         )
+        search_query = self._get_search_query(query, enhanced_query)
 
+        # Perform retrieval
         context_string, citations = await self.retrieve_relevant_knowledge(
             query=search_query,
             top_k=top_k,
@@ -514,15 +553,13 @@ class ChatKnowledgeService:
             categories=effective_categories,
         )
 
-        retrieval_time = time.time() - start_time
         logger.info(
             "[Conversation RAG] Completed in %.3fs - %d citations, enhanced=%s, categories=%s",
-            retrieval_time,
+            time.time() - start_time,
             len(citations),
             enhanced_query.enhancement_applied,
             effective_categories or "all"
         )
-
         return context_string, citations, intent_result, enhanced_query
 
     async def retrieve_documentation(

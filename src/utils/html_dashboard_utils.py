@@ -144,20 +144,14 @@ def get_dark_theme_css() -> str:
     return f"{base_styles}\n{header_styles}\n{component_styles}\n    """
 
 
-def get_light_theme_css() -> str:
+def _get_light_base_styles() -> str:
     """
-    Return light theme CSS with purple gradient header.
+    Generate base reset and body styles for light theme.
 
-    This theme uses a modern light color scheme:
-    - Background: #f5f5f5
-    - Cards/containers: white
-    - Primary gradient: purple (667eea -> 764ba2)
-    - Success: #38a169
-    - Warning: #d69e2e
-    - Error: #e53e3e
+    Issue #665: Extracted from get_light_theme_css
 
     Returns:
-        str: Complete CSS stylesheet for light theme
+        str: CSS for base styles including reset and body
     """
     return """
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -166,7 +160,19 @@ def get_light_theme_css() -> str:
             background-color: #f5f5f5;
             color: #333;
             line-height: 1.6;
-        }
+        }"""
+
+
+def _get_light_header_styles() -> str:
+    """
+    Generate header and status indicator styles for light theme.
+
+    Issue #665: Extracted from get_light_theme_css
+
+    Returns:
+        str: CSS for header with purple gradient and status indicators
+    """
+    return """
         .header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -182,6 +188,21 @@ def get_light_theme_css() -> str:
             font-size: 1.1rem;
             opacity: 0.9;
         }
+        .status-healthy { color: #38a169; }
+        .status-warning { color: #d69e2e; }
+        .status-critical { color: #e53e3e; }"""
+
+
+def _get_light_component_styles() -> str:
+    """
+    Generate component styles for light theme (cards, metrics, charts).
+
+    Issue #665: Extracted from get_light_theme_css
+
+    Returns:
+        str: CSS for containers, metric cards, and chart containers
+    """
+    return """
         .container {
             max-width: 1400px;
             margin: 0 auto;
@@ -226,11 +247,31 @@ def get_light_theme_css() -> str:
             padding: 1.5rem;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
             margin-bottom: 1.5rem;
-        }
-        .status-healthy { color: #38a169; }
-        .status-warning { color: #d69e2e; }
-        .status-critical { color: #e53e3e; }
+        }"""
+
+
+def get_light_theme_css() -> str:
     """
+    Return light theme CSS with purple gradient header.
+
+    Issue #665: Refactored to use helper functions for maintainability.
+
+    This theme uses a modern light color scheme:
+    - Background: #f5f5f5
+    - Cards/containers: white
+    - Primary gradient: purple (667eea -> 764ba2)
+    - Success: #38a169
+    - Warning: #d69e2e
+    - Error: #e53e3e
+
+    Returns:
+        str: Complete CSS stylesheet for light theme
+    """
+    base_styles = _get_light_base_styles()
+    header_styles = _get_light_header_styles()
+    component_styles = _get_light_component_styles()
+
+    return f"{base_styles}\n{header_styles}\n{component_styles}\n    "
 
 
 def create_metric_card(

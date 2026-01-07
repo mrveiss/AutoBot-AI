@@ -79,23 +79,31 @@ class WorkflowStepJudge(BaseLLMJudge):
             alternatives=alternatives,
         )
 
-    async def _prepare_judgment_prompt(
+    def _build_judgment_context(
         self,
-        subject: Any,
-        criteria: List[JudgmentDimension],
-        context: Dict[str, Any],
-        alternatives: Optional[List[Any]] = None,
-        **kwargs,
+        step_data: Any,
+        workflow_context: Dict[str, Any],
+        user_context: Dict[str, Any],
+        risk_tolerance: str,
     ) -> str:
-        """Prepare the prompt for workflow step evaluation"""
+        """Build context section for judgment prompt.
 
-        step_data = subject
-        workflow_context = context.get("workflow_context", {})
-        user_context = context.get("user_context", {})
-        risk_tolerance = context.get("risk_tolerance", "medium")
+        Constructs the workflow step data and context information sections
+        of the judgment prompt including workflow state and user permissions.
 
-        prompt = f"""
-Please evaluate the following workflow step for execution approval:
+        Args:
+            step_data: The workflow step data to evaluate.
+            workflow_context: Context about the current workflow state.
+            user_context: Context about the user and their permissions.
+            risk_tolerance: User's risk tolerance level.
+
+        Returns:
+            Formatted string containing step and context sections.
+
+        Related:
+            Issue #665: Extract helper methods from _init_metrics functions.
+        """
+        return f"""Please evaluate the following workflow step for execution approval:
 
 WORKFLOW STEP TO EVALUATE:
 {json.dumps(step_data, indent=2)}
@@ -110,9 +118,22 @@ USER CONTEXT:
 - User permissions: {user_context.get('permissions', [])}
 - Risk tolerance: {risk_tolerance}
 - User experience level: {user_context.get('experience_level', 'unknown')}
-- Current environment: {user_context.get('environment', 'unknown')}
+- Current environment: {user_context.get('environment', 'unknown')}"""
 
-EVALUATION CRITERIA:
+    def _build_judgment_criteria(self) -> str:
+        """Build evaluation criteria section for judgment prompt.
+
+        Constructs the standardized evaluation criteria section describing
+        each dimension (safety, quality, relevance, feasibility, efficiency,
+        compliance) and their specific assessment factors.
+
+        Returns:
+            Formatted string containing all evaluation criteria.
+
+        Related:
+            Issue #665: Extract helper methods from _init_metrics functions.
+        """
+        return """EVALUATION CRITERIA:
 Please evaluate this step on the following dimensions (score 0.0 to 1.0):
 
 1. SAFETY: Risk assessment and potential for harm
@@ -143,10 +164,37 @@ Please evaluate this step on the following dimensions (score 0.0 to 1.0):
 6. COMPLIANCE: Adherence to policies and best practices
    - Check security policy compliance
    - Assess regulatory requirements
-   - Evaluate coding/operational standards
+   - Evaluate coding/operational standards"""
 
-ALTERNATIVES TO CONSIDER:
-{json.dumps(alternatives, indent=2) if alternatives else "No alternatives provided"}
+    def _format_judgment_instructions(
+        self,
+        context: Dict[str, Any],
+        risk_tolerance: str,
+        alternatives: Optional[List[Any]] = None,
+    ) -> str:
+        """Format decision criteria and final instructions for judgment.
+
+        Constructs the alternatives section, decision thresholds, and
+        output format instructions for the judgment prompt.
+
+        Args:
+            context: Context dictionary containing threshold values.
+            risk_tolerance: User's risk tolerance level.
+            alternatives: Optional list of alternative approaches to consider.
+
+        Returns:
+            Formatted string with alternatives, criteria, and instructions.
+
+        Related:
+            Issue #665: Extract helper methods from _init_metrics functions.
+        """
+        alternatives_text = (
+            json.dumps(alternatives, indent=2)
+            if alternatives
+            else "No alternatives provided"
+        )
+        return f"""ALTERNATIVES TO CONSIDER:
+{alternatives_text}
 
 DECISION CRITERIA:
 - Safety score must be ≥ {context.get('safety_threshold', 0.7)} for approval
@@ -160,10 +208,47 @@ Please provide your evaluation in the required JSON format with:
 - Actionable improvement suggestions if applicable
 - Analysis of alternatives if provided
 
-Focus on being thorough but practical - the goal is to ensure safe, effective workflow execution.
-"""
+Focus on being thorough but practical - the goal is to ensure safe, effective workflow execution."""
 
-        return prompt.strip()
+    async def _prepare_judgment_prompt(
+        self,
+        subject: Any,
+        criteria: List[JudgmentDimension],
+        context: Dict[str, Any],
+        alternatives: Optional[List[Any]] = None,
+        **kwargs,
+    ) -> str:
+        """Prepare the prompt for workflow step evaluation.
+
+        Assembles the complete judgment prompt by combining context,
+        criteria, and instruction sections from helper methods.
+
+        Args:
+            subject: The workflow step data to evaluate.
+            criteria: List of judgment dimensions to evaluate.
+            context: Context dictionary with workflow, user, and threshold info.
+            alternatives: Optional list of alternative approaches.
+            **kwargs: Additional keyword arguments (unused).
+
+        Returns:
+            Complete formatted prompt string for LLM evaluation.
+
+        Related:
+            Issue #665: Extract helper methods from _init_metrics functions.
+        """
+        workflow_context = context.get("workflow_context", {})
+        user_context = context.get("user_context", {})
+        risk_tolerance = context.get("risk_tolerance", "medium")
+
+        context_section = self._build_judgment_context(
+            subject, workflow_context, user_context, risk_tolerance
+        )
+        criteria_section = self._build_judgment_criteria()
+        instructions_section = self._format_judgment_instructions(
+            context, risk_tolerance, alternatives
+        )
+
+        return f"{context_section}\n\n{criteria_section}\n\n{instructions_section}"
 
     async def should_approve_step(
         self,

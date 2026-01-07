@@ -611,45 +611,25 @@ class AgentTerminalService:
     # Command Execution (delegated to CommandExecutor)
     # ============================================================================
 
-    async def execute_command(
+    def _check_agent_permission(
         self,
-        session_id: str,
+        session: AgentTerminalSession,
         command: str,
-        description: Optional[str] = None,
-        force_approval: bool = False,
-    ) -> Metadata:
+        risk,
+    ) -> Optional[Metadata]:
         """
-        Execute a command in an agent terminal session.
+        Check if agent has permission to execute command at given risk level.
 
-        Issue #281: Refactored from 240 lines to use extracted helper methods.
-
-        Security workflow:
-        1. Validate session and permissions
-        2. Assess command risk (SecureCommandExecutor)
-        3. Check agent permissions for risk level
-        4. Request user approval if needed
-        5. Execute command if approved
-        6. Log execution with security metadata
+        Issue #665: Extracted from execute_command for single responsibility.
 
         Args:
-            session_id: Agent session ID
-            command: Command to execute
-            description: Optional command description
-            force_approval: Force user approval even for safe commands
+            session: Terminal session containing agent role
+            command: Command being executed
+            risk: Assessed risk level of the command
 
         Returns:
-            Execution result with security metadata
+            Error response if permission denied, None if allowed
         """
-        # Get and validate session (Issue #281: uses helper)
-        session = await self.get_session(session_id)
-        validation_error = self._validate_session_for_execution(session, session_id)
-        if validation_error:
-            return validation_error
-
-        # Assess command risk and interactivity (Issue #281: uses helper)
-        _, risk, reasons, is_interactive, interactive_reasons = self._assess_command(command)
-
-        # Check agent permissions
         allowed, permission_reason = self.approval_handler.check_agent_permission(
             session.agent_role, risk
         )
@@ -660,8 +640,35 @@ class AgentTerminalService:
             return session.get_permission_denied_response(
                 permission_reason, command, risk.value
             )
+        return None
 
-        # Check auto-approve rules
+    async def _check_auto_approval_or_queue(
+        self,
+        session: AgentTerminalSession,
+        command: str,
+        description: Optional[str],
+        risk,
+        reasons: list,
+        is_interactive: bool,
+        interactive_reasons: list,
+    ) -> tuple[bool, Optional[Metadata]]:
+        """
+        Check auto-approve rules or queue command for manual approval.
+
+        Issue #665: Extracted from execute_command for single responsibility.
+
+        Args:
+            session: Terminal session
+            command: Command to execute
+            description: Optional command description
+            risk: Assessed risk level
+            reasons: Risk assessment reasons
+            is_interactive: Whether command requires stdin
+            interactive_reasons: Reasons for interactivity
+
+        Returns:
+            Tuple of (is_auto_approved, queue_response_if_not_approved)
+        """
         user_id = session.get_user_id()
         is_auto_approved = await self.approval_handler.check_auto_approve_rules(
             user_id=user_id,
@@ -674,28 +681,69 @@ class AgentTerminalService:
                 f"Command auto-approved by rule: {command} "
                 f"(user: {user_id}, risk: {risk.value})"
             )
-        else:
-            # Queue for approval (Issue #281: uses helper)
-            return await self._queue_command_for_approval(
-                session=session,
-                command=command,
-                description=description,
-                risk=risk,
-                reasons=reasons,
-                is_interactive=is_interactive,
-                interactive_reasons=interactive_reasons,
-            )
+            return True, None
 
-        # Execute auto-approved command (Issue #281: uses helper)
+        # Queue for approval
+        queue_response = await self._queue_command_for_approval(
+            session=session,
+            command=command,
+            description=description,
+            risk=risk,
+            reasons=reasons,
+            is_interactive=is_interactive,
+            interactive_reasons=interactive_reasons,
+        )
+        return False, queue_response
+
+    async def execute_command(
+        self,
+        session_id: str,
+        command: str,
+        description: Optional[str] = None,
+        force_approval: bool = False,
+    ) -> Metadata:
+        """
+        Execute a command in an agent terminal session.
+
+        Issue #281: Refactored from 240 lines to use extracted helper methods.
+        Issue #665: Further refactored to extract permission and approval logic.
+
+        Args:
+            session_id: Agent session ID
+            command: Command to execute
+            description: Optional command description
+            force_approval: Force user approval even for safe commands
+
+        Returns:
+            Execution result with security metadata
+        """
+        # Validate session
+        session = await self.get_session(session_id)
+        validation_error = self._validate_session_for_execution(session, session_id)
+        if validation_error:
+            return validation_error
+
+        # Assess command risk and interactivity
+        _, risk, reasons, is_interactive, interactive_reasons = self._assess_command(command)
+
+        # Check agent permissions (Issue #665: extracted helper)
+        permission_error = self._check_agent_permission(session, command, risk)
+        if permission_error:
+            return permission_error
+
+        # Check auto-approve or queue for approval (Issue #665: extracted helper)
+        is_auto_approved, queue_response = await self._check_auto_approval_or_queue(
+            session, command, description, risk, reasons, is_interactive, interactive_reasons
+        )
+        if not is_auto_approved:
+            return queue_response
+
+        # Execute auto-approved command
         try:
             return await self._execute_auto_approved_command(session, command, risk)
         except Exception as e:
             logger.error("Command execution error: %s", e)
-            return {
-                "status": "error",
-                "error": str(e),
-                "command": command,
-            }
+            return {"status": "error", "error": str(e), "command": command}
 
     async def _save_command_to_chat(
         self,

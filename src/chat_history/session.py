@@ -302,6 +302,80 @@ class SessionMixin:
         except Exception as e:
             logger.error("Failed to cache session in Redis: %s", e)
 
+    def _prepare_session_messages(
+        self,
+        session_id: str,
+        messages: Optional[List[Dict[str, Any]]],
+    ) -> List[Dict[str, Any]]:
+        """
+        Prepare and validate session messages for saving.
+
+        Handles message list initialization and truncation to prevent
+        excessive file sizes.
+
+        Args:
+            session_id: The session identifier for logging.
+            messages: The messages to prepare, or None for empty list.
+
+        Returns:
+            List of prepared messages, truncated if necessary.
+
+        Issue #665: Extracted from save_session for single responsibility.
+        """
+        session_messages = messages if messages is not None else []
+
+        if len(session_messages) > self.max_messages:
+            logger.warning(
+                f"Session {session_id} has {len(session_messages)} messages, "
+                f"truncating to {self.max_messages} most recent"
+            )
+            session_messages = session_messages[-self.max_messages:]
+
+        return session_messages
+
+    async def _write_session_to_storage(
+        self,
+        chat_file: str,
+        chat_data: Dict[str, Any],
+    ) -> None:
+        """
+        Write session data to storage with atomic write and fallback.
+
+        Attempts atomic write first for data integrity, falls back to
+        direct write if atomic operation fails.
+
+        Args:
+            chat_file: Path to the chat session file.
+            chat_data: The session data dictionary to save.
+
+        Issue #665: Extracted from save_session for single responsibility.
+        """
+        encrypted_data = self._encrypt_data(chat_data)
+        try:
+            await self._atomic_write(chat_file, encrypted_data)
+        except Exception as atomic_error:
+            logger.warning(
+                f"Atomic write failed, falling back to direct write: {atomic_error}"
+            )
+            async with aiofiles.open(chat_file, "w", encoding="utf-8") as f:
+                await f.write(encrypted_data)
+
+    async def _handle_periodic_cleanup(self) -> None:
+        """
+        Handle periodic cleanup of old session files.
+
+        Triggers cleanup every 10th save operation using thread-safe
+        counter management.
+
+        Issue #665: Extracted from save_session for single responsibility.
+        """
+        with self._counter_lock:
+            self._session_save_counter += 1
+            should_cleanup = self._session_save_counter % 10 == 0
+
+        if should_cleanup:
+            await self._cleanup_old_session_files()
+
     async def save_session(
         self,
         session_id: str,
@@ -312,78 +386,45 @@ class SessionMixin:
         Save a chat session with messages and metadata.
 
         Args:
-            session_id: The identifier for the session to save
-            messages: The messages to save (defaults to empty list)
-            name: Optional name for the chat session
+            session_id: The identifier for the session to save.
+            messages: The messages to save (defaults to empty list).
+            name: Optional name for the chat session.
+
+        Issue #665: Refactored to use extracted helper methods.
         """
         try:
-            # Ensure chats directory exists
             chats_directory = self._get_chats_directory()
             dir_exists = await asyncio.to_thread(os.path.exists, chats_directory)
             if not dir_exists:
                 await asyncio.to_thread(os.makedirs, chats_directory, exist_ok=True)
 
-            # Use new naming convention: {uuid}_chat.json
             chat_file = f"{chats_directory}/{session_id}_chat.json"
             current_time = time.strftime("%Y-%m-%d %H:%M:%S")
 
-            # Use provided messages or empty list (never use self.history)
-            session_messages = messages if messages is not None else []
+            session_messages = self._prepare_session_messages(session_id, messages)
 
-            # Limit session messages to prevent excessive file sizes
-            if len(session_messages) > self.max_messages:
-                logger.warning(
-                    f"Session {session_id} has {len(session_messages)} messages, "
-                    f"truncating to {self.max_messages} most recent"
-                )
-                session_messages = session_messages[-self.max_messages:]
-
-            # Load existing chat data if it exists to preserve metadata (Issue #315 - uses helper)
             chat_data = await self._load_existing_chat_data(
                 session_id, chat_file, chats_directory
             )
+            chat_data.update({
+                "chatId": session_id,
+                "name": name or chat_data.get("name", ""),
+                "messages": session_messages,
+                "last_modified": current_time,
+                "created_time": chat_data.get("created_time", current_time),
+            })
 
-            # Update chat data
-            chat_data.update(
-                {
-                    "chatId": session_id,
-                    "name": name or chat_data.get("name", ""),
-                    "messages": session_messages,
-                    "last_modified": current_time,
-                    "created_time": chat_data.get("created_time", current_time),
-                }
-            )
-
-            # Save to file with encryption if enabled (use atomic write)
-            encrypted_data = self._encrypt_data(chat_data)
-            try:
-                await self._atomic_write(chat_file, encrypted_data)
-            except Exception as atomic_error:
-                # Fallback to direct write if atomic write fails
-                logger.warning(
-                    f"Atomic write failed, falling back to direct write: {atomic_error}"
-                )
-                async with aiofiles.open(chat_file, "w", encoding="utf-8") as f:
-                    await f.write(encrypted_data)
-
-            # Update Redis cache (write-through) - Issue #315 uses helper
+            await self._write_session_to_storage(chat_file, chat_data)
             await self._update_redis_cache_on_save(session_id, chat_data)
 
             logger.info("Chat session '%s' saved successfully", session_id)
 
-            # Memory Graph: Update conversation entity with observations
             if self.memory_graph_enabled and self.memory_graph:
                 await self._update_memory_graph_entity(
                     session_id, session_messages, name, current_time
                 )
 
-            # Periodic cleanup of old session files (thread-safe)
-            with self._counter_lock:
-                self._session_save_counter += 1
-                should_cleanup = self._session_save_counter % 10 == 0
-
-            if should_cleanup:  # Every 10th save
-                await self._cleanup_old_session_files()
+            await self._handle_periodic_cleanup()
 
         except Exception as e:
             logger.error("Error saving chat session %s: %s", session_id, e)
