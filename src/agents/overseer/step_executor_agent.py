@@ -289,6 +289,46 @@ class StepExecutorAgent:
 
         return command_explanation, output_explanation
 
+    def _extract_return_code_from_chunk(self, chunk: StreamChunk, current_code: int) -> int:
+        """
+        Extract return code from a final chunk if available.
+
+        Issue #665: Extracted from execute_step to reduce inline complexity.
+
+        Args:
+            chunk: The stream chunk to check
+            current_code: Current return code value
+
+        Returns:
+            Updated return code
+        """
+        if chunk.is_final and chunk.chunk_type == "return_code":
+            try:
+                return int(chunk.content)
+            except ValueError:
+                pass
+        return current_code
+
+    def _create_explaining_notification(self, task: AgentTask) -> StreamChunk:
+        """
+        Create a notification chunk for explanation phase.
+
+        Issue #665: Extracted from execute_step to reduce function length.
+
+        Args:
+            task: The task being executed
+
+        Returns:
+            StreamChunk for explaining notification
+        """
+        return StreamChunk(
+            task_id=task.task_id,
+            step_number=task.step_number,
+            chunk_type="explaining",
+            content="Generating explanations...",
+            is_final=False,
+        )
+
     async def _build_final_step_result(
         self,
         task: AgentTask,
@@ -372,17 +412,11 @@ class StepExecutorAgent:
         return_code = 0
 
         try:
-            # Issue #665: Uses helper for command execution
+            # Issue #665: Uses helpers for command execution
             async for chunk in self._execute_and_stream_command(task):
                 output_buffer.append(chunk.content)
                 yield chunk
-
-                # Extract return code if this is the final chunk
-                if chunk.is_final and chunk.chunk_type == "return_code":
-                    try:
-                        return_code = int(chunk.content)
-                    except ValueError:
-                        pass
+                return_code = self._extract_return_code_from_chunk(chunk, return_code)
 
         except Exception as e:
             # Issue #665: Uses helper for error result
@@ -394,14 +428,8 @@ class StepExecutorAgent:
 
         full_output = "".join(output_buffer)
 
-        # Phase 2: Generate explanations (Issue #665: uses helper)
-        yield StreamChunk(
-            task_id=task.task_id,
-            step_number=task.step_number,
-            chunk_type="explaining",
-            content="Generating explanations...",
-            is_final=False,
-        )
+        # Phase 2: Generate explanations (Issue #665: uses helpers)
+        yield self._create_explaining_notification(task)
 
         command_explanation, output_explanation = await self._generate_explanations_for_result(
             task, full_output, return_code

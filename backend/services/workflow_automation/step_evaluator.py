@@ -181,6 +181,56 @@ class WorkflowStepEvaluator:
 
         return result
 
+    async def _run_judge_evaluations(
+        self, step_data: Metadata, workflow_context: Metadata, user_context: Metadata, command: str
+    ) -> tuple:
+        """
+        Run workflow and security judge evaluations.
+
+        Issue #665: Extracted from evaluate_step to reduce function length.
+
+        Args:
+            step_data: Prepared step data
+            workflow_context: Prepared workflow context
+            user_context: User context dictionary
+            command: Step command to evaluate
+
+        Returns:
+            Tuple of (workflow_judgment, security_judgment)
+        """
+        workflow_judgment = await self.workflow_step_judge.evaluate_workflow_step(
+            step_data, workflow_context, user_context
+        )
+        security_judgment = await self.security_risk_judge.evaluate_command_security(
+            command,
+            {
+                "working_directory": "/home/user",
+                "user": "user",
+                "session_type": "automated_workflow",
+            },
+            user_permissions=["user"],
+            environment="development",
+        )
+        return workflow_judgment, security_judgment
+
+    def _build_evaluation_error_response(self, error: Exception) -> Metadata:
+        """
+        Build error response for evaluation failure.
+
+        Issue #665: Extracted from evaluate_step to reduce function length.
+
+        Args:
+            error: Exception that occurred
+
+        Returns:
+            Error response dictionary
+        """
+        return {
+            "should_proceed": True,  # Default to proceed on evaluation error
+            "reason": f"Evaluation error: {str(error)}",
+            "suggestions": ["Manual review recommended due to evaluation error"],
+        }
+
     async def evaluate_step(
         self, workflow: ActiveWorkflow, step: WorkflowStep
     ) -> Metadata:
@@ -188,6 +238,7 @@ class WorkflowStepEvaluator:
         Evaluate workflow step using LLM judges.
 
         Issue #281: Refactored from 144 lines to use extracted helper methods.
+        Issue #665: Further refactored with _run_judge_evaluations and error handler.
 
         Args:
             workflow: Active workflow containing the step
@@ -209,28 +260,14 @@ class WorkflowStepEvaluator:
                 "environment": "development",
             }
 
-            # Evaluate with judges
-            workflow_judgment = await self.workflow_step_judge.evaluate_workflow_step(
-                step_data, workflow_context, user_context
-            )
-            security_judgment = await self.security_risk_judge.evaluate_command_security(
-                step.command,
-                {
-                    "working_directory": "/home/user",
-                    "user": "user",
-                    "session_type": "automated_workflow",
-                },
-                user_permissions=["user"],
-                environment="development",
+            # Evaluate with judges (Issue #665: uses helper)
+            workflow_judgment, security_judgment = await self._run_judge_evaluations(
+                step_data, workflow_context, user_context, step.command
             )
 
             # Combine judgments
-            should_approve_workflow = (
-                workflow_judgment.recommendation in APPROVAL_RECOMMENDATIONS
-            )
-            should_approve_security = (
-                security_judgment.recommendation in APPROVAL_RECOMMENDATIONS
-            )
+            should_approve_workflow = workflow_judgment.recommendation in APPROVAL_RECOMMENDATIONS
+            should_approve_security = security_judgment.recommendation in APPROVAL_RECOMMENDATIONS
 
             # Extract safety scores (Issue #281: uses helper)
             workflow_safety = self._extract_safety_score(workflow_judgment)
@@ -238,34 +275,21 @@ class WorkflowStepEvaluator:
             min_safety = min(workflow_safety, security_safety)
 
             # Decision logic
-            should_proceed = (
-                should_approve_workflow
-                and should_approve_security
-                and min_safety > 0.7
-            )
+            should_proceed = should_approve_workflow and should_approve_security and min_safety > 0.7
 
             # Build result (Issue #281: uses helper)
             evaluation_result = self._build_evaluation_result(
-                should_proceed,
-                workflow_judgment,
-                security_judgment,
-                min_safety,
-                should_approve_workflow,
-                should_approve_security,
+                should_proceed, workflow_judgment, security_judgment,
+                min_safety, should_approve_workflow, should_approve_security,
             )
 
             logger.info(
-                f"Step evaluation for {step.step_id}: proceed={should_proceed}, "
-                f"workflow_score={workflow_judgment.overall_score:.2f}, "
-                f"security_score={security_judgment.overall_score:.2f}"
+                "Step evaluation for %s: proceed=%s, workflow_score=%.2f, security_score=%.2f",
+                step.step_id, should_proceed, workflow_judgment.overall_score, security_judgment.overall_score
             )
 
             return evaluation_result
 
         except Exception as e:
             logger.error("Error in step evaluation: %s", e)
-            return {
-                "should_proceed": True,  # Default to proceed on evaluation error
-                "reason": f"Evaluation error: {str(e)}",
-                "suggestions": ["Manual review recommended due to evaluation error"],
-            }
+            return self._build_evaluation_error_response(e)

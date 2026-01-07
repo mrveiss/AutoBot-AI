@@ -458,6 +458,70 @@ class EnhancedMemoryManager:
 
         return None
 
+    def _batch_load_markdown_refs(
+        self, conn: sqlite3.Connection, task_ids: List[str]
+    ) -> Dict[str, List[str]]:
+        """
+        Batch load markdown references for multiple tasks.
+
+        Issue #665: Extracted from get_task_history to reduce function length.
+
+        Args:
+            conn: SQLite connection
+            task_ids: List of task IDs to load references for
+
+        Returns:
+            Dict mapping task_id to list of markdown file paths
+        """
+        task_ids_placeholder = ",".join(["?" for _ in task_ids])
+        ref_cursor = conn.execute(
+            f"""
+            SELECT task_id, markdown_file_path
+            FROM markdown_references
+            WHERE task_id IN ({task_ids_placeholder})
+            """,
+            task_ids,
+        )
+        markdown_refs_by_task: Dict[str, List[str]] = {}
+        for ref_row in ref_cursor.fetchall():
+            task_id = ref_row[0]
+            if task_id not in markdown_refs_by_task:
+                markdown_refs_by_task[task_id] = []
+            markdown_refs_by_task[task_id].append(ref_row[1])
+        return markdown_refs_by_task
+
+    def _batch_load_subtasks(
+        self, conn: sqlite3.Connection, task_ids: List[str]
+    ) -> Dict[str, List[str]]:
+        """
+        Batch load subtask relationships for multiple tasks.
+
+        Issue #665: Extracted from get_task_history to reduce function length.
+
+        Args:
+            conn: SQLite connection
+            task_ids: List of parent task IDs to load subtasks for
+
+        Returns:
+            Dict mapping parent_task_id to list of subtask IDs
+        """
+        task_ids_placeholder = ",".join(["?" for _ in task_ids])
+        subtask_cursor = conn.execute(
+            f"""
+            SELECT parent_task_id, subtask_id
+            FROM subtask_relationships
+            WHERE parent_task_id IN ({task_ids_placeholder})
+            """,
+            task_ids,
+        )
+        subtasks_by_parent: Dict[str, List[str]] = {}
+        for subtask_row in subtask_cursor.fetchall():
+            parent_id = subtask_row[0]
+            if parent_id not in subtasks_by_parent:
+                subtasks_by_parent[parent_id] = []
+            subtasks_by_parent[parent_id].append(subtask_row[1])
+        return subtasks_by_parent
+
     def _build_task_record(
         self,
         row: tuple,
@@ -530,11 +594,10 @@ class EnhancedMemoryManager:
         query += " ORDER BY created_at DESC LIMIT ?"
         params.append(limit)
 
-        tasks = []
+        tasks: List[TaskExecutionRecord] = []
         # Use connection pool instead of direct connection
         pool = get_connection_pool(self.db_path)
         with pool.get_connection() as conn:
-            # Get task IDs first for batch loading
             cursor = conn.execute(query, params)
             task_rows = cursor.fetchall()
 
@@ -543,41 +606,12 @@ class EnhancedMemoryManager:
 
             # Extract task IDs for batch queries
             task_ids = [row[0] for row in task_rows]
-            task_ids_placeholder = ",".join(["?" for _ in task_ids])
 
-            # Batch load markdown references
-            ref_cursor = conn.execute(
-                f"""
-                SELECT task_id, markdown_file_path
-                FROM markdown_references
-                WHERE task_id IN ({task_ids_placeholder})
-                """,
-                task_ids,
-            )
-            markdown_refs_by_task = {}
-            for ref_row in ref_cursor.fetchall():
-                task_id = ref_row[0]
-                if task_id not in markdown_refs_by_task:
-                    markdown_refs_by_task[task_id] = []
-                markdown_refs_by_task[task_id].append(ref_row[1])
+            # Issue #665: Use extracted helpers for batch loading
+            markdown_refs_by_task = self._batch_load_markdown_refs(conn, task_ids)
+            subtasks_by_parent = self._batch_load_subtasks(conn, task_ids)
 
-            # Batch load subtask relationships
-            subtask_cursor = conn.execute(
-                f"""
-                SELECT parent_task_id, subtask_id
-                FROM subtask_relationships
-                WHERE parent_task_id IN ({task_ids_placeholder})
-                """,
-                task_ids,
-            )
-            subtasks_by_parent = {}
-            for subtask_row in subtask_cursor.fetchall():
-                parent_id = subtask_row[0]
-                if parent_id not in subtasks_by_parent:
-                    subtasks_by_parent[parent_id] = []
-                subtasks_by_parent[parent_id].append(subtask_row[1])
-
-            # Issue #281: Build task objects using extracted helper
+            # Build task objects using extracted helper (Issue #281)
             for row in task_rows:
                 task_id = row[0]
                 markdown_refs = markdown_refs_by_task.get(task_id, [])

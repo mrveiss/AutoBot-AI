@@ -193,6 +193,51 @@ async def _apply_rag_enhancement(query: str, results: list, kb_class_name: str) 
 # =============================================================================
 
 
+def _build_no_results_response(
+    query: str, reformulated_queries: List[str]
+) -> Metadata:
+    """
+    Build response when no results are found.
+
+    Issue #665: Extracted from rag_enhanced_search to reduce function length.
+
+    Args:
+        query: Original search query
+        reformulated_queries: List of reformulated queries used
+
+    Returns:
+        Response dictionary for empty results
+    """
+    return {
+        "status": "success",
+        "synthesized_response": f"No relevant documents found for query: '{query}'",
+        "results": [],
+        "total_results": 0,
+        "original_query": query,
+        "reformulated_queries": (
+            reformulated_queries[1:] if len(reformulated_queries) > 1 else []
+        ),
+        "rag_enhanced": True,
+    }
+
+
+def _build_kb_not_initialized_response() -> Metadata:
+    """
+    Build response when KB is not initialized.
+
+    Issue #665: Extracted from rag_enhanced_search to reduce function length.
+
+    Returns:
+        Response dictionary for uninitialized KB
+    """
+    return {
+        "status": "error",
+        "synthesized_response": "",
+        "results": [],
+        "message": "Knowledge base not initialized - please check logs for errors",
+    }
+
+
 async def _check_empty_kb_for_rag(kb_to_use, query: str) -> Metadata | None:
     """Check if KB is empty and return early response if so (Issue #281: extracted)."""
     try:
@@ -760,12 +805,7 @@ async def rag_enhanced_search(request: dict, req: Request):
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
-        return {
-            "status": "error",
-            "synthesized_response": "",
-            "results": [],
-            "message": "Knowledge base not initialized - please check logs for errors",
-        }
+        return _build_kb_not_initialized_response()
 
     query = request.get("query", "")
     top_k = request.get("top_k", 10)
@@ -794,25 +834,12 @@ async def rag_enhanced_search(request: dict, req: Request):
     # Step 2: Search with all queries (Issue #281: uses helper)
     all_results = await _search_with_all_queries(kb_to_use, reformulated_queries, search_limit)
 
-    # Step 3: RAG processing for synthesis (Issue #281: uses helper)
+    # Step 3: RAG processing or empty response (Issue #665: uses helpers)
     if all_results:
         return await _process_with_rag_agent(
             original_query, all_results, reformulated_queries, kb_to_use
         )
-    else:
-        return {
-            "status": "success",
-            "synthesized_response": (
-                f"No relevant documents found for query: '{original_query}'"
-            ),
-            "results": [],
-            "total_results": 0,
-            "original_query": original_query,
-            "reformulated_queries": (
-                reformulated_queries[1:] if len(reformulated_queries) > 1 else []
-            ),
-            "rag_enhanced": True,
-        }
+    return _build_no_results_response(original_query, reformulated_queries)
 
 
 @with_error_handling(
