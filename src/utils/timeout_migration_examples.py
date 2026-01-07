@@ -185,7 +185,10 @@ class ExistingOperationMigrator:
 
     async def migrate_comprehensive_test_suite(self):
         """
-        Migrate comprehensive test suite to long-running framework
+        Migrate comprehensive test suite to long-running framework.
+
+        Issue #665: Refactored to delegate to phase-specific helper methods
+        to reduce function length from 131 lines to under 50 lines.
 
         BEFORE:
         - Fixed 10-minute timeout regardless of test count
@@ -201,104 +204,24 @@ class ExistingOperationMigrator:
         """
 
         async def enhanced_test_suite_operation(context: OperationExecutionContext):
-            """Enhanced test suite with checkpoint/resume and parallel execution"""
-
-            test_path = Path(f"{PATH.PROJECT_ROOT}/tests")
-            test_patterns = ["test_*.py", "*_test.py"]
-
-            # Discover all test files
-            test_files = []
-            for pattern in test_patterns:
-                test_files.extend(test_path.rglob(pattern))
-
+            """Enhanced test suite with checkpoint/resume and parallel execution."""
+            # Setup phase: discover tests
+            test_files = self._discover_test_files()
             total_tests = len(test_files)
             await context.update_progress("Test discovery", 0, total_tests)
 
-            # Check if resuming
-            if context.should_resume():
-                checkpoint_data = context.get_resume_data()
-                completed_tests = checkpoint_data.intermediate_results.get(
-                    "completed_tests", []
-                )
-                failed_tests = checkpoint_data.intermediate_results.get(
-                    "failed_tests", []
-                )
-                start_index = len(completed_tests) + len(failed_tests)
-                logger.info("Resuming test suite from test %s", start_index)
-            else:
-                completed_tests = []
-                failed_tests = []
-                start_index = 0
+            # Resume phase: check for checkpoint data
+            completed_tests, failed_tests, start_index = self._get_resume_state(context)
 
-            # Run tests with proper resource management
-            import concurrent.futures
+            # Execution phase: run tests with resource management
+            completed_tests, failed_tests = await self._execute_tests(
+                context, test_files, total_tests, completed_tests, failed_tests, start_index
+            )
 
-            # Limit concurrent test execution
-            max_concurrent = min(4, len(test_files))
-
-            with concurrent.futures.ThreadPoolExecutor(
-                max_workers=max_concurrent
-            ) as executor:
-                for i, test_file in enumerate(test_files[start_index:], start_index):
-                    try:
-                        await context.update_progress(
-                            f"Running {test_file.name}",
-                            i,
-                            total_tests,
-                            {
-                                "passed": len(completed_tests),
-                                "failed": len(failed_tests),
-                                "current_test": str(test_file),
-                            },
-                            f"Test {i + 1} of {total_tests}: {test_file.name}",
-                        )
-
-                        # Run test with timeout
-                        future = executor.submit(self._run_single_test, test_file)
-                        test_result = await asyncio.get_event_loop().run_in_executor(
-                            None, lambda: future.result(timeout=300)
-                        )
-
-                        if test_result["status"] == "PASS":
-                            completed_tests.append(test_result)
-                        else:
-                            failed_tests.append(test_result)
-
-                        # Checkpoint every 10 tests
-                        if (i + 1) % 10 == 0:
-                            await context.save_checkpoint(
-                                {
-                                    "completed_tests": completed_tests,
-                                    "failed_tests": failed_tests,
-                                },
-                                f"test_{i + 1}",
-                            )
-
-                    except Exception as e:
-                        logger.warning("Test %s failed with error: %s", test_file, e)
-                        failed_tests.append(
-                            {
-                                "file": str(test_file),
-                                "status": "ERROR",
-                                "error": str(e),
-                                "duration": 0,
-                            }
-                        )
-
-            # Calculate final results
-            total_passed = len(completed_tests)
-            total_failed = len(failed_tests)
-            success_rate = (total_passed / total_tests) * 100 if total_tests > 0 else 0
-
-            return {
-                "total_tests": total_tests,
-                "passed": total_passed,
-                "failed": total_failed,
-                "success_rate": success_rate,
-                "completed_tests": completed_tests,
-                "failed_tests": failed_tests,
-                "resumed_from_checkpoint": context.should_resume(),
-            }
+            # Validation phase: calculate and return results
+            return self._calculate_test_results(
+                total_tests, completed_tests, failed_tests, context.should_resume()
+            )
 
         operation_id = await self.manager.create_operation(
             operation_type=OperationType.COMPREHENSIVE_TEST_SUITE,
@@ -314,6 +237,162 @@ class ExistingOperationMigrator:
 
         logger.info("Migrated comprehensive test suite operation: %s", operation_id)
         return operation_id
+
+    def _discover_test_files(self) -> List[Path]:
+        """Discover all test files in the tests directory.
+
+        Issue #665: Extracted from migrate_comprehensive_test_suite to reduce function length.
+
+        Returns:
+            List of Path objects pointing to test files.
+        """
+        test_path = Path(f"{PATH.PROJECT_ROOT}/tests")
+        test_patterns = ["test_*.py", "*_test.py"]
+
+        test_files = []
+        for pattern in test_patterns:
+            test_files.extend(test_path.rglob(pattern))
+        return test_files
+
+    def _get_resume_state(
+        self, context: OperationExecutionContext
+    ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], int]:
+        """Get resume state from checkpoint if resuming.
+
+        Issue #665: Extracted from migrate_comprehensive_test_suite to reduce function length.
+
+        Args:
+            context: The operation execution context.
+
+        Returns:
+            Tuple of (completed_tests, failed_tests, start_index).
+        """
+        if context.should_resume():
+            checkpoint_data = context.get_resume_data()
+            completed_tests = checkpoint_data.intermediate_results.get(
+                "completed_tests", []
+            )
+            failed_tests = checkpoint_data.intermediate_results.get(
+                "failed_tests", []
+            )
+            start_index = len(completed_tests) + len(failed_tests)
+            logger.info("Resuming test suite from test %s", start_index)
+        else:
+            completed_tests = []
+            failed_tests = []
+            start_index = 0
+        return completed_tests, failed_tests, start_index
+
+    async def _execute_tests(
+        self,
+        context: OperationExecutionContext,
+        test_files: List[Path],
+        total_tests: int,
+        completed_tests: List[Dict[str, Any]],
+        failed_tests: List[Dict[str, Any]],
+        start_index: int,
+    ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """Execute tests with resource management and checkpointing.
+
+        Issue #665: Extracted from migrate_comprehensive_test_suite to reduce function length.
+
+        Args:
+            context: The operation execution context.
+            test_files: List of test file paths.
+            total_tests: Total number of tests.
+            completed_tests: List of completed test results.
+            failed_tests: List of failed test results.
+            start_index: Index to start execution from.
+
+        Returns:
+            Tuple of (completed_tests, failed_tests) after execution.
+        """
+        import concurrent.futures
+
+        max_concurrent = min(4, len(test_files))
+
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=max_concurrent
+        ) as executor:
+            for i, test_file in enumerate(test_files[start_index:], start_index):
+                try:
+                    await context.update_progress(
+                        f"Running {test_file.name}",
+                        i,
+                        total_tests,
+                        {
+                            "passed": len(completed_tests),
+                            "failed": len(failed_tests),
+                            "current_test": str(test_file),
+                        },
+                        f"Test {i + 1} of {total_tests}: {test_file.name}",
+                    )
+
+                    future = executor.submit(self._run_single_test, test_file)
+                    test_result = await asyncio.get_event_loop().run_in_executor(
+                        None, lambda: future.result(timeout=300)
+                    )
+
+                    if test_result["status"] == "PASS":
+                        completed_tests.append(test_result)
+                    else:
+                        failed_tests.append(test_result)
+
+                    if (i + 1) % 10 == 0:
+                        await context.save_checkpoint(
+                            {
+                                "completed_tests": completed_tests,
+                                "failed_tests": failed_tests,
+                            },
+                            f"test_{i + 1}",
+                        )
+
+                except Exception as e:
+                    logger.warning("Test %s failed with error: %s", test_file, e)
+                    failed_tests.append(
+                        {
+                            "file": str(test_file),
+                            "status": "ERROR",
+                            "error": str(e),
+                            "duration": 0,
+                        }
+                    )
+
+        return completed_tests, failed_tests
+
+    def _calculate_test_results(
+        self,
+        total_tests: int,
+        completed_tests: List[Dict[str, Any]],
+        failed_tests: List[Dict[str, Any]],
+        resumed_from_checkpoint: bool,
+    ) -> Dict[str, Any]:
+        """Calculate final test results.
+
+        Issue #665: Extracted from migrate_comprehensive_test_suite to reduce function length.
+
+        Args:
+            total_tests: Total number of tests.
+            completed_tests: List of completed test results.
+            failed_tests: List of failed test results.
+            resumed_from_checkpoint: Whether operation was resumed.
+
+        Returns:
+            Dictionary containing final test results.
+        """
+        total_passed = len(completed_tests)
+        total_failed = len(failed_tests)
+        success_rate = (total_passed / total_tests) * 100 if total_tests > 0 else 0
+
+        return {
+            "total_tests": total_tests,
+            "passed": total_passed,
+            "failed": total_failed,
+            "success_rate": success_rate,
+            "completed_tests": completed_tests,
+            "failed_tests": failed_tests,
+            "resumed_from_checkpoint": resumed_from_checkpoint,
+        }
 
     async def migrate_security_scan_operation(self):
         """
