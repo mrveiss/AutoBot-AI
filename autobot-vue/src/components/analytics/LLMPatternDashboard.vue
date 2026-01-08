@@ -567,11 +567,13 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
+
 .llm-pattern-dashboard {
   padding: 1.5rem;
-  background: #0f0f1a;
+  background: var(--bg-primary);
   min-height: 100vh;
-  color: #f9fafb;
+  color: var(--text-primary);
 }
 
 .dashboard-header {
@@ -581,12 +583,12 @@ onMounted(() => {
 .dashboard-header h2 {
   font-size: 1.5rem;
   font-weight: 600;
-  color: #f9fafb;
+  color: var(--text-primary);
   margin: 0;
 }
 
 .subtitle {
-  color: #9ca3af;
+  color: var(--text-secondary);
   font-size: 0.875rem;
   margin: 0.25rem 0 0 0;
 }
@@ -603,8 +605,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 1rem;
-  background: #1a1a2e;
-  border: 1px solid #2a2a3e;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-secondary);
   border-radius: 0.5rem;
   padding: 1rem;
 }
@@ -623,10 +625,10 @@ onMounted(() => {
   height: 1.25rem;
 }
 
-.stat-icon.requests { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
-.stat-icon.cost { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
-.stat-icon.avg { background: rgba(168, 85, 247, 0.2); color: #a855f7; }
-.stat-icon.savings { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+.stat-icon.requests { background: var(--color-info-bg); color: var(--color-info); }
+.stat-icon.cost { background: var(--color-error-bg); color: var(--color-error); }
+.stat-icon.avg { background: rgba(168, 85, 247, 0.2); color: var(--color-purple-light); }
+.stat-icon.savings { background: var(--color-success-bg); color: var(--chart-green); }
 
 .stat-content {
   display: flex;
@@ -636,12 +638,12 @@ onMounted(() => {
 .stat-value {
   font-size: 1.25rem;
   font-weight: 600;
-  color: #f9fafb;
+  color: var(--text-primary);
 }
 
 .stat-label {
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: var(--text-secondary);
 }
 
 /* Content Grid */
@@ -661,8 +663,8 @@ onMounted(() => {
 
 /* Panels */
 .panel {
-  background: #1a1a2e;
-  border: 1px solid #2a2a3e;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-secondary);
   border-radius: 0.5rem;
 }
 
@@ -671,13 +673,13 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 1rem;
-  border-bottom: 1px solid #2a2a3e;
+  border-bottom: 1px solid var(--border-secondary);
 }
 
 .panel-header h3 {
   font-size: 0.875rem;
   font-weight: 500;
-  color: #f9fafb;
+  color: var(--text-primary);
   margin: 0;
 }
 
@@ -687,20 +689,20 @@ onMounted(() => {
 
 .empty-state {
   text-align: center;
-  color: #6b7280;
+  color: var(--text-tertiary);
   padding: 2rem;
 }
 
 .refresh-btn {
   background: transparent;
   border: none;
-  color: #9ca3af;
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 0.25rem;
 }
 
 .refresh-btn:hover {
-  color: #f9fafb;
+  color: var(--text-primary);
 }
 
 .refresh-btn svg {
@@ -717,10 +719,10 @@ onMounted(() => {
 .form-row select {
   width: 100%;
   padding: 0.75rem;
-  background: #0f0f1a;
-  border: 1px solid #3a3a4e;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  color: #f9fafb;
+  color: var(--text-primary);
   font-size: 0.875rem;
   resize: vertical;
 }
@@ -728,7 +730,7 @@ onMounted(() => {
 .form-group textarea:focus,
 .form-row select:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: var(--color-info);
 }
 
 .form-row {
@@ -742,7 +744,7 @@ onMounted(() => {
 
 .analyze-btn {
   padding: 0.75rem 1.5rem;
-  background: #3b82f6;
+  background: var(--color-info);
   border: none;
   border-radius: 0.375rem;
   color: #fff;
@@ -752,7 +754,7 @@ onMounted(() => {
 }
 
 .analyze-btn:hover:not(:disabled) {
-  background: #2563eb;
+  background: var(--color-info-hover);
 }
 
 .analyze-btn:disabled {
@@ -764,8 +766,8 @@ onMounted(() => {
 .analysis-result {
   margin-top: 1rem;
   padding: 1rem;
-  background: #0f0f1a;
-  border: 1px solid #2a2a3e;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-secondary);
   border-radius: 0.375rem;
 }
 
@@ -786,18 +788,18 @@ onMounted(() => {
 
 .category-badge {
   background: rgba(168, 85, 247, 0.2);
-  color: #a855f7;
+  color: var(--color-purple-light);
   text-transform: capitalize;
 }
 
 .tokens-badge {
-  background: rgba(59, 130, 246, 0.2);
-  color: #3b82f6;
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .cost-badge {
-  background: rgba(245, 158, 11, 0.2);
-  color: #f59e0b;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .issues-list,
@@ -813,21 +815,21 @@ onMounted(() => {
 }
 
 .issue-item.warning {
-  background: rgba(245, 158, 11, 0.1);
-  color: #fbbf24;
+  background: var(--color-warning-alpha-10);
+  color: var(--color-warning-light);
 }
 
 .issue-item.info {
-  background: rgba(59, 130, 246, 0.1);
-  color: #60a5fa;
+  background: var(--color-info-bg);
+  color: var(--color-info-light);
 }
 
 .recommendation-item {
   padding: 0.5rem;
-  background: rgba(34, 197, 94, 0.1);
+  background: var(--color-success-alpha-10);
   border-radius: 0.25rem;
   font-size: 0.8125rem;
-  color: #4ade80;
+  color: var(--chart-green-light);
   margin-bottom: 0.25rem;
 }
 
@@ -836,7 +838,7 @@ onMounted(() => {
   background: rgba(168, 85, 247, 0.1);
   border-radius: 0.25rem;
   font-size: 0.8125rem;
-  color: #c084fc;
+  color: var(--chart-purple-light);
   text-align: center;
 }
 
@@ -849,15 +851,15 @@ onMounted(() => {
 
 .recommendation-card {
   padding: 1rem;
-  background: #0f0f1a;
-  border: 1px solid #2a2a3e;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-secondary);
   border-radius: 0.375rem;
 }
 
-.recommendation-card.priority-1 { border-left: 3px solid #ef4444; }
-.recommendation-card.priority-2 { border-left: 3px solid #f59e0b; }
-.recommendation-card.priority-3 { border-left: 3px solid #3b82f6; }
-.recommendation-card.priority-4 { border-left: 3px solid #6b7280; }
+.recommendation-card.priority-1 { border-left: 3px solid var(--color-error); }
+.recommendation-card.priority-2 { border-left: 3px solid var(--color-warning); }
+.recommendation-card.priority-3 { border-left: 3px solid var(--color-info); }
+.recommendation-card.priority-4 { border-left: 3px solid var(--text-tertiary); }
 
 .rec-header {
   display: flex;
@@ -867,61 +869,61 @@ onMounted(() => {
 
 .rec-type {
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: var(--text-secondary);
   text-transform: uppercase;
 }
 
 .rec-savings {
   font-size: 0.875rem;
-  color: #22c55e;
+  color: var(--chart-green);
   font-weight: 500;
 }
 
 .recommendation-card h4 {
   font-size: 0.875rem;
   font-weight: 500;
-  color: #f9fafb;
+  color: var(--text-primary);
   margin: 0 0 0.5rem 0;
 }
 
 .recommendation-card p {
   font-size: 0.8125rem;
-  color: #9ca3af;
+  color: var(--text-secondary);
   margin: 0 0 0.5rem 0;
 }
 
 .rec-meta {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--text-tertiary);
   margin-bottom: 0.5rem;
 }
 
 .expand-btn {
   background: transparent;
-  border: 1px solid #3a3a4e;
+  border: 1px solid var(--border-default);
   border-radius: 0.25rem;
-  color: #9ca3af;
+  color: var(--text-secondary);
   font-size: 0.75rem;
   padding: 0.25rem 0.5rem;
   cursor: pointer;
 }
 
 .expand-btn:hover {
-  background: #2a2a3e;
-  color: #f9fafb;
+  background: var(--border-secondary);
+  color: var(--text-primary);
 }
 
 .rec-steps {
   margin-top: 0.75rem;
   padding-top: 0.75rem;
-  border-top: 1px solid #2a2a3e;
+  border-top: 1px solid var(--border-secondary);
 }
 
 .rec-steps ol {
   margin: 0;
   padding-left: 1.25rem;
   font-size: 0.8125rem;
-  color: #d1d5db;
+  color: var(--text-tertiary);
 }
 
 .rec-steps li {
@@ -937,7 +939,7 @@ onMounted(() => {
 
 .model-item {
   padding: 0.75rem;
-  background: #0f0f1a;
+  background: var(--bg-primary);
   border-radius: 0.375rem;
 }
 
@@ -949,12 +951,12 @@ onMounted(() => {
 
 .model-name {
   font-weight: 500;
-  color: #f9fafb;
+  color: var(--text-primary);
   font-size: 0.875rem;
 }
 
 .model-cost {
-  color: #f59e0b;
+  color: var(--color-warning);
   font-size: 0.875rem;
 }
 
@@ -962,20 +964,20 @@ onMounted(() => {
   display: flex;
   gap: 1rem;
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: var(--text-secondary);
   margin-bottom: 0.5rem;
 }
 
 .model-bar {
   height: 4px;
-  background: #2a2a3e;
+  background: var(--border-secondary);
   border-radius: 2px;
   overflow: hidden;
 }
 
 .model-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+  background: linear-gradient(90deg, var(--color-info), var(--chart-purple));
   border-radius: 2px;
   transition: width 0.3s;
 }
@@ -999,17 +1001,17 @@ onMounted(() => {
 
 .category-name {
   font-size: 0.875rem;
-  color: #d1d5db;
+  color: var(--text-tertiary);
 }
 
 .category-count {
   font-size: 0.875rem;
-  color: #9ca3af;
+  color: var(--text-secondary);
 }
 
 .category-bar {
   height: 4px;
-  background: #2a2a3e;
+  background: var(--border-secondary);
   border-radius: 2px;
   overflow: hidden;
   margin-bottom: 0.25rem;
@@ -1017,7 +1019,7 @@ onMounted(() => {
 
 .category-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #22c55e, #4ade80);
+  background: linear-gradient(90deg, var(--chart-green), var(--chart-green-light));
   border-radius: 2px;
   transition: width 0.3s;
 }
@@ -1026,7 +1028,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--text-tertiary);
 }
 
 /* Cache List */
@@ -1038,7 +1040,7 @@ onMounted(() => {
 
 .cache-item {
   padding: 0.75rem;
-  background: #0f0f1a;
+  background: var(--bg-primary);
   border-radius: 0.375rem;
 }
 
@@ -1050,18 +1052,18 @@ onMounted(() => {
 
 .cache-count {
   font-weight: 500;
-  color: #a855f7;
+  color: var(--color-purple-light);
   font-size: 0.875rem;
 }
 
 .cache-savings {
-  color: #22c55e;
+  color: var(--chart-green);
   font-size: 0.75rem;
 }
 
 .cache-preview {
   font-size: 0.8125rem;
-  color: #9ca3af;
+  color: var(--text-secondary);
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1083,22 +1085,22 @@ onMounted(() => {
 }
 
 .grid-line {
-  stroke: #2a2a3e;
+  stroke: var(--border-secondary);
   stroke-width: 1;
 }
 
 .cost-line {
-  stroke: #3b82f6;
+  stroke: var(--color-info);
   stroke-width: 2;
 }
 
 .data-point {
-  fill: #3b82f6;
+  fill: var(--color-info);
 }
 
 .axis-label {
   font-size: 10px;
-  fill: #9ca3af;
+  fill: var(--text-secondary);
 }
 
 .trend-legend {
@@ -1113,13 +1115,13 @@ onMounted(() => {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: var(--text-secondary);
 }
 
 .legend-dot {
   width: 8px;
   height: 8px;
-  background: #3b82f6;
+  background: var(--color-info);
   border-radius: 50%;
 }
 

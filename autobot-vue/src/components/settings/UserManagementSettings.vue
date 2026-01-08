@@ -780,12 +780,14 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
+
 .user-management-settings {
   padding: 24px;
 }
 
 .user-management-settings h3 {
-  color: #2c3e50;
+  color: var(--text-primary);
   margin-bottom: 24px;
   font-size: 24px;
   font-weight: 600;
@@ -793,13 +795,13 @@ onMounted(async () => {
 
 .settings-section {
   margin-bottom: 32px;
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   border-radius: 8px;
   padding: 20px;
 }
 
 .settings-section h4 {
-  color: #495057;
+  color: var(--text-primary);
   margin-bottom: 16px;
   font-size: 18px;
   font-weight: 500;
@@ -816,15 +818,15 @@ onMounted(async () => {
 }
 
 .auth-status-card.authenticated {
-  background: #d4edda;
-  border-color: #28a745;
-  color: #155724;
+  background: var(--color-success-bg);
+  border-color: var(--color-success);
+  color: var(--color-success);
 }
 
 .auth-status-card.unauthenticated {
-  background: #f8d7da;
-  border-color: #dc3545;
-  color: #721c24;
+  background: var(--color-error-bg);
+  border-color: var(--color-error);
+  color: var(--color-error);
 }
 
 .auth-status-card i {
@@ -859,13 +861,13 @@ onMounted(async () => {
 }
 
 .login-btn {
-  background: #007bff;
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .logout-btn {
-  background: #dc3545;
-  color: white;
+  background: var(--color-danger);
+  color: var(--text-on-error);
 }
 
 /* Form Elements */
@@ -877,20 +879,22 @@ onMounted(async () => {
   display: block;
   margin-bottom: 4px;
   font-weight: 500;
-  color: #495057;
+  color: var(--text-primary);
 }
 
 .form-control {
   width: 100%;
   padding: 8px 12px;
-  border: 1px solid #ced4da;
+  border: 1px solid var(--border-default);
   border-radius: 4px;
   font-size: 14px;
+  background: var(--bg-input);
+  color: var(--text-primary);
 }
 
 .form-control:disabled {
-  background: #e9ecef;
-  color: #6c757d;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
 }
 
 /* Action Buttons */
@@ -901,8 +905,8 @@ onMounted(async () => {
 }
 
 .edit-btn, .save-btn {
-  background: #28a745;
-  color: white;
+  background: var(--color-success);
+  color: var(--text-on-success);
   border: none;
   padding: 10px 16px;
   border-radius: 6px;
@@ -914,8 +918,8 @@ onMounted(async () => {
 }
 
 .cancel-btn {
-  background: #6c757d;
-  color: white;
+  background: var(--color-secondary);
+  color: var(--text-on-primary);
   border: none;
   padding: 10px 16px;
   border-radius: 6px;
@@ -927,8 +931,8 @@ onMounted(async () => {
 }
 
 .change-password-btn {
-  background: #ffc107;
-  color: #212529;
+  background: var(--color-warning);
+  color: var(--text-on-warning);
   border: none;
   padding: 10px 16px;
   border-radius: 6px;
@@ -950,15 +954,15 @@ onMounted(async () => {
 }
 
 .alert-success {
-  background: #d4edda;
-  border: 1px solid #c3e6cb;
-  color: #155724;
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success);
 }
 
 .alert-error {
-  background: #f8d7da;
-  border: 1px solid #f5c6cb;
-  color: #721c24;
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
+  color: var(--color-error);
 }
 
 .alert i {
@@ -970,7 +974,7 @@ onMounted(async () => {
   display: block;
   margin-top: 4px;
   font-size: 12px;
-  color: #6c757d;
+  color: var(--text-secondary);
 }
 
 /* Disabled button styles */
@@ -988,7 +992,7 @@ button:disabled {
 
 .rbac-status {
   padding: 16px;
-  background: #e9ecef;
+  background: var(--bg-tertiary);
   border-radius: 8px;
 }
 
@@ -1001,22 +1005,22 @@ button:disabled {
 }
 
 .status-indicator.initialized {
-  color: #28a745;
+  color: var(--color-success);
 }
 
 .status-indicator.not-initialized {
-  color: #ffc107;
+  color: var(--color-warning);
 }
 
 .status-message {
-  color: #6c757d;
+  color: var(--text-secondary);
   font-size: 14px;
   margin: 0;
 }
 
 .rbac-info {
   padding: 12px;
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   border-radius: 6px;
   font-size: 14px;
 }
@@ -1031,8 +1035,8 @@ button:disabled {
 }
 
 .init-rbac-btn {
-  background: #6f42c1;
-  color: white;
+  background: var(--color-purple);
+  color: var(--text-on-primary);
   border: none;
   padding: 10px 16px;
   border-radius: 6px;
@@ -1044,12 +1048,12 @@ button:disabled {
 }
 
 .init-rbac-btn:hover:not(:disabled) {
-  background: #5a32a3;
+  background: var(--color-purple-hover);
 }
 
 .check-status-btn {
-  background: #17a2b8;
-  color: white;
+  background: var(--color-info);
+  color: var(--text-on-primary);
   border: none;
   padding: 10px 16px;
   border-radius: 6px;
@@ -1061,14 +1065,14 @@ button:disabled {
 }
 
 .check-status-btn:hover:not(:disabled) {
-  background: #138496;
+  background: var(--color-info-hover);
 }
 
 .rbac-progress {
   padding: 12px;
-  background: #e3f2fd;
+  background: var(--color-info-bg);
   border-radius: 6px;
-  border-left: 4px solid #2196f3;
+  border-left: 4px solid var(--color-info);
 }
 
 .progress-header {
@@ -1086,38 +1090,38 @@ button:disabled {
 }
 
 .task-status.PENDING {
-  background: #ffc107;
-  color: #212529;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .task-status.PROGRESS {
-  background: #17a2b8;
-  color: white;
+  background: var(--color-info);
+  color: var(--text-on-primary);
 }
 
 .task-status.SUCCESS {
-  background: #28a745;
-  color: white;
+  background: var(--color-success);
+  color: var(--text-on-success);
 }
 
 .task-status.FAILURE {
-  background: #dc3545;
-  color: white;
+  background: var(--color-danger);
+  color: var(--text-on-error);
 }
 
 .progress-details {
   margin-top: 8px;
   font-size: 14px;
-  color: #495057;
+  color: var(--text-primary);
 }
 
 /* Progress section for modals (Issue #687, #544) */
 .progress-section {
   margin: 16px 0;
   padding: 16px;
-  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  background: var(--color-info-bg);
   border-radius: 8px;
-  border-left: 4px solid #2196f3;
+  border-left: 4px solid var(--color-info);
 }
 
 .progress-section .progress-header {
@@ -1129,7 +1133,7 @@ button:disabled {
 
 .progress-section .status-text {
   font-weight: 500;
-  color: #1565c0;
+  color: var(--color-info);
 }
 
 .progress-section .task-info {
@@ -1138,13 +1142,13 @@ button:disabled {
   align-items: center;
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid rgba(33, 150, 243, 0.2);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .progress-section .task-id {
   font-family: monospace;
   font-size: 12px;
-  color: #546e7a;
+  color: var(--text-tertiary);
 }
 
 .task-status-badge {
@@ -1156,23 +1160,23 @@ button:disabled {
 }
 
 .task-status-badge.pending {
-  background: #fff3cd;
-  color: #856404;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .task-status-badge.progress {
-  background: #17a2b8;
-  color: white;
+  background: var(--color-info);
+  color: var(--text-on-primary);
 }
 
 .task-status-badge.success {
-  background: #28a745;
-  color: white;
+  background: var(--color-success);
+  color: var(--text-on-success);
 }
 
 .task-status-badge.failure {
-  background: #dc3545;
-  color: white;
+  background: var(--color-danger);
+  color: var(--text-on-error);
 }
 
 .rbac-init-modal .alert {
@@ -1182,31 +1186,9 @@ button:disabled {
 }
 
 .alert-warning {
-  background: #fff3cd;
-  border: 1px solid #ffc107;
-  color: #856404;
-}
-
-/* Dark theme support */
-@media (prefers-color-scheme: dark) {
-  .user-management-settings h3,
-  .settings-section h4 {
-    color: #ffffff;
-  }
-
-  .settings-section {
-    background: #2d2d2d;
-  }
-
-  .form-group label {
-    color: #ffffff;
-  }
-
-  .form-control {
-    background: #3d3d3d;
-    border-color: #555;
-    color: #ffffff;
-  }
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
+  color: var(--color-warning);
 }
 
 /* Mobile responsive */
