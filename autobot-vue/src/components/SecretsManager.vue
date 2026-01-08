@@ -570,28 +570,39 @@ import BaseModal from '@/components/ui/BaseModal.vue';
 
 const logger = createLogger('SecretsManager');
 
-// Credential type categories with icons and colors
-const credentialCategories = [
-  { type: 'api_key', label: 'API Keys', icon: 'fas fa-key', color: '#6366f1' },
-  { type: 'token', label: 'Tokens', icon: 'fas fa-ticket-alt', color: '#8b5cf6' },
-  { type: 'password', label: 'Passwords', icon: 'fas fa-lock', color: '#ec4899' },
-  { type: 'ssh_key', label: 'SSH Keys', icon: 'fas fa-terminal', color: '#14b8a6' },
-  { type: 'database_url', label: 'Database', icon: 'fas fa-database', color: '#f59e0b' },
-  { type: 'certificate', label: 'Certificates', icon: 'fas fa-certificate', color: '#10b981' },
-  { type: 'other', label: 'Other', icon: 'fas fa-ellipsis-h', color: '#6b7280' },
-];
+/**
+ * Helper to get CSS custom property value at runtime.
+ * Used for dynamic styles that need design token colors (e.g., inline styles).
+ * @param name - CSS custom property name (e.g., '--color-primary')
+ * @param fallback - Fallback value for SSR/testing
+ */
+function getCssVar(name: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback;
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+}
 
-// Quick-add templates for common services
-const credentialTemplates = [
-  { id: 'openai', name: 'OpenAI', description: 'GPT API access', icon: 'fas fa-brain', color: '#10a37f', type: 'api_key' },
-  { id: 'anthropic', name: 'Anthropic', description: 'Claude API access', icon: 'fas fa-robot', color: '#d97706', type: 'api_key' },
-  { id: 'aws', name: 'AWS', description: 'Amazon Web Services', icon: 'fab fa-aws', color: '#ff9900', type: 'api_key' },
-  { id: 'github', name: 'GitHub', description: 'GitHub personal token', icon: 'fab fa-github', color: '#333', type: 'token' },
-  { id: 'postgres', name: 'PostgreSQL', description: 'Database connection', icon: 'fas fa-database', color: '#336791', type: 'database_url' },
-  { id: 'redis', name: 'Redis', description: 'Redis connection', icon: 'fas fa-layer-group', color: '#dc382d', type: 'database_url' },
-  { id: 'ssh', name: 'SSH Key', description: 'Server access', icon: 'fas fa-terminal', color: '#000', type: 'ssh_key' },
-  { id: 'slack', name: 'Slack', description: 'Slack bot token', icon: 'fab fa-slack', color: '#4a154b', type: 'token' },
-];
+// Credential type categories with icons and colors (using design tokens)
+const credentialCategories = computed(() => [
+  { type: 'api_key', label: 'API Keys', icon: 'fas fa-key', color: getCssVar('--color-primary', '#6366f1') },
+  { type: 'token', label: 'Tokens', icon: 'fas fa-ticket-alt', color: getCssVar('--chart-purple', '#8b5cf6') },
+  { type: 'password', label: 'Passwords', icon: 'fas fa-lock', color: getCssVar('--chart-pink', '#ec4899') },
+  { type: 'ssh_key', label: 'SSH Keys', icon: 'fas fa-terminal', color: getCssVar('--chart-teal', '#14b8a6') },
+  { type: 'database_url', label: 'Database', icon: 'fas fa-database', color: getCssVar('--color-warning', '#f59e0b') },
+  { type: 'certificate', label: 'Certificates', icon: 'fas fa-certificate', color: getCssVar('--color-success', '#10b981') },
+  { type: 'other', label: 'Other', icon: 'fas fa-ellipsis-h', color: getCssVar('--text-tertiary', '#6b7280') },
+]);
+
+// Quick-add templates for common services (using design tokens)
+const credentialTemplates = computed(() => [
+  { id: 'openai', name: 'OpenAI', description: 'GPT API access', icon: 'fas fa-brain', color: getCssVar('--color-success', '#10a37f'), type: 'api_key' },
+  { id: 'anthropic', name: 'Anthropic', description: 'Claude API access', icon: 'fas fa-robot', color: getCssVar('--color-warning-hover', '#d97706'), type: 'api_key' },
+  { id: 'aws', name: 'AWS', description: 'Amazon Web Services', icon: 'fab fa-aws', color: getCssVar('--chart-orange', '#ff9900'), type: 'api_key' },
+  { id: 'github', name: 'GitHub', description: 'GitHub personal token', icon: 'fab fa-github', color: getCssVar('--bg-tertiary', '#333'), type: 'token' },
+  { id: 'postgres', name: 'PostgreSQL', description: 'Database connection', icon: 'fas fa-database', color: getCssVar('--color-info', '#336791'), type: 'database_url' },
+  { id: 'redis', name: 'Redis', description: 'Redis connection', icon: 'fas fa-layer-group', color: getCssVar('--chart-red', '#dc382d'), type: 'database_url' },
+  { id: 'ssh', name: 'SSH Key', description: 'Server access', icon: 'fas fa-terminal', color: getCssVar('--bg-primary', '#000'), type: 'ssh_key' },
+  { id: 'slack', name: 'Slack', description: 'Slack bot token', icon: 'fab fa-slack', color: getCssVar('--chart-purple', '#4a154b'), type: 'token' },
+]);
 
 // State
 const secrets = ref<any[]>([]);
@@ -675,7 +686,7 @@ const currentCategoryLabel = computed(() => {
   if (showExpiredOnly.value) return 'Expired Credentials';
   if (selectedScope.value) return `${selectedScope.value.charAt(0).toUpperCase() + selectedScope.value.slice(1)} Credentials`;
   if (selectedCategory.value === 'all') return 'All Credentials';
-  const cat = credentialCategories.find(c => c.type === selectedCategory.value);
+  const cat = credentialCategories.value.find(c => c.type === selectedCategory.value);
   return cat?.label || 'Credentials';
 });
 
@@ -765,17 +776,17 @@ const getCategoryCount = (type: string) => {
 };
 
 const getTypeColor = (type: string) => {
-  const cat = credentialCategories.find(c => c.type === type);
-  return cat?.color || '#6b7280';
+  const cat = credentialCategories.value.find(c => c.type === type);
+  return cat?.color || getCssVar('--text-tertiary', '#6b7280');
 };
 
 const getTypeIcon = (type: string) => {
-  const cat = credentialCategories.find(c => c.type === type);
+  const cat = credentialCategories.value.find(c => c.type === type);
   return cat?.icon || 'fas fa-key';
 };
 
 const getTypeLabel = (type: string) => {
-  const cat = credentialCategories.find(c => c.type === type);
+  const cat = credentialCategories.value.find(c => c.type === type);
   return cat?.label.replace(/s$/, '') || type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || '';
 };
 
@@ -1066,15 +1077,15 @@ watch(selectedScope, () => {
   display: flex;
   height: 100%;
   min-height: 0;
-  background: var(--bg-primary, #f8fafc);
+  background: var(--bg-primary);
 }
 
 /* Sidebar */
 .secrets-sidebar {
   width: 280px;
   min-width: 280px;
-  background: var(--bg-secondary, #fff);
-  border-right: 1px solid var(--border-color, #e2e8f0);
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-default);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1082,26 +1093,26 @@ watch(selectedScope, () => {
 
 .sidebar-header {
   padding: 20px;
-  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .sidebar-header h3 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
 .sidebar-header i {
-  color: var(--primary, #6366f1);
+  color: var(--color-primary);
 }
 
 .sidebar-search {
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .search-wrapper {
@@ -1113,23 +1124,25 @@ watch(selectedScope, () => {
 .search-wrapper i {
   position: absolute;
   left: 12px;
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-muted);
   font-size: 14px;
 }
 
 .search-wrapper .search-input {
   width: 100%;
   padding: 10px 36px 10px 36px;
-  border: 1px solid var(--border-color, #e2e8f0);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   font-size: 14px;
   transition: all 0.2s;
+  background: var(--bg-input);
+  color: var(--text-primary);
 }
 
 .search-wrapper .search-input:focus {
   outline: none;
-  border-color: var(--primary, #6366f1);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus);
 }
 
 .clear-search {
@@ -1139,7 +1152,7 @@ watch(selectedScope, () => {
   border: none;
   padding: 4px;
   cursor: pointer;
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-muted);
 }
 
 .category-nav {
@@ -1154,7 +1167,7 @@ watch(selectedScope, () => {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-muted);
 }
 
 .category-item {
@@ -1164,16 +1177,16 @@ watch(selectedScope, () => {
   padding: 10px 20px;
   cursor: pointer;
   transition: all 0.15s;
-  color: var(--text-secondary, #475569);
+  color: var(--text-secondary);
 }
 
 .category-item:hover {
-  background: var(--bg-hover, #f1f5f9);
+  background: var(--bg-hover);
 }
 
 .category-item.active {
-  background: rgba(99, 102, 241, 0.1);
-  color: var(--primary, #6366f1);
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
 }
 
 .category-item i {
@@ -1189,36 +1202,36 @@ watch(selectedScope, () => {
 
 .category-item .count {
   font-size: 12px;
-  background: var(--bg-tertiary, #e2e8f0);
+  background: var(--bg-tertiary);
   padding: 2px 8px;
   border-radius: 10px;
-  color: var(--text-muted, #64748b);
+  color: var(--text-tertiary);
 }
 
 .category-item.active .count {
-  background: var(--primary, #6366f1);
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .category-item.alert {
-  color: var(--danger, #ef4444);
+  color: var(--color-error);
 }
 
 .category-item.alert .count.alert {
-  background: var(--danger, #ef4444);
-  color: white;
+  background: var(--color-error);
+  color: var(--text-on-error);
 }
 
 .sidebar-actions {
   padding: 16px 20px;
-  border-top: 1px solid var(--border-color, #e2e8f0);
+  border-top: 1px solid var(--border-default);
 }
 
 .btn-create {
   width: 100%;
   padding: 12px;
-  background: var(--primary, #6366f1);
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
   border: none;
   border-radius: 8px;
   font-size: 14px;
@@ -1232,7 +1245,7 @@ watch(selectedScope, () => {
 }
 
 .btn-create:hover {
-  background: var(--primary-dark, #4f46e5);
+  background: var(--color-primary-hover);
 }
 
 /* Main Content */
@@ -1249,20 +1262,20 @@ watch(selectedScope, () => {
   justify-content: space-between;
   align-items: center;
   padding: 20px 24px;
-  background: var(--bg-secondary, #fff);
-  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .header-left h2 {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary);
 }
 
 .header-left .subtitle {
   font-size: 13px;
-  color: var(--text-muted, #64748b);
+  color: var(--text-tertiary);
 }
 
 .header-actions {
@@ -1276,16 +1289,16 @@ watch(selectedScope, () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-tertiary, #f1f5f9);
+  background: var(--bg-tertiary);
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  color: var(--text-secondary, #475569);
+  color: var(--text-secondary);
   transition: all 0.15s;
 }
 
 .btn-icon:hover {
-  background: var(--bg-hover, #e2e8f0);
+  background: var(--bg-hover);
 }
 
 .btn-icon:disabled {
@@ -1298,8 +1311,8 @@ watch(selectedScope, () => {
   display: flex;
   gap: 24px;
   padding: 16px 24px;
-  background: var(--bg-secondary, #fff);
-  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .stat-item {
@@ -1309,27 +1322,27 @@ watch(selectedScope, () => {
 }
 
 .stat-item i {
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-muted);
   font-size: 14px;
 }
 
 .stat-item .stat-value {
   font-weight: 600;
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary);
 }
 
 .stat-item .stat-label {
   font-size: 13px;
-  color: var(--text-muted, #64748b);
+  color: var(--text-tertiary);
 }
 
 .stat-item.warning {
-  color: var(--warning, #f59e0b);
+  color: var(--color-warning);
 }
 
 .stat-item.warning i,
 .stat-item.warning .stat-value {
-  color: var(--warning, #f59e0b);
+  color: var(--color-warning);
 }
 
 /* Loading */
@@ -1340,7 +1353,7 @@ watch(selectedScope, () => {
   align-items: center;
   justify-content: center;
   gap: 16px;
-  color: var(--text-muted, #64748b);
+  color: var(--text-tertiary);
 }
 
 /* Credentials Container */
@@ -1368,25 +1381,25 @@ watch(selectedScope, () => {
   display: flex;
   gap: 16px;
   padding: 16px;
-  background: var(--bg-secondary, #fff);
-  border: 1px solid var(--border-color, #e2e8f0);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .credential-card:hover {
-  border-color: var(--primary, #6366f1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-md);
 }
 
 .credential-card.selected {
-  border-color: var(--primary, #6366f1);
-  background: rgba(99, 102, 241, 0.02);
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
 }
 
 .credential-card.expired {
-  border-left: 3px solid var(--danger, #ef4444);
+  border-left: 3px solid var(--color-error);
 }
 
 .card-icon {
@@ -1397,7 +1410,7 @@ watch(selectedScope, () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--text-on-primary);
   font-size: 18px;
 }
 
@@ -1418,7 +1431,7 @@ watch(selectedScope, () => {
   margin: 0;
   font-size: 15px;
   font-weight: 600;
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1439,18 +1452,18 @@ watch(selectedScope, () => {
 }
 
 .badge.general {
-  background: rgba(99, 102, 241, 0.1);
-  color: var(--primary, #6366f1);
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
 }
 
 .badge.chat {
-  background: rgba(34, 197, 94, 0.1);
-  color: #16a34a;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .badge.expired {
-  background: rgba(239, 68, 68, 0.1);
-  color: var(--danger, #ef4444);
+  background: var(--color-error-bg);
+  color: var(--color-error);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -1459,7 +1472,7 @@ watch(selectedScope, () => {
 .card-description {
   margin: 0 0 8px;
   font-size: 13px;
-  color: var(--text-muted, #64748b);
+  color: var(--text-tertiary);
   line-height: 1.4;
 }
 
@@ -1467,7 +1480,7 @@ watch(selectedScope, () => {
   display: flex;
   gap: 16px;
   font-size: 12px;
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-muted);
 }
 
 .meta-item {
@@ -1477,7 +1490,7 @@ watch(selectedScope, () => {
 }
 
 .meta-item.text-warning {
-  color: var(--warning, #f59e0b);
+  color: var(--color-warning);
 }
 
 .card-tags {
@@ -1490,13 +1503,13 @@ watch(selectedScope, () => {
 .tag {
   font-size: 11px;
   padding: 2px 8px;
-  background: var(--bg-tertiary, #f1f5f9);
+  background: var(--bg-tertiary);
   border-radius: 4px;
-  color: var(--text-secondary, #475569);
+  color: var(--text-secondary);
 }
 
 .tag.more {
-  color: var(--primary, #6366f1);
+  color: var(--color-primary);
 }
 
 .card-actions {
@@ -1517,22 +1530,22 @@ watch(selectedScope, () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-tertiary, #f1f5f9);
+  background: var(--bg-tertiary);
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  color: var(--text-secondary, #475569);
+  color: var(--text-secondary);
   transition: all 0.15s;
 }
 
 .action-btn:hover {
-  background: var(--bg-hover, #e2e8f0);
-  color: var(--primary, #6366f1);
+  background: var(--bg-hover);
+  color: var(--color-primary);
 }
 
 .action-btn.delete:hover {
-  background: rgba(239, 68, 68, 0.1);
-  color: var(--danger, #ef4444);
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 /* Templates Section */
@@ -1544,20 +1557,20 @@ watch(selectedScope, () => {
   margin: 0 0 8px;
   font-size: 18px;
   font-weight: 600;
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
 .templates-section h3 i {
-  color: var(--primary, #6366f1);
+  color: var(--color-primary);
 }
 
 .templates-subtitle {
   margin: 0 0 20px;
   font-size: 14px;
-  color: var(--text-muted, #64748b);
+  color: var(--text-tertiary);
 }
 
 .templates-grid {
@@ -1571,16 +1584,16 @@ watch(selectedScope, () => {
   align-items: center;
   gap: 12px;
   padding: 14px;
-  background: var(--bg-secondary, #fff);
-  border: 1px solid var(--border-color, #e2e8f0);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .template-card:hover {
-  border-color: var(--primary, #6366f1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
 }
 
 .template-icon {
@@ -1590,7 +1603,7 @@ watch(selectedScope, () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--text-on-primary);
   font-size: 16px;
 }
 
@@ -1598,13 +1611,13 @@ watch(selectedScope, () => {
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary);
 }
 
 .template-info p {
   margin: 2px 0 0;
   font-size: 12px;
-  color: var(--text-muted, #64748b);
+  color: var(--text-tertiary);
 }
 
 /* Form Styles */
@@ -1618,7 +1631,7 @@ watch(selectedScope, () => {
   margin: 0 0 16px;
   font-size: 15px;
   font-weight: 600;
-  color: var(--text-secondary, #475569);
+  color: var(--text-secondary);
 }
 
 .type-grid {
@@ -1633,15 +1646,15 @@ watch(selectedScope, () => {
   align-items: center;
   gap: 10px;
   padding: 16px;
-  border: 1px solid var(--border-color, #e2e8f0);
+  border: 1px solid var(--border-default);
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .type-option:hover {
-  border-color: var(--primary, #6366f1);
-  background: rgba(99, 102, 241, 0.02);
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
 }
 
 .type-option .type-icon {
@@ -1651,14 +1664,14 @@ watch(selectedScope, () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--text-on-primary);
   font-size: 18px;
 }
 
 .type-option span {
   font-size: 13px;
   font-weight: 500;
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary);
   text-align: center;
 }
 
@@ -1667,7 +1680,7 @@ watch(selectedScope, () => {
   align-items: center;
   gap: 12px;
   padding: 12px;
-  background: var(--bg-tertiary, #f8fafc);
+  background: var(--bg-tertiary);
   border-radius: 10px;
   margin-bottom: 8px;
 }
@@ -1679,7 +1692,7 @@ watch(selectedScope, () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--text-on-primary);
   font-size: 16px;
 }
 
@@ -1690,7 +1703,7 @@ watch(selectedScope, () => {
 
 .selected-type .type-label {
   font-weight: 600;
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary);
 }
 
 .selected-type .change-type {
@@ -1698,7 +1711,7 @@ watch(selectedScope, () => {
   border: none;
   padding: 0;
   font-size: 12px;
-  color: var(--primary, #6366f1);
+  color: var(--color-primary);
   cursor: pointer;
 }
 
@@ -1727,30 +1740,32 @@ watch(selectedScope, () => {
 .form-group label {
   font-size: 13px;
   font-weight: 500;
-  color: var(--text-secondary, #475569);
+  color: var(--text-secondary);
 }
 
 .required {
-  color: var(--danger, #ef4444);
+  color: var(--color-error);
 }
 
 .form-input {
   padding: 10px 12px;
-  border: 1px solid var(--border-color, #e2e8f0);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   font-size: 14px;
   transition: all 0.2s;
+  background: var(--bg-input);
+  color: var(--text-primary);
 }
 
 .form-input:focus {
   outline: none;
-  border-color: var(--primary, #6366f1);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus);
 }
 
 .input-hint {
   font-size: 12px;
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-muted);
 }
 
 .secret-input-wrapper {
@@ -1759,21 +1774,21 @@ watch(selectedScope, () => {
 
 .secret-input {
   padding-right: 44px;
-  font-family: 'Monaco', 'Menlo', monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
 }
 
 .secret-masked {
   -webkit-text-security: disc;
   text-security: disc;
-  color: #666;
+  color: var(--text-tertiary);
 }
 
 .toggle-visibility {
   position: absolute;
   right: 8px;
   top: 8px;
-  background: var(--bg-tertiary, #f1f5f9);
+  background: var(--bg-tertiary);
   border: none;
   border-radius: 6px;
   width: 32px;
@@ -1782,7 +1797,7 @@ watch(selectedScope, () => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: var(--text-muted, #64748b);
+  color: var(--text-tertiary);
 }
 
 .scope-selector {
@@ -1796,19 +1811,19 @@ watch(selectedScope, () => {
   align-items: flex-start;
   gap: 12px;
   padding: 14px;
-  border: 1px solid var(--border-color, #e2e8f0);
+  border: 1px solid var(--border-default);
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .scope-option:hover {
-  border-color: var(--primary, #6366f1);
+  border-color: var(--color-primary);
 }
 
 .scope-option.active {
-  border-color: var(--primary, #6366f1);
-  background: rgba(99, 102, 241, 0.02);
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
 }
 
 .scope-option input[type="radio"] {
@@ -1817,12 +1832,12 @@ watch(selectedScope, () => {
 
 .scope-option i {
   font-size: 20px;
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-muted);
   margin-top: 2px;
 }
 
 .scope-option.active i {
-  color: var(--primary, #6366f1);
+  color: var(--color-primary);
 }
 
 .scope-option > div {
@@ -1832,12 +1847,12 @@ watch(selectedScope, () => {
 
 .scope-option span {
   font-weight: 500;
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary);
 }
 
 .scope-option small {
   font-size: 12px;
-  color: var(--text-muted, #64748b);
+  color: var(--text-tertiary);
   margin-top: 2px;
 }
 
@@ -1853,7 +1868,7 @@ watch(selectedScope, () => {
   align-items: center;
   gap: 16px;
   padding-bottom: 16px;
-  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .view-icon {
@@ -1863,7 +1878,7 @@ watch(selectedScope, () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--text-on-primary);
   font-size: 24px;
 }
 
@@ -1871,12 +1886,12 @@ watch(selectedScope, () => {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary);
 }
 
 .view-type {
   font-size: 14px;
-  color: var(--text-muted, #64748b);
+  color: var(--text-tertiary);
 }
 
 .view-section {
@@ -1890,12 +1905,12 @@ watch(selectedScope, () => {
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--text-muted, #64748b);
+  color: var(--text-tertiary);
 }
 
 .view-section p {
   margin: 0;
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary);
 }
 
 .secret-display {
@@ -1903,16 +1918,16 @@ watch(selectedScope, () => {
   align-items: center;
   gap: 8px;
   padding: 12px;
-  background: var(--bg-tertiary, #f8fafc);
+  background: var(--bg-tertiary);
   border-radius: 8px;
 }
 
 .secret-display code {
   flex: 1;
-  font-family: 'Monaco', 'Menlo', monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   word-break: break-all;
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary);
 }
 
 .secret-actions {
@@ -1937,12 +1952,12 @@ watch(selectedScope, () => {
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--text-muted, #64748b);
+  color: var(--text-tertiary);
 }
 
 .view-item span {
   font-size: 14px;
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary);
 }
 
 .tags-list {
@@ -1952,11 +1967,11 @@ watch(selectedScope, () => {
 }
 
 .text-danger {
-  color: var(--danger, #ef4444) !important;
+  color: var(--color-error) !important;
 }
 
 .text-warning {
-  color: var(--warning, #f59e0b) !important;
+  color: var(--color-warning) !important;
 }
 
 /* Transfer & Delete Modals */
@@ -1979,13 +1994,13 @@ watch(selectedScope, () => {
 }
 
 .transfer-icon {
-  background: rgba(99, 102, 241, 0.1);
-  color: var(--primary, #6366f1);
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
 }
 
 .delete-icon {
-  background: rgba(239, 68, 68, 0.1);
-  color: var(--danger, #ef4444);
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .transfer-content h4,
@@ -1993,13 +2008,13 @@ watch(selectedScope, () => {
   margin: 0 0 8px;
   font-size: 18px;
   font-weight: 600;
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary);
 }
 
 .transfer-content p,
 .delete-content p {
   margin: 0 0 16px;
-  color: var(--text-secondary, #475569);
+  color: var(--text-secondary);
 }
 
 .transfer-warning,
@@ -2013,20 +2028,20 @@ watch(selectedScope, () => {
 }
 
 .transfer-warning {
-  background: rgba(99, 102, 241, 0.1);
-  color: var(--primary, #6366f1);
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
 }
 
 .delete-warning {
-  background: rgba(239, 68, 68, 0.1);
-  color: var(--danger, #ef4444);
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 /* Buttons */
 .btn-primary {
   padding: 10px 20px;
-  background: var(--primary, #6366f1);
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
   border: none;
   border-radius: 8px;
   font-size: 14px;
@@ -2040,7 +2055,7 @@ watch(selectedScope, () => {
 }
 
 .btn-primary:hover {
-  background: var(--primary-dark, #4f46e5);
+  background: var(--color-primary-hover);
 }
 
 .btn-primary:disabled {
@@ -2050,8 +2065,8 @@ watch(selectedScope, () => {
 
 .btn-secondary {
   padding: 10px 20px;
-  background: var(--bg-tertiary, #f1f5f9);
-  color: var(--text-secondary, #475569);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
   border: none;
   border-radius: 8px;
   font-size: 14px;
@@ -2061,13 +2076,13 @@ watch(selectedScope, () => {
 }
 
 .btn-secondary:hover {
-  background: var(--bg-hover, #e2e8f0);
+  background: var(--bg-hover);
 }
 
 .btn-danger {
   padding: 10px 20px;
-  background: var(--danger, #ef4444);
-  color: white;
+  background: var(--color-error);
+  color: var(--text-on-error);
   border: none;
   border-radius: 8px;
   font-size: 14px;
@@ -2081,7 +2096,7 @@ watch(selectedScope, () => {
 }
 
 .btn-danger:hover {
-  background: #dc2626;
+  background: var(--color-error-hover);
 }
 
 .btn-danger:disabled {
