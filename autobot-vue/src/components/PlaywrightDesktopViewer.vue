@@ -182,10 +182,11 @@ export default {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .playwright-desktop-viewer {
-  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  background: var(--gradient-surface);
   border-radius: 8px;
-  border: 2px solid #9333ea;
+  border: 2px solid var(--color-purple);
   min-height: 500px;
   position: relative;
   overflow: hidden;
@@ -201,24 +202,24 @@ export default {
 
 .connection-status {
   text-align: center;
-  color: #6b7280;
+  color: var(--text-tertiary);
 }
 
 .connect-btn {
-  background: linear-gradient(135deg, #9333ea 0%, #7c3aed 100%);
-  color: white;
+  background: var(--gradient-purple);
+  color: var(--text-on-primary);
   border: none;
   border-radius: 6px;
   padding: 0.75rem 1.5rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(147, 51, 234, 0.2);
+  box-shadow: var(--shadow-purple-sm);
 }
 
 .connect-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(147, 51, 234, 0.3);
+  box-shadow: var(--shadow-purple-md);
 }
 
 .connect-btn:disabled {
@@ -234,8 +235,8 @@ export default {
 }
 
 .vnc-header {
-  background: linear-gradient(135deg, #9333ea 0%, #7c3aed 100%);
-  color: white;
+  background: var(--gradient-purple);
+  color: var(--text-on-primary);
   padding: 0.75rem 1rem;
   display: flex;
   justify-content: space-between;
@@ -250,25 +251,25 @@ export default {
 }
 
 .control-btn {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--bg-overlay-light);
   border: none;
   border-radius: 4px;
   padding: 0.25rem 0.5rem;
-  color: white;
+  color: var(--text-on-primary);
   cursor: pointer;
   font-size: 0.875rem;
   transition: background 0.2s ease;
 }
 
 .control-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--bg-overlay-medium);
 }
 
 .vnc-iframe {
   flex: 1;
   width: 100%;
   border: none;
-  background: #000;
+  background: var(--bg-dark);
   margin: 0 2px 2px 2px;
   border-radius: 0 0 6px 6px;
   min-height: 450px;

@@ -186,8 +186,9 @@ const cancelAdd = () => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .workflow-management {
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--border-primary);
 }
 
 .section-header {
@@ -199,7 +200,7 @@ const cancelAdd = () => {
 
 .section-header h4 {
   margin: 0;
-  color: #f3f4f6;
+  color: var(--text-primary);
 }
 
 .steps-manager {
@@ -216,19 +217,19 @@ const cancelAdd = () => {
   gap: 16px;
   padding: 16px;
   margin-bottom: 12px;
-  background: #111827;
-  border: 1px solid #374151;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-secondary);
   border-radius: 8px;
 }
 
 .step-item.current {
-  border-color: #2563eb;
-  background: rgba(37, 99, 235, 0.1);
+  border-color: var(--color-primary);
+  background: var(--color-primary-alpha-10);
 }
 
 .step-item.completed {
-  border-color: #22c55e;
-  background: rgba(34, 197, 94, 0.1);
+  border-color: var(--color-success);
+  background: var(--color-success-alpha-10);
 }
 
 .step-controls {
@@ -245,8 +246,8 @@ const cancelAdd = () => {
 }
 
 .step-number {
-  background: #2563eb;
-  color: #ffffff;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -264,16 +265,16 @@ const cancelAdd = () => {
 .step-title {
   font-weight: 600;
   margin-bottom: 4px;
-  color: #f3f4f6;
+  color: var(--text-primary);
 }
 
 .step-command {
   font-size: 0.85em;
-  color: #9ca3af;
+  color: var(--text-tertiary);
 }
 
 .step-command code {
-  background: #0f1419;
+  background: var(--bg-tertiary);
   padding: 2px 6px;
   border-radius: 4px;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
@@ -285,15 +286,15 @@ const cancelAdd = () => {
 }
 
 .add-step-section {
-  border-top: 1px solid #374151;
+  border-top: 1px solid var(--border-secondary);
   padding-top: 20px;
 }
 
 .add-step-form {
   margin-top: 16px;
   padding: 16px;
-  background: #111827;
-  border: 1px solid #374151;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-secondary);
   border-radius: 8px;
 }
 
@@ -305,15 +306,15 @@ const cancelAdd = () => {
   display: block;
   margin-bottom: 6px;
   font-weight: 600;
-  color: #f3f4f6;
+  color: var(--text-primary);
 }
 
 .form-input,
 .form-textarea {
   width: 100%;
-  background: #0f1419;
-  border: 1px solid #374151;
-  color: #ffffff;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-secondary);
+  color: var(--text-primary);
   padding: 10px;
   border-radius: 6px;
   font-family: inherit;
@@ -322,7 +323,7 @@ const cancelAdd = () => {
 .form-input:focus,
 .form-textarea:focus {
   outline: none;
-  border-color: #2563eb;
+  border-color: var(--color-primary);
 }
 
 .form-actions {

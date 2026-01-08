@@ -226,10 +226,11 @@ export default {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .history-view {
-  background-color: white;
+  background-color: var(--bg-primary);
   border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
   padding: 15px;
   height: 100%;
   display: flex;
@@ -239,7 +240,7 @@ export default {
 .history-view h2 {
   margin: 0 0 15px 0;
   font-size: 20px;
-  color: #007bff;
+  color: var(--color-primary);
 }
 
 .history-actions {
@@ -249,8 +250,8 @@ export default {
 }
 
 .history-actions button {
-  background-color: #007bff;
-  color: white;
+  background-color: var(--color-primary);
+  color: var(--text-on-primary);
   border: none;
   padding: 8px 15px;
   border-radius: 4px;
@@ -263,7 +264,7 @@ export default {
 }
 
 .history-actions button:hover:not(:disabled) {
-  background-color: #0056b3;
+  background-color: var(--color-primary-hover);
 }
 
 .history-actions button:disabled {
@@ -276,17 +277,17 @@ export default {
 }
 
 .history-actions button:last-child {
-  background-color: #dc3545;
+  background-color: var(--color-danger);
 }
 
 .history-actions button:last-child:hover:not(:disabled) {
-  background-color: #c82333;
+  background-color: var(--color-danger-hover);
 }
 
 .history-list-container {
   flex: 1;
   overflow-y: auto;
-  border: 1px solid #e9ecef;
+  border: 1px solid var(--border-light);
   border-radius: 4px;
   padding: 10px;
   position: relative;
@@ -298,7 +299,7 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(255, 255, 255, 0.9);
+  background-color: var(--bg-overlay-light);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -311,7 +312,7 @@ export default {
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  color: #007bff;
+  color: var(--color-primary);
 }
 
 .loading-content p {
@@ -331,14 +332,14 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 10px;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--border-light);
   border-radius: 4px;
   cursor: pointer;
   transition: background-color 0.3s;
 }
 
 .history-entry:hover {
-  background-color: #f1f1f1;
+  background-color: var(--bg-hover);
 }
 
 .history-summary {
@@ -348,14 +349,14 @@ export default {
 
 .history-date {
   font-size: 14px;
-  color: #6c757d;
+  color: var(--text-tertiary);
   display: block;
   margin-bottom: 5px;
 }
 
 .history-preview {
   font-size: 16px;
-  color: #343a40;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -363,8 +364,8 @@ export default {
 }
 
 .history-actions-entry button {
-  background-color: #dc3545;
-  color: white;
+  background-color: var(--color-danger);
+  color: var(--text-on-primary);
   border: none;
   padding: 5px 10px;
   border-radius: 4px;
@@ -377,7 +378,7 @@ export default {
 }
 
 .history-actions-entry button:hover:not(:disabled) {
-  background-color: #c82333;
+  background-color: var(--color-danger-hover);
 }
 
 .history-actions-entry button:disabled {

@@ -33,9 +33,10 @@ defineProps<Props>()
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .risk-section {
   padding: 20px;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--border-primary);
 }
 
 .risk-indicator {
@@ -45,23 +46,23 @@ defineProps<Props>()
 }
 
 .risk-indicator.low {
-  background: rgba(34, 197, 94, 0.1);
-  border-left-color: #22c55e;
+  background: var(--color-success-alpha-10);
+  border-left-color: var(--color-success);
 }
 
 .risk-indicator.moderate {
-  background: rgba(251, 191, 36, 0.1);
-  border-left-color: #fbbf24;
+  background: var(--color-warning-alpha-10);
+  border-left-color: var(--color-warning);
 }
 
 .risk-indicator.high {
-  background: rgba(239, 68, 68, 0.1);
-  border-left-color: #ef4444;
+  background: var(--color-error-alpha-10);
+  border-left-color: var(--color-error);
 }
 
 .risk-indicator.critical {
-  background: rgba(220, 38, 38, 0.1);
-  border-left-color: #dc2626;
+  background: var(--color-danger-alpha-10);
+  border-left-color: var(--color-danger);
   animation: pulse 2s infinite;
 }
 
@@ -69,7 +70,7 @@ defineProps<Props>()
   font-weight: 600;
   display: block;
   margin-bottom: 8px;
-  color: #f3f4f6;
+  color: var(--text-primary);
 }
 
 .risk-reasons {
@@ -78,7 +79,7 @@ defineProps<Props>()
 
 .risk-reason {
   font-size: 0.9em;
-  color: #d1d5db;
+  color: var(--text-secondary);
   margin-bottom: 4px;
 }
 

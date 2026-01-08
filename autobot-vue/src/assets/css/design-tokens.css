@@ -79,6 +79,26 @@
   --color-info-bg: rgba(59, 130, 246, 0.1);
   --color-info-bg-hover: rgba(59, 130, 246, 0.2);
 
+  /* Danger Colors (for critical actions) */
+  --color-danger: #dc2626;
+  --color-danger-hover: #b91c1c;
+  --color-danger-light: #f87171;
+  --color-danger-dark: #991b1b;
+  --color-danger-bg: rgba(220, 38, 38, 0.1);
+  --color-danger-alpha-10: rgba(220, 38, 38, 0.1);
+
+  /* Purple/Violet Colors (for special UI elements) */
+  --color-purple: #9333ea;
+  --color-purple-hover: #7c3aed;
+  --color-purple-light: #a855f7;
+  --color-purple-dark: #6b21a8;
+
+  /* Alpha variants for semantic colors */
+  --color-primary-alpha-10: rgba(99, 102, 241, 0.1);
+  --color-success-alpha-10: rgba(16, 185, 129, 0.1);
+  --color-warning-alpha-10: rgba(245, 158, 11, 0.1);
+  --color-error-alpha-10: rgba(239, 68, 68, 0.1);
+
   /* ============================================
    * BACKGROUND COLORS
    * Theme-aware - overridden in theme files
@@ -99,6 +119,19 @@
   /* Semi-transparent backgrounds (for overlays) */
   --bg-secondary-alpha: rgba(30, 41, 59, 0.5);
   --bg-tertiary-alpha: rgba(51, 65, 85, 0.5);
+  --bg-overlay-light: rgba(255, 255, 255, 0.2);
+  --bg-overlay-medium: rgba(255, 255, 255, 0.3);
+  --bg-dark: #000000;
+
+  /* Gradients */
+  --gradient-surface: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  --gradient-purple: linear-gradient(135deg, #9333ea 0%, #7c3aed 100%);
+  --gradient-primary: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
+
+  /* Border colors (light theme variants) */
+  --border-light: #e9ecef;
+  --border-primary: #333333;
+  --border-secondary: #374151;
 
   /* ============================================
    * TEXT COLORS
@@ -321,6 +354,8 @@
 
   /* Colored shadows */
   --shadow-primary: 0 4px 14px 0 rgba(99, 102, 241, 0.3);
+  --shadow-purple-sm: 0 2px 4px rgba(147, 51, 234, 0.2);
+  --shadow-purple-md: 0 4px 8px rgba(147, 51, 234, 0.3);
 
   /* ============================================
    * TRANSITIONS

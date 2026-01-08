@@ -828,18 +828,20 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to design tokens from design-tokens.css */
+
 .settings-panel {
-  padding: 20px;
-  max-width: 1200px;
+  padding: var(--spacing-5);
+  max-width: var(--content-max-width);
   margin: 0 auto;
-  background: #f8f9fa;
-  min-height: calc(100vh - 40px);
+  background: var(--bg-secondary);
+  min-height: var(--view-min-height);
 }
 
 .settings-content {
-  background: #ffffff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
   overflow: hidden;
 }
 
@@ -848,18 +850,18 @@ onMounted(async () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px;
-  color: #6c757d;
+  padding: var(--spacing-16) var(--spacing-5);
+  color: var(--text-secondary);
 }
 
 .loading-spinner {
-  border: 3px solid #f3f3f3;
-  border-top: 3px solid #007acc;
-  border-radius: 50%;
+  border: 3px solid var(--bg-tertiary);
+  border-top: 3px solid var(--color-primary);
+  border-radius: var(--radius-full);
   width: 40px;
   height: 40px;
   animation: spin 1s linear infinite;
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 @keyframes spin {
@@ -868,109 +870,89 @@ onMounted(async () => {
 }
 
 .settings-status {
-  padding: 16px 24px;
+  padding: var(--spacing-4) var(--spacing-6);
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-weight: 500;
+  gap: var(--spacing-3);
+  font-weight: var(--font-medium);
 }
 
 .settings-status.offline {
-  background: #fff3cd;
-  color: #856404;
-  border-bottom: 1px solid #ffeaa7;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-dark);
+  border-bottom: 1px solid var(--color-warning-border);
 }
 
 .settings-actions {
   display: flex;
-  gap: 16px;
-  padding: 24px;
-  background: #f8f9fa;
-  border-top: 1px solid #dee2e6;
+  gap: var(--spacing-4);
+  padding: var(--spacing-6);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-default);
   justify-content: flex-end;
 }
 
 .save-settings-btn {
-  background: #28a745;
-  color: white;
+  background: var(--color-success);
+  color: var(--text-on-success);
   border: none;
-  padding: 12px 24px;
-  border-radius: 6px;
+  padding: var(--spacing-3) var(--spacing-6);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
   display: flex;
   align-items: center;
-  gap: 8px;
-  transition: background-color 0.2s ease;
+  gap: var(--spacing-2);
+  transition: background-color var(--duration-200) var(--ease-in-out);
 }
 
 .save-settings-btn:hover:not(:disabled) {
-  background: #218838;
+  background: var(--color-success-hover);
 }
 
 .save-settings-btn:disabled {
-  background: #6c757d;
+  background: var(--color-secondary);
   cursor: not-allowed;
 }
 
 .discard-btn {
-  background: #6c757d;
-  color: white;
+  background: var(--color-secondary);
+  color: var(--text-on-primary);
   border: none;
-  padding: 12px 24px;
-  border-radius: 6px;
+  padding: var(--spacing-3) var(--spacing-6);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
   display: flex;
   align-items: center;
-  gap: 8px;
-  transition: background-color 0.2s ease;
+  gap: var(--spacing-2);
+  transition: background-color var(--duration-200) var(--ease-in-out);
 }
 
 .discard-btn:hover:not(:disabled) {
-  background: #5a6268;
+  background: var(--color-secondary-hover);
 }
 
-/* Dark theme support */
-@media (prefers-color-scheme: dark) {
-  .settings-panel {
-background: #1a1a1a;
-  }
-
-
-  .settings-content {
-background: #2d2d2d;
-  }
-
-  .settings-status.offline {
-background: #664d03;
-color: #ffecb5;
-border-bottom-color: #b08800;
-  }
-
-  .settings-actions {
-background: #383838;
-border-top-color: #555;
-  }
-}
+/* Dark theme support - now handled by design tokens automatically */
+/* The design tokens are already dark-theme by default */
 
 /* Mobile responsive */
 @media (max-width: 768px) {
   .settings-panel {
-padding: 12px;
+    padding: var(--spacing-3);
   }
 
   .settings-actions {
-flex-direction: column;
-gap: 12px;
+    flex-direction: column;
+    gap: var(--spacing-3);
   }
 
   .save-settings-btn,
   .discard-btn {
-width: 100%;
-justify-content: center;
+    width: 100%;
+    justify-content: center;
   }
 }
 </style>

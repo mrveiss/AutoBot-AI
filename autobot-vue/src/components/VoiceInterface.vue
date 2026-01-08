@@ -73,7 +73,7 @@
             v-model="settings.speech_rate"
             class="voice-slider"
           >
-          <span style="color: #374151; font-weight: 500;">{{ settings.speech_rate }}x</span>
+          <span class="slider-value">{{ settings.speech_rate }}x</span>
         </div>
         <div class="setting-group">
           <label>Voice Pitch</label>
@@ -85,7 +85,7 @@
             v-model="settings.pitch"
             class="voice-slider"
           >
-          <span style="color: #374151; font-weight: 500;">{{ settings.pitch }}x</span>
+          <span class="slider-value">{{ settings.pitch }}x</span>
         </div>
         <div class="setting-group">
           <label>Auto-Listen After Response</label>
@@ -113,7 +113,7 @@
             class="voice-slider"
             @change="updateWakeWordConfig"
           >
-          <span style="color: #374151; font-weight: 500;">{{ (wakeWordSettings.confidence_threshold * 100).toFixed(0) }}%</span>
+          <span class="slider-value">{{ (wakeWordSettings.confidence_threshold * 100).toFixed(0) }}%</span>
         </div>
         <div class="setting-group wake-words-list">
           <label>Active Wake Words</label>
@@ -568,26 +568,26 @@ export default {
 </script>
 
 <style scoped>
-:root {
-  --blue-gray-700: #374151;
-}
+/* VoiceInterface - Migrated to Design Tokens
+ * Issue #704: CSS Design System - Centralized Theming & SSOT Styles
+ */
 
 .voice-interface {
   display: flex;
   flex-direction: column;
   height: 100%;
-  color: #374151;
-  background-color: white;
+  color: var(--text-primary);
+  background-color: var(--bg-card);
   overflow-y: auto;
   max-height: calc(100vh - 200px);
-  padding: 20px;
+  padding: var(--spacing-5);
 }
 
 .voice-container {
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-template-rows: auto auto auto;
-  gap: 24px;
+  gap: var(--spacing-6);
   height: 100%;
 }
 
@@ -596,26 +596,26 @@ export default {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
-  padding: 32px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  gap: var(--spacing-6);
+  padding: var(--spacing-8);
+  background: var(--bg-hover);
+  border-radius: var(--radius-2xl);
+  border: 1px solid var(--border-subtle);
 }
 
 .waveform-container {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
   height: 80px;
 }
 
 .wave-bar {
   width: 4px;
-  background: linear-gradient(to top, #4facfe, #00f2fe);
-  border-radius: 2px;
+  background: linear-gradient(to top, var(--chart-cyan), var(--chart-cyan-light));
+  border-radius: var(--radius-xs);
   height: 20px;
-  transition: height 0.3s ease;
+  transition: height var(--duration-300) var(--ease-in-out);
 }
 
 .wave-bar.active {
@@ -630,38 +630,38 @@ export default {
 .voice-status-circle {
   width: 120px;
   height: 120px;
-  border-radius: 50%;
-  background: rgba(99, 102, 241, 0.1);
-  border: 3px solid rgba(99, 102, 241, 0.2);
+  border-radius: var(--radius-full);
+  background: var(--color-primary-bg);
+  border: 3px solid var(--color-primary-bg-hover);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-300) var(--ease-in-out);
   position: relative;
   overflow: hidden;
 }
 
 .voice-status-circle.listening {
-  border-color: #10b981;
-  background: rgba(16, 185, 129, 0.2);
+  border-color: var(--color-success);
+  background: var(--color-success-bg-hover);
   animation: listeningPulse 2s ease-in-out infinite;
 }
 
 .voice-status-circle.processing {
-  border-color: #f59e0b;
-  background: rgba(245, 158, 11, 0.2);
+  border-color: var(--color-warning);
+  background: var(--color-warning-bg-hover);
   animation: processingRotate 1s linear infinite;
 }
 
 .voice-status-circle.speaking {
-  border-color: #3b82f6;
-  background: rgba(59, 130, 246, 0.2);
+  border-color: var(--color-info);
+  background: var(--color-info-bg-hover);
   animation: speakingPulse 0.5s ease-in-out infinite;
 }
 
 @keyframes listeningPulse {
-  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
-  50% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(16, 185, 129, 0); }
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 var(--color-success-bg); }
+  50% { transform: scale(1.05); box-shadow: 0 0 0 20px transparent; }
 }
 
 @keyframes processingRotate {
@@ -675,47 +675,47 @@ export default {
 }
 
 .status-icon {
-  font-size: 32px;
-  z-index: 2;
+  font-size: var(--text-4xl);
+  z-index: var(--z-10);
 }
 
 .voice-controls {
   display: flex;
-  gap: 16px;
+  gap: var(--spacing-4);
   justify-content: center;
   grid-column: 1 / -1;
 }
 
 .voice-btn {
-  padding: 16px 32px;
+  padding: var(--spacing-4) var(--spacing-8);
   border: none;
-  border-radius: 16px;
-  font-size: 16px;
-  font-weight: 600;
+  border-radius: var(--radius-xl);
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-300) var(--ease-in-out);
   position: relative;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .voice-btn.primary {
-  background: linear-gradient(135deg, #10b981, #34d399);
-  color: white;
+  background: linear-gradient(135deg, var(--color-success), var(--color-success-light));
+  color: var(--text-on-success);
 }
 
 .voice-btn.secondary {
-  background: rgba(99, 102, 241, 0.1);
-  color: #374151;
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  background: var(--color-primary-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--color-primary-bg-hover);
 }
 
 .voice-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-xl);
 }
 
 .voice-btn:disabled,
@@ -729,31 +729,36 @@ export default {
 .setting-group {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: var(--spacing-3);
+  margin-bottom: var(--spacing-4);
   flex-wrap: wrap;
 }
 
 .setting-group label {
-  font-size: 14px;
-  color: #374151;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
   min-width: 120px;
-  font-weight: 500;
+  font-weight: var(--font-medium);
 }
 
 .setting-group select {
-  background: white;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  color: #374151;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  padding: var(--spacing-2) var(--spacing-3);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
 }
 
 .voice-slider {
   flex: 1;
   max-width: 200px;
-  accent-color: #10b981;
+  accent-color: var(--color-success);
+}
+
+.slider-value {
+  color: var(--text-primary);
+  font-weight: var(--font-medium);
 }
 
 .history-list {
@@ -764,53 +769,53 @@ export default {
 .history-item {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  gap: 12px;
-  padding: 12px;
-  background: rgba(148, 163, 184, 0.1);
-  border-radius: 8px;
-  margin-bottom: 8px;
-  font-size: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  gap: var(--spacing-3);
+  padding: var(--spacing-3);
+  background: var(--bg-hover);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-2);
+  font-size: var(--text-sm);
+  border: 1px solid var(--border-subtle);
 }
 
 .command-time {
-  color: #6b7280;
-  font-size: 12px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
 }
 
 .command-text {
-  color: #374151;
-  font-weight: 500;
+  color: var(--text-primary);
+  font-weight: var(--font-medium);
 }
 
 .command-confidence {
-  color: #10b981;
-  font-weight: 600;
-  font-size: 12px;
+  color: var(--color-success);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-xs);
 }
 
 .voice-status-display {
   grid-column: 1 / -1;
-  background: rgba(248, 250, 252, 0.8);
-  border-radius: 12px;
-  padding: 20px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  color: #374151;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-5);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
 }
 
 .transcription {
-  margin-bottom: 12px;
-  font-size: 16px;
-  color: #374151;
+  margin-bottom: var(--spacing-3);
+  font-size: var(--text-base);
+  color: var(--text-primary);
 }
 
 .status-message {
-  font-size: 14px;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
   font-style: italic;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 /* Wake word styles */
@@ -822,36 +827,36 @@ export default {
 .wake-words-container {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
+  gap: var(--spacing-2);
+  margin-top: var(--spacing-2);
 }
 
 .wake-word-tag {
-  background: linear-gradient(135deg, #10b981, #34d399);
-  color: white;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 500;
+  background: linear-gradient(135deg, var(--color-success), var(--color-success-light));
+  color: var(--text-on-success);
+  padding: var(--spacing-1-5) var(--spacing-3);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .remove-wake-word {
   background: rgba(255, 255, 255, 0.2);
   border: none;
-  color: white;
+  color: var(--text-on-success);
   width: 20px;
   height: 20px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: bold;
-  font-size: 14px;
-  transition: background 0.2s;
+  font-weight: var(--font-bold);
+  font-size: var(--text-sm);
+  transition: background var(--duration-200);
 }
 
 .remove-wake-word:hover:not(:disabled) {
@@ -865,48 +870,48 @@ export default {
 
 .add-wake-word-input {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
   flex: 1;
 }
 
 .add-wake-word-input input {
   flex: 1;
-  padding: 8px 12px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 8px;
-  font-size: 14px;
-  background: white;
-  color: #374151;
+  padding: var(--spacing-2) var(--spacing-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  background: var(--bg-card);
+  color: var(--text-primary);
 }
 
 .add-btn {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: white;
+  background: linear-gradient(135deg, var(--color-primary), var(--chart-purple));
+  color: var(--text-on-primary);
   border: none;
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-weight: 500;
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--radius-lg);
+  font-weight: var(--font-medium);
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: transform var(--duration-200), box-shadow var(--duration-200);
 }
 
 .add-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  box-shadow: var(--shadow-primary);
 }
 
 .wake-word-stats {
-  margin-top: 16px;
-  padding: 12px;
-  background: rgba(99, 102, 241, 0.05);
-  border-radius: 8px;
-  border: 1px solid rgba(99, 102, 241, 0.1);
+  margin-top: var(--spacing-4);
+  padding: var(--spacing-3);
+  background: var(--color-primary-bg);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-primary-bg-hover);
 }
 
 .stat-item {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .stat-item:last-child {
@@ -914,14 +919,14 @@ export default {
 }
 
 .stat-label {
-  color: #6b7280;
-  font-size: 13px;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
 }
 
 .stat-value {
-  color: #374151;
-  font-weight: 600;
-  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
 }
 
 @media (max-width: 768px) {
@@ -935,8 +940,8 @@ export default {
   }
 
   .voice-btn {
-    padding: 12px 24px;
-    font-size: 14px;
+    padding: var(--spacing-3) var(--spacing-6);
+    font-size: var(--text-sm);
   }
 }
 </style>

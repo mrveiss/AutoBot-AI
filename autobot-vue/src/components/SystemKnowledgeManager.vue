@@ -764,130 +764,135 @@ export default {
 
 <style scoped>
 .system-knowledge-manager {
-  padding: 20px;
+  padding: var(--spacing-5);
   width: 100%;
   flex: 1;
 }
 
 .header {
-  margin-bottom: 30px;
+  margin-bottom: var(--spacing-8);
 }
 
 .header h2 {
-  margin: 0 0 10px 0;
-  color: #2c3e50;
+  margin: 0 0 var(--spacing-2) 0;
+  color: var(--text-primary);
 }
 
 .subtitle {
   margin: 0;
-  color: #7f8c8d;
-  font-size: 14px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 .host-selection {
-  margin-bottom: 25px;
-  padding: 15px;
-  background: #f8f9fa;
-  border-radius: 8px;
+  margin-bottom: var(--spacing-6);
+  padding: var(--spacing-4);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: var(--spacing-4);
 }
 
 .host-selection label {
-  font-weight: 600;
-  color: #2c3e50;
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
   white-space: nowrap;
 }
 
 .host-select {
   flex: 1;
   max-width: 400px;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  background: white;
-  font-size: 14px;
+  padding: var(--spacing-2) var(--spacing-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-default);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
 .host-select:focus {
   outline: none;
-  border-color: #3498db;
-  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
+  border-color: var(--color-info);
+  box-shadow: var(--shadow-focus);
 }
 
 .status-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-  margin-bottom: 30px;
+  gap: var(--spacing-5);
+  margin-bottom: var(--spacing-8);
 }
 
 /* BasePanel handles card container - only content styles remain */
 .status-card-content {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: var(--spacing-4);
 }
 
 .status-icon {
-  font-size: 32px;
+  font-size: var(--text-4xl);
 }
 
 .status-content h3 {
-  margin: 0 0 5px 0;
-  font-size: 24px;
-  color: #2c3e50;
+  margin: 0 0 var(--spacing-1) 0;
+  font-size: var(--text-2xl);
+  color: var(--text-primary);
 }
 
 .status-content p {
   margin: 0;
-  color: #7f8c8d;
-  font-size: 12px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
 }
 
 .actions {
   display: flex;
-  gap: 15px;
-  margin-bottom: 30px;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-8);
   flex-wrap: wrap;
 }
 
 .btn-highlight {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--chart-purple) 100%);
+  color: var(--text-on-primary);
   border: 2px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-  font-weight: 600;
+  box-shadow: var(--shadow-primary);
+  font-weight: var(--font-semibold);
 }
 
 .btn-highlight:hover:not(:disabled) {
-  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+  background: linear-gradient(135deg, var(--chart-purple) 0%, var(--color-primary) 100%);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.6);
   transform: translateY(-2px);
 }
 
 .progress-display {
-  background: #ecf0f1;
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 20px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-5);
+  margin-bottom: var(--spacing-5);
 }
 
 .progress-content {
   display: flex;
   align-items: center;
-  gap: 15px;
-  margin-bottom: 15px;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-4);
+}
+
+.progress-content p {
+  color: var(--text-primary);
 }
 
 .spinner {
   width: 24px;
   height: 24px;
-  border: 3px solid #ecf0f1;
-  border-top-color: #3498db;
-  border-radius: 50%;
+  border: 3px solid var(--bg-tertiary);
+  border-top-color: var(--color-info);
+  border-radius: var(--radius-full);
   animation: spin 1s linear infinite;
 }
 
@@ -897,123 +902,125 @@ export default {
 
 .progress-bar {
   height: 6px;
-  background: #ddd;
-  border-radius: 3px;
+  background: var(--border-default);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: #3498db;
-  transition: width 0.5s;
+  background: var(--color-info);
+  transition: width var(--duration-500);
 }
 
 .result-display {
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 30px;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-5);
+  margin-bottom: var(--spacing-8);
   display: flex;
-  gap: 15px;
+  gap: var(--spacing-4);
 }
 
 .result-display.success {
-  background: #d5f4e6;
-  border-left: 4px solid #2ecc71;
+  background: var(--color-success-bg);
+  border-left: 4px solid var(--color-success);
 }
 
 .result-display.error {
-  background: #fadbd8;
-  border-left: 4px solid #e74c3c;
+  background: var(--color-error-bg);
+  border-left: 4px solid var(--color-error);
 }
 
 .result-icon {
-  font-size: 32px;
+  font-size: var(--text-4xl);
 }
 
 .result-content h4 {
-  margin: 0 0 10px 0;
+  margin: 0 0 var(--spacing-2) 0;
+  color: var(--text-primary);
 }
 
 .result-content p {
-  margin: 0 0 10px 0;
+  margin: 0 0 var(--spacing-2) 0;
+  color: var(--text-primary);
 }
 
 .result-details {
-  margin-top: 15px;
-  padding-top: 15px;
-  border-top: 1px solid rgba(0,0,0,0.1);
+  margin-top: var(--spacing-4);
+  padding-top: var(--spacing-4);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .result-details p {
-  margin: 5px 0;
-  font-size: 14px;
+  margin: var(--spacing-1) 0;
+  font-size: var(--text-sm);
 }
 
 /* BasePanel handles info section container - only content styles remain */
 .info-content p {
-  margin: 10px 0;
-  line-height: 1.6;
-  color: #555;
+  margin: var(--spacing-2) 0;
+  line-height: var(--leading-relaxed);
+  color: var(--text-secondary);
 }
 
 .activity-log {
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-5);
+  box-shadow: var(--shadow-md);
 }
 
 .activity-log h3 {
-  margin: 0 0 15px 0;
-  color: #2c3e50;
+  margin: 0 0 var(--spacing-4) 0;
+  color: var(--text-primary);
 }
 
 .log-entries {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--spacing-2);
 }
 
 .log-entry {
   display: flex;
-  gap: 15px;
-  padding: 10px;
-  background: #f8f9fa;
-  border-radius: 4px;
-  font-size: 13px;
+  gap: var(--spacing-4);
+  padding: var(--spacing-2);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-default);
+  font-size: var(--text-sm);
 }
 
 .log-time {
-  color: #7f8c8d;
-  font-family: monospace;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
   min-width: 80px;
 }
 
 .log-message {
   flex: 1;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .log-status {
-  padding: 2px 8px;
-  border-radius: 3px;
-  font-size: 11px;
-  font-weight: 500;
+  padding: var(--spacing-0-5) var(--spacing-2);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
   text-transform: uppercase;
 }
 
 .log-status.success {
-  background: #d5f4e6;
-  color: #27ae60;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .log-status.error {
-  background: #fadbd8;
-  color: #e74c3c;
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .log-status.info {
-  background: #d6eaf8;
-  color: #2980b9;
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 </style>
