@@ -322,9 +322,10 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .document-change-feed {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   padding: 1.5rem;
   margin-bottom: 1.5rem;
@@ -336,14 +337,14 @@ onUnmounted(() => {
   align-items: center;
   margin-bottom: 1rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-default);
 }
 
 .feed-title {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -365,23 +366,23 @@ onUnmounted(() => {
 }
 
 .badge-success {
-  background: #d1fae5;
-  color: #065f46;
+  background: var(--color-success-bg);
+  color: var(--color-success-dark);
 }
 
 .badge-info {
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--color-info-bg);
+  color: var(--color-info-dark);
 }
 
 .badge-danger {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--color-error-bg);
+  color: var(--color-error-dark);
 }
 
 .badge-secondary {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
 }
 
 .feed-controls {
@@ -404,25 +405,25 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.375rem;
   font-size: 0.875rem;
-  color: #374151;
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 
 .section-select {
   padding: 0.375rem 0.5rem;
   font-size: 0.875rem;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-light);
   border-radius: 4px;
-  background: #ffffff;
-  color: #374151;
+  background: var(--bg-card);
+  color: var(--text-secondary);
   min-width: 180px;
   max-height: 100px;
 }
 
 .section-select:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-alpha, rgba(59, 130, 246, 0.2));
 }
 
 .auto-refresh-toggle {
@@ -449,7 +450,7 @@ onUnmounted(() => {
 
 .last-scan {
   margin-left: auto;
-  color: #6b7280;
+  color: var(--text-tertiary);
   font-size: 0.875rem;
   display: flex;
   align-items: center;
@@ -457,8 +458,8 @@ onUnmounted(() => {
 }
 
 .vectorization-status {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
@@ -466,7 +467,7 @@ onUnmounted(() => {
 
 .status-header {
   font-weight: 600;
-  color: #374151;
+  color: var(--text-secondary);
   margin-bottom: 0.5rem;
   display: flex;
   align-items: center;
@@ -488,15 +489,15 @@ onUnmounted(() => {
 }
 
 .stat-success {
-  color: #10b981;
+  color: var(--color-success);
 }
 
 .stat-failed {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .stat-skipped {
-  color: #f59e0b;
+  color: var(--color-warning);
 }
 
 .change-filters {
@@ -525,19 +526,19 @@ onUnmounted(() => {
 }
 
 .change-item:hover {
-  background: #f9fafb;
+  background: var(--bg-tertiary);
 }
 
 .change-added {
-  border-left: 3px solid #10b981;
+  border-left: 3px solid var(--color-success);
 }
 
 .change-updated {
-  border-left: 3px solid #3b82f6;
+  border-left: 3px solid var(--color-primary);
 }
 
 .change-removed {
-  border-left: 3px solid #ef4444;
+  border-left: 3px solid var(--color-error);
 }
 
 .change-icon {
@@ -557,13 +558,13 @@ onUnmounted(() => {
 
 .change-title {
   font-weight: 500;
-  color: #111827;
+  color: var(--text-primary);
   margin-bottom: 0.25rem;
   word-break: break-word;
 }
 
 .change-command {
-  color: #6b7280;
+  color: var(--text-tertiary);
   font-weight: 400;
   font-size: 0.875rem;
 }
@@ -572,7 +573,7 @@ onUnmounted(() => {
   display: flex;
   gap: 0.75rem;
   font-size: 0.8125rem;
-  color: #6b7280;
+  color: var(--text-tertiary);
   flex-wrap: wrap;
 }
 
@@ -585,62 +586,8 @@ onUnmounted(() => {
   display: flex;
   gap: 0.75rem;
   padding-top: 1rem;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--border-default);
 }
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .document-change-feed {
-    background: #1f2937;
-    border-color: #374151;
-  }
-
-  .feed-header {
-    border-bottom-color: #374151;
-  }
-
-  .feed-title {
-    color: #f9fafb;
-  }
-
-  .btn-secondary {
-    background: #374151;
-    color: #d1d5db;
-  }
-
-  .btn-secondary:hover {
-    background: #4b5563;
-  }
-
-  .btn-outline-secondary {
-    color: #d1d5db;
-    border-color: #4b5563;
-  }
-
-  .btn-outline-secondary:hover {
-    background: #374151;
-  }
-
-  .filter-btn {
-    background: #374151;
-    border-color: #4b5563;
-    color: #d1d5db;
-  }
-
-  .filter-btn:hover {
-    background: #4b5563;
-  }
-
-  .change-item:hover {
-    background: #374151;
-  }
-
-  .change-title {
-    color: #f9fafb;
-  }
-
-  .feed-actions {
-    border-top-color: #374151;
-  }
-}
+/* Dark mode support handled automatically by CSS custom properties */
 </style>

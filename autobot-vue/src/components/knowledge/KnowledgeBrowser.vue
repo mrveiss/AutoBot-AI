@@ -1189,11 +1189,12 @@ watch(() => props.mode, () => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .knowledge-file-browser {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #f9fafb;
+  background: var(--bg-secondary);
 }
 
 /* Main Categories */
@@ -1202,8 +1203,8 @@ watch(() => props.mode, () => {
   grid-template-columns: repeat(3, 1fr);
   gap: 0.75rem;
   padding: 0.75rem;
-  background: white;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .main-category-card {
@@ -1213,7 +1214,7 @@ watch(() => props.mode, () => {
   padding: 0.75rem;
   border: 2px solid;
   border-radius: 8px;
-  background: white;
+  background: var(--bg-card);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -1230,7 +1231,7 @@ watch(() => props.mode, () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--bg-card);
   font-size: 1.5rem;
   flex-shrink: 0;
 }
@@ -1242,13 +1243,13 @@ watch(() => props.mode, () => {
 .category-info h3 {
   font-size: 1rem;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
   margin: 0 0 0.25rem 0;
 }
 
 .category-info p {
   font-size: 0.8125rem;
-  color: #6b7280;
+  color: var(--text-tertiary);
   margin: 0 0 0.375rem 0;
   line-height: 1.3;
 }
@@ -1262,8 +1263,8 @@ watch(() => props.mode, () => {
 .fact-count {
   font-size: 0.875rem;
   font-weight: 500;
-  color: #374151;
-  background: #f3f4f6;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
   padding: 0.25rem 0.75rem;
   border-radius: 6px;
 }
@@ -1275,9 +1276,9 @@ watch(() => props.mode, () => {
 
 /* Header */
 .browser-header {
-  background: white;
+  background: var(--bg-card);
   padding: 1rem;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2px solid var(--border-default);
   display: flex;
   align-items: center;
   gap: 1rem;
@@ -1301,7 +1302,7 @@ watch(() => props.mode, () => {
   flex: 0 0 auto;
   padding-bottom: 0.25rem;
   scrollbar-width: thin;
-  scrollbar-color: rgba(59, 130, 246, 0.3) transparent;
+  scrollbar-color: var(--color-primary-alpha-30) transparent;
 }
 
 .category-tabs::-webkit-scrollbar {
@@ -1313,7 +1314,7 @@ watch(() => props.mode, () => {
 }
 
 .category-tabs::-webkit-scrollbar-thumb {
-  background: rgba(59, 130, 246, 0.3);
+  background: var(--color-primary-alpha-30);
   border-radius: 2px;
 }
 
@@ -1324,7 +1325,7 @@ watch(() => props.mode, () => {
 }
 
 .category-tab-active {
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
+  box-shadow: 0 2px 8px var(--color-primary-alpha-30);
 }
 
 .category-tab-icon {
@@ -1366,16 +1367,16 @@ watch(() => props.mode, () => {
   gap: 0.5rem;
   padding: 0.375rem 0.75rem;
   background: linear-gradient(135deg, #eff6ff, #dbeafe);
-  border: 1px solid #93c5fd;
+  border: 1px solid var(--color-primary-light);
   border-radius: 1rem;
   font-size: 0.8125rem;
-  color: #1d4ed8;
+  color: var(--color-primary-dark);
   font-weight: 500;
   width: fit-content;
 }
 
 .active-filter-badge i.fa-filter {
-  color: #3b82f6;
+  color: var(--color-primary);
   font-size: 0.75rem;
 }
 
@@ -1389,14 +1390,14 @@ watch(() => props.mode, () => {
   background: transparent;
   border: none;
   border-radius: 50%;
-  color: #6b7280;
+  color: var(--text-tertiary);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .clear-filter-btn:hover {
-  background: rgba(239, 68, 68, 0.1);
-  color: #dc2626;
+  background: var(--color-error-alpha-10);
+  color: var(--color-error);
 }
 
 /* Category tab transitions */
@@ -1449,8 +1450,8 @@ watch(() => props.mode, () => {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary));
+  box-shadow: 0 4px 12px var(--color-primary-alpha-30);
   padding: 0.75rem 1.5rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
@@ -1467,7 +1468,7 @@ watch(() => props.mode, () => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  color: white;
+  color: var(--bg-card);
   font-weight: 500;
 }
 
@@ -1482,13 +1483,13 @@ watch(() => props.mode, () => {
 
 /* Toolbar button custom styling */
 .toolbar-btn.vectorize {
-  background: white;
-  color: #3b82f6;
+  background: var(--bg-card);
+  color: var(--color-primary);
 }
 
 .toolbar-btn.cancel {
   background: rgba(255, 255, 255, 0.2);
-  color: white;
+  color: var(--bg-card);
   border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
@@ -1516,13 +1517,13 @@ watch(() => props.mode, () => {
 .search-bar i.fa-search {
   position: absolute;
   left: 1rem;
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .search-input {
   width: 100%;
   padding: 0.625rem 2.5rem 0.625rem 2.5rem;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-light);
   border-radius: 0.5rem;
   font-size: 0.875rem;
   transition: all 0.2s;
@@ -1530,8 +1531,8 @@ watch(() => props.mode, () => {
 
 .search-input:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-alpha-10);
 }
 
 .clear-btn {
@@ -1545,18 +1546,18 @@ watch(() => props.mode, () => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1.5rem;
-  background: white;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-default);
   font-size: 0.875rem;
 }
 
 .breadcrumb-item.active {
-  color: #1f2937;
+  color: var(--text-primary);
   cursor: default;
 }
 
 .breadcrumb-sep {
-  color: #d1d5db;
+  color: var(--border-light);
   font-size: 0.75rem;
 }
 
@@ -1570,14 +1571,14 @@ watch(() => props.mode, () => {
 }
 
 .tree-pane {
-  background: white;
-  border-right: 2px solid #e5e7eb;
+  background: var(--bg-card);
+  border-right: 2px solid var(--border-default);
   overflow-y: auto;
   overflow-x: hidden;
 }
 
 .content-pane {
-  background: #f9fafb;
+  background: var(--bg-secondary);
   overflow-y: auto;
 }
 
@@ -1600,7 +1601,7 @@ watch(() => props.mode, () => {
   justify-content: center;
   gap: 0.5rem;
   padding: 1rem;
-  color: #6b7280;
+  color: var(--text-tertiary);
   font-size: 0.875rem;
 }
 
@@ -1618,7 +1619,7 @@ watch(() => props.mode, () => {
   justify-content: center;
   padding: 3rem 1.5rem;
   text-align: center;
-  color: #6b7280;
+  color: var(--text-tertiary);
 }
 
 .loading-state i,
@@ -1630,7 +1631,7 @@ watch(() => props.mode, () => {
 }
 
 .error-state {
-  color: #dc2626;
+  color: var(--color-error);
 }
 
 .retry-btn {
@@ -1649,8 +1650,8 @@ watch(() => props.mode, () => {
   justify-content: space-between;
   align-items: flex-start;
   padding: 1.5rem;
-  background: white;
-  border-bottom: 2px solid #e5e7eb;
+  background: var(--bg-card);
+  border-bottom: 2px solid var(--border-default);
 }
 
 .file-info {
@@ -1662,20 +1663,20 @@ watch(() => props.mode, () => {
 
 .file-info > i {
   font-size: 2rem;
-  color: #3b82f6;
+  color: var(--color-primary);
   margin-top: 0.25rem;
 }
 
 .file-info h4 {
   font-size: 1.125rem;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary);
   margin-bottom: 0.25rem;
 }
 
 .file-meta {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--text-tertiary);
 }
 
 .close-btn {
@@ -1689,7 +1690,7 @@ watch(() => props.mode, () => {
 .file-content {
   flex: 1;
   overflow-y: auto;
-  background: white;
+  background: var(--bg-card);
   margin: 1rem;
   border-radius: 0.5rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -1702,11 +1703,11 @@ watch(() => props.mode, () => {
   align-items: center;
   justify-content: center;
   padding: 3rem;
-  color: #6b7280;
+  color: var(--text-tertiary);
 }
 
 .error-content {
-  color: #dc2626;
+  color: var(--color-error);
 }
 
 .content-display {
@@ -1714,7 +1715,7 @@ watch(() => props.mode, () => {
   font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
   font-size: 0.875rem;
   line-height: 1.6;
-  color: #1f2937;
+  color: var(--text-primary);
   white-space: pre-wrap;
   word-wrap: break-word;
   margin: 0;
@@ -1728,17 +1729,17 @@ watch(() => props.mode, () => {
 
 .tree-pane::-webkit-scrollbar-track,
 .content-pane::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--bg-tertiary);
 }
 
 .tree-pane::-webkit-scrollbar-thumb,
 .content-pane::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--border-secondary);
   border-radius: 4px;
 }
 
 .tree-pane::-webkit-scrollbar-thumb:hover,
 .content-pane::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--border-secondary);
 }
 </style>

@@ -683,13 +683,14 @@ validateEditForm()
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .confirmation-modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -698,14 +699,14 @@ validateEditForm()
 }
 
 .advanced-step-modal {
-  background: #1a1a1a;
-  border: 2px solid #333;
+  background: var(--bg-card);
+  border: 2px solid var(--border-secondary);
   border-radius: 12px;
   min-width: 800px;
   max-width: 90vw;
   max-height: 90vh;
   overflow-y: auto;
-  color: #ffffff;
+  color: var(--text-primary);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
@@ -714,12 +715,12 @@ validateEditForm()
   justify-content: space-between;
   align-items: center;
   padding: 20px;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--border-secondary);
   background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
 }
 
 .modal-title {
-  color: #ffffff;
+  color: var(--text-on-primary);
   margin: 0;
   font-size: 1.25em;
   font-weight: 700;
@@ -727,18 +728,17 @@ validateEditForm()
 
 .current-step-info {
   padding: 20px;
-  border-bottom: 1px solid #333;
-  background: #0f1419;
+  border-bottom: 1px solid var(--border-secondary);
+  background: var(--bg-primary);
 }
 
 .step-counter {
   display: inline-block;
-  background: #2563eb;
-  color: #ffffff;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
   padding: 6px 16px;
   border-radius: 20px;
   font-size: 0.9em;
-  color: #9ca3af;
   margin-bottom: 8px;
 }
 
@@ -748,44 +748,44 @@ validateEditForm()
 }
 
 .step-explanation {
-  color: #d1d5db;
+  color: var(--text-secondary);
   font-size: 0.95em;
 }
 
 .command-section {
   padding: 20px;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--border-secondary);
 }
 
 .section-label {
   display: block;
   font-weight: 600;
   margin-bottom: 12px;
-  color: #f3f4f6;
+  color: var(--text-primary);
 }
 
 .command-preview {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: #0f1419;
+  background: var(--bg-primary);
   padding: 12px;
   border-radius: 8px;
-  border: 1px solid #374151;
+  border: 1px solid var(--border-default);
 }
 
 .command-preview code {
   flex: 1;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   background: none;
-  color: #22c55e;
+  color: var(--color-success);
 }
 
 .command-editor {
   margin-top: 12px;
-  border: 1px solid #374151;
+  border: 1px solid var(--border-default);
   border-radius: 8px;
-  background: #0f1419;
+  background: var(--bg-primary);
 }
 
 .command-input {
@@ -793,7 +793,7 @@ validateEditForm()
   background: transparent;
   border: none;
   padding: 12px;
-  color: #ffffff;
+  color: var(--text-primary);
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   resize: vertical;
 }
@@ -806,12 +806,12 @@ validateEditForm()
   display: flex;
   gap: 8px;
   padding: 12px;
-  border-top: 1px solid #374151;
+  border-top: 1px solid var(--border-default);
 }
 
 .risk-section {
   padding: 20px;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--border-secondary);
 }
 
 .risk-indicator,
@@ -823,26 +823,26 @@ validateEditForm()
 
 .risk-indicator.low,
 .edit-risk-indicator.low {
-  background: rgba(34, 197, 94, 0.1);
-  border-left-color: #22c55e;
+  background: var(--color-success-alpha-10);
+  border-left-color: var(--color-success);
 }
 
 .risk-indicator.moderate,
 .edit-risk-indicator.moderate {
-  background: rgba(251, 191, 36, 0.1);
-  border-left-color: #fbbf24;
+  background: var(--color-warning-alpha-10);
+  border-left-color: var(--color-warning);
 }
 
 .risk-indicator.high,
 .edit-risk-indicator.high {
-  background: rgba(239, 68, 68, 0.1);
-  border-left-color: #ef4444;
+  background: var(--color-error-alpha-10);
+  border-left-color: var(--color-error);
 }
 
 .risk-indicator.critical,
 .edit-risk-indicator.critical {
-  background: rgba(220, 38, 38, 0.1);
-  border-left-color: #dc2626;
+  background: var(--color-danger-alpha-10);
+  border-left-color: var(--color-danger);
   animation: pulse 2s infinite;
 }
 
@@ -858,12 +858,12 @@ validateEditForm()
 
 .risk-reason {
   font-size: 0.9em;
-  color: #d1d5db;
+  color: var(--text-secondary);
   margin-bottom: 4px;
 }
 
 .workflow-management {
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--border-secondary);
 }
 
 .section-header {
@@ -875,7 +875,7 @@ validateEditForm()
 
 .section-header h4 {
   margin: 0;
-  color: #f3f4f6;
+  color: var(--text-primary);
 }
 
 .steps-manager {
@@ -892,19 +892,19 @@ validateEditForm()
   gap: 16px;
   padding: 16px;
   margin-bottom: 12px;
-  background: #111827;
-  border: 1px solid #374151;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
 }
 
 .step-item.current {
-  border-color: #2563eb;
-  background: rgba(37, 99, 235, 0.1);
+  border-color: var(--color-primary);
+  background: var(--color-primary-alpha-10);
 }
 
 .step-item.completed {
-  border-color: #22c55e;
-  background: rgba(34, 197, 94, 0.1);
+  border-color: var(--color-success);
+  background: var(--color-success-alpha-10);
 }
 
 .step-controls {
@@ -921,8 +921,8 @@ validateEditForm()
 }
 
 .step-number {
-  background: #2563eb;
-  color: #ffffff;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -940,16 +940,16 @@ validateEditForm()
 .step-title {
   font-weight: 600;
   margin-bottom: 4px;
-  color: #f3f4f6;
+  color: var(--text-primary);
 }
 
 .step-command {
   font-size: 0.85em;
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .step-command code {
-  background: #0f1419;
+  background: var(--bg-primary);
   padding: 2px 6px;
   border-radius: 4px;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
@@ -961,15 +961,15 @@ validateEditForm()
 }
 
 .add-step-section {
-  border-top: 1px solid #374151;
+  border-top: 1px solid var(--border-default);
   padding-top: 20px;
 }
 
 .add-step-form {
   margin-top: 16px;
   padding: 16px;
-  background: #111827;
-  border: 1px solid #374151;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
 }
 
@@ -981,15 +981,15 @@ validateEditForm()
   display: block;
   margin-bottom: 6px;
   font-weight: 600;
-  color: #f3f4f6;
+  color: var(--text-primary);
 }
 
 .form-input,
 .form-textarea {
   width: 100%;
-  background: #0f1419;
-  border: 1px solid #374151;
-  color: #ffffff;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
   padding: 10px;
   border-radius: 6px;
   font-family: inherit;
@@ -998,7 +998,7 @@ validateEditForm()
 .form-input:focus,
 .form-textarea:focus {
   outline: none;
-  border-color: #2563eb;
+  border-color: var(--color-primary);
 }
 
 .form-actions {
@@ -1008,12 +1008,12 @@ validateEditForm()
 
 .advanced-options {
   padding: 20px;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--border-secondary);
 }
 
 .advanced-options h4 {
   margin: 0 0 16px 0;
-  color: #f3f4f6;
+  color: var(--text-primary);
 }
 
 .option-group {
@@ -1023,13 +1023,13 @@ validateEditForm()
 .option-group label {
   display: block;
   margin-bottom: 8px;
-  color: #f3f4f6;
+  color: var(--text-primary);
 }
 
 .timeout-input {
-  background: #111827;
-  border: 1px solid #374151;
-  color: #ffffff;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
   padding: 8px 12px;
   border-radius: 6px;
   width: 120px;
@@ -1054,9 +1054,9 @@ validateEditForm()
 
 .password-field {
   width: 100%;
-  background: #111827;
-  border: 1px solid #374151;
-  color: #ffffff;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
   padding: 10px;
   border-radius: 6px;
   margin-bottom: 8px;
@@ -1064,7 +1064,7 @@ validateEditForm()
 
 .password-note {
   font-size: 0.85em;
-  color: #f97316;
+  color: var(--color-warning);
 }
 
 .modal-actions {
@@ -1091,7 +1091,7 @@ validateEditForm()
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.9);
+  background: var(--bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1099,14 +1099,14 @@ validateEditForm()
 }
 
 .edit-dialog {
-  background: #1a1a1a;
-  border: 2px solid #333;
+  background: var(--bg-card);
+  border: 2px solid var(--border-secondary);
   border-radius: 12px;
   width: 600px;
   max-width: 90vw;
   max-height: 90vh;
   overflow-y: auto;
-  color: #ffffff;
+  color: var(--text-primary);
 }
 
 .edit-header {
@@ -1114,13 +1114,13 @@ validateEditForm()
   justify-content: space-between;
   align-items: center;
   padding: 20px;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--border-secondary);
   background: linear-gradient(135deg, #059669 0%, #047857 100%);
 }
 
 .edit-header h4 {
   margin: 0;
-  color: #ffffff;
+  color: var(--text-on-primary);
   font-size: 1.1em;
 }
 
@@ -1136,7 +1136,7 @@ validateEditForm()
   display: flex;
   gap: 12px;
   padding: 20px;
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--border-secondary);
   justify-content: flex-end;
 }
 
@@ -1168,15 +1168,15 @@ validateEditForm()
 }
 
 .error-message {
-  background-color: rgba(220, 53, 69, 0.1);
-  border: 1px solid rgba(220, 53, 69, 0.3);
-  color: #ff6b6b;
+  background-color: var(--color-error-alpha-10);
+  border: 1px solid var(--color-error-alpha-30, rgba(239, 68, 68, 0.3));
+  color: var(--color-error);
 }
 
 .success-message {
-  background-color: rgba(40, 167, 69, 0.1);
-  border: 1px solid rgba(40, 167, 69, 0.3);
-  color: #28a745;
+  background-color: var(--color-success-alpha-10);
+  border: 1px solid var(--color-success-alpha-30, rgba(34, 197, 94, 0.3));
+  color: var(--color-success);
 }
 
 .error-icon, .success-icon {
@@ -1190,7 +1190,7 @@ validateEditForm()
 }
 
 .field-error {
-  color: #ef4444;
+  color: var(--color-error);
   font-size: 0.85em;
   margin-top: 4px;
 }
