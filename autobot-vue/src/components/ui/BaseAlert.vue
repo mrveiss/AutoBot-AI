@@ -111,6 +111,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .base-alert {
   display: flex;
   align-items: flex-start;
@@ -162,7 +163,7 @@ onMounted(() => {
 }
 
 .alert-dismiss:hover {
-  background-color: rgba(0, 0, 0, 0.1);
+  background-color: var(--bg-hover-alpha-10);
 }
 
 .alert-dismiss:focus {
@@ -173,142 +174,83 @@ onMounted(() => {
 
 /* Success variant */
 .alert-success {
-  background-color: #d1fae5;
-  color: #065f46;
+  background-color: var(--color-success-bg);
+  color: var(--color-success-dark);
 }
 
 .alert-success .alert-icon {
-  color: #10b981;
+  color: var(--color-success);
 }
 
 .alert-success.alert-bordered {
-  border: 1px solid #a7f3d0;
+  border: 1px solid var(--color-success-light);
   border-left-width: 4px;
-  border-left-color: #10b981;
+  border-left-color: var(--color-success);
 }
 
 /* Info variant */
 .alert-info {
-  background-color: #dbeafe;
-  color: #1e40af;
+  background-color: var(--color-info-bg);
+  color: var(--color-info-dark);
 }
 
 .alert-info .alert-icon {
-  color: #3b82f6;
+  color: var(--color-primary);
 }
 
 .alert-info.alert-bordered {
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--color-info-light);
   border-left-width: 4px;
-  border-left-color: #3b82f6;
+  border-left-color: var(--color-primary);
 }
 
 /* Warning variant */
 .alert-warning {
-  background-color: #fef3c7;
-  color: #92400e;
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning-darker);
 }
 
 .alert-warning .alert-icon {
-  color: #f59e0b;
+  color: var(--color-warning);
 }
 
 .alert-warning.alert-bordered {
-  border: 1px solid #fde68a;
+  border: 1px solid var(--color-warning-light);
   border-left-width: 4px;
-  border-left-color: #f59e0b;
+  border-left-color: var(--color-warning);
 }
 
 /* Error variant */
 .alert-error {
-  background-color: #fee2e2;
-  color: #991b1b;
+  background-color: var(--color-error-bg);
+  color: var(--color-error-dark);
 }
 
 .alert-error .alert-icon {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .alert-error.alert-bordered {
-  border: 1px solid #fecaca;
+  border: 1px solid var(--color-error-light);
   border-left-width: 4px;
-  border-left-color: #ef4444;
+  border-left-color: var(--color-error);
 }
 
 /* Critical variant (more severe than error) */
 .alert-critical {
-  background-color: #fef2f2;
-  color: #7f1d1d;
+  background-color: var(--color-error-bg);
+  color: var(--color-error-darker);
 }
 
 .alert-critical .alert-icon {
-  color: #dc2626;
+  color: var(--color-error-dark);
 }
 
 .alert-critical.alert-bordered {
-  border: 1px solid #fecaca;
+  border: 1px solid var(--color-error-light);
   border-left-width: 4px;
-  border-left-color: #dc2626;
+  border-left-color: var(--color-error-dark);
 }
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .alert-success {
-    background-color: rgba(16, 185, 129, 0.1);
-    color: #6ee7b7;
-  }
-
-  .alert-info {
-    background-color: rgba(59, 130, 246, 0.1);
-    color: #93c5fd;
-  }
-
-  .alert-warning {
-    background-color: rgba(245, 158, 11, 0.1);
-    color: #fcd34d;
-  }
-
-  .alert-error {
-    background-color: rgba(239, 68, 68, 0.1);
-    color: #fca5a5;
-  }
-
-  .alert-critical {
-    background-color: rgba(220, 38, 38, 0.1);
-    color: #f87171;
-  }
-
-  .alert-dismiss:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-  }
-}
-
-.dark .alert-success {
-  background-color: rgba(16, 185, 129, 0.1);
-  color: #6ee7b7;
-}
-
-.dark .alert-info {
-  background-color: rgba(59, 130, 246, 0.1);
-  color: #93c5fd;
-}
-
-.dark .alert-warning {
-  background-color: rgba(245, 158, 11, 0.1);
-  color: #fcd34d;
-}
-
-.dark .alert-error {
-  background-color: rgba(239, 68, 68, 0.1);
-  color: #fca5a5;
-}
-
-.dark .alert-critical {
-  background-color: rgba(220, 38, 38, 0.1);
-  color: #f87171;
-}
-
-.dark .alert-dismiss:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-}
+/* Note: Dark mode is handled automatically by CSS custom properties */
 </style>

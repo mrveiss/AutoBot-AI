@@ -259,23 +259,24 @@ const cleanupSessionOrphans = async () => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .session-orphan-manager {
-  background: white;
+  background: var(--bg-card);
   border-radius: 0.5rem;
   margin: 1rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .section-header {
   padding: 1.25rem;
-  border-bottom: 1px solid #e5e7eb;
-  background: #f9fafb;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-secondary);
 }
 
 .section-header h4 {
   font-size: 1.125rem;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary);
   margin: 0 0 0.25rem 0;
   display: flex;
   align-items: center;
@@ -283,7 +284,7 @@ const cleanupSessionOrphans = async () => {
 }
 
 .header-description {
-  color: #6b7280;
+  color: var(--text-tertiary);
   margin: 0;
   font-size: 0.875rem;
 }
@@ -306,37 +307,37 @@ const cleanupSessionOrphans = async () => {
 .stat-item {
   text-align: center;
   padding: 1rem;
-  background: #f9fafb;
+  background: var(--bg-secondary);
   border-radius: 0.5rem;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-default);
 }
 
 .stat-item.highlight {
-  background: #fef3c7;
-  border-color: #f59e0b;
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning);
 }
 
 .stat-value {
   display: block;
   font-size: 1.5rem;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--text-primary);
 }
 
 .stat-item.highlight .stat-value {
-  color: #b45309;
+  color: var(--color-warning-dark);
 }
 
 .stat-label {
   display: block;
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--text-tertiary);
   margin-top: 0.25rem;
 }
 
 .orphan-preview {
-  background: #fefce8;
-  border: 1px solid #fde047;
+  background: var(--color-warning-bg-light);
+  border: 1px solid var(--color-warning-light);
   border-radius: 0.5rem;
   padding: 1rem;
 }
@@ -344,7 +345,7 @@ const cleanupSessionOrphans = async () => {
 .orphan-preview h5 {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #854d0e;
+  color: var(--color-warning-darker);
   margin: 0 0 0.75rem 0;
 }
 
@@ -357,8 +358,8 @@ const cleanupSessionOrphans = async () => {
 }
 
 .orphan-item {
-  background: white;
-  border: 1px solid #fde68a;
+  background: var(--bg-card);
+  border: 1px solid var(--color-warning-light);
   border-radius: 0.375rem;
   padding: 0.75rem;
 }
@@ -372,22 +373,22 @@ const cleanupSessionOrphans = async () => {
 .orphan-category {
   font-size: 0.75rem;
   padding: 0.125rem 0.5rem;
-  background: #e0e7ff;
-  color: #3730a3;
+  background: var(--color-primary-bg);
+  color: var(--color-primary-dark);
   border-radius: 9999px;
 }
 
 .orphan-important {
   font-size: 0.75rem;
   padding: 0.125rem 0.5rem;
-  background: #fef3c7;
-  color: #b45309;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-dark);
   border-radius: 9999px;
 }
 
 .orphan-content-text {
   font-size: 0.875rem;
-  color: #374151;
+  color: var(--text-secondary);
   margin: 0 0 0.25rem 0;
   line-height: 1.4;
   overflow: hidden;
@@ -397,12 +398,12 @@ const cleanupSessionOrphans = async () => {
 
 .orphan-session {
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .orphan-more {
   font-size: 0.875rem;
-  color: #6b7280;
+  color: var(--text-tertiary);
   font-style: italic;
   margin: 0.75rem 0 0 0;
   text-align: center;
@@ -415,7 +416,7 @@ const cleanupSessionOrphans = async () => {
 }
 
 .action-card {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
   padding: 1.25rem;
   display: flex;
@@ -426,17 +427,17 @@ const cleanupSessionOrphans = async () => {
 }
 
 .action-card:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-md);
 }
 
 .action-card.warning {
-  border-color: #fcd34d;
-  background: #fffbeb;
+  border-color: var(--color-warning-light);
+  background: var(--color-warning-bg-light);
 }
 
 .action-card.warning:hover {
-  border-color: #f59e0b;
+  border-color: var(--color-warning);
 }
 
 .action-content {
@@ -455,30 +456,30 @@ const cleanupSessionOrphans = async () => {
 }
 
 .action-icon.scan {
-  background: #dbeafe;
-  color: #3b82f6;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
 }
 
 .action-icon.cleanup {
-  background: #fef3c7;
-  color: #f59e0b;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .action-card h5 {
   font-size: 1.125rem;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary);
   margin: 0 0 0.5rem 0;
 }
 
 .action-card p {
-  color: #6b7280;
+  color: var(--text-tertiary);
   margin: 0 0 1rem 0;
   line-height: 1.5;
 }
 
 .action-meta {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 0.75rem;
   display: block;
   margin-bottom: 1rem;
@@ -499,27 +500,27 @@ const cleanupSessionOrphans = async () => {
 }
 
 .status-message.success {
-  background: #f0fdf4;
-  border: 1px solid #10b981;
-  color: #065f46;
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success);
+  color: var(--color-success-dark);
 }
 
 .status-message.error {
-  background: #fef2f2;
-  border: 1px solid #ef4444;
-  color: #991b1b;
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error);
+  color: var(--color-error-dark);
 }
 
 .status-message.warning {
-  background: #fffbeb;
-  border: 1px solid #f59e0b;
-  color: #92400e;
+  background: var(--color-warning-bg-light);
+  border: 1px solid var(--color-warning);
+  color: var(--color-warning-darker);
 }
 
 .status-message.info {
-  background: #eff6ff;
-  border: 1px solid #3b82f6;
-  color: #1e40af;
+  background: var(--color-info-bg);
+  border: 1px solid var(--color-primary);
+  color: var(--color-info-dark);
 }
 
 .status-message span {

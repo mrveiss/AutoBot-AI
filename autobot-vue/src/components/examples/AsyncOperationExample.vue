@@ -768,21 +768,22 @@ const loadAnalytics = () => analytics.execute(async () => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .async-examples-container {
   min-height: calc(100vh - 80px);
   max-height: calc(100vh - 80px);
   overflow-y: auto;
   overflow-x: hidden;
   scroll-behavior: smooth;
-  background: #f8f9fa;
+  background: var(--bg-secondary);
 }
 
 .example-card {
-  background: white;
+  background: var(--bg-card);
   border-radius: 8px;
   padding: 24px;
   margin-bottom: 24px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .example-header {
@@ -791,18 +792,18 @@ const loadAnalytics = () => analytics.execute(async () => {
   align-items: center;
   margin-bottom: 16px;
   padding-bottom: 16px;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2px solid var(--border-default);
 }
 
 .example-title {
   font-size: 1.5rem;
   font-weight: 600;
-  color: #1e3a8a;
+  color: var(--color-primary-dark);
 }
 
 .code-reduction {
-  background: #10b981;
-  color: white;
+  background: var(--color-success);
+  color: var(--text-on-primary);
   padding: 4px 12px;
   border-radius: 16px;
   font-size: 0.875rem;
@@ -810,7 +811,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 }
 
 .example-description {
-  color: #6b7280;
+  color: var(--text-tertiary);
   margin-bottom: 20px;
 }
 
@@ -820,8 +821,8 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 /* Buttons */
 .btn-primary {
-  background: #3b82f6;
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
   padding: 10px 20px;
   border-radius: 6px;
   font-weight: 500;
@@ -832,7 +833,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #2563eb;
+  background: var(--color-primary-hover);
 }
 
 .btn-primary:disabled {
@@ -841,8 +842,8 @@ const loadAnalytics = () => analytics.execute(async () => {
 }
 
 .btn-secondary {
-  background: #6b7280;
-  color: white;
+  background: var(--text-tertiary);
+  color: var(--text-on-primary);
   padding: 8px 16px;
   border-radius: 6px;
   font-weight: 500;
@@ -852,7 +853,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 }
 
 .btn-secondary:hover {
-  background: #4b5563;
+  background: var(--text-secondary);
 }
 
 /* Loading States */
@@ -861,18 +862,18 @@ const loadAnalytics = () => analytics.execute(async () => {
   align-items: center;
   gap: 12px;
   padding: 16px;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  background: var(--color-info-bg);
+  border: 1px solid var(--color-info-light);
   border-radius: 6px;
   margin-top: 12px;
-  color: #1e40af;
+  color: var(--color-info-dark);
 }
 
 .spinner {
   width: 20px;
   height: 20px;
-  border: 3px solid #bfdbfe;
-  border-top-color: #3b82f6;
+  border: 3px solid var(--color-info-light);
+  border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -884,21 +885,21 @@ const loadAnalytics = () => analytics.execute(async () => {
 /* Error Messages */
 .error-message {
   padding: 16px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-light);
   border-radius: 6px;
   margin-top: 12px;
-  color: #b91c1c;
+  color: var(--color-error-dark);
 }
 
 /* Success Messages */
 .success-message {
   padding: 16px;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success-light);
   border-radius: 6px;
   margin-top: 12px;
-  color: #15803d;
+  color: var(--color-success-dark);
 }
 
 .success-header {
@@ -916,8 +917,8 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 /* Data Display */
 .data-display {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   padding: 12px;
   margin-top: 12px;
@@ -927,7 +928,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 .data-display pre {
   margin: 0;
   font-size: 0.875rem;
-  color: #374151;
+  color: var(--text-secondary);
 }
 
 /* Form Elements */
@@ -938,7 +939,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 .form-group label {
   display: block;
   font-weight: 500;
-  color: #374151;
+  color: var(--text-secondary);
   margin-bottom: 6px;
 }
 
@@ -946,7 +947,7 @@ const loadAnalytics = () => analytics.execute(async () => {
   width: 100%;
   max-width: 400px;
   padding: 8px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-light);
   border-radius: 6px;
   font-size: 1rem;
   transition: border-color 0.2s;
@@ -954,8 +955,8 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 .form-input:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus);
 }
 
 /* Notifications */
@@ -966,14 +967,14 @@ const loadAnalytics = () => analytics.execute(async () => {
   padding: 16px 24px;
   border-radius: 8px;
   font-weight: 500;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-lg);
   animation: slideIn 0.3s ease;
   z-index: 1000;
 }
 
 .notification-toast.success {
-  background: #10b981;
-  color: white;
+  background: var(--color-success);
+  color: var(--text-on-primary);
 }
 
 @keyframes slideIn {
@@ -991,14 +992,14 @@ const loadAnalytics = () => analytics.execute(async () => {
 .error-log {
   margin-top: 16px;
   padding: 16px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-light);
   border-radius: 6px;
 }
 
 .error-log h4 {
   margin: 0 0 12px 0;
-  color: #991b1b;
+  color: var(--color-error-darker);
 }
 
 .error-log ul {
@@ -1009,7 +1010,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 .error-log li {
   padding: 8px;
-  border-bottom: 1px solid #fecaca;
+  border-bottom: 1px solid var(--color-error-light);
 }
 
 .error-log li:last-child {
@@ -1018,12 +1019,12 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 .log-timestamp {
   font-size: 0.75rem;
-  color: #b91c1c;
+  color: var(--color-error-dark);
   margin-right: 12px;
 }
 
 .log-message {
-  color: #991b1b;
+  color: var(--color-error-darker);
 }
 
 /* Data Grid */
@@ -1035,15 +1036,15 @@ const loadAnalytics = () => analytics.execute(async () => {
 }
 
 .data-section {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   padding: 16px;
 }
 
 .data-section h3 {
   margin: 0 0 12px 0;
-  color: #1f2937;
+  color: var(--text-primary);
   font-size: 1.125rem;
 }
 
@@ -1081,21 +1082,21 @@ const loadAnalytics = () => analytics.execute(async () => {
 }
 
 .code-comparison details {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   padding: 12px;
-  background: #f9fafb;
+  background: var(--bg-secondary);
 }
 
 .code-comparison summary {
   cursor: pointer;
   font-weight: 500;
-  color: #3b82f6;
+  color: var(--color-primary);
   user-select: none;
 }
 
 .code-comparison summary:hover {
-  color: #2563eb;
+  color: var(--color-primary-hover);
 }
 
 .code-blocks {
@@ -1112,8 +1113,8 @@ const loadAnalytics = () => analytics.execute(async () => {
 }
 
 .code-block {
-  background: white;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -1121,8 +1122,8 @@ const loadAnalytics = () => analytics.execute(async () => {
 .code-block h4 {
   margin: 0;
   padding: 12px 16px;
-  background: #f3f4f6;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-default);
   font-size: 0.875rem;
 }
 
@@ -1135,7 +1136,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 .code-block code {
   font-size: 0.8125rem;
   line-height: 1.6;
-  color: #1f2937;
+  color: var(--text-primary);
 }
 
 /* Summary Card */
@@ -1161,7 +1162,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 }
 
 .benefit-item {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-white-alpha-10);
   backdrop-filter: blur(10px);
   border-radius: 8px;
   padding: 20px;
@@ -1172,7 +1173,7 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 .benefit-item:hover {
   transform: translateY(-4px);
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--bg-white-alpha-15);
 }
 
 .benefit-icon {
@@ -1196,15 +1197,15 @@ const loadAnalytics = () => analytics.execute(async () => {
 }
 
 .async-examples-container::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--bg-tertiary);
 }
 
 .async-examples-container::-webkit-scrollbar-thumb {
-  background: #888;
+  background: var(--border-secondary);
   border-radius: 4px;
 }
 
 .async-examples-container::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: var(--text-tertiary);
 }
 </style>

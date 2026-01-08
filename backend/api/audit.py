@@ -102,6 +102,22 @@ def check_admin_permission(request: Request) -> bool:
         raise_server_error("API_0003", "Permission check error")
 
 
+def _build_query_dict(
+    start_time: Optional[str], end_time: Optional[str], operation: Optional[str],
+    user_id: Optional[str], session_id: Optional[str], vm_name: Optional[str],
+    result: Optional[AuditResult], limit: int, offset: int,
+) -> dict:
+    """Build query parameters dictionary for response.
+
+    Issue #665: Extracted from query_audit_logs to reduce function length.
+    """
+    return {
+        "start_time": start_time, "end_time": end_time, "operation": operation,
+        "user_id": user_id, "session_id": session_id, "vm_name": vm_name,
+        "result": result, "limit": limit, "offset": offset,
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="query_audit_logs",
@@ -121,72 +137,36 @@ async def query_audit_logs(
     offset: int = Query(0, ge=0),
     admin_check: bool = Depends(check_admin_permission),
 ):
-    """
-    Query audit logs with filters
+    """Query audit logs with filters. Issue #665: Refactored with helper.
 
-    Requires admin permission. Returns audit entries matching the specified filters.
-
-    **Time Range:**
-    - Default: Last 24 hours if not specified
-    - Format: ISO 8601 (e.g., "2025-10-06T12:00:00")
-
-    **Filters:**
-    - operation: e.g., "auth.login", "file.delete"
-    - user_id: Username
-    - session_id: Session identifier
-    - vm_name: VM source (backend, frontend, etc.)
-    - result: success, denied, failed, error
-
-    **Pagination:**
-    - limit: Maximum entries per page (1-1000)
-    - offset: Skip first N entries
+    Requires admin permission. Filters: operation, user_id, session_id, vm_name, result.
+    Time format: ISO 8601. Pagination: limit (1-1000), offset.
     """
     try:
         audit_logger = await get_audit_logger()
-
-        # Parse time parameters
         start_dt = datetime.fromisoformat(start_time) if start_time else None
         end_dt = datetime.fromisoformat(end_time) if end_time else None
 
-        # Query audit logs
         entries = await audit_logger.query(
-            start_time=start_dt,
-            end_time=end_dt,
-            operation=operation,
-            user_id=user_id,
-            session_id=session_id,
-            vm_name=vm_name,
-            result=result,
-            limit=limit + 1,  # Request one extra to check if more exist
-            offset=offset,
+            start_time=start_dt, end_time=end_dt, operation=operation,
+            user_id=user_id, session_id=session_id, vm_name=vm_name,
+            result=result, limit=limit + 1, offset=offset,
         )
 
-        # Check if more results exist
         has_more = len(entries) > limit
         if has_more:
             entries = entries[:limit]
 
-        # Issue #372: Use model method to reduce feature envy
-        entry_dicts = [e.to_response_dict() for e in entries]
-
         return AuditQueryResponse(
             success=True,
-            total_returned=len(entry_dicts),
+            total_returned=len(entries),
             has_more=has_more,
-            entries=entry_dicts,
-            query={
-                "start_time": start_time,
-                "end_time": end_time,
-                "operation": operation,
-                "user_id": user_id,
-                "session_id": session_id,
-                "vm_name": vm_name,
-                "result": result,
-                "limit": limit,
-                "offset": offset,
-            },
+            entries=[e.to_response_dict() for e in entries],
+            query=_build_query_dict(
+                start_time, end_time, operation, user_id,
+                session_id, vm_name, result, limit, offset
+            ),
         )
-
     except HTTPException:
         raise
     except Exception as e:

@@ -189,6 +189,7 @@ const allCompleted = computed(() => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 /* Modal overlay */
 .modal-overlay {
   position: fixed;
@@ -196,7 +197,7 @@ const allCompleted = computed(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -205,9 +206,9 @@ const allCompleted = computed(() => {
 }
 
 .modal-container {
-  background: white;
+  background: var(--bg-card);
   border-radius: 0.75rem;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-xl);
   max-width: 700px;
   width: 100%;
   max-height: 90vh;
@@ -221,7 +222,7 @@ const allCompleted = computed(() => {
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2px solid var(--border-default);
 }
 
 .header-content {
@@ -232,13 +233,13 @@ const allCompleted = computed(() => {
 
 .header-content i {
   font-size: 1.5rem;
-  color: #3b82f6;
+  color: var(--color-primary);
 }
 
 .modal-header h3 {
   font-size: 1.25rem;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary);
   margin: 0;
 }
 
@@ -248,24 +249,24 @@ const allCompleted = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f3f4f6;
+  background: var(--bg-tertiary);
   border: none;
   border-radius: 0.375rem;
-  color: #6b7280;
+  color: var(--text-tertiary);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .close-btn:hover {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--border-default);
+  color: var(--text-secondary);
 }
 
 /* Progress Summary */
 .progress-summary {
   padding: 1.5rem;
-  background: #f9fafb;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .summary-stats {
@@ -280,34 +281,34 @@ const allCompleted = computed(() => {
   flex-direction: column;
   align-items: center;
   padding: 1rem;
-  background: white;
+  background: var(--bg-card);
   border-radius: 0.5rem;
-  border: 2px solid #e5e7eb;
+  border: 2px solid var(--border-default);
 }
 
 .stat-value {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--text-primary);
 }
 
 .stat-label {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--text-tertiary);
   font-weight: 500;
   margin-top: 0.25rem;
 }
 
 .stat-completed .stat-value {
-  color: #10b981;
+  color: var(--color-success);
 }
 
 .stat-pending .stat-value {
-  color: #fbbf24;
+  color: var(--color-warning);
 }
 
 .stat-failed .stat-value {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 /* Overall progress bar */
@@ -320,14 +321,14 @@ const allCompleted = computed(() => {
 .progress-bar {
   flex: 1;
   height: 1.5rem;
-  background: #e5e7eb;
+  background: var(--border-default);
   border-radius: 0.75rem;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #3b82f6, #2563eb);
+  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-hover));
   transition: width 0.3s ease;
   border-radius: 0.75rem;
 }
@@ -335,7 +336,7 @@ const allCompleted = computed(() => {
 .progress-text {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #374151;
+  color: var(--text-secondary);
   min-width: 3rem;
   text-align: right;
 }
@@ -354,14 +355,14 @@ const allCompleted = computed(() => {
   justify-content: space-between;
   padding: 0.75rem;
   margin-bottom: 0.5rem;
-  background: white;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
   transition: all 0.2s;
 }
 
 .document-item:hover {
-  background: #f9fafb;
+  background: var(--bg-secondary);
   transform: translateX(4px);
 }
 
@@ -384,23 +385,23 @@ const allCompleted = computed(() => {
 }
 
 .status-vectorized .status-icon {
-  background: rgba(16, 185, 129, 0.1);
-  color: #10b981;
+  background: var(--color-success-alpha-10);
+  color: var(--color-success);
 }
 
 .status-pending .status-icon {
-  background: rgba(251, 191, 36, 0.1);
-  color: #fbbf24;
+  background: var(--color-warning-alpha-10);
+  color: var(--color-warning);
 }
 
 .status-failed .status-icon {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
+  background: var(--color-error-alpha-10);
+  color: var(--color-error);
 }
 
 .status-unknown .status-icon {
-  background: rgba(107, 114, 128, 0.1);
-  color: #9ca3af;
+  background: var(--text-tertiary-alpha-10);
+  color: var(--text-muted);
 }
 
 .status-icon i {
@@ -418,7 +419,7 @@ const allCompleted = computed(() => {
 .document-name {
   font-size: 0.875rem;
   font-weight: 500;
-  color: #374151;
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -426,7 +427,7 @@ const allCompleted = computed(() => {
 
 .error-message {
   font-size: 0.75rem;
-  color: #dc2626;
+  color: var(--color-error);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -443,14 +444,14 @@ const allCompleted = computed(() => {
 .mini-progress-bar {
   width: 80px;
   height: 0.5rem;
-  background: #e5e7eb;
+  background: var(--border-default);
   border-radius: 0.25rem;
   overflow: hidden;
 }
 
 .mini-progress-fill {
   height: 100%;
-  background: #3b82f6;
+  background: var(--color-primary);
   transition: width 0.3s ease;
   border-radius: 0.25rem;
 }
@@ -458,7 +459,7 @@ const allCompleted = computed(() => {
 .progress-percentage {
   font-size: 0.75rem;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--text-tertiary);
   min-width: 3rem;
 }
 
@@ -468,8 +469,8 @@ const allCompleted = computed(() => {
   justify-content: flex-end;
   gap: 0.75rem;
   padding: 1.5rem;
-  border-top: 2px solid #e5e7eb;
-  background: #f9fafb;
+  border-top: 2px solid var(--border-default);
+  background: var(--bg-secondary);
 }
 
 .action-btn {
@@ -486,36 +487,36 @@ const allCompleted = computed(() => {
 }
 
 .retry-btn {
-  background: #3b82f6;
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .retry-btn:hover {
-  background: #2563eb;
+  background: var(--color-primary-hover);
   transform: translateY(-1px);
-  box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);
+  box-shadow: var(--shadow-primary);
 }
 
 .close-btn-action {
-  background: #10b981;
-  color: white;
+  background: var(--color-success);
+  color: var(--text-on-primary);
 }
 
 .close-btn-action:hover {
-  background: #059669;
+  background: var(--color-success-hover);
   transform: translateY(-1px);
-  box-shadow: 0 4px 6px rgba(16, 185, 129, 0.3);
+  box-shadow: var(--shadow-success);
 }
 
 .cancel-btn {
-  background: #f3f4f6;
-  color: #6b7280;
-  border: 1px solid #d1d5db;
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+  border: 1px solid var(--border-light);
 }
 
 .cancel-btn:hover {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--border-default);
+  color: var(--text-secondary);
 }
 
 /* Scrollbar styling */
@@ -524,17 +525,17 @@ const allCompleted = computed(() => {
 }
 
 .document-list::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--bg-tertiary);
   border-radius: 4px;
 }
 
 .document-list::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--border-light);
   border-radius: 4px;
 }
 
 .document-list::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--border-secondary);
 }
 
 /* Modal animations */

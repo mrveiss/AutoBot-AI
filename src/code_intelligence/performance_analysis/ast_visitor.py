@@ -425,33 +425,19 @@ class PerformanceASTVisitor(ast.NodeVisitor):
             return True
         return False
 
-    def _check_blocking_in_async(self, node: ast.Call) -> None:
+    def _check_high_confidence_blocking(
+        self, call_name: str, node: ast.Call, code: str
+    ) -> bool:
+        """Check HIGH confidence blocking patterns (exact match).
+
+        Issue #665: Extracted from _check_blocking_in_async to reduce function length.
+
+        Returns:
+            True if a high confidence match was found and issue created.
         """
-        Check for blocking operations in async context.
-
-        Issue #281: Refactored from 117 lines to use extracted helper methods.
-        Issue #385: Uses context-aware detection with confidence scoring.
-        """
-        if not self.async_context:
-            return
-
-        call_name = self._get_call_name(node)
-        if not call_name:
-            return
-
-        call_name_lower = call_name.lower()
-        code = self._get_source_segment(node.lineno, node.lineno)
-
-        # Skip if already using async version
-        if "async" in call_name_lower or "aio" in call_name_lower:
-            return
-
-        # Step 1: Check HIGH confidence patterns (exact match)
-        for pattern, (
-            recommendation,
-            confidence,
-            is_exact,
-        ) in BLOCKING_IO_PATTERNS_HIGH_CONFIDENCE.items():
+        for pattern, (recommendation, confidence, is_exact) in (
+            BLOCKING_IO_PATTERNS_HIGH_CONFIDENCE.items()
+        ):
             if is_exact and call_name == pattern:
                 severity = (
                     PerformanceSeverity.HIGH
@@ -461,53 +447,90 @@ class PerformanceASTVisitor(ast.NodeVisitor):
                 self._create_blocking_issue(
                     call_name, node, code, severity, confidence, recommendation
                 )
-                return  # Found definite match
+                return True
+        return False
 
-        # Step 2: Check SAFE patterns - skip known safe patterns
+    def _check_medium_confidence_blocking(
+        self, call_name_lower: str, call_name: str, node: ast.Call, code: str
+    ) -> bool:
+        """Check MEDIUM confidence blocking patterns (substring match).
+
+        Issue #665: Extracted from _check_blocking_in_async to reduce function length.
+
+        Returns:
+            True if a medium confidence match was found and issue created.
+        """
+        for pattern, (recommendation, confidence, _) in (
+            BLOCKING_IO_PATTERNS_MEDIUM_CONFIDENCE.items()
+        ):
+            if pattern in call_name_lower:
+                self._create_blocking_issue(
+                    call_name, node, code, PerformanceSeverity.MEDIUM, confidence,
+                    recommendation, is_potential=True,
+                    false_positive_reason="Generic pattern match - verify if this is actual I/O",
+                )
+                return True
+        return False
+
+    def _check_legacy_blocking_patterns(
+        self, call_name_lower: str, call_name: str, node: ast.Call, code: str
+    ) -> bool:
+        """Check legacy low-confidence blocking patterns.
+
+        Issue #665: Extracted from _check_blocking_in_async to reduce function length.
+        Issue #569: Skip dict.get() false positives.
+
+        Returns:
+            True if a legacy pattern match was found and issue created.
+        """
+        for blocking_op, recommendation in BLOCKING_IO_OPERATIONS.items():
+            if blocking_op in call_name_lower:
+                if blocking_op == "get" and ".get" in call_name_lower:
+                    continue  # Skip dict.get() false positives
+                self._create_blocking_issue(
+                    call_name, node, code, PerformanceSeverity.LOW, 0.4,
+                    recommendation, is_potential=True,
+                    false_positive_reason=f"Generic pattern '{blocking_op}' matched - may be safe",
+                )
+                return True
+        return False
+
+    def _check_blocking_in_async(self, node: ast.Call) -> None:
+        """Check for blocking operations in async context.
+
+        Issue #281/#385/#665: Refactored with confidence-based pattern matching.
+        """
+        if not self.async_context:
+            return
+
+        call_name = self._get_call_name(node)
+        if not call_name:
+            return
+
+        call_name_lower = call_name.lower()
+        if "async" in call_name_lower or "aio" in call_name_lower:
+            return  # Already using async version
+
+        code = self._get_source_segment(node.lineno, node.lineno)
+
+        # Step 1: HIGH confidence patterns
+        if self._check_high_confidence_blocking(call_name, node, code):
+            return
+
+        # Step 2: Skip SAFE patterns
         for safe_pattern in SAFE_PATTERNS:
             if safe_pattern in call_name_lower:
                 return
 
-        # Step 3: Check MEDIUM confidence patterns (substring match)
-        for pattern, (
-            recommendation,
-            confidence,
-            _,
-        ) in BLOCKING_IO_PATTERNS_MEDIUM_CONFIDENCE.items():
-            if pattern in call_name_lower:
-                self._create_blocking_issue(
-                    call_name,
-                    node,
-                    code,
-                    PerformanceSeverity.MEDIUM,
-                    confidence,
-                    recommendation,
-                    is_potential=True,
-                    false_positive_reason="Generic pattern match - verify if this is actual I/O",
-                )
-                return
+        # Step 3: MEDIUM confidence patterns
+        if self._check_medium_confidence_blocking(call_name_lower, call_name, node, code):
+            return
 
-        # Step 4: Legacy fallback - low confidence generic match
-        # Issue #569: Be smarter about .get pattern - it's usually dict access
-        for blocking_op, recommendation in BLOCKING_IO_OPERATIONS.items():
-            if blocking_op in call_name_lower:
-                # Issue #569: Skip generic "get" pattern for attribute access (dict.get)
-                # These are almost always false positives - dict access is O(1)
-                if blocking_op == "get" and ".get" in call_name_lower:
-                    continue  # Skip dict.get() false positives
-                self._create_blocking_issue(
-                    call_name,
-                    node,
-                    code,
-                    PerformanceSeverity.LOW,
-                    0.4,
-                    recommendation,
-                    is_potential=True,
-                    false_positive_reason=f"Generic pattern '{blocking_op}' matched - may be safe",
-                )
-                return
+        # Step 4: Legacy fallback patterns
+        if self._check_legacy_blocking_patterns(call_name_lower, call_name, node, code):
+            return
 
-        # Step 5: Check for time.sleep (Issue #281: uses helper)
+        # Step 5: time.sleep special case
         self._check_time_sleep_in_async(call_name, node)
 
     def _check_sequential_awaits(self, node: ast.AsyncFunctionDef) -> None:

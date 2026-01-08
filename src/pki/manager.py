@@ -92,17 +92,61 @@ class PKIManager:
         self._errors: List[str] = []
         self._warnings: List[str] = []
 
+    async def _run_distribution_stage(self) -> None:
+        """Run certificate distribution stage.
+
+        Issue #665: Extracted from setup to reduce function length.
+        Distributes certificates to VMs and logs failures as warnings.
+        """
+        self._stage = PKIStage.DISTRIBUTION
+        logger.info("PKI Stage: Certificate Distribution")
+
+        results = await self.distributor.distribute_all()
+        failed = [name for name, r in results.items() if not r.success]
+
+        if failed:
+            self._warnings.append(f"Distribution failed for: {', '.join(failed)}")
+            logger.warning(f"Some distributions failed: {failed}")
+
+    async def _run_configuration_stage(self) -> None:
+        """Run service configuration stage.
+
+        Issue #665: Extracted from setup to reduce function length.
+        Configures services and logs failures as warnings.
+        """
+        self._stage = PKIStage.CONFIGURATION
+        logger.info("PKI Stage: Service Configuration")
+
+        config_results = await self.configurator.configure_all()
+        for service, result in config_results.items():
+            if not result.success:
+                self._warnings.append(
+                    f"Configuration failed for {service}: {result.message}"
+                )
+
+    async def _run_verification_stage(self) -> None:
+        """Run distribution verification stage.
+
+        Issue #665: Extracted from setup to reduce function length.
+        Verifies certificate distribution and logs failures as warnings.
+        """
+        self._stage = PKIStage.VERIFICATION
+        logger.info("PKI Stage: Verification")
+
+        verification = await self.distributor.verify_distribution()
+        failed_verify = [name for name, ok in verification.items() if not ok]
+        if failed_verify:
+            self._warnings.append(
+                f"Verification failed for: {', '.join(failed_verify)}"
+            )
+
     async def setup(
         self,
         force_regenerate: bool = False,
         skip_distribution: bool = False,
         skip_configuration: bool = False,
     ) -> bool:
-        """
-        Run complete PKI setup.
-
-        This is the main entry point for setting up TLS across the infrastructure.
-        Equivalent to oVirt's engine-setup PKI plugin stages.
+        """Run complete PKI setup. Issue #665: Refactored to use helper methods.
 
         Args:
             force_regenerate: Regenerate certificates even if they exist
@@ -119,7 +163,6 @@ class PKIManager:
         # Stage 1: Validation
         self._stage = PKIStage.VALIDATION
         logger.info("PKI Stage: Validation")
-
         if not self._validate_prerequisites():
             self._stage = PKIStage.FAILED
             return False
@@ -127,55 +170,21 @@ class PKIManager:
         # Stage 2: Generation
         self._stage = PKIStage.GENERATION
         logger.info("PKI Stage: Certificate Generation")
-
         if not self.generator.generate_all(force=force_regenerate):
             self._errors.append("Certificate generation failed")
             self._stage = PKIStage.FAILED
             return False
 
-        # Stage 3: Distribution
+        # Stage 3-5: Distribution, Configuration, Verification
         if not skip_distribution:
-            self._stage = PKIStage.DISTRIBUTION
-            logger.info("PKI Stage: Certificate Distribution")
-
-            results = await self.distributor.distribute_all()
-            failed = [name for name, r in results.items() if not r.success]
-
-            if failed:
-                self._warnings.append(
-                    f"Distribution failed for: {', '.join(failed)}"
-                )
-                # Don't fail completely - some VMs might be offline
-                logger.warning(f"Some distributions failed: {failed}")
-
-        # Stage 4: Configuration
+            await self._run_distribution_stage()
         if not skip_configuration:
-            self._stage = PKIStage.CONFIGURATION
-            logger.info("PKI Stage: Service Configuration")
-
-            config_results = await self.configurator.configure_all()
-            for service, result in config_results.items():
-                if not result.success:
-                    self._warnings.append(
-                        f"Configuration failed for {service}: {result.message}"
-                    )
-
-        # Stage 5: Verification
-        self._stage = PKIStage.VERIFICATION
-        logger.info("PKI Stage: Verification")
-
+            await self._run_configuration_stage()
         if not skip_distribution:
-            verification = await self.distributor.verify_distribution()
-            failed_verify = [name for name, ok in verification.items() if not ok]
-            if failed_verify:
-                self._warnings.append(
-                    f"Verification failed for: {', '.join(failed_verify)}"
-                )
+            await self._run_verification_stage()
 
-        # Complete
         self._stage = PKIStage.COMPLETE
         logger.info("PKI setup complete")
-
         return len(self._errors) == 0
 
     def _validate_prerequisites(self) -> bool:
