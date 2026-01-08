@@ -205,19 +205,19 @@
         </template>
         <div class="actions-content">
           <router-link to="/chat" class="action-item">
-            <i class="fas fa-comments text-blue-500"></i>
+            <i class="fas fa-comments action-icon-blue"></i>
             <span>Start New Chat</span>
           </router-link>
           <router-link to="/knowledge/upload" class="action-item">
-            <i class="fas fa-upload text-green-500"></i>
+            <i class="fas fa-upload action-icon-green"></i>
             <span>Upload Document</span>
           </router-link>
           <router-link to="/tools/terminal" class="action-item">
-            <i class="fas fa-terminal text-gray-700"></i>
+            <i class="fas fa-terminal action-icon-default"></i>
             <span>Open Terminal</span>
           </router-link>
           <router-link to="/monitoring/logs" class="action-item">
-            <i class="fas fa-file-alt text-purple-500"></i>
+            <i class="fas fa-file-alt action-icon-purple"></i>
             <span>View Logs</span>
           </router-link>
         </div>
@@ -270,13 +270,13 @@ const systemStatus = computed(() => {
   const overallStatus = serviceMonitor.overallStatus.value || 'unknown'
   const healthyCount = serviceMonitor.healthyServices.value || 0
   const totalServices = serviceMonitor.services.value?.length || 0
-  
+
   return {
-    status: overallStatus === 'online' ? 'Healthy' : 
+    status: overallStatus === 'online' ? 'Healthy' :
             overallStatus === 'warning' ? 'Warning' :
             overallStatus === 'error' ? 'Error' : 'Unknown',
     message: `${healthyCount}/${totalServices} services operational`,
-    iconClass: overallStatus === 'online' ? 'text-green-500' : 
+    iconClass: overallStatus === 'online' ? 'text-green-500' :
               overallStatus === 'warning' ? 'text-yellow-500' : 'text-red-500'
   }
 })
@@ -299,12 +299,12 @@ const knowledgeStats = computed((): KnowledgeBaseStats => ({
 const performanceScore = computed(() => {
   const services = serviceMonitor.services.value || []
   if (services.length === 0) return 100
-  
+
   // FIXED: Use proper type casting for service compatibility
   const avgResponseTime = services.reduce((acc: number, service: any) => {
     return acc + (service.responseTime || 0)
   }, 0) / services.length
-  
+
   // Convert response time to performance score (lower is better)
   return Math.max(0, Math.min(100, Math.round(100 - (avgResponseTime / 10))))
 })
@@ -540,16 +540,21 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* ===========================================
+ * SystemMonitor.vue - Design Token Migration
+ * Issue #704: Migrated to centralized design tokens
+ * =========================================== */
+
 .system-monitor-enhanced {
-  padding: 1.5rem;
-  background: #f8fafc;
+  padding: var(--spacing-6);
+  background: var(--bg-surface);
   min-height: 100vh;
 }
 
 .monitor-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-  gap: 1.5rem;
+  gap: var(--spacing-6);
 }
 
 .card-header-content {
@@ -560,16 +565,16 @@ onUnmounted(() => {
 }
 
 .card-header-content h3 {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #374151;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .refresh-indicator {
-  font-size: 1.2rem;
-  color: #6b7280;
+  font-size: var(--text-xl);
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: transform 0.3s ease;
+  transition: transform var(--duration-300) var(--ease-in-out);
 }
 
 .refresh-indicator.spinning {
@@ -584,7 +589,7 @@ onUnmounted(() => {
 .header-status {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .error-indicator {
@@ -593,65 +598,79 @@ onUnmounted(() => {
   justify-content: center;
   width: 18px;
   height: 18px;
-  background: #ef4444;
-  color: white;
-  font-weight: bold;
-  font-size: 0.75rem;
-  border-radius: 50%;
+  background: var(--color-error);
+  color: var(--text-on-error);
+  font-weight: var(--font-bold);
+  font-size: var(--text-xs);
+  border-radius: var(--radius-full);
 }
 
 .loading-state,
 .error-state {
-  padding: 1rem;
+  padding: var(--spacing-4);
   text-align: center;
-  color: #6b7280;
-  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 .error-state {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 /* Metric bars */
 .metric-item {
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .metric-label {
-  font-size: 0.875rem;
-  color: #6b7280;
-  margin-bottom: 0.5rem;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-2);
 }
 
 .metric-bar {
   position: relative;
   width: 100%;
   height: 24px;
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 12px;
+  background: var(--bg-hover);
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
 .bar-fill {
   height: 100%;
-  transition: width 0.3s ease;
-  border-radius: 12px;
+  transition: width var(--duration-300) var(--ease-in-out);
+  border-radius: var(--radius-xl);
 }
 
-.bar-fill.cpu { background: linear-gradient(90deg, #3b82f6, #1d4ed8); }
-.bar-fill.memory { background: linear-gradient(90deg, #10b981, #065f46); }
-.bar-fill.gpu { background: linear-gradient(90deg, #8b5cf6, #5b21b6); }
-.bar-fill.npu { background: linear-gradient(90deg, #f59e0b, #d97706); }
-.bar-fill.network { background: linear-gradient(90deg, #ef4444, #dc2626); }
+.bar-fill.cpu {
+  background: linear-gradient(90deg, var(--color-info), var(--color-info-dark));
+}
+
+.bar-fill.memory {
+  background: linear-gradient(90deg, var(--color-success), var(--color-success-dark));
+}
+
+.bar-fill.gpu {
+  background: linear-gradient(90deg, var(--chart-purple), var(--chart-purple-light));
+}
+
+.bar-fill.npu {
+  background: linear-gradient(90deg, var(--color-warning), var(--color-warning-hover));
+}
+
+.bar-fill.network {
+  background: linear-gradient(90deg, var(--color-error), var(--color-error-hover));
+}
 
 .metric-value {
   position: absolute;
-  right: 0.75rem;
+  right: var(--spacing-3);
   top: 50%;
   transform: translateY(-50%);
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: white;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--text-on-primary);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
@@ -660,149 +679,175 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  padding: var(--spacing-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .service-name {
-  font-weight: 500;
-  color: #374151;
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
 }
 
 .service-version {
-  font-size: 0.875rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .service-status {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
+  gap: var(--spacing-2);
+  font-size: var(--text-sm);
 }
 
 .status-dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
 }
 
-.service-status.online .status-dot { background: #10b981; }
-.service-status.warning .status-dot { background: #f59e0b; }
-.service-status.error .status-dot { background: #ef4444; }
+.service-status.online .status-dot {
+  background: var(--color-success);
+}
+
+.service-status.warning .status-dot {
+  background: var(--color-warning);
+}
+
+.service-status.error .status-dot {
+  background: var(--color-error);
+}
 
 /* Chart controls */
 .chart-controls {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .time-btn {
-  padding: 0.25rem 0.75rem;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 6px;
+  padding: var(--spacing-1) var(--spacing-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
   background: transparent;
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 0.875rem;
+  transition: all var(--duration-200) var(--ease-in-out);
+  font-size: var(--text-sm);
 }
 
 .time-btn:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--bg-hover);
 }
 
 .time-btn.active {
-  background: #3b82f6;
-  color: white;
-  border-color: #3b82f6;
+  background: var(--color-info);
+  color: var(--text-on-primary);
+  border-color: var(--color-info);
 }
 
 /* API endpoints */
 .endpoint-group {
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .group-name {
-  font-weight: 500;
-  color: #374151;
-  margin-bottom: 0.5rem;
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-2);
 }
 
 .endpoint-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.5rem;
-  margin-bottom: 0.25rem;
-  border-radius: 6px;
-  font-size: 0.875rem;
+  padding: var(--spacing-2);
+  margin-bottom: var(--spacing-1);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
 }
 
 .endpoint-item.healthy {
-  background: rgba(16, 185, 129, 0.1);
-  color: #065f46;
+  background: var(--color-success-bg);
+  color: var(--color-success-dark);
 }
 
 .endpoint-item.warning {
-  background: rgba(245, 158, 11, 0.1);
-  color: #92400e;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-dark);
 }
 
 .endpoint-item.error {
-  background: rgba(239, 68, 68, 0.1);
-  color: #991b1b;
+  background: var(--color-error-bg);
+  color: var(--color-error-dark);
 }
 
 /* Quick Actions */
 .action-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem;
-  border-radius: 8px;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3);
+  border-radius: var(--radius-lg);
   text-decoration: none;
-  color: #374151;
-  transition: background-color 0.2s ease;
-  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+  transition: background-color var(--duration-200) var(--ease-in-out);
+  margin-bottom: var(--spacing-2);
 }
 
 .action-item:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--bg-hover);
+}
+
+/* Action icon colors using design tokens */
+.action-icon-blue {
+  color: var(--color-info);
+}
+
+.action-icon-green {
+  color: var(--color-success);
+}
+
+.action-icon-default {
+  color: var(--text-secondary);
+}
+
+.action-icon-purple {
+  color: var(--chart-purple);
 }
 
 /* Activity */
 .activity-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  gap: var(--spacing-3);
+  padding: var(--spacing-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .activity-icon {
   width: 32px;
   height: 32px;
-  border-radius: 50%;
-  background: rgba(59, 130, 246, 0.1);
+  border-radius: var(--radius-full);
+  background: var(--color-info-bg);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #3b82f6;
+  color: var(--color-info);
 }
 
 .activity-action {
-  font-weight: 500;
-  color: #374151;
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
 }
 
 .activity-time {
-  font-size: 0.875rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .status-summary,
 .api-stats {
-  font-size: 0.875rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 </style>

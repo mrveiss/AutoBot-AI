@@ -155,15 +155,15 @@ const searchQuery = ref('');
 const dropdownRef = ref<HTMLElement | null>(null);
 const searchInputRef = ref<HTMLInputElement | null>(null);
 
-// Credential type mappings
+// Credential type mappings - using design token CSS variable references
 const typeConfig: Record<string, { icon: string; color: string; label: string }> = {
-  api_key: { icon: 'fas fa-key', color: '#6366f1', label: 'API Key' },
-  token: { icon: 'fas fa-ticket-alt', color: '#8b5cf6', label: 'Token' },
-  password: { icon: 'fas fa-lock', color: '#ec4899', label: 'Password' },
-  ssh_key: { icon: 'fas fa-terminal', color: '#14b8a6', label: 'SSH Key' },
-  database_url: { icon: 'fas fa-database', color: '#f59e0b', label: 'Database' },
-  certificate: { icon: 'fas fa-certificate', color: '#10b981', label: 'Certificate' },
-  other: { icon: 'fas fa-ellipsis-h', color: '#6b7280', label: 'Other' },
+  api_key: { icon: 'fas fa-key', color: 'var(--chart-indigo)', label: 'API Key' },
+  token: { icon: 'fas fa-ticket-alt', color: 'var(--chart-purple)', label: 'Token' },
+  password: { icon: 'fas fa-lock', color: 'var(--chart-pink)', label: 'Password' },
+  ssh_key: { icon: 'fas fa-terminal', color: 'var(--chart-teal)', label: 'SSH Key' },
+  database_url: { icon: 'fas fa-database', color: 'var(--chart-yellow)', label: 'Database' },
+  certificate: { icon: 'fas fa-certificate', color: 'var(--chart-green)', label: 'Certificate' },
+  other: { icon: 'fas fa-ellipsis-h', color: 'var(--text-tertiary)', label: 'Other' },
 };
 
 // Computed
@@ -326,22 +326,22 @@ watch(
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.625rem 0.875rem;
-  background: var(--bg-secondary, #1e293b);
-  border: 1px solid var(--border-color, #334155);
-  border-radius: 0.5rem;
+  padding: var(--spacing-2-5) var(--spacing-3-5);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-in-out);
   min-height: 2.75rem;
 }
 
 .picker-trigger:hover:not(.disabled) {
-  border-color: var(--primary-color, #6366f1);
+  border-color: var(--color-primary);
 }
 
 .picker-trigger.open {
-  border-color: var(--primary-color, #6366f1);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus);
 }
 
 .picker-trigger.disabled {
@@ -352,7 +352,7 @@ watch(
 .selected-display {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   flex: 1;
   min-width: 0;
 }
@@ -363,38 +363,38 @@ watch(
   justify-content: center;
   width: 1.75rem;
   height: 1.75rem;
-  border-radius: 0.375rem;
-  color: white;
-  font-size: 0.75rem;
+  border-radius: var(--radius-md);
+  color: var(--text-on-primary);
+  font-size: var(--text-xs);
   flex-shrink: 0;
 }
 
 .secret-name {
-  font-weight: 500;
-  color: var(--text-primary, #f1f5f9);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .secret-type {
-  color: var(--text-secondary, #94a3b8);
-  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 .placeholder-icon {
-  color: var(--text-tertiary, #64748b);
-  font-size: 0.875rem;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
 }
 
 .placeholder {
-  color: var(--text-tertiary, #64748b);
+  color: var(--text-tertiary);
 }
 
 .picker-actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .clear-btn {
@@ -404,22 +404,22 @@ watch(
   width: 1.25rem;
   height: 1.25rem;
   border: none;
-  background: var(--bg-tertiary, #334155);
-  color: var(--text-secondary, #94a3b8);
-  border-radius: 50%;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-radius: var(--radius-full);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-in-out);
 }
 
 .clear-btn:hover {
-  background: var(--danger-color, #ef4444);
-  color: white;
+  background: var(--color-error);
+  color: var(--text-on-error);
 }
 
 .arrow {
-  color: var(--text-tertiary, #64748b);
-  font-size: 0.75rem;
-  transition: transform 0.2s ease;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  transition: transform var(--duration-200) var(--ease-in-out);
 }
 
 .picker-trigger.open .arrow {
@@ -429,14 +429,14 @@ watch(
 /* Dropdown */
 .picker-dropdown {
   position: absolute;
-  top: calc(100% + 0.375rem);
+  top: calc(100% + var(--spacing-1-5));
   left: 0;
   right: 0;
-  background: var(--bg-secondary, #1e293b);
-  border: 1px solid var(--border-color, #334155);
-  border-radius: 0.5rem;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-  z-index: 1000;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  z-index: var(--z-dropdown);
   max-height: 20rem;
   overflow: hidden;
   display: flex;
@@ -446,26 +446,26 @@ watch(
 .dropdown-search {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  border-bottom: 1px solid var(--border-color, #334155);
+  gap: var(--spacing-2);
+  padding: var(--spacing-3);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .dropdown-search i {
-  color: var(--text-tertiary, #64748b);
+  color: var(--text-tertiary);
 }
 
 .dropdown-search input {
   flex: 1;
   background: transparent;
   border: none;
-  color: var(--text-primary, #f1f5f9);
-  font-size: 0.875rem;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
   outline: none;
 }
 
 .dropdown-search input::placeholder {
-  color: var(--text-tertiary, #64748b);
+  color: var(--text-tertiary);
 }
 
 .dropdown-loading,
@@ -474,56 +474,56 @@ watch(
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 2rem;
-  color: var(--text-secondary, #94a3b8);
+  gap: var(--spacing-2);
+  padding: var(--spacing-8);
+  color: var(--text-secondary);
 }
 
 .dropdown-loading i,
 .dropdown-empty i {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   opacity: 0.5;
 }
 
 .create-link {
-  margin-top: 0.5rem;
-  padding: 0.375rem 0.75rem;
+  margin-top: var(--spacing-2);
+  padding: var(--spacing-1-5) var(--spacing-3);
   background: transparent;
-  border: 1px solid var(--primary-color, #6366f1);
-  color: var(--primary-color, #6366f1);
-  border-radius: 0.375rem;
-  font-size: 0.75rem;
+  border: 1px solid var(--color-primary);
+  color: var(--color-primary);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-in-out);
 }
 
 .create-link:hover {
-  background: var(--primary-color, #6366f1);
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .dropdown-list {
   flex: 1;
   overflow-y: auto;
-  padding: 0.375rem;
+  padding: var(--spacing-1-5);
 }
 
 .dropdown-item {
   display: flex;
   align-items: center;
-  gap: 0.625rem;
-  padding: 0.625rem;
-  border-radius: 0.375rem;
+  gap: var(--spacing-2-5);
+  padding: var(--spacing-2-5);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background var(--duration-150) var(--ease-in-out);
 }
 
 .dropdown-item:hover {
-  background: var(--bg-tertiary, #334155);
+  background: var(--bg-tertiary);
 }
 
 .dropdown-item.selected {
-  background: rgba(99, 102, 241, 0.15);
+  background: var(--color-primary-bg-hover);
 }
 
 .secret-info {
@@ -531,19 +531,19 @@ watch(
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
+  gap: var(--spacing-0-5);
 }
 
 .secret-info .secret-name {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .secret-meta {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  font-size: 0.75rem;
-  color: var(--text-tertiary, #64748b);
+  gap: var(--spacing-1-5);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 
 .scope-indicator {
@@ -551,21 +551,21 @@ watch(
 }
 
 .scope-indicator.general {
-  color: var(--primary-color, #6366f1);
+  color: var(--color-primary);
 }
 
 .scope-indicator.chat {
-  color: var(--success-color, #10b981);
+  color: var(--color-success);
 }
 
 .check-icon {
-  color: var(--primary-color, #6366f1);
-  font-size: 0.75rem;
+  color: var(--color-primary);
+  font-size: var(--text-xs);
 }
 
 .dropdown-footer {
-  padding: 0.5rem;
-  border-top: 1px solid var(--border-color, #334155);
+  padding: var(--spacing-2);
+  border-top: 1px solid var(--border-default);
 }
 
 .create-btn {
@@ -573,43 +573,43 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.375rem;
-  padding: 0.5rem;
+  gap: var(--spacing-1-5);
+  padding: var(--spacing-2);
   background: transparent;
-  border: 1px dashed var(--border-color, #334155);
-  color: var(--text-secondary, #94a3b8);
-  border-radius: 0.375rem;
-  font-size: 0.75rem;
+  border: 1px dashed var(--border-default);
+  color: var(--text-secondary);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-in-out);
 }
 
 .create-btn:hover {
-  border-color: var(--primary-color, #6366f1);
-  color: var(--primary-color, #6366f1);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 .picker-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 999;
+  z-index: calc(var(--z-dropdown) - 1);
 }
 
 /* Dropdown animation */
 .dropdown-enter-active,
 .dropdown-leave-active {
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-in-out);
 }
 
 .dropdown-enter-from,
 .dropdown-leave-to {
   opacity: 0;
-  transform: translateY(-0.5rem);
+  transform: translateY(calc(-1 * var(--spacing-2)));
 }
 
 /* Dark scrollbar */
 .dropdown-list::-webkit-scrollbar {
-  width: 0.375rem;
+  width: var(--spacing-1-5);
 }
 
 .dropdown-list::-webkit-scrollbar-track {
@@ -617,11 +617,11 @@ watch(
 }
 
 .dropdown-list::-webkit-scrollbar-thumb {
-  background: var(--border-color, #334155);
-  border-radius: 0.25rem;
+  background: var(--border-default);
+  border-radius: var(--radius-default);
 }
 
 .dropdown-list::-webkit-scrollbar-thumb:hover {
-  background: var(--text-tertiary, #64748b);
+  background: var(--text-tertiary);
 }
 </style>

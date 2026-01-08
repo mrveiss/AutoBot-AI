@@ -46,7 +46,7 @@
           </div>
         </div>
       </div>
-      
+
       <div v-else-if="!loading?.profile" class="no-data">
         <i class="fas fa-exclamation-triangle"></i>
         Machine profile not loaded. Click refresh to detect current machine.
@@ -118,8 +118,8 @@
           <div v-if="integrationStatus.available_commands" class="available-commands">
             <h4>Integrated Commands ({{ integrationStatus.available_commands.length }}):</h4>
             <div class="command-tags">
-              <span 
-                v-for="command in integrationStatus.available_commands" 
+              <span
+                v-for="command in integrationStatus.available_commands"
                 :key="command"
                 class="command-tag"
               >
@@ -196,7 +196,7 @@
               <span class="progress-percentage">{{ Math.round(progressState.overallProgress) }}%</span>
             </div>
             <div class="progress-bar">
-              <div 
+              <div
                 class="progress-fill"
                 :style="{ width: progressState.overallProgress + '%' }"
                 :class="progressState.status"
@@ -211,7 +211,7 @@
               <span class="progress-percentage">{{ Math.round(progressState.taskProgress) }}%</span>
             </div>
             <div class="progress-bar">
-              <div 
+              <div
                 class="progress-fill task-progress"
                 :style="{ width: progressState.taskProgress + '%' }"
               ></div>
@@ -220,8 +220,8 @@
 
           <!-- Progress Messages -->
           <div class="progress-messages">
-            <div 
-              v-for="(message, index) in progressState.messages.slice(-5)" 
+            <div
+              v-for="(message, index) in progressState.messages.slice(-5)"
               :key="index"
               class="progress-message"
               :class="message.type"
@@ -234,8 +234,8 @@
 
           <!-- Connection Status -->
           <div class="connection-status">
-            <i :class="websocketConnected ? 'fas fa-plug text-green-500' : 'fas fa-plug text-red-500'"></i>
-            <span :class="websocketConnected ? 'text-green-600' : 'text-red-600'">
+            <i :class="websocketConnected ? 'fas fa-plug connected-icon' : 'fas fa-plug disconnected-icon'"></i>
+            <span :class="websocketConnected ? 'connected-text' : 'disconnected-text'">
               {{ websocketConnected ? 'Connected' : 'Disconnected' }}
             </span>
           </div>
@@ -244,15 +244,15 @@
 
       <div class="action-info">
         <div class="info-item">
-          <strong>Initialize Machine Knowledge:</strong> 
+          <strong>Initialize Machine Knowledge:</strong>
           Detects your machine and creates machine-specific knowledge including man page integration.
         </div>
         <div class="info-item">
-          <strong>Integrate Man Pages:</strong> 
+          <strong>Integrate Man Pages:</strong>
           Extracts manual pages for available Linux commands (Linux only).
         </div>
         <div class="info-item">
-          <strong>Test Search:</strong> 
+          <strong>Test Search:</strong>
           Tests searching through integrated man page knowledge.
         </div>
       </div>
@@ -265,7 +265,7 @@
       </template>
 
       <div class="search-input">
-        <input 
+        <input
           v-model="searchQuery"
           @keyup.enter="searchManPages"
           type="text"
@@ -284,7 +284,7 @@
 
       <div v-if="searchResults" class="search-results">
         <h4>Search Results for "{{ lastSearchQuery }}":</h4>
-        
+
         <EmptyState
           v-if="searchResults.length === 0"
           icon="fas fa-info-circle"
@@ -299,7 +299,7 @@
             </div>
             <div class="result-purpose">{{ result.purpose }}</div>
             <div class="result-meta">
-              <span class="source">{{ result.source }}</span> • 
+              <span class="source">{{ result.source }}</span> •
               <span class="machine">{{ result.machine_id }}</span>
             </div>
           </div>
@@ -393,12 +393,12 @@ export default {
     })
 
     const canIntegrate = computed(() => {
-      return machineProfile.value && 
+      return machineProfile.value &&
              machineProfile.value.os_type === 'linux'
     })
 
     const hasIntegration = computed(() => {
-      return integrationStatus.value && 
+      return integrationStatus.value &&
              integrationStatus.value.status !== 'not_integrated' &&
              integrationStatus.value.status !== 'error'
     })
@@ -407,7 +407,7 @@ export default {
     const setProgressMessage = (message, type = 'info', duration = 5000) => {
       progressMessage.value = message
       progressMessageType.value = type
-      
+
       if (duration > 0) {
         setTimeout(() => {
           progressMessage.value = ''
@@ -578,7 +578,7 @@ export default {
         timestamp: Date.now()
       }
       progressState.value.messages.push(message)
-      
+
       // Keep only last 10 messages
       if (progressState.value.messages.length > 10) {
         progressState.value.messages = progressState.value.messages.slice(-10)
@@ -716,7 +716,7 @@ export default {
       integrateManPages,
       searchManPages,
       testSearchManPages,
-      
+
       // Progress tracking methods
       addProgressMessage,
       updateProgress,
@@ -731,10 +731,15 @@ export default {
 </script>
 
 <style scoped>
+/**
+ * ManPageManager.vue - Styles migrated to design tokens
+ * Issue #704: CSS Design System - Centralized Theming & SSOT Styles
+ */
+
 .man-page-manager {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 20px;
+  padding: var(--spacing-5);
   max-height: calc(100vh - 80px);
   overflow-y: auto;
   overflow-x: hidden;
@@ -743,52 +748,52 @@ export default {
 
 .header {
   text-align: center;
-  margin-bottom: 40px;
+  margin-bottom: var(--spacing-10);
 }
 
 .title {
-  font-size: 2rem;
-  color: #2c3e50;
-  margin-bottom: 10px;
+  font-size: var(--text-3xl);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-2);
 }
 
 .title i {
-  margin-right: 10px;
-  color: #3498db;
+  margin-right: var(--spacing-2);
+  color: var(--color-info);
 }
 
 .subtitle {
-  color: #7f8c8d;
-  font-size: 1.1rem;
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
 }
 
 /* BasePanel handles section containers - only .integration-actions remains as non-migrated */
 .integration-actions {
-  background: #f8f9fa;
-  border-radius: 10px;
-  padding: 25px;
-  margin-bottom: 30px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-6);
+  margin-bottom: var(--spacing-8);
+  box-shadow: var(--shadow-md);
 }
 
 .machine-info {
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-5);
 }
 
 .info-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 15px;
+  gap: var(--spacing-4);
 }
 
 .info-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid #ecf0f1;
+  padding: var(--spacing-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .info-item:last-child {
@@ -796,35 +801,35 @@ export default {
 }
 
 .info-item label {
-  font-weight: 600;
-  color: #2c3e50;
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .mono {
-  font-family: 'Courier New', monospace;
-  background: #ecf0f1;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.9rem;
+  font-family: var(--font-mono);
+  background: var(--bg-tertiary);
+  padding: var(--spacing-0-5) var(--spacing-1-5);
+  border-radius: var(--radius-default);
+  font-size: var(--text-sm);
 }
 
 .badge {
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 0.8rem;
-  font-weight: bold;
+  padding: var(--spacing-1) var(--spacing-3);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
   text-transform: uppercase;
 }
 
-.badge-success { background: #27ae60; color: white; }
-.badge-info { background: #3498db; color: white; }
-.badge-warning { background: #f39c12; color: white; }
-.badge-secondary { background: #95a5a6; color: white; }
+.badge-success { background: var(--color-success); color: var(--text-on-success); }
+.badge-info { background: var(--color-info); color: var(--text-on-primary); }
+.badge-warning { background: var(--color-warning); color: var(--text-on-warning); }
+.badge-secondary { background: var(--color-secondary); color: var(--text-on-primary); }
 
 .highlight {
-  font-weight: bold;
-  color: #27ae60;
-  font-size: 1.1rem;
+  font-weight: var(--font-bold);
+  color: var(--color-success);
+  font-size: var(--text-lg);
 }
 
 /* Integration Status */
@@ -832,107 +837,107 @@ export default {
 .error {
   display: flex;
   align-items: center;
-  gap: 15px;
-  padding: 20px;
-  border-radius: 8px;
-  background: white;
+  gap: var(--spacing-4);
+  padding: var(--spacing-5);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
 }
 
 .not-integrated {
-  border-left: 4px solid #3498db;
+  border-left: 4px solid var(--color-info);
 }
 
 .not-integrated i {
-  color: #3498db;
-  font-size: 1.5rem;
+  color: var(--color-info);
+  font-size: var(--text-2xl);
 }
 
 .error {
-  border-left: 4px solid #e74c3c;
+  border-left: 4px solid var(--color-error);
 }
 
 .error i {
-  color: #e74c3c;
-  font-size: 1.5rem;
+  color: var(--color-error);
+  font-size: var(--text-2xl);
 }
 
 .integration-stats {
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-5);
 }
 
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 20px;
-  margin-bottom: 20px;
+  gap: var(--spacing-5);
+  margin-bottom: var(--spacing-5);
 }
 
 .stat-item {
   text-align: center;
-  padding: 15px;
-  background: #ecf0f1;
-  border-radius: 8px;
+  padding: var(--spacing-4);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
 }
 
 .stat-number {
-  font-size: 2rem;
-  font-weight: bold;
-  color: #2c3e50;
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
 }
 
 .stat-label {
-  color: #7f8c8d;
-  font-size: 0.9rem;
-  margin-top: 5px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  margin-top: var(--spacing-1);
 }
 
 .integration-date {
-  color: #7f8c8d;
-  margin-bottom: 20px;
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-5);
 }
 
 .integration-date i {
-  margin-right: 8px;
+  margin-right: var(--spacing-2);
 }
 
 .available-commands h4 {
-  margin-bottom: 15px;
-  color: #2c3e50;
+  margin-bottom: var(--spacing-4);
+  color: var(--text-primary);
 }
 
 .command-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .command-tag {
-  background: #3498db;
-  color: white;
-  padding: 4px 10px;
-  border-radius: 15px;
-  font-size: 0.8rem;
-  font-family: 'Courier New', monospace;
+  background: var(--color-info);
+  color: var(--text-on-primary);
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
 }
 
 /* Action Buttons */
 .action-buttons {
   display: flex;
-  gap: 15px;
-  margin-bottom: 25px;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
   flex-wrap: wrap;
 }
 
 .action-info {
-  color: #7f8c8d;
+  color: var(--text-secondary);
 }
 
 .action-info .info-item {
-  margin-bottom: 10px;
-  padding: 10px 0;
-  border-bottom: 1px solid #ecf0f1;
+  margin-bottom: var(--spacing-2);
+  padding: var(--spacing-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
   display: block;
 }
 
@@ -943,69 +948,71 @@ export default {
 /* Search Section */
 .search-input {
   display: flex;
-  gap: 15px;
-  margin-bottom: 25px;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
 }
 
 .form-input {
   flex: 1;
-  padding: 12px 16px;
-  border: 2px solid #ecf0f1;
-  border-radius: 6px;
-  font-size: 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
+  border: 2px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  background: var(--bg-input);
+  color: var(--text-primary);
 }
 
 .form-input:focus {
   outline: none;
-  border-color: #3498db;
+  border-color: var(--color-primary);
 }
 
 .search-results h4 {
-  margin-bottom: 20px;
-  color: #2c3e50;
+  margin-bottom: var(--spacing-5);
+  color: var(--text-primary);
 }
 
 .result-list {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: var(--spacing-4);
 }
 
 .result-item {
-  background: white;
-  padding: 15px;
-  border-radius: 8px;
-  border-left: 4px solid #3498db;
+  background: var(--bg-card);
+  padding: var(--spacing-4);
+  border-radius: var(--radius-lg);
+  border-left: 4px solid var(--color-info);
 }
 
 .result-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .result-header strong {
-  color: #2c3e50;
-  font-family: 'Courier New', monospace;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
 }
 
 .relevance-score {
-  font-size: 0.8rem;
-  color: #7f8c8d;
-  background: #ecf0f1;
-  padding: 2px 8px;
-  border-radius: 12px;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  padding: var(--spacing-0-5) var(--spacing-2);
+  border-radius: var(--radius-full);
 }
 
 .result-purpose {
-  color: #2c3e50;
-  margin-bottom: 8px;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-2);
 }
 
 .result-meta {
-  font-size: 0.8rem;
-  color: #7f8c8d;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .source {
@@ -1013,41 +1020,42 @@ export default {
 }
 
 .machine {
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-mono);
 }
 
-/* Progress Messages */
+/* Progress Messages (toast notifications) */
 .progress-message {
   position: fixed;
-  top: 20px;
-  right: 20px;
-  padding: 15px 20px;
-  border-radius: 8px;
-  color: white;
-  font-weight: 600;
-  z-index: 1000;
+  top: var(--spacing-5);
+  right: var(--spacing-5);
+  padding: var(--spacing-4) var(--spacing-5);
+  border-radius: var(--radius-lg);
+  color: var(--text-on-primary);
+  font-weight: var(--font-semibold);
+  z-index: var(--z-toast);
   max-width: 400px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
 }
 
 .progress-message.info {
-  background: #3498db;
+  background: var(--color-info);
 }
 
 .progress-message.success {
-  background: #27ae60;
+  background: var(--color-success);
 }
 
 .progress-message.warning {
-  background: #f39c12;
+  background: var(--color-warning);
+  color: var(--text-on-warning);
 }
 
 .progress-message.error {
-  background: #e74c3c;
+  background: var(--color-error);
 }
 
 .progress-message i {
-  margin-right: 10px;
+  margin-right: var(--spacing-2);
 }
 
 /* Loading and No Data States */
@@ -1056,35 +1064,35 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 15px;
-  padding: 40px;
-  color: #7f8c8d;
+  gap: var(--spacing-4);
+  padding: var(--spacing-10);
+  color: var(--text-secondary);
   font-style: italic;
 }
 
 .loading i,
 .no-data i {
-  font-size: 1.2rem;
+  font-size: var(--text-xl);
 }
 
 /* Responsive Design */
 @media (max-width: 768px) {
   .man-page-manager {
-    padding: 15px;
+    padding: var(--spacing-4);
   }
-  
+
   .action-buttons {
     flex-direction: column;
   }
-  
+
   .btn {
     min-width: 100%;
   }
-  
+
   .search-input {
     flex-direction: column;
   }
-  
+
   .info-grid {
     grid-template-columns: 1fr;
   }
@@ -1092,129 +1100,134 @@ export default {
 
 /* BasePanel handles progress-section container - only content styles remain */
 .progress-container {
-  margin-top: 15px;
+  margin-top: var(--spacing-4);
 }
 
 .progress-item {
-  margin-bottom: 15px;
+  margin-bottom: var(--spacing-4);
 }
 
 .progress-label {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
-  font-weight: 600;
-  color: #2c3e50;
+  margin-bottom: var(--spacing-2);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .progress-percentage {
-  font-size: 0.9em;
-  color: #7f8c8d;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .progress-bar {
   width: 100%;
   height: 8px;
-  background: #ecf0f1;
-  border-radius: 4px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  transition: width 0.3s ease;
-  border-radius: 4px;
+  transition: width var(--duration-300) var(--ease-out);
+  border-radius: var(--radius-default);
 }
 
 .progress-fill.waiting {
-  background: #95a5a6;
+  background: var(--color-secondary);
 }
 
 .progress-fill.running {
-  background: linear-gradient(90deg, #3498db, #2980b9);
+  background: linear-gradient(90deg, var(--color-info), var(--color-info-hover));
 }
 
 .progress-fill.success {
-  background: linear-gradient(90deg, #27ae60, #229954);
+  background: linear-gradient(90deg, var(--color-success), var(--color-success-hover));
 }
 
 .progress-fill.error {
-  background: linear-gradient(90deg, #e74c3c, #c0392b);
+  background: linear-gradient(90deg, var(--color-error), var(--color-error-hover));
 }
 
 .progress-fill.task-progress {
-  background: linear-gradient(90deg, #9b59b6, #8e44ad);
+  background: linear-gradient(90deg, var(--chart-purple), var(--chart-purple-light));
 }
 
 .progress-messages {
-  background: #ffffff;
-  border: 1px solid #dee2e6;
-  border-radius: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-default);
   max-height: 200px;
   overflow-y: auto;
-  margin: 15px 0;
-  padding: 10px;
+  margin: var(--spacing-4) 0;
+  padding: var(--spacing-2);
 }
 
-.progress-message {
+/* Progress message items within the list (different from toast notifications) */
+.progress-messages .progress-message {
+  position: static;
   display: flex;
   align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid #f1f3f4;
-  font-size: 0.9em;
+  padding: var(--spacing-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--text-sm);
+  background: transparent;
+  color: var(--text-primary);
+  font-weight: var(--font-normal);
+  box-shadow: none;
+  max-width: none;
+  border-radius: 0;
 }
 
-.progress-message:last-child {
+.progress-messages .progress-message:last-child {
   border-bottom: none;
 }
 
-.progress-message .timestamp {
-  color: #6c757d;
-  font-size: 0.8em;
-  margin-right: 10px;
+.progress-messages .progress-message .timestamp {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  margin-right: var(--spacing-2);
   min-width: 70px;
 }
 
-.progress-message .message {
+.progress-messages .progress-message .message {
   flex: 1;
 }
 
 .connection-status {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px;
-  background: #ffffff;
-  border: 1px solid #dee2e6;
-  border-radius: 4px;
-  font-size: 0.9em;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-default);
+  font-size: var(--text-sm);
 }
 
-.text-green-500 { color: #10b981; }
-.text-green-600 { color: #059669; }
+/* Connection status icons and text */
+.connected-icon { color: var(--color-success); }
+.disconnected-icon { color: var(--color-error); }
+.connected-text { color: var(--color-success-hover); }
+.disconnected-text { color: var(--color-error-hover); }
 
 /* Custom scrollbar styling for better UX */
 .man-page-manager::-webkit-scrollbar {
-  width: 8px;
+  width: var(--scrollbar-width);
 }
 
 .man-page-manager::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--scrollbar-track);
 }
 
 .man-page-manager::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
+  background: var(--scrollbar-thumb);
+  border-radius: var(--scrollbar-radius);
 }
 
 .man-page-manager::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: var(--scrollbar-thumb-hover);
 }
-.text-green-500 { color: #10b981; }
-.text-green-600 { color: #059669; }
-.text-red-500 { color: #ef4444; }
-.text-red-600 { color: #dc2626; }
-.text-blue-500 { color: #3b82f6; }
-.text-yellow-500 { color: #eab308; }
 </style>

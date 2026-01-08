@@ -360,9 +360,9 @@ onUnmounted(() => {
 <style scoped>
 .workflow-approval {
   display: flex;
-  gap: 20px;
+  gap: var(--spacing-5);
   height: 100%;
-  padding: 20px;
+  padding: var(--spacing-5);
 }
 
 .workflows-section {
@@ -378,120 +378,120 @@ onUnmounted(() => {
 .section-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 16px;
-  font-size: 1.2em;
-  font-weight: 600;
-  color: #333;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-4);
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .section-title i {
-  color: #007bff;
+  color: var(--color-primary);
 }
 
 .loading {
   text-align: center;
-  padding: 40px;
-  color: #666;
+  padding: var(--spacing-10);
+  color: var(--text-secondary);
 }
 
 .workflows-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .workflow-card {
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 16px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
   cursor: pointer;
-  transition: all 0.2s;
-  background: white;
+  transition: var(--transition-all);
+  background: var(--bg-card);
 }
 
 .workflow-card:hover {
-  border-color: #007bff;
-  box-shadow: 0 2px 4px rgba(0, 123, 255, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
 }
 
 .workflow-card.selected {
-  border-color: #007bff;
-  background: #f8f9ff;
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
 }
 
 .workflow-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
 }
 
 .workflow-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  color: #333;
+  gap: var(--spacing-2);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
   flex: 1;
 }
 
 .workflow-status {
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 0.8em;
-  font-weight: 600;
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-default);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
   text-transform: uppercase;
 }
 
-.workflow-status.planned { background: #e3f2fd; color: #1976d2; }
-.workflow-status.executing { background: #fff3e0; color: #f57c00; }
-.workflow-status.completed { background: #e8f5e8; color: #2e7d32; }
-.workflow-status.failed { background: #ffebee; color: #d32f2f; }
-.workflow-status.cancelled { background: #f5f5f5; color: #757575; }
+.workflow-status.planned { background: var(--color-info-bg); color: var(--color-info); }
+.workflow-status.executing { background: var(--color-warning-bg); color: var(--color-warning); }
+.workflow-status.completed { background: var(--color-success-bg); color: var(--color-success); }
+.workflow-status.failed { background: var(--color-error-bg); color: var(--color-error); }
+.workflow-status.cancelled { background: var(--bg-tertiary); color: var(--text-tertiary); }
 
 .workflow-meta {
   display: flex;
-  gap: 16px;
-  margin-bottom: 12px;
-  font-size: 0.9em;
-  color: #666;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-3);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .meta-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .workflow-progress {
-  margin-top: 8px;
+  margin-top: var(--spacing-2);
 }
 
 .progress-bar {
   height: 4px;
-  background: #eee;
-  border-radius: 2px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-xs);
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: #007bff;
-  transition: width 0.3s;
+  background: var(--color-primary);
+  transition: width var(--duration-300) var(--ease-out);
 }
 
 .workflow-info {
-  background: #f8f9fa;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 20px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
+  margin-bottom: var(--spacing-5);
 }
 
 .info-row {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .info-row:last-child {
@@ -499,84 +499,84 @@ onUnmounted(() => {
 }
 
 .label {
-  font-weight: 600;
-  color: #333;
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .value {
-  color: #666;
+  color: var(--text-secondary);
 }
 
-.classification.simple { color: #2e7d32; }
-.classification.research { color: #1976d2; }
-.classification.install { color: #f57c00; }
-.classification.complex { color: #d32f2f; }
+.classification.simple { color: var(--color-success); }
+.classification.research { color: var(--color-info); }
+.classification.install { color: var(--color-warning); }
+.classification.complex { color: var(--color-error); }
 
-.status.planned { color: #1976d2; }
-.status.executing { color: #f57c00; }
-.status.completed { color: #2e7d32; }
-.status.failed { color: #d32f2f; }
-.status.cancelled { color: #757575; }
+.status.planned { color: var(--color-info); }
+.status.executing { color: var(--color-warning); }
+.status.completed { color: var(--color-success); }
+.status.failed { color: var(--color-error); }
+.status.cancelled { color: var(--text-tertiary); }
 
 .workflow-steps {
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .workflow-steps h4 {
-  margin-bottom: 16px;
-  color: #333;
+  margin-bottom: var(--spacing-4);
+  color: var(--text-primary);
 }
 
 .steps-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .step-card {
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 16px;
-  background: white;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
+  background: var(--bg-card);
 }
 
 .step-card.current {
-  border-color: #007bff;
-  background: #f8f9ff;
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
 }
 
 .step-card.completed {
-  border-color: #28a745;
-  background: #f8fff8;
+  border-color: var(--color-success);
+  background: var(--color-success-bg);
 }
 
 .step-card.waiting-approval {
-  border-color: #ffc107;
-  background: #fffdf0;
+  border-color: var(--color-warning);
+  background: var(--color-warning-bg);
 }
 
 .step-card.failed {
-  border-color: #dc3545;
-  background: #fff8f8;
+  border-color: var(--color-error);
+  background: var(--color-error-bg);
 }
 
 .step-header {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .step-number {
-  background: #007bff;
-  color: white;
-  border-radius: 50%;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
+  border-radius: var(--radius-full);
   width: 24px;
   height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.8em;
-  font-weight: 600;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
   flex-shrink: 0;
 }
 
@@ -585,96 +585,96 @@ onUnmounted(() => {
 }
 
 .step-title {
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 4px;
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-1);
 }
 
 .step-meta {
   display: flex;
-  gap: 12px;
-  font-size: 0.8em;
-  color: #666;
+  gap: var(--spacing-3);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .agent-type {
-  background: #e9ecef;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-weight: 600;
+  background: var(--bg-tertiary);
+  padding: var(--spacing-0-5) var(--spacing-1-5);
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-semibold);
 }
 
 .step-status {
   text-transform: uppercase;
-  font-weight: 600;
+  font-weight: var(--font-semibold);
 }
 
 .approval-required {
-  color: #ffc107;
-  font-weight: 600;
+  color: var(--color-warning);
+  font-weight: var(--font-semibold);
 }
 
 .step-status-icon {
-  font-size: 1.2em;
+  font-size: var(--text-lg);
 }
 
-.text-success { color: #28a745; }
-.text-warning { color: #ffc107; }
-.text-info { color: #17a2b8; }
-.text-danger { color: #dc3545; }
-.text-muted { color: #6c757d; }
+.text-success { color: var(--color-success); }
+.text-warning { color: var(--color-warning); }
+.text-info { color: var(--color-info); }
+.text-danger { color: var(--color-error); }
+.text-muted { color: var(--text-muted); }
 
 .approval-interface {
-  margin-top: 16px;
-  padding: 16px;
-  background: #fff3cd;
-  border-radius: 6px;
-  border: 1px solid #ffeaa7;
+  margin-top: var(--spacing-4);
+  padding: var(--spacing-4);
+  background: var(--color-warning-bg);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-warning-border);
 }
 
 .approval-message {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-  font-weight: 600;
-  color: #856404;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-3);
+  font-weight: var(--font-semibold);
+  color: var(--color-warning-dark);
 }
 
 .approval-details {
-  margin-bottom: 16px;
-  font-size: 0.9em;
+  margin-bottom: var(--spacing-4);
+  font-size: var(--text-sm);
 }
 
 .approval-details p {
-  margin: 4px 0;
+  margin: var(--spacing-1) 0;
 }
 
 .approval-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .step-result {
-  margin-top: 12px;
-  padding: 12px;
-  background: #f8f9fa;
-  border-radius: 6px;
+  margin-top: var(--spacing-3);
+  padding: var(--spacing-3);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
 }
 
 .result-label {
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 4px;
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-1);
 }
 
 .result-content {
-  color: #666;
-  font-size: 0.9em;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 .workflow-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 </style>
