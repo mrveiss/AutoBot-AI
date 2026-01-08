@@ -258,82 +258,97 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/**
+ * LoginForm.vue - Migrated to Design Tokens
+ * Issue #704: CSS Design System - Centralized Theming
+ *
+ * Hardcoded colors replaced with CSS variables from design-tokens.css
+ */
+
 .login-container {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 1rem;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--chart-purple) 100%);
+  padding: var(--spacing-4);
 }
 
 .login-card {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  padding: 2rem;
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  padding: var(--spacing-8);
   width: 100%;
   max-width: 400px;
 }
 
 .login-header {
   text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: var(--spacing-8);
 }
 
 .logo h1 {
-  font-size: 2rem;
-  font-weight: bold;
-  color: #1f2937;
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
   margin: 0;
 }
 
 .subtitle {
-  color: #6b7280;
-  margin: 0.5rem 0 0 0;
-  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin: var(--spacing-2) 0 0 0;
+  font-size: var(--text-sm);
 }
 
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--spacing-6);
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .form-label {
-  font-weight: 500;
-  color: #374151;
-  font-size: 0.875rem;
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 .form-input {
-  padding: 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 1rem;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  padding: var(--spacing-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  transition: border-color var(--duration-200) var(--ease-in-out),
+              box-shadow var(--duration-200) var(--ease-in-out);
 }
 
 .form-input:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus);
 }
 
 .form-input.error {
-  border-color: #ef4444;
+  border-color: var(--color-error);
 }
 
 .form-input:disabled {
-  background-color: #f9fafb;
+  background-color: var(--bg-tertiary);
   cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-input::placeholder {
+  color: var(--text-muted);
 }
 
 .password-input-wrapper {
@@ -342,19 +357,20 @@ onMounted(async () => {
 
 .password-toggle {
   position: absolute;
-  right: 0.75rem;
+  right: var(--spacing-3);
   top: 50%;
   transform: translateY(-50%);
   background: none;
   border: none;
-  color: #6b7280;
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 0;
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
+  transition: color var(--duration-150) var(--ease-in-out);
 }
 
 .password-toggle:hover {
-  color: #374151;
+  color: var(--text-primary);
 }
 
 .password-toggle:disabled {
@@ -363,26 +379,27 @@ onMounted(async () => {
 }
 
 .error-message {
-  color: #ef4444;
-  font-size: 0.875rem;
-  margin-top: 0.25rem;
+  color: var(--color-error);
+  font-size: var(--text-sm);
+  margin-top: var(--spacing-1);
 }
 
 
 .login-button {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--chart-purple) 100%);
+  color: var(--text-on-primary);
   border: none;
-  padding: 0.875rem;
-  border-radius: 6px;
-  font-size: 1rem;
-  font-weight: 500;
+  padding: var(--spacing-3-5);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
   cursor: pointer;
-  transition: opacity 0.2s, transform 0.2s;
+  transition: opacity var(--duration-200) var(--ease-in-out),
+              transform var(--duration-200) var(--ease-in-out);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .login-button:hover:not(:disabled) {
@@ -401,7 +418,7 @@ onMounted(async () => {
   height: 1.25rem;
   border: 2px solid transparent;
   border-top: 2px solid currentColor;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   animation: spin 1s linear infinite;
 }
 
@@ -410,27 +427,28 @@ onMounted(async () => {
 }
 
 .login-info {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid #e5e7eb;
+  margin-top: var(--spacing-4);
+  padding-top: var(--spacing-4);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .demo-credentials {
-  font-size: 0.75rem;
-  color: #6b7280;
-  line-height: 1.4;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: var(--leading-relaxed);
   margin: 0;
   text-align: center;
 }
 
 .login-footer {
-  margin-top: 2rem;
+  margin-top: var(--spacing-8);
   text-align: center;
 }
 
 .login-footer p {
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 0.875rem;
+  color: var(--text-on-primary);
+  opacity: 0.8;
+  font-size: var(--text-sm);
   margin: 0;
 }
 
@@ -438,48 +456,21 @@ onMounted(async () => {
 .icon-eye::before { content: '👁'; }
 .icon-eye-off::before { content: '🙈'; }
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .login-card {
-    background: #1f2937;
-    color: white;
-  }
-
-  .logo h1 {
-    color: white;
-  }
-
-  .form-label {
-    color: #e5e7eb;
-  }
-
-  .form-input {
-    background: #374151;
-    border-color: #4b5563;
-    color: white;
-  }
-
-  .form-input:focus {
-    border-color: #667eea;
-  }
-
-  .form-input:disabled {
-    background-color: #374151;
-  }
-}
+/* Dark mode support - now handled by design tokens */
+/* The design tokens already define dark theme colors as defaults */
 
 /* Responsive design */
 @media (max-width: 480px) {
   .login-container {
-    padding: 0.5rem;
+    padding: var(--spacing-2);
   }
 
   .login-card {
-    padding: 1.5rem;
+    padding: var(--spacing-6);
   }
 
   .logo h1 {
-    font-size: 1.75rem;
+    font-size: var(--text-2xl);
   }
 }
 </style>

@@ -51,6 +51,7 @@
  *
  * Issue #184: Split oversized Vue components
  * Issue #249: Knowledge Base Citations Display
+ * Issue #704: Migrated to design tokens
  */
 
 import { ref } from 'vue'
@@ -114,10 +115,14 @@ const formatSourcePath = (sourcePath: string): string => {
 
 <style scoped>
 .knowledge-citations {
-  margin-top: 12px;
-  border: 1px solid rgba(99, 102, 241, 0.2);
-  border-radius: 8px;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(99, 102, 241, 0.02) 100%);
+  margin-top: var(--spacing-3);
+  border: 1px solid var(--color-primary-bg);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(
+    135deg,
+    var(--color-primary-bg) 0%,
+    rgba(99, 102, 241, 0.02) 100%
+  );
   overflow: hidden;
 }
 
@@ -125,26 +130,26 @@ const formatSourcePath = (sourcePath: string): string => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 14px;
+  padding: var(--spacing-2-5) var(--spacing-3-5);
   cursor: pointer;
   user-select: none;
-  transition: background 0.2s;
+  transition: background var(--duration-200);
 }
 
 .citations-header:hover {
-  background: rgba(99, 102, 241, 0.1);
+  background: var(--color-primary-bg);
 }
 
 .citations-header-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .citations-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #4f46e5;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-primary-hover);
 }
 
 .citations-count {
@@ -153,25 +158,25 @@ const formatSourcePath = (sourcePath: string): string => {
   justify-content: center;
   min-width: 20px;
   height: 20px;
-  padding: 0 6px;
-  background: #4f46e5;
-  color: white;
-  font-size: 11px;
-  font-weight: 600;
-  border-radius: 10px;
+  padding: 0 var(--spacing-1-5);
+  background: var(--color-primary-hover);
+  color: var(--text-on-primary);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  border-radius: var(--radius-full);
 }
 
 .citations-list {
-  border-top: 1px solid rgba(99, 102, 241, 0.15);
+  border-top: 1px solid var(--color-primary-bg-hover);
 }
 
 .citation-item {
   display: flex;
-  gap: 10px;
-  padding: 10px 14px;
-  border-bottom: 1px solid rgba(99, 102, 241, 0.1);
+  gap: var(--spacing-2-5);
+  padding: var(--spacing-2-5) var(--spacing-3-5);
+  border-bottom: 1px solid var(--color-primary-bg);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background var(--duration-200);
 }
 
 .citation-item:last-child {
@@ -189,11 +194,11 @@ const formatSourcePath = (sourcePath: string): string => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(99, 102, 241, 0.15);
-  color: #4f46e5;
-  font-size: 11px;
-  font-weight: 600;
-  border-radius: 6px;
+  background: var(--color-primary-bg-hover);
+  color: var(--color-primary-hover);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  border-radius: var(--radius-md);
 }
 
 .citation-content {
@@ -202,57 +207,57 @@ const formatSourcePath = (sourcePath: string): string => {
 }
 
 .citation-text {
-  font-size: 13px;
-  color: #334155;
-  line-height: 1.5;
-  margin-bottom: 6px;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  line-height: var(--leading-normal);
+  margin-bottom: var(--spacing-1-5);
 }
 
 .citation-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  font-size: 11px;
+  gap: var(--spacing-3);
+  font-size: var(--text-xs);
 }
 
 .citation-score,
 .citation-source {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .citation-score {
-  font-weight: 600;
+  font-weight: var(--font-semibold);
 }
 
 .score-excellent {
-  color: #22c55e;
+  color: var(--chart-green);
 }
 
 .score-good {
-  color: #84cc16;
+  color: var(--color-success-light);
 }
 
 .score-acceptable {
-  color: #f59e0b;
+  color: var(--color-warning);
 }
 
 .score-low {
-  color: #94a3b8;
+  color: var(--text-secondary);
 }
 
 .citation-source {
-  color: #64748b;
+  color: var(--text-tertiary);
 }
 
 /* Transition */
 .slide-fade-enter-active {
-  transition: all 0.3s ease-out;
+  transition: all var(--duration-300) var(--ease-out);
 }
 
 .slide-fade-leave-active {
-  transition: all 0.2s ease-in;
+  transition: all var(--duration-200) var(--ease-in);
 }
 
 .slide-fade-enter-from,
@@ -264,7 +269,7 @@ const formatSourcePath = (sourcePath: string): string => {
 @media (max-width: 640px) {
   .citation-meta {
     flex-direction: column;
-    gap: 4px;
+    gap: var(--spacing-1);
   }
 }
 </style>

@@ -177,26 +177,26 @@ onUnmounted(() => {
 <style scoped>
 .workflow-progress-widget {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
+  bottom: var(--spacing-5);
+  right: var(--spacing-5);
   width: 400px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 900;
-  border: 1px solid #dee2e6;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-toast);
+  border: 1px solid var(--border-default);
 }
 
 .widget-header {
   display: flex;
   align-items: center;
-  padding: 16px;
+  padding: var(--spacing-4);
   cursor: pointer;
-  border-bottom: 1px solid #f1f3f4;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .widget-header:hover {
-  background: #f8f9fa;
+  background: var(--bg-hover);
 }
 
 .workflow-info {
@@ -205,13 +205,13 @@ onUnmounted(() => {
 }
 
 .workflow-title {
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 8px;
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-2);
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 14px;
+  gap: var(--spacing-1-5);
+  font-size: var(--text-sm);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -220,169 +220,169 @@ onUnmounted(() => {
 .workflow-progress {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .progress-bar {
   flex: 1;
   height: 6px;
-  background: #e9ecef;
-  border-radius: 3px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: #007bff;
-  transition: width 0.3s ease;
+  background: var(--color-primary);
+  transition: width var(--duration-300) var(--ease-out);
 }
 
 .progress-text {
-  font-size: 12px;
-  color: #666;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 
 .widget-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-left: 12px;
+  gap: var(--spacing-2);
+  margin-left: var(--spacing-3);
 }
 
 .btn-approval {
-  background: #ffc107;
-  color: #212529;
+  background: var(--color-warning);
+  color: var(--text-on-warning);
   border: none;
-  padding: 6px 10px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 600;
+  padding: var(--spacing-1-5) var(--spacing-2-5);
+  border-radius: var(--radius-default);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .btn-approval:hover {
-  background: #ffca2c;
+  background: var(--color-warning-hover);
 }
 
 .btn-toggle {
   background: none;
   border: none;
-  color: #6c757d;
+  color: var(--text-tertiary);
   cursor: pointer;
-  padding: 6px;
-  border-radius: 4px;
+  padding: var(--spacing-1-5);
+  border-radius: var(--radius-default);
 }
 
 .btn-toggle:hover {
-  background: #f1f3f4;
-  color: #495057;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
 }
 
 .widget-content {
-  padding: 16px;
+  padding: var(--spacing-4);
 }
 
 .workflow-details {
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
 }
 
 .detail-row {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 8px;
-  font-size: 13px;
+  margin-bottom: var(--spacing-2);
+  font-size: var(--text-sm);
 }
 
 .label {
-  font-weight: 600;
-  color: #495057;
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
 }
 
 .value {
-  color: #666;
+  color: var(--text-tertiary);
 }
 
-.value.simple { color: #28a745; }
-.value.research { color: #17a2b8; }
-.value.install { color: #ffc107; }
-.value.complex { color: #dc3545; }
+.value.simple { color: var(--color-success); }
+.value.research { color: var(--color-info); }
+.value.install { color: var(--color-warning); }
+.value.complex { color: var(--color-error); }
 
 .current-step {
-  margin-bottom: 16px;
-  padding: 12px;
-  background: #f8f9fa;
-  border-radius: 6px;
+  margin-bottom: var(--spacing-4);
+  padding: var(--spacing-3);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
 }
 
 .current-step h5 {
-  margin: 0 0 8px 0;
-  font-size: 14px;
-  color: #495057;
+  margin: 0 0 var(--spacing-2) 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .step-info .step-title {
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 4px;
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-1);
 }
 
 .step-meta {
   display: flex;
-  gap: 12px;
-  font-size: 12px;
+  gap: var(--spacing-3);
+  font-size: var(--text-xs);
 }
 
 .agent {
-  background: #e9ecef;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-weight: 600;
+  background: var(--bg-tertiary);
+  padding: var(--spacing-0-5) var(--spacing-1-5);
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-semibold);
 }
 
 .status {
   text-transform: uppercase;
-  font-weight: 600;
+  font-weight: var(--font-semibold);
 }
 
 .widget-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .btn-view,
 .btn-cancel {
   flex: 1;
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   border: none;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 600;
+  border-radius: var(--radius-default);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .btn-view {
-  background: #007bff;
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .btn-view:hover {
-  background: #0056b3;
+  background: var(--color-primary-hover);
 }
 
 .btn-cancel {
-  background: #dc3545;
-  color: white;
+  background: var(--color-error);
+  color: var(--text-on-error);
 }
 
 .btn-cancel:hover {
-  background: #c82333;
+  background: var(--color-error-hover);
 }
 </style>

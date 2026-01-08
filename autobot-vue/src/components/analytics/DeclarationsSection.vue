@@ -87,6 +87,7 @@
  * Extracted from CodebaseAnalytics.vue for better maintainability.
  *
  * Issue #184: Split oversized Vue components
+ * Issue #704: Migrated to design tokens
  */
 
 import { ref, computed } from 'vue'
@@ -155,72 +156,72 @@ const getDeclarationTypeClass = (type: string): string => {
 
 <style scoped>
 .declarations-section {
-  margin-bottom: 24px;
+  margin-bottom: var(--spacing-6);
 }
 
 .declarations-section h3 {
-  color: #00d4ff;
-  margin-bottom: 16px;
+  color: var(--color-info);
+  margin-bottom: var(--spacing-4);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .total-count {
-  font-size: 0.8em;
-  color: rgba(255, 255, 255, 0.6);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .section-content {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 8px;
-  padding: 16px;
+  background: var(--bg-active);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
 }
 
 .summary-cards {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
   flex-wrap: wrap;
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .summary-card {
-  padding: 12px 20px;
-  border-radius: 8px;
+  padding: var(--spacing-3) var(--spacing-5);
+  border-radius: var(--radius-lg);
   text-align: center;
   min-width: 80px;
 }
 
-.summary-card.total { background: rgba(255, 255, 255, 0.1); }
-.summary-card.type-function { background: rgba(76, 175, 80, 0.2); }
-.summary-card.type-class { background: rgba(156, 39, 176, 0.2); }
-.summary-card.type-method { background: rgba(0, 188, 212, 0.2); }
-.summary-card.type-variable { background: rgba(255, 152, 0, 0.2); }
-.summary-card.type-constant { background: rgba(233, 30, 99, 0.2); }
-.summary-card.type-interface { background: rgba(33, 150, 243, 0.2); }
-.summary-card.type-type { background: rgba(103, 58, 183, 0.2); }
-.summary-card.type-other { background: rgba(158, 158, 158, 0.2); }
+.summary-card.total { background: var(--bg-active); }
+.summary-card.type-function { background: var(--chart-green-bg); }
+.summary-card.type-class { background: var(--chart-purple-bg); }
+.summary-card.type-method { background: var(--chart-blue-bg); }
+.summary-card.type-variable { background: var(--chart-orange-bg); }
+.summary-card.type-constant { background: var(--chart-red-bg); }
+.summary-card.type-interface { background: var(--color-info-bg); }
+.summary-card.type-type { background: var(--color-primary-bg); }
+.summary-card.type-other { background: var(--bg-hover); }
 
 .summary-value {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: white;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
 }
 
 .summary-label {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.6);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .accordion-groups {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .accordion-group {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
+  background: var(--bg-hover);
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
@@ -228,93 +229,93 @@ const getDeclarationTypeClass = (type: string): string => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
+  padding: var(--spacing-3) var(--spacing-4);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background var(--duration-200) var(--ease-in-out);
 }
 
 .accordion-header:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-active);
 }
 
 .header-info {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .header-name {
-  font-weight: 600;
-  color: white;
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .header-count {
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 13px;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
 }
 
 .export-badge {
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  background: rgba(0, 212, 255, 0.2);
-  color: #00d4ff;
+  padding: var(--spacing-0-5) var(--spacing-2);
+  border-radius: var(--radius-default);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .export-badge.small {
   font-size: 10px;
-  padding: 1px 6px;
+  padding: var(--spacing-px) var(--spacing-1-5);
 }
 
 .accordion-items {
-  padding: 0 16px 16px;
+  padding: 0 var(--spacing-4) var(--spacing-4);
 }
 
 .list-item {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 6px;
-  padding: 10px 12px;
-  margin-bottom: 6px;
-  border-left: 3px solid #666;
+  background: var(--bg-active);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-2-5) var(--spacing-3);
+  margin-bottom: var(--spacing-1-5);
+  border-left: 3px solid var(--border-default);
 }
 
 .list-item.item-exported {
-  border-left-color: #00d4ff;
+  border-left-color: var(--color-info);
 }
 
 .item-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-1);
 }
 
 .item-name {
-  color: white;
-  font-weight: 500;
-  font-family: monospace;
+  color: var(--text-primary);
+  font-weight: var(--font-medium);
+  font-family: var(--font-mono);
 }
 
 .item-location {
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 11px;
-  font-family: monospace;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
 }
 
 .show-more {
   text-align: center;
-  padding: 8px;
+  padding: var(--spacing-2);
 }
 
 .muted {
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 12px;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
 }
 
 .accordion-enter-active,
 .accordion-leave-active {
-  transition: all 0.3s ease;
+  transition: all var(--duration-300) var(--ease-in-out);
 }
 
 .accordion-enter-from,

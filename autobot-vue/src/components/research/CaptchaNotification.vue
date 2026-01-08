@@ -254,17 +254,17 @@ watch(activeCaptcha, (newVal) => {
 <style scoped>
 .captcha-notification {
   position: fixed;
-  bottom: 1.5rem;
-  right: 1.5rem;
-  z-index: 9999;
+  bottom: var(--spacing-6);
+  right: var(--spacing-6);
+  z-index: var(--z-maximum);
   max-width: 400px;
   width: 100%;
 }
 
 .captcha-card {
-  background: white;
-  border-radius: 0.75rem;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl), 0 0 0 1px var(--border-subtle);
   overflow: hidden;
 }
 
@@ -272,10 +272,10 @@ watch(activeCaptcha, (newVal) => {
 .captcha-header {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1rem;
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  color: white;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
+  background: linear-gradient(135deg, var(--color-error) 0%, var(--color-error-hover) 100%);
+  color: var(--text-on-error);
 }
 
 .captcha-icon {
@@ -285,8 +285,8 @@ watch(activeCaptcha, (newVal) => {
   align-items: center;
   justify-content: center;
   background: rgba(255, 255, 255, 0.2);
-  border-radius: 0.5rem;
-  font-size: 1.25rem;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-xl);
 }
 
 .captcha-title {
@@ -295,26 +295,26 @@ watch(activeCaptcha, (newVal) => {
 
 .captcha-title h3 {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
 }
 
 .captcha-type {
   margin: 0.125rem 0 0;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   opacity: 0.9;
 }
 
 .captcha-timer {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.75rem;
+  gap: var(--spacing-1-5);
+  padding: var(--spacing-1-5) var(--spacing-3);
   background: rgba(255, 255, 255, 0.2);
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  font-family: monospace;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  font-family: var(--font-mono);
 }
 
 .captcha-timer.timer-warning {
@@ -324,27 +324,27 @@ watch(activeCaptcha, (newVal) => {
 
 /* Content */
 .captcha-content {
-  padding: 1rem;
+  padding: var(--spacing-4);
 }
 
 .captcha-message {
-  margin: 0 0 0.75rem;
-  font-size: 0.875rem;
-  color: #4b5563;
-  line-height: 1.5;
+  margin: 0 0 var(--spacing-3);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: var(--leading-normal);
 }
 
 .captcha-url {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin: 0 0 1rem;
-  font-size: 0.75rem;
-  color: #6b7280;
+  gap: var(--spacing-2);
+  margin: 0 0 var(--spacing-4);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 
 .captcha-url a {
-  color: #3b82f6;
+  color: var(--color-info);
   text-decoration: none;
   word-break: break-all;
 }
@@ -356,9 +356,9 @@ watch(activeCaptcha, (newVal) => {
 /* Preview */
 .captcha-preview {
   position: relative;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-subtle);
   cursor: pointer;
 }
 
@@ -375,12 +375,12 @@ watch(activeCaptcha, (newVal) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  background: rgba(0, 0, 0, 0.6);
-  color: white;
-  font-size: 0.875rem;
+  gap: var(--spacing-2);
+  background: var(--bg-overlay);
+  color: var(--text-on-primary);
+  font-size: var(--text-sm);
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: opacity var(--duration-200) var(--ease-out);
 }
 
 .captcha-preview:hover .preview-overlay {
@@ -388,15 +388,15 @@ watch(activeCaptcha, (newVal) => {
 }
 
 .preview-overlay i {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
 }
 
 /* Actions */
 .captcha-actions {
   display: flex;
-  gap: 0.5rem;
-  padding: 1rem;
-  border-top: 1px solid #e5e7eb;
+  gap: var(--spacing-2);
+  padding: var(--spacing-4);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .captcha-actions button {
@@ -404,14 +404,14 @@ watch(activeCaptcha, (newVal) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.375rem;
-  padding: 0.625rem 0.75rem;
+  gap: var(--spacing-1-5);
+  padding: var(--spacing-2-5) var(--spacing-3);
   border: none;
-  border-radius: 0.375rem;
-  font-size: 0.75rem;
-  font-weight: 500;
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color var(--duration-200) var(--ease-out);
 }
 
 .captcha-actions button:disabled {
@@ -420,46 +420,46 @@ watch(activeCaptcha, (newVal) => {
 }
 
 .btn-vnc {
-  background: #3b82f6;
-  color: white;
+  background: var(--color-info);
+  color: var(--text-on-primary);
 }
 
 .btn-vnc:hover:not(:disabled) {
-  background: #2563eb;
+  background: var(--color-info-hover);
 }
 
 .btn-solved {
-  background: #10b981;
-  color: white;
+  background: var(--color-success);
+  color: var(--text-on-success);
 }
 
 .btn-solved:hover:not(:disabled) {
-  background: #059669;
+  background: var(--color-success-hover);
 }
 
 .btn-skip {
-  background: #6b7280;
-  color: white;
+  background: var(--color-secondary);
+  color: var(--text-on-primary);
 }
 
 .btn-skip:hover:not(:disabled) {
-  background: #4b5563;
+  background: var(--color-secondary-hover);
 }
 
 /* Progress bar */
 .timeout-progress {
   height: 3px;
-  background: #e5e7eb;
+  background: var(--border-subtle);
 }
 
 .timeout-bar {
   height: 100%;
-  background: linear-gradient(90deg, #3b82f6, #10b981);
+  background: linear-gradient(90deg, var(--color-info), var(--color-success));
   transition: width 1s linear;
 }
 
 .timeout-bar.bar-warning {
-  background: linear-gradient(90deg, #ef4444, #f97316);
+  background: linear-gradient(90deg, var(--color-error), var(--color-warning));
 }
 
 /* Animations */
@@ -470,7 +470,7 @@ watch(activeCaptcha, (newVal) => {
 
 .slide-up-enter-active,
 .slide-up-leave-active {
-  transition: all 0.3s ease;
+  transition: all var(--duration-300) var(--ease-out);
 }
 
 .slide-up-enter-from,

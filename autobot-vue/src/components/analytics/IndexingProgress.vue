@@ -96,6 +96,7 @@
  * Extracted from CodebaseAnalytics.vue for better maintainability.
  *
  * Issue #184: Split oversized Vue components
+ * Issue #704: Migrated to design tokens
  */
 
 interface Phase {
@@ -147,84 +148,84 @@ const getPhaseIcon = (status: string): string => {
 
 <style scoped>
 .progress-container {
-  background: linear-gradient(135deg, #1e3a5f 0%, #1a1a2e 100%);
-  border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 24px;
-  border: 1px solid rgba(0, 212, 255, 0.3);
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-surface) 100%);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-5);
+  margin-bottom: var(--spacing-6);
+  border: 1px solid rgba(6, 182, 212, 0.3);
 }
 
 .code-smells-progress {
-  background: linear-gradient(135deg, #3d1e5f 0%, #1a1a2e 100%);
-  border-color: rgba(233, 30, 99, 0.3);
+  background: linear-gradient(135deg, var(--chart-purple-bg) 0%, var(--bg-surface) 100%);
+  border-color: rgba(236, 72, 153, 0.3);
 }
 
 .progress-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
 }
 
 .progress-title {
-  color: #00d4ff;
-  font-weight: 600;
+  color: var(--chart-cyan);
+  font-weight: var(--font-semibold);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .job-id {
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 12px;
-  font-family: monospace;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
 }
 
 .phase-progress {
   display: flex;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-4);
   flex-wrap: wrap;
 }
 
 .phase-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  padding: 6px 12px;
-  border-radius: 20px;
-  transition: all 0.3s;
+  gap: var(--spacing-1-5);
+  font-size: var(--text-sm);
+  padding: var(--spacing-1-5) var(--spacing-3);
+  border-radius: var(--radius-full);
+  transition: var(--transition-all);
 }
 
 .phase-pending {
-  color: rgba(255, 255, 255, 0.4);
-  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+  background: var(--bg-hover);
 }
 
 .phase-running {
-  color: #00d4ff;
-  background: rgba(0, 212, 255, 0.15);
+  color: var(--chart-cyan);
+  background: rgba(6, 182, 212, 0.15);
 }
 
 .phase-completed {
-  color: #4caf50;
-  background: rgba(76, 175, 80, 0.15);
+  color: var(--color-success);
+  background: var(--color-success-bg);
 }
 
 .progress-bar {
   height: 8px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
+  background: var(--bg-active);
+  border-radius: var(--radius-default);
   overflow: hidden;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #00d4ff, #00ff88);
-  border-radius: 4px;
-  transition: width 0.3s ease;
+  background: linear-gradient(90deg, var(--chart-cyan), var(--color-success-light));
+  border-radius: var(--radius-default);
+  transition: width var(--duration-300) var(--ease-out);
 }
 
 .progress-fill.indeterminate {
@@ -238,65 +239,65 @@ const getPhaseIcon = (status: string): string => {
 }
 
 .progress-status {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 .batch-progress {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: var(--spacing-4);
+  padding-top: var(--spacing-4);
+  border-top: 1px solid var(--bg-active);
 }
 
 .batch-header {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .batch-label {
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 12px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
 }
 
 .batch-count {
-  color: #00d4ff;
-  font-size: 12px;
-  font-weight: 600;
+  color: var(--chart-cyan);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
 }
 
 .batch-bar {
   height: 4px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
+  background: var(--bg-active);
+  border-radius: var(--radius-xs);
   overflow: hidden;
 }
 
 .batch-fill {
   height: 100%;
-  background: #00ff88;
-  border-radius: 2px;
-  transition: width 0.3s;
+  background: var(--color-success-light);
+  border-radius: var(--radius-xs);
+  transition: width var(--duration-300);
 }
 
 .live-stats {
   display: flex;
-  gap: 20px;
+  gap: var(--spacing-5);
   flex-wrap: wrap;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: var(--spacing-4);
+  padding-top: var(--spacing-4);
+  border-top: 1px solid var(--bg-active);
 }
 
 .stat-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 13px;
+  gap: var(--spacing-2);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
 }
 
 .stat-item i {
-  color: #00d4ff;
+  color: var(--chart-cyan);
 }
 </style>

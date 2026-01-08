@@ -58,8 +58,8 @@
 
       <!-- Connection Status -->
       <div class="connection-status">
-        <i :class="websocketConnected ? 'fas fa-plug text-green-500' : 'fas fa-plug text-red-500'"></i>
-        <span :class="websocketConnected ? 'text-green-600' : 'text-red-600'">
+        <i :class="websocketConnected ? 'fas fa-plug connected' : 'fas fa-plug disconnected'"></i>
+        <span :class="websocketConnected ? 'connected' : 'disconnected'">
           {{ websocketConnected ? 'Connected' : 'Disconnected' }}
         </span>
       </div>
@@ -78,6 +78,7 @@
  * Extracted from ManPageManager.vue for better maintainability.
  *
  * Issue #184: Split oversized Vue components
+ * Issue #704: Migrated to design tokens for centralized theming
  */
 
 import { computed } from 'vue'
@@ -123,77 +124,77 @@ const recentMessages = computed(() => props.state.messages.slice(-5))
 
 <style scoped>
 .progress-container {
-  margin-top: 15px;
+  margin-top: var(--spacing-4);
 }
 
 .progress-item {
-  margin-bottom: 15px;
+  margin-bottom: var(--spacing-4);
 }
 
 .progress-label {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
-  font-weight: 600;
-  color: #2c3e50;
+  margin-bottom: var(--spacing-2);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .progress-percentage {
-  font-size: 0.9em;
-  color: #7f8c8d;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .progress-bar {
   width: 100%;
   height: 8px;
-  background: #ecf0f1;
-  border-radius: 4px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  transition: width 0.3s ease;
-  border-radius: 4px;
+  transition: width var(--duration-300) var(--ease-out);
+  border-radius: var(--radius-default);
 }
 
 .progress-fill.waiting {
-  background: #95a5a6;
+  background: var(--text-tertiary);
 }
 
 .progress-fill.running {
-  background: linear-gradient(90deg, #3498db, #2980b9);
+  background: linear-gradient(90deg, var(--color-info), var(--color-info-hover));
 }
 
 .progress-fill.success {
-  background: linear-gradient(90deg, #27ae60, #229954);
+  background: linear-gradient(90deg, var(--color-success), var(--color-success-hover));
 }
 
 .progress-fill.error {
-  background: linear-gradient(90deg, #e74c3c, #c0392b);
+  background: linear-gradient(90deg, var(--color-error), var(--color-error-hover));
 }
 
 .progress-fill.task-progress {
-  background: linear-gradient(90deg, #9b59b6, #8e44ad);
+  background: linear-gradient(90deg, var(--chart-purple), var(--chart-purple-light));
 }
 
 .progress-messages {
-  background: #ffffff;
-  border: 1px solid #dee2e6;
-  border-radius: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-default);
   max-height: 200px;
   overflow-y: auto;
-  margin: 15px 0;
-  padding: 10px;
+  margin: var(--spacing-4) 0;
+  padding: var(--spacing-2-5);
 }
 
 .progress-message {
   display: flex;
   align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid #f1f3f4;
-  font-size: 0.9em;
+  padding: var(--spacing-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--text-sm);
 }
 
 .progress-message:last-child {
@@ -201,9 +202,9 @@ const recentMessages = computed(() => props.state.messages.slice(-5))
 }
 
 .progress-message .timestamp {
-  color: #6c757d;
-  font-size: 0.8em;
-  margin-right: 10px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  margin-right: var(--spacing-2-5);
   min-width: 70px;
 }
 
@@ -212,22 +213,25 @@ const recentMessages = computed(() => props.state.messages.slice(-5))
 }
 
 .progress-message i {
-  margin-right: 8px;
+  margin-right: var(--spacing-2);
 }
 
 .connection-status {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px;
-  background: #ffffff;
-  border: 1px solid #dee2e6;
-  border-radius: 4px;
-  font-size: 0.9em;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-default);
+  font-size: var(--text-sm);
 }
 
-.text-green-500 { color: #10b981; }
-.text-green-600 { color: #059669; }
-.text-red-500 { color: #ef4444; }
-.text-red-600 { color: #dc2626; }
+.connection-status .connected {
+  color: var(--color-success);
+}
+
+.connection-status .disconnected {
+  color: var(--color-error);
+}
 </style>

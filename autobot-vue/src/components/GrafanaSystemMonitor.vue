@@ -132,8 +132,8 @@ const getDashboardUrl = (uid: string) => {
 
 <style scoped>
 .grafana-system-monitor {
-  padding: 20px;
-  background: #f5f5f5;
+  padding: var(--spacing-5);
+  background: var(--bg-secondary);
   min-height: 100vh;
 }
 
@@ -141,94 +141,94 @@ const getDashboardUrl = (uid: string) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-  padding: 16px 24px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  margin-bottom: var(--spacing-6);
+  padding: var(--spacing-4) var(--spacing-6);
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .monitor-header h2 {
   margin: 0;
-  font-size: 24px;
-  font-weight: 600;
-  color: #1a202c;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .view-toggle {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .toggle-btn {
-  padding: 8px 16px;
-  border: 2px solid #e2e8f0;
-  background: white;
-  border-radius: 6px;
+  padding: var(--spacing-2) var(--spacing-4);
+  border: 2px solid var(--border-default);
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  color: #4a5568;
-  transition: all 0.2s;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
+  transition: var(--transition-all);
 }
 
 .toggle-btn:hover {
-  border-color: #4299e1;
-  color: #2b6cb0;
+  border-color: var(--color-primary);
+  color: var(--color-primary-hover);
 }
 
 .toggle-btn.active {
-  background: #4299e1;
-  border-color: #4299e1;
-  color: white;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .toggle-btn i {
-  margin-right: 6px;
+  margin-right: var(--spacing-1-5);
 }
 
 .grafana-view {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
 }
 
 .dashboard-tabs {
   display: flex;
-  gap: 4px;
-  padding: 16px;
-  background: #f7fafc;
-  border-bottom: 1px solid #e2e8f0;
+  gap: var(--spacing-1);
+  padding: var(--spacing-4);
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-default);
   overflow-x: auto;
 }
 
 .tab-btn {
-  padding: 10px 20px;
+  padding: var(--spacing-2-5) var(--spacing-5);
   border: none;
-  background: white;
-  border-radius: 6px;
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  color: #4a5568;
-  transition: all 0.2s;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
+  transition: var(--transition-all);
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 .tab-btn:hover {
-  background: #edf2f7;
-  color: #2d3748;
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .tab-btn.active {
-  background: #4299e1;
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .tab-btn i {
-  margin-right: 8px;
+  margin-right: var(--spacing-2);
 }
 
 .dashboard-container {
@@ -244,17 +244,17 @@ const getDashboardUrl = (uid: string) => {
 }
 
 .legacy-view {
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-5);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Responsive */
 @media (max-width: 768px) {
   .monitor-header {
     flex-direction: column;
-    gap: 16px;
+    gap: var(--spacing-4);
     align-items: stretch;
   }
 
