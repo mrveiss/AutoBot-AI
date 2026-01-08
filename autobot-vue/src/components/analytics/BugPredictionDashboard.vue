@@ -8,11 +8,11 @@
       </div>
       <div class="header-actions">
         <button class="btn-analyze" @click="analyzeCodbase" :disabled="loading">
-          <span class="icon">🔍</span>
+          <span class="icon">&#128269;</span>
           {{ loading ? 'Analyzing...' : 'Analyze Codebase' }}
         </button>
         <button class="btn-refresh" @click="refreshData" :disabled="loading">
-          <span class="icon">↻</span>
+          <span class="icon">&#8635;</span>
           Refresh
         </button>
       </div>
@@ -21,7 +21,7 @@
     <!-- Summary Cards -->
     <div class="summary-cards">
       <div class="summary-card high-risk">
-        <div class="card-icon">⚠️</div>
+        <div class="card-icon">&#9888;&#65039;</div>
         <div class="card-content">
           <span class="card-value">{{ summary.high_risk_files }}</span>
           <span class="card-label">High Risk Files</span>
@@ -30,7 +30,7 @@
       </div>
 
       <div class="summary-card predictions">
-        <div class="card-icon">🐛</div>
+        <div class="card-icon">&#128027;</div>
         <div class="card-content">
           <span class="card-value">{{ summary.predicted_bugs_next_sprint }}</span>
           <span class="card-label">Predicted Bugs</span>
@@ -39,7 +39,7 @@
       </div>
 
       <div class="summary-card accuracy">
-        <div class="card-icon">🎯</div>
+        <div class="card-icon">&#127919;</div>
         <div class="card-content">
           <span class="card-value">{{ summary.model_accuracy.toFixed(1) }}%</span>
           <span class="card-label">Model Accuracy</span>
@@ -50,7 +50,7 @@
       </div>
 
       <div class="summary-card analyzed">
-        <div class="card-icon">📁</div>
+        <div class="card-icon">&#128193;</div>
         <div class="card-content">
           <span class="card-value">{{ summary.total_files_analyzed }}</span>
           <span class="card-label">Files Analyzed</span>
@@ -119,12 +119,12 @@
       <!-- High Risk Files -->
       <div class="panel high-risk-panel">
         <div class="panel-header">
-          <h3>🔥 High Risk Files</h3>
+          <h3>&#128293; High Risk Files</h3>
           <span class="panel-count">{{ highRiskFiles.length }} files</span>
         </div>
         <div class="panel-content">
           <div v-if="highRiskFiles.length === 0" class="empty-state">
-            <span class="empty-icon">✨</span>
+            <span class="empty-icon">&#10024;</span>
             <span class="empty-text">No high risk files detected</span>
           </div>
           <div v-else class="high-risk-list">
@@ -158,7 +158,7 @@
       <!-- Top Risk Factors -->
       <div class="panel factors-panel">
         <div class="panel-header">
-          <h3>📊 Top Risk Factors</h3>
+          <h3>&#128202; Top Risk Factors</h3>
         </div>
         <div class="panel-content">
           <div class="factors-list">
@@ -196,7 +196,7 @@
       <!-- Prediction Accuracy Trends -->
       <div class="panel trends-panel">
         <div class="panel-header">
-          <h3>📈 Prediction Accuracy</h3>
+          <h3>&#128200; Prediction Accuracy</h3>
           <div class="period-selector">
             <button
               v-for="period in ['7d', '30d', '90d']"
@@ -213,18 +213,18 @@
             <svg viewBox="0 0 600 180" class="accuracy-chart" preserveAspectRatio="xMidYMid meet">
               <!-- Grid -->
               <g class="grid">
-                <line v-for="i in 5" :key="'h' + i" x1="40" x2="580" :y1="i * 30 + 10" :y2="i * 30 + 10" stroke="#2a2a3e" stroke-dasharray="2,2" />
+                <line v-for="i in 5" :key="'h' + i" x1="40" x2="580" :y1="i * 30 + 10" :y2="i * 30 + 10" class="grid-line" stroke-dasharray="2,2" />
               </g>
 
               <!-- Y-Axis -->
               <g class="y-axis">
-                <text x="35" y="15" text-anchor="end" fill="#666" font-size="9">100%</text>
-                <text x="35" y="75" text-anchor="end" fill="#666" font-size="9">75%</text>
-                <text x="35" y="135" text-anchor="end" fill="#666" font-size="9">50%</text>
+                <text x="35" y="15" text-anchor="end" class="axis-text" font-size="9">100%</text>
+                <text x="35" y="75" text-anchor="end" class="axis-text" font-size="9">75%</text>
+                <text x="35" y="135" text-anchor="end" class="axis-text" font-size="9">50%</text>
               </g>
 
               <!-- Accuracy Line -->
-              <path v-if="trendLinePath" :d="trendLinePath" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" />
+              <path v-if="trendLinePath" :d="trendLinePath" fill="none" class="trend-line" stroke-width="2" stroke-linecap="round" />
 
               <!-- Data Points -->
               <g class="data-points">
@@ -234,7 +234,7 @@
                   :cx="point.x"
                   :cy="point.y"
                   r="4"
-                  fill="#22c55e"
+                  class="data-point-circle"
                   @mouseenter="hoveredPoint = point"
                   @mouseleave="hoveredPoint = null"
                 />
@@ -242,11 +242,11 @@
 
               <!-- Tooltip -->
               <g v-if="hoveredPoint" class="tooltip">
-                <rect :x="hoveredPoint.x - 35" :y="hoveredPoint.y - 40" width="70" height="30" rx="4" fill="#1a1a2e" />
-                <text :x="hoveredPoint.x" :y="hoveredPoint.y - 25" text-anchor="middle" fill="#fff" font-size="11">
+                <rect :x="hoveredPoint.x - 35" :y="hoveredPoint.y - 40" width="70" height="30" rx="4" class="tooltip-bg" />
+                <text :x="hoveredPoint.x" :y="hoveredPoint.y - 25" text-anchor="middle" class="tooltip-text-primary" font-size="11">
                   {{ hoveredPoint.accuracy.toFixed(1) }}%
                 </text>
-                <text :x="hoveredPoint.x" :y="hoveredPoint.y - 12" text-anchor="middle" fill="#888" font-size="9">
+                <text :x="hoveredPoint.x" :y="hoveredPoint.y - 12" text-anchor="middle" class="tooltip-text-secondary" font-size="9">
                   {{ hoveredPoint.date }}
                 </text>
               </g>
@@ -273,7 +273,7 @@
     <!-- Recommendations -->
     <div class="panel recommendations-panel">
       <div class="panel-header">
-        <h3>💡 Recommendations</h3>
+        <h3>&#128161; Recommendations</h3>
       </div>
       <div class="panel-content">
         <div class="recommendations-grid">
@@ -294,7 +294,7 @@
       <div class="modal-content">
         <div class="modal-header">
           <h3>File Risk Details</h3>
-          <button class="btn-close" @click="selectedFile = null">×</button>
+          <button class="btn-close" @click="selectedFile = null">x</button>
         </div>
         <div class="modal-body">
           <div class="detail-section">
@@ -366,11 +366,27 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * AutoBot - AI-Powered Automation Platform
+ * Copyright (c) 2025 mrveiss
+ * Author: mrveiss
+ *
+ * BugPredictionDashboard.vue - Bug prediction analytics dashboard
+ * Issue #704: Migrated to design tokens for centralized theming
+ */
 import { ref, computed, onMounted, watch } from 'vue';
 import { createLogger } from '@/utils/debugUtils';
 
 // Create scoped logger for BugPredictionDashboard
 const logger = createLogger('BugPredictionDashboard');
+
+/**
+ * Helper function to get CSS custom property value
+ * Issue #704: Added for dynamic color access in JavaScript
+ */
+function getCssVar(varName: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+}
 
 // Types
 interface RiskFile {
@@ -632,13 +648,13 @@ function formatShortDate(dateStr: string): string {
 
 function getFactorIcon(factor: string): string {
   const icons: Record<string, string> = {
-    'Bug History': '🐛',
-    'Complexity': '🔄',
-    'Change Frequency': '📝',
-    'Test Coverage': '🧪',
-    'File Size': '📦',
+    'Bug History': '\u{1F41B}',
+    'Complexity': '\u{1F504}',
+    'Change Frequency': '\u{1F4DD}',
+    'Test Coverage': '\u{1F9EA}',
+    'File Size': '\u{1F4E6}',
   };
-  return icons[factor] || '📊';
+  return icons[factor] || '\u{1F4CA}';
 }
 
 function getFactorClass(value: number): string {
@@ -659,11 +675,20 @@ watch(selectedPeriod, () => {
 </script>
 
 <style scoped>
+/**
+ * AutoBot - AI-Powered Automation Platform
+ * Copyright (c) 2025 mrveiss
+ * Author: mrveiss
+ *
+ * BugPredictionDashboard styles - Using design tokens from design-tokens.css
+ * Issue #704: Migrated all hardcoded colors to CSS custom properties
+ */
+
 .bug-prediction-dashboard {
-  padding: 1.5rem;
-  background: #0a0a0f;
+  padding: var(--spacing-6);
+  background: var(--bg-primary);
   min-height: 100vh;
-  color: #e0e0e0;
+  color: var(--text-primary);
 }
 
 /* Header */
@@ -671,80 +696,80 @@ watch(selectedPeriod, () => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .dashboard-title {
-  font-size: 1.75rem;
-  font-weight: 600;
-  color: #fff;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
   margin: 0;
 }
 
 .dashboard-subtitle {
-  color: #888;
-  margin: 0.25rem 0 0;
-  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: var(--spacing-1) 0 0;
+  font-size: var(--text-sm);
 }
 
 .header-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .btn-analyze,
 .btn-refresh {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  font-size: 0.875rem;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition-all);
 }
 
 .btn-analyze {
-  background: #22c55e;
+  background: var(--color-success);
   border: none;
-  color: #fff;
+  color: var(--text-on-success);
 }
 
 .btn-analyze:hover:not(:disabled) {
-  background: #16a34a;
+  background: var(--color-success-hover);
 }
 
 .btn-refresh {
-  background: #1a1a2e;
-  border: 1px solid #333;
-  color: #e0e0e0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
 }
 
 .btn-refresh:hover:not(:disabled) {
-  background: #252540;
+  background: var(--bg-tertiary);
 }
 
 /* Summary Cards */
 .summary-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
 }
 
 .summary-card {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16162a 100%);
-  border: 1px solid #2a2a3e;
-  border-radius: 12px;
-  padding: 1.25rem;
+  background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-secondary) 100%);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-5);
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .card-icon {
-  font-size: 2rem;
+  font-size: var(--text-3xl);
 }
 
 .card-content {
@@ -754,42 +779,42 @@ watch(selectedPeriod, () => {
 }
 
 .card-value {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: #fff;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
 }
 
 .card-label {
-  font-size: 0.8rem;
-  color: #888;
-  margin-top: 0.25rem;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin-top: var(--spacing-1);
 }
 
 .card-indicator {
-  font-size: 0.7rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #888;
+  font-size: var(--text-xs);
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-default);
+  background: var(--bg-hover);
+  color: var(--text-secondary);
 }
 
 .card-indicator.critical {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .accuracy-bar {
   width: 100%;
   height: 6px;
-  background: #2a2a3e;
-  border-radius: 3px;
+  background: var(--border-subtle);
+  border-radius: var(--radius-md);
   overflow: hidden;
-  margin-top: 0.5rem;
+  margin-top: var(--spacing-2);
 }
 
 .accuracy-fill {
   height: 100%;
-  background: #22c55e;
+  background: var(--color-success);
   transition: width 0.5s ease;
 }
 
@@ -797,8 +822,8 @@ watch(selectedPeriod, () => {
 .content-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-  margin-bottom: 1.5rem;
+  gap: var(--spacing-6);
+  margin-bottom: var(--spacing-6);
 }
 
 @media (max-width: 1200px) {
@@ -809,9 +834,9 @@ watch(selectedPeriod, () => {
 
 /* Panels */
 .panel {
-  background: #12121a;
-  border: 1px solid #2a2a3e;
-  border-radius: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
@@ -819,53 +844,53 @@ watch(selectedPeriod, () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid #2a2a3e;
+  padding: var(--spacing-4) var(--spacing-5);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .panel-header h3 {
   margin: 0;
-  font-size: 1rem;
-  color: #fff;
+  font-size: var(--text-base);
+  color: var(--text-primary);
 }
 
 .panel-count {
-  font-size: 0.75rem;
-  color: #888;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .panel-content {
-  padding: 1.25rem;
+  padding: var(--spacing-5);
 }
 
 /* Heatmap */
 .grouping-toggle {
   display: flex;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .grouping-toggle button {
-  padding: 0.375rem 0.75rem;
+  padding: var(--spacing-1-5) var(--spacing-3);
   background: transparent;
-  border: 1px solid #333;
-  border-radius: 4px;
-  color: #888;
-  font-size: 0.75rem;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-default);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition-all);
 }
 
 .grouping-toggle button.active {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  color: #fff;
+  background: var(--color-info);
+  border-color: var(--color-info);
+  color: var(--text-on-primary);
 }
 
 .heatmap-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-4);
 }
 
 .heatmap-cell {
@@ -873,36 +898,36 @@ watch(selectedPeriod, () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 0.75rem;
-  border-radius: 8px;
+  padding: var(--spacing-3);
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition-all);
   min-width: 80px;
 }
 
 .heatmap-cell.risk-critical {
   background: rgba(239, 68, 68, var(--opacity, 0.5));
-  border: 1px solid rgba(239, 68, 68, 0.5);
+  border: 1px solid var(--color-error-border);
 }
 
 .heatmap-cell.risk-high {
   background: rgba(249, 115, 22, var(--opacity, 0.5));
-  border: 1px solid rgba(249, 115, 22, 0.5);
+  border: 1px solid var(--chart-orange);
 }
 
 .heatmap-cell.risk-medium {
   background: rgba(234, 179, 8, var(--opacity, 0.5));
-  border: 1px solid rgba(234, 179, 8, 0.5);
+  border: 1px solid var(--chart-yellow);
 }
 
 .heatmap-cell.risk-low {
   background: rgba(34, 197, 94, var(--opacity, 0.5));
-  border: 1px solid rgba(34, 197, 94, 0.5);
+  border: 1px solid var(--color-success-border);
 }
 
 .heatmap-cell.risk-minimal {
   background: rgba(59, 130, 246, var(--opacity, 0.5));
-  border: 1px solid rgba(59, 130, 246, 0.5);
+  border: 1px solid var(--color-info);
 }
 
 .heatmap-cell:hover {
@@ -910,87 +935,87 @@ watch(selectedPeriod, () => {
 }
 
 .cell-name {
-  font-size: 0.75rem;
-  color: #fff;
-  margin-bottom: 0.25rem;
+  font-size: var(--text-xs);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-1);
 }
 
 .cell-score {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #fff;
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
 }
 
 .heatmap-legend {
   display: flex;
   justify-content: center;
-  gap: 1.5rem;
-  padding-top: 1rem;
-  border-top: 1px solid #2a2a3e;
+  gap: var(--spacing-6);
+  padding-top: var(--spacing-4);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.7rem;
-  color: #888;
+  gap: var(--spacing-2);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .legend-color {
   width: 12px;
   height: 12px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
-.legend-color.critical { background: #ef4444; }
-.legend-color.high { background: #f97316; }
-.legend-color.medium { background: #eab308; }
-.legend-color.low { background: #22c55e; }
-.legend-color.minimal { background: #3b82f6; }
+.legend-color.critical { background: var(--color-error); }
+.legend-color.high { background: var(--chart-orange); }
+.legend-color.medium { background: var(--chart-yellow); }
+.legend-color.low { background: var(--color-success); }
+.legend-color.minimal { background: var(--color-info); }
 
 /* High Risk Files */
 .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 2rem;
-  color: #666;
+  padding: var(--spacing-8);
+  color: var(--text-tertiary);
 }
 
 .empty-icon {
-  font-size: 2rem;
-  margin-bottom: 0.5rem;
+  font-size: var(--text-3xl);
+  margin-bottom: var(--spacing-2);
 }
 
 .high-risk-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .risk-file-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.875rem;
-  background: #1a1a2e;
-  border-radius: 8px;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3-5);
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition-all);
   border-left: 3px solid transparent;
 }
 
 .risk-file-item.risk-critical {
-  border-left-color: #ef4444;
+  border-left-color: var(--color-error);
 }
 
 .risk-file-item.risk-high {
-  border-left-color: #f97316;
+  border-left-color: var(--chart-orange);
 }
 
 .risk-file-item:hover {
-  background: #1e1e35;
+  background: var(--bg-tertiary);
 }
 
 .file-rank {
@@ -999,11 +1024,11 @@ watch(selectedPeriod, () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #2a2a3e;
-  border-radius: 50%;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #fff;
+  background: var(--border-subtle);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .file-info {
@@ -1012,158 +1037,158 @@ watch(selectedPeriod, () => {
 
 .file-path {
   display: block;
-  font-size: 0.8rem;
-  font-family: monospace;
-  color: #3b82f6;
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--color-info);
 }
 
 .file-bugs {
-  font-size: 0.7rem;
-  color: #888;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .score-badge {
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  font-weight: 700;
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-default);
+  font-size: var(--text-sm);
+  font-weight: var(--font-bold);
 }
 
 .score-badge.critical {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .score-badge.high {
-  background: rgba(249, 115, 22, 0.2);
-  color: #f97316;
+  background: var(--chart-orange-bg);
+  color: var(--chart-orange);
 }
 
 .score-badge.medium {
-  background: rgba(234, 179, 8, 0.2);
-  color: #eab308;
+  background: var(--chart-yellow-bg);
+  color: var(--chart-yellow);
 }
 
 .score-badge.low {
-  background: rgba(34, 197, 94, 0.2);
-  color: #22c55e;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 /* Factors Panel */
 .factors-list {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .factor-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid #1a1a2e;
+  gap: var(--spacing-3);
+  padding: var(--spacing-2) 0;
+  border-bottom: 1px solid var(--bg-surface);
 }
 
 .factor-info {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   min-width: 140px;
 }
 
 .factor-icon {
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 .factor-name {
-  font-size: 0.8rem;
-  color: #ccc;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .factor-bar {
   flex: 1;
   height: 8px;
-  background: #1a1a2e;
-  border-radius: 4px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
 .bar-fill {
   height: 100%;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   transition: width 0.3s;
 }
 
-.bar-fill.critical { background: #ef4444; }
-.bar-fill.high { background: #f97316; }
-.bar-fill.medium { background: #eab308; }
-.bar-fill.low { background: #22c55e; }
+.bar-fill.critical { background: var(--color-error); }
+.bar-fill.high { background: var(--chart-orange); }
+.bar-fill.medium { background: var(--chart-yellow); }
+.bar-fill.low { background: var(--color-success); }
 
 .factor-score {
   min-width: 30px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #fff;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
   text-align: right;
 }
 
 .factors-weights {
-  padding-top: 1rem;
-  border-top: 1px solid #2a2a3e;
+  padding-top: var(--spacing-4);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .factors-weights h4 {
-  margin: 0 0 0.75rem;
-  font-size: 0.85rem;
-  color: #888;
+  margin: 0 0 var(--spacing-3);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .weights-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .weight-item {
   display: flex;
   justify-content: space-between;
-  padding: 0.375rem 0.5rem;
-  background: #1a1a2e;
-  border-radius: 4px;
-  font-size: 0.75rem;
+  padding: var(--spacing-1-5) var(--spacing-2);
+  background: var(--bg-surface);
+  border-radius: var(--radius-default);
+  font-size: var(--text-xs);
 }
 
 .weight-name {
-  color: #888;
+  color: var(--text-secondary);
 }
 
 .weight-value {
-  color: #3b82f6;
-  font-weight: 600;
+  color: var(--color-info);
+  font-weight: var(--font-semibold);
 }
 
 /* Trends Panel */
 .period-selector {
   display: flex;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .period-selector button {
-  padding: 0.375rem 0.75rem;
+  padding: var(--spacing-1-5) var(--spacing-3);
   background: transparent;
-  border: 1px solid #333;
-  border-radius: 4px;
-  color: #888;
-  font-size: 0.75rem;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-default);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
   cursor: pointer;
 }
 
 .period-selector button.active {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  color: #fff;
+  background: var(--color-info);
+  border-color: var(--color-info);
+  color: var(--text-on-primary);
 }
 
 .trends-chart {
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .accuracy-chart {
@@ -1171,21 +1196,47 @@ watch(selectedPeriod, () => {
   height: 180px;
 }
 
-.data-point {
+/* SVG Chart Styles using design tokens */
+.grid-line {
+  stroke: var(--border-subtle);
+}
+
+.axis-text {
+  fill: var(--text-tertiary);
+}
+
+.trend-line {
+  stroke: var(--color-success);
+}
+
+.data-point-circle {
+  fill: var(--color-success);
   cursor: pointer;
   transition: r 0.2s;
 }
 
-.data-point:hover {
+.data-point-circle:hover {
   r: 6;
+}
+
+.tooltip-bg {
+  fill: var(--bg-surface);
+}
+
+.tooltip-text-primary {
+  fill: var(--text-primary);
+}
+
+.tooltip-text-secondary {
+  fill: var(--text-secondary);
 }
 
 .trend-stats {
   display: flex;
-  gap: 2rem;
-  padding: 0.75rem;
-  background: #1a1a2e;
-  border-radius: 8px;
+  gap: var(--spacing-8);
+  padding: var(--spacing-3);
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
 }
 
 .trend-stat {
@@ -1194,35 +1245,35 @@ watch(selectedPeriod, () => {
 }
 
 .trend-stat .stat-label {
-  font-size: 0.7rem;
-  color: #666;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 
 .trend-stat .stat-value {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #fff;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 /* Recommendations Panel */
 .recommendations-panel {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .recommendations-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .recommendation-card {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
-  padding: 1rem;
-  background: #1a1a2e;
-  border-radius: 8px;
-  border-left: 3px solid #3b82f6;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
+  border-left: 3px solid var(--color-info);
 }
 
 .rec-number {
@@ -1231,18 +1282,18 @@ watch(selectedPeriod, () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #3b82f6;
-  border-radius: 50%;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #fff;
+  background: var(--color-info);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--text-on-primary);
   flex-shrink: 0;
 }
 
 .rec-text {
-  font-size: 0.85rem;
-  color: #ccc;
-  line-height: 1.4;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: var(--leading-snug);
 }
 
 /* Modal */
@@ -1252,17 +1303,17 @@ watch(selectedPeriod, () => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--overlay-backdrop);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .modal-content {
-  background: #12121a;
-  border: 1px solid #2a2a3e;
-  border-radius: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
   width: 90%;
   max-width: 600px;
   max-height: 90vh;
@@ -1273,13 +1324,13 @@ watch(selectedPeriod, () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid #2a2a3e;
+  padding: var(--spacing-4) var(--spacing-6);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .modal-header h3 {
   margin: 0;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .btn-close {
@@ -1287,139 +1338,139 @@ watch(selectedPeriod, () => {
   height: 32px;
   background: transparent;
   border: none;
-  color: #888;
-  font-size: 1.5rem;
+  color: var(--text-secondary);
+  font-size: var(--text-2xl);
   cursor: pointer;
 }
 
 .modal-body {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
 }
 
 .detail-section {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .detail-section h4 {
-  margin: 0 0 0.75rem;
-  font-size: 0.9rem;
-  color: #888;
+  margin: 0 0 var(--spacing-3);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .detail-row {
   display: flex;
-  gap: 1rem;
-  margin-bottom: 0.5rem;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-2);
 }
 
 .detail-label {
   min-width: 100px;
-  color: #666;
-  font-size: 0.85rem;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
 }
 
 .detail-value {
-  color: #e0e0e0;
-  font-size: 0.85rem;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
 }
 
 .detail-value.file-path {
-  font-family: monospace;
-  color: #3b82f6;
+  font-family: var(--font-mono);
+  color: var(--color-info);
   word-break: break-all;
 }
 
 .score-badge.large {
-  font-size: 1rem;
-  padding: 0.375rem 0.75rem;
+  font-size: var(--text-base);
+  padding: var(--spacing-1-5) var(--spacing-3);
 }
 
 .factors-breakdown {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .factor-row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .factor-row .factor-name {
   min-width: 120px;
-  font-size: 0.8rem;
-  color: #888;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .factor-bar-container {
   flex: 1;
   height: 8px;
-  background: #1a1a2e;
-  border-radius: 4px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
 .factor-bar-fill {
   height: 100%;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
-.factor-bar-fill.critical { background: #ef4444; }
-.factor-bar-fill.high { background: #f97316; }
-.factor-bar-fill.medium { background: #eab308; }
-.factor-bar-fill.low { background: #22c55e; }
+.factor-bar-fill.critical { background: var(--color-error); }
+.factor-bar-fill.high { background: var(--chart-orange); }
+.factor-bar-fill.medium { background: var(--chart-yellow); }
+.factor-bar-fill.low { background: var(--color-success); }
 
 .factor-value {
   min-width: 30px;
   text-align: right;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #fff;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .tips-list,
 .tests-list {
   margin: 0;
-  padding-left: 1.25rem;
+  padding-left: var(--spacing-5);
 }
 
 .tips-list li,
 .tests-list li {
-  font-size: 0.85rem;
-  color: #ccc;
-  margin-bottom: 0.5rem;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-2);
 }
 
 .modal-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 1rem 1.5rem;
-  border-top: 1px solid #2a2a3e;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4) var(--spacing-6);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .btn-secondary,
 .btn-primary {
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  font-size: 0.875rem;
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
 .btn-secondary {
-  background: #1a1a2e;
-  border: 1px solid #333;
-  color: #e0e0e0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
 }
 
 .btn-primary {
-  background: #3b82f6;
+  background: var(--color-info);
   border: none;
-  color: #fff;
+  color: var(--text-on-primary);
 }
 
 .btn-primary:hover {
-  background: #2563eb;
+  background: var(--color-info-hover);
 }
 </style>

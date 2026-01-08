@@ -26,31 +26,31 @@
 
           <!-- Enhanced Debug Controls -->
           <div class="debug-controls" style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
-            <button @click="getDeclarationsData" class="btn-debug" style="padding: 5px 10px; background: #4CAF50; color: white; border: none; border-radius: 4px;">Test Declarations</button>
-            <button @click="getDuplicatesData" class="btn-debug" style="padding: 5px 10px; background: #FF9800; color: white; border: none; border-radius: 4px;">Test Duplicates</button>
-            <button @click="getHardcodesData" class="btn-debug" style="padding: 5px 10px; background: #F44336; color: white; border: none; border-radius: 4px;">Test Hardcodes</button>
-            <button @click="testNpuConnection" class="btn-debug" style="padding: 5px 10px; background: #9C27B0; color: white; border: none; border-radius: 4px;">Test NPU</button>
-            <button @click="testDataState" class="btn-debug" style="padding: 5px 10px; background: #2196F3; color: white; border: none; border-radius: 4px;">Debug State</button>
-            <button @click="resetState" class="btn-debug" style="padding: 5px 10px; background: #FF5722; color: white; border: none; border-radius: 4px;">Reset State</button>
-            <button @click="testAllEndpoints" class="btn-debug" style="padding: 5px 10px; background: #00BCD4; color: white; border: none; border-radius: 4px;">Test All APIs</button>
+            <button @click="getDeclarationsData" class="btn-debug btn-debug-success">Test Declarations</button>
+            <button @click="getDuplicatesData" class="btn-debug btn-debug-warning">Test Duplicates</button>
+            <button @click="getHardcodesData" class="btn-debug btn-debug-error">Test Hardcodes</button>
+            <button @click="testNpuConnection" class="btn-debug btn-debug-purple">Test NPU</button>
+            <button @click="testDataState" class="btn-debug btn-debug-info">Debug State</button>
+            <button @click="resetState" class="btn-debug btn-debug-orange">Reset State</button>
+            <button @click="testAllEndpoints" class="btn-debug btn-debug-cyan">Test All APIs</button>
             <!-- Issue #527: API Endpoint Checker -->
-            <button @click="getApiEndpointCoverage" :disabled="loadingApiEndpoints" class="btn-debug" style="padding: 5px 10px; background: #3F51B5; color: white; border: none; border-radius: 4px;">
+            <button @click="getApiEndpointCoverage" :disabled="loadingApiEndpoints" class="btn-debug btn-debug-indigo">
               <i :class="loadingApiEndpoints ? 'fas fa-spinner fa-spin' : 'fas fa-plug'"></i>
               {{ loadingApiEndpoints ? 'Scanning...' : 'API Coverage' }}
             </button>
             <!-- Code Intelligence / Anti-Pattern Detection -->
-            <button @click="runCodeSmellAnalysis" :disabled="analyzingCodeSmells" class="btn-debug" style="padding: 5px 10px; background: #E91E63; color: white; border: none; border-radius: 4px;">
+            <button @click="runCodeSmellAnalysis" :disabled="analyzingCodeSmells" class="btn-debug btn-debug-pink">
               <i :class="analyzingCodeSmells ? 'fas fa-spinner fa-spin' : 'fas fa-bug'"></i>
               {{ analyzingCodeSmells ? 'Scanning...' : 'Code Smells' }}
             </button>
-            <button @click="getCodeHealthScore" :disabled="analyzingCodeSmells" class="btn-debug" style="padding: 5px 10px; background: #673AB7; color: white; border: none; border-radius: 4px;">
+            <button @click="getCodeHealthScore" :disabled="analyzingCodeSmells" class="btn-debug btn-debug-violet">
               <i class="fas fa-heartbeat"></i> Health Score
             </button>
-            <button @click="exportReport()" :disabled="exportingReport" class="btn-debug" style="padding: 5px 10px; background: #607D8B; color: white; border: none; border-radius: 4px;">
+            <button @click="exportReport()" :disabled="exportingReport" class="btn-debug btn-debug-secondary">
               <i :class="exportingReport ? 'fas fa-spinner fa-spin' : 'fas fa-file-export'"></i>
               {{ exportingReport ? 'Exporting...' : 'Export Report' }}
             </button>
-            <button @click="clearCache" :disabled="clearingCache" class="btn-debug" style="padding: 5px 10px; background: #795548; color: white; border: none; border-radius: 4px;">
+            <button @click="clearCache" :disabled="clearingCache" class="btn-debug btn-debug-brown">
               <i :class="clearingCache ? 'fas fa-spinner fa-spin' : 'fas fa-trash-alt'"></i>
               {{ clearingCache ? 'Clearing...' : 'Clear Cache' }}
             </button>
@@ -675,6 +675,7 @@
           <FunctionCallGraph
             :data="callGraphData"
             :summary="(callGraphSummary as any)"
+            :orphaned-functions="callGraphOrphaned"
             title="Function Call Relationships"
             subtitle="View which functions call which other functions"
             :height="600"
@@ -2162,17 +2163,17 @@
             </span>
           </label>
           <span v-if="useAiFiltering" class="ai-filter-options" style="display: flex; align-items: center; gap: 10px;">
-            <select v-model="aiFilteringPriority" style="padding: 4px 8px; border-radius: 4px; background: #2a2a2a; color: #fff; border: 1px solid #444;">
+            <select v-model="aiFilteringPriority" class="ai-filter-select">
               <option value="high">High Priority Only</option>
               <option value="medium">Medium Priority</option>
               <option value="low">Low Priority</option>
               <option value="all">All Priorities</option>
             </select>
-            <span style="font-size: 0.85em; color: #888;">
+            <span class="ai-filter-model-hint">
               Model: {{ aiFilteringModel }}
             </span>
           </span>
-          <span v-if="llmFilteringResult" class="llm-result-badge" style="font-size: 0.85em; padding: 4px 10px; background: #2e7d32; color: #fff; border-radius: 12px;">
+          <span v-if="llmFilteringResult" class="llm-result-badge">
             <i class="fas fa-check-circle"></i>
             {{ llmFilteringResult.original_count }} → {{ llmFilteringResult.filtered_count }}
             ({{ llmFilteringResult.reduction_percent }}% reduced)
@@ -2938,6 +2939,7 @@ const importTreeError = ref('')
 // Function call graph data
 const callGraphData = ref<DependencyGraph>({ nodes: [], edges: [] })
 const callGraphSummary = ref<Record<string, unknown> | null>(null)
+const callGraphOrphaned = ref<Array<Record<string, unknown>>>([])
 const callGraphLoading = ref(false)
 const callGraphError = ref('')
 
@@ -3951,15 +3953,18 @@ const loadCallGraphData = async () => {
     if (data.status === 'success' && data.call_graph) {
       callGraphData.value = data.call_graph
       callGraphSummary.value = data.summary
+      callGraphOrphaned.value = data.orphaned_functions || []
       logger.debug('Call graph loaded:', {
         nodes: data.call_graph.nodes?.length || 0,
         edges: data.call_graph.edges?.length || 0,
+        orphaned: data.orphaned_functions?.length || 0,
         summary: data.summary
       })
     } else if (data.status === 'no_data') {
       // Issue #543: Handle no_data status from backend
       callGraphData.value = { nodes: [], edges: [] }
       callGraphSummary.value = null
+      callGraphOrphaned.value = []
       logger.debug('No call graph data - run indexing first')
     }
 
@@ -6030,12 +6035,22 @@ const getPriorityClass = (severity: string | undefined): string => {
   }
 }
 
+/**
+ * Helper to get CSS variable value at runtime.
+ * Used for JavaScript color values (charts, Cytoscape, D3, etc.)
+ * Falls back to provided default for SSR/testing safety.
+ */
+function getCssVar(name: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+}
+
 const getSeverityColor = (severity: string | undefined): string => {
   switch (severity?.toLowerCase()) {
-    case 'critical': return '#dc2626'
-    case 'high': return '#ea580c'
-    case 'medium': return '#d97706'
-    default: return '#059669'
+    case 'critical': return getCssVar('--color-error-hover', '#dc2626')
+    case 'high': return getCssVar('--chart-orange', '#ea580c')
+    case 'medium': return getCssVar('--color-warning-hover', '#d97706')
+    default: return getCssVar('--color-success-hover', '#059669')
   }
 }
 
@@ -6376,8 +6391,8 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 <style scoped>
 .codebase-analytics {
   padding: 20px;
-  background: #0f0f0f;
-  color: #ffffff;
+  background: var(--bg-primary);
+  color: var(--text-primary);
   min-height: 100vh;
   max-height: 100vh;
   overflow-y: auto;
@@ -6385,18 +6400,18 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .analytics-header {
-  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
-  border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 24px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  background: linear-gradient(135deg, var(--color-info-dark) 0%, var(--color-info-hover) 100%);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-5);
+  margin-bottom: var(--spacing-6);
+  box-shadow: var(--shadow-lg);
 }
 
 .header-content h2 {
   margin: 0 0 16px 0;
-  color: #ffffff;
+  color: var(--text-on-primary);
   font-size: 1.5em;
-  font-weight: 600;
+  font-weight: var(--font-semibold);
 }
 
 .header-controls {
@@ -6407,76 +6422,76 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .path-input {
-  background: #1f2937;
-  border: 1px solid #374151;
-  color: #ffffff;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
   padding: 10px 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   min-width: 300px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
 }
 
 .path-input:focus {
   outline: none;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+  border-color: var(--color-info-hover);
+  box-shadow: var(--shadow-focus);
 }
 
 .btn-primary, .btn-secondary, .btn-debug {
   padding: 10px 20px;
   border: none;
-  border-radius: 8px;
-  font-weight: 600;
+  border-radius: var(--radius-lg);
+  font-weight: var(--font-semibold);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition-all);
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .btn-primary {
-  background: #22c55e;
-  color: #ffffff;
+  background: var(--chart-green);
+  color: var(--text-on-success);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #16a34a;
+  background: var(--color-success-dark);
   transform: translateY(-1px);
 }
 
 .btn-secondary {
-  background: #6366f1;
-  color: #ffffff;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: #4f46e5;
+  background: var(--color-primary-hover);
   transform: translateY(-1px);
 }
 
 .btn-primary:disabled, .btn-secondary:disabled {
-  background: #374151;
-  color: #9ca3af;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
   cursor: not-allowed;
   transform: none;
 }
 
 .btn-cancel {
-  background: #dc2626;
-  color: #ffffff;
+  background: var(--color-error-hover);
+  color: var(--text-on-error);
   padding: 10px 20px;
   border: none;
-  border-radius: 8px;
-  font-weight: 600;
+  border-radius: var(--radius-lg);
+  font-weight: var(--font-semibold);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition-all);
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .btn-cancel:hover {
-  background: #b91c1c;
+  background: var(--color-error-dark);
   transform: translateY(-1px);
 }
 
@@ -6498,11 +6513,11 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .progress-container {
-  background: #1f2937;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 24px;
-  border: 1px solid #374151;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
+  border: 1px solid var(--border-default);
 }
 
 .progress-header {
@@ -6516,30 +6531,30 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #22c55e;
-  font-weight: 600;
+  color: var(--chart-green);
+  font-weight: var(--font-semibold);
 }
 
 .job-id {
-  color: #6b7280;
+  color: var(--text-tertiary);
   font-size: 0.8em;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
 }
 
 .progress-bar {
   width: 100%;
   height: 8px;
-  background: #374151;
-  border-radius: 4px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-default);
   overflow: hidden;
   margin-bottom: 8px;
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%);
+  background: linear-gradient(90deg, var(--chart-green) 0%, var(--color-success-dark) 100%);
   transition: width 0.3s ease;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
 }
 
 .progress-fill.indeterminate {
@@ -6557,17 +6572,17 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .code-smells-progress {
-  border-left: 4px solid #E91E63;
+  border-left: 4px solid var(--chart-pink);
 }
 
 .code-smells-progress .progress-fill {
-  background: linear-gradient(90deg, #E91E63 0%, #9C27B0 100%);
+  background: linear-gradient(90deg, var(--chart-pink) 0%, var(--chart-purple) 100%);
 }
 
 .progress-status {
-  color: #d1d5db;
+  color: var(--text-primary);
   font-size: 0.9em;
-  font-weight: 500;
+  font-weight: var(--font-medium);
 }
 
 /* Phase Progress */
@@ -6577,8 +6592,8 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   gap: 12px;
   margin-bottom: 16px;
   padding: 12px;
-  background: #111827;
-  border-radius: 6px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
 }
 
 .phase-item {
@@ -6586,28 +6601,28 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: #1f2937;
-  border-radius: 4px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-default);
   font-size: 0.85em;
-  transition: all 0.2s;
+  transition: var(--transition-all);
 }
 
 .phase-item.phase-completed {
-  color: #22c55e;
-  background: rgba(34, 197, 94, 0.15);
-  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: var(--chart-green);
+  background: var(--color-success-bg-hover);
+  border: 1px solid var(--color-success-border);
 }
 
 .phase-item.phase-running {
-  color: #3b82f6;
-  background: rgba(59, 130, 246, 0.15);
+  color: var(--chart-blue);
+  background: var(--color-info-bg-hover);
   border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
 .phase-item.phase-pending {
-  color: #6b7280;
-  background: #1f2937;
-  border: 1px solid #374151;
+  color: var(--text-tertiary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
 }
 
 .phase-item i {
@@ -6618,8 +6633,8 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .batch-progress {
   margin-top: 16px;
   padding: 12px;
-  background: #111827;
-  border-radius: 6px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
 }
 
 .batch-header {
@@ -6630,27 +6645,27 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .batch-label {
-  color: #9ca3af;
+  color: var(--text-secondary);
   font-size: 0.85em;
 }
 
 .batch-count {
-  color: #22c55e;
-  font-weight: 600;
-  font-family: 'JetBrains Mono', monospace;
+  color: var(--chart-green);
+  font-weight: var(--font-semibold);
+  font-family: var(--font-mono);
 }
 
 .batch-bar {
   width: 100%;
   height: 6px;
-  background: #374151;
+  background: var(--bg-tertiary);
   border-radius: 3px;
   overflow: hidden;
 }
 
 .batch-fill {
   height: 100%;
-  background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%);
+  background: linear-gradient(90deg, var(--chart-green) 0%, var(--color-success-dark) 100%);
   transition: width 0.3s ease;
   border-radius: 3px;
 }
@@ -6662,7 +6677,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   gap: 16px;
   margin-top: 16px;
   padding: 12px;
-  background: #111827;
+  background: var(--bg-card);
   border-radius: 6px;
 }
 
@@ -6670,12 +6685,12 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #d1d5db;
+  color: var(--text-secondary);
   font-size: 0.85em;
 }
 
 .live-stats .stat-item i {
-  color: #3b82f6;
+  color: var(--chart-blue);
   width: 16px;
   text-align: center;
 }
@@ -6697,7 +6712,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .card-header-content h3 {
   margin: 0;
-  color: #f9fafb;
+  color: var(--text-primary);
   font-size: 1.1em;
   font-weight: 600;
 }
@@ -6707,11 +6722,11 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   align-items: center;
   gap: 6px;
   font-size: 0.8em;
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .refresh-indicator.active {
-  color: #22c55e;
+  color: var(--chart-green);
 }
 
 .refresh-indicator .fas {
@@ -6719,9 +6734,9 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .refresh-btn {
-  background: #374151;
-  border: 1px solid #4b5563;
-  color: #d1d5db;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--bg-hover);
+  color: var(--text-secondary);
   padding: 6px 8px;
   border-radius: 6px;
   cursor: pointer;
@@ -6729,8 +6744,8 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .refresh-btn:hover {
-  background: #4b5563;
-  color: #ffffff;
+  background: var(--bg-hover);
+  color: var(--text-on-primary);
 }
 
 /* Issue #609: Section Export Buttons */
@@ -6741,9 +6756,9 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .export-btn {
-  background: #1f2937;
-  border: 1px solid #374151;
-  color: #9ca3af;
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-tertiary);
+  color: var(--text-muted);
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 0.75rem;
@@ -6755,9 +6770,9 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .export-btn:hover {
-  background: #374151;
-  color: #60a5fa;
-  border-color: #60a5fa;
+  background: var(--bg-tertiary);
+  color: var(--color-info);
+  border-color: var(--color-info);
 }
 
 .export-btn i {
@@ -6776,20 +6791,20 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .metric-label {
   font-size: 0.8em;
-  color: #9ca3af;
+  color: var(--text-muted);
   margin-bottom: 4px;
 }
 
 .metric-value {
   font-size: 1.4em;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--text-on-primary);
 }
 
-.metric-value.health-good { color: #22c55e; }
-.metric-value.health-warning { color: #f59e0b; }
-.metric-value.health-critical { color: #ef4444; }
-.metric-value.health-unknown { color: #6b7280; }
+.metric-value.health-good { color: var(--chart-green); }
+.metric-value.health-warning { color: var(--color-warning); }
+.metric-value.health-critical { color: var(--color-error); }
+.metric-value.health-unknown { color: var(--text-tertiary); }
 
 .communication-metrics, .performance-details, .quality-details {
   display: flex;
@@ -6802,7 +6817,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   justify-content: space-between;
   align-items: center;
   padding: 8px 0;
-  border-bottom: 1px solid #374151;
+  border-bottom: 1px solid var(--bg-tertiary);
 }
 
 .pattern-item:last-child, .performance-item:last-child, .quality-item:last-child {
@@ -6810,12 +6825,12 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .pattern-label, .performance-label, .quality-label {
-  color: #d1d5db;
+  color: var(--text-secondary);
   font-size: 0.9em;
 }
 
 .pattern-value, .performance-value, .quality-value {
-  color: #ffffff;
+  color: var(--text-on-primary);
   font-weight: 600;
 }
 
@@ -6834,43 +6849,43 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .score-label, .gauge-label {
   font-size: 0.9em;
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .quality-high, .efficiency-high {
   background: rgba(34, 197, 94, 0.1);
-  color: #22c55e;
+  color: var(--chart-green);
 }
 
 .quality-medium, .efficiency-medium {
   background: rgba(251, 191, 36, 0.1);
-  color: #fbbf24;
+  color: var(--color-warning-light);
 }
 
 .quality-low, .efficiency-low {
   background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .btn-link {
   background: none;
   border: none;
-  color: #3b82f6;
+  color: var(--chart-blue);
   cursor: pointer;
   text-decoration: underline;
   font-size: 0.9em;
 }
 
 .btn-link:hover {
-  color: #2563eb;
+  color: var(--color-info-dark);
 }
 
 /* Traditional Analytics Section */
 .analytics-section {
-  background: #1f2937;
+  background: var(--bg-secondary);
   border-radius: 12px;
   padding: 24px;
-  border: 1px solid #374151;
+  border: 1px solid var(--bg-tertiary);
 }
 
 .real-time-controls {
@@ -6879,7 +6894,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   align-items: center;
   margin-bottom: 24px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #374151;
+  border-bottom: 1px solid var(--bg-tertiary);
 }
 
 .toggle-switch {
@@ -6887,7 +6902,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   align-items: center;
   gap: 10px;
   cursor: pointer;
-  color: #d1d5db;
+  color: var(--text-secondary);
 }
 
 .toggle-switch input {
@@ -6897,7 +6912,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .toggle-slider {
   width: 40px;
   height: 20px;
-  background: #374151;
+  background: var(--bg-tertiary);
   border-radius: 10px;
   position: relative;
   transition: all 0.3s;
@@ -6907,7 +6922,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   content: '';
   width: 16px;
   height: 16px;
-  background: #ffffff;
+  background: var(--text-on-primary);
   border-radius: 50%;
   position: absolute;
   top: 2px;
@@ -6916,7 +6931,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .toggle-switch input:checked + .toggle-slider {
-  background: #22c55e;
+  background: var(--chart-green);
 }
 
 .toggle-switch input:checked + .toggle-slider:before {
@@ -6924,8 +6939,8 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .refresh-all-btn {
-  background: #6366f1;
-  color: #ffffff;
+  background: var(--chart-indigo);
+  color: var(--text-on-primary);
   border: none;
   padding: 8px 16px;
   border-radius: 6px;
@@ -6937,7 +6952,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .refresh-all-btn:hover {
-  background: #4f46e5;
+  background: var(--chart-indigo-dark);
 }
 
 .stats-section, .problems-section, .duplicates-section, .declarations-section {
@@ -6945,7 +6960,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .stats-section h3, .problems-section h3, .duplicates-section h3, .declarations-section h3 {
-  color: #f9fafb;
+  color: var(--text-primary);
   margin-bottom: 16px;
   font-size: 1.2em;
   font-weight: 600;
@@ -6960,13 +6975,13 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .stat-value {
   font-size: 2em;
   font-weight: 700;
-  color: #22c55e;
+  color: var(--chart-green);
   margin-bottom: 4px;
   text-align: center;
 }
 
 .stat-label {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 0.9em;
   text-align: center;
 }
@@ -6978,32 +6993,32 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .problem-item, .duplicate-item, .declaration-item {
-  background: #111827;
-  border: 1px solid #374151;
+  background: var(--bg-card);
+  border: 1px solid var(--bg-tertiary);
   border-radius: 8px;
   padding: 16px;
   transition: all 0.2s;
 }
 
 .problem-item:hover, .duplicate-item:hover, .declaration-item:hover {
-  border-color: #4b5563;
+  border-color: var(--bg-hover);
   transform: translateX(4px);
 }
 
 .problem-item.priority-critical {
-  border-left: 4px solid #dc2626;
+  border-left: 4px solid var(--color-error-hover);
 }
 
 .problem-item.priority-high {
-  border-left: 4px solid #ea580c;
+  border-left: 4px solid var(--chart-orange);
 }
 
 .problem-item.priority-medium {
-  border-left: 4px solid #d97706;
+  border-left: 4px solid var(--color-warning-dark);
 }
 
 .problem-item.priority-low {
-  border-left: 4px solid #059669;
+  border-left: 4px solid var(--color-success-dark);
 }
 
 .problem-header, .duplicate-header {
@@ -7015,7 +7030,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .problem-type, .duplicate-similarity {
   font-weight: 600;
-  color: #ffffff;
+  color: var(--text-on-primary);
 }
 
 .problem-severity, .duplicate-lines {
@@ -7032,17 +7047,17 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .problem-description {
-  color: #d1d5db;
+  color: var(--text-secondary);
 }
 
 .problem-file {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.8em;
 }
 
 .problem-suggestion {
-  color: #fbbf24;
+  color: var(--color-warning-light);
   font-style: italic;
 }
 
@@ -7054,7 +7069,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .duplicate-file {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.8em;
 }
@@ -7062,7 +7077,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 /* Grouped Duplicates Section */
 .duplicates-section h3 .total-count {
   font-size: 0.8em;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-weight: normal;
 }
 
@@ -7080,11 +7095,11 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .duplicate-summary-card {
-  background: #111827;
+  background: var(--bg-card);
   border-radius: 8px;
   padding: 16px;
   text-align: center;
-  border: 2px solid #374151;
+  border: 2px solid var(--bg-tertiary);
   transition: all 0.2s ease;
 }
 
@@ -7093,40 +7108,40 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .duplicate-summary-card.high-similarity {
-  border-color: #ef4444;
+  border-color: var(--color-error);
   background: rgba(239, 68, 68, 0.1);
 }
 
 .duplicate-summary-card.medium-similarity {
-  border-color: #f59e0b;
+  border-color: var(--color-warning);
   background: rgba(245, 158, 11, 0.1);
 }
 
 .duplicate-summary-card.low-similarity {
-  border-color: #10b981;
+  border-color: var(--color-success);
   background: rgba(16, 185, 129, 0.1);
 }
 
 .duplicate-summary-card.total-lines {
-  border-color: #6366f1;
+  border-color: var(--chart-indigo);
   background: rgba(99, 102, 241, 0.1);
 }
 
 .summary-card-count {
   font-size: 1.8em;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--text-on-primary);
   line-height: 1;
 }
 
-.duplicate-summary-card.high-similarity .summary-card-count { color: #ef4444; }
-.duplicate-summary-card.medium-similarity .summary-card-count { color: #f59e0b; }
-.duplicate-summary-card.low-similarity .summary-card-count { color: #10b981; }
-.duplicate-summary-card.total-lines .summary-card-count { color: #818cf8; }
+.duplicate-summary-card.high-similarity .summary-card-count { color: var(--color-error); }
+.duplicate-summary-card.medium-similarity .summary-card-count { color: var(--color-warning); }
+.duplicate-summary-card.low-similarity .summary-card-count { color: var(--color-success); }
+.duplicate-summary-card.total-lines .summary-card-count { color: var(--chart-indigo-light); }
 
 .summary-card-label {
   font-size: 0.75em;
-  color: #9ca3af;
+  color: var(--text-muted);
   text-transform: uppercase;
   margin-top: 4px;
   font-weight: 500;
@@ -7139,9 +7154,9 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .duplicate-similarity-group {
-  background: #1f2937;
+  background: var(--bg-secondary);
   border-radius: 8px;
-  border: 1px solid #374151;
+  border: 1px solid var(--bg-tertiary);
   overflow: hidden;
 }
 
@@ -7155,7 +7170,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .duplicate-group-header:hover {
-  background: #374151;
+  background: var(--bg-tertiary);
 }
 
 .group-info {
@@ -7165,17 +7180,17 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .group-info i {
-  color: #6b7280;
+  color: var(--text-tertiary);
   font-size: 0.9em;
 }
 
 .group-name {
   font-weight: 600;
-  color: #e5e7eb;
+  color: var(--text-secondary);
 }
 
 .group-count {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 0.9em;
 }
 
@@ -7187,18 +7202,18 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .badge-high {
-  background: #7f1d1d;
-  color: #fca5a5;
+  background: var(--color-error-bg);
+  color: var(--color-error-light);
 }
 
 .badge-medium {
-  background: #713f12;
-  color: #fde047;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-light);
 }
 
 .badge-low {
-  background: #14532d;
-  color: #86efac;
+  background: var(--color-success-bg);
+  color: var(--color-success-light);
 }
 
 .duplicate-group-items {
@@ -7206,8 +7221,8 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: #111827;
-  border-top: 1px solid #374151;
+  background: var(--bg-card);
+  border-top: 1px solid var(--bg-tertiary);
   max-height: 400px;
   overflow-y: auto;
 }
@@ -7215,25 +7230,25 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .duplicate-group-items .duplicate-item {
   margin: 0;
   padding: 12px;
-  background: #1a1f2e;
+  background: var(--bg-secondary);
   border-radius: 6px;
 }
 
 .duplicate-item.similarity-high {
-  border-left: 4px solid #ef4444;
+  border-left: 4px solid var(--color-error);
 }
 
 .duplicate-item.similarity-medium {
-  border-left: 4px solid #f59e0b;
+  border-left: 4px solid var(--color-warning);
 }
 
 .duplicate-item.similarity-low {
-  border-left: 4px solid #10b981;
+  border-left: 4px solid var(--color-success);
 }
 
 .more-duplicates-note {
   text-align: center;
-  color: #6b7280;
+  color: var(--text-tertiary);
   font-style: italic;
   padding: 8px;
   font-size: 0.9em;
@@ -7241,18 +7256,18 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .declaration-name {
   font-weight: 600;
-  color: #22c55e;
+  color: var(--chart-green);
   margin-bottom: 4px;
 }
 
 .declaration-type {
-  color: #3b82f6;
+  color: var(--chart-blue);
   font-size: 0.8em;
   margin-bottom: 4px;
 }
 
 .declaration-file {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.8em;
 }
@@ -7260,7 +7275,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .show-more {
   text-align: center;
   padding: 16px;
-  border-top: 1px solid #374151;
+  border-top: 1px solid var(--bg-tertiary);
 }
 
 /* Grouped Problems Section */
@@ -7278,11 +7293,11 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .severity-card {
-  background: #111827;
+  background: var(--bg-card);
   border-radius: 8px;
   padding: 16px;
   text-align: center;
-  border: 2px solid #374151;
+  border: 2px solid var(--bg-tertiary);
   transition: all 0.2s ease;
 }
 
@@ -7291,40 +7306,40 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .severity-card.severity-critical {
-  border-color: #dc2626;
+  border-color: var(--color-error-hover);
   background: rgba(220, 38, 38, 0.1);
 }
 
 .severity-card.severity-high {
-  border-color: #ea580c;
+  border-color: var(--chart-orange);
   background: rgba(234, 88, 12, 0.1);
 }
 
 .severity-card.severity-medium {
-  border-color: #d97706;
+  border-color: var(--color-warning-dark);
   background: rgba(217, 119, 6, 0.1);
 }
 
 .severity-card.severity-low {
-  border-color: #059669;
+  border-color: var(--color-success-dark);
   background: rgba(5, 150, 105, 0.1);
 }
 
 .severity-count {
   font-size: 2em;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--text-on-primary);
   line-height: 1;
 }
 
-.severity-card.severity-critical .severity-count { color: #ef4444; }
-.severity-card.severity-high .severity-count { color: #f97316; }
-.severity-card.severity-medium .severity-count { color: #f59e0b; }
-.severity-card.severity-low .severity-count { color: #10b981; }
+.severity-card.severity-critical .severity-count { color: var(--color-error); }
+.severity-card.severity-high .severity-count { color: var(--chart-orange); }
+.severity-card.severity-medium .severity-count { color: var(--color-warning); }
+.severity-card.severity-low .severity-count { color: var(--color-success); }
 
 .severity-label {
   font-size: 0.8em;
-  color: #9ca3af;
+  color: var(--text-muted);
   text-transform: uppercase;
   margin-top: 4px;
   font-weight: 500;
@@ -7337,9 +7352,9 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .problem-type-group {
-  background: #1f2937;
+  background: var(--bg-secondary);
   border-radius: 8px;
-  border: 1px solid #374151;
+  border: 1px solid var(--bg-tertiary);
   overflow: hidden;
 }
 
@@ -7353,7 +7368,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .problem-type-header:hover {
-  background: #374151;
+  background: var(--bg-tertiary);
 }
 
 .type-info {
@@ -7363,18 +7378,18 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .type-info i {
-  color: #6b7280;
+  color: var(--text-tertiary);
   font-size: 0.9em;
   transition: transform 0.2s ease;
 }
 
 .type-name {
   font-weight: 600;
-  color: #e5e7eb;
+  color: var(--text-secondary);
 }
 
 .type-count {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 0.9em;
 }
 
@@ -7391,23 +7406,23 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .badge-critical {
-  background: #7f1d1d;
-  color: #fca5a5;
+  background: var(--color-error-bg);
+  color: var(--color-error-light);
 }
 
 .badge-high {
-  background: #7c2d12;
-  color: #fdba74;
+  background: var(--color-warning-bg);
+  color: var(--chart-orange-light);
 }
 
 .badge-medium {
-  background: #713f12;
-  color: #fde047;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-light);
 }
 
 .badge-low {
-  background: #14532d;
-  color: #86efac;
+  background: var(--color-success-bg);
+  color: var(--color-success-light);
 }
 
 .problem-type-items {
@@ -7415,19 +7430,19 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: #111827;
-  border-top: 1px solid #374151;
+  background: var(--bg-card);
+  border-top: 1px solid var(--bg-tertiary);
 }
 
 .problem-type-items .problem-item {
   margin: 0;
   padding: 12px;
-  background: #1a1f2e;
+  background: var(--bg-secondary);
 }
 
 .more-problems-note {
   text-align: center;
-  color: #6b7280;
+  color: var(--text-tertiary);
   font-style: italic;
   padding: 8px;
   font-size: 0.9em;
@@ -7442,7 +7457,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .declarations-section h3 .total-count {
   font-size: 0.8em;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-weight: normal;
 }
 
@@ -7460,60 +7475,60 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .declaration-type-card {
-  background: #111827;
+  background: var(--bg-card);
   border-radius: 8px;
   padding: 16px;
   text-align: center;
-  border: 2px solid #374151;
+  border: 2px solid var(--bg-tertiary);
   transition: all 0.2s ease;
 }
 
 .declaration-type-card:hover {
   transform: translateY(-2px);
-  border-color: #4b5563;
+  border-color: var(--bg-hover);
 }
 
 .declaration-type-card.type-function {
-  border-color: #3b82f6;
+  border-color: var(--chart-blue);
   background: rgba(59, 130, 246, 0.1);
 }
 
 .declaration-type-card.type-class {
-  border-color: #8b5cf6;
+  border-color: var(--chart-purple);
   background: rgba(139, 92, 246, 0.1);
 }
 
 .declaration-type-card.type-method {
-  border-color: #10b981;
+  border-color: var(--color-success);
   background: rgba(16, 185, 129, 0.1);
 }
 
 .declaration-type-card.type-variable {
-  border-color: #f59e0b;
+  border-color: var(--color-warning);
   background: rgba(245, 158, 11, 0.1);
 }
 
 .declaration-type-card.type-constant {
-  border-color: #ec4899;
+  border-color: var(--chart-pink);
   background: rgba(236, 72, 153, 0.1);
 }
 
 .type-card-count {
   font-size: 1.8em;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--text-on-primary);
   line-height: 1;
 }
 
-.declaration-type-card.type-function .type-card-count { color: #60a5fa; }
-.declaration-type-card.type-class .type-card-count { color: #a78bfa; }
-.declaration-type-card.type-method .type-card-count { color: #34d399; }
-.declaration-type-card.type-variable .type-card-count { color: #fbbf24; }
-.declaration-type-card.type-constant .type-card-count { color: #f472b6; }
+.declaration-type-card.type-function .type-card-count { color: var(--color-info); }
+.declaration-type-card.type-class .type-card-count { color: var(--chart-purple-light); }
+.declaration-type-card.type-method .type-card-count { color: var(--color-success-light); }
+.declaration-type-card.type-variable .type-card-count { color: var(--color-warning-light); }
+.declaration-type-card.type-constant .type-card-count { color: var(--chart-pink-light); }
 
 .type-card-label {
   font-size: 0.8em;
-  color: #9ca3af;
+  color: var(--text-muted);
   text-transform: uppercase;
   margin-top: 4px;
   font-weight: 500;
@@ -7521,7 +7536,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .type-card-exported {
   font-size: 0.7em;
-  color: #22c55e;
+  color: var(--chart-green);
   margin-top: 4px;
 }
 
@@ -7532,9 +7547,9 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .declaration-type-group {
-  background: #1f2937;
+  background: var(--bg-secondary);
   border-radius: 8px;
-  border: 1px solid #374151;
+  border: 1px solid var(--bg-tertiary);
   overflow: hidden;
 }
 
@@ -7548,12 +7563,12 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .declaration-type-header:hover {
-  background: #374151;
+  background: var(--bg-tertiary);
 }
 
 .badge-exported {
-  background: #14532d;
-  color: #86efac;
+  background: var(--color-success-bg);
+  color: var(--color-success-light);
 }
 
 .declaration-type-items {
@@ -7561,8 +7576,8 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: #111827;
-  border-top: 1px solid #374151;
+  background: var(--bg-card);
+  border-top: 1px solid var(--bg-tertiary);
   max-height: 400px;
   overflow-y: auto;
 }
@@ -7570,13 +7585,13 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .declaration-type-items .declaration-item {
   margin: 0;
   padding: 10px 12px;
-  background: #1a1f2e;
+  background: var(--bg-secondary);
   border-radius: 6px;
-  border-left: 3px solid #374151;
+  border-left: 3px solid var(--bg-tertiary);
 }
 
 .declaration-type-items .declaration-item.is-exported {
-  border-left-color: #22c55e;
+  border-left-color: var(--chart-green);
 }
 
 .declaration-header {
@@ -7588,7 +7603,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .declaration-item .declaration-name {
   font-weight: 600;
-  color: #60a5fa;
+  color: var(--color-info);
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -7596,20 +7611,20 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   font-size: 0.65em;
   padding: 2px 6px;
   border-radius: 4px;
-  background: #14532d;
-  color: #86efac;
+  background: var(--color-success-bg);
+  color: var(--color-success-light);
   text-transform: uppercase;
 }
 
 .declaration-item .declaration-file {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.8em;
 }
 
 .more-declarations-note {
   text-align: center;
-  color: #6b7280;
+  color: var(--text-tertiary);
   font-style: italic;
   padding: 8px;
   font-size: 0.9em;
@@ -7619,9 +7634,9 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .code-smells-section {
   margin-top: 24px;
   padding: 20px;
-  background: #1f2937;
+  background: var(--bg-secondary);
   border-radius: 12px;
-  border: 1px solid #374151;
+  border: 1px solid var(--bg-tertiary);
 }
 
 .code-smells-section h3 {
@@ -7629,7 +7644,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   align-items: center;
   gap: 12px;
   margin: 0 0 16px 0;
-  color: #e5e7eb;
+  color: var(--text-secondary);
   font-size: 1.1em;
 }
 
@@ -7640,12 +7655,12 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   font-weight: 600;
 }
 
-.grade-a { background: #10b981; color: white; }
-.grade-b { background: #22c55e; color: white; }
-.grade-c { background: #eab308; color: black; }
-.grade-d { background: #f97316; color: white; }
-.grade-f { background: #ef4444; color: white; }
-.grade-unknown { background: #6b7280; color: white; }
+.grade-a { background: var(--color-success); color: white; }
+.grade-b { background: var(--chart-green); color: white; }
+.grade-c { background: var(--color-warning); color: black; }
+.grade-d { background: var(--chart-orange); color: white; }
+.grade-f { background: var(--color-error); color: white; }
+.grade-unknown { background: var(--text-tertiary); color: white; }
 
 .smells-summary {
   display: grid;
@@ -7655,30 +7670,30 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .summary-card {
-  background: #111827;
+  background: var(--bg-card);
   border-radius: 8px;
   padding: 16px;
   text-align: center;
-  border: 1px solid #374151;
+  border: 1px solid var(--bg-tertiary);
 }
 
-.summary-card.warning { border-color: #f59e0b; }
-.summary-card.critical { border-color: #ef4444; }
-.summary-card.high { border-color: #f97316; }
+.summary-card.warning { border-color: var(--color-warning); }
+.summary-card.critical { border-color: var(--color-error); }
+.summary-card.high { border-color: var(--chart-orange); }
 
 .summary-value {
   font-size: 1.8em;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--text-on-primary);
 }
 
-.summary-card.warning .summary-value { color: #f59e0b; }
-.summary-card.critical .summary-value { color: #ef4444; }
-.summary-card.high .summary-value { color: #f97316; }
+.summary-card.warning .summary-value { color: var(--color-warning); }
+.summary-card.critical .summary-value { color: var(--color-error); }
+.summary-card.high .summary-value { color: var(--chart-orange); }
 
 .summary-label {
   font-size: 0.75em;
-  color: #9ca3af;
+  color: var(--text-muted);
   text-transform: uppercase;
   margin-top: 4px;
 }
@@ -7690,23 +7705,23 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .smell-item {
-  background: #111827;
+  background: var(--bg-card);
   border-radius: 8px;
   padding: 16px;
-  border-left: 4px solid #6b7280;
+  border-left: 4px solid var(--text-tertiary);
   transition: all 0.2s ease;
 }
 
 .smell-item:hover {
   transform: translateX(4px);
-  background: #1a232f;
+  background: var(--bg-secondary);
 }
 
-.smell-item.smell-critical { border-left-color: #ef4444; }
-.smell-item.smell-high { border-left-color: #f97316; }
-.smell-item.smell-medium { border-left-color: #eab308; }
-.smell-item.smell-low { border-left-color: #22c55e; }
-.smell-item.smell-info { border-left-color: #3b82f6; }
+.smell-item.smell-critical { border-left-color: var(--color-error); }
+.smell-item.smell-high { border-left-color: var(--chart-orange); }
+.smell-item.smell-medium { border-left-color: var(--color-warning); }
+.smell-item.smell-low { border-left-color: var(--chart-green); }
+.smell-item.smell-info { border-left-color: var(--chart-blue); }
 
 .smell-header {
   display: flex;
@@ -7717,7 +7732,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .smell-type {
   font-weight: 600;
-  color: #e5e7eb;
+  color: var(--text-secondary);
 }
 
 .smell-severity {
@@ -7728,27 +7743,27 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   text-transform: uppercase;
 }
 
-.smell-severity.critical { background: #7f1d1d; color: #fca5a5; }
-.smell-severity.high { background: #7c2d12; color: #fdba74; }
-.smell-severity.medium { background: #713f12; color: #fde047; }
-.smell-severity.low { background: #14532d; color: #86efac; }
-.smell-severity.info { background: #1e3a8a; color: #93c5fd; }
+.smell-severity.critical { background: var(--color-error-bg); color: var(--color-error-light); }
+.smell-severity.high { background: var(--color-warning-bg); color: var(--chart-orange-light); }
+.smell-severity.medium { background: var(--color-warning-bg); color: var(--color-warning-light); }
+.smell-severity.low { background: var(--color-success-bg); color: var(--color-success-light); }
+.smell-severity.info { background: var(--color-info-dark); color: var(--color-info-light); }
 
 .smell-description {
-  color: #d1d5db;
+  color: var(--text-secondary);
   font-size: 0.9em;
   margin-bottom: 8px;
 }
 
 .smell-location {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.8em;
   margin-bottom: 4px;
 }
 
 .smell-suggestion {
-  color: #22c55e;
+  color: var(--chart-green);
   font-size: 0.85em;
   padding: 8px;
   background: rgba(34, 197, 94, 0.1);
@@ -7763,12 +7778,12 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   gap: 16px;
 }
 
-.summary-card.total { border-color: #6366f1; }
-.summary-card.total .summary-value { color: #818cf8; }
-.summary-card.medium { border-color: #eab308; }
-.summary-card.medium .summary-value { color: #eab308; }
-.summary-card.low { border-color: #22c55e; }
-.summary-card.low .summary-value { color: #22c55e; }
+.summary-card.total { border-color: var(--chart-indigo); }
+.summary-card.total .summary-value { color: var(--chart-indigo-light); }
+.summary-card.medium { border-color: var(--color-warning); }
+.summary-card.medium .summary-value { color: var(--color-warning); }
+.summary-card.low { border-color: var(--chart-green); }
+.summary-card.low .summary-value { color: var(--chart-green); }
 
 .code-smells-by-type {
   display: flex;
@@ -7777,9 +7792,9 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .smell-type-group {
-  background: #111827;
+  background: var(--bg-card);
   border-radius: 8px;
-  border: 1px solid #374151;
+  border: 1px solid var(--bg-tertiary);
   overflow: hidden;
 }
 
@@ -7789,12 +7804,12 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   align-items: center;
   padding: 14px 16px;
   cursor: pointer;
-  background: #1f2937;
+  background: var(--bg-secondary);
   transition: background 0.2s ease;
 }
 
 .smell-type-header:hover {
-  background: #2a3544;
+  background: var(--bg-tertiary);
 }
 
 .type-info {
@@ -7804,18 +7819,18 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .type-info i {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 0.75em;
   transition: transform 0.2s ease;
 }
 
 .type-name {
   font-weight: 600;
-  color: #e5e7eb;
+  color: var(--text-secondary);
 }
 
 .type-count {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 0.9em;
 }
 
@@ -7832,14 +7847,14 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   font-weight: 500;
 }
 
-.severity-badge.critical { background: #7f1d1d; color: #fca5a5; }
-.severity-badge.high { background: #7c2d12; color: #fdba74; }
-.severity-badge.medium { background: #713f12; color: #fde047; }
-.severity-badge.low { background: #14532d; color: #86efac; }
+.severity-badge.critical { background: var(--color-error-bg); color: var(--color-error-light); }
+.severity-badge.high { background: var(--color-warning-bg); color: var(--chart-orange-light); }
+.severity-badge.medium { background: var(--color-warning-bg); color: var(--color-warning-light); }
+.severity-badge.low { background: var(--color-success-bg); color: var(--color-success-light); }
 
 .smell-type-items {
   padding: 12px;
-  background: #0d1117;
+  background: var(--bg-primary);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -7852,13 +7867,13 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .show-more {
   text-align: center;
   padding: 12px;
-  background: #1a232f;
+  background: var(--bg-secondary);
   border-radius: 6px;
   margin-top: 8px;
 }
 
 .muted {
-  color: #6b7280;
+  color: var(--text-tertiary);
   font-style: italic;
 }
 
@@ -7871,9 +7886,9 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .analytics-section {
   margin-top: 24px;
   padding: 20px;
-  background: #1f2937;
+  background: var(--bg-secondary);
   border-radius: 12px;
-  border: 1px solid #374151;
+  border: 1px solid var(--bg-tertiary);
 }
 
 .analytics-section h3 {
@@ -7881,14 +7896,14 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   align-items: center;
   gap: 12px;
   margin: 0 0 16px 0;
-  color: #e5e7eb;
+  color: var(--text-secondary);
   font-size: 1.1em;
   flex-wrap: wrap;
 }
 
 .analytics-section .total-count {
   font-size: 0.85em;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-weight: normal;
 }
 
@@ -7907,11 +7922,11 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .summary-card {
-  background: #111827;
+  background: var(--bg-card);
   border-radius: 8px;
   padding: 16px;
   text-align: center;
-  border: 1px solid #374151;
+  border: 1px solid var(--bg-tertiary);
   transition: transform 0.2s ease, border-color 0.2s ease;
 }
 
@@ -7922,45 +7937,45 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .summary-value {
   font-size: 1.8em;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--text-on-primary);
 }
 
 .summary-label {
   font-size: 0.75em;
-  color: #9ca3af;
+  color: var(--text-muted);
   text-transform: uppercase;
   margin-top: 4px;
 }
 
 /* Summary Card Variants */
-.summary-card.total { border-color: #6366f1; }
-.summary-card.total .summary-value { color: #818cf8; }
-.summary-card.critical { border-color: #ef4444; }
-.summary-card.critical .summary-value { color: #ef4444; }
-.summary-card.high { border-color: #f97316; }
-.summary-card.high .summary-value { color: #f97316; }
-.summary-card.medium { border-color: #eab308; }
-.summary-card.medium .summary-value { color: #eab308; }
-.summary-card.low { border-color: #22c55e; }
-.summary-card.low .summary-value { color: #22c55e; }
-.summary-card.info { border-color: #3b82f6; }
-.summary-card.info .summary-value { color: #3b82f6; }
+.summary-card.total { border-color: var(--chart-indigo); }
+.summary-card.total .summary-value { color: var(--chart-indigo-light); }
+.summary-card.critical { border-color: var(--color-error); }
+.summary-card.critical .summary-value { color: var(--color-error); }
+.summary-card.high { border-color: var(--chart-orange); }
+.summary-card.high .summary-value { color: var(--chart-orange); }
+.summary-card.medium { border-color: var(--color-warning); }
+.summary-card.medium .summary-value { color: var(--color-warning); }
+.summary-card.low { border-color: var(--chart-green); }
+.summary-card.low .summary-value { color: var(--chart-green); }
+.summary-card.info { border-color: var(--chart-blue); }
+.summary-card.info .summary-value { color: var(--chart-blue); }
 
 /* Declaration Type Variants */
-.summary-card.type-function { border-color: #8b5cf6; }
-.summary-card.type-function .summary-value { color: #a78bfa; }
-.summary-card.type-class { border-color: #06b6d4; }
-.summary-card.type-class .summary-value { color: #22d3ee; }
-.summary-card.type-method { border-color: #ec4899; }
-.summary-card.type-method .summary-value { color: #f472b6; }
-.summary-card.type-variable { border-color: #84cc16; }
-.summary-card.type-variable .summary-value { color: #a3e635; }
-.summary-card.type-constant { border-color: #f59e0b; }
-.summary-card.type-constant .summary-value { color: #fbbf24; }
-.summary-card.type-import { border-color: #64748b; }
-.summary-card.type-import .summary-value { color: #94a3b8; }
-.summary-card.type-other { border-color: #6b7280; }
-.summary-card.type-other .summary-value { color: #9ca3af; }
+.summary-card.type-function { border-color: var(--chart-purple); }
+.summary-card.type-function .summary-value { color: var(--chart-purple-light); }
+.summary-card.type-class { border-color: var(--chart-teal); }
+.summary-card.type-class .summary-value { color: var(--chart-teal-light); }
+.summary-card.type-method { border-color: var(--chart-pink); }
+.summary-card.type-method .summary-value { color: var(--chart-pink-light); }
+.summary-card.type-variable { border-color: var(--chart-lime); }
+.summary-card.type-variable .summary-value { color: var(--chart-lime-light); }
+.summary-card.type-constant { border-color: var(--color-warning); }
+.summary-card.type-constant .summary-value { color: var(--color-warning-light); }
+.summary-card.type-import { border-color: var(--text-tertiary); }
+.summary-card.type-import .summary-value { color: var(--text-muted); }
+.summary-card.type-other { border-color: var(--text-tertiary); }
+.summary-card.type-other .summary-value { color: var(--text-muted); }
 
 /* Unified Accordion Groups */
 .accordion-groups {
@@ -7970,9 +7985,9 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .accordion-group {
-  background: #111827;
+  background: var(--bg-card);
   border-radius: 8px;
-  border: 1px solid #374151;
+  border: 1px solid var(--bg-tertiary);
   overflow: hidden;
 }
 
@@ -7982,12 +7997,12 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   align-items: center;
   padding: 14px 16px;
   cursor: pointer;
-  background: #1f2937;
+  background: var(--bg-secondary);
   transition: background 0.2s ease;
 }
 
 .accordion-header:hover {
-  background: #2a3544;
+  background: var(--bg-tertiary);
 }
 
 .header-info {
@@ -7997,18 +8012,18 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .header-info i {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 0.75em;
   transition: transform 0.2s ease;
 }
 
 .header-name {
   font-weight: 600;
-  color: #e5e7eb;
+  color: var(--text-secondary);
 }
 
 .header-count {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 0.9em;
 }
 
@@ -8026,10 +8041,10 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   font-weight: 500;
 }
 
-.severity-badge.critical { background: #7f1d1d; color: #fca5a5; }
-.severity-badge.high { background: #7c2d12; color: #fdba74; }
-.severity-badge.medium { background: #713f12; color: #fde047; }
-.severity-badge.low { background: #14532d; color: #86efac; }
+.severity-badge.critical { background: var(--color-error-bg); color: var(--color-error-light); }
+.severity-badge.high { background: var(--color-warning-bg); color: var(--chart-orange-light); }
+.severity-badge.medium { background: var(--color-warning-bg); color: var(--color-warning-light); }
+.severity-badge.low { background: var(--color-success-bg); color: var(--color-success-light); }
 
 /* Similarity Badges (for duplicates) */
 .similarity-badge {
@@ -8039,9 +8054,9 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   font-weight: 500;
 }
 
-.similarity-badge.high { background: #7f1d1d; color: #fca5a5; }
-.similarity-badge.medium { background: #713f12; color: #fde047; }
-.similarity-badge.low { background: #14532d; color: #86efac; }
+.similarity-badge.high { background: var(--color-error-bg); color: var(--color-error-light); }
+.similarity-badge.medium { background: var(--color-warning-bg); color: var(--color-warning-light); }
+.similarity-badge.low { background: var(--color-success-bg); color: var(--color-success-light); }
 
 /* Export Badges (for declarations) */
 .export-badge {
@@ -8049,8 +8064,8 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   padding: 2px 8px;
   border-radius: 10px;
   font-weight: 500;
-  background: #1e3a8a;
-  color: #93c5fd;
+  background: var(--color-info-dark);
+  color: var(--color-info-light);
 }
 
 .export-badge.small {
@@ -8061,7 +8076,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 /* Accordion Items Container */
 .accordion-items {
   padding: 12px;
-  background: #0d1117;
+  background: var(--bg-primary);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -8088,30 +8103,30 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 /* Unified List Items */
 .list-item {
-  background: #111827;
+  background: var(--bg-card);
   border-radius: 8px;
   padding: 14px 16px;
-  border-left: 4px solid #6b7280;
+  border-left: 4px solid var(--text-tertiary);
   transition: all 0.2s ease;
 }
 
 .list-item:hover {
   transform: translateX(4px);
-  background: #1a232f;
+  background: var(--bg-secondary);
 }
 
 /* List Item Severity Variants */
-.list-item.item-critical { border-left-color: #ef4444; }
-.list-item.item-high { border-left-color: #f97316; }
-.list-item.item-medium { border-left-color: #eab308; }
-.list-item.item-low { border-left-color: #22c55e; }
-.list-item.item-info { border-left-color: #3b82f6; }
-.list-item.item-exported { border-left-color: #3b82f6; }
+.list-item.item-critical { border-left-color: var(--color-error); }
+.list-item.item-high { border-left-color: var(--chart-orange); }
+.list-item.item-medium { border-left-color: var(--color-warning); }
+.list-item.item-low { border-left-color: var(--chart-green); }
+.list-item.item-info { border-left-color: var(--chart-blue); }
+.list-item.item-exported { border-left-color: var(--chart-blue); }
 
 /* Similarity Variants for Duplicates */
-.list-item.item-high { border-left-color: #ef4444; }
-.list-item.item-medium { border-left-color: #eab308; }
-.list-item.item-low { border-left-color: #22c55e; }
+.list-item.item-high { border-left-color: var(--color-error); }
+.list-item.item-medium { border-left-color: var(--color-warning); }
+.list-item.item-low { border-left-color: var(--chart-green); }
 
 /* Item Header */
 .item-header {
@@ -8123,7 +8138,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .item-name {
   font-weight: 600;
-  color: #e5e7eb;
+  color: var(--text-secondary);
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -8135,28 +8150,28 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   text-transform: uppercase;
 }
 
-.item-severity.critical { background: #7f1d1d; color: #fca5a5; }
-.item-severity.high { background: #7c2d12; color: #fdba74; }
-.item-severity.medium { background: #713f12; color: #fde047; }
-.item-severity.low { background: #14532d; color: #86efac; }
-.item-severity.info { background: #1e3a8a; color: #93c5fd; }
+.item-severity.critical { background: var(--color-error-bg); color: var(--color-error-light); }
+.item-severity.high { background: var(--color-warning-bg); color: var(--chart-orange-light); }
+.item-severity.medium { background: var(--color-warning-bg); color: var(--color-warning-light); }
+.item-severity.low { background: var(--color-success-bg); color: var(--color-success-light); }
+.item-severity.info { background: var(--color-info-dark); color: var(--color-info-light); }
 
 /* Item Content */
 .item-description {
-  color: #d1d5db;
+  color: var(--text-secondary);
   font-size: 0.9em;
   margin-bottom: 8px;
 }
 
 .item-location {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.8em;
   margin-bottom: 4px;
 }
 
 .item-suggestion {
-  color: #22c55e;
+  color: var(--chart-green);
   font-size: 0.85em;
   padding: 8px;
   background: rgba(34, 197, 94, 0.1);
@@ -8172,12 +8187,12 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   font-weight: 600;
 }
 
-.item-similarity.high { background: #7f1d1d; color: #fca5a5; }
-.item-similarity.medium { background: #713f12; color: #fde047; }
-.item-similarity.low { background: #14532d; color: #86efac; }
+.item-similarity.high { background: var(--color-error-bg); color: var(--color-error-light); }
+.item-similarity.medium { background: var(--color-warning-bg); color: var(--color-warning-light); }
+.item-similarity.low { background: var(--color-success-bg); color: var(--color-success-light); }
 
 .item-lines {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 0.8em;
 }
 
@@ -8188,7 +8203,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .item-file {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.8em;
 }
@@ -8270,7 +8285,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .charts-section .section-header h3 {
   margin: 0;
-  color: #e2e8f0;
+  color: var(--text-secondary);
   font-size: 1.25rem;
   font-weight: 600;
   display: flex;
@@ -8279,7 +8294,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .charts-section .section-header h3 i {
-  color: #3b82f6;
+  color: var(--chart-blue);
 }
 
 .section-header-actions {
@@ -8308,7 +8323,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   background: rgba(51, 65, 85, 0.5);
   border: 1px solid rgba(71, 85, 105, 0.5);
   border-radius: 6px;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
@@ -8317,14 +8332,14 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .category-tab:hover {
   background: rgba(71, 85, 105, 0.5);
-  color: #e2e8f0;
+  color: var(--text-secondary);
   border-color: rgba(100, 116, 139, 0.5);
 }
 
 .category-tab.active {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  border-color: #3b82f6;
-  color: #ffffff;
+  background: linear-gradient(135deg, var(--chart-blue) 0%, var(--color-info-dark) 100%);
+  border-color: var(--chart-blue);
+  color: var(--text-on-primary);
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
 }
 
@@ -8357,21 +8372,21 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   justify-content: center;
   min-height: 200px;
   gap: 12px;
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .charts-loading i {
   font-size: 32px;
-  color: #3b82f6;
+  color: var(--chart-blue);
 }
 
 .charts-error i {
   font-size: 32px;
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .charts-error {
-  color: #f87171;
+  color: var(--color-error-light);
 }
 
 .charts-grid {
@@ -8413,17 +8428,17 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .summary-value {
   font-size: 2rem;
   font-weight: 700;
-  color: #e2e8f0;
+  color: var(--text-secondary);
   line-height: 1;
 }
 
 .summary-stat.race-highlight .summary-value {
-  color: #f97316;
+  color: var(--chart-orange);
 }
 
 .summary-label {
   font-size: 0.85rem;
-  color: #94a3b8;
+  color: var(--text-muted);
   margin-top: 4px;
   display: block;
 }
@@ -8494,7 +8509,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .dependency-section .section-header h3 {
   margin: 0;
-  color: #e2e8f0;
+  color: var(--text-secondary);
   font-size: 1.25rem;
   font-weight: 600;
   display: flex;
@@ -8503,7 +8518,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .dependency-section .section-header h3 i {
-  color: #8b5cf6;
+  color: var(--chart-purple);
 }
 
 .dependency-grid {
@@ -8525,12 +8540,12 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   align-items: center;
   gap: 8px;
   font-weight: 600;
-  color: #f87171;
+  color: var(--color-error-light);
   margin-bottom: 12px;
 }
 
 .circular-deps-warning .warning-header i {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .circular-deps-list {
@@ -8548,11 +8563,11 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   border-radius: 4px;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.85rem;
-  color: #e2e8f0;
+  color: var(--text-secondary);
 }
 
 .circular-dep-item i {
-  color: #f59e0b;
+  color: var(--color-warning);
 }
 
 /* External Dependencies Table */
@@ -8565,7 +8580,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .external-deps-table h4 {
   margin: 0 0 16px 0;
-  color: #e2e8f0;
+  color: var(--text-secondary);
   font-size: 1rem;
   font-weight: 600;
   display: flex;
@@ -8574,7 +8589,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .external-deps-table h4 i {
-  color: #06b6d4;
+  color: var(--chart-teal);
 }
 
 .deps-table-content {
@@ -8600,12 +8615,12 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .dep-name {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.85rem;
-  color: #e2e8f0;
+  color: var(--text-secondary);
 }
 
 .dep-count {
   font-size: 0.8rem;
-  color: #94a3b8;
+  color: var(--text-muted);
   background: rgba(59, 130, 246, 0.2);
   padding: 2px 8px;
   border-radius: 4px;
@@ -8629,7 +8644,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .import-tree-section .section-header h3 {
   margin: 0;
-  color: #e2e8f0;
+  color: var(--text-secondary);
   font-size: 1.1rem;
   font-weight: 600;
   display: flex;
@@ -8638,7 +8653,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .import-tree-section .section-header h3 i {
-  color: #06b6d4;
+  color: var(--chart-teal);
 }
 
 .import-tree-section .section-error {
@@ -8649,11 +8664,11 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 8px;
-  color: #fca5a5;
+  color: var(--color-error-light);
 }
 
 .import-tree-section .section-error i {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .import-tree-content {
@@ -8678,7 +8693,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .call-graph-section .section-header h3 {
   margin: 0;
-  color: #e2e8f0;
+  color: var(--text-secondary);
   font-size: 1.1rem;
   font-weight: 600;
   display: flex;
@@ -8687,7 +8702,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .call-graph-section .section-header h3 i {
-  color: #8b5cf6;
+  color: var(--chart-purple);
 }
 
 .call-graph-section .section-error {
@@ -8698,11 +8713,11 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 8px;
-  color: #fca5a5;
+  color: var(--color-error-light);
 }
 
 .call-graph-section .section-error i {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .call-graph-content {
@@ -8723,13 +8738,13 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   align-items: center;
   gap: 10px;
   margin: 0 0 20px 0;
-  color: #e2e8f0;
+  color: var(--text-secondary);
   font-size: 1.1rem;
   font-weight: 600;
 }
 
 .api-endpoints-section h3 i {
-  color: #3b82f6;
+  color: var(--chart-blue);
 }
 
 .api-endpoints-section .loading-state,
@@ -8744,13 +8759,13 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .api-endpoints-section .loading-state {
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.3);
-  color: #93c5fd;
+  color: var(--color-info-light);
 }
 
 .api-endpoints-section .error-state {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
+  color: var(--color-error-light);
 }
 
 /* Coverage Bar */
@@ -8766,7 +8781,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 0.9rem;
 }
 
@@ -8775,10 +8790,10 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   font-size: 1rem;
 }
 
-.coverage-value.success { color: #22c55e; }
-.coverage-value.info { color: #3b82f6; }
-.coverage-value.warning { color: #f59e0b; }
-.coverage-value.critical { color: #ef4444; }
+.coverage-value.success { color: var(--chart-green); }
+.coverage-value.info { color: var(--chart-blue); }
+.coverage-value.warning { color: var(--color-warning); }
+.coverage-value.critical { color: var(--color-error); }
 
 .coverage-bar {
   height: 12px;
@@ -8793,10 +8808,10 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   transition: width 0.3s ease;
 }
 
-.coverage-fill.success { background: linear-gradient(90deg, #22c55e, #16a34a); }
-.coverage-fill.info { background: linear-gradient(90deg, #3b82f6, #2563eb); }
-.coverage-fill.warning { background: linear-gradient(90deg, #f59e0b, #d97706); }
-.coverage-fill.critical { background: linear-gradient(90deg, #ef4444, #dc2626); }
+.coverage-fill.success { background: linear-gradient(90deg, var(--chart-green), var(--color-success-dark)); }
+.coverage-fill.info { background: linear-gradient(90deg, var(--chart-blue), var(--color-info-dark)); }
+.coverage-fill.warning { background: linear-gradient(90deg, var(--color-warning), var(--color-warning-dark)); }
+.coverage-fill.critical { background: linear-gradient(90deg, var(--color-error), var(--color-error-hover)); }
 
 /* HTTP Method Badges */
 .method-badge {
@@ -8809,17 +8824,17 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   margin-right: 8px;
 }
 
-.method-badge.get { background: #22c55e20; color: #22c55e; border: 1px solid #22c55e40; }
-.method-badge.post { background: #3b82f620; color: #3b82f6; border: 1px solid #3b82f640; }
-.method-badge.put { background: #f59e0b20; color: #f59e0b; border: 1px solid #f59e0b40; }
-.method-badge.patch { background: #8b5cf620; color: #8b5cf6; border: 1px solid #8b5cf640; }
-.method-badge.delete { background: #ef444420; color: #ef4444; border: 1px solid #ef444440; }
-.method-badge.unknown { background: #64748b20; color: #64748b; border: 1px solid #64748b40; }
+.method-badge.get { background: var(--chart-green)20; color: var(--chart-green); border: 1px solid var(--chart-green)40; }
+.method-badge.post { background: var(--chart-blue)20; color: var(--chart-blue); border: 1px solid var(--chart-blue)40; }
+.method-badge.put { background: var(--color-warning)20; color: var(--color-warning); border: 1px solid var(--color-warning)40; }
+.method-badge.patch { background: var(--chart-purple)20; color: var(--chart-purple); border: 1px solid var(--chart-purple)40; }
+.method-badge.delete { background: var(--color-error)20; color: var(--color-error); border: 1px solid var(--color-error)40; }
+.method-badge.unknown { background: var(--text-tertiary)20; color: var(--text-tertiary); border: 1px solid var(--text-tertiary)40; }
 
 /* API Path Display */
 .item-path {
   font-family: 'JetBrains Mono', monospace;
-  color: #e2e8f0;
+  color: var(--text-secondary);
   font-size: 0.9rem;
 }
 
@@ -8829,7 +8844,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   padding: 2px 8px;
   margin-left: auto;
   background: rgba(59, 130, 246, 0.2);
-  color: #93c5fd;
+  color: var(--color-info-light);
   border-radius: 10px;
   font-size: 0.75rem;
   font-weight: 500;
@@ -8841,66 +8856,66 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   padding: 6px 10px;
   background: rgba(0, 0, 0, 0.2);
   border-radius: 4px;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 0.8rem;
   font-style: italic;
 }
 
 /* Item Variants for API Endpoints */
 .list-item.item-success {
-  border-left: 3px solid #22c55e;
+  border-left: 3px solid var(--chart-green);
   background: rgba(34, 197, 94, 0.05);
 }
 
 .list-item.item-warning {
-  border-left: 3px solid #f59e0b;
+  border-left: 3px solid var(--color-warning);
   background: rgba(245, 158, 11, 0.05);
 }
 
 .list-item.item-critical {
-  border-left: 3px solid #ef4444;
+  border-left: 3px solid var(--color-error);
   background: rgba(239, 68, 68, 0.05);
 }
 
 /* Accordion Header Variants */
 .accordion-header.success {
-  border-left: 3px solid #22c55e;
+  border-left: 3px solid var(--chart-green);
 }
 
 .accordion-header.warning {
-  border-left: 3px solid #f59e0b;
+  border-left: 3px solid var(--color-warning);
 }
 
 .accordion-header.critical {
-  border-left: 3px solid #ef4444;
+  border-left: 3px solid var(--color-error);
 }
 
 /* Severity Badge Variants for API Endpoints */
 .severity-badge.success {
   background: rgba(34, 197, 94, 0.2);
-  color: #22c55e;
+  color: var(--chart-green);
 }
 
 .severity-badge.warning {
   background: rgba(245, 158, 11, 0.2);
-  color: #f59e0b;
+  color: var(--color-warning);
 }
 
 /* Summary Card Variants */
 .summary-card.success {
-  border-color: #22c55e;
+  border-color: var(--chart-green);
 }
 
 .summary-card.success .summary-value {
-  color: #22c55e;
+  color: var(--chart-green);
 }
 
 .summary-card.info {
-  border-color: #3b82f6;
+  border-color: var(--chart-blue);
 }
 
 .summary-card.info .summary-value {
-  color: #3b82f6;
+  color: var(--chart-blue);
 }
 
 /* Scan Timestamp */
@@ -8909,7 +8924,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   padding: 8px 12px;
   background: rgba(30, 41, 59, 0.8);
   border-radius: 6px;
-  color: #64748b;
+  color: var(--text-tertiary);
   font-size: 0.8rem;
   display: flex;
   align-items: center;
@@ -8917,7 +8932,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .scan-timestamp i {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 /* Issue #244: Cross-Language Pattern Analysis Section */
@@ -8934,13 +8949,13 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   align-items: center;
   gap: 10px;
   margin: 0 0 20px 0;
-  color: #e2e8f0;
+  color: var(--text-secondary);
   font-size: 1.1rem;
   font-weight: 600;
 }
 
 .cross-language-section h3 i {
-  color: #8b5cf6;
+  color: var(--chart-purple);
 }
 
 .cross-language-section .loading-state,
@@ -8955,13 +8970,13 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .cross-language-section .loading-state {
   background: rgba(139, 92, 246, 0.1);
   border: 1px solid rgba(139, 92, 246, 0.3);
-  color: #c4b5fd;
+  color: var(--chart-purple-light);
 }
 
 .cross-language-section .error-state {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
+  color: var(--color-error-light);
 }
 
 /* Language Breakdown */
@@ -8987,19 +9002,19 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .language-badge.python {
   background: rgba(59, 130, 246, 0.2);
-  color: #60a5fa;
+  color: var(--color-info);
   border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
 .language-badge.typescript {
   background: rgba(49, 120, 198, 0.2);
-  color: #7cc5ff;
+  color: var(--chart-blue-light);
   border: 1px solid rgba(49, 120, 198, 0.3);
 }
 
 .language-badge.vue {
   background: rgba(66, 184, 131, 0.2);
-  color: #42b883;
+  color: var(--chart-green);
   border: 1px solid rgba(66, 184, 131, 0.3);
 }
 
@@ -9013,19 +9028,19 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   text-transform: uppercase;
   margin-right: 8px;
   background: rgba(139, 92, 246, 0.2);
-  color: #c4b5fd;
+  color: var(--chart-purple-light);
   border: 1px solid rgba(139, 92, 246, 0.3);
 }
 
 .type-badge.missing {
   background: rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
+  color: var(--color-error-light);
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .type-badge.orphaned {
   background: rgba(245, 158, 11, 0.2);
-  color: #fcd34d;
+  color: var(--color-warning-light);
   border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
@@ -9038,7 +9053,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   font-weight: 500;
   margin-right: 8px;
   background: rgba(59, 130, 246, 0.2);
-  color: #93c5fd;
+  color: var(--color-info-light);
   border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
@@ -9050,13 +9065,13 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   font-size: 0.75rem;
   font-weight: 600;
   background: rgba(34, 197, 94, 0.2);
-  color: #86efac;
+  color: var(--color-success-light);
   border: 1px solid rgba(34, 197, 94, 0.3);
 }
 
 .similarity-score.highlight {
   background: rgba(139, 92, 246, 0.2);
-  color: #c4b5fd;
+  color: var(--chart-purple-light);
   border: 1px solid rgba(139, 92, 246, 0.3);
 }
 
@@ -9069,7 +9084,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   font-size: 0.75rem;
   font-weight: 500;
   background: rgba(100, 116, 139, 0.2);
-  color: #94a3b8;
+  color: var(--text-muted);
   border: 1px solid rgba(100, 116, 139, 0.3);
 }
 
@@ -9085,19 +9100,19 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .item-locations .location {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.8rem;
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .item-locations .location.python {
-  color: #60a5fa;
+  color: var(--color-info);
 }
 
 .item-locations .location.typescript {
-  color: #7cc5ff;
+  color: var(--chart-blue-light);
 }
 
 .item-locations .arrow {
-  color: #64748b;
+  color: var(--text-tertiary);
   font-weight: bold;
 }
 
@@ -9105,20 +9120,20 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .item-field {
   margin-top: 4px;
   font-size: 0.85rem;
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .item-field code {
   padding: 2px 6px;
   background: rgba(0, 0, 0, 0.3);
   border-radius: 4px;
-  color: #e2e8f0;
+  color: var(--text-secondary);
   font-family: 'JetBrains Mono', monospace;
 }
 
 /* Item Name */
 .item-name {
-  color: #e2e8f0;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
@@ -9128,14 +9143,14 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   padding: 8px 12px;
   background: rgba(59, 130, 246, 0.1);
   border-radius: 6px;
-  color: #93c5fd;
+  color: var(--color-info-light);
   font-size: 0.8rem;
-  border-left: 2px solid #3b82f6;
+  border-left: 2px solid var(--chart-blue);
 }
 
 /* Analysis Time */
 .analysis-time {
-  color: #64748b;
+  color: var(--text-tertiary);
   font-size: 0.75rem;
   margin-left: 4px;
 }
@@ -9143,7 +9158,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 /* Scan Button */
 .btn-scan {
   padding: 4px 10px;
-  background: #8b5cf6;
+  background: var(--chart-purple);
   color: white;
   border: none;
   border-radius: 4px;
@@ -9156,7 +9171,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .btn-scan:hover:not(:disabled) {
-  background: #7c3aed;
+  background: var(--chart-purple-dark);
 }
 
 .btn-scan:disabled {
@@ -9177,14 +9192,14 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #f9fafb;
+  color: var(--text-primary);
   margin-bottom: 16px;
   font-size: 1.2em;
   font-weight: 600;
 }
 
 .config-duplicates-section h3 i {
-  color: #f59e0b;
+  color: var(--color-warning);
 }
 
 .config-duplicates-section .loading-state,
@@ -9200,23 +9215,23 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .config-duplicates-section .loading-state {
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.3);
-  color: #93c5fd;
+  color: var(--color-info-light);
 }
 
 .config-duplicates-section .error-state {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
+  color: var(--color-error-light);
 }
 
 .config-duplicates-section .success-state {
   background: rgba(34, 197, 94, 0.1);
   border: 1px solid rgba(34, 197, 94, 0.3);
-  color: #86efac;
+  color: var(--color-success-light);
 }
 
 .config-duplicates-section .success-state i {
-  color: #22c55e;
+  color: var(--chart-green);
 }
 
 .config-duplicates-section .duplicates-list {
@@ -9235,7 +9250,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .config-duplicates-section .config-value-badge {
   background: rgba(245, 158, 11, 0.2);
-  color: #fbbf24;
+  color: var(--color-warning-light);
   padding: 4px 10px;
   border-radius: 4px;
   font-family: 'Monaco', 'Menlo', monospace;
@@ -9243,7 +9258,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .config-duplicates-section .location-count {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 0.85em;
 }
 
@@ -9253,13 +9268,13 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .config-duplicates-section .location-item {
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 0.85em;
   padding: 2px 0;
 }
 
 .config-duplicates-section .more-locations {
-  color: #64748b;
+  color: var(--text-tertiary);
   font-size: 0.8em;
   font-style: italic;
   padding-top: 4px;
@@ -9271,14 +9286,14 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.3);
   border-radius: 8px;
-  color: #93c5fd;
+  color: var(--color-info-light);
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
 .config-duplicates-section .recommendation-box i {
-  color: #fbbf24;
+  color: var(--color-warning-light);
 }
 
 .config-duplicates-section .recommendation-box code {
@@ -9301,14 +9316,14 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #f9fafb;
+  color: var(--text-primary);
   margin-bottom: 16px;
   font-size: 1.2em;
   font-weight: 600;
 }
 
 .bug-prediction-section h3 i {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .bug-prediction-section .loading-state,
@@ -9324,23 +9339,23 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .bug-prediction-section .loading-state {
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.3);
-  color: #93c5fd;
+  color: var(--color-info-light);
 }
 
 .bug-prediction-section .error-state {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
+  color: var(--color-error-light);
 }
 
 .bug-prediction-section .success-state {
   background: rgba(34, 197, 94, 0.1);
   border: 1px solid rgba(34, 197, 94, 0.3);
-  color: #86efac;
+  color: var(--color-success-light);
 }
 
 .bug-prediction-section .success-state i {
-  color: #22c55e;
+  color: var(--chart-green);
 }
 
 /* Risk Files List */
@@ -9349,7 +9364,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .bug-prediction-section .risk-files-list h4 {
-  color: #e5e7eb;
+  color: var(--text-secondary);
   font-size: 1em;
   margin-bottom: 12px;
   font-weight: 600;
@@ -9360,7 +9375,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   background: rgba(17, 24, 39, 0.5);
   border-radius: 8px;
   margin-bottom: 12px;
-  border-left: 4px solid #6b7280;
+  border-left: 4px solid var(--text-tertiary);
   transition: all 0.2s ease;
 }
 
@@ -9369,19 +9384,19 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .bug-prediction-section .list-item.item-critical {
-  border-left-color: #ef4444;
+  border-left-color: var(--color-error);
 }
 
 .bug-prediction-section .list-item.item-warning {
-  border-left-color: #f59e0b;
+  border-left-color: var(--color-warning);
 }
 
 .bug-prediction-section .list-item.item-info {
-  border-left-color: #3b82f6;
+  border-left-color: var(--chart-blue);
 }
 
 .bug-prediction-section .list-item.item-success {
-  border-left-color: #22c55e;
+  border-left-color: var(--chart-green);
 }
 
 .bug-prediction-section .item-header {
@@ -9403,26 +9418,26 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .bug-prediction-section .risk-badge.item-critical {
   background: rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
+  color: var(--color-error-light);
 }
 
 .bug-prediction-section .risk-badge.item-warning {
   background: rgba(245, 158, 11, 0.2);
-  color: #fcd34d;
+  color: var(--color-warning-light);
 }
 
 .bug-prediction-section .risk-badge.item-info {
   background: rgba(59, 130, 246, 0.2);
-  color: #93c5fd;
+  color: var(--color-info-light);
 }
 
 .bug-prediction-section .risk-badge.item-success {
   background: rgba(34, 197, 94, 0.2);
-  color: #86efac;
+  color: var(--color-success-light);
 }
 
 .bug-prediction-section .item-path {
-  color: #d1d5db;
+  color: var(--text-secondary);
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 0.9em;
   flex: 1;
@@ -9440,17 +9455,17 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .bug-prediction-section .risk-level-badge.critical,
 .bug-prediction-section .risk-level-badge.high {
   background: rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
+  color: var(--color-error-light);
 }
 
 .bug-prediction-section .risk-level-badge.medium {
   background: rgba(245, 158, 11, 0.2);
-  color: #fcd34d;
+  color: var(--color-warning-light);
 }
 
 .bug-prediction-section .risk-level-badge.low {
   background: rgba(34, 197, 94, 0.2);
-  color: #86efac;
+  color: var(--color-success-light);
 }
 
 /* Risk Factors */
@@ -9466,7 +9481,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   background: rgba(71, 85, 105, 0.4);
   border-radius: 4px;
   font-size: 0.8em;
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 /* Prevention Tips */
@@ -9481,12 +9496,12 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .bug-prediction-section .prevention-tips i {
-  color: #fbbf24;
+  color: var(--color-warning-light);
   margin-top: 2px;
 }
 
 .bug-prediction-section .prevention-tips span {
-  color: #93c5fd;
+  color: var(--color-info-light);
   font-size: 0.85em;
   line-height: 1.4;
 }
@@ -9497,7 +9512,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .bug-prediction-section .show-more .muted {
-  color: #64748b;
+  color: var(--text-tertiary);
   font-size: 0.85em;
 }
 
@@ -9505,84 +9520,84 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .summary-card.clickable { cursor: pointer; transition: transform 0.2s; }
 .summary-card.clickable:hover { transform: translateY(-2px); }
 .top-risk-factors-summary { margin: 20px 0; padding: 16px; background: rgba(17, 24, 39, 0.6); border-radius: 10px; border: 1px solid rgba(239, 68, 68, 0.2); }
-.top-risk-factors-summary h4 { color: #fca5a5; font-size: 1em; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
-.top-risk-factors-summary h4 i { color: #ef4444; }
+.top-risk-factors-summary h4 { color: var(--color-error-light); font-size: 1em; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.top-risk-factors-summary h4 i { color: var(--color-error); }
 .risk-factors-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
-.risk-factor-card { display: flex; align-items: flex-start; gap: 12px; padding: 14px; background: rgba(30, 41, 59, 0.5); border-radius: 8px; border-left: 3px solid #6b7280; }
-.risk-factor-card.critical { border-left-color: #ef4444; background: rgba(239, 68, 68, 0.1); }
-.risk-factor-card.high { border-left-color: #f97316; background: rgba(249, 115, 22, 0.1); }
-.risk-factor-card.medium { border-left-color: #eab308; background: rgba(234, 179, 8, 0.1); }
+.risk-factor-card { display: flex; align-items: flex-start; gap: 12px; padding: 14px; background: rgba(30, 41, 59, 0.5); border-radius: 8px; border-left: 3px solid var(--text-tertiary); }
+.risk-factor-card.critical { border-left-color: var(--color-error); background: rgba(239, 68, 68, 0.1); }
+.risk-factor-card.high { border-left-color: var(--chart-orange); background: rgba(249, 115, 22, 0.1); }
+.risk-factor-card.medium { border-left-color: var(--color-warning); background: rgba(234, 179, 8, 0.1); }
 .risk-factor-card .factor-icon { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: rgba(71, 85, 105, 0.4); border-radius: 8px; }
-.risk-factor-card .factor-icon i { font-size: 1.1em; color: #94a3b8; }
-.risk-factor-card.critical .factor-icon i { color: #fca5a5; }
-.risk-factor-card.high .factor-icon i { color: #fdba74; }
+.risk-factor-card .factor-icon i { font-size: 1.1em; color: var(--text-muted); }
+.risk-factor-card.critical .factor-icon i { color: var(--color-error-light); }
+.risk-factor-card.high .factor-icon i { color: var(--chart-orange-light); }
 .risk-factor-card .factor-details { flex: 1; }
-.risk-factor-card .factor-name { color: #f3f4f6; font-weight: 600; font-size: 0.95em; margin-bottom: 4px; }
-.risk-factor-card .factor-count { color: #fbbf24; font-size: 0.85em; font-weight: 500; margin-bottom: 4px; }
-.risk-factor-card .factor-description { color: #9ca3af; font-size: 0.8em; line-height: 1.4; }
+.risk-factor-card .factor-name { color: var(--text-primary); font-weight: 600; font-size: 0.95em; margin-bottom: 4px; }
+.risk-factor-card .factor-count { color: var(--color-warning-light); font-size: 0.85em; font-weight: 500; margin-bottom: 4px; }
+.risk-factor-card .factor-description { color: var(--text-muted); font-size: 0.8em; line-height: 1.4; }
 .risk-filter-tabs { display: flex; gap: 8px; margin: 20px 0 16px; flex-wrap: wrap; }
-.risk-filter-tabs button { padding: 8px 16px; border: 1px solid rgba(71, 85, 105, 0.5); background: rgba(30, 41, 59, 0.5); color: #9ca3af; border-radius: 6px; font-size: 0.85em; cursor: pointer; transition: all 0.2s; }
-.risk-filter-tabs button:hover:not(:disabled) { background: rgba(71, 85, 105, 0.5); color: #e5e7eb; }
-.risk-filter-tabs button.active { background: rgba(59, 130, 246, 0.2); border-color: rgba(59, 130, 246, 0.5); color: #93c5fd; }
+.risk-filter-tabs button { padding: 8px 16px; border: 1px solid rgba(71, 85, 105, 0.5); background: rgba(30, 41, 59, 0.5); color: var(--text-muted); border-radius: 6px; font-size: 0.85em; cursor: pointer; transition: all 0.2s; }
+.risk-filter-tabs button:hover:not(:disabled) { background: rgba(71, 85, 105, 0.5); color: var(--text-secondary); }
+.risk-filter-tabs button.active { background: rgba(59, 130, 246, 0.2); border-color: rgba(59, 130, 246, 0.5); color: var(--color-info-light); }
 .risk-filter-tabs button:disabled { opacity: 0.5; cursor: not-allowed; }
-.risk-files-list.detailed h4 { display: flex; align-items: center; gap: 8px; color: #e5e7eb; margin-bottom: 12px; }
-.risk-files-list.detailed h4 .file-count { color: #6b7280; font-weight: normal; font-size: 0.9em; }
-.risk-files-list .no-files-message { padding: 20px; text-align: center; color: #86efac; background: rgba(34, 197, 94, 0.1); border-radius: 8px; }
-.risk-file-item { background: rgba(17, 24, 39, 0.5); border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #6b7280; overflow: hidden; transition: all 0.2s; }
-.risk-file-item.item-critical { border-left-color: #ef4444; }
-.risk-file-item.item-warning { border-left-color: #f59e0b; }
-.risk-file-item.item-info { border-left-color: #3b82f6; }
-.risk-file-item.item-success { border-left-color: #22c55e; }
+.risk-files-list.detailed h4 { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); margin-bottom: 12px; }
+.risk-files-list.detailed h4 .file-count { color: var(--text-tertiary); font-weight: normal; font-size: 0.9em; }
+.risk-files-list .no-files-message { padding: 20px; text-align: center; color: var(--color-success-light); background: rgba(34, 197, 94, 0.1); border-radius: 8px; }
+.risk-file-item { background: rgba(17, 24, 39, 0.5); border-radius: 8px; margin-bottom: 10px; border-left: 4px solid var(--text-tertiary); overflow: hidden; transition: all 0.2s; }
+.risk-file-item.item-critical { border-left-color: var(--color-error); }
+.risk-file-item.item-warning { border-left-color: var(--color-warning); }
+.risk-file-item.item-info { border-left-color: var(--chart-blue); }
+.risk-file-item.item-success { border-left-color: var(--chart-green); }
 .risk-file-item.expanded { background: rgba(17, 24, 39, 0.8); }
 .risk-file-item .file-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; cursor: pointer; transition: background 0.2s; }
 .risk-file-item .file-header:hover { background: rgba(71, 85, 105, 0.2); }
 .risk-file-item .file-info { display: flex; align-items: center; gap: 10px; flex: 1; flex-wrap: wrap; }
 .risk-file-item .risk-score-badge { padding: 4px 10px; border-radius: 4px; font-weight: 700; font-size: 0.85em; min-width: 40px; text-align: center; }
-.risk-file-item .risk-score-badge.item-critical { background: rgba(239, 68, 68, 0.3); color: #fca5a5; }
-.risk-file-item .risk-score-badge.item-warning { background: rgba(245, 158, 11, 0.3); color: #fcd34d; }
-.risk-file-item .risk-score-badge.item-info { background: rgba(59, 130, 246, 0.3); color: #93c5fd; }
-.risk-file-item .risk-score-badge.item-success { background: rgba(34, 197, 94, 0.3); color: #86efac; }
-.risk-file-item .file-path { color: #d1d5db; font-family: monospace; font-size: 0.85em; flex: 1; word-break: break-all; }
+.risk-file-item .risk-score-badge.item-critical { background: rgba(239, 68, 68, 0.3); color: var(--color-error-light); }
+.risk-file-item .risk-score-badge.item-warning { background: rgba(245, 158, 11, 0.3); color: var(--color-warning-light); }
+.risk-file-item .risk-score-badge.item-info { background: rgba(59, 130, 246, 0.3); color: var(--color-info-light); }
+.risk-file-item .risk-score-badge.item-success { background: rgba(34, 197, 94, 0.3); color: var(--color-success-light); }
+.risk-file-item .file-path { color: var(--text-secondary); font-family: monospace; font-size: 0.85em; flex: 1; word-break: break-all; }
 .risk-file-item .risk-level-tag { padding: 2px 8px; border-radius: 4px; font-size: 0.7em; text-transform: uppercase; font-weight: 600; }
-.risk-file-item .risk-level-tag.high, .risk-file-item .risk-level-tag.critical { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
-.risk-file-item .risk-level-tag.medium { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
-.risk-file-item .risk-level-tag.low, .risk-file-item .risk-level-tag.minimal { background: rgba(34, 197, 94, 0.2); color: #86efac; }
-.risk-file-item .expand-icon { color: #6b7280; padding: 4px 8px; }
+.risk-file-item .risk-level-tag.high, .risk-file-item .risk-level-tag.critical { background: rgba(239, 68, 68, 0.2); color: var(--color-error-light); }
+.risk-file-item .risk-level-tag.medium { background: rgba(245, 158, 11, 0.2); color: var(--color-warning-light); }
+.risk-file-item .risk-level-tag.low, .risk-file-item .risk-level-tag.minimal { background: rgba(34, 197, 94, 0.2); color: var(--color-success-light); }
+.risk-file-item .expand-icon { color: var(--text-tertiary); padding: 4px 8px; }
 .quick-risk-indicators { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 12px; }
 .quick-risk-indicators .indicator { display: flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 4px; font-size: 0.75em; font-weight: 500; }
-.quick-risk-indicators .indicator.critical { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
-.quick-risk-indicators .indicator.high { background: rgba(249, 115, 22, 0.2); color: #fdba74; }
-.quick-risk-indicators .indicator.warning { background: rgba(234, 179, 8, 0.2); color: #fde047; }
-.quick-risk-indicators .indicator.info { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
-.quick-risk-indicators .indicator.muted { background: rgba(100, 116, 139, 0.2); color: #94a3b8; }
+.quick-risk-indicators .indicator.critical { background: rgba(239, 68, 68, 0.2); color: var(--color-error-light); }
+.quick-risk-indicators .indicator.high { background: rgba(249, 115, 22, 0.2); color: var(--chart-orange-light); }
+.quick-risk-indicators .indicator.warning { background: rgba(234, 179, 8, 0.2); color: var(--color-warning-light); }
+.quick-risk-indicators .indicator.info { background: rgba(59, 130, 246, 0.2); color: var(--color-info-light); }
+.quick-risk-indicators .indicator.muted { background: rgba(100, 116, 139, 0.2); color: var(--text-muted); }
 .file-details { padding: 16px; background: rgba(15, 23, 42, 0.5); border-top: 1px solid rgba(71, 85, 105, 0.3); }
 .file-details .detail-section { margin-bottom: 16px; }
 .file-details .detail-section:last-child { margin-bottom: 0; }
-.file-details h5 { color: #d1d5db; font-size: 0.9em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
-.file-details h5 i { color: #6b7280; }
+.file-details h5 { color: var(--text-secondary); font-size: 0.9em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+.file-details h5 i { color: var(--text-tertiary); }
 .factors-breakdown { display: flex; flex-direction: column; gap: 8px; }
 .factor-row { display: flex; align-items: center; gap: 12px; }
-.factor-row .factor-label { width: 140px; color: #9ca3af; font-size: 0.85em; display: flex; align-items: center; gap: 6px; }
-.factor-row .factor-label i { width: 16px; text-align: center; color: #6b7280; }
-.factor-row.high-value .factor-label { color: #fca5a5; }
-.factor-row.high-value .factor-label i { color: #ef4444; }
-.factor-row.medium-value .factor-label { color: #fcd34d; }
+.factor-row .factor-label { width: 140px; color: var(--text-muted); font-size: 0.85em; display: flex; align-items: center; gap: 6px; }
+.factor-row .factor-label i { width: 16px; text-align: center; color: var(--text-tertiary); }
+.factor-row.high-value .factor-label { color: var(--color-error-light); }
+.factor-row.high-value .factor-label i { color: var(--color-error); }
+.factor-row.medium-value .factor-label { color: var(--color-warning-light); }
 .factor-row .factor-bar-container { flex: 1; height: 8px; background: rgba(71, 85, 105, 0.3); border-radius: 4px; overflow: hidden; }
 .factor-row .factor-bar { height: 100%; border-radius: 4px; transition: width 0.3s; }
-.factor-row .factor-bar.bar-critical { background: linear-gradient(90deg, #ef4444, #f87171); }
-.factor-row .factor-bar.bar-warning { background: linear-gradient(90deg, #eab308, #fcd34d); }
-.factor-row .factor-bar.bar-ok { background: linear-gradient(90deg, #22c55e, #4ade80); }
-.factor-row .factor-value { width: 40px; text-align: right; font-weight: 600; font-size: 0.85em; color: #d1d5db; }
-.factor-row.high-value .factor-value { color: #fca5a5; }
-.factor-row.medium-value .factor-value { color: #fcd34d; }
+.factor-row .factor-bar.bar-critical { background: linear-gradient(90deg, var(--color-error), var(--color-error-light)); }
+.factor-row .factor-bar.bar-warning { background: linear-gradient(90deg, var(--color-warning), var(--color-warning-light)); }
+.factor-row .factor-bar.bar-ok { background: linear-gradient(90deg, var(--chart-green), var(--color-success-light)); }
+.factor-row .factor-value { width: 40px; text-align: right; font-weight: 600; font-size: 0.85em; color: var(--text-secondary); }
+.factor-row.high-value .factor-value { color: var(--color-error-light); }
+.factor-row.medium-value .factor-value { color: var(--color-warning-light); }
 .tips-list, .tests-list { list-style: none; padding: 0; margin: 0; }
 .tips-list li, .tests-list li { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: rgba(30, 41, 59, 0.5); border-radius: 6px; margin-bottom: 6px; font-size: 0.85em; line-height: 1.4; }
-.tips-list li i { color: #fbbf24; margin-top: 2px; }
-.tips-list li { color: #d1d5db; border-left: 3px solid #fbbf24; }
-.tests-list li i { color: #a78bfa; margin-top: 2px; }
-.tests-list li { color: #c4b5fd; border-left: 3px solid #a78bfa; }
+.tips-list li i { color: var(--color-warning-light); margin-top: 2px; }
+.tips-list li { color: var(--text-secondary); border-left: 3px solid var(--color-warning-light); }
+.tests-list li i { color: var(--chart-purple-light); margin-top: 2px; }
+.tests-list li { color: var(--chart-purple-light); border-left: 3px solid var(--chart-purple-light); }
 .show-more-container { text-align: center; margin-top: 16px; }
-.show-more-btn { padding: 10px 24px; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: #93c5fd; border-radius: 6px; cursor: pointer; font-size: 0.9em; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; }
+.show-more-btn { padding: 10px 24px; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: var(--color-info-light); border-radius: 6px; cursor: pointer; font-size: 0.9em; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; }
 .show-more-btn:hover { background: rgba(59, 130, 246, 0.3); }
 
 /* Issue #538: Code Intelligence Scores Section */
@@ -9598,14 +9613,14 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #f9fafb;
+  color: var(--text-primary);
   margin-bottom: 20px;
   font-size: 1.2em;
   font-weight: 600;
 }
 
 .code-intelligence-scores-section h3 i {
-  color: #3b82f6;
+  color: var(--chart-blue);
 }
 
 /* Score Cards Grid */
@@ -9635,7 +9650,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   margin-bottom: 16px;
   font-size: 1.1em;
   font-weight: 600;
-  color: #e5e7eb;
+  color: var(--text-secondary);
 }
 
 .score-card .score-header .card-refresh-btn {
@@ -9644,7 +9659,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.3);
   border-radius: 4px;
-  color: #93c5fd;
+  color: var(--color-info-light);
   cursor: pointer;
   font-size: 0.8em;
   transition: all 0.2s ease;
@@ -9653,7 +9668,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .score-card .score-header .card-refresh-btn:hover:not(:disabled) {
   background: rgba(59, 130, 246, 0.2);
   border-color: rgba(59, 130, 246, 0.5);
-  color: #60a5fa;
+  color: var(--color-info);
 }
 
 .score-card .score-header .card-refresh-btn:disabled {
@@ -9662,22 +9677,22 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .score-card.security-card .score-header i {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .score-card.performance-card .score-header i {
-  color: #f59e0b;
+  color: var(--color-warning);
 }
 
 .score-card.redis-card .score-header i {
-  color: #22c55e;
+  color: var(--chart-green);
 }
 
 .score-card .score-loading {
   display: flex;
   justify-content: center;
   padding: 30px;
-  color: #93c5fd;
+  color: var(--color-info-light);
   font-size: 1.5em;
 }
 
@@ -9688,12 +9703,12 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   padding: 12px;
   background: rgba(239, 68, 68, 0.1);
   border-radius: 8px;
-  color: #fca5a5;
+  color: var(--color-error-light);
   font-size: 0.85em;
 }
 
 .score-card .score-error i {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .score-card .score-content {
@@ -9711,15 +9726,15 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .score-card .score-value.score-high {
-  color: #22c55e;
+  color: var(--chart-green);
 }
 
 .score-card .score-value.score-medium {
-  color: #f59e0b;
+  color: var(--color-warning);
 }
 
 .score-card .score-value.score-low {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .score-card .score-grade {
@@ -9732,31 +9747,31 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .score-card .score-grade.grade-a {
   background: rgba(34, 197, 94, 0.2);
-  color: #86efac;
+  color: var(--color-success-light);
 }
 
 .score-card .score-grade.grade-b {
   background: rgba(34, 197, 94, 0.15);
-  color: #4ade80;
+  color: var(--color-success-light);
 }
 
 .score-card .score-grade.grade-c {
   background: rgba(245, 158, 11, 0.2);
-  color: #fcd34d;
+  color: var(--color-warning-light);
 }
 
 .score-card .score-grade.grade-d {
   background: rgba(239, 68, 68, 0.15);
-  color: #fca5a5;
+  color: var(--color-error-light);
 }
 
 .score-card .score-grade.grade-f {
   background: rgba(239, 68, 68, 0.2);
-  color: #f87171;
+  color: var(--color-error-light);
 }
 
 .score-card .score-status {
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 0.9em;
   margin-bottom: 12px;
 }
@@ -9780,24 +9795,24 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .score-card .detail-item.critical {
   background: rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
+  color: var(--color-error-light);
 }
 
 .score-card .detail-item.warning {
   background: rgba(245, 158, 11, 0.2);
-  color: #fcd34d;
+  color: var(--color-warning-light);
 }
 
 .score-card .detail-item.info {
   background: rgba(59, 130, 246, 0.2);
-  color: #93c5fd;
+  color: var(--color-info-light);
 }
 
 .score-card .score-empty {
   display: flex;
   justify-content: center;
   padding: 30px;
-  color: #64748b;
+  color: var(--text-tertiary);
   font-style: italic;
 }
 
@@ -9809,7 +9824,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   background: rgba(99, 102, 241, 0.2);
   border: 1px solid rgba(99, 102, 241, 0.4);
   border-radius: 6px;
-  color: #a5b4fc;
+  color: var(--chart-indigo-light);
   font-size: 0.85em;
   font-weight: 500;
   cursor: pointer;
@@ -9823,7 +9838,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .view-details-btn:hover:not(:disabled) {
   background: rgba(99, 102, 241, 0.3);
   border-color: rgba(99, 102, 241, 0.6);
-  color: #c7d2fe;
+  color: var(--chart-indigo-light);
 }
 
 .view-details-btn:disabled {
@@ -9868,20 +9883,20 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #f1f5f9;
+  color: var(--text-primary);
   font-size: 1.1em;
   font-weight: 600;
 }
 
-.security-findings-panel .findings-header h4 i { color: #f87171; }
-.performance-findings-panel .findings-header h4 i { color: #fbbf24; }
-.redis-findings-panel .findings-header h4 i { color: #60a5fa; }
+.security-findings-panel .findings-header h4 i { color: var(--color-error-light); }
+.performance-findings-panel .findings-header h4 i { color: var(--color-warning-light); }
+.redis-findings-panel .findings-header h4 i { color: var(--color-info); }
 
 .findings-count {
   padding: 4px 12px;
   background: rgba(71, 85, 105, 0.5);
   border-radius: 20px;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 0.85em;
   font-weight: 500;
 }
@@ -9893,12 +9908,12 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   justify-content: center;
   gap: 10px;
   padding: 40px 20px;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 0.95em;
 }
 
 .findings-empty i {
-  color: #22c55e;
+  color: var(--chart-green);
   font-size: 1.2em;
 }
 
@@ -9913,7 +9928,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   border-radius: 8px;
   padding: 14px 16px;
   margin-bottom: 10px;
-  border-left: 4px solid #64748b;
+  border-left: 4px solid var(--text-tertiary);
   transition: all 0.2s ease;
 }
 
@@ -9926,27 +9941,27 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .finding-item.severity-critical {
-  border-left-color: #ef4444;
+  border-left-color: var(--color-error);
   background: rgba(239, 68, 68, 0.08);
 }
 
 .finding-item.severity-high {
-  border-left-color: #f97316;
+  border-left-color: var(--chart-orange);
   background: rgba(249, 115, 22, 0.08);
 }
 
 .finding-item.severity-medium {
-  border-left-color: #eab308;
+  border-left-color: var(--color-warning);
   background: rgba(234, 179, 8, 0.08);
 }
 
 .finding-item.severity-low {
-  border-left-color: #22c55e;
+  border-left-color: var(--chart-green);
   background: rgba(34, 197, 94, 0.08);
 }
 
 .finding-item.severity-info {
-  border-left-color: #3b82f6;
+  border-left-color: var(--chart-blue);
   background: rgba(59, 130, 246, 0.08);
 }
 
@@ -9969,31 +9984,31 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .finding-severity.severity-critical {
   background: rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
+  color: var(--color-error-light);
 }
 
 .finding-severity.severity-high {
   background: rgba(249, 115, 22, 0.3);
-  color: #fdba74;
+  color: var(--chart-orange-light);
 }
 
 .finding-severity.severity-medium {
   background: rgba(234, 179, 8, 0.3);
-  color: #fde047;
+  color: var(--color-warning-light);
 }
 
 .finding-severity.severity-low {
   background: rgba(34, 197, 94, 0.3);
-  color: #86efac;
+  color: var(--color-success-light);
 }
 
 .finding-severity.severity-info {
   background: rgba(59, 130, 246, 0.3);
-  color: #93c5fd;
+  color: var(--color-info-light);
 }
 
 .finding-type {
-  color: #e2e8f0;
+  color: var(--text-secondary);
   font-weight: 500;
   font-size: 0.9em;
 }
@@ -10003,11 +10018,11 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   background: rgba(71, 85, 105, 0.5);
   border-radius: 4px;
   font-size: 0.75em;
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .finding-description {
-  color: #cbd5e1;
+  color: var(--text-secondary);
   font-size: 0.9em;
   line-height: 1.5;
   margin-bottom: 10px;
@@ -10017,17 +10032,17 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #64748b;
+  color: var(--text-tertiary);
   font-size: 0.85em;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
 .finding-location i {
-  color: #6366f1;
+  color: var(--chart-indigo);
 }
 
 .finding-location .function-name {
-  color: #a5b4fc;
+  color: var(--chart-indigo-light);
   font-style: italic;
 }
 
@@ -10036,25 +10051,25 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   padding: 10px 12px;
   background: rgba(34, 197, 94, 0.1);
   border-radius: 6px;
-  border-left: 3px solid #22c55e;
-  color: #86efac;
+  border-left: 3px solid var(--chart-green);
+  color: var(--color-success-light);
   font-size: 0.85em;
   line-height: 1.4;
 }
 
 .finding-recommendation i {
-  color: #22c55e;
+  color: var(--chart-green);
   margin-right: 6px;
 }
 
 .finding-owasp {
   margin-top: 8px;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 0.8em;
 }
 
 .finding-owasp i {
-  color: #f97316;
+  color: var(--chart-orange);
   margin-right: 4px;
 }
 
@@ -10071,14 +10086,14 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #f9fafb;
+  color: var(--text-primary);
   margin-bottom: 16px;
   font-size: 1.2em;
   font-weight: 600;
 }
 
 .environment-analysis-section h3 i {
-  color: #22c55e;
+  color: var(--chart-green);
 }
 
 .environment-analysis-section .loading-state,
@@ -10094,23 +10109,23 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .environment-analysis-section .loading-state {
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.3);
-  color: #93c5fd;
+  color: var(--color-info-light);
 }
 
 .environment-analysis-section .error-state {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
+  color: var(--color-error-light);
 }
 
 .environment-analysis-section .success-state {
   background: rgba(34, 197, 94, 0.1);
   border: 1px solid rgba(34, 197, 94, 0.3);
-  color: #86efac;
+  color: var(--color-success-light);
 }
 
 .environment-analysis-section .success-state i {
-  color: #22c55e;
+  color: var(--chart-green);
 }
 
 /* Categories Breakdown */
@@ -10119,7 +10134,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .environment-analysis-section .categories-breakdown h4 {
-  color: #e5e7eb;
+  color: var(--text-secondary);
   font-size: 1em;
   margin-bottom: 12px;
 }
@@ -10135,7 +10150,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   background: rgba(71, 85, 105, 0.4);
   border-radius: 4px;
   font-size: 0.85em;
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 /* Recommendations List */
@@ -10144,7 +10159,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .environment-analysis-section .recommendations-list h4 {
-  color: #e5e7eb;
+  color: var(--text-secondary);
   font-size: 1em;
   margin-bottom: 12px;
 }
@@ -10154,19 +10169,19 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   background: rgba(17, 24, 39, 0.5);
   border-radius: 8px;
   margin-bottom: 10px;
-  border-left: 4px solid #6b7280;
+  border-left: 4px solid var(--text-tertiary);
 }
 
 .environment-analysis-section .recommendation-item.priority-high {
-  border-left-color: #ef4444;
+  border-left-color: var(--color-error);
 }
 
 .environment-analysis-section .recommendation-item.priority-medium {
-  border-left-color: #f59e0b;
+  border-left-color: var(--color-warning);
 }
 
 .environment-analysis-section .recommendation-item.priority-low {
-  border-left-color: #22c55e;
+  border-left-color: var(--chart-green);
 }
 
 .environment-analysis-section .rec-header {
@@ -10178,7 +10193,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .environment-analysis-section .env-var-name {
   background: rgba(34, 197, 94, 0.2);
-  color: #86efac;
+  color: var(--color-success-light);
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 0.9em;
@@ -10194,27 +10209,27 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .environment-analysis-section .priority-badge.high {
   background: rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
+  color: var(--color-error-light);
 }
 
 .environment-analysis-section .priority-badge.medium {
   background: rgba(245, 158, 11, 0.2);
-  color: #fcd34d;
+  color: var(--color-warning-light);
 }
 
 .environment-analysis-section .priority-badge.low {
   background: rgba(34, 197, 94, 0.2);
-  color: #86efac;
+  color: var(--color-success-light);
 }
 
 .environment-analysis-section .rec-description {
-  color: #d1d5db;
+  color: var(--text-secondary);
   font-size: 0.9em;
   margin-bottom: 6px;
 }
 
 .environment-analysis-section .rec-default {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 0.85em;
 }
 
@@ -10230,7 +10245,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .environment-analysis-section .hardcoded-preview h4 {
-  color: #e5e7eb;
+  color: var(--text-secondary);
   font-size: 1em;
   margin-bottom: 12px;
 }
@@ -10238,7 +10253,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 /* Issue #631: Truncation warning style */
 .environment-analysis-section .truncation-warning {
   font-size: 0.85em;
-  color: #f59e0b;
+  color: var(--color-warning);
   font-weight: normal;
   margin-left: 8px;
 }
@@ -10248,19 +10263,19 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   background: rgba(17, 24, 39, 0.5);
   border-radius: 6px;
   margin-bottom: 8px;
-  border-left: 3px solid #6b7280;
+  border-left: 3px solid var(--text-tertiary);
 }
 
 .environment-analysis-section .hardcoded-item.severity-high {
-  border-left-color: #ef4444;
+  border-left-color: var(--color-error);
 }
 
 .environment-analysis-section .hardcoded-item.severity-medium {
-  border-left-color: #f59e0b;
+  border-left-color: var(--color-warning);
 }
 
 .environment-analysis-section .hardcoded-item.severity-low {
-  border-left-color: #22c55e;
+  border-left-color: var(--chart-green);
 }
 
 .environment-analysis-section .hv-location {
@@ -10268,13 +10283,13 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .environment-analysis-section .file-path {
-  color: #93c5fd;
+  color: var(--color-info-light);
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 0.85em;
 }
 
 .environment-analysis-section .line-number {
-  color: #64748b;
+  color: var(--text-tertiary);
   font-size: 0.85em;
 }
 
@@ -10287,14 +10302,14 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .environment-analysis-section .hv-value code {
   background: rgba(245, 158, 11, 0.1);
-  color: #fcd34d;
+  color: var(--color-warning-light);
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 0.85em;
 }
 
 .environment-analysis-section .value-type {
-  color: #64748b;
+  color: var(--text-tertiary);
   font-size: 0.75em;
   text-transform: uppercase;
 }
@@ -10310,11 +10325,11 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .environment-analysis-section .hv-suggestion i {
-  color: #fbbf24;
+  color: var(--color-warning-light);
 }
 
 .environment-analysis-section .hv-suggestion code {
-  color: #86efac;
+  color: var(--color-success-light);
   background: transparent;
 }
 
@@ -10331,14 +10346,14 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #f9fafb;
+  color: var(--text-primary);
   margin-bottom: 16px;
   font-size: 1.2em;
   font-weight: 600;
 }
 
 .ownership-section h3 i {
-  color: #a78bfa;
+  color: var(--chart-purple-light);
 }
 
 .ownership-section .loading-state,
@@ -10354,19 +10369,19 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .ownership-section .loading-state {
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.3);
-  color: #93c5fd;
+  color: var(--color-info-light);
 }
 
 .ownership-section .error-state {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
+  color: var(--color-error-light);
 }
 
 .ownership-section .success-state {
   background: rgba(34, 197, 94, 0.1);
   border: 1px solid rgba(34, 197, 94, 0.3);
-  color: #86efac;
+  color: var(--color-success-light);
 }
 
 /* Ownership Tabs */
@@ -10383,7 +10398,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   background: rgba(71, 85, 105, 0.3);
   border: 1px solid rgba(71, 85, 105, 0.5);
   border-radius: 6px;
-  color: #94a3b8;
+  color: var(--text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -10394,18 +10409,18 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .ownership-tabs .tab-btn:hover {
   background: rgba(71, 85, 105, 0.5);
-  color: #e2e8f0;
+  color: var(--text-secondary);
 }
 
 .ownership-tabs .tab-btn.active {
   background: rgba(167, 139, 250, 0.2);
   border-color: rgba(167, 139, 250, 0.5);
-  color: #a78bfa;
+  color: var(--chart-purple-light);
 }
 
 .ownership-tabs .gap-badge {
   background: rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
+  color: var(--color-error-light);
   padding: 2px 6px;
   border-radius: 10px;
   font-size: 0.75em;
@@ -10431,17 +10446,17 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .ownership-metrics .metric-label {
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 0.9em;
 }
 
 .ownership-metrics .metric-value {
-  color: #e2e8f0;
+  color: var(--text-secondary);
   font-weight: 600;
 }
 
 .ownership-metrics .metric-value.high-concentration {
-  color: #fbbf24;
+  color: var(--color-warning-light);
 }
 
 .ownership-metrics .metric-bar {
@@ -10458,15 +10473,15 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .ownership-metrics .metric-bar-fill.ok {
-  background: linear-gradient(90deg, #22c55e, #4ade80);
+  background: linear-gradient(90deg, var(--chart-green), var(--color-success-light));
 }
 
 .ownership-metrics .metric-bar-fill.warning {
-  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+  background: linear-gradient(90deg, var(--color-warning), var(--color-warning-light));
 }
 
 .ownership-metrics .metric-bar-fill.critical {
-  background: linear-gradient(90deg, #ef4444, #f87171);
+  background: linear-gradient(90deg, var(--color-error), var(--color-error-light));
 }
 
 /* Top Contributors Preview */
@@ -10475,7 +10490,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .top-contributors-preview h4 {
-  color: #e5e7eb;
+  color: var(--text-secondary);
   font-size: 1em;
   margin-bottom: 12px;
   display: flex;
@@ -10484,7 +10499,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .top-contributors-preview h4 i {
-  color: #fbbf24;
+  color: var(--color-warning-light);
 }
 
 .contributor-list {
@@ -10504,23 +10519,23 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .contributor-item .rank {
-  color: #a78bfa;
+  color: var(--chart-purple-light);
   font-weight: 600;
 }
 
 .contributor-item .name {
-  color: #e2e8f0;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
 .contributor-item .lines {
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 0.85em;
   text-align: right;
 }
 
 .contributor-item .score {
-  color: #4ade80;
+  color: var(--color-success-light);
   font-weight: 600;
   text-align: right;
 }
@@ -10531,7 +10546,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .risk-distribution h4 {
-  color: #e5e7eb;
+  color: var(--text-secondary);
   font-size: 1em;
   margin-bottom: 12px;
   display: flex;
@@ -10554,25 +10569,25 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .risk-badge.risk-low {
   background: rgba(34, 197, 94, 0.2);
-  color: #4ade80;
+  color: var(--color-success-light);
   border: 1px solid rgba(34, 197, 94, 0.4);
 }
 
 .risk-badge.risk-medium {
   background: rgba(245, 158, 11, 0.2);
-  color: #fbbf24;
+  color: var(--color-warning-light);
   border: 1px solid rgba(245, 158, 11, 0.4);
 }
 
 .risk-badge.risk-high {
   background: rgba(239, 68, 68, 0.2);
-  color: #f87171;
+  color: var(--color-error-light);
   border: 1px solid rgba(239, 68, 68, 0.4);
 }
 
 .risk-badge.risk-critical {
   background: rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
+  color: var(--color-error-light);
   border: 1px solid rgba(239, 68, 68, 0.6);
 }
 
@@ -10598,19 +10613,19 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .expert-rank {
-  color: #a78bfa;
+  color: var(--chart-purple-light);
   font-weight: 700;
   font-size: 1.1em;
 }
 
 .expert-name {
-  color: #e2e8f0;
+  color: var(--text-secondary);
   font-weight: 600;
   flex: 1;
 }
 
 .expert-score {
-  background: linear-gradient(135deg, #a78bfa, #818cf8);
+  background: linear-gradient(135deg, var(--chart-purple-light), var(--chart-indigo-light));
   color: white;
   padding: 4px 10px;
   border-radius: 12px;
@@ -10629,12 +10644,12 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 0.85em;
 }
 
 .expert-stats .stat i {
-  color: #64748b;
+  color: var(--text-tertiary);
 }
 
 .expert-scores {
@@ -10651,7 +10666,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .score-label {
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 0.8em;
 }
 
@@ -10668,15 +10683,15 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .score-fill.impact {
-  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  background: linear-gradient(90deg, var(--chart-blue), var(--color-info));
 }
 
 .score-fill.recency {
-  background: linear-gradient(90deg, #22c55e, #4ade80);
+  background: linear-gradient(90deg, var(--chart-green), var(--color-success-light));
 }
 
 .score-value {
-  color: #e2e8f0;
+  color: var(--text-secondary);
   font-size: 0.8em;
   text-align: right;
 }
@@ -10693,7 +10708,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   background: rgba(71, 85, 105, 0.4);
   border-radius: 4px;
   font-size: 0.75em;
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 /* Files Tab */
@@ -10703,7 +10718,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .ownership-files h4 {
-  color: #e5e7eb;
+  color: var(--text-secondary);
   font-size: 1em;
   margin-bottom: 12px;
   display: flex;
@@ -10712,7 +10727,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .ownership-files h4 i {
-  color: #60a5fa;
+  color: var(--color-info);
 }
 
 .directory-list,
@@ -10727,27 +10742,27 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   padding: 12px 14px;
   background: rgba(17, 24, 39, 0.5);
   border-radius: 8px;
-  border-left: 3px solid #4ade80;
+  border-left: 3px solid var(--color-success-light);
 }
 
 .directory-item.risk-medium,
 .file-item.risk-medium {
-  border-left-color: #fbbf24;
+  border-left-color: var(--color-warning-light);
 }
 
 .directory-item.risk-high,
 .file-item.risk-high {
-  border-left-color: #f87171;
+  border-left-color: var(--color-error-light);
 }
 
 .directory-item.risk-critical,
 .file-item.risk-critical {
-  border-left-color: #ef4444;
+  border-left-color: var(--color-error);
 }
 
 .dir-path,
 .file-path {
-  color: #e2e8f0;
+  color: var(--text-secondary);
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 0.9em;
   margin-bottom: 6px;
@@ -10763,28 +10778,28 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .dir-owner,
 .file-owner {
-  color: #a78bfa;
+  color: var(--chart-purple-light);
   font-weight: 500;
 }
 
 .dir-pct,
 .file-pct {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .dir-bus-factor,
 .file-bus-factor {
-  color: #4ade80;
+  color: var(--color-success-light);
 }
 
 .dir-bus-factor.low,
 .file-bus-factor.low {
-  color: #f87171;
+  color: var(--color-error-light);
 }
 
 .dir-lines,
 .file-lines {
-  color: #64748b;
+  color: var(--text-tertiary);
 }
 
 /* Knowledge Gaps Tab */
@@ -10798,19 +10813,19 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   padding: 16px;
   background: rgba(17, 24, 39, 0.5);
   border-radius: 10px;
-  border-left: 4px solid #f87171;
+  border-left: 4px solid var(--color-error-light);
 }
 
 .gap-item.risk-medium {
-  border-left-color: #fbbf24;
+  border-left-color: var(--color-warning-light);
 }
 
 .gap-item.risk-low {
-  border-left-color: #4ade80;
+  border-left-color: var(--color-success-light);
 }
 
 .gap-item.risk-critical {
-  border-left-color: #ef4444;
+  border-left-color: var(--color-error);
   background: rgba(239, 68, 68, 0.05);
 }
 
@@ -10831,37 +10846,37 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .gap-risk-badge.critical {
   background: rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
+  color: var(--color-error-light);
 }
 
 .gap-risk-badge.high {
   background: rgba(239, 68, 68, 0.2);
-  color: #f87171;
+  color: var(--color-error-light);
 }
 
 .gap-risk-badge.medium {
   background: rgba(245, 158, 11, 0.2);
-  color: #fbbf24;
+  color: var(--color-warning-light);
 }
 
 .gap-risk-badge.low {
   background: rgba(34, 197, 94, 0.2);
-  color: #4ade80;
+  color: var(--color-success-light);
 }
 
 .gap-type {
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 0.9em;
 }
 
 .gap-lines {
-  color: #64748b;
+  color: var(--text-tertiary);
   font-size: 0.85em;
   margin-left: auto;
 }
 
 .gap-area {
-  color: #a78bfa;
+  color: var(--chart-purple-light);
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 0.9em;
   margin-bottom: 8px;
@@ -10871,18 +10886,18 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .gap-area i {
-  color: #64748b;
+  color: var(--text-tertiary);
 }
 
 .gap-description {
-  color: #e2e8f0;
+  color: var(--text-secondary);
   font-size: 0.9em;
   line-height: 1.4;
   margin-bottom: 10px;
 }
 
 .gap-recommendation {
-  color: #86efac;
+  color: var(--color-success-light);
   font-size: 0.85em;
   display: flex;
   align-items: flex-start;
@@ -10893,7 +10908,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .gap-recommendation i {
-  color: #fbbf24;
+  color: var(--color-warning-light);
   margin-top: 2px;
 }
 </style>
