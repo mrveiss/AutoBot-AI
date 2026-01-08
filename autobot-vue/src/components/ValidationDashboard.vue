@@ -309,45 +309,45 @@ export default {
 .validation-dashboard {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 20px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  padding: var(--spacing-5);
+  font-family: var(--font-sans);
 }
 
 .dashboard-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30px;
-  padding: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-radius: 10px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  margin-bottom: var(--spacing-8);
+  padding: var(--spacing-5);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--chart-purple) 100%);
+  color: var(--text-on-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
 }
 
 .dashboard-header h1 {
   margin: 0;
-  font-size: 2em;
+  font-size: var(--text-3xl);
 }
 
 .header-controls {
   display: flex;
-  gap: 20px;
+  gap: var(--spacing-5);
   align-items: center;
 }
 
 .refresh-btn {
-  background: rgba(255,255,255,0.2);
-  color: white;
-  border: 1px solid rgba(255,255,255,0.3);
-  padding: 8px 16px;
-  border-radius: 5px;
+  background: var(--bg-hover);
+  color: var(--text-on-primary);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: var(--transition-colors);
 }
 
 .refresh-btn:hover:not(:disabled) {
-  background: rgba(255,255,255,0.3);
+  background: var(--bg-active);
 }
 
 .refresh-btn:disabled {
@@ -358,23 +358,24 @@ export default {
 .auto-refresh label {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.9em;
+  gap: var(--spacing-2);
+  font-size: var(--text-sm);
 }
 
-.loading-state, .error-state {
+.loading-state,
+.error-state {
   text-align: center;
-  padding: 60px 20px;
+  padding: var(--spacing-16) var(--spacing-5);
 }
 
 .spinner {
   width: 40px;
   height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #667eea;
-  border-radius: 50%;
+  border: 4px solid var(--bg-tertiary);
+  border-top: 4px solid var(--color-primary);
+  border-radius: var(--radius-full);
   animation: spin 1s linear infinite;
-  margin: 0 auto 20px;
+  margin: 0 auto var(--spacing-5);
 }
 
 @keyframes spin {
@@ -383,84 +384,84 @@ export default {
 }
 
 .error-state {
-  color: #e74c3c;
+  color: var(--color-error);
 }
 
 .retry-btn {
-  background: #e74c3c;
-  color: white;
+  background: var(--color-error);
+  color: var(--text-on-error);
   border: none;
-  padding: 10px 20px;
-  border-radius: 5px;
+  padding: var(--spacing-2-5) var(--spacing-5);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  margin-top: 10px;
+  margin-top: var(--spacing-2-5);
 }
 
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
-  margin-bottom: 30px;
+  gap: var(--spacing-5);
+  margin-bottom: var(--spacing-8);
 }
 
 .stat-card-content {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 .stat-icon {
-  font-size: 2.5em;
+  font-size: var(--text-4xl);
 }
 
 .stat-value {
-  font-size: 2.5em;
-  font-weight: bold;
-  margin-bottom: 5px;
+  font-size: var(--text-4xl);
+  font-weight: var(--font-bold);
+  margin-bottom: var(--spacing-1);
 }
 
 .stat-label {
-  color: #666;
-  font-size: 0.9em;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
-.health-excellent { color: #4CAF50; }
-.health-good { color: #8BC34A; }
-.health-fair { color: #FF9800; }
-.health-needs_attention { color: #F44336; }
+.health-excellent { color: var(--color-success); }
+.health-good { color: var(--color-success-light); }
+.health-fair { color: var(--color-warning); }
+.health-needs_attention { color: var(--color-error); }
 
 .main-grid {
   display: grid;
   grid-template-columns: 2fr 1fr;
-  gap: 30px;
-  margin-bottom: 30px;
+  gap: var(--spacing-8);
+  margin-bottom: var(--spacing-8);
 }
 
 .phases-list {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: var(--spacing-4);
 }
 
 .phase-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  border-left: 4px solid #ddd;
+  padding: var(--spacing-5);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border-left: 4px solid var(--border-default);
 }
 
 .phase-name {
-  font-weight: bold;
-  font-size: 1.1em;
+  font-weight: var(--font-bold);
+  font-size: var(--text-lg);
 }
 
 .phase-requirements {
-  font-size: 0.9em;
-  color: #666;
-  margin-top: 5px;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-top: var(--spacing-1);
 }
 
 .phase-progress {
@@ -469,126 +470,126 @@ export default {
 }
 
 .progress-text {
-  font-weight: bold;
-  margin-bottom: 5px;
+  font-weight: var(--font-bold);
+  margin-bottom: var(--spacing-1);
 }
 
 .progress-bar {
   width: 100px;
   height: 8px;
-  background: #e0e0e0;
-  border-radius: 4px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  transition: width 0.3s ease;
+  transition: width var(--duration-300) var(--ease-out);
 }
 
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 .alerts-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .alert-time {
-  font-size: 0.8em;
+  font-size: var(--text-xs);
   opacity: 0.7;
-  margin-top: 5px;
+  margin-top: var(--spacing-1);
 }
 
 .recommendation {
-  padding: 15px;
-  margin: 10px 0;
-  background: #f8f9fa;
-  border-radius: 5px;
-  border-left: 4px solid #007bff;
+  padding: var(--spacing-4);
+  margin: var(--spacing-2-5) 0;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--color-info);
 }
 
 .rec-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 10px;
+  margin-bottom: var(--spacing-2-5);
 }
 
 .rec-title {
-  font-weight: bold;
+  font-weight: var(--font-bold);
   flex: 1;
 }
 
 .rec-urgency {
-  padding: 2px 8px;
-  border-radius: 3px;
-  font-size: 0.7em;
-  font-weight: bold;
-  margin-left: 10px;
+  padding: var(--spacing-0-5) var(--spacing-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+  margin-left: var(--spacing-2-5);
 }
 
-.urgency-high { background: #ffcdd2; color: #c62828; }
-.urgency-medium { background: #ffe0b2; color: #e65100; }
-.urgency-low { background: #c8e6c9; color: #2e7d32; }
+.urgency-high { background: var(--color-error-bg); color: var(--color-error); }
+.urgency-medium { background: var(--color-warning-bg); color: var(--color-warning); }
+.urgency-low { background: var(--color-success-bg); color: var(--color-success); }
 
 .rec-description {
-  margin-bottom: 10px;
-  font-size: 0.9em;
+  margin-bottom: var(--spacing-2-5);
+  font-size: var(--text-sm);
 }
 
 .rec-action {
   font-style: italic;
-  color: #666;
-  font-size: 0.9em;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 .progression-section {
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .progression-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 .progression-item {
   text-align: center;
-  padding: 15px;
-  background: #f8f9fa;
-  border-radius: 8px;
+  padding: var(--spacing-4);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
 }
 
 .progression-label {
-  font-size: 0.9em;
-  color: #666;
-  margin-bottom: 5px;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-1);
 }
 
 .progression-value {
-  font-size: 1.2em;
-  font-weight: bold;
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
 }
 
-.progression-value.positive { color: #4CAF50; }
-.progression-value.negative { color: #F44336; }
+.progression-value.positive { color: var(--color-success); }
+.progression-value.negative { color: var(--color-error); }
 
 .dashboard-footer {
   text-align: center;
-  padding: 20px;
-  color: #666;
-  font-size: 0.9em;
+  padding: var(--spacing-5);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 @media (max-width: 768px) {
   .dashboard-header {
     flex-direction: column;
-    gap: 15px;
+    gap: var(--spacing-4);
   }
 
   .header-controls {

@@ -307,74 +307,74 @@ export default {
 
 <style scoped>
 .phase-status-indicator {
-  background: #f8f9fa;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  margin-bottom: 1rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-4);
   overflow: hidden;
 }
 
 .phase-header {
-  padding: 12px 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  padding: var(--spacing-3) var(--spacing-4);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--chart-purple) 100%);
+  color: var(--text-on-primary);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  transition: all 0.3s ease;
+  transition: all var(--duration-300) var(--ease-in-out);
 }
 
 .phase-header:hover {
-  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+  background: linear-gradient(135deg, var(--color-primary-hover) 0%, var(--chart-purple) 100%);
 }
 
 .phase-info {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .phase-name {
-  font-weight: 600;
-  font-size: 14px;
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
 }
 
 .phase-progress {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .progress-bar {
   width: 200px;
   height: 6px;
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 3px;
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: #4ade80;
-  transition: width 0.5s ease;
+  background: var(--chart-green-light);
+  transition: width var(--duration-500) var(--ease-in-out);
 }
 
 .progress-text {
-  font-size: 12px;
-  font-weight: 500;
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
   min-width: 45px;
 }
 
 .toggle-btn {
   background: none;
   border: none;
-  color: white;
-  font-size: 16px;
+  color: var(--text-on-primary);
+  font-size: var(--text-base);
   cursor: pointer;
-  transition: transform 0.3s ease;
-  padding: 4px;
+  transition: transform var(--duration-300) var(--ease-in-out);
+  padding: var(--spacing-1);
 }
 
 .toggle-btn.expanded {
@@ -382,186 +382,186 @@ export default {
 }
 
 .phase-details {
-  padding: 16px;
-  background: white;
+  padding: var(--spacing-4);
+  background: var(--bg-card);
 }
 
 .validation-summary {
   display: flex;
-  gap: 24px;
-  margin-bottom: 20px;
+  gap: var(--spacing-6);
+  margin-bottom: var(--spacing-5);
   flex-wrap: wrap;
 }
 
 .summary-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: #6b7280;
-  font-size: 13px;
+  gap: var(--spacing-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 .summary-item i {
-  color: #9ca3af;
+  color: var(--text-tertiary);
 }
 
 .current-phase h4 {
-  margin: 0 0 12px 0;
-  color: #374151;
-  font-size: 16px;
+  margin: 0 0 var(--spacing-3) 0;
+  color: var(--text-primary);
+  font-size: var(--text-base);
 }
 
 .capabilities-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 8px;
-  margin-bottom: 20px;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-5);
 }
 
 .capability-item {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
-  border-radius: 6px;
-  border: 1px solid #e5e7eb;
-  transition: all 0.2s ease;
+  gap: var(--spacing-3);
+  padding: var(--spacing-2) var(--spacing-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  transition: all var(--duration-200) var(--ease-in-out);
 }
 
 .capability-item.capability-implemented {
-  background: #f0fdf4;
-  border-color: #86efac;
+  background: var(--color-success-bg);
+  border-color: var(--color-success-border);
 }
 
 .capability-item.capability-pending {
-  background: #fef3c7;
-  border-color: #fcd34d;
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
 }
 
 .capability-name {
-  font-weight: 500;
-  font-size: 13px;
+  font-weight: var(--font-medium);
+  font-size: var(--text-sm);
 }
 
 .capability-description {
-  font-size: 12px;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
   grid-column: 2 / -1;
-  margin-left: 24px;
+  margin-left: var(--spacing-6);
 }
 
 .phases-overview h4 {
-  margin: 20px 0 12px 0;
-  color: #374151;
-  font-size: 16px;
+  margin: var(--spacing-5) 0 var(--spacing-3) 0;
+  color: var(--text-primary);
+  font-size: var(--text-base);
 }
 
 .phases-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: var(--spacing-3);
+  margin-bottom: var(--spacing-5);
 }
 
 .phase-card {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 12px;
-  transition: all 0.2s ease;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-3);
+  transition: all var(--duration-200) var(--ease-in-out);
 }
 
 .phase-card.phase-completed {
-  background: #f0fdf4;
-  border-color: #86efac;
+  background: var(--color-success-bg);
+  border-color: var(--color-success-border);
 }
 
 .phase-card.phase-active {
-  background: #eff6ff;
-  border-color: #60a5fa;
-  box-shadow: 0 0 0 1px #60a5fa;
+  background: var(--color-info-bg);
+  border-color: var(--color-info-light);
+  box-shadow: 0 0 0 1px var(--color-info-light);
 }
 
 .phase-card.phase-inactive {
-  background: #f9fafb;
-  border-color: #d1d5db;
+  background: var(--bg-tertiary);
+  border-color: var(--border-default);
 }
 
 .phase-card-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-2);
 }
 
 .phase-card-header i.fa-check-circle {
-  color: #22c55e;
+  color: var(--color-success);
 }
 
 .phase-card-header i.fa-play-circle {
-  color: #3b82f6;
+  color: var(--color-info);
 }
 
 .phase-card-header i.fa-circle {
-  color: #9ca3af;
+  color: var(--text-tertiary);
 }
 
 .phase-card-name {
-  font-weight: 500;
-  font-size: 13px;
-  color: #374151;
+  font-weight: var(--font-medium);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
 }
 
 .phase-card-progress {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-1);
 }
 
 .mini-progress-bar {
   flex: 1;
   height: 4px;
-  background: #e5e7eb;
-  border-radius: 2px;
+  background: var(--border-subtle);
+  border-radius: var(--radius-xs);
   overflow: hidden;
 }
 
 .mini-progress-fill {
   height: 100%;
-  background: #3b82f6;
-  transition: width 0.5s ease;
+  background: var(--color-info);
+  transition: width var(--duration-500) var(--ease-in-out);
 }
 
 .phase-card.phase-completed .mini-progress-fill {
-  background: #22c55e;
+  background: var(--color-success);
 }
 
 .mini-progress-text {
-  font-size: 12px;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
   min-width: 30px;
 }
 
 .phase-card-capabilities {
-  font-size: 12px;
-  color: #9ca3af;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 
 .phase-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
   flex-wrap: wrap;
 }
 
 .validation-report {
-  background: #f8f9fa;
-  padding: 16px;
-  border-radius: 8px;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 12px;
-  line-height: 1.5;
+  background: var(--bg-secondary);
+  padding: var(--spacing-4);
+  border-radius: var(--radius-lg);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
   white-space: pre-wrap;
   margin: 0;
 }
@@ -569,7 +569,7 @@ export default {
 @media (max-width: 768px) {
   .validation-summary {
     flex-direction: column;
-    gap: 12px;
+    gap: var(--spacing-3);
   }
 
   .capabilities-grid {

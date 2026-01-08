@@ -2,26 +2,26 @@
   <div v-if="show" class="edit-overlay" @click="$emit('cancel')">
     <div class="edit-dialog" @click.stop>
       <div class="edit-header">
-        <h4>✏️ Edit Step {{ stepIndex + 1 }}</h4>
+        <h4>Edit Step {{ stepIndex + 1 }}</h4>
         <BaseButton
           variant="ghost"
           size="xs"
           @click="$emit('cancel')"
           class="close-button"
           aria-label="Close dialog"
-        >×</BaseButton>
+        >x</BaseButton>
       </div>
 
       <div class="edit-content">
         <!-- Error Display -->
         <div v-if="error" class="error-message">
-          <div class="error-icon">⚠️</div>
+          <div class="error-icon">!</div>
           <div class="error-text">{{ error }}</div>
         </div>
 
         <!-- Success Display -->
         <div v-if="success" class="success-message">
-          <div class="success-icon">✅</div>
+          <div class="success-icon">OK</div>
           <div class="success-text">{{ success }}</div>
         </div>
 
@@ -74,7 +74,7 @@
             <span class="risk-label">Live Risk Assessment: {{ riskLevel.toUpperCase() }}</span>
             <div class="risk-reasons">
               <div v-for="reason in riskReasons" :key="reason" class="risk-reason">
-                • {{ reason }}
+                - {{ reason }}
               </div>
             </div>
           </div>
@@ -89,14 +89,14 @@
           :loading="saving"
           aria-label="Save changes"
         >
-          💾 {{ saving ? 'Saving...' : 'Save Changes' }}
+          {{ saving ? 'Saving...' : 'Save Changes' }}
         </BaseButton>
         <BaseButton
           variant="secondary"
           @click="$emit('cancel')"
           :disabled="saving"
           aria-label="Cancel"
-        >❌ Cancel</BaseButton>
+        >Cancel</BaseButton>
       </div>
     </div>
   </div>
@@ -113,6 +113,7 @@
  * Extracted from AdvancedStepConfirmationModal.vue for better maintainability.
  *
  * Issue #184: Split oversized Vue components
+ * Issue #704: Migrated to design tokens
  */
 
 import { ref, computed, onMounted, nextTick } from 'vue'
@@ -201,167 +202,169 @@ onMounted(async () => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.9);
+  background: var(--overlay-backdrop);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2000;
+  z-index: var(--z-modal);
 }
 
 .edit-dialog {
-  background: #1a1a1a;
-  border: 2px solid #333;
-  border-radius: 12px;
+  background: var(--bg-primary);
+  border: 2px solid var(--border-default);
+  border-radius: var(--radius-xl);
   width: 600px;
   max-width: 90vw;
   max-height: 90vh;
   overflow-y: auto;
-  color: #ffffff;
+  color: var(--text-primary);
 }
 
 .edit-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #333;
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  padding: var(--spacing-5);
+  border-bottom: 1px solid var(--border-default);
+  background: linear-gradient(135deg, var(--color-success-hover) 0%, var(--color-success-dark) 100%);
 }
 
 .edit-header h4 {
   margin: 0;
-  color: #ffffff;
-  font-size: 1.1em;
+  color: var(--text-on-success);
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
 }
 
 .close-button {
-  color: #ffffff;
-  font-size: 1.5em;
-  line-height: 1;
+  color: var(--text-on-success);
+  font-size: var(--text-2xl);
+  line-height: var(--leading-none);
 }
 
 .edit-content {
-  padding: 20px;
+  padding: var(--spacing-5);
 }
 
 .edit-risk-section {
-  margin-top: 16px;
+  margin-top: var(--spacing-4);
 }
 
 .edit-risk-indicator {
-  padding: 16px;
-  border-radius: 8px;
+  padding: var(--spacing-4);
+  border-radius: var(--radius-lg);
   border-left: 4px solid;
 }
 
 .edit-risk-indicator.low {
-  background: rgba(34, 197, 94, 0.1);
-  border-left-color: #22c55e;
+  background: var(--color-success-bg);
+  border-left-color: var(--chart-green);
 }
 
 .edit-risk-indicator.moderate {
-  background: rgba(251, 191, 36, 0.1);
-  border-left-color: #fbbf24;
+  background: var(--color-warning-bg);
+  border-left-color: var(--color-warning-light);
 }
 
 .edit-risk-indicator.high {
-  background: rgba(239, 68, 68, 0.1);
-  border-left-color: #ef4444;
+  background: var(--color-error-bg);
+  border-left-color: var(--color-error);
 }
 
 .edit-risk-indicator.critical {
-  background: rgba(220, 38, 38, 0.1);
-  border-left-color: #dc2626;
+  background: var(--color-error-bg);
+  border-left-color: var(--color-error-hover);
   animation: pulse 2s infinite;
 }
 
 .risk-label {
-  font-weight: 600;
+  font-weight: var(--font-semibold);
   display: block;
-  margin-bottom: 8px;
-  color: #f3f4f6;
+  margin-bottom: var(--spacing-2);
+  color: var(--text-primary);
 }
 
 .risk-reasons {
-  margin-top: 8px;
+  margin-top: var(--spacing-2);
 }
 
 .risk-reason {
-  font-size: 0.9em;
-  color: #d1d5db;
-  margin-bottom: 4px;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-1);
 }
 
 .edit-actions {
   display: flex;
-  gap: 12px;
-  padding: 20px;
-  border-top: 1px solid #333;
+  gap: var(--spacing-3);
+  padding: var(--spacing-5);
+  border-top: 1px solid var(--border-default);
   justify-content: flex-end;
 }
 
 .form-field {
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
 }
 
 .form-field label {
   display: block;
-  margin-bottom: 6px;
-  font-weight: 600;
-  color: #f3f4f6;
+  margin-bottom: var(--spacing-1-5);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .form-input,
 .form-textarea {
   width: 100%;
-  background: #0f1419;
-  border: 1px solid #374151;
-  color: #ffffff;
-  padding: 10px;
-  border-radius: 6px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  padding: var(--spacing-2-5);
+  border-radius: var(--radius-md);
   font-family: inherit;
 }
 
 .form-input:focus,
 .form-textarea:focus {
   outline: none;
-  border-color: #2563eb;
+  border-color: var(--color-info-hover);
 }
 
 .field-error {
-  color: #ef4444;
-  font-size: 0.85em;
-  margin-top: 4px;
+  color: var(--color-error);
+  font-size: var(--text-sm);
+  margin-top: var(--spacing-1);
 }
 
 .error-message,
 .success-message {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  padding: 12px;
-  border-radius: 6px;
-  margin: 16px 0;
-  font-size: 14px;
-  line-height: 1.4;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3);
+  border-radius: var(--radius-md);
+  margin: var(--spacing-4) 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
 }
 
 .error-message {
-  background-color: rgba(220, 53, 69, 0.1);
-  border: 1px solid rgba(220, 53, 69, 0.3);
-  color: #ff6b6b;
+  background-color: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
+  color: var(--color-error-light);
 }
 
 .success-message {
-  background-color: rgba(40, 167, 69, 0.1);
-  border: 1px solid rgba(40, 167, 69, 0.3);
-  color: #28a745;
+  background-color: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success);
 }
 
 .error-icon,
 .success-icon {
   flex-shrink: 0;
-  font-size: 16px;
+  font-size: var(--text-base);
+  font-weight: var(--font-bold);
 }
 
 .error-text,
@@ -385,21 +388,21 @@ onMounted(async () => {
   }
 
   .edit-header {
-    padding: 16px;
+    padding: var(--spacing-4);
   }
 
   .edit-content {
-    padding: 16px;
+    padding: var(--spacing-4);
   }
 
   .edit-actions {
     flex-direction: column;
-    gap: 8px;
+    gap: var(--spacing-2);
   }
 
   .form-input,
   .form-textarea {
-    font-size: 16px;
+    font-size: var(--text-base);
   }
 }
 </style>

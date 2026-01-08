@@ -253,7 +253,7 @@ const refreshDataFn = async () => {
 
   // Simulate API call delay
   await new Promise(resolve => setTimeout(resolve, 1000))
-    
+
     // Update health data
     health.value = {
       frontend: {
@@ -281,7 +281,7 @@ const refreshDataFn = async () => {
         messageRate: Math.floor(Math.random() * 50 + 10)
       }
     }
-    
+
     // Add a log entry
   recentLogs.value.unshift({
     timestamp: new Date(),
@@ -313,9 +313,17 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/**
+ * MCPDashboard.vue - Design Token Migration
+ * Issue #704: CSS Design System - Centralized Theming
+ *
+ * All hardcoded colors have been replaced with CSS variables
+ * from design-tokens.css for consistent theming support.
+ */
+
 .mcp-dashboard {
-  padding: 20px;
-  background: #f5f5f5;
+  padding: var(--spacing-5);
+  background: var(--bg-secondary);
   min-height: 100vh;
 }
 
@@ -323,71 +331,71 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30px;
-  padding: 20px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  margin-bottom: var(--spacing-8);
+  padding: var(--spacing-5);
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .dashboard-header h2 {
   margin: 0;
-  color: #333;
+  color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .refresh-controls {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 .last-update {
-  color: #666;
-  font-size: 14px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 .health-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 20px;
-  margin-bottom: 30px;
+  gap: var(--spacing-5);
+  margin-bottom: var(--spacing-8);
 }
 
 /* Health card conditional border styles - applied to BasePanel */
 .health-good {
-  border-top: 4px solid #28a745;
+  border-top: 4px solid var(--color-success);
 }
 
 .health-warning {
-  border-top: 4px solid #ffc107;
+  border-top: 4px solid var(--color-warning);
 }
 
 .health-error {
-  border-top: 4px solid #dc3545;
+  border-top: 4px solid var(--color-error);
 }
 
 .health-unknown {
-  border-top: 4px solid #6c757d;
+  border-top: 4px solid var(--text-muted);
 }
 
 /* Card header content styles - BasePanel handles structure */
 .status-icon {
-  font-size: 20px;
+  font-size: var(--text-xl);
   margin-left: auto;
 }
 
 .card-body {
-  padding: 20px;
+  padding: var(--spacing-5);
 }
 
 .metric {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
 }
 
 .metric:last-child {
@@ -395,50 +403,54 @@ onUnmounted(() => {
 }
 
 .label {
-  color: #666;
-  font-size: 14px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 .value {
-  font-weight: bold;
-  font-size: 16px;
-  color: #333;
+  font-weight: var(--font-bold);
+  font-size: var(--text-base);
+  color: var(--text-primary);
 }
 
 .text-danger {
-  color: #dc3545 !important;
+  color: var(--color-error) !important;
 }
 
 .text-success {
-  color: #28a745;
+  color: var(--color-success);
 }
 
 .text-warning {
-  color: #ffc107;
+  color: var(--color-warning);
+}
+
+.text-muted {
+  color: var(--text-muted);
 }
 
 .error-list {
-  margin-top: 15px;
-  padding-top: 15px;
-  border-top: 1px solid #e9ecef;
+  margin-top: var(--spacing-4);
+  padding-top: var(--spacing-4);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .error-item {
-  font-size: 13px;
-  color: #dc3545;
-  margin-bottom: 5px;
-  padding: 5px;
-  background: #fef2f2;
-  border-radius: 4px;
+  font-size: var(--text-sm);
+  color: var(--color-error);
+  margin-bottom: var(--spacing-1);
+  padding: var(--spacing-1);
+  background: var(--color-error-bg);
+  border-radius: var(--radius-default);
 }
 
 /* Header styles - BasePanel handles section structure */
 h3 {
   margin: 0;
-  color: #333;
+  color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .activity-log {
@@ -448,83 +460,87 @@ h3 {
 
 .log-entry {
   display: flex;
-  gap: 15px;
-  padding: 8px 12px;
-  margin-bottom: 5px;
-  border-radius: 4px;
-  font-size: 14px;
-  background: #f8f9fa;
+  gap: var(--spacing-4);
+  padding: var(--spacing-2) var(--spacing-3);
+  margin-bottom: var(--spacing-1);
+  border-radius: var(--radius-default);
+  font-size: var(--text-sm);
+  background: var(--bg-tertiary);
 }
 
 .log-entry.log-error {
-  background: #fef2f2;
+  background: var(--color-error-bg);
 }
 
 .log-entry.log-warning {
-  background: #fffbeb;
+  background: var(--color-warning-bg);
 }
 
 .log-entry.log-success {
-  background: #f0fdf4;
+  background: var(--color-success-bg);
+}
+
+.log-entry.log-info {
+  background: var(--color-info-bg);
 }
 
 .log-time {
-  color: #666;
-  font-family: monospace;
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
 }
 
 .log-level {
-  font-weight: bold;
+  font-weight: var(--font-bold);
   width: 80px;
 }
 
 .log-message {
   flex: 1;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .tools-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 15px;
+  gap: var(--spacing-4);
 }
 
 .tool-status {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 15px;
-  border: 2px solid #e9ecef;
-  border-radius: 8px;
+  padding: var(--spacing-4);
+  border: 2px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
   text-align: center;
-  transition: all 0.3s;
+  transition: var(--transition-all);
 }
 
 .tool-status.tool-active {
-  border-color: #28a745;
-  background: #f8fff9;
+  border-color: var(--color-success);
+  background: var(--color-success-bg);
 }
 
 .tool-status i {
-  font-size: 24px;
-  margin-bottom: 8px;
-  color: #666;
+  font-size: var(--text-2xl);
+  margin-bottom: var(--spacing-2);
+  color: var(--text-secondary);
 }
 
 .tool-status.tool-active i {
-  color: #28a745;
+  color: var(--color-success);
 }
 
 .tool-status span {
   display: block;
-  font-size: 14px;
-  color: #333;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
 }
 
 .tool-count {
-  font-size: 12px !important;
-  color: #666 !important;
-  margin-top: 4px;
+  font-size: var(--text-xs) !important;
+  color: var(--text-secondary) !important;
+  margin-top: var(--spacing-1);
 }
 </style>

@@ -55,7 +55,7 @@
       title="Phase Validation Ready"
       message="Click 'Load Validation Data' above to run on-demand system validation and see detailed phase requirements."
     >
-      <p class="performance-note">💡 Validation is now on-demand to improve system performance</p>
+      <p class="performance-note">Validation is now on-demand to improve system performance</p>
     </EmptyState>
 
     <!-- Phase Grid -->
@@ -106,7 +106,7 @@
             <h4><i class="fas fa-check-square"></i> Acceptance Criteria:</h4>
             <ul class="criteria-list">
               <li v-for="criteria in phase.acceptance_criteria" :key="criteria" class="acceptance-criteria-item">
-                <i class="fas fa-chevron-right text-blue-500"></i>
+                <i class="fas fa-chevron-right icon-info"></i>
                 {{ criteria }}
               </li>
             </ul>
@@ -117,7 +117,7 @@
             <h4><i class="fas fa-cog"></i> Functional Requirements:</h4>
             <ul class="criteria-list">
               <li v-for="requirement in phase.functional_requirements" :key="requirement" class="functional-req-item">
-                <i class="fas fa-chevron-right text-purple-500"></i>
+                <i class="fas fa-chevron-right icon-purple"></i>
                 {{ requirement }}
               </li>
             </ul>
@@ -132,7 +132,7 @@
               <ul class="criteria-list">
                 <li v-for="file in phase.validation_details.files_check.details" :key="file.file"
                     :class="file.exists ? 'criteria-pass' : 'criteria-fail'">
-                  <i :class="file.exists ? 'fas fa-check text-green-500' : 'fas fa-times text-red-500'"></i>
+                  <i :class="file.exists ? 'fas fa-check icon-success' : 'fas fa-times icon-error'"></i>
                   {{ file.file }}
                 </li>
               </ul>
@@ -144,7 +144,7 @@
               <ul class="criteria-list">
                 <li v-for="dir in phase.validation_details.directories_check.details" :key="dir.directory"
                     :class="dir.exists ? 'criteria-pass' : 'criteria-fail'">
-                  <i :class="dir.exists ? 'fas fa-check text-green-500' : 'fas fa-times text-red-500'"></i>
+                  <i :class="dir.exists ? 'fas fa-check icon-success' : 'fas fa-times icon-error'"></i>
                   {{ dir.directory }}
                 </li>
               </ul>
@@ -156,7 +156,7 @@
               <ul class="criteria-list">
                 <li v-for="endpoint in phase.validation_details.endpoints_check.details" :key="endpoint.endpoint"
                     :class="endpoint.accessible ? 'criteria-pass' : 'criteria-fail'">
-                  <i :class="endpoint.accessible ? 'fas fa-check text-green-500' : 'fas fa-times text-red-500'"></i>
+                  <i :class="endpoint.accessible ? 'fas fa-check icon-success' : 'fas fa-times icon-error'"></i>
                   {{ endpoint.endpoint }}
                   <span v-if="endpoint.response_time" class="response-time">({{ endpoint.response_time }}ms)</span>
                 </li>
@@ -169,7 +169,7 @@
               <ul class="criteria-list">
                 <li v-for="service in phase.validation_details.services_check.details" :key="service.service"
                     :class="service.running ? 'criteria-pass' : 'criteria-fail'">
-                  <i :class="service.running ? 'fas fa-check text-green-500' : 'fas fa-times text-red-500'"></i>
+                  <i :class="service.running ? 'fas fa-check icon-success' : 'fas fa-times icon-error'"></i>
                   {{ service.service }}
                   <span class="service-status">({{ service.status }})</span>
                 </li>
@@ -182,9 +182,9 @@
               <ul class="criteria-list">
                 <li v-for="(metric, key) in phase.validation_details.performance_check.details" :key="key"
                     :class="metric.passed ? 'criteria-pass' : 'criteria-fail'">
-                  <i :class="metric.passed ? 'fas fa-check text-green-500' : 'fas fa-times text-red-500'"></i>
+                  <i :class="metric.passed ? 'fas fa-check icon-success' : 'fas fa-times icon-error'"></i>
                   {{ key }}: {{ metric.current }}{{ metric.unit }}
-                  <span class="metric-threshold">({{ metric.passed ? '✓' : '✗' }} threshold: {{ metric.threshold }}{{ metric.unit }})</span>
+                  <span class="metric-threshold">({{ metric.passed ? 'passed' : 'failed' }} threshold: {{ metric.threshold }}{{ metric.unit }})</span>
                 </li>
               </ul>
             </div>
@@ -195,7 +195,7 @@
               <ul class="criteria-list">
                 <li v-for="feature in phase.validation_details.security_check.details" :key="feature.feature"
                     :class="feature.enabled ? 'criteria-pass' : 'criteria-fail'">
-                  <i :class="feature.enabled ? 'fas fa-check text-green-500' : 'fas fa-times text-red-500'"></i>
+                  <i :class="feature.enabled ? 'fas fa-check icon-success' : 'fas fa-times icon-error'"></i>
                   {{ feature.feature }}
                 </li>
               </ul>
@@ -207,7 +207,7 @@
               <ul class="criteria-list">
                 <li v-for="feature in phase.validation_details.ui_check.details" :key="feature.feature"
                     :class="feature.available ? 'criteria-pass' : 'criteria-fail'">
-                  <i :class="feature.available ? 'fas fa-check text-green-500' : 'fas fa-times text-red-500'"></i>
+                  <i :class="feature.available ? 'fas fa-check icon-success' : 'fas fa-times icon-error'"></i>
                   {{ feature.feature }}
                 </li>
               </ul>
@@ -270,7 +270,7 @@
           class="history-item"
         >
           <div class="history-icon">
-            <i class="fas fa-arrow-right text-blue-500"></i>
+            <i class="fas fa-arrow-right icon-info"></i>
           </div>
           <div class="history-content">
             <strong>{{ item.phase }}</strong>
@@ -644,19 +644,25 @@ export default {
 </script>
 
 <style scoped>
+/**
+ * PhaseProgressionIndicator.vue - Migrated to Design Tokens
+ * Issue #704: CSS Design System - Centralized Theming
+ * All hardcoded colors replaced with CSS custom properties from design-tokens.css
+ */
+
 .phase-progression-container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 20px;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  padding: var(--spacing-5);
+  font-family: var(--font-sans);
 }
 
 .phase-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 20px;
-  border-radius: 10px;
-  margin-bottom: 20px;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--chart-purple) 100%);
+  color: var(--text-on-primary);
+  padding: var(--spacing-5);
+  border-radius: var(--radius-xl);
+  margin-bottom: var(--spacing-5);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -665,29 +671,29 @@ export default {
 .header-controls {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: var(--spacing-5);
 }
 
 /* Button styling handled by BaseButton component */
 
 .performance-note {
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   font-style: italic;
-  color: #059669 !important;
+  color: var(--color-success) !important;
 }
 
 .phase-title {
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 1.5rem;
+  gap: var(--spacing-2-5);
+  font-size: var(--text-2xl);
 }
 
 .overall-maturity {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   min-width: 300px;
 }
 
@@ -695,64 +701,75 @@ export default {
   width: 200px;
   height: 20px;
   background: rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
 .maturity-fill {
   height: 100%;
-  transition: width 0.3s ease;
-  border-radius: 10px;
+  transition: width var(--duration-300) var(--ease-out);
+  border-radius: var(--radius-xl);
 }
 
-.maturity-production { background: linear-gradient(90deg, #10b981, #059669); }
-.maturity-beta { background: linear-gradient(90deg, #3b82f6, #1d4ed8); }
-.maturity-alpha { background: linear-gradient(90deg, #f59e0b, #d97706); }
-.maturity-development { background: linear-gradient(90deg, #ef4444, #dc2626); }
+.maturity-production {
+  background: linear-gradient(90deg, var(--color-success) 0%, var(--color-success-hover) 100%);
+}
+
+.maturity-beta {
+  background: linear-gradient(90deg, var(--color-info) 0%, var(--color-info-dark) 100%);
+}
+
+.maturity-alpha {
+  background: linear-gradient(90deg, var(--color-warning) 0%, var(--color-warning-hover) 100%);
+}
+
+.maturity-development {
+  background: linear-gradient(90deg, var(--color-error) 0%, var(--color-error-hover) 100%);
+}
 
 .error-notice {
-  background: #fef3cd;
-  border: 1px solid #facc15;
-  border-radius: 8px;
-  margin: 20px 0;
-  padding: 20px;
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-lg);
+  margin: var(--spacing-5) 0;
+  padding: var(--spacing-5);
   text-align: center;
 }
 
 .phase-description {
-  background: #f8fafc;
-  padding: 1rem;
-  border-radius: 0.5rem;
-  margin-bottom: 1rem;
-  border-left: 4px solid #3b82f6;
+  background: var(--bg-secondary);
+  padding: var(--spacing-4);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-4);
+  border-left: 4px solid var(--color-info);
 }
 
 .phase-description h4 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1rem;
-  color: #1e40af;
+  margin: 0 0 var(--spacing-2) 0;
+  font-size: var(--text-base);
+  color: var(--color-info-dark);
 }
 
 .phase-description p {
   margin: 0;
-  color: #64748b;
+  color: var(--text-secondary);
   font-style: italic;
 }
 
 .acceptance-criteria-item {
-  color: #1e40af;
-  margin: 0.25rem 0;
-  padding: 0.25rem;
-  background: #eff6ff;
-  border-radius: 0.25rem;
+  color: var(--color-info-dark);
+  margin: var(--spacing-1) 0;
+  padding: var(--spacing-1);
+  background: var(--color-info-bg);
+  border-radius: var(--radius-default);
 }
 
 .functional-req-item {
-  color: #7c3aed;
-  margin: 0.25rem 0;
-  padding: 0.25rem;
-  background: #faf5ff;
-  border-radius: 0.25rem;
+  color: var(--chart-purple);
+  margin: var(--spacing-1) 0;
+  padding: var(--spacing-1);
+  background: var(--chart-purple-bg);
+  border-radius: var(--radius-default);
 }
 
 .error-content {
@@ -761,20 +778,20 @@ export default {
 }
 
 .error-content i {
-  font-size: 2rem;
-  color: #f59e0b;
-  margin-bottom: 10px;
+  font-size: var(--text-4xl);
+  color: var(--color-warning);
+  margin-bottom: var(--spacing-2-5);
 }
 
 .error-content h3 {
-  color: #92400e;
-  margin: 10px 0;
-  font-size: 1.2rem;
+  color: var(--color-warning-dark);
+  margin: var(--spacing-2-5) 0;
+  font-size: var(--text-xl);
 }
 
 .error-content p {
-  color: #b45309;
-  margin-bottom: 15px;
+  color: var(--color-warning-dark);
+  margin-bottom: var(--spacing-4);
 }
 
 /* Button styling handled by BaseButton component */
@@ -782,39 +799,50 @@ export default {
 .phases-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-  gap: 20px;
-  margin-bottom: 30px;
+  gap: var(--spacing-5);
+  margin-bottom: var(--spacing-8);
 }
 
 .phase-card {
-  background: white;
-  border-radius: 10px;
-  padding: 20px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  border-left: 4px solid #e5e5e5;
-  transition: all 0.3s ease;
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-5);
+  box-shadow: var(--shadow-md);
+  border-left: 4px solid var(--border-default);
+  transition: var(--transition-all);
 }
 
 .phase-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-lg);
 }
 
-.phase-complete { border-left-color: #10b981; }
-.phase-mostly-complete { border-left-color: #3b82f6; }
-.phase-in-progress { border-left-color: #f59e0b; }
-.phase-incomplete { border-left-color: #ef4444; }
+.phase-complete {
+  border-left-color: var(--color-success);
+}
+
+.phase-mostly-complete {
+  border-left-color: var(--color-info);
+}
+
+.phase-in-progress {
+  border-left-color: var(--color-warning);
+}
+
+.phase-incomplete {
+  border-left-color: var(--color-error);
+}
 
 .phase-card-header {
   display: flex;
   align-items: center;
-  gap: 15px;
-  margin-bottom: 15px;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-4);
 }
 
 .phase-icon {
-  font-size: 1.5rem;
-  color: #6b7280;
+  font-size: var(--text-2xl);
+  color: var(--text-tertiary);
 }
 
 .phase-info {
@@ -822,79 +850,105 @@ export default {
 }
 
 .phase-name {
-  margin: 0 0 5px 0;
-  font-size: 1.1rem;
-  color: #1f2937;
+  margin: 0 0 var(--spacing-1) 0;
+  font-size: var(--text-lg);
+  color: var(--text-primary);
 }
 
 .phase-status {
-  font-size: 0.9rem;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-weight: 500;
+  font-size: var(--text-sm);
+  padding: 2px var(--spacing-2);
+  border-radius: var(--radius-full);
+  font-weight: var(--font-medium);
 }
 
-.status-complete { background: #d1fae5; color: #065f46; }
-.status-mostly-complete { background: #dbeafe; color: #1e40af; }
-.status-in-progress { background: #fef3c7; color: #92400e; }
-.status-incomplete { background: #fee2e2; color: #991b1b; }
+.status-complete {
+  background: var(--color-success-bg);
+  color: var(--color-success-dark);
+}
+
+.status-mostly-complete {
+  background: var(--color-info-bg);
+  color: var(--color-info-dark);
+}
+
+.status-in-progress {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-dark);
+}
+
+.status-incomplete {
+  background: var(--color-error-bg);
+  color: var(--color-error-dark);
+}
 
 .phase-completion {
-  font-size: 1.2rem;
-  font-weight: bold;
-  color: #374151;
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
 }
 
 .progress-container {
-  margin: 15px 0;
+  margin: var(--spacing-4) 0;
 }
 
 .progress-bar {
   width: 100%;
   height: 8px;
-  background: #e5e5e5;
-  border-radius: 4px;
+  background: var(--border-default);
+  border-radius: var(--radius-default);
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  transition: width 0.3s ease;
-  border-radius: 4px;
+  transition: width var(--duration-300) var(--ease-out);
+  border-radius: var(--radius-default);
 }
 
-.progress-complete { background: linear-gradient(90deg, #10b981, #059669); }
-.progress-mostly-complete { background: linear-gradient(90deg, #3b82f6, #1d4ed8); }
-.progress-in-progress { background: linear-gradient(90deg, #f59e0b, #d97706); }
-.progress-incomplete { background: linear-gradient(90deg, #ef4444, #dc2626); }
+.progress-complete {
+  background: linear-gradient(90deg, var(--color-success) 0%, var(--color-success-hover) 100%);
+}
+
+.progress-mostly-complete {
+  background: linear-gradient(90deg, var(--color-info) 0%, var(--color-info-dark) 100%);
+}
+
+.progress-in-progress {
+  background: linear-gradient(90deg, var(--color-warning) 0%, var(--color-warning-hover) 100%);
+}
+
+.progress-incomplete {
+  background: linear-gradient(90deg, var(--color-error) 0%, var(--color-error-hover) 100%);
+}
 
 .phase-details {
-  margin: 15px 0;
-  font-size: 0.9rem;
-  color: #6b7280;
+  margin: var(--spacing-4) 0;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
 }
 
 .validation-criteria {
-  margin-top: 10px;
+  margin-top: var(--spacing-2-5);
 }
 
 .criteria-section {
-  margin-bottom: 15px;
-  padding: 10px;
-  background: #f8f9fa;
-  border-radius: 5px;
-  border-left: 3px solid #e5e5e5;
+  margin-bottom: var(--spacing-4);
+  padding: var(--spacing-2-5);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--border-default);
 }
 
 .criteria-section h4 {
-  margin: 0 0 8px 0;
-  font-size: 0.85rem;
-  color: #374151;
-  font-weight: 600;
+  margin: 0 0 var(--spacing-2) 0;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  font-weight: var(--font-semibold);
 }
 
 .criteria-section h4 i {
-  margin-right: 5px;
+  margin-right: var(--spacing-1);
   width: 14px;
 }
 
@@ -908,152 +962,153 @@ export default {
   display: flex;
   align-items: center;
   padding: 3px 0;
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
 }
 
 .criteria-list li i {
-  margin-right: 8px;
+  margin-right: var(--spacing-2);
   width: 12px;
   font-size: 0.75rem;
 }
 
 .criteria-pass {
-  color: #059669;
+  color: var(--color-success-hover);
 }
 
 .criteria-fail {
-  color: #dc2626;
+  color: var(--color-error-hover);
 }
 
 .response-time {
-  margin-left: 5px;
+  margin-left: var(--spacing-1);
   font-size: 0.7rem;
-  color: #6b7280;
+  color: var(--text-tertiary);
   font-style: italic;
 }
 
 .service-status {
-  margin-left: 5px;
+  margin-left: var(--spacing-1);
   font-size: 0.7rem;
-  color: #6b7280;
+  color: var(--text-tertiary);
   font-style: italic;
 }
 
 .metric-threshold {
-  margin-left: 5px;
+  margin-left: var(--spacing-1);
   font-size: 0.7rem;
-  color: #6b7280;
+  color: var(--text-tertiary);
   font-style: italic;
 }
 
 .capability-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 5px;
+  gap: var(--spacing-1);
+  margin-top: var(--spacing-1);
 }
 
 .capability-tag {
-  background: #f3f4f6;
-  color: #374151;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.8rem;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  padding: 2px var(--spacing-1-5);
+  border-radius: var(--radius-default);
+  font-size: var(--text-xs);
 }
 
-.prereq-list, .next-phases-list {
-  margin: 5px 0;
-  padding-left: 20px;
+.prereq-list,
+.next-phases-list {
+  margin: var(--spacing-1) 0;
+  padding-left: var(--spacing-5);
 }
 
 .phase-actions {
   display: flex;
-  gap: 10px;
-  margin-top: 15px;
+  gap: var(--spacing-2-5);
+  margin-top: var(--spacing-4);
 }
 
 /* Button styling handled by BaseButton component */
 
 .progression-history {
-  background: white;
-  padding: 20px;
-  border-radius: 10px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  margin-bottom: 20px;
+  background: var(--bg-card);
+  padding: var(--spacing-5);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  margin-bottom: var(--spacing-5);
 }
 
 .progression-history h3 {
-  margin: 0 0 15px 0;
+  margin: 0 0 var(--spacing-4) 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-  color: #374151;
+  gap: var(--spacing-2-5);
+  color: var(--text-primary);
 }
 
 .history-timeline {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .history-item {
   display: flex;
   align-items: center;
-  gap: 15px;
-  padding: 10px;
-  background: #f9fafb;
-  border-radius: 5px;
+  gap: var(--spacing-4);
+  padding: var(--spacing-2-5);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
 }
 
 .history-icon {
-  font-size: 1.2rem;
+  font-size: var(--text-xl);
 }
 
 .history-content {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .history-status {
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.8rem;
+  padding: 2px var(--spacing-1-5);
+  border-radius: var(--radius-default);
+  font-size: var(--text-xs);
 }
 
 .history-time {
-  font-size: 0.8rem;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
   margin-left: auto;
 }
 
 .auto-progression-controls {
-  background: white;
-  padding: 20px;
-  border-radius: 10px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  background: var(--bg-card);
+  padding: var(--spacing-5);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
 }
 
 .control-header h3 {
-  margin: 0 0 20px 0;
+  margin: 0 0 var(--spacing-5) 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-  color: #374151;
+  gap: var(--spacing-2-5);
+  color: var(--text-primary);
 }
 
 .controls-grid {
   display: grid;
   grid-template-columns: auto 1fr 1fr;
-  gap: 20px;
+  gap: var(--spacing-5);
   align-items: center;
 }
 
 .control-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .switch {
@@ -1076,9 +1131,9 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #ccc;
-  transition: .4s;
-  border-radius: 34px;
+  background-color: var(--border-default);
+  transition: var(--duration-300);
+  border-radius: var(--radius-full);
 }
 
 .slider:before {
@@ -1088,13 +1143,13 @@ export default {
   width: 26px;
   left: 4px;
   bottom: 4px;
-  background-color: white;
-  transition: .4s;
-  border-radius: 50%;
+  background-color: var(--text-on-primary);
+  transition: var(--duration-300);
+  border-radius: var(--radius-full);
 }
 
 input:checked + .slider {
-  background-color: #3b82f6;
+  background-color: var(--color-info);
 }
 
 input:checked + .slider:before {
@@ -1109,30 +1164,43 @@ input:checked + .slider:before {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .loading-spinner {
-  background: white;
-  padding: 30px;
-  border-radius: 10px;
+  background: var(--bg-card);
+  padding: var(--spacing-8);
+  border-radius: var(--radius-xl);
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 15px;
+  gap: var(--spacing-4);
 }
 
 .loading-spinner i {
-  font-size: 2rem;
-  color: #3b82f6;
+  font-size: var(--text-4xl);
+  color: var(--color-info);
 }
 
-.text-green-500 { color: #10b981; }
-.text-red-500 { color: #ef4444; }
-.text-blue-500 { color: #3b82f6; }
+/* Icon color utility classes using design tokens */
+.icon-success {
+  color: var(--color-success);
+}
+
+.icon-error {
+  color: var(--color-error);
+}
+
+.icon-info {
+  color: var(--color-info);
+}
+
+.icon-purple {
+  color: var(--chart-purple);
+}
 </style>

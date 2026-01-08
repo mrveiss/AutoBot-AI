@@ -45,16 +45,16 @@
       <div class="knowledge-items">
         <h4 class="section-title">📋 Review Knowledge Items</h4>
         <div class="items-list">
-          <div 
-            v-for="item in pendingItems" 
+          <div
+            v-for="item in pendingItems"
             :key="item.id"
             class="knowledge-item"
             :class="{ 'selected': selectedItems[item.id] }"
           >
             <div class="item-header">
               <div class="item-selection">
-                <input 
-                  type="checkbox" 
+                <input
+                  type="checkbox"
                   :id="`item-${item.id}`"
                   v-model="selectedItems[item.id]"
                   @change="updateItemDecision(item.id)"
@@ -67,16 +67,16 @@
                 {{ getSuggestionText(item.suggested_action) }}
               </div>
             </div>
-            
+
             <div v-if="selectedItems[item.id]" class="item-details">
               <div class="content-preview">
                 <pre>{{ item.content }}</pre>
               </div>
-              
+
               <div class="decision-options">
                 <label class="decision-option">
-                  <input 
-                    type="radio" 
+                  <input
+                    type="radio"
                     :name="`decision-${item.id}`"
                     value="add_to_kb"
                     v-model="itemDecisions[item.id]"
@@ -89,10 +89,10 @@
                     Store permanently for future reference across all chats
                   </span>
                 </label>
-                
+
                 <label class="decision-option">
-                  <input 
-                    type="radio" 
+                  <input
+                    type="radio"
                     :name="`decision-${item.id}`"
                     value="keep_temporary"
                     v-model="itemDecisions[item.id]"
@@ -105,10 +105,10 @@
                     Available only during this chat session
                   </span>
                 </label>
-                
+
                 <label class="decision-option">
-                  <input 
-                    type="radio" 
+                  <input
+                    type="radio"
                     :name="`decision-${item.id}`"
                     value="delete"
                     v-model="itemDecisions[item.id]"
@@ -122,7 +122,7 @@
                   </span>
                 </label>
               </div>
-              
+
               <div class="item-metadata" v-if="item.metadata">
                 <span class="metadata-label">Created:</span>
                 <span class="metadata-value">{{ formatDate(item.created_at) }}</span>
@@ -197,8 +197,8 @@
           </label>
           <div class="compile-title">
             <label>Title for compiled entry:</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               v-model="compileOptions.title"
               placeholder="Enter a descriptive title..."
               class="title-input"
@@ -311,13 +311,13 @@ const decisionsCount = computed(() => {
     keep_temporary: 0,
     delete: 0
   };
-  
+
   Object.entries(itemDecisions.value).forEach(([itemId, decision]) => {
     if (selectedItems.value[itemId] && decision) {
       counts[decision]++;
     }
   });
-  
+
   return counts;
 });
 
@@ -327,10 +327,10 @@ const loadPendingItems = async () => {
     loading.value = true;
     // Issue #552: Fixed path to match backend (hyphen instead of underscore)
     const response = await apiService.get(`/api/chat-knowledge/knowledge/pending/${props.chatId}`);
-    
+
     if (response.success) {
       pendingItems.value = response.pending_items;
-      
+
       // Initialize selections and decisions
       pendingItems.value.forEach(item => {
         selectedItems.value[item.id] = false;
@@ -392,7 +392,7 @@ const applyAllDecisions = async () => {
   try {
     loading.value = true;
     const decisions = [];
-    
+
     // Collect all decisions
     Object.entries(itemDecisions.value).forEach(([itemId, decision]) => {
       if (selectedItems.value[itemId]) {
@@ -403,7 +403,7 @@ const applyAllDecisions = async () => {
         });
       }
     });
-    
+
     // Apply decisions in parallel - eliminates N+1 sequential API calls
     // Issue #552: Fixed path to match backend (hyphen instead of underscore)
     await Promise.all(
@@ -411,7 +411,7 @@ const applyAllDecisions = async () => {
         apiService.post('/api/chat-knowledge/knowledge/decide', decision)
       )
     );
-    
+
     showToast(`Applied ${decisions.length} knowledge decisions`, 'success');
     emit('decisions-applied', decisions);
     closeDialog();
@@ -434,7 +434,7 @@ const compileChat = async () => {
       title: compileOptions.value.title || null,
       include_system_messages: compileOptions.value.includeSystemMessages
     });
-    
+
     if (response.success) {
       showToast('Chat compiled to knowledge base successfully', 'success');
       emit('chat-compiled', response.compiled);
@@ -469,89 +469,94 @@ watch(() => props.visible, (newVal) => {
 </script>
 
 <style scoped>
+/**
+ * KnowledgePersistenceDialog - Design Token Migration
+ * Issue #704: Migrated hardcoded colors to CSS design tokens
+ */
+
 .dialog-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--overlay-backdrop);
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 2000;
+  z-index: var(--z-modal);
   backdrop-filter: blur(4px);
 }
 
 .knowledge-dialog {
-  background: #1a1a1a;
-  border: 2px solid #333;
-  border-radius: 12px;
+  background: var(--bg-surface);
+  border: 2px solid var(--border-default);
+  border-radius: var(--radius-xl);
   max-width: 900px;
   width: 90%;
   max-height: 90vh;
   overflow-y: auto;
-  color: #ffffff;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
 }
 
 .dialog-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #333;
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  padding: var(--spacing-5);
+  border-bottom: 1px solid var(--border-default);
+  background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info-dark) 100%);
 }
 
 .dialog-title {
   margin: 0;
-  font-size: 1.3em;
-  font-weight: 600;
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
 }
 
 /* Button styling handled by BaseButton component */
 
 .context-info {
-  padding: 20px;
-  background: #0f1419;
-  border-bottom: 1px solid #333;
+  padding: var(--spacing-5);
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .context-topic,
 .context-keywords {
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
 }
 
 .label {
-  font-weight: 600;
-  color: #9ca3af;
-  margin-right: 8px;
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
+  margin-right: var(--spacing-2);
 }
 
 .value {
-  color: #f3f4f6;
+  color: var(--text-primary);
 }
 
 .keywords-list {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
+  gap: var(--spacing-2);
+  margin-top: var(--spacing-2);
 }
 
 .keyword-tag {
-  background: #2563eb;
-  color: #ffffff;
-  padding: 4px 12px;
-  border-radius: 16px;
-  font-size: 0.85em;
+  background: var(--color-info);
+  color: var(--text-on-primary);
+  padding: var(--spacing-1) var(--spacing-3);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
 }
 
 .context-stats {
   display: flex;
-  gap: 32px;
-  margin-top: 16px;
+  gap: var(--spacing-8);
+  margin-top: var(--spacing-4);
 }
 
 .stat {
@@ -561,55 +566,55 @@ watch(() => props.visible, (newVal) => {
 }
 
 .stat-value {
-  font-size: 1.5em;
-  font-weight: 700;
-  color: #2563eb;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--color-info);
 }
 
 .stat-label {
-  font-size: 0.85em;
-  color: #9ca3af;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .knowledge-items {
-  padding: 20px;
+  padding: var(--spacing-5);
 }
 
 .section-title {
-  margin: 0 0 16px 0;
-  font-size: 1.1em;
-  font-weight: 600;
+  margin: 0 0 var(--spacing-4) 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
 }
 
 .items-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .knowledge-item {
-  border: 1px solid #374151;
-  border-radius: 8px;
-  background: #111827;
-  transition: all 0.2s;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
+  transition: var(--transition-all);
 }
 
 .knowledge-item.selected {
-  border-color: #2563eb;
-  background: rgba(37, 99, 235, 0.1);
+  border-color: var(--color-info);
+  background: var(--color-info-bg);
 }
 
 .item-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px;
+  padding: var(--spacing-4);
 }
 
 .item-selection {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-3);
   flex: 1;
 }
 
@@ -621,170 +626,170 @@ watch(() => props.visible, (newVal) => {
 
 .item-preview {
   cursor: pointer;
-  font-size: 0.95em;
+  font-size: var(--text-base);
   flex: 1;
 }
 
 .item-suggestion {
-  font-size: 0.85em;
-  padding: 4px 12px;
-  border-radius: 16px;
-  font-weight: 500;
+  font-size: var(--text-sm);
+  padding: var(--spacing-1) var(--spacing-3);
+  border-radius: var(--radius-full);
+  font-weight: var(--font-medium);
 }
 
 .item-suggestion.add_to_kb {
-  background: rgba(34, 197, 94, 0.2);
-  color: #22c55e;
+  background: var(--color-success-bg);
+  color: var(--chart-green);
 }
 
 .item-suggestion.keep_temporary {
-  background: rgba(251, 191, 36, 0.2);
-  color: #fbbf24;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-light);
 }
 
 .item-suggestion.delete {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .item-details {
-  padding: 0 16px 16px;
-  border-top: 1px solid #374151;
+  padding: 0 var(--spacing-4) var(--spacing-4);
+  border-top: 1px solid var(--border-default);
 }
 
 .content-preview {
-  margin: 16px 0;
-  padding: 12px;
-  background: #0f1419;
-  border-radius: 6px;
-  border: 1px solid #374151;
+  margin: var(--spacing-4) 0;
+  padding: var(--spacing-3);
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
 }
 
 .content-preview pre {
   margin: 0;
   white-space: pre-wrap;
   word-wrap: break-word;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 0.85em;
-  color: #e5e7eb;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
 }
 
 .decision-options {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin: 16px 0;
+  gap: var(--spacing-3);
+  margin: var(--spacing-4) 0;
 }
 
 .decision-option {
   display: flex;
   flex-direction: column;
-  padding: 12px;
-  border: 1px solid #374151;
-  border-radius: 6px;
+  padding: var(--spacing-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition-all);
 }
 
 .decision-option:hover {
-  border-color: #4b5563;
-  background: rgba(55, 65, 81, 0.2);
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
 }
 
 .decision-option input[type="radio"] {
-  margin-right: 8px;
+  margin-right: var(--spacing-2);
 }
 
 .option-label {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  margin-bottom: 4px;
+  gap: var(--spacing-2);
+  font-weight: var(--font-semibold);
+  margin-bottom: var(--spacing-1);
 }
 
 .option-icon {
-  font-size: 1.2em;
+  font-size: var(--text-lg);
 }
 
 .option-description {
-  font-size: 0.85em;
-  color: #9ca3af;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
   margin-left: 28px;
 }
 
 .item-metadata {
   display: flex;
-  gap: 16px;
-  font-size: 0.85em;
-  color: #6b7280;
+  gap: var(--spacing-4);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
 }
 
 .metadata-label {
-  font-weight: 600;
+  font-weight: var(--font-semibold);
 }
 
 .bulk-actions {
-  padding: 20px;
-  border-top: 1px solid #333;
-  background: #0f1419;
+  padding: var(--spacing-5);
+  border-top: 1px solid var(--border-default);
+  background: var(--bg-primary);
 }
 
 .bulk-buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 /* Button styling handled by BaseButton component */
 
 .compile-section {
-  padding: 20px;
-  border-top: 1px solid #333;
+  padding: var(--spacing-5);
+  border-top: 1px solid var(--border-default);
 }
 
 .compile-description {
-  color: #d1d5db;
-  font-size: 0.95em;
-  margin-bottom: 16px;
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+  margin-bottom: var(--spacing-4);
 }
 
 .compile-options {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: var(--spacing-3);
+  margin-bottom: var(--spacing-4);
 }
 
 .compile-option {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .compile-title {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .compile-title label {
-  font-weight: 600;
-  font-size: 0.9em;
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
 }
 
 .title-input {
-  background: #111827;
-  border: 1px solid #374151;
-  color: #ffffff;
-  padding: 10px;
-  border-radius: 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  padding: var(--spacing-2-5);
+  border-radius: var(--radius-md);
   font-family: inherit;
 }
 
 .title-input:focus {
   outline: none;
-  border-color: #2563eb;
+  border-color: var(--color-info);
 }
 
 /* Button styling handled by BaseButton component */
@@ -793,41 +798,41 @@ watch(() => props.visible, (newVal) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
-  border-top: 1px solid #333;
-  background: #0f1419;
+  padding: var(--spacing-5);
+  border-top: 1px solid var(--border-default);
+  background: var(--bg-primary);
 }
 
 .action-summary {
   display: flex;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .summary-item {
-  padding: 4px 12px;
-  border-radius: 16px;
-  font-size: 0.85em;
-  font-weight: 600;
+  padding: var(--spacing-1) var(--spacing-3);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
 }
 
 .summary-item.add {
-  background: rgba(34, 197, 94, 0.2);
-  color: #22c55e;
+  background: var(--color-success-bg);
+  color: var(--chart-green);
 }
 
 .summary-item.temp {
-  background: rgba(251, 191, 36, 0.2);
-  color: #fbbf24;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-light);
 }
 
 .summary-item.delete {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .action-buttons {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 /* Button styling handled by BaseButton component */
@@ -836,22 +841,22 @@ watch(() => props.visible, (newVal) => {
 @media (max-width: 768px) {
   .knowledge-dialog {
     width: 95%;
-    margin: 10px;
+    margin: var(--spacing-2-5);
   }
-  
+
   .bulk-buttons {
     flex-direction: column;
   }
 
   .dialog-actions {
     flex-direction: column;
-    gap: 16px;
+    gap: var(--spacing-4);
   }
-  
+
   .action-summary {
     order: 2;
   }
-  
+
   .action-buttons {
     order: 1;
     width: 100%;

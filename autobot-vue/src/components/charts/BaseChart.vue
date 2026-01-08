@@ -5,6 +5,8 @@
 
   BaseChart.vue - Base ApexCharts component with AutoBot dark theme
   Provides consistent chart styling across all analytics visualizations
+
+  Issue #704: Migrated to design tokens from design-tokens.css
 -->
 <template>
   <div class="base-chart" :class="{ 'chart-loading': loading }">
@@ -103,8 +105,11 @@ const getCssVar = (name: string, fallback: string): string => {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
 }
 
-// AutoBot theme colors using CSS custom properties (Issue #704)
-// These values are read from design-tokens.css and adapt to dark/light theme
+/**
+ * AutoBot theme colors using CSS custom properties (Issue #704)
+ * All values are read from design-tokens.css and adapt to dark/light theme
+ * Hardcoded fallbacks match design-tokens.css defaults for SSR compatibility
+ */
 const darkTheme: any = {
   chart: {
     background: 'transparent',
@@ -208,7 +213,7 @@ const darkTheme: any = {
     theme: 'dark',
     style: {
       fontSize: '12px',
-      fontFamily: 'Inter, system-ui, sans-serif'
+      fontFamily: getCssVar('--font-sans', 'Inter, system-ui, sans-serif')
     },
     x: {
       show: true
@@ -227,10 +232,10 @@ const darkTheme: any = {
     position: 'bottom',
     horizontalAlign: 'center',
     fontSize: '12px',
-    fontFamily: 'Inter, system-ui, sans-serif',
+    fontFamily: getCssVar('--font-sans', 'Inter, system-ui, sans-serif'),
     fontWeight: 400,
     labels: {
-      colors: '#e2e8f0'
+      colors: getCssVar('--text-primary', '#e2e8f0')
     },
     markers: {
       width: 12,
@@ -246,13 +251,13 @@ const darkTheme: any = {
     enabled: false,
     style: {
       fontSize: '11px',
-      fontFamily: 'Inter, system-ui, sans-serif',
+      fontFamily: getCssVar('--font-sans', 'Inter, system-ui, sans-serif'),
       fontWeight: 500,
-      colors: ['#fff']
+      colors: [getCssVar('--text-on-primary', '#ffffff')]
     },
     background: {
       enabled: true,
-      foreColor: '#1e293b',
+      foreColor: getCssVar('--bg-secondary', '#1e293b'),
       borderRadius: 2,
       padding: 4,
       opacity: 0.9,
@@ -286,14 +291,14 @@ const darkTheme: any = {
           name: {
             show: true,
             fontSize: '14px',
-            fontFamily: 'Inter, system-ui, sans-serif',
-            color: '#e2e8f0'
+            fontFamily: getCssVar('--font-sans', 'Inter, system-ui, sans-serif'),
+            color: getCssVar('--text-primary', '#e2e8f0')
           },
           value: {
             show: true,
             fontSize: '22px',
-            fontFamily: 'Inter, system-ui, sans-serif',
-            color: '#e2e8f0',
+            fontFamily: getCssVar('--font-sans', 'Inter, system-ui, sans-serif'),
+            color: getCssVar('--text-primary', '#e2e8f0'),
             formatter: (val: string) => val
           },
           total: {
@@ -301,8 +306,8 @@ const darkTheme: any = {
             showAlways: false,
             label: 'Total',
             fontSize: '14px',
-            fontFamily: 'Inter, system-ui, sans-serif',
-            color: '#94a3b8'
+            fontFamily: getCssVar('--font-sans', 'Inter, system-ui, sans-serif'),
+            color: getCssVar('--text-secondary', '#94a3b8')
           }
         }
       }
@@ -312,16 +317,16 @@ const darkTheme: any = {
         size: '60%'
       },
       track: {
-        background: '#334155'
+        background: getCssVar('--bg-tertiary', '#334155')
       },
       dataLabels: {
         name: {
           fontSize: '14px',
-          color: '#e2e8f0'
+          color: getCssVar('--text-primary', '#e2e8f0')
         },
         value: {
           fontSize: '24px',
-          color: '#e2e8f0'
+          color: getCssVar('--text-primary', '#e2e8f0')
         }
       }
     },
@@ -337,10 +342,10 @@ const darkTheme: any = {
       shadeIntensity: 0.5,
       colorScale: {
         ranges: [
-          { from: 0, to: 25, color: '#1e3a5f', name: 'low' },
-          { from: 26, to: 50, color: '#3b82f6', name: 'medium' },
-          { from: 51, to: 75, color: '#f59e0b', name: 'high' },
-          { from: 76, to: 100, color: '#ef4444', name: 'critical' }
+          { from: 0, to: 25, color: getCssVar('--color-info-dark', '#1d4ed8'), name: 'low' },
+          { from: 26, to: 50, color: getCssVar('--chart-blue', '#3b82f6'), name: 'medium' },
+          { from: 51, to: 75, color: getCssVar('--chart-yellow', '#f59e0b'), name: 'high' },
+          { from: 76, to: 100, color: getCssVar('--chart-red', '#ef4444'), name: 'critical' }
         ]
       }
     }
