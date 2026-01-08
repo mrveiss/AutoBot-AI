@@ -317,27 +317,29 @@ const formatDbName = (dbName: string | number): string => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
+
 .settings-section {
   margin-bottom: 30px;
-  background: #ffffff;
-  border: 1px solid #e1e5e9;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   padding: 24px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .settings-section h3 {
   margin: 0 0 20px 0;
-  color: #2c3e50;
+  color: var(--text-primary);
   font-weight: 600;
   font-size: 18px;
-  border-bottom: 2px solid #3498db;
+  border-bottom: 2px solid var(--color-primary);
   padding-bottom: 8px;
 }
 
 .cache-unavailable-warning {
-  background: #fff3cd;
-  border: 1px solid #ffeaa7;
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning);
   border-radius: 6px;
   padding: 16px;
   margin-bottom: 20px;
@@ -350,33 +352,34 @@ const formatDbName = (dbName: string | number): string => {
 }
 
 .warning-content i {
-  color: #856404;
+  color: var(--color-warning-text);
   font-size: 20px;
   margin-top: 2px;
 }
 
 .warning-text h4 {
   margin: 0 0 8px 0;
-  color: #856404;
+  color: var(--color-warning-text);
   font-size: 16px;
   font-weight: 600;
 }
 
 .warning-text p {
   margin: 0 0 8px 0;
-  color: #856404;
+  color: var(--color-warning-text);
   line-height: 1.4;
 }
 
 .warning-text small {
-  color: #6c5014;
+  color: var(--color-warning-text);
   font-size: 13px;
   line-height: 1.3;
+  opacity: 0.85;
 }
 
 .cache-configuration {
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
   border-radius: 6px;
   padding: 20px;
   margin-bottom: 20px;
@@ -384,7 +387,7 @@ const formatDbName = (dbName: string | number): string => {
 
 .cache-configuration h4 {
   margin: 0 0 15px 0;
-  color: #495057;
+  color: var(--text-secondary);
   font-size: 16px;
   font-weight: 600;
 }
@@ -395,7 +398,7 @@ const formatDbName = (dbName: string | number): string => {
   align-items: center;
   margin-bottom: 16px;
   padding: 12px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .setting-item:last-child {
@@ -405,7 +408,7 @@ const formatDbName = (dbName: string | number): string => {
 
 .setting-item label {
   font-weight: 500;
-  color: #34495e;
+  color: var(--text-secondary);
   flex: 1;
   margin-right: 16px;
   cursor: pointer;
@@ -414,10 +417,12 @@ const formatDbName = (dbName: string | number): string => {
 .setting-item input {
   min-width: 150px;
   padding: 8px 12px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-default);
   border-radius: 4px;
   font-size: 14px;
   transition: border-color 0.2s ease;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .setting-item input[type="checkbox"] {
@@ -425,18 +430,18 @@ const formatDbName = (dbName: string | number): string => {
   width: 20px;
   height: 20px;
   cursor: pointer;
-  accent-color: #007acc;
+  accent-color: var(--color-primary);
 }
 
 .setting-item input:focus {
   outline: none;
-  border-color: #007acc;
-  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-alpha);
 }
 
 .save-btn {
-  background: #28a745;
-  color: white;
+  background: var(--color-success);
+  color: var(--text-on-primary);
   border: none;
   padding: 10px 20px;
   border-radius: 5px;
@@ -450,11 +455,11 @@ const formatDbName = (dbName: string | number): string => {
 }
 
 .save-btn:hover:not(:disabled) {
-  background: #218838;
+  background: var(--color-success-hover);
 }
 
 .save-btn:disabled {
-  background: #6c757d;
+  background: var(--text-tertiary);
   cursor: not-allowed;
 }
 
@@ -464,7 +469,7 @@ const formatDbName = (dbName: string | number): string => {
 
 .cache-activity h4 {
   margin: 0 0 15px 0;
-  color: #495057;
+  color: var(--text-secondary);
   font-size: 16px;
   font-weight: 600;
   display: flex;
@@ -473,8 +478,8 @@ const formatDbName = (dbName: string | number): string => {
 }
 
 .small-btn {
-  background: #007acc;
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
   border: none;
   padding: 4px 8px;
   border-radius: 3px;
@@ -483,12 +488,12 @@ const formatDbName = (dbName: string | number): string => {
 }
 
 .small-btn:hover {
-  background: #005999;
+  background: var(--color-primary-hover);
 }
 
 .activity-log {
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
   border-radius: 6px;
   max-height: 200px;
   overflow-y: auto;
@@ -499,7 +504,7 @@ const formatDbName = (dbName: string | number): string => {
   display: flex;
   justify-content: space-between;
   padding: 8px 0;
-  border-bottom: 1px solid #e9ecef;
+  border-bottom: 1px solid var(--border-light);
   font-size: 13px;
 }
 
@@ -508,15 +513,15 @@ const formatDbName = (dbName: string | number): string => {
 }
 
 .activity-item.info {
-  color: #17a2b8;
+  color: var(--color-info);
 }
 
 .activity-item.warning {
-  color: #ffc107;
+  color: var(--color-warning);
 }
 
 .activity-item.error {
-  color: #dc3545;
+  color: var(--color-danger);
 }
 
 .cache-stats {
@@ -525,7 +530,7 @@ const formatDbName = (dbName: string | number): string => {
 
 .cache-stats h4 {
   margin: 0 0 15px 0;
-  color: #495057;
+  color: var(--text-secondary);
   font-size: 16px;
   font-weight: 600;
 }
@@ -538,13 +543,13 @@ const formatDbName = (dbName: string | number): string => {
 }
 
 .stats-unavailable {
-  background: #e2e3e5;
-  color: #6c757d;
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
 }
 
 .stats-error {
-  background: #f8d7da;
-  color: #721c24;
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
 }
 
 .stats-grid {
@@ -554,7 +559,7 @@ const formatDbName = (dbName: string | number): string => {
 }
 
 .stat-item {
-  background: #e9ecef;
+  background: var(--bg-tertiary);
   padding: 12px 16px;
   border-radius: 6px;
   display: flex;
@@ -564,17 +569,17 @@ const formatDbName = (dbName: string | number): string => {
 
 .stat-item label {
   font-weight: 500;
-  color: #495057;
+  color: var(--text-secondary);
 }
 
 .stat-item span {
   font-weight: 600;
-  color: #007acc;
+  color: var(--color-primary);
 }
 
 .cache-alternative-info {
-  background: #d1ecf1;
-  border: 1px solid #bee5eb;
+  background: var(--color-info-bg);
+  border: 1px solid var(--color-info-border);
   border-radius: 6px;
   padding: 20px;
   margin-top: 20px;
@@ -582,7 +587,7 @@ const formatDbName = (dbName: string | number): string => {
 
 .cache-alternative-info h4 {
   margin: 0 0 16px 0;
-  color: #0c5460;
+  color: var(--color-info-text);
   font-size: 16px;
   font-weight: 600;
 }
@@ -598,24 +603,24 @@ const formatDbName = (dbName: string | number): string => {
   align-items: flex-start;
   gap: 12px;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--bg-primary-alpha);
   border-radius: 4px;
 }
 
 .info-item i {
-  color: #0c5460;
+  color: var(--color-info-text);
   font-size: 16px;
   margin-top: 2px;
 }
 
 .info-item div {
-  color: #0c5460;
+  color: var(--color-info-text);
   line-height: 1.4;
 }
 
 .cache-section {
   margin-bottom: 30px;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--border-light);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -623,9 +628,9 @@ const formatDbName = (dbName: string | number): string => {
 .cache-section h4 {
   margin: 0;
   padding: 16px 20px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #dee2e6;
-  color: #495057;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-light);
+  color: var(--text-secondary);
   font-size: 16px;
   font-weight: 600;
 }
@@ -642,14 +647,14 @@ const formatDbName = (dbName: string | number): string => {
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
   border-radius: 6px;
   transition: border-color 0.2s ease;
 }
 
 .redis-db-item:hover {
-  border-color: #007acc;
+  border-color: var(--color-primary);
 }
 
 .db-info {
@@ -658,7 +663,7 @@ const formatDbName = (dbName: string | number): string => {
 
 .db-info h5 {
   margin: 0 0 8px 0;
-  color: #2c3e50;
+  color: var(--text-primary);
   font-size: 14px;
   font-weight: 600;
 }
@@ -674,23 +679,23 @@ const formatDbName = (dbName: string | number): string => {
   font-size: 12px;
   padding: 4px 8px;
   border-radius: 4px;
-  background: #e9ecef;
-  color: #495057;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
 }
 
 .connection-status.connected {
-  background: #d4edda;
-  color: #155724;
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
 }
 
 .connection-status.disconnected {
-  background: #f8d7da;
-  color: #721c24;
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
 }
 
 .clear-db-btn {
-  background: #dc3545;
-  color: white;
+  background: var(--color-danger);
+  color: var(--text-on-primary);
   border: none;
   padding: 8px 12px;
   border-radius: 4px;
@@ -704,24 +709,24 @@ const formatDbName = (dbName: string | number): string => {
 }
 
 .clear-db-btn:hover:not(:disabled) {
-  background: #c82333;
+  background: var(--color-danger-hover);
 }
 
 .clear-db-btn:disabled {
-  background: #6c757d;
+  background: var(--text-tertiary);
   cursor: not-allowed;
 }
 
 .redis-all-control {
   padding: 20px;
-  border-top: 1px solid #dee2e6;
-  background: #f8f9fa;
+  border-top: 1px solid var(--border-light);
+  background: var(--bg-secondary);
   text-align: center;
 }
 
 .clear-all-redis-btn {
-  background: #dc3545;
-  color: white;
+  background: var(--color-danger);
+  color: var(--text-on-primary);
   border: none;
   padding: 12px 24px;
   border-radius: 6px;
@@ -735,11 +740,11 @@ const formatDbName = (dbName: string | number): string => {
 }
 
 .clear-all-redis-btn:hover:not(:disabled) {
-  background: #c82333;
+  background: var(--color-danger-hover);
 }
 
 .clear-all-redis-btn:disabled {
-  background: #6c757d;
+  background: var(--text-tertiary);
   cursor: not-allowed;
 }
 
@@ -761,35 +766,35 @@ const formatDbName = (dbName: string | number): string => {
   align-items: center;
   gap: 8px;
   transition: all 0.2s ease;
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .clear-type-btn.knowledge {
-  background: #6f42c1;
+  background: var(--color-purple);
 }
 
 .clear-type-btn.knowledge:hover:not(:disabled) {
-  background: #5a359e;
+  background: var(--color-purple-hover);
 }
 
 .clear-type-btn.llm {
-  background: #20c997;
+  background: var(--color-teal);
 }
 
 .clear-type-btn.llm:hover:not(:disabled) {
-  background: #1ba085;
+  background: var(--color-teal-hover);
 }
 
 .clear-type-btn.config {
-  background: #fd7e14;
+  background: var(--color-orange);
 }
 
 .clear-type-btn.config:hover:not(:disabled) {
-  background: #e8680d;
+  background: var(--color-orange-hover);
 }
 
 .clear-type-btn:disabled {
-  background: #6c757d !important;
+  background: var(--text-tertiary) !important;
   cursor: not-allowed;
 }
 
@@ -815,117 +820,117 @@ const formatDbName = (dbName: string | number): string => {
 }
 
 .clear-btn {
-  background: #dc3545;
-  color: white;
+  background: var(--color-danger);
+  color: var(--text-on-primary);
 }
 
 .clear-btn:hover:not(:disabled) {
-  background: #c82333;
+  background: var(--color-danger-hover);
 }
 
 .clear-btn:disabled {
-  background: #6c757d;
+  background: var(--text-tertiary);
   cursor: not-allowed;
 }
 
 .refresh-btn,
 .warmup-btn {
-  background: #007acc;
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .refresh-btn:hover,
 .warmup-btn:hover:not(:disabled) {
-  background: #005999;
+  background: var(--color-primary-hover);
 }
 
 .warmup-btn:disabled {
-  background: #6c757d;
+  background: var(--text-tertiary);
   cursor: not-allowed;
 }
 
-/* Dark theme support */
+/* Dark theme support - tokens automatically apply correct values */
 @media (prefers-color-scheme: dark) {
   .settings-section {
-    background: #2d2d2d;
-    border-color: #404040;
+    background: var(--bg-primary);
+    border-color: var(--border-default);
   }
 
   .settings-section h3 {
-    color: #ffffff;
-    border-bottom-color: #4fc3f7;
+    color: var(--text-primary);
+    border-bottom-color: var(--color-primary);
   }
 
   .cache-unavailable-warning {
-    background: #664d03;
-    border-color: #b08800;
+    background: var(--color-warning-bg);
+    border-color: var(--color-warning);
   }
 
   .warning-content i,
   .warning-text h4,
   .warning-text p {
-    color: #ffecb5;
+    color: var(--color-warning-text);
   }
 
   .warning-text small {
-    color: #ffeaa7;
+    color: var(--color-warning-text);
   }
 
   .cache-configuration {
-    background: #383838;
-    border-color: #555;
+    background: var(--bg-secondary);
+    border-color: var(--border-default);
   }
 
   .cache-configuration h4,
   .cache-activity h4,
   .cache-stats h4 {
-    color: #ffffff;
+    color: var(--text-primary);
   }
 
   .setting-item {
-    border-bottom-color: #404040;
+    border-bottom-color: var(--border-default);
   }
 
   .setting-item label {
-    color: #e0e0e0;
+    color: var(--text-secondary);
   }
 
   .setting-item input {
-    background: #404040;
-    border-color: #555;
-    color: #ffffff;
+    background: var(--bg-tertiary);
+    border-color: var(--border-default);
+    color: var(--text-primary);
   }
 
   .activity-log {
-    background: #383838;
-    border-color: #555;
+    background: var(--bg-secondary);
+    border-color: var(--border-default);
   }
 
   .activity-item {
-    border-bottom-color: #555;
+    border-bottom-color: var(--border-default);
   }
 
   .stat-item {
-    background: #404040;
+    background: var(--bg-tertiary);
   }
 
   .stat-item label {
-    color: #e0e0e0;
+    color: var(--text-secondary);
   }
 
   .cache-alternative-info {
-    background: #184956;
-    border-color: #2e8a9a;
+    background: var(--color-info-bg);
+    border-color: var(--color-info-border);
   }
 
   .cache-alternative-info h4,
   .info-item i,
   .info-item div {
-    color: #d1ecf1;
+    color: var(--color-info-text);
   }
 
   .info-item {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--bg-primary-alpha);
   }
 }
 

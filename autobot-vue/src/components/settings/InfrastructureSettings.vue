@@ -541,6 +541,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .infrastructure-settings {
   padding: 24px;
 }
@@ -550,7 +551,7 @@ onMounted(async () => {
   display: flex;
   gap: 8px;
   margin-bottom: 24px;
-  border-bottom: 2px solid #e9ecef;
+  border-bottom: 2px solid var(--border-light);
   padding-bottom: 0;
 }
 
@@ -558,7 +559,7 @@ onMounted(async () => {
   padding: 12px 20px;
   border: none;
   background: transparent;
-  color: #6c757d;
+  color: var(--text-tertiary);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -570,18 +571,18 @@ onMounted(async () => {
 }
 
 .infrastructure-tab:hover {
-  color: #495057;
-  background: #f8f9fa;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
 }
 
 .infrastructure-tab.active {
-  color: #007bff;
-  border-bottom-color: #007bff;
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
   background: transparent;
 }
 
 .infrastructure-settings h3 {
-  color: #2c3e50;
+  color: var(--text-primary);
   margin-bottom: 24px;
   font-size: 24px;
   font-weight: 600;
@@ -589,13 +590,13 @@ onMounted(async () => {
 
 .settings-section {
   margin-bottom: 32px;
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   border-radius: 8px;
   padding: 20px;
 }
 
 .settings-section h4 {
-  color: #495057;
+  color: var(--text-primary);
   margin-bottom: 16px;
   font-size: 18px;
   font-weight: 500;
@@ -610,26 +611,26 @@ onMounted(async () => {
   display: block;
   margin-bottom: 4px;
   font-weight: 500;
-  color: #495057;
+  color: var(--text-primary);
 }
 
 .form-control {
   width: 100%;
   padding: 8px 12px;
-  border: 1px solid #ced4da;
+  border: 1px solid var(--border-default);
   border-radius: 4px;
   font-size: 14px;
 }
 
 .form-control:disabled {
-  background: #e9ecef;
-  color: #6c757d;
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
 }
 
 /* Action Buttons */
 .save-btn {
-  background: #28a745;
-  color: white;
+  background: var(--color-success);
+  color: var(--bg-primary);
   border: none;
   padding: 10px 16px;
   border-radius: 6px;
@@ -641,8 +642,8 @@ onMounted(async () => {
 }
 
 .cancel-btn {
-  background: #6c757d;
-  color: white;
+  background: var(--text-tertiary);
+  color: var(--bg-primary);
   border: none;
   padding: 10px 16px;
   border-radius: 6px;
@@ -664,27 +665,27 @@ onMounted(async () => {
 }
 
 .alert-success {
-  background: #d4edda;
-  border: 1px solid #c3e6cb;
-  color: #155724;
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success);
+  color: var(--color-success-text, #155724);
 }
 
 .alert-error {
-  background: #f8d7da;
-  border: 1px solid #f5c6cb;
-  color: #721c24;
+  background: var(--color-danger-bg, #f8d7da);
+  border: 1px solid var(--color-danger);
+  color: var(--color-danger-text, #721c24);
 }
 
 .alert-info {
-  background: #cce5ff;
-  border: 1px solid #b8daff;
-  color: #004085;
+  background: var(--color-info-bg, #cce5ff);
+  border: 1px solid var(--color-info, #b8daff);
+  color: var(--color-info-text, #004085);
 }
 
 .alert-warning {
-  background: #fff3cd;
-  border: 1px solid #ffc107;
-  color: #856404;
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning);
+  color: var(--color-warning-text, #856404);
 }
 
 .alert i {
@@ -701,15 +702,15 @@ onMounted(async () => {
 }
 
 .status-indicator.has-updates {
-  color: #fd7e14;
+  color: var(--color-warning);
 }
 
 .status-indicator.up-to-date {
-  color: #28a745;
+  color: var(--color-success);
 }
 
 .status-message {
-  color: #6c757d;
+  color: var(--text-tertiary);
   font-size: 14px;
   margin: 0;
 }
@@ -723,13 +724,13 @@ onMounted(async () => {
 
 .updates-status {
   padding: 16px;
-  background: #e9ecef;
+  background: var(--bg-tertiary);
   border-radius: 8px;
 }
 
 .updates-info {
   padding: 12px;
-  background: #fff3cd;
+  background: var(--color-warning-bg);
   border-radius: 6px;
   font-size: 14px;
 }
@@ -744,8 +745,8 @@ onMounted(async () => {
 }
 
 .check-updates-btn {
-  background: #17a2b8;
-  color: white;
+  background: var(--color-info, #17a2b8);
+  color: var(--bg-primary);
   border: none;
   padding: 10px 16px;
   border-radius: 6px;
@@ -757,12 +758,12 @@ onMounted(async () => {
 }
 
 .check-updates-btn:hover:not(:disabled) {
-  background: #138496;
+  background: var(--color-info-hover, #138496);
 }
 
 .run-updates-btn {
-  background: #28a745;
-  color: white;
+  background: var(--color-success);
+  color: var(--bg-primary);
   border: none;
   padding: 10px 16px;
   border-radius: 6px;
@@ -774,14 +775,14 @@ onMounted(async () => {
 }
 
 .run-updates-btn:hover:not(:disabled) {
-  background: #218838;
+  background: var(--color-success-hover);
 }
 
 .update-progress {
   padding: 12px;
-  background: #e3f2fd;
+  background: var(--color-info-bg, #e3f2fd);
   border-radius: 6px;
-  border-left: 4px solid #2196f3;
+  border-left: 4px solid var(--color-info, #2196f3);
 }
 
 .progress-header {
@@ -799,38 +800,38 @@ onMounted(async () => {
 }
 
 .task-status.PENDING {
-  background: #ffc107;
-  color: #212529;
+  background: var(--color-warning);
+  color: var(--text-primary);
 }
 
 .task-status.PROGRESS {
-  background: #17a2b8;
-  color: white;
+  background: var(--color-info, #17a2b8);
+  color: var(--bg-primary);
 }
 
 .task-status.SUCCESS {
-  background: #28a745;
-  color: white;
+  background: var(--color-success);
+  color: var(--bg-primary);
 }
 
 .task-status.FAILURE {
-  background: #dc3545;
-  color: white;
+  background: var(--color-danger);
+  color: var(--bg-primary);
 }
 
 .progress-details {
   margin-top: 8px;
   font-size: 14px;
-  color: #495057;
+  color: var(--text-primary);
 }
 
 /* Progress section for modals (Issue #544) */
 .progress-section {
   margin: 16px 0;
   padding: 16px;
-  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  background: linear-gradient(135deg, var(--color-info-bg, #e3f2fd) 0%, var(--color-info-bg-alt, #bbdefb) 100%);
   border-radius: 8px;
-  border-left: 4px solid #2196f3;
+  border-left: 4px solid var(--color-info, #2196f3);
 }
 
 .progress-section .progress-header {
@@ -842,7 +843,7 @@ onMounted(async () => {
 
 .progress-section .status-text {
   font-weight: 500;
-  color: #1565c0;
+  color: var(--color-info-dark, #1565c0);
 }
 
 .progress-section .task-info {
@@ -851,13 +852,13 @@ onMounted(async () => {
   align-items: center;
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid rgba(33, 150, 243, 0.2);
+  border-top: 1px solid var(--color-info-border, rgba(33, 150, 243, 0.2));
 }
 
 .progress-section .task-id {
   font-family: monospace;
   font-size: 12px;
-  color: #546e7a;
+  color: var(--text-secondary);
 }
 
 .task-status-badge {
@@ -869,23 +870,23 @@ onMounted(async () => {
 }
 
 .task-status-badge.pending {
-  background: #fff3cd;
-  color: #856404;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text, #856404);
 }
 
 .task-status-badge.progress {
-  background: #17a2b8;
-  color: white;
+  background: var(--color-info, #17a2b8);
+  color: var(--bg-primary);
 }
 
 .task-status-badge.success {
-  background: #28a745;
-  color: white;
+  background: var(--color-success);
+  color: var(--bg-primary);
 }
 
 .task-status-badge.failure {
-  background: #dc3545;
-  color: white;
+  background: var(--color-danger);
+  color: var(--bg-primary);
 }
 
 .update-modal .alert {
@@ -905,7 +906,7 @@ button:disabled {
   display: flex;
   gap: 12px;
   align-items: flex-start;
-  border-left: 4px solid #fd7e14;
+  border-left: 4px solid var(--color-warning);
 }
 
 .worker-warning p {
@@ -915,7 +916,7 @@ button:disabled {
 
 .worker-warning code {
   display: block;
-  background: rgba(0, 0, 0, 0.1);
+  background: var(--bg-code, rgba(0, 0, 0, 0.1));
   padding: 8px 12px;
   border-radius: 4px;
   font-family: monospace;
@@ -926,29 +927,29 @@ button:disabled {
 @media (prefers-color-scheme: dark) {
   .infrastructure-settings h3,
   .settings-section h4 {
-    color: #ffffff;
+    color: var(--text-primary);
   }
 
   .settings-section {
-    background: #2d2d2d;
+    background: var(--bg-secondary);
   }
 
   .form-group label {
-    color: #ffffff;
+    color: var(--text-primary);
   }
 
   .form-control {
-    background: #3d3d3d;
-    border-color: #555;
-    color: #ffffff;
+    background: var(--bg-tertiary);
+    border-color: var(--border-default);
+    color: var(--text-primary);
   }
 
   .updates-status {
-    background: #383838;
+    background: var(--bg-tertiary);
   }
 
   .status-message {
-    color: #b0b0b0;
+    color: var(--text-secondary);
   }
 }
 

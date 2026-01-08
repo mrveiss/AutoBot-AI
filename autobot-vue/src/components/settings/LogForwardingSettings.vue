@@ -751,13 +751,14 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .log-forwarding-settings {
   min-height: 400px;
 }
 
 /* Service Status */
 .service-status {
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   border-radius: 8px;
   padding: 16px;
 }
@@ -782,12 +783,12 @@ onMounted(async () => {
 }
 
 .status-dot.running {
-  background: #28a745;
+  background: var(--color-success);
   animation: pulse 2s infinite;
 }
 
 .status-dot.stopped {
-  background: #dc3545;
+  background: var(--color-danger);
 }
 
 @keyframes pulse {
@@ -797,7 +798,7 @@ onMounted(async () => {
 
 .status-text {
   font-weight: 600;
-  color: #495057;
+  color: var(--text-primary);
 }
 
 .status-actions {
@@ -818,40 +819,40 @@ onMounted(async () => {
 }
 
 .start-btn {
-  background: #28a745;
-  color: white;
+  background: var(--color-success);
+  color: var(--bg-primary);
 }
 
 .start-btn:hover:not(:disabled) {
-  background: #218838;
+  background: var(--color-success-hover);
 }
 
 .stop-btn {
-  background: #dc3545;
-  color: white;
+  background: var(--color-danger);
+  color: var(--bg-primary);
 }
 
 .stop-btn:hover:not(:disabled) {
-  background: #c82333;
+  background: var(--color-danger-hover);
 }
 
 .test-all-btn {
-  background: #17a2b8;
-  color: white;
+  background: var(--color-info);
+  color: var(--bg-primary);
 }
 
 .test-all-btn:hover:not(:disabled) {
-  background: #138496;
+  background: var(--color-info-hover);
 }
 
 .refresh-btn {
-  background: #6c757d;
-  color: white;
+  background: var(--text-tertiary);
+  color: var(--bg-primary);
   padding: 8px 12px;
 }
 
 .refresh-btn:hover:not(:disabled) {
-  background: #5a6268;
+  background: var(--text-secondary);
 }
 
 .stats-row {
@@ -863,7 +864,7 @@ onMounted(async () => {
 .auto-start-row {
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid #e9ecef;
+  border-top: 1px solid var(--border-light);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -875,7 +876,7 @@ onMounted(async () => {
   gap: 8px;
   cursor: pointer;
   font-size: 14px;
-  color: #495057;
+  color: var(--text-primary);
 }
 
 .auto-start-label input[type="checkbox"] {
@@ -886,7 +887,7 @@ onMounted(async () => {
 
 .saving-indicator {
   font-size: 12px;
-  color: #6c757d;
+  color: var(--text-tertiary);
 }
 
 .stat {
@@ -898,20 +899,20 @@ onMounted(async () => {
 .stat-value {
   font-size: 24px;
   font-weight: 700;
-  color: #495057;
+  color: var(--text-primary);
 }
 
 .stat-value.healthy {
-  color: #28a745;
+  color: var(--color-success);
 }
 
 .stat-value.error {
-  color: #dc3545;
+  color: var(--color-danger);
 }
 
 .stat-label {
   font-size: 12px;
-  color: #6c757d;
+  color: var(--text-tertiary);
   text-transform: uppercase;
 }
 
@@ -930,13 +931,13 @@ onMounted(async () => {
 .section-header h4 {
   font-size: 18px;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--text-primary);
   margin: 0;
 }
 
 .add-btn {
-  background: #007bff;
-  color: white;
+  background: var(--color-primary);
+  color: var(--bg-primary);
   border: none;
   padding: 10px 16px;
   border-radius: 6px;
@@ -948,13 +949,13 @@ onMounted(async () => {
 }
 
 .add-btn:hover {
-  background: #0069d9;
+  background: var(--color-primary-hover);
 }
 
 .loading-state, .empty-state {
   text-align: center;
   padding: 48px;
-  color: #6c757d;
+  color: var(--text-tertiary);
 }
 
 .empty-state i {
@@ -971,21 +972,21 @@ onMounted(async () => {
 }
 
 .destination-card {
-  background: white;
-  border: 1px solid #e9ecef;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
   border-radius: 8px;
   padding: 16px;
   transition: all 0.2s;
 }
 
 .destination-card:hover {
-  border-color: #007bff;
-  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
 }
 
 .destination-card.disabled {
   opacity: 0.6;
-  background: #f8f9fa;
+  background: var(--bg-secondary);
 }
 
 .dest-header {
@@ -1009,16 +1010,16 @@ onMounted(async () => {
   text-transform: uppercase;
 }
 
-.dest-type-badge.seq { background: #6f42c1; color: white; }
-.dest-type-badge.elasticsearch { background: #ffc107; color: #212529; }
-.dest-type-badge.loki { background: #fd7e14; color: white; }
-.dest-type-badge.syslog { background: #20c997; color: white; }
-.dest-type-badge.webhook { background: #e83e8c; color: white; }
-.dest-type-badge.file { background: #6c757d; color: white; }
+.dest-type-badge.seq { background: var(--color-purple, #6f42c1); color: var(--bg-primary); }
+.dest-type-badge.elasticsearch { background: var(--color-warning); color: var(--text-primary); }
+.dest-type-badge.loki { background: var(--color-orange, #fd7e14); color: var(--bg-primary); }
+.dest-type-badge.syslog { background: var(--color-teal, #20c997); color: var(--bg-primary); }
+.dest-type-badge.webhook { background: var(--color-pink, #e83e8c); color: var(--bg-primary); }
+.dest-type-badge.file { background: var(--text-tertiary); color: var(--bg-primary); }
 
 .dest-name {
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .health-indicator {
@@ -1026,11 +1027,11 @@ onMounted(async () => {
 }
 
 .health-indicator.healthy {
-  color: #28a745;
+  color: var(--color-success);
 }
 
 .health-indicator.unhealthy {
-  color: #dc3545;
+  color: var(--color-danger);
 }
 
 .dest-actions {
@@ -1043,19 +1044,19 @@ onMounted(async () => {
   border: none;
   padding: 8px;
   cursor: pointer;
-  color: #6c757d;
+  color: var(--text-tertiary);
   border-radius: 4px;
   transition: all 0.2s;
 }
 
 .icon-btn:hover {
-  background: #e9ecef;
-  color: #495057;
+  background: var(--border-light);
+  color: var(--text-primary);
 }
 
 .icon-btn.delete:hover {
-  background: #f8d7da;
-  color: #dc3545;
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
 }
 
 .dest-details {
@@ -1064,7 +1065,7 @@ onMounted(async () => {
 
 .dest-url {
   font-size: 13px;
-  color: #6c757d;
+  color: var(--text-tertiary);
   margin-bottom: 8px;
 }
 
@@ -1086,30 +1087,30 @@ onMounted(async () => {
 }
 
 .scope-badge {
-  background: #e3f2fd;
-  color: #1565c0;
+  background: var(--color-info-bg, #e3f2fd);
+  color: var(--color-info, #1565c0);
 }
 
 .scope-badge.per_host {
-  background: #fff3e0;
-  color: #e65100;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text, #e65100);
 }
 
 .protocol-badge {
-  background: #e8f5e9;
-  color: #2e7d32;
+  background: var(--color-success-bg);
+  color: var(--color-success-text, #2e7d32);
 }
 
 .level-badge {
-  background: #f5f5f5;
-  color: #616161;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
 }
 
 .dest-stats {
   display: flex;
   gap: 16px;
   font-size: 12px;
-  color: #6c757d;
+  color: var(--text-tertiary);
 }
 
 .stat-item {
@@ -1119,7 +1120,7 @@ onMounted(async () => {
 }
 
 .stat-item.error {
-  color: #dc3545;
+  color: var(--color-danger);
 }
 
 .dest-hosts {
@@ -1132,11 +1133,11 @@ onMounted(async () => {
 
 .hosts-label {
   font-size: 12px;
-  color: #6c757d;
+  color: var(--text-tertiary);
 }
 
 .host-tag {
-  background: #e9ecef;
+  background: var(--border-light);
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 11px;
@@ -1163,31 +1164,33 @@ onMounted(async () => {
 
 .form-group label {
   font-weight: 500;
-  color: #495057;
+  color: var(--text-primary);
   font-size: 14px;
 }
 
 .form-control {
   padding: 10px 12px;
-  border: 1px solid #ced4da;
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   font-size: 14px;
   transition: border-color 0.2s;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .form-control:focus {
   outline: none;
-  border-color: #007bff;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-bg, rgba(0, 123, 255, 0.1));
 }
 
 .form-control:disabled {
-  background: #e9ecef;
-  color: #6c757d;
+  background: var(--border-light);
+  color: var(--text-tertiary);
 }
 
 .syslog-options, .auth-options, .scope-config {
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   padding: 16px;
   border-radius: 8px;
 }
@@ -1196,7 +1199,7 @@ onMounted(async () => {
   margin: 0 0 12px 0;
   font-size: 14px;
   font-weight: 600;
-  color: #495057;
+  color: var(--text-primary);
 }
 
 .hosts-selector {
@@ -1214,7 +1217,7 @@ onMounted(async () => {
 }
 
 .advanced-options {
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   padding: 16px;
   border-radius: 8px;
 }
@@ -1222,7 +1225,7 @@ onMounted(async () => {
 .advanced-options summary {
   cursor: pointer;
   font-weight: 500;
-  color: #495057;
+  color: var(--text-primary);
   margin-bottom: 12px;
 }
 
@@ -1239,18 +1242,18 @@ onMounted(async () => {
 }
 
 .cancel-btn {
-  background: #6c757d;
-  color: white;
+  background: var(--text-tertiary);
+  color: var(--bg-primary);
 }
 
 .save-btn {
-  background: #28a745;
-  color: white;
+  background: var(--color-success);
+  color: var(--bg-primary);
 }
 
 .delete-btn {
-  background: #dc3545;
-  color: white;
+  background: var(--color-danger);
+  color: var(--bg-primary);
 }
 
 button:disabled {
@@ -1274,15 +1277,15 @@ button:disabled {
 }
 
 .test-toast.success {
-  background: #d4edda;
-  color: #155724;
-  border: 1px solid #c3e6cb;
+  background: var(--color-success-bg);
+  color: var(--color-success-text, #155724);
+  border: 1px solid var(--color-success-border, #c3e6cb);
 }
 
 .test-toast.error {
-  background: #f8d7da;
-  color: #721c24;
-  border: 1px solid #f5c6cb;
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text, #721c24);
+  border: 1px solid var(--color-danger-border, #f5c6cb);
 }
 
 @keyframes slideIn {
@@ -1296,43 +1299,9 @@ button:disabled {
   }
 }
 
-/* Dark theme */
+/* Dark theme - now handled by CSS variables */
 @media (prefers-color-scheme: dark) {
-  .log-forwarding-settings h3,
-  .section-header h4 {
-    color: #ffffff;
-  }
-
-  .service-status {
-    background: #2d2d2d;
-  }
-
-  .status-text {
-    color: #e0e0e0;
-  }
-
-  .stat-value {
-    color: #e0e0e0;
-  }
-
-  .destination-card {
-    background: #2d2d2d;
-    border-color: #404040;
-  }
-
-  .dest-name {
-    color: #ffffff;
-  }
-
-  .form-control {
-    background: #3d3d3d;
-    border-color: #555;
-    color: #ffffff;
-  }
-
-  .syslog-options, .auth-options, .scope-config, .advanced-options {
-    background: #383838;
-  }
+  /* Variables automatically switch in dark mode via design tokens */
 }
 
 /* Responsive */
