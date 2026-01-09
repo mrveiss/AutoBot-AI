@@ -142,6 +142,38 @@ class CommandExecutor:
             logger.error(f"[CANCEL] Failed to forcefully close PTY: {sigkill_error}")
             return False
 
+    async def _finalize_cancellation(
+        self, session: AgentTerminalSession, reason: str
+    ) -> bool:
+        """
+        Finalize command cancellation with cleanup and logging.
+
+        Issue #665: Extracted from cancel_command to reduce function length.
+
+        Args:
+            session: Agent terminal session
+            reason: Reason for cancellation
+
+        Returns:
+            True if finalization completed successfully
+        """
+        # Clean up session state (Issue #372 - use model method)
+        task_was_running = await session.cancel_running_task()
+        if task_was_running:
+            logger.info(
+                f"[CANCEL] Cancelled running command task for "
+                f"session {session.session_id}"
+            )
+
+        # Log cancellation (Issue #281: uses extracted helper)
+        await self._log_cancellation_to_chat(session, reason)
+
+        logger.info(
+            f"[CANCEL] ✅ Command cancellation complete for "
+            f"session {session.session_id}"
+        )
+        return True
+
     def _write_to_pty(self, session: AgentTerminalSession, text: str) -> bool:
         """
         Write text to PTY terminal display.
@@ -265,22 +297,8 @@ class CommandExecutor:
             else:
                 logger.info("[CANCEL] Process terminated gracefully after SIGINT")
 
-            # Step 4: Clean up session state (Issue #372 - use model method)
-            task_was_running = await session.cancel_running_task()
-            if task_was_running:
-                logger.info(
-                    f"[CANCEL] Cancelled running command task for "
-                    f"session {session.session_id}"
-                )
-
-            # Issue #281: Log cancellation using extracted helper
-            await self._log_cancellation_to_chat(session, reason)
-
-            logger.info(
-                f"[CANCEL] ✅ Command cancellation complete for "
-                f"session {session.session_id}"
-            )
-            return True
+            # Steps 4-5: Cleanup and finalize (Issue #665: extracted helper)
+            return await self._finalize_cancellation(session, reason)
 
         except Exception as e:
             logger.error("[CANCEL] Error during command cancellation: %s", e, exc_info=True)

@@ -210,6 +210,62 @@ class FastDocumentScanner:
         # Expire after 7 days
         self.redis.expire(cache_key, 604800)
 
+    def _check_file_changes(
+        self,
+        commands_to_check,
+        current_files: Dict[str, List[str]],
+        changes: Dict[str, List],
+        limit: Optional[int],
+    ) -> None:
+        """
+        Check files for new/updated changes and update changes dict.
+
+        Issue #665: Extracted from _detect_changes to reduce function length.
+
+        Args:
+            commands_to_check: Commands to process
+            current_files: Dict of command -> file paths
+            changes: Dict to populate with changes
+            limit: Max files to check
+        """
+        checked_count = 0
+
+        for command in commands_to_check:
+            if checked_count >= (limit or float("inf")):
+                break
+
+            file_paths = current_files.get(command, [])
+            if not file_paths:
+                continue
+
+            # Use first file path (prefer section 1)
+            file_path = file_paths[0]
+
+            # Get current file metadata
+            current_meta = self._get_file_metadata(file_path)
+            if not current_meta:
+                continue
+
+            # Get cached metadata and detect change
+            cached_meta = self._get_cached_metadata(file_path)
+
+            if cached_meta is None:
+                changes["added"].append(
+                    self._create_document_change(
+                        command, "added", file_path, current_meta.size, current_meta.mtime
+                    )
+                )
+            elif current_meta.mtime != cached_meta.mtime or current_meta.size != cached_meta.size:
+                changes["updated"].append(
+                    self._create_document_change(
+                        command, "updated", file_path, current_meta.size, current_meta.mtime
+                    )
+                )
+
+            # Cache current metadata
+            self._cache_metadata(current_meta)
+            checked_count += 1
+
     def _detect_changes(
         self,
         current_files: Dict[str, List[str]],
@@ -240,45 +296,8 @@ class FastDocumentScanner:
         # Limit processing if requested
         commands_to_check = list(current_commands)[:limit] if limit else current_commands
 
-        checked_count = 0
-
-        # Check for new or updated documents
-        for command in commands_to_check:
-            if checked_count >= (limit or float("inf")):
-                break
-
-            file_paths = current_files[command]
-            if not file_paths:
-                continue
-
-            # Use first file path (prefer section 1)
-            file_path = file_paths[0]
-
-            # Get current file metadata
-            current_meta = self._get_file_metadata(file_path)
-            if not current_meta:
-                continue
-
-            # Get cached metadata
-            cached_meta = self._get_cached_metadata(file_path)
-
-            # Detect change type and create record (Issue #281: uses helper)
-            if cached_meta is None:
-                changes["added"].append(
-                    self._create_document_change(
-                        command, "added", file_path, current_meta.size, current_meta.mtime
-                    )
-                )
-            elif current_meta.mtime != cached_meta.mtime or current_meta.size != cached_meta.size:
-                changes["updated"].append(
-                    self._create_document_change(
-                        command, "updated", file_path, current_meta.size, current_meta.mtime
-                    )
-                )
-
-            # Cache current metadata
-            self._cache_metadata(current_meta)
-            checked_count += 1
+        # Check for new or updated documents (Issue #665: extracted helper)
+        self._check_file_changes(commands_to_check, current_files, changes, limit)
 
         # Check for removed documents (Issue #281: uses helper)
         removed_commands = cached_commands - current_commands

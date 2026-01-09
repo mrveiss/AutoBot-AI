@@ -26,6 +26,81 @@ FILE_CATEGORY_DATA = "data"
 FILE_CATEGORY_ASSETS = "assets"
 FILE_CATEGORY_TEST = "test"
 
+# Issue #665: Category display info extracted to module-level constant
+_CATEGORY_INFO: Dict[str, Dict] = {
+    FILE_CATEGORY_CODE: {
+        "emoji": "📄",
+        "title": "Code Files",
+        "description": "Source code files",
+        "priority": True,
+        "count_metrics": True,
+    },
+    FILE_CATEGORY_CONFIG: {
+        "emoji": "⚙️",
+        "title": "Configuration",
+        "description": "Configuration files",
+        "priority": True,
+        "count_metrics": True,
+    },
+    FILE_CATEGORY_TEST: {
+        "emoji": "🧪",
+        "title": "Test Files",
+        "description": "Test and spec files",
+        "priority": True,
+        "count_metrics": True,
+    },
+    FILE_CATEGORY_DOCS: {
+        "emoji": "📝",
+        "title": "Documentation",
+        "description": "Documentation files",
+        "priority": False,
+        "count_metrics": False,
+    },
+    FILE_CATEGORY_LOGS: {
+        "emoji": "📋",
+        "title": "Log Files",
+        "description": "Log and output files",
+        "priority": False,
+        "count_metrics": False,
+    },
+    FILE_CATEGORY_BACKUP: {
+        "emoji": "📦",
+        "title": "Backup Files",
+        "description": "Backup files for rollback",
+        "priority": False,
+        "count_metrics": False,
+    },
+    FILE_CATEGORY_ARCHIVE: {
+        "emoji": "🗄️",
+        "title": "Archived Files",
+        "description": "Archived/deprecated files",
+        "priority": False,
+        "count_metrics": False,
+    },
+    FILE_CATEGORY_DATA: {
+        "emoji": "📊",
+        "title": "Data Files",
+        "description": "Data and dataset files",
+        "priority": False,
+        "count_metrics": False,
+    },
+    FILE_CATEGORY_ASSETS: {
+        "emoji": "🖼️",
+        "title": "Asset Files",
+        "description": "Images, fonts, media",
+        "priority": False,
+        "count_metrics": False,
+    },
+}
+
+_DEFAULT_CATEGORY_INFO: Dict = {
+    "emoji": "❓",
+    "title": "Unknown",
+    "description": "Unknown file type",
+    "priority": False,
+    "count_metrics": False,
+}
+
 # =============================================================================
 # Programming Language Extensions
 # =============================================================================
@@ -392,81 +467,12 @@ def get_category_info(category: str) -> Dict[str, any]:
     """
     Get display information for a file category.
 
+    Issue #665: Refactored to use module-level _CATEGORY_INFO constant.
+
     Args:
         category: Category string
 
     Returns:
         Dict with emoji, title, description, and priority flag.
     """
-    info = {
-        FILE_CATEGORY_CODE: {
-            "emoji": "📄",
-            "title": "Code Files",
-            "description": "Source code files",
-            "priority": True,
-            "count_metrics": True,
-        },
-        FILE_CATEGORY_CONFIG: {
-            "emoji": "⚙️",
-            "title": "Configuration",
-            "description": "Configuration files",
-            "priority": True,
-            "count_metrics": True,
-        },
-        FILE_CATEGORY_TEST: {
-            "emoji": "🧪",
-            "title": "Test Files",
-            "description": "Test and spec files",
-            "priority": True,
-            "count_metrics": True,
-        },
-        FILE_CATEGORY_DOCS: {
-            "emoji": "📝",
-            "title": "Documentation",
-            "description": "Documentation files",
-            "priority": False,
-            "count_metrics": False,
-        },
-        FILE_CATEGORY_LOGS: {
-            "emoji": "📋",
-            "title": "Log Files",
-            "description": "Log and output files",
-            "priority": False,
-            "count_metrics": False,
-        },
-        FILE_CATEGORY_BACKUP: {
-            "emoji": "📦",
-            "title": "Backup Files",
-            "description": "Backup files for rollback",
-            "priority": False,
-            "count_metrics": False,
-        },
-        FILE_CATEGORY_ARCHIVE: {
-            "emoji": "🗄️",
-            "title": "Archived Files",
-            "description": "Archived/deprecated files",
-            "priority": False,
-            "count_metrics": False,
-        },
-        FILE_CATEGORY_DATA: {
-            "emoji": "📊",
-            "title": "Data Files",
-            "description": "Data and dataset files",
-            "priority": False,
-            "count_metrics": False,
-        },
-        FILE_CATEGORY_ASSETS: {
-            "emoji": "🖼️",
-            "title": "Asset Files",
-            "description": "Images, fonts, media",
-            "priority": False,
-            "count_metrics": False,
-        },
-    }
-    return info.get(category, {
-        "emoji": "❓",
-        "title": "Unknown",
-        "description": "Unknown file type",
-        "priority": False,
-        "count_metrics": False,
-    })
+    return _CATEGORY_INFO.get(category, _DEFAULT_CATEGORY_INFO)

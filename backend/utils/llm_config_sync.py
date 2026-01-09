@@ -68,6 +68,76 @@ class LLMConfigurationSynchronizer:
         return agent_models, common_model
 
     @staticmethod
+    def _check_sync_needed(current_model: str, common_model: str) -> tuple:
+        """
+        Check if LLM config sync is needed.
+
+        Issue #665: Extracted from sync_llm_config_with_agents to reduce function length.
+
+        Args:
+            current_model: Currently configured global model
+            common_model: Most common model used by agents
+
+        Returns:
+            Tuple of (sync_needed: bool, sync_reason: str)
+        """
+        if not current_model:
+            return True, "No global LLM model configured"
+        if common_model and current_model != common_model:
+            return True, (
+                f"Global model '{current_model}' differs from agent model '{common_model}'"
+            )
+        return False, ""
+
+    @staticmethod
+    def _perform_sync_update(
+        config_manager, previous_model: str, target_model: str,
+        sync_reason: str, agent_models: dict
+    ) -> Metadata:
+        """
+        Perform the actual sync update and verification.
+
+        Issue #665: Extracted from sync_llm_config_with_agents to reduce function length.
+
+        Args:
+            config_manager: Global config manager instance
+            previous_model: Previously configured model
+            target_model: Model to sync to
+            sync_reason: Reason for sync
+            agent_models: Dict of agent models
+
+        Returns:
+            Sync result dictionary
+        """
+        logger.info("SYNC NEEDED: %s", sync_reason)
+        logger.info("Setting global LLM model to: %s", target_model)
+        config_manager.update_llm_model(target_model)
+
+        # Verify the change
+        updated_model = LLMConfigurationSynchronizer._get_current_llm_model(config_manager)
+
+        if updated_model == target_model:
+            logger.info("✅ Successfully synchronized global LLM model to: %s", target_model)
+            return {
+                "status": "synchronized",
+                "previous_model": previous_model,
+                "new_model": target_model,
+                "reason": sync_reason,
+                "agent_models": agent_models,
+            }
+
+        logger.error(
+            "❌ Failed to update global model. Expected: %s, Got: %s",
+            target_model, updated_model
+        )
+        return {
+            "status": "sync_failed",
+            "error": "Model update verification failed",
+            "expected": target_model,
+            "actual": updated_model,
+        }
+
+    @staticmethod
     def sync_llm_config_with_agents() -> Metadata:
         """
         Synchronize global LLM configuration with agent configurations
@@ -94,19 +164,10 @@ class LLMConfigurationSynchronizer:
             logger.info("Agent models: %s", agent_models)
             logger.info("Most common agent model: %s", common_model)
 
-            # Determine if sync is needed
-            sync_needed = False
-            sync_reason = ""
-
-            if not current_selected_model:
-                sync_needed = True
-                sync_reason = "No global LLM model configured"
-            elif common_model and current_selected_model != common_model:
-                sync_needed = True
-                sync_reason = (
-                    f"Global model '{current_selected_model}' differs from agent model"
-                    f"'{common_model}'"
-                )
+            # Check if sync needed (Issue #665: extracted helper)
+            sync_needed, sync_reason = LLMConfigurationSynchronizer._check_sync_needed(
+                current_selected_model, common_model
+            )
 
             # No sync needed
             if not (sync_needed and common_model):
@@ -117,35 +178,11 @@ class LLMConfigurationSynchronizer:
                     "agent_models": agent_models,
                 }
 
-            # Perform synchronization
-            logger.info("SYNC NEEDED: %s", sync_reason)
-            logger.info("Setting global LLM model to: %s", common_model)
-            global_config_manager.update_llm_model(common_model)
-
-            # Verify the change
-            updated_model = LLMConfigurationSynchronizer._get_current_llm_model(
-                global_config_manager
+            # Perform sync and return result (Issue #665: extracted helper)
+            return LLMConfigurationSynchronizer._perform_sync_update(
+                global_config_manager, current_selected_model, common_model,
+                sync_reason, agent_models
             )
-
-            if updated_model == common_model:
-                logger.info("✅ Successfully synchronized global LLM model to: %s", common_model)
-                return {
-                    "status": "synchronized",
-                    "previous_model": current_selected_model,
-                    "new_model": common_model,
-                    "reason": sync_reason,
-                    "agent_models": agent_models,
-                }
-
-            logger.error(
-                f"❌ Failed to update global model. Expected: {common_model}, Got: {updated_model}"
-            )
-            return {
-                "status": "sync_failed",
-                "error": "Model update verification failed",
-                "expected": common_model,
-                "actual": updated_model,
-            }
 
         except Exception as e:
             logger.error("❌ Failed to synchronize LLM configuration: %s", e)

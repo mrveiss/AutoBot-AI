@@ -621,6 +621,48 @@ class IncrementalKnowledgeSync:
             logger.info("Invalidating %d expired knowledge entries", len(expired_files))
             await self._remove_obsolete_knowledge(expired_files)
 
+    async def _process_sync_changes(
+        self,
+        changed_files: List[Path],
+        removed_files: List[Path],
+        metrics: SyncMetrics,
+    ) -> None:
+        """
+        Process file changes during sync (remove, update, invalidate).
+
+        Issue #665: Extracted from perform_incremental_sync to reduce function length.
+
+        Args:
+            changed_files: Files that have changed
+            removed_files: Files that were removed
+            metrics: Sync metrics to update
+        """
+        # Step 3: Remove obsolete knowledge (fast operation)
+        if removed_files:
+            await self._remove_obsolete_knowledge(removed_files)
+
+        # Step 4: Process changed/new files with GPU acceleration
+        if changed_files:
+            logger.info(
+                "Processing %d changed files with GPU acceleration...", len(changed_files)
+            )
+
+            # Process files in parallel batches for maximum performance
+            semaphore = asyncio.Semaphore(self.max_concurrent_files)
+
+            # Process files concurrently using extracted helper (Issue #315)
+            tasks = [_process_file_with_semaphore(semaphore, self, fp) for fp in changed_files]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Update metadata for successful results
+            self._update_metadata_from_results(changed_files, results, metrics)
+            metrics.gpu_acceleration_used = True
+        else:
+            logger.info("No files to process - all up to date!")
+
+        # Step 5: Invalidate expired knowledge
+        await self._invalidate_expired_knowledge()
+
     async def perform_incremental_sync(self) -> SyncMetrics:
         """
         Perform intelligent incremental sync with GPU acceleration.
@@ -656,31 +698,8 @@ class IncrementalKnowledgeSync:
             )
             logger.info(metrics.get_change_analysis_log())
 
-            # Step 3: Remove obsolete knowledge (fast operation)
-            if removed_files:
-                await self._remove_obsolete_knowledge(removed_files)
-
-            # Step 4: Process changed/new files with GPU acceleration
-            if changed_files:
-                logger.info(
-                    "Processing %d changed files with GPU acceleration...", len(changed_files)
-                )
-
-                # Process files in parallel batches for maximum performance
-                semaphore = asyncio.Semaphore(self.max_concurrent_files)
-
-                # Process files concurrently using extracted helper (Issue #315)
-                tasks = [_process_file_with_semaphore(semaphore, self, fp) for fp in changed_files]
-                results = await asyncio.gather(*tasks, return_exceptions=True)
-
-                # Update metadata for successful results
-                self._update_metadata_from_results(changed_files, results, metrics)
-                metrics.gpu_acceleration_used = True
-            else:
-                logger.info("No files to process - all up to date!")
-
-            # Step 5: Invalidate expired knowledge
-            await self._invalidate_expired_knowledge()
+            # Steps 3-5: Process file changes (Issue #665: extracted helper)
+            await self._process_sync_changes(changed_files, removed_files, metrics)
 
             # Step 6: Save sync state
             await self._save_sync_state()
