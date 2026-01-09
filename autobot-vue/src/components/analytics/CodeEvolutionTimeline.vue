@@ -284,15 +284,15 @@ const availableMetrics = [
   'performance'
 ]
 
-// Metric colors
+// Metric colors - Using CSS custom properties with fallbacks
 const metricColors: Record<string, string> = {
-  overall_score: '#10b981',
-  maintainability: '#3b82f6',
-  testability: '#8b5cf6',
-  documentation: '#f59e0b',
-  complexity: '#ef4444',
-  security: '#06b6d4',
-  performance: '#ec4899'
+  overall_score: 'var(--color-success, #10b981)',
+  maintainability: 'var(--color-primary, #3b82f6)',
+  testability: 'var(--chart-purple, #8b5cf6)',
+  documentation: 'var(--color-warning, #f59e0b)',
+  complexity: 'var(--color-error, #ef4444)',
+  security: 'var(--chart-cyan, #06b6d4)',
+  performance: 'var(--chart-pink, #ec4899)'
 }
 
 // X-axis labels (show every nth label based on data size)
@@ -409,7 +409,7 @@ function getLinePath(metric: string): string {
 }
 
 function getMetricColor(metric: string): string {
-  return metricColors[metric] || '#6b7280'
+  return metricColors[metric] || 'var(--text-tertiary, #6b7280)'
 }
 
 // Tooltip
@@ -514,9 +514,10 @@ watch([selectedGranularity, selectedDays], () => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .code-evolution-timeline {
   padding: 1.5rem;
-  background: var(--color-bg-secondary, #1a1a2e);
+  background: var(--bg-secondary);
   border-radius: 8px;
 }
 
@@ -529,7 +530,7 @@ watch([selectedGranularity, selectedDays], () => {
 
 .timeline-header h2 {
   font-size: 1.5rem;
-  color: var(--color-text-primary, #fff);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -543,10 +544,10 @@ watch([selectedGranularity, selectedDays], () => {
 
 .control-select {
   padding: 0.5rem 0.75rem;
-  background: var(--color-bg-tertiary, #252547);
-  border: 1px solid var(--color-border, #3a3a5a);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
-  color: var(--color-text-primary, #fff);
+  color: var(--text-primary);
   font-size: 0.875rem;
 }
 
@@ -558,7 +559,7 @@ watch([selectedGranularity, selectedDays], () => {
   justify-content: center;
   padding: 3rem;
   gap: 1rem;
-  color: var(--color-text-secondary, #a0a0c0);
+  color: var(--text-secondary);
 }
 
 .trends-grid {
@@ -569,18 +570,18 @@ watch([selectedGranularity, selectedDays], () => {
 }
 
 .trend-card {
-  background: var(--color-bg-tertiary, #252547);
+  background: var(--bg-tertiary);
   border-radius: 8px;
   padding: 1rem;
-  border: 1px solid var(--color-border, #3a3a5a);
+  border: 1px solid var(--border-default);
 }
 
 .trend-card.trend-positive {
-  border-color: #10b981;
+  border-color: var(--color-success);
 }
 
 .trend-card.trend-negative {
-  border-color: #ef4444;
+  border-color: var(--color-error);
 }
 
 .trend-header {
@@ -592,14 +593,14 @@ watch([selectedGranularity, selectedDays], () => {
 
 .metric-name {
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #a0a0c0);
+  color: var(--text-secondary);
   text-transform: uppercase;
 }
 
 .trend-value {
   font-size: 1.75rem;
   font-weight: 600;
-  color: var(--color-text-primary, #fff);
+  color: var(--text-primary);
 }
 
 .trend-change {
@@ -608,28 +609,28 @@ watch([selectedGranularity, selectedDays], () => {
 }
 
 .trend-change .improving {
-  color: #10b981;
+  color: var(--color-success);
 }
 
 .trend-change .declining {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .trend-change .percent {
-  color: var(--color-text-secondary, #a0a0c0);
+  color: var(--text-secondary);
   margin-left: 0.25rem;
 }
 
 .trend-up {
-  color: #10b981;
+  color: var(--color-success);
 }
 
 .trend-down {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .chart-container {
-  background: var(--color-bg-tertiary, #252547);
+  background: var(--bg-tertiary);
   border-radius: 8px;
   padding: 1.5rem;
   margin-bottom: 1.5rem;
@@ -644,7 +645,7 @@ watch([selectedGranularity, selectedDays], () => {
 
 .chart-header h3 {
   font-size: 1.125rem;
-  color: var(--color-text-primary, #fff);
+  color: var(--text-primary);
 }
 
 .metric-toggles {
@@ -683,12 +684,12 @@ watch([selectedGranularity, selectedDays], () => {
 }
 
 .grid-line {
-  stroke: var(--color-border, #3a3a5a);
+  stroke: var(--border-default);
   stroke-dasharray: 4 4;
 }
 
 .axis-label {
-  fill: var(--color-text-secondary, #a0a0c0);
+  fill: var(--text-secondary);
   font-size: 10px;
   text-anchor: end;
 }
@@ -716,8 +717,8 @@ watch([selectedGranularity, selectedDays], () => {
 
 .chart-tooltip {
   position: fixed;
-  background: var(--color-bg-primary, #0f0f1e);
-  border: 1px solid var(--color-border, #3a3a5a);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   padding: 0.75rem;
   z-index: 1000;
@@ -726,7 +727,7 @@ watch([selectedGranularity, selectedDays], () => {
 
 .tooltip-date {
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #a0a0c0);
+  color: var(--text-secondary);
   margin-bottom: 0.25rem;
 }
 
@@ -737,12 +738,12 @@ watch([selectedGranularity, selectedDays], () => {
 
 .tooltip-metric .metric-value {
   font-weight: 600;
-  color: var(--color-text-primary, #fff);
+  color: var(--text-primary);
 }
 
 .patterns-section h3 {
   font-size: 1.125rem;
-  color: var(--color-text-primary, #fff);
+  color: var(--text-primary);
   margin-bottom: 1rem;
   display: flex;
   align-items: center;
@@ -756,10 +757,10 @@ watch([selectedGranularity, selectedDays], () => {
 }
 
 .pattern-card {
-  background: var(--color-bg-tertiary, #252547);
+  background: var(--bg-tertiary);
   border-radius: 8px;
   padding: 1rem;
-  border: 1px solid var(--color-border, #3a3a5a);
+  border: 1px solid var(--border-default);
 }
 
 .pattern-header {
@@ -771,7 +772,7 @@ watch([selectedGranularity, selectedDays], () => {
 
 .pattern-name {
   font-size: 0.875rem;
-  color: var(--color-text-primary, #fff);
+  color: var(--text-primary);
 }
 
 .pattern-count {
@@ -780,11 +781,11 @@ watch([selectedGranularity, selectedDays], () => {
 }
 
 .pattern-count.declining {
-  color: #10b981;
+  color: var(--color-success);
 }
 
 .pattern-count.increasing {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .pattern-sparkline {
@@ -797,14 +798,14 @@ watch([selectedGranularity, selectedDays], () => {
 
 .sparkline-bar {
   flex: 1;
-  background: linear-gradient(to top, #3b82f6, #8b5cf6);
+  background: linear-gradient(to top, var(--color-primary), var(--chart-purple));
   border-radius: 2px 2px 0 0;
   min-height: 2px;
 }
 
 .pattern-trend {
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #a0a0c0);
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   gap: 0.25rem;

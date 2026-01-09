@@ -500,6 +500,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .knowledge-advanced {
   padding: 1.5rem;
   max-width: 1200px;
@@ -514,12 +515,12 @@ onMounted(() => {
 .advanced-header h3 {
   font-size: 1.5rem;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary);
   margin-bottom: 0.5rem;
 }
 
 .header-description {
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 1rem;
 }
 
@@ -530,22 +531,22 @@ onMounted(() => {
 }
 
 .section-card {
-  background: white;
+  background: var(--bg-card);
   border-radius: 0.75rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
 }
 
 .section-header {
   padding: 1.5rem;
-  border-bottom: 1px solid #e5e7eb;
-  background: #f9fafb;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-secondary);
 }
 
 .section-header h4 {
   font-size: 1.25rem;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary);
   margin-bottom: 0.5rem;
   display: flex;
   align-items: center;
@@ -553,7 +554,7 @@ onMounted(() => {
 }
 
 .section-header p {
-  color: #6b7280;
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -569,7 +570,7 @@ onMounted(() => {
 }
 
 .action-card {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
   padding: 1.25rem;
   display: flex;
@@ -580,17 +581,17 @@ onMounted(() => {
 }
 
 .action-card:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-md);
 }
 
 .action-card.danger-zone {
-  border-color: #fca5a5;
-  background: #fef2f2;
+  border-color: var(--color-error-light);
+  background: var(--color-error-bg);
 }
 
 .action-card.danger-zone:hover {
-  border-color: #dc2626;
+  border-color: var(--color-error);
 }
 
 .action-content {
@@ -609,40 +610,40 @@ onMounted(() => {
 }
 
 .action-icon.system-commands {
-  background: #dbeafe;
-  color: #3b82f6;
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .action-icon.man-pages {
-  background: #d1fae5;
-  color: #10b981;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .action-icon.autobot-docs {
-  background: #fde68a;
-  color: #f59e0b;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .action-icon.danger {
-  background: #fecaca;
-  color: #dc2626;
+  background: var(--color-error-bg-hover);
+  color: var(--color-error);
 }
 
 .action-card h5 {
   font-size: 1.125rem;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary);
   margin-bottom: 0.5rem;
 }
 
 .action-card p {
-  color: #6b7280;
+  color: var(--text-secondary);
   margin-bottom: 1rem;
   line-height: 1.5;
 }
 
 .action-meta {
-  color: #9ca3af;
+  color: var(--text-tertiary);
   font-size: 0.75rem;
   display: block;
   margin-bottom: 1rem;
@@ -673,24 +674,24 @@ onMounted(() => {
 
 .progress-operation {
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary);
 }
 
 .progress-details {
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 0.875rem;
 }
 
 .progress-percentage {
   font-weight: 600;
-  color: #3b82f6;
+  color: var(--color-primary);
   font-size: 1.25rem;
 }
 
 .progress-bar {
   width: 100%;
   height: 0.5rem;
-  background: #e5e7eb;
+  background: var(--bg-tertiary);
   border-radius: 9999px;
   overflow: hidden;
   margin-bottom: 1rem;
@@ -698,7 +699,7 @@ onMounted(() => {
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-dark));
   transition: width 0.3s ease;
 }
 
@@ -706,7 +707,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   font-size: 0.875rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 /* Status Messages */
@@ -722,11 +723,11 @@ onMounted(() => {
 }
 
 .status-message {
-  background: white;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
   padding: 1rem;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
@@ -734,23 +735,23 @@ onMounted(() => {
 }
 
 .status-message.success {
-  border-color: #10b981;
-  background: #f0fdf4;
+  border-color: var(--color-success);
+  background: var(--color-success-bg);
 }
 
 .status-message.error {
-  border-color: #ef4444;
-  background: #fef2f2;
+  border-color: var(--color-error);
+  background: var(--color-error-bg);
 }
 
 .status-message.warning {
-  border-color: #f59e0b;
-  background: #fffbeb;
+  border-color: var(--color-warning);
+  background: var(--color-warning-bg);
 }
 
 .status-message.info {
-  border-color: #3b82f6;
-  background: #eff6ff;
+  border-color: var(--color-info);
+  background: var(--color-info-bg);
 }
 
 .status-message i {
@@ -759,19 +760,19 @@ onMounted(() => {
 }
 
 .status-message.success i {
-  color: #10b981;
+  color: var(--color-success);
 }
 
 .status-message.error i {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .status-message.warning i {
-  color: #f59e0b;
+  color: var(--color-warning);
 }
 
 .status-message.info i {
-  color: #3b82f6;
+  color: var(--color-info);
 }
 
 .message-content {
@@ -780,12 +781,12 @@ onMounted(() => {
 
 .message-title {
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary);
   margin-bottom: 0.25rem;
 }
 
 .message-details {
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 0.875rem;
 }
 

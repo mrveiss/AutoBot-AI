@@ -641,12 +641,13 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .custom-dashboard {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #0f172a;
-  color: #f8fafc;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 /* Header */
@@ -655,8 +656,8 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem 2rem;
-  background: linear-gradient(135deg, #1e293b, #0f172a);
-  border-bottom: 1px solid #334155;
+  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-primary));
+  border-bottom: 1px solid var(--border-default);
 }
 
 .header-content h1 {
@@ -665,15 +666,15 @@ onMounted(() => {
   gap: 0.75rem;
   font-size: 1.5rem;
   font-weight: 700;
-  color: #f8fafc;
+  color: var(--text-primary);
 }
 
 .header-content h1 i {
-  color: #667eea;
+  color: var(--color-primary);
 }
 
 .header-description {
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-size: 0.875rem;
   margin-top: 0.25rem;
 }
@@ -689,9 +690,9 @@ onMounted(() => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.625rem 1rem;
-  background: #1e293b;
-  border: 1px solid #334155;
-  color: #e2e8f0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
   border-radius: 0.5rem;
   font-size: 0.875rem;
   cursor: pointer;
@@ -699,24 +700,24 @@ onMounted(() => {
 }
 
 .action-btn:hover {
-  background: #334155;
-  border-color: #475569;
+  background: var(--bg-tertiary);
+  border-color: var(--border-hover);
 }
 
 .action-btn.active {
-  background: #667eea;
-  border-color: #667eea;
-  color: white;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .action-btn.primary {
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
   border-color: transparent;
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .action-btn.primary:hover {
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: var(--shadow-primary);
 }
 
 .dashboard-selector {
@@ -727,10 +728,10 @@ onMounted(() => {
 
 .dashboard-selector select {
   padding: 0.625rem 1rem;
-  background: #0f172a;
-  border: 1px solid #334155;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
-  color: #e2e8f0;
+  color: var(--text-primary);
   font-size: 0.875rem;
   min-width: 150px;
 }
@@ -738,10 +739,10 @@ onMounted(() => {
 .icon-btn {
   width: 36px;
   height: 36px;
-  background: #1e293b;
-  border: 1px solid #334155;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
-  color: #94a3b8;
+  color: var(--text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -750,21 +751,21 @@ onMounted(() => {
 }
 
 .icon-btn:hover {
-  background: #334155;
-  color: #f8fafc;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 /* Widget Palette */
 .widget-palette {
   padding: 1rem 2rem;
-  background: #1e293b;
-  border-bottom: 1px solid #334155;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .widget-palette h4 {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #94a3b8;
+  color: var(--text-secondary);
   margin-bottom: 0.75rem;
 }
 
@@ -779,22 +780,22 @@ onMounted(() => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
-  background: #0f172a;
-  border: 1px solid #334155;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
-  color: #e2e8f0;
+  color: var(--text-primary);
   font-size: 0.875rem;
   cursor: grab;
   transition: all 0.2s;
 }
 
 .palette-widget:hover {
-  border-color: #667eea;
-  background: #334155;
+  border-color: var(--color-primary);
+  background: var(--bg-tertiary);
 }
 
 .palette-widget i {
-  color: #667eea;
+  color: var(--color-primary);
 }
 
 /* Dashboard Grid */
@@ -812,24 +813,24 @@ onMounted(() => {
     0deg,
     transparent,
     transparent 49px,
-    #334155 49px,
-    #334155 50px
+    var(--border-default) 49px,
+    var(--border-default) 50px
   ),
   repeating-linear-gradient(
     90deg,
     transparent,
     transparent 49px,
-    #334155 49px,
-    #334155 50px
+    var(--border-default) 49px,
+    var(--border-default) 50px
   );
   background-size: 50px 50px;
 }
 
 /* Widget Container */
 .widget-container {
-  background: #1e293b;
+  background: var(--bg-secondary);
   border-radius: 0.75rem;
-  border: 1px solid #334155;
+  border: 1px solid var(--border-default);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -837,12 +838,12 @@ onMounted(() => {
 }
 
 .widget-container:hover {
-  border-color: #475569;
+  border-color: var(--border-hover);
 }
 
 .widget-container.is-dragging {
   opacity: 0.5;
-  border-color: #667eea;
+  border-color: var(--color-primary);
 }
 
 .edit-mode .widget-container {
@@ -858,8 +859,8 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1rem;
-  background: linear-gradient(135deg, #334155, #1e293b);
-  border-bottom: 1px solid #334155;
+  background: linear-gradient(135deg, var(--bg-tertiary), var(--bg-secondary));
+  border-bottom: 1px solid var(--border-default);
 }
 
 .widget-header h3 {
@@ -868,11 +869,11 @@ onMounted(() => {
   gap: 0.5rem;
   font-size: 0.9375rem;
   font-weight: 600;
-  color: #f8fafc;
+  color: var(--text-primary);
 }
 
 .widget-header h3 i {
-  color: #667eea;
+  color: var(--color-primary);
 }
 
 .widget-actions {
@@ -885,7 +886,7 @@ onMounted(() => {
   height: 28px;
   background: transparent;
   border: none;
-  color: #64748b;
+  color: var(--text-tertiary);
   cursor: pointer;
   border-radius: 0.375rem;
   display: flex;
@@ -895,13 +896,13 @@ onMounted(() => {
 }
 
 .widget-actions button:hover {
-  background: #475569;
-  color: #f8fafc;
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .widget-actions button.remove-btn:hover {
-  background: #ef4444;
-  color: white;
+  background: var(--color-error);
+  color: var(--text-on-error);
 }
 
 .widget-content {
@@ -914,15 +915,15 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #0f172a;
-  border-top: 1px solid #334155;
-  color: #64748b;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-default);
+  color: var(--text-tertiary);
   cursor: ns-resize;
 }
 
 .resize-handle:hover {
-  background: #334155;
-  color: #f8fafc;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 /* Empty Dashboard */
@@ -939,25 +940,25 @@ onMounted(() => {
 .empty-icon {
   width: 80px;
   height: 80px;
-  background: linear-gradient(135deg, #667eea20, #764ba220);
+  background: linear-gradient(135deg, var(--color-primary-alpha-10), var(--color-primary-alpha-10));
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 2rem;
-  color: #667eea;
+  color: var(--color-primary);
   margin-bottom: 1.5rem;
 }
 
 .empty-dashboard h3 {
   font-size: 1.25rem;
   font-weight: 600;
-  color: #f8fafc;
+  color: var(--text-primary);
   margin-bottom: 0.5rem;
 }
 
 .empty-dashboard p {
-  color: #94a3b8;
+  color: var(--text-secondary);
   margin-bottom: 1.5rem;
 }
 
@@ -965,7 +966,7 @@ onMounted(() => {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.75);
+  background: var(--bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -973,9 +974,9 @@ onMounted(() => {
 }
 
 .modal-content {
-  background: #1e293b;
+  background: var(--bg-secondary);
   border-radius: 0.75rem;
-  border: 1px solid #334155;
+  border: 1px solid var(--border-default);
   width: 90%;
   max-width: 480px;
   max-height: 90vh;
@@ -993,8 +994,8 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 1rem 1.5rem;
-  background: linear-gradient(135deg, #334155, #1e293b);
-  border-bottom: 1px solid #334155;
+  background: linear-gradient(135deg, var(--bg-tertiary), var(--bg-secondary));
+  border-bottom: 1px solid var(--border-default);
 }
 
 .modal-header h4 {
@@ -1003,23 +1004,23 @@ onMounted(() => {
   gap: 0.75rem;
   font-size: 1.125rem;
   font-weight: 600;
-  color: #f8fafc;
+  color: var(--text-primary);
 }
 
 .modal-header h4 i {
-  color: #667eea;
+  color: var(--color-primary);
 }
 
 .close-btn {
   background: none;
   border: none;
-  color: #94a3b8;
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 0.25rem;
 }
 
 .close-btn:hover {
-  color: #f8fafc;
+  color: var(--text-primary);
 }
 
 .modal-body {
@@ -1036,7 +1037,7 @@ onMounted(() => {
   display: block;
   font-size: 0.875rem;
   font-weight: 500;
-  color: #e2e8f0;
+  color: var(--text-primary);
   margin-bottom: 0.375rem;
 }
 
@@ -1044,17 +1045,17 @@ onMounted(() => {
 .form-group select {
   width: 100%;
   padding: 0.625rem 0.75rem;
-  background: #0f172a;
-  border: 1px solid #334155;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
-  color: #e2e8f0;
+  color: var(--text-primary);
   font-size: 0.875rem;
 }
 
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--color-primary);
 }
 
 .modal-footer {
@@ -1062,8 +1063,8 @@ onMounted(() => {
   justify-content: flex-end;
   gap: 0.75rem;
   padding: 1rem 1.5rem;
-  background: #0f172a;
-  border-top: 1px solid #334155;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-default);
 }
 
 /* Widget Gallery */
@@ -1074,8 +1075,8 @@ onMounted(() => {
 }
 
 .widget-option {
-  background: #0f172a;
-  border: 1px solid #334155;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
   border-radius: 0.75rem;
   padding: 1.5rem;
   text-align: center;
@@ -1084,33 +1085,33 @@ onMounted(() => {
 }
 
 .widget-option:hover {
-  border-color: #667eea;
+  border-color: var(--color-primary);
   transform: translateY(-2px);
 }
 
 .widget-preview {
   width: 60px;
   height: 60px;
-  background: linear-gradient(135deg, #667eea20, #764ba220);
+  background: linear-gradient(135deg, var(--color-primary-alpha-10), var(--color-primary-alpha-10));
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto 1rem;
   font-size: 1.5rem;
-  color: #667eea;
+  color: var(--color-primary);
 }
 
 .widget-option h5 {
   font-size: 0.9375rem;
   font-weight: 600;
-  color: #f8fafc;
+  color: var(--text-primary);
   margin-bottom: 0.25rem;
 }
 
 .widget-option p {
   font-size: 0.75rem;
-  color: #94a3b8;
+  color: var(--text-secondary);
   line-height: 1.4;
 }
 
