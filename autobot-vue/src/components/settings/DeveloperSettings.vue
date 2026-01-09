@@ -215,37 +215,42 @@ const handleRUMIntegerInputChange = (key: string) => (event: Event) => {
 </script>
 
 <style scoped>
+/**
+ * Issue #704: CSS Design System - Using design tokens
+ * All colors reference CSS custom properties from design-tokens.css
+ */
+
 .settings-section {
-  margin-bottom: 30px;
-  background: #ffffff;
-  border: 1px solid #e1e5e9;
-  border-radius: 8px;
-  padding: 24px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: var(--spacing-8);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-6);
+  box-shadow: var(--shadow-sm);
 }
 
 .developer-section h3 {
-  margin: 0 0 20px 0;
-  color: #2c3e50;
-  font-weight: 600;
-  font-size: 18px;
-  border-bottom: 2px solid #3498db;
-  padding-bottom: 8px;
+  margin: 0 0 var(--spacing-5) 0;
+  color: var(--text-primary);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-lg);
+  border-bottom: 2px solid var(--color-primary);
+  padding-bottom: var(--spacing-2);
 }
 
 .developer-options {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid #e0e0e0;
+  margin-top: var(--spacing-5);
+  padding-top: var(--spacing-5);
+  border-top: 1px solid var(--border-default);
 }
 
 .setting-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  padding: 12px 0;
-  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: var(--spacing-4);
+  padding: var(--spacing-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .setting-item:last-child {
@@ -254,33 +259,35 @@ const handleRUMIntegerInputChange = (key: string) => (event: Event) => {
 }
 
 .setting-item label {
-  font-weight: 500;
-  color: #34495e;
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
   flex: 1;
-  margin-right: 16px;
+  margin-right: var(--spacing-4);
   cursor: pointer;
 }
 
 .setting-item label.with-description {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .setting-item label .description {
-  font-size: 12px;
-  font-weight: 400;
-  color: #6c757d;
+  font-size: var(--text-xs);
+  font-weight: var(--font-normal);
+  color: var(--text-secondary);
   font-style: italic;
 }
 
 .setting-item input {
   min-width: 150px;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-  transition: border-color 0.2s ease;
+  padding: var(--spacing-2) var(--spacing-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  transition: border-color var(--duration-200) ease;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .setting-item input[type="checkbox"] {
@@ -288,131 +295,73 @@ const handleRUMIntegerInputChange = (key: string) => (event: Event) => {
   width: 20px;
   height: 20px;
   cursor: pointer;
-  accent-color: #007acc;
+  accent-color: var(--color-primary);
 }
 
 .setting-item input:focus {
   outline: none;
-  border-color: #007acc;
-  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus);
 }
 
 .setting-item input:invalid {
-  border-color: #e74c3c;
-  box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.2);
+  border-color: var(--color-error);
+  box-shadow: 0 0 0 2px var(--color-error-alpha-20);
 }
 
 .rum-settings {
-  margin-top: 30px;
-  padding-top: 20px;
-  border-top: 2px solid #17a2b8;
-  background: #f8f9fa;
-  border-radius: 8px;
-  padding: 20px;
+  margin-top: var(--spacing-8);
+  padding-top: var(--spacing-5);
+  border-top: 2px solid var(--color-info);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-5);
 }
 
 .rum-settings h4 {
-  margin: 0 0 20px 0;
-  color: #17a2b8;
-  font-weight: 600;
-  font-size: 16px;
+  margin: 0 0 var(--spacing-5) 0;
+  color: var(--color-info);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-base);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .rum-settings h4::before {
   content: "📊";
-  font-size: 18px;
+  font-size: var(--text-lg);
 }
 
 .rum-config {
-  margin-top: 20px;
-  padding-left: 20px;
-  border-left: 3px solid #17a2b8;
-  background: #ffffff;
-  border-radius: 6px;
-  padding: 16px;
+  margin-top: var(--spacing-5);
+  padding-left: var(--spacing-5);
+  border-left: 3px solid var(--color-info);
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-4);
 }
 
 .rum-config .setting-item {
-  border-bottom-color: #e9ecef;
-}
-
-/* Dark theme support */
-@media (prefers-color-scheme: dark) {
-  .settings-section {
-    background: #2d2d2d;
-    border-color: #404040;
-  }
-
-  .developer-section h3 {
-    color: #ffffff;
-    border-bottom-color: #4fc3f7;
-  }
-
-  .developer-options {
-    border-top-color: #404040;
-  }
-
-  .setting-item {
-    border-bottom-color: #404040;
-  }
-
-  .setting-item label {
-    color: #e0e0e0;
-  }
-
-  .setting-item label .description {
-    color: #aaaaaa;
-  }
-
-  .setting-item input {
-    background: #404040;
-    border-color: #555;
-    color: #ffffff;
-  }
-
-  .setting-item input:focus {
-    border-color: #4fc3f7;
-    box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.2);
-  }
-
-  .rum-settings {
-    background: #383838;
-    border-top-color: #4fc3f7;
-  }
-
-  .rum-settings h4 {
-    color: #4fc3f7;
-  }
-
-  .rum-config {
-    background: #2d2d2d;
-    border-left-color: #4fc3f7;
-  }
-
-  .rum-config .setting-item {
-    border-bottom-color: #404040;
-  }
+  border-bottom-color: var(--border-subtle);
 }
 
 /* Mobile responsive */
 @media (max-width: 768px) {
   .settings-section {
-    padding: 16px;
-    margin-bottom: 20px;
+    padding: var(--spacing-4);
+    margin-bottom: var(--spacing-5);
   }
 
   .setting-item {
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--spacing-2);
   }
 
   .setting-item label {
     margin-right: 0;
-    margin-bottom: 4px;
+    margin-bottom: var(--spacing-1);
   }
 
   .setting-item input {
@@ -426,7 +375,7 @@ const handleRUMIntegerInputChange = (key: string) => (event: Event) => {
   }
 
   .rum-config {
-    padding-left: 12px;
+    padding-left: var(--spacing-3);
   }
 }
 </style>

@@ -123,233 +123,194 @@ const clearSelectedPrompt = () => {
 </script>
 
 <style scoped>
+/**
+ * Issue #704: CSS Design System - Using design tokens
+ * All colors reference CSS custom properties from design-tokens.css
+ */
+
 .settings-section {
-  margin-bottom: 30px;
-  background: #ffffff;
-  border: 1px solid #e1e5e9;
-  border-radius: 8px;
-  padding: 24px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: var(--spacing-8);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-6);
+  box-shadow: var(--shadow-sm);
 }
 
 .settings-section h3 {
-  margin: 0 0 20px 0;
-  color: #2c3e50;
-  font-weight: 600;
-  font-size: 18px;
-  border-bottom: 2px solid #3498db;
-  padding-bottom: 8px;
+  margin: 0 0 var(--spacing-5) 0;
+  color: var(--text-primary);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-lg);
+  border-bottom: 2px solid var(--color-primary);
+  padding-bottom: var(--spacing-2);
 }
 
 .prompts-list {
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .prompt-item {
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  padding: 16px;
-  margin-bottom: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-4);
+  margin-bottom: var(--spacing-3);
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .prompt-item h4 {
-  margin: 0 0 8px 0;
-  color: #495057;
-  font-size: 14px;
-  font-weight: 600;
+  margin: 0 0 var(--spacing-2) 0;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
 }
 
 .prompt-item p {
   margin: 0;
-  color: #6c757d;
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
   flex: 1;
 }
 
 .prompt-item button {
-  background: #007acc;
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
   border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
+  padding: var(--spacing-1-5) var(--spacing-3);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  transition: background-color 0.2s ease;
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  transition: background-color var(--duration-200) ease;
   flex-shrink: 0;
 }
 
 .prompt-item button:hover {
-  background: #005999;
+  background: var(--color-primary-dark);
 }
 
 .prompt-editor {
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  padding: 20px;
-  margin-bottom: 20px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-5);
+  margin-bottom: var(--spacing-5);
 }
 
 .prompt-editor h4 {
-  margin: 0 0 16px 0;
-  color: #495057;
-  font-size: 16px;
-  font-weight: 600;
+  margin: 0 0 var(--spacing-4) 0;
+  color: var(--text-primary);
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
 }
 
 .prompt-editor textarea {
   width: 100%;
   min-height: 200px;
-  padding: 12px;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 13px;
-  line-height: 1.5;
+  padding: var(--spacing-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
   resize: vertical;
   box-sizing: border-box;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .prompt-editor textarea:focus {
   outline: none;
-  border-color: #007acc;
-  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus);
 }
 
 .editor-actions {
   display: flex;
-  gap: 12px;
-  margin-top: 16px;
+  gap: var(--spacing-3);
+  margin-top: var(--spacing-4);
   flex-wrap: wrap;
 }
 
 .editor-actions button {
   border: none;
-  padding: 10px 16px;
-  border-radius: 5px;
+  padding: var(--spacing-2-5) var(--spacing-4);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: background-color 0.2s ease;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  transition: background-color var(--duration-200) ease;
 }
 
 .editor-actions button:first-child {
-  background: #28a745;
-  color: white;
+  background: var(--color-success);
+  color: var(--text-on-success);
 }
 
 .editor-actions button:first-child:hover {
-  background: #218838;
+  background: var(--color-success-dark);
 }
 
 .editor-actions button:nth-child(2) {
-  background: #ffc107;
-  color: #212529;
+  background: var(--color-warning);
+  color: var(--text-on-warning);
 }
 
 .editor-actions button:nth-child(2):hover {
-  background: #e0a800;
+  background: var(--color-warning-dark);
 }
 
 .editor-actions button:last-child {
-  background: #6c757d;
-  color: white;
+  background: var(--text-tertiary);
+  color: var(--text-on-primary);
 }
 
 .editor-actions button:last-child:hover {
-  background: #5a6268;
+  background: var(--text-secondary);
 }
 
 .prompts-controls {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .control-button {
-  background: #007acc;
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
   border: none;
-  padding: 10px 16px;
-  border-radius: 5px;
+  padding: var(--spacing-2-5) var(--spacing-4);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: background-color 0.2s ease;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  transition: background-color var(--duration-200) ease;
 }
 
 .control-button:hover {
-  background: #005999;
+  background: var(--color-primary-dark);
 }
 
 .control-button.small {
-  padding: 8px 12px;
-  font-size: 13px;
-}
-
-/* Dark theme support */
-@media (prefers-color-scheme: dark) {
-  .settings-section {
-    background: #2d2d2d;
-    border-color: #404040;
-  }
-
-  .settings-section h3 {
-    color: #ffffff;
-    border-bottom-color: #4fc3f7;
-  }
-
-  .prompt-item {
-    background: #383838;
-    border-color: #555;
-  }
-
-  .prompt-item h4 {
-    color: #ffffff;
-  }
-
-  .prompt-item p {
-    color: #cccccc;
-  }
-
-  .prompt-editor {
-    background: #383838;
-    border-color: #555;
-  }
-
-  .prompt-editor h4 {
-    color: #ffffff;
-  }
-
-  .prompt-editor textarea {
-    background: #404040;
-    border-color: #555;
-    color: #ffffff;
-  }
-
-  .prompt-editor textarea:focus {
-    border-color: #4fc3f7;
-    box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.2);
-  }
+  padding: var(--spacing-2) var(--spacing-3);
+  font-size: var(--text-xs);
 }
 
 /* Mobile responsive */
 @media (max-width: 768px) {
   .settings-section {
-    padding: 16px;
-    margin-bottom: 20px;
+    padding: var(--spacing-4);
+    margin-bottom: var(--spacing-5);
   }
 
   .prompt-item {
     flex-direction: column;
     align-items: flex-start;
-    gap: 12px;
+    gap: var(--spacing-3);
   }
 
   .prompt-item button {

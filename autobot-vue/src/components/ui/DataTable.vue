@@ -227,10 +227,15 @@ const formatCell = (value: any, column: Column) => {
 </script>
 
 <style scoped>
+/**
+ * Issue #704: CSS Design System - Using design tokens
+ * All colors reference CSS custom properties from design-tokens.css
+ */
+
 .data-table-container {
-  background: white;
-  border-radius: 0.5rem;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
   overflow: hidden;
 }
 
@@ -239,20 +244,20 @@ const formatCell = (value: any, column: Column) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid #e5e7eb;
+  padding: var(--spacing-4) var(--spacing-6);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .header-left h3 {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #1f2937;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
   margin: 0;
 }
 
 .header-right {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   align-items: center;
 }
 
@@ -267,16 +272,16 @@ const formatCell = (value: any, column: Column) => {
 }
 
 .data-table thead {
-  background: #f9fafb;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .data-table th {
   text-align: left;
-  padding: 0.75rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #6b7280;
+  padding: var(--spacing-3) var(--spacing-4);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -284,18 +289,18 @@ const formatCell = (value: any, column: Column) => {
 .data-table th.sortable {
   cursor: pointer;
   user-select: none;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .data-table th.sortable:hover {
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .data-table th.sortable i {
-  margin-left: 0.5rem;
-  font-size: 0.75rem;
-  color: #9ca3af;
+  margin-left: var(--spacing-2);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
 }
 
 .data-table th.actions-column {
@@ -303,14 +308,14 @@ const formatCell = (value: any, column: Column) => {
 }
 
 .data-table td {
-  padding: 1rem;
-  font-size: 0.875rem;
-  color: #374151;
-  border-bottom: 1px solid #f3f4f6;
+  padding: var(--spacing-4);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .data-table tbody tr:hover {
-  background: #f9fafb;
+  background: var(--bg-hover);
 }
 
 .data-table td.actions-cell {
@@ -320,7 +325,7 @@ const formatCell = (value: any, column: Column) => {
 .loading-cell,
 .empty-cell {
   text-align: center;
-  padding: 2rem 1rem;
+  padding: var(--spacing-8) var(--spacing-4);
 }
 
 /* Pagination */
@@ -328,24 +333,24 @@ const formatCell = (value: any, column: Column) => {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  border-top: 1px solid #e5e7eb;
+  gap: var(--spacing-4);
+  padding: var(--spacing-4);
+  border-top: 1px solid var(--border-default);
 }
 
 .pagination-btn {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #d1d5db;
-  background: white;
-  border-radius: 0.375rem;
-  color: #374151;
+  padding: var(--spacing-2) var(--spacing-3);
+  border: 1px solid var(--border-default);
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .pagination-btn:hover:not(:disabled) {
-  background: #f9fafb;
-  border-color: #9ca3af;
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
 }
 
 .pagination-btn:disabled {
@@ -354,65 +359,7 @@ const formatCell = (value: any, column: Column) => {
 }
 
 .pagination-info {
-  font-size: 0.875rem;
-  color: #6b7280;
-}
-
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .data-table-container {
-    background: #1f2937;
-    border-color: #374151;
-  }
-
-  .table-header {
-    border-bottom-color: #374151;
-  }
-
-  .header-left h3 {
-    color: #f9fafb;
-  }
-
-  .data-table thead {
-    background: #374151;
-    border-bottom-color: #4b5563;
-  }
-
-  .data-table th {
-    color: #d1d5db;
-  }
-
-  .data-table th.sortable:hover {
-    background: #4b5563;
-    color: #f9fafb;
-  }
-
-  .data-table td {
-    color: #d1d5db;
-    border-bottom-color: #374151;
-  }
-
-  .data-table tbody tr:hover {
-    background: #374151;
-  }
-
-  .table-pagination {
-    border-top-color: #374151;
-  }
-
-  .pagination-btn {
-    background: #374151;
-    border-color: #4b5563;
-    color: #d1d5db;
-  }
-
-  .pagination-btn:hover:not(:disabled) {
-    background: #4b5563;
-    border-color: #6b7280;
-  }
-
-  .pagination-info {
-    color: #9ca3af;
-  }
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 </style>
