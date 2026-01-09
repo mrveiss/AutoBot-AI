@@ -64,6 +64,50 @@ def _is_approval_already_responded(
     return False
 
 
+def _apply_restored_approval_state(
+    session: "AgentTerminalSession",
+    approval_request: Dict,
+    conversation_id: str,
+    request_timestamp: float,
+) -> None:
+    """
+    Apply restored approval state to session from approval request metadata.
+
+    Issue #665: Extracted from _restore_pending_approval to reduce function length.
+
+    Args:
+        session: Agent terminal session to update
+        approval_request: Approval request message with metadata
+        conversation_id: Chat conversation ID
+        request_timestamp: Timestamp of the approval request
+    """
+    metadata = approval_request.get("metadata", {})
+    command = metadata.get("command")
+
+    if command:
+        session.pending_approval = {
+            "command": command,
+            "risk": metadata.get("risk_level", "MEDIUM"),
+            "reasons": metadata.get("reasons", []),
+            "description": metadata.get("description", ""),
+            "terminal_session_id": metadata.get("terminal_session_id"),
+            "conversation_id": conversation_id,
+            "timestamp": request_timestamp,
+        }
+        session.state = AgentSessionState.AWAITING_APPROVAL
+
+        logger.info(
+            f"✅ [APPROVAL RESTORED] Restored pending approval "
+            f"for session {session.session_id}: "
+            f"command='{command}', risk={metadata.get('risk_level')}"
+        )
+    else:
+        logger.warning(
+            f"Found approval request but no command in metadata "
+            f"for conversation {conversation_id}"
+        )
+
+
 class SessionManager:
     """Manages agent terminal session lifecycle"""
 
@@ -412,32 +456,10 @@ class SessionManager:
                 )
                 return
 
-            # Approval is still pending! Restore state from metadata
-            metadata = approval_request.get("metadata", {})
-            command = metadata.get("command")
-
-            if command:
-                session.pending_approval = {
-                    "command": command,
-                    "risk": metadata.get("risk_level", "MEDIUM"),
-                    "reasons": metadata.get("reasons", []),
-                    "description": metadata.get("description", ""),
-                    "terminal_session_id": metadata.get("terminal_session_id"),
-                    "conversation_id": conversation_id,
-                    "timestamp": request_timestamp,
-                }
-                session.state = AgentSessionState.AWAITING_APPROVAL
-
-                logger.info(
-                    f"✅ [APPROVAL RESTORED] Restored pending approval "
-                    f"for session {session.session_id}: "
-                    f"command='{command}', risk={metadata.get('risk_level')}"
-                )
-            else:
-                logger.warning(
-                    f"Found approval request but no command in metadata "
-                    f"for conversation {conversation_id}"
-                )
+            # Approval is still pending! Restore state (Issue #665: uses helper)
+            _apply_restored_approval_state(
+                session, approval_request, conversation_id, request_timestamp
+            )
 
         except Exception as e:
             logger.error("Failed to restore pending approval from chat history: %s", e)

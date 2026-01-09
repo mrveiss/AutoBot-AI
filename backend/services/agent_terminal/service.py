@@ -293,6 +293,34 @@ class AgentTerminalService:
             session.conversation_id, command, result, command_type="agent"
         )
 
+        # Interpret result if chat workflow manager available
+        await self._interpret_command_result(session, command, result)
+
+        # Update session history and broadcast status (Issue #665: extracted helper)
+        await self._finalize_auto_approved_execution(session, command, risk, result)
+
+        return result
+
+    # ============================================================================
+    # Helper Methods for auto-approved execution (Issue #665)
+    # ============================================================================
+
+    async def _interpret_command_result(
+        self,
+        session: AgentTerminalSession,
+        command: str,
+        result: Metadata,
+    ) -> None:
+        """
+        Interpret command result using LLM if available.
+
+        Issue #665: Extracted from _execute_auto_approved_command.
+
+        Args:
+            session: Terminal session
+            command: Executed command
+            result: Execution result
+        """
         if session.has_conversation() and self.chat_workflow_manager:
             try:
                 logger.info(
@@ -308,15 +336,31 @@ class AgentTerminalService:
             except Exception as e:
                 logger.error("[INTERPRETATION] Failed to interpret results: %s", e)
 
-        session.command_history.append(
-            {
-                "command": command,
-                "risk": risk.value,
-                "timestamp": time.time(),
-                "auto_approved": True,
-                "result": result,
-            }
-        )
+    async def _finalize_auto_approved_execution(
+        self,
+        session: AgentTerminalSession,
+        command: str,
+        risk,
+        result: Metadata,
+    ) -> None:
+        """
+        Finalize auto-approved execution with history update and broadcast.
+
+        Issue #665: Extracted from _execute_auto_approved_command.
+
+        Args:
+            session: Terminal session
+            command: Executed command
+            risk: Risk level
+            result: Execution result (modified in place)
+        """
+        session.command_history.append({
+            "command": command,
+            "risk": risk.value,
+            "timestamp": time.time(),
+            "auto_approved": True,
+            "result": result,
+        })
         session.last_activity = time.time()
 
         await self.approval_handler.broadcast_approval_status(
@@ -330,8 +374,6 @@ class AgentTerminalService:
         result["approval_status"] = "pre_approved"
         result["approval_comment"] = f"Auto-approved ({risk.value} risk)"
         result["command"] = command
-
-        return result
 
     # ============================================================================
     # Helper Methods for _approve_command_internal (Issue #281)

@@ -577,6 +577,52 @@ def _build_similar_block_entry(result) -> dict:
     }
 
 
+# Issue #665: Module-level constant for refactoring suggestions
+_REFACTOR_SUGGESTIONS = (
+    {
+        "type": "Extract Utility Functions",
+        "priority": "high",
+        "description": (
+            "Functions with high usage but multiple definitions "
+            "can be centralized"
+        ),
+        "impact": "Reduces code duplication and improves maintainability",
+        "effort": "medium",
+    },
+    {
+        "type": "Create Base Classes",
+        "priority": "medium",
+        "description": (
+            "Similar classes can be refactored to use inheritance "
+            "or composition"
+        ),
+        "impact": "Improves code organization and reduces repetition",
+        "effort": "high",
+    },
+    {
+        "type": "Standardize Error Handling",
+        "priority": "high",
+        "description": "Inconsistent error handling patterns detected",
+        "impact": "Improves reliability and debugging experience",
+        "effort": "medium",
+    },
+    {
+        "type": "Configuration Centralization",
+        "priority": "medium",
+        "description": "Multiple configuration loading patterns found",
+        "impact": "Simplifies configuration management",
+        "effort": "low",
+    },
+)
+
+# Issue #665: Module-level constant for next steps
+_REFACTOR_NEXT_STEPS = (
+    "Review high-priority suggestions first",
+    "Use duplicate detection to identify specific refactoring targets",
+    "Run declaration analysis to understand usage patterns",
+    "Test thoroughly after any refactoring changes",
+)
+
 # Issue #380: Module-level tuple for common duplicate detection patterns
 _DUPLICATE_DETECTION_PATTERNS = (
     "error handling",
@@ -867,6 +913,32 @@ async def get_codebase_statistics():
         raise HTTPException(status_code=500, detail=f"Statistics failed: {str(e)}")
 
 
+def _build_refactor_response(root_path: str, suggestions: list) -> dict:
+    """
+    Build refactor suggestions response.
+
+    Issue #665: Extracted from get_refactor_suggestions to reduce function length.
+
+    Args:
+        root_path: The analyzed codebase path
+        suggestions: List of suggestion dicts
+
+    Returns:
+        Response content dictionary
+    """
+    return {
+        "refactor_suggestions": suggestions,
+        "analysis_summary": {
+            "root_path": root_path,
+            "suggestion_count": len(suggestions),
+            "high_priority_count": sum(
+                1 for s in suggestions if s["priority"] == "high"
+            ),
+        },
+        "next_steps": list(_REFACTOR_NEXT_STEPS),
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_refactor_suggestions",
@@ -876,6 +948,8 @@ async def get_codebase_statistics():
 async def get_refactor_suggestions(request: AnalyticsRequest):
     """
     Generate intelligent refactoring suggestions based on codebase analysis.
+
+    Issue #665: Refactored to use module-level constants for suggestions.
 
     Analyzes code patterns, usage statistics, and complexity to suggest
     specific refactoring opportunities for improved maintainability.
@@ -889,66 +963,13 @@ async def get_refactor_suggestions(request: AnalyticsRequest):
         # Get duplicate analysis (for future integration)
         await find_code_duplicates(request)
 
-        suggestions = []
+        # Issue #665: Use module-level constant for suggestions
+        suggestions = list(_REFACTOR_SUGGESTIONS)
 
-        # High-impact refactoring suggestions
-        suggestions.extend(
-            [
-                {
-                    "type": "Extract Utility Functions",
-                    "priority": "high",
-                    "description": (
-                        "Functions with high usage but multiple definitions "
-                        "can be centralized"
-                    ),
-                    "impact": "Reduces code duplication and improves maintainability",
-                    "effort": "medium",
-                },
-                {
-                    "type": "Create Base Classes",
-                    "priority": "medium",
-                    "description": (
-                        "Similar classes can be refactored to use inheritance "
-                        "or composition"
-                    ),
-                    "impact": "Improves code organization and reduces repetition",
-                    "effort": "high",
-                },
-                {
-                    "type": "Standardize Error Handling",
-                    "priority": "high",
-                    "description": "Inconsistent error handling patterns detected",
-                    "impact": "Improves reliability and debugging experience",
-                    "effort": "medium",
-                },
-                {
-                    "type": "Configuration Centralization",
-                    "priority": "medium",
-                    "description": "Multiple configuration loading patterns found",
-                    "impact": "Simplifies configuration management",
-                    "effort": "low",
-                },
-            ]
-        )
-
+        # Issue #665: Use helper to build response
         return JSONResponse(
             status_code=200,
-            content={
-                "refactor_suggestions": suggestions,
-                "analysis_summary": {
-                    "root_path": request.root_path,
-                    "suggestion_count": len(suggestions),
-                    "high_priority_count": len(
-                        [s for s in suggestions if s["priority"] == "high"]
-                    ),
-                },
-                "next_steps": [
-                    "Review high-priority suggestions first",
-                    "Use duplicate detection to identify specific refactoring targets",
-                    "Run declaration analysis to understand usage patterns",
-                    "Test thoroughly after any refactoring changes",
-                ],
-            },
+            content=_build_refactor_response(request.root_path, suggestions),
         )
 
     except Exception as e:

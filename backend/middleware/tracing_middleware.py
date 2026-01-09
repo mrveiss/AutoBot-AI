@@ -105,30 +105,8 @@ class TracingMiddleware(BaseHTTPMiddleware):
         # Extract trace context from incoming headers
         # This is handled automatically by the propagator set in tracing_service
 
-        # Create custom attributes for AutoBot
-        attributes = {
-            "http.method": request.method,
-            "http.url": str(request.url),
-            "http.host": request.url.hostname or "unknown",
-            "http.path": path,
-            "http.scheme": request.url.scheme,
-            "autobot.service": self.service_name,
-            "autobot.request_id": request.headers.get("x-request-id", ""),
-        }
-
-        # Add query parameters if present
-        if request.url.query:
-            attributes["http.query"] = request.url.query
-
-        # Add client IP
-        client_ip = self._get_client_ip(request)
-        if client_ip:
-            attributes["http.client_ip"] = client_ip
-
-        # Add user agent
-        user_agent = request.headers.get("user-agent")
-        if user_agent:
-            attributes["http.user_agent"] = user_agent[:200]  # Truncate long UAs
+        # Build span attributes (Issue #665: extracted helper)
+        attributes = self._build_span_attributes(request, path)
 
         response: Optional[Response] = None
 
@@ -224,6 +202,45 @@ class TracingMiddleware(BaseHTTPMiddleware):
             return request.client.host
 
         return None
+
+    def _build_span_attributes(self, request: Request, path: str) -> dict:
+        """
+        Build span attributes dictionary for tracing.
+
+        Issue #665: Extracted from dispatch to reduce function length.
+
+        Args:
+            request: The incoming request
+            path: Request path
+
+        Returns:
+            Dictionary of span attributes
+        """
+        attributes = {
+            "http.method": request.method,
+            "http.url": str(request.url),
+            "http.host": request.url.hostname or "unknown",
+            "http.path": path,
+            "http.scheme": request.url.scheme,
+            "autobot.service": self.service_name,
+            "autobot.request_id": request.headers.get("x-request-id", ""),
+        }
+
+        # Add query params if present
+        if request.url.query:
+            attributes["http.query"] = request.url.query
+
+        # Add client IP
+        client_ip = self._get_client_ip(request)
+        if client_ip:
+            attributes["http.client_ip"] = client_ip
+
+        # Add user agent
+        user_agent = request.headers.get("user-agent")
+        if user_agent:
+            attributes["http.user_agent"] = user_agent[:200]  # Truncate long UAs
+
+        return attributes
 
     def _set_response_span_attributes(self, span, response: Response) -> None:
         """Set response attributes on span. (Issue #315 - extracted)"""

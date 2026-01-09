@@ -200,6 +200,51 @@ class ApprovalMemoryManager:
         # No arguments - exact match
         return base_cmd
 
+    async def _load_existing_records(self, redis, key: str) -> List[Dict]:
+        """
+        Load existing approval records from Redis.
+
+        Issue #665: Extracted from remember_approval to reduce function length.
+
+        Args:
+            redis: Redis client
+            key: Redis key for records
+
+        Returns:
+            List of existing records or empty list
+        """
+        existing_data = await redis.get(key)
+        if existing_data:
+            try:
+                return json.loads(existing_data)
+            except json.JSONDecodeError:
+                return []
+        return []
+
+    def _update_or_add_record(
+        self, records: List[Dict], record: ApprovalRecord, pattern: str, tool: str
+    ) -> List[Dict]:
+        """
+        Update existing record or add new one.
+
+        Issue #665: Extracted from remember_approval to reduce function length.
+
+        Args:
+            records: Existing records list
+            record: New record to add/update
+            pattern: Pattern to match
+            tool: Tool to match
+
+        Returns:
+            Updated records list
+        """
+        for i, rec in enumerate(records):
+            if rec.get("pattern") == pattern and rec.get("tool") == tool:
+                records[i] = record.to_dict()
+                return records
+        records.append(record.to_dict())
+        return records
+
     async def remember_approval(
         self,
         project_path: str,
@@ -248,26 +293,9 @@ class ApprovalMemoryManager:
             # Get Redis key
             key = self._get_redis_key(project_path, user_id)
 
-            # Get existing records
-            existing_data = await redis.get(key)
-            records: List[Dict] = []
-            if existing_data:
-                try:
-                    records = json.loads(existing_data)
-                except json.JSONDecodeError:
-                    records = []
-
-            # Check if pattern already exists (update if so)
-            found = False
-            for i, rec in enumerate(records):
-                if rec.get("pattern") == pattern and rec.get("tool") == tool:
-                    # Update existing record
-                    records[i] = record.to_dict()
-                    found = True
-                    break
-
-            if not found:
-                records.append(record.to_dict())
+            # Get existing records and update (Issue #665: uses helper)
+            records = await self._load_existing_records(redis, key)
+            records = self._update_or_add_record(records, record, pattern, tool)
 
             # Store with TTL
             await redis.setex(key, self.ttl, json.dumps(records))

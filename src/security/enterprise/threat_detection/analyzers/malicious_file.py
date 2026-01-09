@@ -63,6 +63,59 @@ class MaliciousFileAnalyzer(ThreatAnalyzer):
 
         return threats
 
+    def _build_threat_event(
+        self,
+        event: SecurityEvent,
+        threats: List[str],
+        filename: str,
+        file_size: int,
+        file_content: Optional[str],
+    ) -> ThreatEvent:
+        """
+        Build a ThreatEvent from detected threats.
+
+        Issue #665: Extracted from analyze to reduce function length.
+
+        Args:
+            event: The security event being analyzed
+            threats: List of detected threat identifiers
+            filename: Name of the file
+            file_size: Size of the file in bytes
+            file_content: Preview of file content or None
+
+        Returns:
+            ThreatEvent for the detected threats
+        """
+        confidence = min(1.0, len(threats) * 0.3 + 0.4)
+        threat_level = (
+            ThreatLevel.CRITICAL
+            if any("malicious_content" in t for t in threats)
+            else ThreatLevel.HIGH
+        )
+
+        # Issue #372: Use SecurityEvent methods to reduce feature envy
+        base_fields = event.get_threat_base_fields()
+
+        return ThreatEvent(
+            event_id=event.generate_threat_id("malicious_file"),
+            **base_fields,
+            threat_category=ThreatCategory.MALICIOUS_UPLOAD,
+            threat_level=threat_level,
+            confidence_score=confidence,
+            resource=filename,  # Override base resource
+            details={
+                "detected_threats": threats,
+                "filename": filename,
+                "file_size": file_size,
+                "content_preview": file_content[:100] if file_content else "",
+            },
+            mitigation_actions=[
+                "quarantine_file",
+                "scan_with_antivirus",
+                "alert_security_team",
+            ],
+        )
+
     async def analyze(
         self, event: SecurityEvent, context: AnalysisContext
     ) -> Optional[ThreatEvent]:
@@ -112,35 +165,10 @@ class MaliciousFileAnalyzer(ThreatAnalyzer):
         if file_size > size_threshold:
             threats.append("unusually_large_file")
 
+        # Issue #665: Use helper to build threat event
         if threats:
-            confidence = min(1.0, len(threats) * 0.3 + 0.4)
-            threat_level = (
-                ThreatLevel.CRITICAL
-                if any("malicious_content" in t for t in threats)
-                else ThreatLevel.HIGH
-            )
-
-            # Issue #372: Use SecurityEvent methods to reduce feature envy
-            base_fields = event.get_threat_base_fields()
-
-            return ThreatEvent(
-                event_id=event.generate_threat_id("malicious_file"),
-                **base_fields,
-                threat_category=ThreatCategory.MALICIOUS_UPLOAD,
-                threat_level=threat_level,
-                confidence_score=confidence,
-                resource=filename,  # Override base resource
-                details={
-                    "detected_threats": threats,
-                    "filename": filename,
-                    "file_size": file_size,
-                    "content_preview": file_content[:100] if file_content else "",
-                },
-                mitigation_actions=[
-                    "quarantine_file",
-                    "scan_with_antivirus",
-                    "alert_security_team",
-                ],
+            return self._build_threat_event(
+                event, threats, filename, file_size, file_content
             )
 
         return None
