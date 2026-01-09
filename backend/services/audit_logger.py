@@ -264,6 +264,72 @@ class AuditLogger:
             self._redis_failures += 1
             return None
 
+    def _create_sanitized_entry(
+        self,
+        operation: str,
+        result: AuditResult,
+        user_id: Optional[str],
+        session_id: Optional[str],
+        ip_address: Optional[str],
+        resource: Optional[str],
+        user_role: Optional[str],
+        details: Optional[Metadata],
+        performance_ms: Optional[float],
+    ) -> AuditEntry:
+        """
+        Create and sanitize an audit entry.
+
+        Issue #665: Extracted from log() to reduce function length.
+
+        Args:
+            operation: Operation type
+            result: Operation result
+            user_id: Username or user identifier
+            session_id: Session ID if applicable
+            ip_address: Client IP address
+            resource: Resource affected
+            user_role: User's role
+            details: Additional metadata
+            performance_ms: Operation duration
+
+        Returns:
+            Sanitized AuditEntry ready for storage
+        """
+        entry = AuditEntry(
+            operation=operation,
+            result=result,
+            user_id=user_id,
+            session_id=session_id,
+            ip_address=ip_address,
+            resource=resource,
+            user_role=user_role,
+            vm_source=self.vm_source,
+            vm_name=self.vm_name,
+            details=details or {},
+            performance_ms=performance_ms,
+        )
+        entry.sanitize()
+        return entry
+
+    async def _add_to_batch_and_schedule(self, entry: AuditEntry) -> None:
+        """
+        Add entry to batch queue and schedule flush if needed.
+
+        Issue #665: Extracted from log() to reduce function length.
+
+        Args:
+            entry: Audit entry to add to batch
+        """
+        async with self._batch_lock:
+            self._batch_queue.append(entry)
+
+            # Flush immediately if batch is full
+            if len(self._batch_queue) >= self.batch_size:
+                await self._flush_batch()
+            elif not self._batch_task or self._batch_task.done():
+                # Start batch timeout timer
+                self._batch_task = asyncio.create_task(self._batch_timer())
+
     async def log(
         self,
         operation: str,
@@ -277,7 +343,9 @@ class AuditLogger:
         performance_ms: Optional[float] = None,
     ) -> bool:
         """
-        Log a security-sensitive operation
+        Log a security-sensitive operation.
+
+        Issue #665: Refactored to use extracted helpers for reduced function length.
 
         This is the primary interface for audit logging. Automatically adds
         VM source information and sanitizes sensitive data.
@@ -297,36 +365,17 @@ class AuditLogger:
             bool: True if logged successfully, False if fallback used
         """
         start_time = datetime.now()
+        entry = None
 
         try:
-            # Create audit entry
-            entry = AuditEntry(
-                operation=operation,
-                result=result,
-                user_id=user_id,
-                session_id=session_id,
-                ip_address=ip_address,
-                resource=resource,
-                user_role=user_role,
-                vm_source=self.vm_source,
-                vm_name=self.vm_name,
-                details=details or {},
-                performance_ms=performance_ms,
+            # Create and sanitize audit entry (Issue #665: extracted)
+            entry = self._create_sanitized_entry(
+                operation, result, user_id, session_id,
+                ip_address, resource, user_role, details, performance_ms
             )
 
-            # Sanitize sensitive data (OWASP requirement)
-            entry.sanitize()
-
-            # Add to batch queue
-            async with self._batch_lock:
-                self._batch_queue.append(entry)
-
-                # Flush immediately if batch is full
-                if len(self._batch_queue) >= self.batch_size:
-                    await self._flush_batch()
-                elif not self._batch_task or self._batch_task.done():
-                    # Start batch timeout timer
-                    self._batch_task = asyncio.create_task(self._batch_timer())
+            # Add to batch queue and schedule flush (Issue #665: extracted)
+            await self._add_to_batch_and_schedule(entry)
 
             # Track performance
             log_duration_ms = (datetime.now() - start_time).total_seconds() * 1000
@@ -341,11 +390,7 @@ class AuditLogger:
         except Exception as e:
             logger.error("Audit logging failed: %s", e)
             self._total_failed += 1
-
-            # Fallback to file logging
-            await self._fallback_log(
-                entry if "entry" in locals() else None, error=str(e)
-            )
+            await self._fallback_log(entry, error=str(e))
             return False
 
     async def _batch_timer(self):

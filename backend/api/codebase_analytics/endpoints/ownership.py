@@ -271,42 +271,12 @@ def _build_knowledge_gaps_error(message: str) -> dict:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_ownership_analysis",
-    error_code_prefix="CODEBASE",
-)
-@router.get("/analysis")
-async def get_ownership_analysis(
-    path: str = Query(None, description="Root path to analyze (defaults to project root)"),
-    refresh: bool = Query(False, description="Force fresh analysis instead of cache"),
-    patterns: str = Query(
-        "**/*.py,**/*.ts,**/*.vue",
-        description="Glob patterns for files to scan, comma-separated"
-    ),
-    days: int = Query(90, description="Days to consider for recency scoring"),
-):
-    """
-    Analyze code ownership for the codebase (Issue #248).
+async def _check_ownership_cache(refresh: bool) -> Optional[JSONResponse]:
+    """Check cache for ownership analysis results.
 
-    Uses git blame and git log to detect:
-    - Primary owners per file and directory
-    - Bus factor (number of knowledgeable maintainers)
-    - Knowledge gaps and risks
-    - Contributor expertise scores
-
-    Args:
-        path: Root path to analyze (defaults to project root)
-        refresh: Force fresh analysis instead of using cached results
-        patterns: Comma-separated glob patterns for files to scan
-        days: Days to consider for recency scoring (default 90)
-
-    Returns:
-        JSON with ownership analysis, expertise scores, and knowledge gaps
+    Issue #665: Extracted from get_ownership_analysis to reduce function length.
     """
     global _ownership_analysis_cache
-
-    # Use cached results if available and not refreshing
     async with _ownership_analysis_cache_lock:
         if _ownership_analysis_cache and not refresh:
             logger.info(
@@ -314,12 +284,40 @@ async def get_ownership_analysis(
                 _ownership_analysis_cache.get("summary", {}).get("total_files", 0)
             )
             return JSONResponse(_ownership_analysis_cache)
+    return None
+
+
+async def _cache_ownership_result(result: dict) -> None:
+    """Cache ownership analysis result.
+
+    Issue #665: Extracted from get_ownership_analysis to reduce function length.
+    """
+    global _ownership_analysis_cache
+    async with _ownership_analysis_cache_lock:
+        _ownership_analysis_cache = result
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_ownership_analysis",
+    error_code_prefix="CODEBASE",
+)
+@router.get("/analysis")
+async def get_ownership_analysis(
+    path: str = Query(None, description="Root path to analyze"),
+    refresh: bool = Query(False, description="Force fresh analysis"),
+    patterns: str = Query("**/*.py,**/*.ts,**/*.vue", description="Glob patterns"),
+    days: int = Query(90, description="Days for recency scoring"),
+):
+    """Analyze code ownership (Issue #248). Issue #665: Refactored with helpers."""
+    cached = await _check_ownership_cache(refresh)
+    if cached:
+        return cached
 
     project_root = _get_project_root()
     if not path:
         path = project_root
 
-    # Security validation
     error_response = _validate_path_security(path, project_root)
     if error_response:
         return error_response
@@ -342,17 +340,13 @@ async def get_ownership_analysis(
             })
 
         result = _build_ownership_result(analysis, path)
-
-        # Cache the results
-        async with _ownership_analysis_cache_lock:
-            _ownership_analysis_cache = result
+        await _cache_ownership_result(result)
 
         logger.info(
             "Ownership analysis complete: %d files, %d gaps",
             result["summary"].get("total_files", 0),
             result["summary"].get("knowledge_gaps_count", 0),
         )
-
         return JSONResponse(result)
 
     except Exception as e:

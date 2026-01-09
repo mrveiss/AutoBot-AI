@@ -359,35 +359,12 @@ class SecurityRiskJudge(BaseLLMJudge):
         else:
             return self._prepare_general_security_prompt(subject_data, context)
 
-    def _prepare_command_security_prompt(
-        self,
-        command: str,
-        execution_context: Dict[str, Any],
-        user_permissions: List[str],
-        environment: str,
-        risk_patterns: Dict[str, Any],
-        context: Dict[str, Any],
-    ) -> str:
-        """Prepare prompt for command security evaluation"""
+    def _get_security_evaluation_criteria(self) -> str:
+        """Return security evaluation criteria template.
 
-        prompt = f"""
-Please evaluate the security risk of the following command before execution:
-
-COMMAND TO EVALUATE:
-{command}
-
-EXECUTION CONTEXT:
-Environment: {environment}
-User Permissions: {user_permissions}
-Working Directory: {execution_context.get('working_directory', 'unknown')}
-User: {execution_context.get('user', 'unknown')}
-Session Type: {execution_context.get('session_type', 'unknown')}
-
-RISK ANALYSIS:
-Dangerous Patterns Detected: {risk_patterns.get('dangerous_patterns', [])}
-Risk Categories: {risk_patterns.get('risk_categories', [])}
-Safety Level: {risk_patterns.get('safety_level', 'unknown')}
-
+        Issue #665: Extracted from _prepare_command_security_prompt to reduce function length.
+        """
+        return """
 SECURITY EVALUATION CRITERIA:
 Please evaluate this command on the following dimensions (score 0.0 to 1.0):
 
@@ -413,12 +390,14 @@ Please evaluate this command on the following dimensions (score 0.0 to 1.0):
    - Is this command appropriate for the current environment?
    - Does the user have necessary permissions?
    - Is this the safest way to achieve the goal?
-   - Are there safer alternatives available?
+   - Are there safer alternatives available?"""
 
-RISK THRESHOLDS:
-- High Risk Threshold: {context.get('high_risk_threshold', 0.3)} (commands above this need extra scrutiny)
-- Block Threshold: {context.get('block_threshold', 0.7)} (commands above this should be blocked)
+    def _get_security_decision_criteria(self) -> str:
+        """Return security decision criteria template.
 
+        Issue #665: Extracted from _prepare_command_security_prompt to reduce function length.
+        """
+        return """
 ENVIRONMENT CONSIDERATIONS:
 - Production: Highest security standards, minimal risk tolerance
 - Staging: Moderate security, some risk acceptable for testing
@@ -438,9 +417,38 @@ Please provide your evaluation in the required JSON format with:
 - Clear approval/rejection recommendation
 - Mitigation strategies if applicable
 
-Focus on protecting system integrity, user data, and organizational security while enabling legitimate operations.
-"""
+Focus on protecting system integrity, user data, and organizational security while enabling legitimate operations."""
 
+    def _prepare_command_security_prompt(
+        self, command: str, execution_context: Dict[str, Any],
+        user_permissions: List[str], environment: str,
+        risk_patterns: Dict[str, Any], context: Dict[str, Any],
+    ) -> str:
+        """Prepare prompt for command security evaluation. Issue #665: Refactored."""
+        prompt = f"""
+Please evaluate the security risk of the following command before execution:
+
+COMMAND TO EVALUATE:
+{command}
+
+EXECUTION CONTEXT:
+Environment: {environment}
+User Permissions: {user_permissions}
+Working Directory: {execution_context.get('working_directory', 'unknown')}
+User: {execution_context.get('user', 'unknown')}
+Session Type: {execution_context.get('session_type', 'unknown')}
+
+RISK ANALYSIS:
+Dangerous Patterns Detected: {risk_patterns.get('dangerous_patterns', [])}
+Risk Categories: {risk_patterns.get('risk_categories', [])}
+Safety Level: {risk_patterns.get('safety_level', 'unknown')}
+{self._get_security_evaluation_criteria()}
+
+RISK THRESHOLDS:
+- High Risk Threshold: {context.get('high_risk_threshold', 0.3)} (commands above this need extra scrutiny)
+- Block Threshold: {context.get('block_threshold', 0.7)} (commands above this should be blocked)
+{self._get_security_decision_criteria()}
+"""
         return prompt.strip()
 
     def _prepare_file_access_prompt(

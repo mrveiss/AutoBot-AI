@@ -714,88 +714,89 @@ class LocalModelProvider(BaseAIProvider):
         # For vision models, attempt to process with images
         return await self._generate_with_images(request)
 
+    def _build_vision_error_response(
+        self, request: AIRequest, error_msg: str, start_time: float, error_detail: str
+    ) -> AIResponse:
+        """Build error response for vision model failures.
+
+        Issue #665: Extracted from _generate_with_images to reduce function length.
+        """
+        return AIResponse(
+            request_id=request.request_id,
+            provider=self.config.provider,
+            model_name=self.config.model_name,
+            content=error_msg,
+            usage={"prompt_tokens": 0, "completion_tokens": 0},
+            finish_reason="error",
+            tool_calls=None,
+            confidence=0.0,
+            processing_time=time.time() - start_time,
+            metadata={"error": error_detail},
+        )
+
+    def _build_vision_success_response(
+        self, request: AIRequest, result: dict, processing_time: float
+    ) -> AIResponse:
+        """Build success response for vision model.
+
+        Issue #665: Extracted from _generate_with_images to reduce function length.
+        """
+        return AIResponse(
+            request_id=request.request_id,
+            provider=self.config.provider,
+            model_name=result.get("model", self.config.model_name),
+            content=result.get("message", {}).get("content", ""),
+            usage={
+                "prompt_tokens": result.get("prompt_eval_count", 0),
+                "completion_tokens": result.get("eval_count", 0),
+            },
+            finish_reason="stop" if result.get("done") else "incomplete",
+            tool_calls=None,
+            confidence=0.7,
+            processing_time=processing_time,
+            metadata={"vision_model": True},
+        )
+
     async def _generate_with_images(self, request: AIRequest) -> AIResponse:
-        """Generate response with image input for vision-capable models."""
+        """Generate response with image input. Issue #665: Refactored with helpers."""
         import aiohttp
 
         start_time = time.time()
 
         if not self._ollama_available:
-            return AIResponse(
-                request_id=request.request_id,
-                provider=self.config.provider,
-                model_name=self.config.model_name,
-                content="Error: Ollama not configured for vision model.",
-                usage={"prompt_tokens": 0, "completion_tokens": 0},
-                finish_reason="error",
-                tool_calls=None,
-                confidence=0.0,
-                processing_time=time.time() - start_time,
-                metadata={"error": "ollama_not_configured"},
+            return self._build_vision_error_response(
+                request, "Error: Ollama not configured for vision model.",
+                start_time, "ollama_not_configured"
             )
 
         try:
-            # Ollama vision models expect images in the message
             messages = []
             if request.system_message:
                 messages.append({"role": "system", "content": request.system_message})
-
             user_message = {"role": "user", "content": request.prompt}
             if request.images:
-                user_message["images"] = request.images  # Base64 encoded
+                user_message["images"] = request.images
             messages.append(user_message)
 
-            data = {
-                "model": self.config.model_name,
-                "messages": messages,
-                "stream": False,
-            }
+            data = {"model": self.config.model_name, "messages": messages, "stream": False}
 
             async with aiohttp.ClientSession() as session:
-                timeout = aiohttp.ClientTimeout(total=180.0)  # Vision takes longer
+                timeout = aiohttp.ClientTimeout(total=180.0)
                 async with session.post(
-                    f"{self._ollama_url}/api/chat",
-                    json=data,
-                    timeout=timeout,
+                    f"{self._ollama_url}/api/chat", json=data, timeout=timeout
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
                         raise aiohttp.ClientError(f"HTTP {response.status}: {error_text}")
-
                     result = await response.json()
 
-            processing_time = time.time() - start_time
-            content = result.get("message", {}).get("content", "")
-
-            return AIResponse(
-                request_id=request.request_id,
-                provider=self.config.provider,
-                model_name=result.get("model", self.config.model_name),
-                content=content,
-                usage={
-                    "prompt_tokens": result.get("prompt_eval_count", 0),
-                    "completion_tokens": result.get("eval_count", 0),
-                },
-                finish_reason="stop" if result.get("done") else "incomplete",
-                tool_calls=None,
-                confidence=0.7,
-                processing_time=processing_time,
-                metadata={"vision_model": True},
-            )
+            return self._build_vision_success_response(request, result, time.time() - start_time)
 
         except Exception as e:
             logger.error("Ollama vision request failed: %s", e)
-            return AIResponse(
-                request_id=request.request_id,
-                provider=self.config.provider,
-                model_name=self.config.model_name,
-                content=f"Error: Vision model request failed - {str(e)}",
-                usage={"prompt_tokens": 0, "completion_tokens": 0},
-                finish_reason="error",
-                tool_calls=None,
-                confidence=0.0,
-                processing_time=time.time() - start_time,
-                metadata={"error": str(e)},
+            return self._build_vision_error_response(
+                request, f"Error: Vision model request failed - {str(e)}",
+                start_time, str(e)
             )
 
     async def multimodal_chat(self, request: AIRequest) -> AIResponse:

@@ -7,18 +7,42 @@ Function call graph analysis endpoints
 
 import ast
 import asyncio
+import json
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import aiofiles
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.utils.redis_client import get_redis_client
 
 from .shared import get_project_root
 
 logger = logging.getLogger(__name__)
+
+# Issue #711: Cache configuration for call graph
+CALL_GRAPH_CACHE_PREFIX = "codebase:call_graph:cache"
+CALL_GRAPH_CACHE_TTL = 300  # 5 minutes cache
+
+
+def _get_cache_key(project_root: str) -> str:
+    """
+    Generate path-specific cache key.
+
+    Issue #711: Include project root in cache key to prevent
+    returning stale data when scanning different paths.
+
+    Args:
+        project_root: The root path being analyzed
+
+    Returns:
+        Cache key unique to this path
+    """
+    import hashlib
+    path_hash = hashlib.md5(project_root.encode()).hexdigest()[:12]
+    return f"{CALL_GRAPH_CACHE_PREFIX}:{path_hash}"
 
 router = APIRouter()
 
@@ -51,31 +75,68 @@ async def _get_python_files(project_root) -> List:
     ]
 
 
-def _build_connected_nodes(
-    functions: Dict[str, Dict],
-    call_edges: List[Dict],
-) -> List[Dict]:
-    """Build graph nodes from connected functions (Issue #281: extracted)."""
+def _get_connected_func_ids(call_edges: List[Dict]) -> set:
+    """Get set of function IDs that appear in call edges."""
     connected_funcs = set()
     for edge in call_edges:
         connected_funcs.add(edge["from"])
         if edge["resolved"]:
             connected_funcs.add(edge["to"])
+    return connected_funcs
+
+
+def _build_function_node(func_id: str, info: Dict) -> Dict:
+    """Build a single function node dict from function info."""
+    return {
+        "id": func_id,
+        "name": info["name"],
+        "full_name": info["full_name"],
+        "module": info["module"],
+        "class": info["class"],
+        "file": info["file"],
+        "line": info["line"],
+        "is_async": info["is_async"],
+    }
+
+
+def _build_connected_nodes(
+    functions: Dict[str, Dict],
+    call_edges: List[Dict],
+) -> List[Dict]:
+    """Build graph nodes from connected functions (Issue #281: extracted)."""
+    connected_funcs = _get_connected_func_ids(call_edges)
 
     nodes = []
     for func_id, info in functions.items():
         if func_id in connected_funcs:
-            nodes.append({
-                "id": func_id,
-                "name": info["name"],
-                "full_name": info["full_name"],
-                "module": info["module"],
-                "class": info["class"],
-                "file": info["file"],
-                "line": info["line"],
-                "is_async": info["is_async"],
-            })
+            nodes.append(_build_function_node(func_id, info))
     return nodes
+
+
+def _build_orphaned_nodes(
+    functions: Dict[str, Dict],
+    call_edges: List[Dict],
+) -> List[Dict]:
+    """
+    Build list of orphaned functions (defined but never called or calling).
+
+    Orphaned functions are those that:
+    - Are not callers (don't appear in edge 'from')
+    - Are not callees (don't appear in edge 'to' with resolved=True)
+
+    Returns:
+        List of orphaned function nodes sorted by module/file for easier review.
+    """
+    connected_funcs = _get_connected_func_ids(call_edges)
+
+    orphaned = []
+    for func_id, info in functions.items():
+        if func_id not in connected_funcs:
+            orphaned.append(_build_function_node(func_id, info))
+
+    # Sort by module then name for easier review
+    orphaned.sort(key=lambda x: (x["module"] or "", x["name"] or ""))
+    return orphaned
 
 
 def _deduplicate_edges(call_edges: List[Dict]) -> List[Dict]:
@@ -268,6 +329,32 @@ def _build_function_info(
     }
 
 
+def _compute_func_identity(
+    node_name: str, module_path: str, current_class: Optional[str]
+) -> tuple:
+    """
+    Compute function ID and full display name.
+
+    Issue #665: Extracted from _create_function_visitor._process_function
+    to reduce nested class method size.
+
+    Args:
+        node_name: Name of the function node
+        module_path: Module path
+        current_class: Current class context (or None)
+
+    Returns:
+        Tuple of (func_id, full_name)
+    """
+    if current_class:
+        func_id = f"{module_path}.{current_class}.{node_name}"
+        full_name = f"{current_class}.{node_name}"
+    else:
+        func_id = f"{module_path}.{node_name}"
+        full_name = node_name
+    return func_id, full_name
+
+
 def _create_function_visitor(functions: Dict, call_edges: List):
     """
     Create FunctionCallVisitor class for AST analysis.
@@ -310,14 +397,13 @@ def _create_function_visitor(functions: Dict, call_edges: List):
             self._process_function(node)
 
         def _process_function(self, node):
-            """Process function node and register it with its call relationships."""
-            if self.current_class:
-                func_id = f"{self.module_path}.{self.current_class}.{node.name}"
-                full_name = f"{self.current_class}.{node.name}"
-            else:
-                func_id = f"{self.module_path}.{node.name}"
-                full_name = node.name
+            """Process function node and register it with its call relationships.
 
+            Issue #665: Refactored to use _compute_func_identity helper.
+            """
+            func_id, full_name = _compute_func_identity(
+                node.name, self.module_path, self.current_class
+            )
             functions[func_id] = _build_function_info(
                 node, func_id, full_name,
                 self.file_path, self.module_path, self.current_class
@@ -359,76 +445,139 @@ def _create_function_visitor(functions: Dict, call_edges: List):
 # =============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_call_graph",
-    error_code_prefix="CODEBASE",
-)
-@router.get("/analytics/call-graph")
-async def get_call_graph():
+async def _get_cached_call_graph(project_root: str) -> Optional[dict]:
     """
-    Get function call graph for visualization.
+    Get cached call graph from Redis.
 
-    Issue #281: Refactored from 247 lines to use extracted helper methods.
+    Issue #711: Cache call graph for 5 minutes to improve load times.
+    Cache key is path-specific to handle different scan paths.
 
-    Analyzes Python files to extract:
-    - Function definitions (nodes)
-    - Function calls within functions (edges)
-    - Call depth and frequency metrics
+    Args:
+        project_root: The root path being analyzed
 
-    Returns data suitable for network/graph visualization.
+    Returns:
+        Cached call graph data or None if not cached/expired
     """
-    project_root = get_project_root()
+    try:
+        cache_key = _get_cache_key(project_root)
+        redis_client = get_redis_client(async_client=False, database="cache")
+        cached = redis_client.get(cache_key)
+        if cached:
+            logger.debug("Call graph cache hit for path: %s", project_root)
+            return json.loads(cached)
+    except Exception as e:
+        logger.debug("Cache read error (non-critical): %s", e)
+    return None
 
-    # Get filtered Python files (Issue #281: uses helper)
-    python_files = await _get_python_files(project_root)
 
-    # Data structures for function and call tracking
-    functions: Dict[str, Dict] = {}
-    call_edges: List[Dict] = []
+async def _set_cached_call_graph(project_root: str, data: dict) -> None:
+    """
+    Cache call graph in Redis.
 
-    # Create visitor class (Issue #281: uses helper)
+    Issue #711: Cache for 5 minutes (300 seconds).
+    Cache key is path-specific to handle different scan paths.
+
+    Args:
+        project_root: The root path being analyzed
+        data: Call graph response data to cache
+    """
+    try:
+        cache_key = _get_cache_key(project_root)
+        redis_client = get_redis_client(async_client=False, database="cache")
+        redis_client.setex(
+            cache_key,
+            CALL_GRAPH_CACHE_TTL,
+            json.dumps(data)
+        )
+        logger.debug("Call graph cached for %d seconds (path: %s)", CALL_GRAPH_CACHE_TTL, project_root)
+    except Exception as e:
+        logger.debug("Cache write error (non-critical): %s", e)
+
+
+async def _analyze_python_files(
+    python_files: List[Path], project_root: Path,
+    functions: Dict[str, Dict], call_edges: List[Dict]
+) -> None:
+    """Analyze Python files and populate functions/call_edges.
+
+    Issue #665: Extracted from get_call_graph to reduce function length.
+    """
     FunctionCallVisitor = _create_function_visitor(functions, call_edges)
-
-    # Analyze files (limit for performance)
     for py_file in python_files[:300]:
         try:
             rel_path = str(py_file.relative_to(project_root))
             module_path = rel_path.replace("/", ".").replace(".py", "")
-
             try:
                 async with aiofiles.open(py_file, "r", encoding="utf-8") as f:
                     content = await f.read()
             except OSError as e:
                 logger.debug("Failed to read file for call graph %s: %s", py_file, e)
                 continue
-
             tree = ast.parse(content)
             visitor = FunctionCallVisitor(rel_path, module_path)
             visitor.visit(tree)
-
         except Exception as e:
             logger.debug("Could not analyze %s: %s", py_file, e)
-            continue
 
-    # Build graph data (Issue #281: uses helpers)
-    nodes = _build_connected_nodes(functions, call_edges)
-    unique_edges = _deduplicate_edges(call_edges)
-    top_callers, top_called = _calculate_metrics(unique_edges)
 
-    return JSONResponse({
+def _build_call_graph_response(
+    functions: Dict, nodes: List, orphaned_nodes: List, unique_edges: List,
+    top_callers: List, top_called: List
+) -> dict:
+    """Build call graph response dictionary.
+
+    Issue #665: Extracted from get_call_graph to reduce function length.
+    """
+    return {
         "status": "success",
-        "call_graph": {
-            "nodes": nodes[:500],
-            "edges": unique_edges[:2000],
-        },
+        "call_graph": {"nodes": nodes[:500], "edges": unique_edges[:2000]},
+        "orphaned_functions": orphaned_nodes[:500],
         "summary": {
             "total_functions": len(functions),
             "connected_functions": len(nodes),
+            "orphaned_functions": len(orphaned_nodes),
             "total_call_relationships": len(unique_edges),
             "resolved_calls": len([e for e in unique_edges if e["resolved"]]),
             "unresolved_calls": len([e for e in unique_edges if not e["resolved"]]),
             "top_callers": top_callers,
             "most_called": top_called,
         },
-    })
+        "from_cache": False,
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_call_graph",
+    error_code_prefix="CODEBASE",
+)
+@router.get("/analytics/call-graph")
+async def get_call_graph(
+    refresh: bool = Query(False, description="Force refresh, bypass cache")
+):
+    """Get function call graph. Issue #281/#665/#711: Refactored with caching."""
+    project_root = get_project_root()
+
+    if not refresh:
+        cached_data = await _get_cached_call_graph(str(project_root))
+        if cached_data:
+            cached_data["from_cache"] = True
+            return JSONResponse(cached_data)
+
+    python_files = await _get_python_files(project_root)
+    functions: Dict[str, Dict] = {}
+    call_edges: List[Dict] = []
+
+    await _analyze_python_files(python_files, project_root, functions, call_edges)
+
+    nodes = _build_connected_nodes(functions, call_edges)
+    orphaned_nodes = _build_orphaned_nodes(functions, call_edges)
+    unique_edges = _deduplicate_edges(call_edges)
+    top_callers, top_called = _calculate_metrics(unique_edges)
+
+    response_data = _build_call_graph_response(
+        functions, nodes, orphaned_nodes, unique_edges, top_callers, top_called
+    )
+    await _set_cached_call_graph(str(project_root), response_data)
+
+    return JSONResponse(response_data)
