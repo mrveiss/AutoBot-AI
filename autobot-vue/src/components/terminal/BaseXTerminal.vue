@@ -359,17 +359,24 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/**
+ * Issue #704: CSS Design System - Using design tokens
+ * Note: Terminal theme colors (lines 58-104) use hardcoded hex values intentionally
+ * because xterm.js theme config requires literal color values, not CSS variables.
+ * The Tokyo Night color scheme is a standard terminal palette.
+ */
+
 .base-xterm-container {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background-color: #1a1b26;
+  background-color: var(--terminal-bg, #1a1b26);
 }
 
 .xterm-wrapper {
   width: 100%;
   height: 100%;
-  padding: 8px;
+  padding: var(--spacing-2, 8px);
 }
 
 /* Ensure xterm.js styles are properly scoped */

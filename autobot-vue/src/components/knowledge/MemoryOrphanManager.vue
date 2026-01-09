@@ -282,178 +282,184 @@ const cleanupOrphans = async () => {
 </script>
 
 <style scoped>
+/**
+ * Issue #704: CSS Design System - Using design tokens
+ * All colors reference CSS custom properties from design-tokens.css
+ */
+
 .memory-orphan-manager {
-  background: white;
-  border-radius: 0.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .section-header {
-  padding: 1.25rem;
-  border-bottom: 1px solid #e5e7eb;
-  background: #f9fafb;
-  border-radius: 0.5rem 0.5rem 0 0;
+  padding: var(--spacing-5);
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
 .section-header h4 {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #1f2937;
-  margin: 0 0 0.25rem 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-1) 0;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .header-description {
-  color: #6b7280;
+  color: var(--text-secondary);
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .orphan-content {
-  padding: 1.25rem;
+  padding: var(--spacing-5);
 }
 
 .orphan-summary {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .summary-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
 }
 
 .stat-item {
   text-align: center;
-  padding: 1rem;
-  background: #f9fafb;
-  border-radius: 0.5rem;
-  border: 1px solid #e5e7eb;
+  padding: var(--spacing-4);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
 }
 
 .stat-item.highlight {
-  background: #fef3c7;
-  border-color: #f59e0b;
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning);
 }
 
 .stat-value {
   display: block;
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #1f2937;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
 }
 
 .stat-item.highlight .stat-value {
-  color: #b45309;
+  color: var(--color-warning-dark);
 }
 
 .stat-label {
   display: block;
-  font-size: 0.75rem;
-  color: #6b7280;
-  margin-top: 0.25rem;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin-top: var(--spacing-1);
 }
 
 .orphan-preview {
-  background: #fefce8;
-  border: 1px solid #fde047;
-  border-radius: 0.5rem;
-  padding: 1rem;
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-light);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
 }
 
 .orphan-preview h5 {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #854d0e;
-  margin: 0 0 0.75rem 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-warning-dark);
+  margin: 0 0 var(--spacing-3) 0;
 }
 
 .orphan-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   max-height: 300px;
   overflow-y: auto;
 }
 
 .orphan-item {
-  background: white;
-  border: 1px solid #fde68a;
-  border-radius: 0.375rem;
-  padding: 0.75rem;
+  background: var(--bg-card);
+  border: 1px solid var(--color-warning-light);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-3);
 }
 
 .orphan-meta {
   display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-2);
 }
 
 .orphan-name {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #1f2937;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .orphan-observations {
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
 }
 
 .observation-text {
-  font-size: 0.8125rem;
-  color: #4b5563;
-  margin: 0.25rem 0;
-  line-height: 1.4;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin: var(--spacing-1) 0;
+  line-height: var(--leading-relaxed);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .orphan-session {
-  font-size: 0.75rem;
-  color: #9ca3af;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
 }
 
 .orphan-more {
-  font-size: 0.875rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
   font-style: italic;
-  margin: 0.75rem 0 0 0;
+  margin: var(--spacing-3) 0 0 0;
   text-align: center;
 }
 
 .orphan-actions {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.5rem;
+  gap: var(--spacing-6);
 }
 
 .action-card {
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  padding: 1.25rem;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-5);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   min-height: 200px;
-  transition: all 0.2s;
+  transition: var(--transition-all);
+  background: var(--bg-card);
 }
 
 .action-card:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-md);
 }
 
 .action-card.warning {
-  border-color: #fcd34d;
-  background: #fffbeb;
+  border-color: var(--color-warning-light);
+  background: var(--color-warning-bg);
 }
 
 .action-card.warning:hover {
-  border-color: #f59e0b;
+  border-color: var(--color-warning);
 }
 
 .action-content {
@@ -467,38 +473,38 @@ const cleanupOrphans = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
-  margin-bottom: 1rem;
+  font-size: var(--text-xl);
+  margin-bottom: var(--spacing-4);
 }
 
 .action-icon.scan {
-  background: #dbeafe;
-  color: #3b82f6;
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .action-icon.cleanup {
-  background: #fef3c7;
-  color: #f59e0b;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .action-card h5 {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #1f2937;
-  margin: 0 0 0.5rem 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-2) 0;
 }
 
 .action-card p {
-  color: #6b7280;
-  margin: 0 0 1rem 0;
-  line-height: 1.5;
+  color: var(--text-secondary);
+  margin: 0 0 var(--spacing-4) 0;
+  line-height: var(--leading-normal);
 }
 
 .action-meta {
-  color: #9ca3af;
-  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
   display: block;
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .action-btn {
@@ -509,34 +515,34 @@ const cleanupOrphans = async () => {
 .status-message {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1rem;
-  border-radius: 0.5rem;
-  margin-top: 1.5rem;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
+  border-radius: var(--radius-lg);
+  margin-top: var(--spacing-6);
 }
 
 .status-message.success {
-  background: #f0fdf4;
-  border: 1px solid #10b981;
-  color: #065f46;
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success);
+  color: var(--color-success-dark);
 }
 
 .status-message.error {
-  background: #fef2f2;
-  border: 1px solid #ef4444;
-  color: #991b1b;
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error);
+  color: var(--color-error-dark);
 }
 
 .status-message.warning {
-  background: #fffbeb;
-  border: 1px solid #f59e0b;
-  color: #92400e;
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning);
+  color: var(--color-warning-dark);
 }
 
 .status-message.info {
-  background: #eff6ff;
-  border: 1px solid #3b82f6;
-  color: #1e40af;
+  background: var(--color-info-bg);
+  border: 1px solid var(--color-info);
+  color: var(--color-info-dark);
 }
 
 .status-message span {
@@ -547,9 +553,10 @@ const cleanupOrphans = async () => {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0.25rem;
+  padding: var(--spacing-1);
   color: inherit;
   opacity: 0.7;
+  transition: opacity var(--duration-200);
 }
 
 .dismiss-btn:hover {
