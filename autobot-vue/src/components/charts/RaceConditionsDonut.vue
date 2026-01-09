@@ -23,6 +23,15 @@ import { computed } from 'vue'
 import BaseChart from './BaseChart.vue'
 import type { ApexOptions } from 'apexcharts'
 
+/**
+ * Get CSS variable value from the document
+ * Issue #704: Use design tokens for theming
+ */
+function getCssVar(name: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+}
+
 interface RaceConditionData {
   category?: string
   name?: string
@@ -88,12 +97,12 @@ const chartOptions = computed<ApexOptions>(() => ({
           name: {
             show: true,
             fontSize: '14px',
-            color: '#e2e8f0'
+            color: getCssVar('--text-primary', '#e2e8f0')
           },
           value: {
             show: true,
             fontSize: '24px',
-            color: '#e2e8f0',
+            color: getCssVar('--text-primary', '#e2e8f0'),
             formatter: () => totalCount.value.toString()
           },
           total: {
@@ -101,7 +110,7 @@ const chartOptions = computed<ApexOptions>(() => ({
             showAlways: true,
             label: 'Total Issues',
             fontSize: '12px',
-            color: '#94a3b8',
+            color: getCssVar('--text-secondary', '#94a3b8'),
             formatter: () => totalCount.value.toString()
           }
         }
@@ -121,29 +130,30 @@ const chartOptions = computed<ApexOptions>(() => ({
 }))
 
 // Get colors based on race condition categories
+// Issue #704: Using design tokens with fallbacks for SSR compatibility
 function getCategoryColors(categories: string[]): string[] {
   const categoryColors: Record<string, string> = {
     // Thread safety issues
-    thread_unsafe_singleton: '#ef4444',
-    unprotected_global_state: '#f97316',
-    unprotected_global_modification: '#f97316',
-    unprotected_subscript_assignment: '#f59e0b',
-    unprotected_mutating_method: '#eab308',
+    thread_unsafe_singleton: getCssVar('--color-error', '#ef4444'),
+    unprotected_global_state: getCssVar('--chart-orange', '#f97316'),
+    unprotected_global_modification: getCssVar('--chart-orange', '#f97316'),
+    unprotected_subscript_assignment: getCssVar('--color-warning', '#f59e0b'),
+    unprotected_mutating_method: getCssVar('--chart-yellow', '#eab308'),
 
     // Async issues
-    async_shared_state: '#8b5cf6',
-    async_global_modification: '#a855f7',
+    async_shared_state: getCssVar('--chart-purple', '#8b5cf6'),
+    async_global_modification: getCssVar('--chart-purple-light', '#a855f7'),
 
     // File operations
-    file_write_without_lock: '#06b6d4',
-    file_writes_without_locking: '#06b6d4',
+    file_write_without_lock: getCssVar('--chart-cyan', '#06b6d4'),
+    file_writes_without_locking: getCssVar('--chart-cyan', '#06b6d4'),
 
     // Read-modify-write
-    read_modify_write: '#ec4899',
-    read_modify_write_pattern: '#ec4899',
+    read_modify_write: getCssVar('--chart-pink', '#ec4899'),
+    read_modify_write_pattern: getCssVar('--chart-pink', '#ec4899'),
 
     // Default
-    other: '#6366f1'
+    other: getCssVar('--chart-indigo', '#6366f1')
   }
 
   return categories.map((category) => {

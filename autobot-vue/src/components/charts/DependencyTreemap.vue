@@ -23,6 +23,15 @@ import { computed } from 'vue'
 import BaseChart from './BaseChart.vue'
 import type { ApexOptions } from 'apexcharts'
 
+/**
+ * Get CSS variable value from the document
+ * Issue #704: Use design tokens for theming
+ */
+function getCssVar(name: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+}
+
 interface DependencyData {
   package: string
   usage_count: number
@@ -55,6 +64,7 @@ const chartSeries = computed(() => [
   }
 ])
 
+// Issue #704: Using design tokens with fallbacks for SSR compatibility
 const chartOptions = computed<ApexOptions>(() => ({
   chart: {
     type: 'treemap'
@@ -63,16 +73,16 @@ const chartOptions = computed<ApexOptions>(() => ({
     show: false
   },
   colors: [
-    '#3b82f6',
-    '#10b981',
-    '#f59e0b',
-    '#8b5cf6',
-    '#06b6d4',
-    '#ec4899',
-    '#f97316',
-    '#84cc16',
-    '#6366f1',
-    '#14b8a6'
+    getCssVar('--chart-blue', '#3b82f6'),
+    getCssVar('--color-success', '#10b981'),
+    getCssVar('--color-warning', '#f59e0b'),
+    getCssVar('--chart-purple', '#8b5cf6'),
+    getCssVar('--chart-cyan', '#06b6d4'),
+    getCssVar('--chart-pink', '#ec4899'),
+    getCssVar('--chart-orange', '#f97316'),
+    getCssVar('--chart-lime', '#84cc16'),
+    getCssVar('--chart-indigo', '#6366f1'),
+    getCssVar('--chart-teal', '#14b8a6')
   ],
   plotOptions: {
     treemap: {
@@ -81,10 +91,10 @@ const chartOptions = computed<ApexOptions>(() => ({
       shadeIntensity: 0.3,
       colorScale: {
         ranges: [
-          { from: 0, to: 10, color: '#3b82f6' },
-          { from: 11, to: 25, color: '#10b981' },
-          { from: 26, to: 50, color: '#f59e0b' },
-          { from: 51, to: 100, color: '#ef4444' }
+          { from: 0, to: 10, color: getCssVar('--chart-blue', '#3b82f6') },
+          { from: 11, to: 25, color: getCssVar('--color-success', '#10b981') },
+          { from: 26, to: 50, color: getCssVar('--color-warning', '#f59e0b') },
+          { from: 51, to: 100, color: getCssVar('--color-error', '#ef4444') }
         ]
       }
     }
