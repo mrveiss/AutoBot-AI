@@ -104,71 +104,75 @@ defineEmits<Emits>()
 </script>
 
 <style scoped>
+/**
+ * Issue #704: Migrated to design tokens
+ * All hardcoded colors replaced with CSS custom properties from design-tokens.css
+ */
 .advanced-options {
-  padding: 20px;
-  border-bottom: 1px solid #333;
+  padding: var(--spacing-5);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .advanced-options h4 {
-  margin: 0 0 16px 0;
-  color: #f3f4f6;
+  margin: 0 0 var(--spacing-4) 0;
+  color: var(--text-primary);
 }
 
 .option-group {
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
 }
 
 .option-group label {
   display: block;
-  margin-bottom: 8px;
-  color: #f3f4f6;
+  margin-bottom: var(--spacing-2);
+  color: var(--text-primary);
 }
 
 .timeout-input {
-  background: #111827;
-  border: 1px solid #374151;
-  color: #ffffff;
-  padding: 8px 12px;
-  border-radius: 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  color: var(--text-on-primary);
+  padding: var(--spacing-2) var(--spacing-3);
+  border-radius: var(--radius-md);
   width: 120px;
 }
 
 .password-options {
   display: flex;
-  gap: 16px;
-  margin-top: 8px;
+  gap: var(--spacing-4);
+  margin-top: var(--spacing-2);
 }
 
 .password-options label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   cursor: pointer;
 }
 
 .password-input {
-  margin-top: 16px;
+  margin-top: var(--spacing-4);
 }
 
 .password-field {
   width: 100%;
-  background: #111827;
-  border: 1px solid #374151;
-  color: #ffffff;
-  padding: 10px;
-  border-radius: 6px;
-  margin-bottom: 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  color: var(--text-on-primary);
+  padding: var(--spacing-2-5);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-2);
 }
 
 .password-note {
-  font-size: 0.85em;
-  color: #f97316;
+  font-size: var(--text-sm);
+  color: var(--chart-orange);
 }
 
 @media (max-width: 768px) {
   .password-options {
     flex-direction: column;
-    gap: 8px;
+    gap: var(--spacing-2);
   }
 
   .timeout-input {

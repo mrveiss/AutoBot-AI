@@ -82,49 +82,53 @@ const cancelEdit = () => {
 </script>
 
 <style scoped>
+/**
+ * Issue #704: Migrated to design tokens
+ * All hardcoded colors replaced with CSS custom properties from design-tokens.css
+ */
 .command-section {
-  padding: 20px;
-  border-bottom: 1px solid #333;
+  padding: var(--spacing-5);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .section-label {
   display: block;
-  font-weight: 600;
-  margin-bottom: 12px;
-  color: #f3f4f6;
+  font-weight: var(--font-semibold);
+  margin-bottom: var(--spacing-3);
+  color: var(--text-primary);
 }
 
 .command-preview {
   display: flex;
   align-items: center;
-  gap: 12px;
-  background: #0f1419;
-  padding: 12px;
-  border-radius: 8px;
-  border: 1px solid #374151;
+  gap: var(--spacing-3);
+  background: var(--bg-code);
+  padding: var(--spacing-3);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
 }
 
 .command-preview code {
   flex: 1;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-family: var(--font-mono);
   background: none;
-  color: #22c55e;
+  color: var(--chart-green);
 }
 
 .command-editor {
-  margin-top: 12px;
-  border: 1px solid #374151;
-  border-radius: 8px;
-  background: #0f1419;
+  margin-top: var(--spacing-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-code);
 }
 
 .command-input {
   width: 100%;
   background: transparent;
   border: none;
-  padding: 12px;
-  color: #ffffff;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  padding: var(--spacing-3);
+  color: var(--text-on-primary);
+  font-family: var(--font-mono);
   resize: vertical;
 }
 
@@ -134,16 +138,16 @@ const cancelEdit = () => {
 
 .editor-actions {
   display: flex;
-  gap: 8px;
-  padding: 12px;
-  border-top: 1px solid #374151;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3);
+  border-top: 1px solid var(--border-default);
 }
 
 @media (max-width: 768px) {
   .command-preview {
     flex-direction: column;
     align-items: stretch;
-    gap: 8px;
+    gap: var(--spacing-2);
   }
 }
 </style>
