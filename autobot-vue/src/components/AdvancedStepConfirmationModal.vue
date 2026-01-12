@@ -716,7 +716,7 @@ validateEditForm()
   align-items: center;
   padding: 20px;
   border-bottom: 1px solid var(--border-secondary);
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-info-dark) 100%);
 }
 
 .modal-title {

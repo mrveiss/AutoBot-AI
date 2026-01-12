@@ -23,6 +23,15 @@ import { computed } from 'vue'
 import BaseChart from './BaseChart.vue'
 import type { ApexOptions } from 'apexcharts'
 
+/**
+ * Get CSS variable value from the document
+ * Issue #704: Use design tokens for theming
+ */
+function getCssVar(name: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+}
+
 interface FileData {
   file?: string
   name?: string
@@ -80,7 +89,8 @@ const chartOptions = computed(() => ({
       }
     }
   },
-  colors: ['#3b82f6'],
+  // Issue #704: Using design tokens with fallbacks for SSR compatibility
+  colors: [getCssVar('--chart-blue', '#3b82f6')],
   xaxis: {
     categories: sortedData.value.map((item) => truncateFilePath(item.file ?? item.name ?? '')),
     labels: {
@@ -94,7 +104,7 @@ const chartOptions = computed(() => ({
       text: 'Number of Problems',
       style: {
         fontSize: '12px',
-        color: '#94a3b8'
+        color: getCssVar('--text-secondary', '#94a3b8')
       }
     }
   },
@@ -113,10 +123,11 @@ const chartOptions = computed(() => ({
     style: {
       fontSize: '11px',
       fontWeight: 600,
-      colors: ['#fff']
+      colors: [getCssVar('--text-on-primary', '#ffffff')]
     },
     offsetX: 0
   },
+  // Issue #704: Tooltip uses design token fallbacks for inline styles
   tooltip: {
     custom: ({ dataPointIndex }: { dataPointIndex: number }) => {
       const item = sortedData.value[dataPointIndex]
@@ -124,13 +135,20 @@ const chartOptions = computed(() => ({
       const filePath = item.file ?? item.name ?? 'Unknown'
       const problemCount = item.count ?? item.value ?? 0
 
+      // Get design token colors for tooltip (inline styles require literal values)
+      const bgElevated = getCssVar('--bg-elevated', '#1e293b')
+      const borderDefault = getCssVar('--border-default', '#475569')
+      const textPrimary = getCssVar('--text-primary', '#e2e8f0')
+      const textSecondary = getCssVar('--text-secondary', '#94a3b8')
+      const chartBlue = getCssVar('--chart-blue', '#3b82f6')
+
       return `
-        <div style="background: #1e293b; border: 1px solid #475569; border-radius: 6px; padding: 12px; max-width: 400px;">
-          <div style="font-weight: 600; color: #e2e8f0; margin-bottom: 8px; word-break: break-all;">
+        <div style="background: ${bgElevated}; border: 1px solid ${borderDefault}; border-radius: 6px; padding: 12px; max-width: 400px;">
+          <div style="font-weight: 600; color: ${textPrimary}; margin-bottom: 8px; word-break: break-all;">
             ${filePath}
           </div>
-          <div style="color: #94a3b8;">
-            <span style="color: #3b82f6; font-weight: 600;">${problemCount.toLocaleString()}</span> problems
+          <div style="color: ${textSecondary};">
+            <span style="color: ${chartBlue}; font-weight: 600;">${problemCount.toLocaleString()}</span> problems
           </div>
         </div>
       `

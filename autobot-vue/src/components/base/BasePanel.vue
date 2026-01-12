@@ -71,85 +71,86 @@ const toggleCollapse = () => {
 </script>
 
 <style scoped>
+/** Issue #704: Migrated to design tokens */
 .base-panel {
-  background-color: white;
-  transition: all 0.2s ease;
+  background-color: var(--bg-primary);
+  transition: all var(--duration-200) ease;
 }
 
 .panel-default {
-  border: 1px solid var(--blue-gray-200);
-  border-radius: 0.5rem;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
 }
 
 .panel-bordered {
-  border: 2px solid var(--blue-gray-300);
-  border-radius: 0.5rem;
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-lg);
 }
 
 .panel-elevated {
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  border-radius: 0.5rem;
-  border: 1px solid var(--blue-gray-100);
+  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
 }
 
 .panel-flat {
-  background-color: var(--blue-gray-50);
+  background-color: var(--bg-secondary);
 }
 
 .panel-dark {
-  background-color: #1a1a2e;
-  border: 1px solid #2a2a3e;
-  border-radius: 0.5rem;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
 }
 
 .panel-dark .panel-header {
-  border-bottom-color: #2a2a3e;
+  border-bottom-color: var(--border-default);
 }
 
 .panel-dark .panel-title {
-  color: #f9fafb;
+  color: var(--text-primary);
 }
 
 .panel-dark .panel-footer {
-  border-top-color: #2a2a3e;
-  background-color: #111827;
+  border-top-color: var(--border-default);
+  background-color: var(--bg-tertiary);
 }
 
 .panel-small {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .panel-medium {
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 .panel-large {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
 }
 
 .panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem;
-  border-bottom: 1px solid var(--blue-gray-200);
+  padding: var(--spacing-4);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .panel-title {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--blue-gray-900);
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
   margin: 0;
 }
 
 .panel-actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .panel-content {
-  padding: 1rem;
+  padding: var(--spacing-4);
   max-height: v-bind('props.maxHeight || "none"');
 }
 
@@ -162,9 +163,9 @@ const toggleCollapse = () => {
 }
 
 .panel-footer {
-  padding: 1rem;
-  border-top: 1px solid var(--blue-gray-200);
-  background-color: var(--blue-gray-50);
+  padding: var(--spacing-4);
+  border-top: 1px solid var(--border-default);
+  background-color: var(--bg-secondary);
 }
 
 .panel-loading {
@@ -179,7 +180,7 @@ const toggleCollapse = () => {
   right: 0;
   bottom: 0;
   left: 0;
-  background-color: rgba(255, 255, 255, 0.5);
+  background-color: var(--overlay-backdrop);
   background-image: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg transform='translate(1 1)' stroke='%23666' stroke-width='2'%3E%3Ccircle stroke-opacity='.25' cx='18' cy='18' r='18'/%3E%3Cpath d='m36 18c0-9.94-8.06-18-18-18'%3E%3CanimateTransform attributeName='transform' type='rotate' from='0 18 18' to='360 18 18' dur='1s' repeatCount='indefinite'/%3E%3C/path%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: center;
@@ -189,19 +190,19 @@ const toggleCollapse = () => {
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .panel-header {
-    padding: 0.75rem;
+    padding: var(--spacing-3);
   }
 
   .panel-content {
-    padding: 0.75rem;
+    padding: var(--spacing-3);
   }
 
   .panel-footer {
-    padding: 0.75rem;
+    padding: var(--spacing-3);
   }
 
   .panel-title {
-    font-size: 1rem;
+    font-size: var(--text-base);
   }
 }
 </style>

@@ -43,30 +43,31 @@ defineProps<Props>()
 </script>
 
 <style scoped>
+/** Issue #704: Migrated to design tokens */
 .current-step-info {
-  padding: 20px;
-  border-bottom: 1px solid #333;
-  background: #0f1419;
+  padding: var(--spacing-5);
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-secondary);
 }
 
 .step-counter {
   display: inline-block;
-  background: #2563eb;
-  color: #ffffff;
-  padding: 6px 16px;
-  border-radius: 20px;
-  font-size: 0.9em;
-  margin-bottom: 8px;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
+  padding: var(--spacing-1-5) var(--spacing-4);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  margin-bottom: var(--spacing-2);
 }
 
 .step-description {
-  font-size: 1.1em;
-  margin-bottom: 8px;
-  color: #f3f4f6;
+  font-size: var(--text-lg);
+  margin-bottom: var(--spacing-2);
+  color: var(--text-primary);
 }
 
 .step-explanation {
-  color: #d1d5db;
-  font-size: 0.95em;
+  color: var(--text-secondary);
+  font-size: var(--text-base);
 }
 </style>

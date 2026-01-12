@@ -312,6 +312,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .sub-tab-content {
   padding: 1rem 0;
 }
@@ -332,16 +333,16 @@ onMounted(() => {
 }
 
 .hardware-card.healthy {
-  border-color: #10b981;
+  border-color: var(--color-success, #10b981);
 }
 
 .hardware-card.degraded {
-  border-color: #f59e0b;
+  border-color: var(--color-warning, #f59e0b);
 }
 
 .hardware-card.unhealthy,
 .hardware-card.error {
-  border-color: #ef4444;
+  border-color: var(--color-error, #ef4444);
 }
 
 .hardware-header {
@@ -379,17 +380,17 @@ onMounted(() => {
 }
 
 .status-indicator.healthy {
-  background: #10b981;
+  background: var(--color-success, #10b981);
 }
 
 .status-indicator.degraded,
 .status-indicator.warning {
-  background: #f59e0b;
+  background: var(--color-warning, #f59e0b);
 }
 
 .status-indicator.unhealthy,
 .status-indicator.error {
-  background: #ef4444;
+  background: var(--color-error, #ef4444);
 }
 
 .status-indicator.testing {
