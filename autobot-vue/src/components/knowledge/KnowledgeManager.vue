@@ -64,9 +64,10 @@ const activeComponent = computed(() => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .knowledge-manager {
-  background: #f9fafb;
-  border-radius: 0.5rem;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
   overflow: hidden;
   height: 100%;
   display: flex;
@@ -75,30 +76,30 @@ const activeComponent = computed(() => {
 
 .tabs {
   display: flex;
-  background: white;
-  border-bottom: 2px solid #e5e7eb;
+  background: var(--bg-primary);
+  border-bottom: 2px solid var(--border-default);
   overflow-x: auto;
 }
 
 .tab-button {
-  padding: 1rem 1.5rem;
+  padding: var(--spacing-4) var(--spacing-6);
   border: none;
   background: none;
-  color: #6b7280;
-  font-weight: 500;
+  color: var(--text-secondary);
+  font-weight: var(--font-medium);
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.2s;
+  transition: all var(--duration-200) var(--ease-in-out);
   position: relative;
 }
 
 .tab-button:hover {
-  color: #374151;
-  background: #f3f4f6;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
 }
 
 .tab-button.active {
-  color: #3b82f6;
+  color: var(--color-primary);
 }
 
 .tab-button.active::after {
@@ -108,13 +109,13 @@ const activeComponent = computed(() => {
   left: 0;
   right: 0;
   height: 2px;
-  background: #3b82f6;
+  background: var(--color-primary);
 }
 
 .tab-content {
   flex: 1;
   overflow-y: auto;
-  background: white;
+  background: var(--bg-primary);
 }
 
 /* Responsive */
@@ -124,8 +125,8 @@ const activeComponent = computed(() => {
   }
 
   .tab-button {
-    padding: 0.75rem 1rem;
-    font-size: 0.875rem;
+    padding: var(--spacing-3) var(--spacing-4);
+    font-size: var(--text-sm);
   }
 }
 </style>

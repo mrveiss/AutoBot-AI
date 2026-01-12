@@ -557,33 +557,34 @@ const handleTakeManualControl = async () => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 /* Error and Success Messages */
 .error-message, .success-message {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  padding: 12px;
-  border-radius: 6px;
-  margin: 16px 0;
-  font-size: 14px;
-  line-height: 1.4;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3);
+  border-radius: var(--radius-md);
+  margin: var(--spacing-4) 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 
 .error-message {
-  background-color: rgba(220, 53, 69, 0.1);
-  border: 1px solid rgba(220, 53, 69, 0.3);
-  color: #ff6b6b;
+  background-color: var(--color-error-bg-transparent);
+  border: 1px solid var(--color-error-border);
+  color: var(--color-error);
 }
 
 .success-message {
-  background-color: rgba(40, 167, 69, 0.1);
-  border: 1px solid rgba(40, 167, 69, 0.3);
-  color: #28a745;
+  background-color: var(--color-success-bg-transparent);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success);
 }
 
 .error-icon, .success-icon {
   flex-shrink: 0;
-  font-size: 16px;
+  font-size: var(--text-base);
 }
 
 .error-text, .success-text {
@@ -593,114 +594,114 @@ const handleTakeManualControl = async () => {
 
 /* Content-specific styles */
 .command-preview {
-  background-color: #1e1e1e;
-  border: 1px solid #444;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 20px;
+  background-color: var(--terminal-bg);
+  border: 1px solid var(--terminal-border);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
+  margin-bottom: var(--spacing-5);
 }
 
 .command-label {
-  font-size: 12px;
-  color: #888;
-  margin-bottom: 8px;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  margin-bottom: var(--spacing-2);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .command-text {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 14px;
-  color: #87ceeb;
-  background-color: #000;
-  padding: 12px;
-  border-radius: 6px;
-  border-left: 4px solid #ffc107;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--terminal-cyan);
+  background-color: var(--terminal-bg-dark);
+  padding: var(--spacing-3);
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--color-warning);
   white-space: pre-wrap;
   word-break: break-all;
 }
 
 .risk-assessment {
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .risk-level {
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 12px;
+  padding: var(--spacing-2) var(--spacing-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  margin-bottom: var(--spacing-3);
 }
 
 .risk-level.low {
-  background-color: rgba(40, 167, 69, 0.2);
-  color: #28a745;
-  border: 1px solid #28a745;
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
+  border: 1px solid var(--color-success);
 }
 
 .risk-level.moderate {
-  background-color: rgba(255, 193, 7, 0.2);
-  color: #ffc107;
-  border: 1px solid #ffc107;
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning);
 }
 
 .risk-level.high {
-  background-color: rgba(255, 107, 107, 0.2);
-  color: #ff6b6b;
-  border: 1px solid #ff6b6b;
+  background-color: var(--color-error-bg);
+  color: var(--color-error);
+  border: 1px solid var(--color-error);
 }
 
 .risk-level.critical {
-  background-color: rgba(220, 53, 69, 0.3);
-  color: #ff4757;
-  border: 1px solid #dc3545;
+  background-color: var(--color-error-bg);
+  color: var(--color-error);
+  border: 1px solid var(--color-error);
   animation: pulse-danger 2s infinite;
 }
 
 .risk-reasons {
-  color: #ccc;
+  color: var(--text-secondary);
 }
 
 .risk-reason {
-  margin-bottom: 4px;
-  font-size: 13px;
+  margin-bottom: var(--spacing-1);
+  font-size: var(--text-xs);
 }
 
 .confirmation-message {
-  color: #ddd;
+  color: var(--text-secondary);
 }
 
 .confirmation-message p {
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
 }
 
 .confirmation-message ul {
-  margin: 12px 0;
-  padding-left: 20px;
+  margin: var(--spacing-3) 0;
+  padding-left: var(--spacing-5);
 }
 
 .confirmation-message li {
-  margin-bottom: 6px;
-  color: #ccc;
+  margin-bottom: var(--spacing-1-5);
+  color: var(--text-secondary);
 }
 
 .emergency-warning {
-  color: #ff6b6b;
+  color: var(--color-error);
 }
 
 .emergency-warning p {
-  margin-bottom: 12px;
-  font-weight: 500;
+  margin-bottom: var(--spacing-3);
+  font-weight: var(--font-medium);
 }
 
 .process-item {
-  background-color: #1e1e1e;
-  padding: 8px 12px;
-  border-radius: 4px;
-  margin-bottom: 4px;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 13px;
-  color: #87ceeb;
+  background-color: var(--terminal-bg);
+  padding: var(--spacing-2) var(--spacing-3);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--spacing-1);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--terminal-cyan);
 }
 
 /* Workflow Step Modal Styles */
@@ -709,77 +710,77 @@ const handleTakeManualControl = async () => {
 }
 
 .step-counter {
-  background-color: #17a2b8;
-  color: white;
-  padding: 8px 16px;
-  border-radius: 20px;
+  background-color: var(--color-info);
+  color: var(--text-on-primary);
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--radius-full);
   display: inline-block;
-  font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 16px;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  margin-bottom: var(--spacing-4);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .step-description h4 {
-  margin: 0 0 8px 0;
-  color: #17a2b8;
-  font-size: 16px;
-  font-weight: 600;
+  margin: 0 0 var(--spacing-2) 0;
+  color: var(--color-info);
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
 }
 
 .step-description p {
-  margin: 0 0 16px 0;
-  color: #ccc;
-  font-size: 14px;
-  line-height: 1.5;
+  margin: 0 0 var(--spacing-4) 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
 }
 
 .workflow-options {
-  background-color: #1e1e1e;
-  border-radius: 8px;
-  padding: 16px;
-  margin-top: 20px;
-  border-left: 4px solid #17a2b8;
+  background-color: var(--terminal-bg);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
+  margin-top: var(--spacing-5);
+  border-left: 4px solid var(--color-info);
 }
 
 .option-info p {
-  margin: 0 0 12px 0;
-  color: #17a2b8;
-  font-weight: 600;
+  margin: 0 0 var(--spacing-3) 0;
+  color: var(--color-info);
+  font-weight: var(--font-semibold);
 }
 
 .option-info ul {
   margin: 0;
-  padding-left: 20px;
-  color: #ccc;
+  padding-left: var(--spacing-5);
+  color: var(--text-secondary);
 }
 
 .option-info li {
-  margin-bottom: 8px;
-  font-size: 13px;
-  line-height: 1.4;
+  margin-bottom: var(--spacing-2);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
 }
 
 .option-info li strong {
-  color: #fff;
+  color: var(--text-primary);
 }
 
 /* Enhanced animations */
 @keyframes pulse-danger {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4);
+    box-shadow: 0 0 0 0 var(--color-error-shadow);
   }
   50% {
-    box-shadow: 0 0 0 8px rgba(220, 53, 69, 0);
+    box-shadow: 0 0 0 8px transparent;
   }
 }
 
 /* Mobile responsiveness */
 @media (max-width: 768px) {
   .command-text {
-    font-size: 12px;
-    padding: 8px;
+    font-size: var(--text-xs);
+    padding: var(--spacing-2);
   }
 }
 </style>

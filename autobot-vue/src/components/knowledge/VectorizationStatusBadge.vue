@@ -88,95 +88,95 @@ const tooltipText = computed(() => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .vectorization-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.25rem 0.625rem;
-  border-radius: 0.375rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  transition: all 0.2s ease;
+  gap: var(--spacing-1-5);
+  padding: var(--spacing-1) var(--spacing-2-5);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  transition: all var(--duration-200) var(--ease-in-out);
   cursor: default;
 }
 
 .vectorization-badge.compact {
-  padding: 0.125rem 0.375rem;
+  padding: var(--spacing-0-5) var(--spacing-1-5);
   font-size: 0.6875rem;
 }
 
 .vectorization-badge i {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .vectorization-badge.compact i {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 /* Vectorized status - green */
 .status-vectorized {
-  background: rgba(16, 185, 129, 0.1);
-  color: #059669;
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  background: var(--color-success-bg-transparent);
+  color: var(--color-success);
+  border: 1px solid var(--color-success-border);
 }
 
 .status-vectorized i {
-  color: #10b981;
+  color: var(--color-success);
 }
 
 .status-vectorized:hover {
-  background: rgba(16, 185, 129, 0.15);
+  background: var(--color-success-bg);
 }
 
 /* Pending status - yellow */
 .status-pending {
-  background: rgba(251, 191, 36, 0.1);
-  color: #d97706;
-  border: 1px solid rgba(251, 191, 36, 0.3);
+  background: var(--color-warning-bg-transparent);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning-border);
 }
 
 .status-pending i {
-  color: #fbbf24;
+  color: var(--color-warning);
 }
 
 .status-pending:hover {
-  background: rgba(251, 191, 36, 0.15);
+  background: var(--color-warning-bg);
 }
 
 /* Failed status - red */
 .status-failed {
-  background: rgba(239, 68, 68, 0.1);
-  color: #dc2626;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: var(--color-error-bg-transparent);
+  color: var(--color-error);
+  border: 1px solid var(--color-error-border);
   cursor: pointer;
 }
 
 .status-failed i {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .status-failed:hover {
-  background: rgba(239, 68, 68, 0.2);
+  background: var(--color-error-bg);
   transform: scale(1.05);
 }
 
 /* Unknown status - gray */
 .status-unknown {
-  background: rgba(107, 114, 128, 0.1);
-  color: #6b7280;
-  border: 1px solid rgba(107, 114, 128, 0.3);
+  background: var(--bg-tertiary-transparent);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
 }
 
 .status-unknown i {
-  color: #9ca3af;
+  color: var(--text-tertiary);
 }
 
 .status-unknown:hover {
-  background: rgba(107, 114, 128, 0.15);
+  background: var(--bg-tertiary);
 }
 
 .badge-label {
   white-space: nowrap;
 }
-
 </style>
