@@ -120,6 +120,7 @@ const dismissAll = () => {
 </template>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
 }
@@ -129,17 +130,17 @@ const dismissAll = () => {
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #4b5563;
-  border-radius: 2px;
+  background: var(--text-tertiary);
+  border-radius: var(--radius-xs);
 }
 
 /* Animation for notifications */
 .notification-enter-active {
-  transition: all 0.3s ease-out;
+  transition: all var(--duration-300) var(--ease-out);
 }
 
 .notification-leave-active {
-  transition: all 0.2s ease-in;
+  transition: all var(--duration-200) var(--ease-in);
 }
 
 .notification-enter-from {
@@ -153,6 +154,6 @@ const dismissAll = () => {
 }
 
 .bg-gray-750 {
-  background-color: #2d3748;
+  background-color: var(--bg-tertiary);
 }
 </style>

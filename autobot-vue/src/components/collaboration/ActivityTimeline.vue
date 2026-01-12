@@ -228,6 +228,7 @@ const typeOptions = [
 </template>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }
@@ -237,11 +238,11 @@ const typeOptions = [
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #4b5563;
-  border-radius: 3px;
+  background: var(--text-tertiary);
+  border-radius: var(--radius-sm);
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #6b7280;
+  background: var(--text-secondary);
 }
 </style>

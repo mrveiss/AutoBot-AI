@@ -139,6 +139,7 @@ const onlineCount = computed(() => {
 </template>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
 }
@@ -148,21 +149,21 @@ const onlineCount = computed(() => {
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #4b5563;
-  border-radius: 2px;
+  background: var(--text-tertiary);
+  border-radius: var(--radius-xs);
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #6b7280;
+  background: var(--text-secondary);
 }
 
 /* Activity list animations */
 .activity-enter-active {
-  transition: all 0.3s ease-out;
+  transition: all var(--duration-300) var(--ease-out);
 }
 
 .activity-leave-active {
-  transition: all 0.2s ease-in;
+  transition: all var(--duration-200) var(--ease-in);
 }
 
 .activity-enter-from {
@@ -176,6 +177,6 @@ const onlineCount = computed(() => {
 }
 
 .activity-move {
-  transition: transform 0.3s ease;
+  transition: transform var(--duration-300) var(--ease-in-out);
 }
 </style>

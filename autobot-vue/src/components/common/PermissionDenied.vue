@@ -107,12 +107,13 @@ function goHome(): void {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .permission-denied {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 400px;
-  padding: 2rem;
+  padding: var(--spacing-8);
 }
 
 .permission-denied__content {
@@ -123,8 +124,8 @@ function goHome(): void {
 .permission-denied__icon {
   width: 80px;
   height: 80px;
-  margin: 0 auto 1.5rem;
-  color: var(--color-danger, #ef4444);
+  margin: 0 auto var(--spacing-6);
+  color: var(--color-error);
 }
 
 .permission-denied__icon svg {
@@ -133,95 +134,81 @@ function goHome(): void {
 }
 
 .permission-denied__title {
-  margin: 0 0 0.75rem;
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: var(--color-text-primary, #1f2937);
+  margin: 0 0 var(--spacing-3);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .permission-denied__message {
-  margin: 0 0 1.5rem;
-  font-size: 1rem;
-  color: var(--color-text-secondary, #6b7280);
-  line-height: 1.5;
+  margin: 0 0 var(--spacing-6);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  line-height: var(--leading-normal);
 }
 
 .permission-denied__details {
-  margin: 0 0 1.5rem;
-  padding: 1rem;
-  background: var(--color-bg-secondary, #f3f4f6);
-  border-radius: 8px;
+  margin: 0 0 var(--spacing-6);
+  padding: var(--spacing-4);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
   text-align: left;
 }
 
 .permission-denied__details p {
-  margin: 0.25rem 0;
-  font-size: 0.875rem;
-  color: var(--color-text-secondary, #6b7280);
+  margin: var(--spacing-1) 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .permission-denied__details code {
-  padding: 0.125rem 0.375rem;
-  background: var(--color-bg-tertiary, #e5e7eb);
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 0.8125rem;
-  color: var(--color-text-primary, #1f2937);
+  padding: var(--spacing-0-5) var(--spacing-1-5);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
 }
 
 .permission-denied__actions {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   justify-content: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .permission-denied__button {
-  padding: 0.625rem 1.25rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  border-radius: 6px;
+  padding: var(--spacing-2-5) var(--spacing-5);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-150) var(--ease-in-out);
 }
 
 .permission-denied__button--primary {
-  background: var(--color-primary, #3b82f6);
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
   border: none;
 }
 
 .permission-denied__button--primary:hover {
-  background: var(--color-primary-dark, #2563eb);
+  background: var(--color-primary-hover);
 }
 
 .permission-denied__button--secondary {
   background: transparent;
-  color: var(--color-text-secondary, #6b7280);
-  border: 1px solid var(--color-border, #d1d5db);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
 }
 
 .permission-denied__button--secondary:hover {
-  background: var(--color-bg-secondary, #f3f4f6);
+  background: var(--bg-secondary);
 }
 
 .permission-denied__contact {
   margin: 0;
-  font-size: 0.8125rem;
-  color: var(--color-text-muted, #9ca3af);
-}
-
-/* Dark mode */
-:global(.dark) .permission-denied__title {
-  color: var(--color-text-primary-dark, #f3f4f6);
-}
-
-:global(.dark) .permission-denied__details {
-  background: var(--color-bg-secondary-dark, #374151);
-}
-
-:global(.dark) .permission-denied__details code {
-  background: var(--color-bg-tertiary-dark, #4b5563);
-  color: var(--color-text-primary-dark, #f3f4f6);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
 }
 </style>
