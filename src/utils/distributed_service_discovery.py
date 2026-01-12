@@ -70,7 +70,7 @@ class DistributedServiceDiscovery:
 
         Issue #281: Refactored from 141 lines to use extracted helper methods.
         """
-        from src.unified_config_manager import unified_config_manager
+        from src.config import unified_config_manager
 
         # Load configurations
         self._services_config = unified_config_manager.get_distributed_services_config()
@@ -430,7 +430,7 @@ async def get_service_discovery() -> DistributedServiceDiscovery:
 
 async def get_service_url(service_name: str) -> str:
     """Quick service URL resolution without DNS delays"""
-    from src.unified_config_manager import unified_config_manager
+    from src.config import unified_config_manager
 
     discovery = await get_service_discovery()
     endpoint = await discovery.get_service_endpoint(service_name)
@@ -460,7 +460,7 @@ def get_redis_connection_params_sync() -> Dict:
 
     Returns same dict structure as config-based approach for backward compatibility
     """
-    from src.unified_config_manager import unified_config_manager
+    from src.config import unified_config_manager
 
     # Get Redis configuration from unified config manager
     redis_config = unified_config_manager.get_redis_config()
@@ -496,7 +496,7 @@ def get_service_endpoint_sync(service_name: str) -> Optional[Dict]:
     Returns endpoint information as a dict with host, port, protocol
     Gets values from unified configuration
     """
-    from src.unified_config_manager import unified_config_manager
+    from src.config import unified_config_manager
 
     # Get configurations
     services_config = unified_config_manager.get_distributed_services_config()

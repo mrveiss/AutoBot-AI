@@ -20,7 +20,7 @@ async def test_autobot_kb():
     """Test the actual AutoBot knowledge base"""
     try:
         from src.knowledge_base import KnowledgeBase
-        from src.unified_config import config as global_config
+        from src.config import config as global_config
 
         # Initialize KB
         kb = KnowledgeBase(config_manager=global_config)

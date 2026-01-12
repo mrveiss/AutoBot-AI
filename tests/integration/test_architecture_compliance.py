@@ -18,7 +18,7 @@ import sys
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.unified_config_manager import unified_config_manager
+from src.config import unified_config_manager
 from src.constants.network_constants import NetworkConstants
 from src.utils.redis_client import get_redis_client
 

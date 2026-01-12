@@ -46,7 +46,7 @@ from src.llm_interface_pkg import (
 )
 
 # Import additional dependencies that may be expected by consumers
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 
 # Create singleton config instance for backward compatibility
 config = UnifiedConfigManager()

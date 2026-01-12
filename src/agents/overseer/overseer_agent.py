@@ -124,7 +124,7 @@ class OverseerAgent:
             return endpoint
         except Exception as e:
             logger.error("Failed to get Ollama endpoint: %s", e)
-            from src.unified_config_manager import UnifiedConfigManager
+            from src.config import UnifiedConfigManager
 
             config = UnifiedConfigManager()
             return f"http://{config.get_host('ollama')}:{config.get_port('ollama')}/api/generate"

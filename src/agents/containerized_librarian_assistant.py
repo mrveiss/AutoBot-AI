@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
-from src.unified_config_manager import config
+from src.config import config
 from src.utils.http_client import get_http_client
 
 from ..utils.service_registry import get_service_url

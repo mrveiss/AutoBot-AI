@@ -38,7 +38,7 @@ from src.system_integration import SystemIntegration
 from src.task_handlers import TaskExecutor
 
 # Import the centralized ConfigManager and Redis client utility
-from src.unified_config_manager import config as global_config_manager
+from src.config import config as global_config_manager
 from src.utils.redis_client import get_redis_client
 
 # Conditional import for GUIController based on OS

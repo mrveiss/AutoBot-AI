@@ -147,7 +147,7 @@ class LLMConfigurationSynchronizer:
         """
         try:
             from backend.api.agent_config import DEFAULT_AGENT_CONFIGS
-            from src.unified_config_manager import config as global_config_manager
+            from src.config import config as global_config_manager
 
             logger.info("Starting LLM configuration synchronization...")
 
@@ -198,7 +198,7 @@ class LLMConfigurationSynchronizer:
         """
         try:
             from backend.utils.connection_utils import ModelManager
-            from src.unified_config_manager import config as global_config_manager
+            from src.config import config as global_config_manager
 
             logger.info("Ensuring models list is populated...")
 

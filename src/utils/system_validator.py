@@ -16,7 +16,7 @@ from typing import Any, Dict, List
 import aiohttp
 import psutil
 
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 from src.utils.http_client import get_http_client
 
 # Create singleton config instance

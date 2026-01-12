@@ -37,7 +37,7 @@ from redis.retry import Retry
 from src.constants.network_constants import NetworkConstants
 from src.constants.threshold_constants import RetryConfig, TimingConstants
 from src.monitoring.prometheus_metrics import get_metrics_manager
-from src.unified_config_manager import config as config_manager
+from src.config import config as config_manager
 from src.utils.redis_management.config import (
     PoolConfig,
     RedisConfig,

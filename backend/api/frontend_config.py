@@ -121,7 +121,7 @@ def _build_fallback_config() -> Dict[str, Any]:
     Returns:
         Complete fallback frontend configuration dict
     """
-    from src.unified_config_manager import unified_config_manager
+    from src.config import unified_config_manager
 
     backend_config = unified_config_manager.get_backend_config()
 

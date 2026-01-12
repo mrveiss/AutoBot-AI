@@ -72,7 +72,7 @@ class LangChainAgentOrchestrator:
 
     def _get_llm_config(self) -> tuple:
         """Get LLM model and base URL from config."""
-        from src.unified_config_manager import config as global_config
+        from src.config import config as global_config
 
         llm_config = global_config.get_llm_config()
         llm_model = ModelConstants.DEFAULT_OLLAMA_MODEL

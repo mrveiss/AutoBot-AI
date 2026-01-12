@@ -23,7 +23,7 @@ from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
 from src.constants.network_constants import NetworkConstants
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 from src.utils.chromadb_client import (
     get_chromadb_client as create_chromadb_client,
     wrap_collection_async,

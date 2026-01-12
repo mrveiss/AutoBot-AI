@@ -24,7 +24,7 @@ import logging
 import threading
 from typing import Any, Dict, List, Optional
 
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 from src.utils.http_client import get_http_client
 from src.utils.redis_client import get_redis_client
 

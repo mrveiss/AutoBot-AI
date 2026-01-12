@@ -20,7 +20,7 @@ async def test_documentation_search():
     """Test searching for documentation in knowledge base"""
     try:
         from src.knowledge_base import KnowledgeBase
-        from src.unified_config import config as global_config
+        from src.config import config as global_config
 
         # Initialize knowledge base
         kb = KnowledgeBase(config_manager=global_config)
@@ -94,7 +94,7 @@ async def test_specific_autobot_docs():
     """Test searching for specific AutoBot documentation"""
     try:
         from src.knowledge_base import KnowledgeBase
-        from src.unified_config import config as global_config
+        from src.config import config as global_config
 
         kb = KnowledgeBase(config_manager=global_config)
         await kb.ainit()

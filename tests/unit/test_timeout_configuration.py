@@ -11,7 +11,7 @@ Validates:
 
 import os
 import pytest
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 from src.utils.knowledge_base_timeouts import KnowledgeBaseTimeouts
 
 

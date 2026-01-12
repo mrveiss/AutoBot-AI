@@ -30,7 +30,7 @@ if str(_project_root) not in sys.path:
 
 try:
     from src.utils.redis_client import get_redis_client
-    from src.unified_config import UnifiedConfig
+    from src.config import UnifiedConfig
     _REDIS_AVAILABLE = True
     _CONFIG_AVAILABLE = True
 except ImportError:

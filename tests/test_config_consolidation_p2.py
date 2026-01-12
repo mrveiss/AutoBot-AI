@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 async def test_config_consolidation():
     """Test all features of unified config manager"""
-    from src.unified_config_manager import unified_config_manager
+    from src.config import unified_config_manager
 
     print("=" * 80)
     print("TESTING P2 CONFIG CONSOLIDATION")

@@ -15,7 +15,7 @@ import requests
 
 # Import configuration from centralized source
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from src.unified_config import API_BASE_URL, OLLAMA_URL
+from src.config import API_BASE_URL, OLLAMA_URL
 
 
 @dataclass

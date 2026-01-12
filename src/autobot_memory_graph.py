@@ -37,7 +37,7 @@ from typing import Any, Dict, FrozenSet, List, Optional
 import redis.asyncio as async_redis  # Modern async Redis with JSON support
 from cachetools import LRUCache
 
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 from src.utils.error_boundaries import (
     error_boundary,
     get_error_boundary_manager,

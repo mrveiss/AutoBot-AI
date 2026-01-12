@@ -13,7 +13,7 @@ import uvicorn
 
 # Import the application factory
 from backend.app_factory import create_app
-from src.unified_config import config as global_config_manager
+from src.config import config as global_config_manager
 
 # Configure logging using centralized logging manager
 from src.utils.logging_manager import get_backend_logger, setup_logging

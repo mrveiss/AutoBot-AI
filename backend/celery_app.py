@@ -14,7 +14,7 @@ import urllib.parse
 from celery import Celery
 
 from src.config.ssot_config import config as ssot_config
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 
 # Create singleton config instance for extended config values
 config = UnifiedConfigManager()

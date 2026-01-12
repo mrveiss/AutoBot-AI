@@ -35,7 +35,7 @@ BACKEND_HOST_IP = _ssot.vm.main if _ssot else NetworkConstants.MAIN_MACHINE_IP
 BACKEND_PORT = _ssot.port.backend if _ssot else NetworkConstants.BACKEND_PORT
 HTTP_PROTOCOL = "http"
 REDIS_HOST_IP = _ssot.vm.redis if _ssot else NetworkConstants.REDIS_VM_IP
-from src.unified_config_manager import unified_config_manager
+from src.config import unified_config_manager
 
 logger = logging.getLogger(__name__)
 

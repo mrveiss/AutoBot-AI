@@ -20,7 +20,7 @@ from backend.type_defs.common import Metadata
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel
 
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 from src.utils.error_boundaries import (
     ErrorCategory,
     get_error_boundary_manager,

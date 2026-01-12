@@ -16,7 +16,7 @@ from typing import Any, AsyncGenerator, Callable, Dict, Optional, Type, TypeVar
 import redis.asyncio as async_redis
 
 from src.llm_interface import LLMInterface, get_llm_interface
-from src.unified_config_manager import UnifiedConfigManager, unified_config_manager
+from src.config import UnifiedConfigManager, unified_config_manager
 from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)

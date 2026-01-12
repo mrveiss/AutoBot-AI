@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from backend.services.config_service import ConfigService
-from src.unified_config_manager import unified_config_manager
+from src.config import unified_config_manager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)

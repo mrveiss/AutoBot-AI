@@ -19,7 +19,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.unified_memory_manager import (
+from src.memory import (
     EnhancedMemoryManager,
     LongTermMemoryManager,
     MemoryCategory,

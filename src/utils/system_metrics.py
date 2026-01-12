@@ -15,7 +15,7 @@ from typing import Any, Dict
 import aiohttp
 import psutil
 
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 
 # Create singleton config instance
 config = UnifiedConfigManager()

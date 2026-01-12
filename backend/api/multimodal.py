@@ -23,7 +23,7 @@ from src.ai_hardware_accelerator import HardwareDevice, accelerated_embedding_ge
 
 # Import AutoBot multi-modal components
 from src.npu_semantic_search import get_npu_search_engine
-from src.unified_multimodal_processor import (
+from src.multimodal_processor import (
     ModalityType,
     MultiModalInput,
     ProcessingIntent,

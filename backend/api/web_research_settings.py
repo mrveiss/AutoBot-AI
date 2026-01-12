@@ -209,7 +209,7 @@ async def disable_web_research():
 async def get_research_settings():
     """Get current web research settings"""
     try:
-        from src.unified_config_manager import UnifiedConfigManager
+        from src.config import UnifiedConfigManager
 
         # Get settings from config
         unified_config_manager = UnifiedConfigManager()
@@ -264,7 +264,7 @@ async def update_research_settings(settings: WebResearchSettings):
     """Update web research settings"""
     try:
         from backend.services.config_service import ConfigService
-        from src.unified_config_manager import unified_config_manager
+        from src.config import unified_config_manager
 
         # Update research agent settings
         unified_config_manager.set_nested("agents.research.enabled", settings.enabled)

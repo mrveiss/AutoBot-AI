@@ -219,7 +219,7 @@ class ServiceDiscovery:
 
     def _init_default_services(self):
         """Initialize default service definitions from unified configuration."""
-        from src.unified_config_manager import unified_config_manager
+        from src.config import unified_config_manager
 
         services_config = unified_config_manager.get_distributed_services_config()
         backend_config = unified_config_manager.get_backend_config()

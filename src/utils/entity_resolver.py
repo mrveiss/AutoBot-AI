@@ -24,7 +24,7 @@ from src.models.entity_mapping import (
     EntityType,
     SimilarityMethod,
 )
-from src.unified_config_manager import config_manager
+from src.config import config_manager
 from src.utils.logging_manager import get_llm_logger
 from src.utils.redis_client import get_redis_client
 

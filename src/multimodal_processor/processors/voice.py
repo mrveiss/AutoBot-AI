@@ -16,7 +16,7 @@ from typing import Any, Dict, Tuple
 import numpy as np
 import torch
 
-from src.unified_config_manager import get_config_section
+from src.config import get_config_section
 
 from ..base import BaseModalProcessor
 from ..models import MultiModalInput, ProcessingResult

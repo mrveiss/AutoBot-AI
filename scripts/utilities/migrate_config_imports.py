@@ -78,9 +78,9 @@ class ConfigMigrator:
         """Migrate config imports to unified_config
 
         Handles various import patterns:
-        - from src.config import config -> from src.unified_config import UnifiedConfig
-        - from config import config -> from src.unified_config import UnifiedConfig
-        - import config -> from src.unified_config import UnifiedConfig
+        - from src.config import config -> from src.config import UnifiedConfig
+        - from config import config -> from src.config import UnifiedConfig
+        - import config -> from src.config import UnifiedConfig
 
         Then initializes: config = UnifiedConfig()
         """
@@ -94,28 +94,28 @@ class ConfigMigrator:
 
             # Pattern 1: from src.config import config
             if re.match(r'^from\s+src\.config\s+import\s+config', line):
-                new_lines.append('from src.unified_config import UnifiedConfig')
+                new_lines.append('from src.config import UnifiedConfig')
                 needs_initialization = True
                 import_line_index = len(new_lines) - 1
                 modified = True
 
             # Pattern 2: from config import config
             elif re.match(r'^from\s+config\s+import\s+config', line):
-                new_lines.append('from src.unified_config import UnifiedConfig')
+                new_lines.append('from src.config import UnifiedConfig')
                 needs_initialization = True
                 import_line_index = len(new_lines) - 1
                 modified = True
 
             # Pattern 3: import config
             elif re.match(r'^import\s+config$', line):
-                new_lines.append('from src.unified_config import UnifiedConfig')
+                new_lines.append('from src.config import UnifiedConfig')
                 needs_initialization = True
                 import_line_index = len(new_lines) - 1
                 modified = True
 
             # Pattern 4: from src.config import Config (class-based)
             elif re.match(r'^from\s+src\.config\s+import\s+Config', line):
-                new_lines.append('from src.unified_config import UnifiedConfig as Config')
+                new_lines.append('from src.config import UnifiedConfig as Config')
                 modified = True
 
             if not modified:

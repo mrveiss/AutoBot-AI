@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Any
 
 from src.utils.redis_client import get_redis_client
-from src.unified_config import UnifiedConfig
+from src.config import UnifiedConfig
 
 
 # Initialize unified config

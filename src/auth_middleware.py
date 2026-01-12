@@ -18,7 +18,7 @@ import jwt
 from fastapi import Request
 
 from src.security_layer import SecurityLayer
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 from src.utils.catalog_http_exceptions import raise_auth_error
 
 logger = logging.getLogger(__name__)

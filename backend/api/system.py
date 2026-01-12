@@ -10,7 +10,7 @@ from datetime import datetime
 from fastapi import APIRouter, Form, HTTPException, Request
 
 from src.constants.model_constants import ModelConstants as ModelConsts
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 
 # Add caching support from unified cache manager (P4 Cache Consolidation)
 from src.utils.advanced_cache_manager import cache_manager, cache_response

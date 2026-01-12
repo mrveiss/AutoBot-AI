@@ -19,7 +19,7 @@ from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
 from src.research_browser_manager import research_browser_manager
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -324,7 +324,7 @@ def _get_or_create_browser_session(session_id: str):
 async def _get_docker_browser_info(session) -> dict:
     """Get Docker browser container info (Issue #665: extracted helper)."""
     try:
-        from src.unified_config_manager import (
+        from src.config import (
             PLAYWRIGHT_VNC_URL,
             get_vnc_direct_url,
         )
@@ -468,7 +468,7 @@ async def get_chat_browser_session(conversation_id: str):
     # Get VNC info for frontend integration
     docker_browser_info = None
     try:
-        from src.unified_config_manager import (
+        from src.config import (
             PLAYWRIGHT_VNC_URL,
             get_vnc_direct_url,
         )

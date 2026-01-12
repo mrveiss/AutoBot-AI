@@ -22,7 +22,7 @@ import aiosqlite
 
 
 # Import the centralized ConfigManager
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 
 # Issue #380: Module-level frozensets for task status checks
 _ACTIVE_STATUSES: FrozenSet[str] = frozenset({"IN_PROGRESS", "DONE", "FAILED"})

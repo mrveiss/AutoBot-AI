@@ -12,7 +12,7 @@ from backend.utils.connection_utils import ConnectionTester, ModelManager
 
 # Import unified configuration system - NO HARDCODED VALUES
 from src.constants.model_constants import ModelConstants
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 
 # Import caching utilities from unified cache manager (P4 Cache Consolidation)
 from src.utils.advanced_cache_manager import cache_response

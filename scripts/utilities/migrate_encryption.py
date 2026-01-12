@@ -27,7 +27,7 @@ sys.path.insert(0, str(project_root))
 
 # Import AutoBot modules after path setup
 from src.chat_history_manager import ChatHistoryManager  # noqa: E402
-from src.unified_config import config as global_config_manager  # noqa: E402
+from src.config import config as global_config_manager  # noqa: E402
 from src.encryption_service import (  # noqa: E402
     get_encryption_service,
     is_encryption_enabled,

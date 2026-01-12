@@ -474,7 +474,7 @@ DEFAULT_AGENT_CONFIGS = {
 @router.get("/agents")
 async def list_agents():
     """Get list of all available agents with their configurations"""
-    from src.unified_config_manager import unified_config_manager
+    from src.config import unified_config_manager
 
     llm_config = unified_config_manager.get_llm_config()
     provider_type = llm_config.get("provider_type", "local")
@@ -540,7 +540,7 @@ async def get_all_agents():
 
     Returns list of backend agents with their configurations and status.
     """
-    from src.unified_config_manager import unified_config_manager
+    from src.config import unified_config_manager
 
     backend_agents = []
     for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
@@ -595,7 +595,7 @@ async def get_agent_config(agent_id: str):
     if agent_id not in DEFAULT_AGENT_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-    from src.unified_config_manager import unified_config_manager
+    from src.config import unified_config_manager
 
     base_config = DEFAULT_AGENT_CONFIGS[agent_id]
 
@@ -649,7 +649,7 @@ async def update_agent_model(agent_id: str, update: AgentModelUpdate):
     if agent_id not in DEFAULT_AGENT_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-    from src.unified_config_manager import unified_config_manager
+    from src.config import unified_config_manager
 
     # Validate the update request
     if update.agent_id != agent_id:
@@ -705,7 +705,7 @@ async def enable_agent(agent_id: str):
     if agent_id not in DEFAULT_AGENT_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-    from src.unified_config_manager import unified_config_manager
+    from src.config import unified_config_manager
 
     unified_config_manager.set_nested(f"agents.{agent_id}.enabled", True)
     unified_config_manager.save_settings()
@@ -734,7 +734,7 @@ async def disable_agent(agent_id: str):
     if agent_id not in DEFAULT_AGENT_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-    from src.unified_config_manager import unified_config_manager
+    from src.config import unified_config_manager
 
     unified_config_manager.set_nested(f"agents.{agent_id}.enabled", False)
     unified_config_manager.save_settings()
@@ -763,7 +763,7 @@ async def check_agent_health(agent_id: str):
     if agent_id not in DEFAULT_AGENT_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-    from src.unified_config_manager import unified_config_manager
+    from src.config import unified_config_manager
 
     enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", True)
     model = unified_config_manager.get_nested(
@@ -832,7 +832,7 @@ async def check_agent_health(agent_id: str):
 @router.get("/status/overview")
 async def get_agents_overview():
     """Get overview of all agents' status for dashboard"""
-    from src.unified_config_manager import unified_config_manager
+    from src.config import unified_config_manager
 
     total_agents = len(DEFAULT_AGENT_CONFIGS)
     enabled_agents = 0

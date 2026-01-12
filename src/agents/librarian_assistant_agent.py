@@ -34,7 +34,7 @@ from src.config.ssot_config import (
 )
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
-from src.unified_config_manager import config
+from src.config import config
 
 logger = logging.getLogger(__name__)
 

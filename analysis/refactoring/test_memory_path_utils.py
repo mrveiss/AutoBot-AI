@@ -17,7 +17,7 @@ project_root = os.path.join(os.path.dirname(__file__), "..", "..")
 sys.path.insert(0, project_root)
 
 from src.utils.common import PathUtils
-from src.unified_memory_manager import LongTermMemoryManager
+from src.memory import LongTermMemoryManager
 from src.memory_manager_async import AsyncLongTermMemoryManager
 
 

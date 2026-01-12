@@ -29,7 +29,7 @@ from backend.knowledge_factory import get_or_create_knowledge_base
 from src.chat_history import ChatHistoryManager
 from src.chat_workflow import ChatWorkflowManager
 from src.security_layer import SecurityLayer
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 from src.utils.background_llm_sync import BackgroundLLMSync
 
 logger = logging.getLogger(__name__)

@@ -11,7 +11,7 @@ import logging
 import time
 from typing import Optional
 
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 
 from ..models import LLMRequest, LLMResponse
 

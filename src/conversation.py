@@ -27,7 +27,7 @@ from src.source_attribution import (
     source_manager,
     track_source,
 )
-from src.unified_config_manager import config as global_config_manager
+from src.config import config as global_config_manager
 
 logger = logging.getLogger(__name__)
 

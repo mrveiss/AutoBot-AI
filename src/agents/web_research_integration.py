@@ -585,7 +585,7 @@ _global_research_integration_lock = threading.Lock()
 def _load_web_research_config() -> Dict[str, Any]:
     """Load web research config from config manager (Issue #334 - extracted helper)."""
     try:
-        from src.unified_config_manager import config_manager
+        from src.config import config_manager
         return config_manager.get_nested("web_research", {})
     except Exception as e:
         logger.warning("Could not load web research config: %s", e)

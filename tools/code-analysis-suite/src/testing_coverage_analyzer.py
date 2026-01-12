@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 
 from src.utils.redis_client import get_redis_client
-from src.unified_config import UnifiedConfig
+from src.config import UnifiedConfig
 
 
 # Initialize unified config

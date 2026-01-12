@@ -31,7 +31,7 @@ from src.temporal_knowledge_manager import (
     TemporalKnowledgeManager,
     TemporalMetadata,
 )
-from src.unified_knowledge_manager import (
+from src.agents.knowledge_manager import (
     IMachineAwareManager,
     ISystemKnowledgeManager,
     ITemporalManager,

@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional
 
 
 # Import the centralized ConfigManager
-from src.unified_config_manager import config as global_config_manager
+from src.config import config as global_config_manager
 
 # Import shared path utilities
 from src.utils.common import PathUtils

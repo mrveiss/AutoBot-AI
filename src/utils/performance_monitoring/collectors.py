@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 import psutil
 
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 from src.constants.network_constants import NetworkConstants
 from src.utils.http_client import get_http_client
 from src.utils.performance_monitoring.metrics import (

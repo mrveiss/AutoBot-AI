@@ -16,7 +16,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 # Import configuration manager
-from src.unified_config_manager import unified_config_manager
+from src.config import unified_config_manager
 
 
 @pytest.fixture(scope="session")

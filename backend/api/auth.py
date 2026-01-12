@@ -388,7 +388,7 @@ def _verify_current_password(
 
 def _persist_password_change(username: str, new_password_hash: str) -> None:
     """Persist password change to config file."""
-    from src.unified_config_manager import UnifiedConfigManager
+    from src.config import UnifiedConfigManager
 
     # Update in-memory config
     allowed_users = auth_middleware.security_config.get("allowed_users", {})

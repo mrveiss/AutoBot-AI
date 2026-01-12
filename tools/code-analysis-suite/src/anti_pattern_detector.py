@@ -25,7 +25,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from src.unified_config import UnifiedConfig
+from src.config import UnifiedConfig
 
 
 # Initialize configuration

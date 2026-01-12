@@ -11,7 +11,7 @@ from pathlib import Path
 
 from backend.type_defs.common import Metadata
 
-from src.unified_config_manager import unified_config_manager
+from src.config import unified_config_manager
 
 logger = logging.getLogger(__name__)
 

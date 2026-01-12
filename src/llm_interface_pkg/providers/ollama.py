@@ -21,7 +21,7 @@ from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from src.circuit_breaker import circuit_breaker_async
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 from src.utils.http_client import get_http_client
 
 from ..models import LLMRequest, LLMResponse, LLMSettings

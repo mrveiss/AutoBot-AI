@@ -27,7 +27,7 @@ from pydantic import BaseModel
 from src.constants.network_constants import NetworkConstants, ServiceURLs
 from src.constants.path_constants import PATH
 from src.monitoring.prometheus_metrics import get_metrics_manager
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.http_client import get_http_client
 

@@ -34,7 +34,7 @@ class OllamaHealth(BaseProviderHealth):
         """Initialize Ollama health checker with host configuration."""
         super().__init__("ollama")
         # Get Ollama configuration from environment
-        from src.unified_config_manager import (
+        from src.config import (
             HTTP_PROTOCOL,
             OLLAMA_HOST_IP,
             OLLAMA_PORT,

@@ -30,7 +30,7 @@ from src.constants import PATH
 # Import models from dedicated module (Issue #185)
 from backend.api.analytics_models import CodeAnalysisRequest, CommunicationPattern
 from src.constants.threshold_constants import TimingConstants
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 from src.utils.redis_client import RedisDatabase, get_redis_client
 from src.utils.system_metrics import get_metrics_collector
 

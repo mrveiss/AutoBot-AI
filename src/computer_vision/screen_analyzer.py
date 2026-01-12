@@ -22,7 +22,7 @@ from PIL import Image
 from src.desktop_streaming_manager import desktop_streaming
 from src.task_execution_tracker import task_tracker
 from src.enhanced_memory_manager import TaskPriority
-from src.unified_multimodal_processor import (
+from src.multimodal_processor import (
     ModalityType,
     MultiModalInput,
     ProcessingIntent,

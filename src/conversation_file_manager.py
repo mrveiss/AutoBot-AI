@@ -93,7 +93,7 @@ from redis.exceptions import (
 )
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
-from src.unified_config_manager import unified_config_manager
+from src.config import unified_config_manager
 from src.utils.redis_client import get_redis_client as get_redis_manager
 
 logger = logging.getLogger(__name__)

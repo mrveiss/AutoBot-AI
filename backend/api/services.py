@@ -98,7 +98,7 @@ def _build_default_services(redis_status_obj) -> list:
     Returns:
         List of default ServiceStatus objects
     """
-    from src.unified_config_manager import unified_config_manager
+    from src.config import unified_config_manager
 
     monitoring_config = unified_config_manager.get_config_section("monitoring") or {}
     default_response_time = monitoring_config.get("default_response_time_ms", 10.0)
@@ -353,7 +353,7 @@ async def get_version():
     """Get application version and system information"""
     try:
         # Get configuration
-        from src.unified_config_manager import unified_config_manager
+        from src.config import unified_config_manager
 
         backend_config = unified_config_manager.get_backend_config()
         system_config = unified_config_manager.get_config_section("system") or {}

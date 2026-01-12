@@ -30,7 +30,7 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from src.constants.threshold_constants import TimingConstants
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 
 if TYPE_CHECKING:
     from src.knowledge_base import KnowledgeBase

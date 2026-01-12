@@ -21,7 +21,7 @@ sys.path.insert(0, str(autobot_root))
 
 try:
     from src.utils.redis_client import get_redis_client
-    from src.unified_config import config
+    from src.config import config
 except ImportError:
     # Fallback for standalone usage
     def get_redis_client(async_client=False):

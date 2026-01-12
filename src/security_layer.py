@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 from src.constants.network_constants import NetworkConstants
 
 # Import the centralized ConfigManager
-from src.unified_config_manager import config as global_config_manager
+from src.config import config as global_config_manager
 
 # Performance optimization: O(1) lookup for boolean string values (Issue #326)
 BOOLEAN_TRUE_VALUES = {"true", "1", "yes"}

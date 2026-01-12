@@ -33,7 +33,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 from src.user_management.config import DeploymentMode, get_deployment_config
 from src.user_management.database import db_session_context, init_database
 from src.user_management.models import (

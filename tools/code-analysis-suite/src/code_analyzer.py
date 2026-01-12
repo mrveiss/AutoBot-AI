@@ -18,7 +18,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from src.utils.redis_client import get_redis_client
-from src.unified_config import UnifiedConfig
+from src.config import UnifiedConfig
 
 
 # Initialize unified config

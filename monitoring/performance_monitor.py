@@ -21,7 +21,7 @@ import aiohttp
 import aiofiles
 from pathlib import Path
 from src.constants.network_constants import NetworkConstants
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 from src.utils.redis_client import get_redis_client
 
 # Create singleton config instance

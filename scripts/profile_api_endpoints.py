@@ -48,7 +48,7 @@ async def test_api_endpoints():
     import sys
 
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from src.unified_config import API_BASE_URL
+    from src.config import API_BASE_URL
 
     base_url = API_BASE_URL
 

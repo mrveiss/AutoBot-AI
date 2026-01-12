@@ -12,7 +12,7 @@ import threading
 
 from fastapi import Depends
 
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 
 global_config_manager = UnifiedConfigManager()
 

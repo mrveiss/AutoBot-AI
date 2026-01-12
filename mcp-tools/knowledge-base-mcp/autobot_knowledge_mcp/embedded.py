@@ -209,7 +209,7 @@ class EmbeddedKnowledgeClient:
             if self._lazy_init:
                 # Lazy import to avoid circular dependencies
                 from src.knowledge_base import KnowledgeBase
-                from src.unified_config_manager import config
+                from src.config import config
 
                 self._kb = KnowledgeBase(config_manager=config)
                 self._initialized = True

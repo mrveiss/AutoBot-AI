@@ -11,7 +11,7 @@ from typing import Dict, List, Tuple
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.unified_config_manager import unified_config_manager
+from src.config import unified_config_manager
 
 
 def get_replacement_map() -> Dict[str, str]:

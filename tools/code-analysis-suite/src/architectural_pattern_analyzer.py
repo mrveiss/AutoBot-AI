@@ -19,7 +19,7 @@ import time
 from typing import Any, Dict, List
 
 from src.utils.redis_client import get_redis_client
-from src.unified_config import UnifiedConfig
+from src.config import UnifiedConfig
 
 # Issue #394: Import from architectural_analysis package
 from .architectural_analysis import (

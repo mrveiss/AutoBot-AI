@@ -20,7 +20,7 @@ from src.models.atomic_fact import (
     FactType,
     TemporalType,
 )
-from src.unified_config_manager import config_manager
+from src.config import config_manager
 from src.utils.entity_resolver import entity_resolver
 from src.utils.logging_manager import get_llm_logger
 from src.utils.redis_client import get_redis_client

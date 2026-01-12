@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 import xxhash
 
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 from src.utils.error_boundaries import error_boundary, get_error_boundary_manager
 from src.utils.http_client import get_http_client
 from src.constants.model_constants import ModelConstants

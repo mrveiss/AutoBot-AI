@@ -18,7 +18,7 @@ from backend.type_defs.common import Metadata
 
 from cryptography.fernet import Fernet
 
-from src.unified_config_manager import config_manager
+from src.config import config_manager
 
 logger = logging.getLogger(__name__)
 

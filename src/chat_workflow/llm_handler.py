@@ -62,7 +62,7 @@ class LLMHandlerMixin:
 
     def _get_ollama_endpoint_fallback(self) -> str:
         """Get Ollama endpoint from UnifiedConfigManager as fallback."""
-        from src.unified_config_manager import UnifiedConfigManager
+        from src.config import UnifiedConfigManager
         config = UnifiedConfigManager()
         ollama_host = config.get_host("ollama")
         ollama_port = config.get_port("ollama")

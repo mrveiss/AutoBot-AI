@@ -23,8 +23,8 @@ from typing import Any, Dict, List, Optional, Set
 from src.conversation import ConversationManager
 from src.llm_interface import LLMInterface
 from src.task_execution_tracker import Priority, TaskType, task_tracker
-from src.unified_config_manager import config_manager
-from src.unified_memory_manager import LongTermMemoryManager
+from src.config import config_manager
+from src.memory import LongTermMemoryManager
 from src.utils.logging_manager import get_logger
 from src.constants.threshold_constants import LLMDefaults, TimingConstants
 
@@ -201,7 +201,7 @@ class ConsolidatedOrchestrator:
     def __init__(self, config_mgr=None):
         """Initialize consolidated orchestrator with all core components."""
         # Use provided config_manager or fall back to global config_manager
-        from src.unified_config_manager import config_manager as global_config_manager
+        from src.config import config_manager as global_config_manager
 
         self.config_manager = config_mgr or global_config_manager
         self.config = OrchestratorConfig(self.config_manager)

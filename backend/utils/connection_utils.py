@@ -18,12 +18,12 @@ from backend.type_defs.common import Metadata
 
 from src.constants.model_constants import ModelConstants
 from src.constants.network_constants import NetworkConstants
-from src.unified_config_manager import (
+from src.config import (
     HTTP_PROTOCOL,
     OLLAMA_HOST_IP,
     OLLAMA_PORT,
 )
-from src.unified_config_manager import config as global_config_manager
+from src.config import config as global_config_manager
 from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -166,7 +166,7 @@ class ConnectionTester:
             )
         # Final fallbacks
         if not endpoint:
-            from src.unified_config_manager import OLLAMA_URL
+            from src.config import OLLAMA_URL
             endpoint = f"{OLLAMA_URL}/api/generate"
         if not model:
             model = os.getenv(
@@ -331,7 +331,7 @@ class ConnectionTester:
         provider_config: dict, current_model: str, provider: str
     ) -> Metadata:
         """Check Ollama embedding model availability (reduces nesting in _get_embedding_status)."""
-        from src.unified_config_manager import OLLAMA_URL
+        from src.config import OLLAMA_URL
 
         ollama_host = provider_config.get("host", OLLAMA_URL)
         tags_url = f"{ollama_host}/api/tags"
@@ -518,7 +518,7 @@ class ModelManager:
         """Get models from Ollama service"""
         try:
             ollama_config = global_config_manager.get_nested("llm_config.ollama", {})
-            from src.unified_config_manager import OLLAMA_URL
+            from src.config import OLLAMA_URL
 
             ollama_host = ollama_config.get("host", OLLAMA_URL)
             ollama_url = f"{ollama_host}/api/tags"

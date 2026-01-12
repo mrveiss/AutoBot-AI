@@ -35,7 +35,7 @@ import aiohttp
 import yaml
 
 # Import unified configuration system - NO HARDCODED VALUES
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 
 # Create singleton config instance
 config = UnifiedConfigManager()

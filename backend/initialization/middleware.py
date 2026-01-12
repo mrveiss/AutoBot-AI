@@ -19,7 +19,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.constants.network_constants import NetworkConstants  # noqa: F401 - used in docstring example
-from src.unified_config_manager import UnifiedConfigManager
+from src.config import UnifiedConfigManager
 
 logger = logging.getLogger(__name__)
 

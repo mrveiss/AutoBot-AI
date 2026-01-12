@@ -37,7 +37,7 @@ from src.utils.gpu_vector_search import (
 from src.constants.threshold_constants import TimingConstants
 from src.knowledge.embedding_cache import get_embedding_cache
 from src.knowledge_base import KnowledgeBase
-from src.unified_config_manager import cfg
+from src.config import cfg
 from src.utils.chromadb_client import get_chromadb_client
 from src.utils.http_client import get_http_client
 from src.utils.logging_manager import get_llm_logger
