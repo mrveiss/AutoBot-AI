@@ -65,7 +65,7 @@ setup(
             'autobot-security=scripts.analyze_security:main',
             'autobot-performance=scripts.analyze_performance:main',
             'autobot-duplicates=scripts.analyze_duplicates:main',
-            'autobot-repair=scripts.generate_automated_repairs:main',
+            'autobot-patch=scripts.generate_patches:main',
         ],
     },
     include_package_data=True,

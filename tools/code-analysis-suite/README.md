@@ -43,7 +43,7 @@ python scripts/analyze_frontend.py      # NEW: Frontend analysis
 python scripts/analyze_code_quality.py
 
 # Generate automated fixes
-python scripts/generate_automated_repairs.py
+python scripts/generate_patches.py
 ```
 
 ## 📊 Analyzers Overview
@@ -146,7 +146,7 @@ python scripts/analyze_code_quality.py
 
 ```bash
 # Generate fixes for detected issues
-python scripts/generate_automated_repairs.py
+python scripts/generate_patches.py
 # Output:
 # - Specific code fixes with confidence scores
 # - Git-style patches ready to apply
