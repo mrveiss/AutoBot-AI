@@ -38,39 +38,41 @@ defineEmits<Emits>()
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .stats-actions {
   display: flex;
   justify-content: center;
-  gap: 1rem;
+  gap: var(--spacing-4);
   flex-wrap: wrap;
 }
 
 .action-btn {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  border: 1px solid #d1d5db;
-  background: white;
-  border-radius: 0.375rem;
-  font-weight: 500;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3) var(--spacing-6);
+  border: 1px solid var(--border-default);
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200) var(--ease-in-out);
 }
 
 .action-btn:hover {
-  background: #f3f4f6;
+  background: var(--bg-secondary);
 }
 
 .action-btn.primary {
-  background: #3b82f6;
-  color: white;
-  border-color: #3b82f6;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
+  border-color: var(--color-primary);
 }
 
 .action-btn.primary:hover {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
 }
 
 @media (max-width: 768px) {

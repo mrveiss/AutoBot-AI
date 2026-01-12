@@ -101,58 +101,59 @@ defineProps<Props>()
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .stats-overview {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
+  gap: var(--spacing-6);
+  margin-bottom: var(--spacing-8);
 }
 
 .stat-icon {
   width: 3.5rem;
   height: 3.5rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.5rem;
-  color: white;
+  color: var(--text-on-primary);
 }
 
-.stat-icon.facts { background: linear-gradient(135deg, #f093fb, #f5576c); }
-.stat-icon.documents { background: linear-gradient(135deg, #3b82f6, #2563eb); }
-.stat-icon.categories { background: linear-gradient(135deg, #10b981, #059669); }
-.stat-icon.tags { background: linear-gradient(135deg, #f59e0b, #d97706); }
-.stat-icon.storage { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+.stat-icon.facts { background: linear-gradient(135deg, var(--chart-pink), var(--color-error)); }
+.stat-icon.documents { background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover)); }
+.stat-icon.categories { background: linear-gradient(135deg, var(--color-success), var(--color-success-hover)); }
+.stat-icon.tags { background: linear-gradient(135deg, var(--color-warning), var(--color-warning-hover)); }
+.stat-icon.storage { background: linear-gradient(135deg, var(--chart-purple), var(--color-purple)); }
 
 .stat-content { flex: 1; }
 
 .stat-content h4 {
-  font-size: 0.875rem;
-  color: #6b7280;
-  margin-bottom: 0.5rem;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-2);
 }
 
 .stat-value {
   font-size: 1.875rem;
-  font-weight: 700;
-  color: #1f2937;
-  margin-bottom: 0.25rem;
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-1);
 }
 
 .stat-change {
-  font-size: 0.875rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
-.stat-change.positive { color: #10b981; }
+.stat-change.positive { color: var(--color-success); }
 
 .stat-change.needs-vectorization {
-  color: #f59e0b;
-  font-weight: 500;
+  color: var(--color-warning);
+  font-weight: var(--font-medium);
 }
 
 @media (max-width: 768px) {

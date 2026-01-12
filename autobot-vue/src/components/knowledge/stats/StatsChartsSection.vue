@@ -92,98 +92,99 @@ const capitalize = (str: string): string => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .charts-section {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
+  gap: var(--spacing-6);
+  margin-bottom: var(--spacing-8);
 }
 
 .charts-section h4 {
-  font-weight: 600;
-  color: #1f2937;
-  margin-bottom: 1rem;
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-4);
 }
 
 /* Bar Chart */
 .bar-chart {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .bar-item {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .bar-label {
   width: 120px;
-  font-size: 0.875rem;
-  color: #374151;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .bar-wrapper {
   flex: 1;
   height: 1.5rem;
-  background: #f3f4f6;
-  border-radius: 0.375rem;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
   position: relative;
   overflow: hidden;
 }
 
 .bar-fill {
   height: 100%;
-  transition: width 0.5s ease;
+  transition: width var(--duration-500) var(--ease-in-out);
 }
 
 .bar-value {
   position: absolute;
-  right: 0.5rem;
+  right: var(--spacing-2);
   top: 50%;
   transform: translateY(-50%);
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: #374151;
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
 }
 
 /* Type Stats */
 .type-stats {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .type-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem;
-  background: #f9fafb;
-  border-radius: 0.375rem;
+  gap: var(--spacing-3);
+  padding: var(--spacing-2);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
 }
 
 .type-color {
   width: 1rem;
   height: 1rem;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
 }
 
 .type-name {
   flex: 1;
-  font-weight: 500;
-  color: #374151;
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
 }
 
 .type-count {
-  font-weight: 600;
-  color: #1f2937;
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .type-percentage {
-  font-size: 0.875rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
 }
 
 @media (max-width: 768px) {
@@ -193,7 +194,7 @@ const capitalize = (str: string): string => {
 
   .bar-label {
     width: 80px;
-    font-size: 0.75rem;
+    font-size: var(--text-xs);
   }
 }
 </style>
