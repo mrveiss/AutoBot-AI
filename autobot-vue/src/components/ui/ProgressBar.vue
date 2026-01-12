@@ -100,6 +100,7 @@ const formatTime = (seconds: number): string => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .progress-container {
   width: 100%;
 }
@@ -113,23 +114,23 @@ const formatTime = (seconds: number): string => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
-  font-size: 0.875rem;
+  margin-bottom: var(--spacing-1);
+  font-size: var(--text-sm);
 }
 
 .progress-text {
-  color: #374151;
-  font-weight: 500;
+  color: var(--text-primary);
+  font-weight: var(--font-medium);
 }
 
 .progress-percentage {
-  color: #6b7280;
-  font-weight: 600;
+  color: var(--text-secondary);
+  font-weight: var(--font-semibold);
   font-variant-numeric: tabular-nums;
 }
 
 .progress-bar {
-  background: #f3f4f6;
+  background: var(--bg-tertiary);
   overflow: hidden;
   position: relative;
 }
@@ -140,24 +141,24 @@ const formatTime = (seconds: number): string => {
 .progress-bar.progress-lg { height: 12px; }
 
 .progress-rounded .progress-bar {
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
 }
 
 .progress-fill {
   height: 100%;
-  transition: width 0.3s ease-in-out;
+  transition: width var(--duration-300) var(--ease-in-out);
   position: relative;
   overflow: hidden;
 }
 
-.progress-fill-default { background: #3b82f6; }
-.progress-fill-success { background: #10b981; }
-.progress-fill-warning { background: #f59e0b; }
-.progress-fill-error { background: #ef4444; }
-.progress-fill-info { background: #06b6d4; }
+.progress-fill-default { background: var(--color-primary); }
+.progress-fill-success { background: var(--color-success); }
+.progress-fill-warning { background: var(--color-warning); }
+.progress-fill-error { background: var(--color-error); }
+.progress-fill-info { background: var(--color-info); }
 
 .progress-fill-complete {
-  background: #10b981 !important;
+  background: var(--color-success) !important;
 }
 
 .progress-animation {
@@ -169,7 +170,7 @@ const formatTime = (seconds: number): string => {
   background: linear-gradient(
     to right,
     transparent 0%,
-    rgba(255, 255, 255, 0.3) 50%,
+    var(--bg-primary-transparent) 50%,
     transparent 100%
   );
   animation: progress-shimmer 2s infinite;
@@ -202,9 +203,9 @@ const formatTime = (seconds: number): string => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 4px;
-  font-size: 0.75rem;
-  color: #6b7280;
+  margin-top: var(--spacing-1);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .progress-stats {
@@ -212,13 +213,13 @@ const formatTime = (seconds: number): string => {
 }
 
 .progress-eta {
-  font-weight: 500;
+  font-weight: var(--font-medium);
 }
 
 /* Compact layout adjustments */
 .progress-compact .progress-label {
   margin-bottom: 0;
-  margin-right: 12px;
+  margin-right: var(--spacing-3);
   flex-shrink: 0;
 }
 
@@ -228,7 +229,7 @@ const formatTime = (seconds: number): string => {
 
 .progress-compact .progress-details {
   margin-top: 0;
-  margin-left: 12px;
+  margin-left: var(--spacing-3);
   flex-shrink: 0;
 }
 
@@ -237,13 +238,13 @@ const formatTime = (seconds: number): string => {
   .progress-label {
     flex-direction: column;
     align-items: flex-start;
-    gap: 2px;
+    gap: var(--spacing-0-5);
   }
-  
+
   .progress-details {
     flex-direction: column;
     align-items: flex-start;
-    gap: 2px;
+    gap: var(--spacing-0-5);
   }
 }
 </style>

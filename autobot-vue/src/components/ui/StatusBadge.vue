@@ -40,98 +40,70 @@ const sizeClass = computed(() => `status-${props.size}`)
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .status-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.25rem 0.75rem;
-  border-radius: 9999px;
-  font-weight: 500;
-  font-size: 0.875rem;
-  transition: all 0.2s;
+  gap: var(--spacing-1-5);
+  padding: var(--spacing-1) var(--spacing-3);
+  border-radius: var(--radius-full);
+  font-weight: var(--font-medium);
+  font-size: var(--text-sm);
+  transition: all var(--duration-200) var(--ease-in-out);
 }
 
 /* Sizes */
 .status-small {
-  padding: 0.125rem 0.5rem;
-  font-size: 0.75rem;
-  gap: 0.25rem;
+  padding: var(--spacing-0-5) var(--spacing-2);
+  font-size: var(--text-xs);
+  gap: var(--spacing-1);
 }
 
 .status-medium {
-  padding: 0.25rem 0.75rem;
-  font-size: 0.875rem;
-  gap: 0.375rem;
+  padding: var(--spacing-1) var(--spacing-3);
+  font-size: var(--text-sm);
+  gap: var(--spacing-1-5);
 }
 
 .status-large {
-  padding: 0.375rem 1rem;
-  font-size: 1rem;
-  gap: 0.5rem;
+  padding: var(--spacing-1-5) var(--spacing-4);
+  font-size: var(--text-base);
+  gap: var(--spacing-2);
 }
 
 /* Variants */
 .status-success {
-  background: #d1fae5;
-  color: #065f46;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .status-danger {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .status-warning {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .status-info {
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .status-primary {
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
 }
 
 .status-secondary {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
 }
 
 /* Icon */
 .with-icon i {
   font-size: 0.875em;
-}
-
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .status-success {
-    background: #065f46;
-    color: #d1fae5;
-  }
-
-  .status-danger {
-    background: #991b1b;
-    color: #fee2e2;
-  }
-
-  .status-warning {
-    background: #92400e;
-    color: #fef3c7;
-  }
-
-  .status-info,
-  .status-primary {
-    background: #1e40af;
-    color: #dbeafe;
-  }
-
-  .status-secondary {
-    background: #4b5563;
-    color: #d1d5db;
-  }
 }
 </style>

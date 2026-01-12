@@ -208,6 +208,8 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
+
 /* Modal overlay */
 .dialog-overlay {
   position: fixed;
@@ -215,23 +217,23 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--bg-overlay-dark);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  padding: 1rem;
+  padding: var(--spacing-4);
 }
 
 /* Modal dialog */
 .dialog {
-  background: white;
-  border-radius: 0.5rem;
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
   width: 90%;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-2xl);
 }
 
 .dialog-small {
@@ -255,14 +257,14 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem;
-  border-bottom: 1px solid #e5e7eb;
+  padding: var(--spacing-6);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .dialog-header h3 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #1f2937;
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
   margin: 0;
 }
 
@@ -270,46 +272,46 @@ onUnmounted(() => {
   width: 2.5rem;
   height: 2.5rem;
   border: none;
-  background: #f3f4f6;
-  border-radius: 0.375rem;
-  color: #6b7280;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all var(--duration-200) var(--ease-in-out);
 }
 
 .close-btn:hover {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 /* Content */
 .dialog-content {
   flex: 1;
   overflow-y: auto;
-  padding: 1.5rem;
+  padding: var(--spacing-6);
 }
 
 /* Actions */
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 1.5rem;
-  border-top: 1px solid #e5e7eb;
+  gap: var(--spacing-3);
+  padding: var(--spacing-6);
+  border-top: 1px solid var(--border-default);
 }
 
 /* Transitions */
 .modal-fade-enter-active,
 .modal-fade-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity var(--duration-300) var(--ease-in-out);
 }
 
 .modal-fade-enter-active .dialog,
 .modal-fade-leave-active .dialog {
-  transition: all 0.3s ease;
+  transition: all var(--duration-300) var(--ease-in-out);
 }
 
 .modal-fade-enter-from,
@@ -320,34 +322,5 @@ onUnmounted(() => {
 .modal-fade-enter-from .dialog,
 .modal-fade-leave-to .dialog {
   transform: scale(0.95);
-}
-
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .dialog {
-    background: #1f2937;
-  }
-
-  .dialog-header {
-    border-bottom-color: #374151;
-  }
-
-  .dialog-header h3 {
-    color: #f9fafb;
-  }
-
-  .close-btn {
-    background: #374151;
-    color: #d1d5db;
-  }
-
-  .close-btn:hover {
-    background: #4b5563;
-    color: #f9fafb;
-  }
-
-  .dialog-actions {
-    border-top-color: #374151;
-  }
 }
 </style>

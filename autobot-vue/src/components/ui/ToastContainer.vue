@@ -58,6 +58,7 @@ const getIcon = (type: string): string => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .toast-container {
   position: fixed;
   top: 80px;
@@ -65,7 +66,7 @@ const getIcon = (type: string): string => {
   z-index: 9999;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
   max-width: 400px;
   pointer-events: none;
 }
@@ -73,37 +74,37 @@ const getIcon = (type: string): string => {
 .toast {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  gap: var(--spacing-3);
+  padding: var(--spacing-3-5) var(--spacing-4);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
   pointer-events: auto;
   min-width: 300px;
   max-width: 400px;
 }
 
 .toast-info {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: #ffffff;
-  border-left: 4px solid #1d4ed8;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
+  color: var(--text-on-primary);
+  border-left: 4px solid var(--color-primary-active);
 }
 
 .toast-success {
-  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-  color: #ffffff;
-  border-left: 4px solid #15803d;
+  background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-hover) 100%);
+  color: var(--text-on-primary);
+  border-left: 4px solid var(--color-success-active);
 }
 
 .toast-warning {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  color: #ffffff;
-  border-left: 4px solid #b45309;
+  background: linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning-hover) 100%);
+  color: var(--text-on-primary);
+  border-left: 4px solid var(--color-warning-active);
 }
 
 .toast-error {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  color: #ffffff;
-  border-left: 4px solid #b91c1c;
+  background: linear-gradient(135deg, var(--color-error) 0%, var(--color-error-hover) 100%);
+  color: var(--text-on-primary);
+  border-left: 4px solid var(--color-error-active);
 }
 
 .toast-icon {
@@ -117,47 +118,47 @@ const getIcon = (type: string): string => {
 }
 
 .toast-message {
-  font-size: 0.9em;
-  font-weight: 500;
-  line-height: 1.4;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  line-height: var(--leading-normal);
   word-break: break-word;
 }
 
 .toast-close {
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--bg-primary-transparent);
   border: none;
-  color: #ffffff;
+  color: var(--text-on-primary);
   width: 24px;
   height: 24px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s;
+  transition: background var(--duration-200) var(--ease-in-out);
 }
 
 .toast-close:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--bg-primary-transparent-hover);
 }
 
 .toast-close:focus {
-  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline: 2px solid var(--bg-primary-transparent);
   outline-offset: 2px;
 }
 
 /* Transition animations */
 .toast-enter-active {
-  animation: slideIn 0.3s ease-out;
+  animation: slideIn var(--duration-300) var(--ease-out);
 }
 
 .toast-leave-active {
-  animation: slideOut 0.2s ease-in;
+  animation: slideOut var(--duration-200) var(--ease-in);
 }
 
 .toast-move {
-  transition: transform 0.3s ease;
+  transition: transform var(--duration-300) var(--ease-in-out);
 }
 
 @keyframes slideIn {
@@ -185,8 +186,8 @@ const getIcon = (type: string): string => {
 /* Responsive adjustments */
 @media (max-width: 480px) {
   .toast-container {
-    left: 12px;
-    right: 12px;
+    left: var(--spacing-3);
+    right: var(--spacing-3);
     top: 70px;
     max-width: none;
   }
@@ -202,7 +203,7 @@ const getIcon = (type: string): string => {
   .toast-enter-active,
   .toast-leave-active {
     animation: none;
-    transition: opacity 0.15s ease;
+    transition: opacity var(--duration-150) var(--ease-in-out);
   }
 
   .toast-enter-from,
