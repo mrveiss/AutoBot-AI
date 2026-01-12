@@ -892,8 +892,8 @@ The Enhanced Security Fix Agent implements a multi-layered defense strategy:
 def main():
     """Main entry point."""
     if len(sys.argv) != 2:
-        logger.info("Usage: python enhanced_security_corrector_agent.py <file_or_directory_path>")
-        logger.info("Example: python enhanced_security_corrector_agent.py /path/to/playwright-report/")
+        logger.info("Usage: python enhanced_security_repair_agent.py <file_or_directory_path>")
+        logger.info("Example: python enhanced_security_repair_agent.py /path/to/playwright-report/")
         sys.exit(1)
 
     target_path = sys.argv[1]

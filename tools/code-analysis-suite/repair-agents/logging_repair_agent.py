@@ -570,7 +570,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) == 1:
         # Default to AutoBot frontend directory - use project-relative path
-        # This script is in tools/code-analysis-suite/correction-agents/, so project root is 3 levels up
+        # This script is in tools/code-analysis-suite/repair-agents/, so project root is 3 levels up
         project_root = str(Path(__file__).parent.parent.parent.parent)
         target_dir = "autobot-vue/src"
 
