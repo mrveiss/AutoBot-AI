@@ -19,7 +19,8 @@ from fastapi.responses import JSONResponse
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.redis_client import get_redis_client
 
-from .shared import get_project_root
+from .shared import (COMMON_THIRD_PARTY, STDLIB_MODULES, ImportContext,
+                     get_project_root)
 
 logger = logging.getLogger(__name__)
 
@@ -258,38 +259,95 @@ def _build_call_edge(
     }
 
 
+def _resolve_via_import_context(
+    callee_name: str,
+    import_context: ImportContext,
+    functions: Dict,
+) -> tuple[str | None, bool]:
+    """
+    Resolve callee via import context.
+
+    Issue #713: Extracted from _resolve_callee_id to reduce function length.
+
+    Args:
+        callee_name: Name of the called function
+        import_context: Import context for the current file
+        functions: Dictionary of registered functions
+
+    Returns:
+        Tuple of (resolved_id, is_external)
+    """
+    imported_path = import_context.resolve_name(callee_name)
+    if not imported_path:
+        return None, False
+
+    # Check if it's an external library call
+    if import_context.is_external(callee_name):
+        return None, True  # External call, not truly unresolved
+
+    # Try the imported path directly
+    if imported_path in functions:
+        return imported_path, False
+
+    # Try variations (module.func vs module.Class.func)
+    parts = imported_path.split(".")
+    for i in range(len(parts) - 1, 0, -1):
+        candidate = ".".join(parts[:i]) + "." + parts[-1]
+        if candidate in functions:
+            return candidate, False
+
+    return None, False
+
+
 def _resolve_callee_id(
     callee_name: str,
     module_path: str,
     current_class: str,
     functions: Dict,
-) -> str:
+    import_context: Optional[ImportContext] = None,
+) -> tuple[str | None, bool]:
     """
     Resolve a callee name to its full function ID.
 
     Issue #665: Extracted from _create_function_visitor to reduce function length.
+    Issue #713: Enhanced with import context for cross-module resolution.
 
     Args:
         callee_name: Name of the called function
         module_path: Current module path
         current_class: Current class context (or None)
         functions: Dictionary of registered functions
+        import_context: Import context for the current file (Issue #713)
 
     Returns:
-        Resolved function ID or None if not found
+        Tuple of (resolved_id, is_external):
+        - resolved_id: Function ID if found, None otherwise
+        - is_external: True if call is to external library (not unresolved)
     """
     # Try module-level function first
     possible_id = f"{module_path}.{callee_name}"
     if possible_id in functions:
-        return possible_id
+        return possible_id, False
 
     # Try class method if in class context
     if current_class:
         possible_id = f"{module_path}.{current_class}.{callee_name}"
         if possible_id in functions:
-            return possible_id
+            return possible_id, False
 
-    return None
+    # Issue #713: Try resolving via import context
+    if import_context:
+        result = _resolve_via_import_context(callee_name, import_context, functions)
+        if result[0] or result[1]:  # Found or is external
+            return result
+
+    # Issue #713: Check if callee_name itself is external (e.g., json.loads)
+    if callee_name and "." in callee_name:
+        base = callee_name.split(".")[0]
+        if base in STDLIB_MODULES or base in COMMON_THIRD_PARTY:
+            return None, True
+
+    return None, False
 
 
 def _build_function_info(
@@ -356,89 +414,134 @@ def _compute_func_identity(
     return func_id, full_name
 
 
-def _create_function_visitor(functions: Dict, call_edges: List):
+def _extract_import_context(tree: ast.AST) -> ImportContext:
     """
-    Create FunctionCallVisitor class for AST analysis.
+    Extract import context from an AST tree.
 
-    Issue #281: Extracted from get_call_graph.
-    Issue #665: Refactored to use extracted helpers for reduced function length.
+    Issue #713: Build import map for cross-module resolution.
 
     Args:
-        functions: Dictionary to populate with function definitions
-        call_edges: List to populate with call relationships
+        tree: Parsed AST tree
 
     Returns:
-        FunctionCallVisitor class for use with ast.NodeVisitor
+        ImportContext with all imports from the file
+    """
+    ctx = ImportContext()
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                ctx.add_import(
+                    module=alias.name,
+                    name=None,
+                    alias=alias.asname
+                )
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            for alias in node.names:
+                if alias.name == "*":
+                    # Star import - can't track specific names
+                    continue
+                ctx.add_import(
+                    module=node.module,
+                    name=alias.name,
+                    alias=alias.asname
+                )
+
+    return ctx
+
+
+class FunctionCallVisitor(ast.NodeVisitor):
+    """
+    AST visitor to extract function definitions and calls.
+
+    Issue #713: Refactored to module level for reduced function length.
+    Uses constructor injection for data collections instead of closure.
     """
 
-    class FunctionCallVisitor(ast.NodeVisitor):
-        """AST visitor to extract function definitions and calls."""
+    def __init__(
+        self,
+        file_path: str,
+        module_path: str,
+        functions: Dict,
+        call_edges: List,
+        external_calls: Optional[List] = None,
+        import_context: Optional[ImportContext] = None,
+    ):
+        """Initialize visitor with file path, module context, and data stores."""
+        self.file_path = file_path
+        self.module_path = module_path
+        self.functions = functions
+        self.call_edges = call_edges
+        self.external_calls = external_calls
+        self.import_context = import_context
+        self.current_class = None
+        self.current_function = None
+        self.function_stack = []
 
-        def __init__(self, file_path: str, module_path: str):
-            """Initialize visitor with file path and module context."""
-            self.file_path = file_path
-            self.module_path = module_path
-            self.current_class = None
-            self.current_function = None
-            self.function_stack = []
+    def visit_ClassDef(self, node):
+        """Visit class definition and track current class context."""
+        old_class = self.current_class
+        self.current_class = node.name
+        self.generic_visit(node)
+        self.current_class = old_class
 
-        def visit_ClassDef(self, node):
-            """Visit class definition and track current class context."""
-            old_class = self.current_class
-            self.current_class = node.name
+    def visit_FunctionDef(self, node):
+        """Visit synchronous function definition."""
+        self._process_function(node)
+
+    def visit_AsyncFunctionDef(self, node):
+        """Visit asynchronous function definition."""
+        self._process_function(node)
+
+    def _process_function(self, node):
+        """Process function node and register it with its call relationships."""
+        func_id, full_name = _compute_func_identity(
+            node.name, self.module_path, self.current_class
+        )
+        self.functions[func_id] = _build_function_info(
+            node, func_id, full_name,
+            self.file_path, self.module_path, self.current_class
+        )
+
+        old_function = self.current_function
+        self.current_function = func_id
+        self.function_stack.append(func_id)
+        self.generic_visit(node)
+        self.function_stack.pop() if self.function_stack else None
+        self.current_function = old_function
+
+    def visit_Call(self, node):
+        """Visit function call and record caller-callee relationship."""
+        if not self.current_function:
             self.generic_visit(node)
-            self.current_class = old_class
+            return
 
-        def visit_FunctionDef(self, node):
-            """Visit synchronous function definition."""
-            self._process_function(node)
+        callee_name = _extract_callee_name(node)
+        if callee_name and callee_name not in BUILTIN_FUNCS:
+            self._record_call(callee_name, node.lineno)
 
-        def visit_AsyncFunctionDef(self, node):
-            """Visit asynchronous function definition."""
-            self._process_function(node)
+        self.generic_visit(node)
 
-        def _process_function(self, node):
-            """Process function node and register it with its call relationships.
+    def _record_call(self, callee_name: str, line: int):
+        """Record a function call edge. Issue #713: Extracted for brevity."""
+        callee_id, is_external = _resolve_callee_id(
+            callee_name,
+            self.module_path,
+            self.current_class,
+            self.functions,
+            self.import_context,
+        )
 
-            Issue #665: Refactored to use _compute_func_identity helper.
-            """
-            func_id, full_name = _compute_func_identity(
-                node.name, self.module_path, self.current_class
-            )
-            functions[func_id] = _build_function_info(
-                node, func_id, full_name,
-                self.file_path, self.module_path, self.current_class
-            )
-
-            old_function = self.current_function
-            self.current_function = func_id
-            self.function_stack.append(func_id)
-            self.generic_visit(node)
-            self.function_stack.pop() if self.function_stack else None
-            self.current_function = old_function
-
-        def visit_Call(self, node):
-            """
-            Visit function call and record caller-callee relationship.
-
-            Issue #665: Refactored to use _extract_callee_name and _build_call_edge helpers.
-            """
-            if not self.current_function:
-                self.generic_visit(node)
-                return
-
-            callee_name = _extract_callee_name(node)
-            if callee_name and callee_name not in BUILTIN_FUNCS:
-                callee_id = _resolve_callee_id(
-                    callee_name, self.module_path, self.current_class, functions
-                )
-                call_edges.append(_build_call_edge(
-                    self.current_function, callee_name, callee_id, node.lineno
-                ))
-
-            self.generic_visit(node)
-
-    return FunctionCallVisitor
+        if is_external and self.external_calls is not None:
+            self.external_calls.append({
+                "from": self.current_function,
+                "to_name": callee_name,
+                "line": line,
+            })
+        else:
+            self.call_edges.append(_build_call_edge(
+                self.current_function, callee_name, callee_id, line
+            ))
 
 
 # =============================================================================
@@ -496,14 +599,17 @@ async def _set_cached_call_graph(project_root: str, data: dict) -> None:
 
 
 async def _analyze_python_files(
-    python_files: List[Path], project_root: Path,
-    functions: Dict[str, Dict], call_edges: List[Dict]
+    python_files: List[Path],
+    project_root: Path,
+    functions: Dict[str, Dict],
+    call_edges: List[Dict],
+    external_calls: Optional[List[Dict]] = None,
 ) -> None:
     """Analyze Python files and populate functions/call_edges.
 
     Issue #665: Extracted from get_call_graph to reduce function length.
+    Issue #713: Added import context extraction for cross-module resolution.
     """
-    FunctionCallVisitor = _create_function_visitor(functions, call_edges)
     for py_file in python_files[:300]:
         try:
             rel_path = str(py_file.relative_to(project_root))
@@ -515,20 +621,38 @@ async def _analyze_python_files(
                 logger.debug("Failed to read file for call graph %s: %s", py_file, e)
                 continue
             tree = ast.parse(content)
-            visitor = FunctionCallVisitor(rel_path, module_path)
+            # Issue #713: Extract import context for cross-module resolution
+            import_context = _extract_import_context(tree)
+            visitor = FunctionCallVisitor(
+                file_path=rel_path,
+                module_path=module_path,
+                functions=functions,
+                call_edges=call_edges,
+                external_calls=external_calls,
+                import_context=import_context,
+            )
             visitor.visit(tree)
         except Exception as e:
             logger.debug("Could not analyze %s: %s", py_file, e)
 
 
 def _build_call_graph_response(
-    functions: Dict, nodes: List, orphaned_nodes: List, unique_edges: List,
-    top_callers: List, top_called: List
+    functions: Dict,
+    nodes: List,
+    orphaned_nodes: List,
+    unique_edges: List,
+    top_callers: List,
+    top_called: List,
+    external_calls_count: int = 0,
 ) -> dict:
     """Build call graph response dictionary.
 
     Issue #665: Extracted from get_call_graph to reduce function length.
+    Issue #713: Added external_calls_count to show filtered library calls.
     """
+    resolved_count = len([e for e in unique_edges if e["resolved"]])
+    unresolved_count = len([e for e in unique_edges if not e["resolved"]])
+
     return {
         "status": "success",
         "call_graph": {"nodes": nodes[:500], "edges": unique_edges[:2000]},
@@ -538,8 +662,13 @@ def _build_call_graph_response(
             "connected_functions": len(nodes),
             "orphaned_functions": len(orphaned_nodes),
             "total_call_relationships": len(unique_edges),
-            "resolved_calls": len([e for e in unique_edges if e["resolved"]]),
-            "unresolved_calls": len([e for e in unique_edges if not e["resolved"]]),
+            "resolved_calls": resolved_count,
+            "unresolved_calls": unresolved_count,
+            # Issue #713: New metrics for external calls
+            "external_library_calls": external_calls_count,
+            "resolution_rate": round(
+                resolved_count / max(resolved_count + unresolved_count, 1) * 100, 1
+            ),
             "top_callers": top_callers,
             "most_called": top_called,
         },
@@ -556,7 +685,11 @@ def _build_call_graph_response(
 async def get_call_graph(
     refresh: bool = Query(False, description="Force refresh, bypass cache")
 ):
-    """Get function call graph. Issue #281/#665/#711: Refactored with caching."""
+    """Get function call graph.
+
+    Issue #281/#665/#711: Refactored with caching.
+    Issue #713: Enhanced with import-aware cross-module resolution.
+    """
     project_root = get_project_root()
 
     if not refresh:
@@ -568,8 +701,11 @@ async def get_call_graph(
     python_files = await _get_python_files(project_root)
     functions: Dict[str, Dict] = {}
     call_edges: List[Dict] = []
+    external_calls: List[Dict] = []  # Issue #713: Track external library calls
 
-    await _analyze_python_files(python_files, project_root, functions, call_edges)
+    await _analyze_python_files(
+        python_files, project_root, functions, call_edges, external_calls
+    )
 
     nodes = _build_connected_nodes(functions, call_edges)
     orphaned_nodes = _build_orphaned_nodes(functions, call_edges)
@@ -577,7 +713,13 @@ async def get_call_graph(
     top_callers, top_called = _calculate_metrics(unique_edges)
 
     response_data = _build_call_graph_response(
-        functions, nodes, orphaned_nodes, unique_edges, top_callers, top_called
+        functions,
+        nodes,
+        orphaned_nodes,
+        unique_edges,
+        top_callers,
+        top_called,
+        external_calls_count=len(external_calls),  # Issue #713
     )
     await _set_cached_call_graph(str(project_root), response_data)
 
