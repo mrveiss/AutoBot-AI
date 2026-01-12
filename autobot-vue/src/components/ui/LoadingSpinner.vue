@@ -221,21 +221,22 @@ const customStyle = computed(() => ({
   }
 }
 
+/* Issue #704: Migrated to CSS design tokens */
 /* Label */
 .loading-label {
-  font-size: 0.875rem;
-  color: #6b7280;
-  margin-top: 8px;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-top: var(--spacing-2);
   text-align: center;
 }
 
 .label-right {
   margin-top: 0;
-  margin-left: 8px;
+  margin-left: var(--spacing-2);
 }
 
 .label-bottom {
-  margin-top: 8px;
+  margin-top: var(--spacing-2);
   margin-left: 0;
 }
 

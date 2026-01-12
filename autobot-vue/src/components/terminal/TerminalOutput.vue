@@ -145,17 +145,18 @@ defineExpose({
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .terminal-output {
   flex: 1;
-  padding: 16px;
+  padding: var(--spacing-4);
   overflow-y: auto;
-  font-size: 13px;
-  line-height: 1.4;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
   white-space: pre-wrap;
   word-break: break-all;
-  background-color: #000;
-  color: #ffffff;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  background-color: var(--terminal-bg);
+  color: var(--terminal-foreground);
+  font-family: var(--font-mono);
 }
 
 .terminal-line {
@@ -165,62 +166,62 @@ defineExpose({
 }
 
 .line-error {
-  color: #ff6b6b;
+  color: var(--terminal-red);
 }
 
 .line-warning {
-  color: #ffc107;
+  color: var(--terminal-yellow);
 }
 
 .line-success {
-  color: #28a745;
+  color: var(--terminal-green);
 }
 
 .line-command {
-  color: #87ceeb;
+  color: var(--terminal-cyan);
 }
 
 .line-system {
-  color: #9370db;
+  color: var(--terminal-magenta);
 }
 
 .line-system_message {
-  color: #9370db;
-  font-weight: 500;
+  color: var(--terminal-magenta);
+  font-weight: var(--font-medium);
 }
 
 .line-automated_command {
-  color: #17a2b8;
-  font-weight: 500;
-  background-color: rgba(23, 162, 184, 0.1);
-  border-left: 3px solid #17a2b8;
-  padding-left: 8px;
+  color: var(--color-info);
+  font-weight: var(--font-medium);
+  background-color: var(--color-info-bg-transparent);
+  border-left: 3px solid var(--color-info);
+  padding-left: var(--spacing-2);
 }
 
 .line-manual_command {
-  color: #28a745;
-  font-weight: 500;
-  background-color: rgba(40, 167, 69, 0.1);
-  border-left: 3px solid #28a745;
-  padding-left: 8px;
+  color: var(--color-success);
+  font-weight: var(--font-medium);
+  background-color: var(--color-success-bg-transparent);
+  border-left: 3px solid var(--color-success);
+  padding-left: var(--spacing-2);
 }
 
 .line-workflow_info {
-  color: #6f42c1;
-  background-color: rgba(111, 66, 193, 0.1);
-  border-left: 3px solid #6f42c1;
-  padding-left: 8px;
+  color: var(--color-purple);
+  background-color: var(--color-purple-bg-transparent);
+  border-left: 3px solid var(--color-purple);
+  padding-left: var(--spacing-2);
   font-style: italic;
 }
 
 .line-command.high {
-  border-left: 3px solid #ffc107;
-  background-color: rgba(255, 193, 7, 0.1);
+  border-left: 3px solid var(--color-warning);
+  background-color: var(--color-warning-bg-transparent);
 }
 
 .line-command.critical {
-  border-left: 3px solid #dc3545;
-  background-color: rgba(220, 53, 69, 0.1);
+  border-left: 3px solid var(--color-error);
+  background-color: var(--color-error-bg-transparent);
 }
 
 /* Scrollbar styling */
@@ -229,15 +230,15 @@ defineExpose({
 }
 
 .terminal-output::-webkit-scrollbar-track {
-  background: #1e1e1e;
+  background: var(--terminal-scrollbar-track);
 }
 
 .terminal-output::-webkit-scrollbar-thumb {
-  background: #555;
-  border-radius: 4px;
+  background: var(--terminal-scrollbar-thumb);
+  border-radius: var(--radius-sm);
 }
 
 .terminal-output::-webkit-scrollbar-thumb:hover {
-  background: #777;
+  background: var(--terminal-scrollbar-thumb-hover);
 }
 </style>

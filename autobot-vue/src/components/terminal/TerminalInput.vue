@@ -219,45 +219,46 @@ defineExpose({
   flex-direction: column;
 }
 
+/* Issue #704: Migrated to CSS design tokens */
 .terminal-input-line {
   display: flex;
   align-items: center;
-  padding: 0 16px 16px 16px;
-  background-color: #000;
+  padding: 0 var(--spacing-4) var(--spacing-4) var(--spacing-4);
+  background-color: var(--terminal-bg);
 }
 
 .prompt {
-  color: #00ff00;
-  margin-right: 8px;
+  color: var(--terminal-green);
+  margin-right: var(--spacing-2);
   flex-shrink: 0;
 }
 
 .terminal-input {
   background: none;
   border: none;
-  color: #fff;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 13px;
+  color: var(--terminal-foreground);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
   outline: none;
   flex: 1;
   min-width: 0;
 }
 
 .send-button {
-  background: rgba(0, 255, 0, 0.1);
-  border: 1px solid rgba(0, 255, 0, 0.3);
-  color: #00ff00;
-  padding: 4px 8px;
-  margin-left: 8px;
-  border-radius: 4px;
+  background: var(--terminal-green-bg);
+  border: 1px solid var(--terminal-green-border);
+  color: var(--terminal-green);
+  padding: var(--spacing-1) var(--spacing-2);
+  margin-left: var(--spacing-2);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
+  font-size: var(--text-sm);
+  transition: all var(--duration-200) var(--ease-in-out);
 }
 
 .send-button:hover:not(:disabled) {
-  background: rgba(0, 255, 0, 0.2);
-  border-color: rgba(0, 255, 0, 0.5);
+  background: var(--terminal-green-bg-hover);
+  border-color: var(--terminal-green-border-hover);
 }
 
 .send-button:disabled {
@@ -266,8 +267,8 @@ defineExpose({
 }
 
 .cursor {
-  color: #00ff00;
-  font-weight: bold;
+  color: var(--terminal-green);
+  font-weight: var(--font-bold);
   margin-left: 2px;
 }
 
@@ -279,45 +280,45 @@ defineExpose({
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #2d2d2d;
-  padding: 6px 16px;
-  border-top: 1px solid #333;
-  font-size: 11px;
+  background-color: var(--terminal-header-bg);
+  padding: var(--spacing-1-5) var(--spacing-4);
+  border-top: 1px solid var(--terminal-border);
+  font-size: var(--text-xs);
 }
 
 .footer-info {
-  color: #888;
+  color: var(--terminal-muted);
 }
 
 .footer-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .footer-button {
-  background-color: #444;
-  border: 1px solid #666;
-  color: #ccc;
-  padding: 3px 8px;
-  border-radius: 3px;
+  background-color: var(--terminal-button-bg);
+  border: 1px solid var(--terminal-button-border);
+  color: var(--terminal-button-text);
+  padding: 3px var(--spacing-2);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 10px;
-  transition: background-color 0.2s;
+  transition: background-color var(--duration-200) var(--ease-in-out);
 }
 
 .footer-button:hover {
-  background-color: #555;
+  background-color: var(--terminal-button-bg-hover);
 }
 
 .footer-button.workflow-test {
-  background-color: #17a2b8;
-  border-color: #138496;
-  color: white;
-  font-weight: 600;
+  background-color: var(--color-info);
+  border-color: var(--color-info-hover);
+  color: var(--text-on-primary);
+  font-weight: var(--font-semibold);
 }
 
 .footer-button.workflow-test:hover {
-  background-color: #138496;
+  background-color: var(--color-info-hover);
 }
 
 @keyframes blink {
