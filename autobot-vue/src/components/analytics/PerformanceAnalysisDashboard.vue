@@ -595,6 +595,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .performance-dashboard {
   padding: 1.5rem;
   display: flex;
@@ -898,10 +899,10 @@ onMounted(() => {
   background: var(--bg-quaternary);
 }
 
-.issue-card.critical { border-left-color: #ef4444; }
-.issue-card.high { border-left-color: #f59e0b; }
-.issue-card.medium { border-left-color: #eab308; }
-.issue-card.low { border-left-color: #22c55e; }
+.issue-card.critical { border-left-color: var(--color-error); }
+.issue-card.high { border-left-color: var(--color-warning); }
+.issue-card.medium { border-left-color: var(--color-warning-light); }
+.issue-card.low { border-left-color: var(--color-success); }
 
 .issue-header {
   display: flex;
@@ -1107,13 +1108,13 @@ onMounted(() => {
 }
 
 .hotspot-stats .stat.critical {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .hotspot-stats .stat.high {
-  background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .hotspot-stats .stat.total {
@@ -1168,10 +1169,10 @@ onMounted(() => {
   transition: width 0.3s;
 }
 
-.bar-fill.critical { background: #ef4444; }
-.bar-fill.high { background: #f59e0b; }
-.bar-fill.medium { background: #eab308; }
-.bar-fill.low { background: #22c55e; }
+.bar-fill.critical { background: var(--color-error); }
+.bar-fill.high { background: var(--color-warning); }
+.bar-fill.medium { background: var(--color-warning-light); }
+.bar-fill.low { background: var(--color-success); }
 
 .bar-value {
   width: 40px;

@@ -601,6 +601,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .precommit-dashboard {
   padding: 1.5rem;
   display: flex;
@@ -675,12 +676,12 @@ onMounted(() => {
 }
 
 .action-btn.danger {
-  background: #ef4444;
-  color: white;
+  background: var(--color-error);
+  color: var(--text-on-primary);
 }
 
 .action-btn.danger:hover:not(:disabled) {
-  background: #dc2626;
+  background: var(--color-error-hover);
 }
 
 .action-btn.text {
@@ -718,13 +719,13 @@ onMounted(() => {
 }
 
 .status-banner.installed {
-  background: rgba(16, 185, 129, 0.1);
-  border-color: rgba(16, 185, 129, 0.3);
+  background: var(--color-success-bg);
+  border-color: var(--color-success-border);
 }
 
 .status-banner.not-installed {
-  background: rgba(245, 158, 11, 0.1);
-  border-color: rgba(245, 158, 11, 0.3);
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
 }
 
 .status-icon {
@@ -764,15 +765,15 @@ onMounted(() => {
 }
 
 .summary-card.success {
-  border-color: rgba(16, 185, 129, 0.5);
+  border-color: var(--color-success-border);
 }
 
 .summary-card.error {
-  border-color: rgba(239, 68, 68, 0.5);
+  border-color: var(--color-error-border);
 }
 
 .summary-card.warning {
-  border-color: rgba(245, 158, 11, 0.5);
+  border-color: var(--color-warning-border);
 }
 
 .card-icon {
@@ -866,15 +867,15 @@ onMounted(() => {
 }
 
 .result-card.block {
-  border-left-color: #ef4444;
+  border-left-color: var(--color-error);
 }
 
 .result-card.warn {
-  border-left-color: #eab308;
+  border-left-color: var(--color-warning);
 }
 
 .result-card.info {
-  border-left-color: #3b82f6;
+  border-left-color: var(--color-info);
 }
 
 .result-header {
@@ -934,7 +935,7 @@ onMounted(() => {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.75rem;
-  color: #10b981;
+  color: var(--color-success);
 }
 
 /* Config Panel */
@@ -1059,18 +1060,18 @@ onMounted(() => {
 }
 
 .severity-indicator.block {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .severity-indicator.warn {
-  background: rgba(234, 179, 8, 0.15);
-  color: #eab308;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .severity-indicator.info {
-  background: rgba(59, 130, 246, 0.15);
-  color: #3b82f6;
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 /* History Panel */
@@ -1100,11 +1101,11 @@ onMounted(() => {
 }
 
 .history-item.failed {
-  border-left: 3px solid #ef4444;
+  border-left: 3px solid var(--color-error);
 }
 
 .history-item.passed {
-  border-left: 3px solid #10b981;
+  border-left: 3px solid var(--color-success);
 }
 
 .history-status {
@@ -1140,8 +1141,8 @@ onMounted(() => {
 }
 
 .stat.failed {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .stat.duration {

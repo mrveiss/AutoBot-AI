@@ -91,6 +91,7 @@ const getPriorityVariant = (priority: string) => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .section-header-content {
   display: flex;
   justify-content: space-between;
@@ -100,54 +101,54 @@ const getPriorityVariant = (priority: string) => {
 
 .section-header-content h4 {
   margin: 0;
-  color: #333;
+  color: var(--text-primary);
   font-size: 1.2em;
 }
 
 .recommendations-list {
-  padding: 20px;
+  padding: var(--spacing-5);
 }
 
 .recommendation-card {
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  padding: 15px;
-  margin-bottom: 15px;
-  background: #fafafa;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-4);
+  margin-bottom: var(--spacing-4);
+  background: var(--bg-secondary);
 }
 
-.recommendation-card.high { border-left: 4px solid #f44336; }
-.recommendation-card.medium { border-left: 4px solid #ff9800; }
-.recommendation-card.low { border-left: 4px solid #2196f3; }
+.recommendation-card.high { border-left: 4px solid var(--color-error); }
+.recommendation-card.medium { border-left: 4px solid var(--color-warning); }
+.recommendation-card.low { border-left: 4px solid var(--color-info); }
 
 .rec-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: var(--spacing-2-5);
+  margin-bottom: var(--spacing-2-5);
 }
 
 .category {
-  font-size: 0.8em;
-  color: #666;
-  font-weight: 500;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  font-weight: var(--font-medium);
 }
 
 .rec-content p {
-  margin: 8px 0;
-  font-size: 0.9em;
-  line-height: 1.4;
+  margin: var(--spacing-2) 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
 }
 
 .no-recommendations {
-  padding: 40px 20px;
+  padding: var(--spacing-10) var(--spacing-5);
   text-align: center;
-  color: #4caf50;
+  color: var(--color-success);
 }
 
 .no-recommendations i {
-  font-size: 2em;
-  margin-bottom: 10px;
+  font-size: var(--text-2xl);
+  margin-bottom: var(--spacing-2-5);
   display: block;
 }
 </style>

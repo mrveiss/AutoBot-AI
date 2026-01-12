@@ -102,98 +102,99 @@ const formatTimestamp = (timestamp: number) => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .alerts-list {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: var(--spacing-4);
 }
 
 .alert-item {
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  padding: 15px;
-  background: #fafafa;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-4);
+  background: var(--bg-secondary);
 }
 
-.alert-item.critical { border-left: 4px solid #f44336; }
-.alert-item.high { border-left: 4px solid #e53935; }
-.alert-item.warning { border-left: 4px solid #ff9800; }
-.alert-item.info { border-left: 4px solid #2196f3; }
+.alert-item.critical { border-left: 4px solid var(--color-error-hover); }
+.alert-item.high { border-left: 4px solid var(--color-error); }
+.alert-item.warning { border-left: 4px solid var(--color-warning); }
+.alert-item.info { border-left: 4px solid var(--color-info); }
 
 .alert-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: var(--spacing-2-5);
+  margin-bottom: var(--spacing-2-5);
 }
 
 .category {
-  font-size: 0.8em;
-  color: #666;
-  font-weight: 500;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  font-weight: var(--font-medium);
 }
 
 .timestamp {
-  font-size: 0.8em;
-  color: #666;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
   margin-left: auto;
 }
 
 .alert-message {
-  font-size: 0.9em;
-  margin-bottom: 8px;
-  color: #333;
+  font-size: var(--text-sm);
+  margin-bottom: var(--spacing-2);
+  color: var(--text-primary);
 }
 
 .alert-recommendation {
-  font-size: 0.85em;
-  color: #666;
-  line-height: 1.4;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: var(--leading-relaxed);
 }
 
 /* Issue #474: AlertManager-specific styles */
 .source-badge {
-  font-size: 0.7em;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-weight: 500;
+  font-size: var(--text-xs);
+  padding: var(--spacing-px) var(--spacing-1-5);
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-medium);
 }
 
 .source-badge.alertmanager {
-  background: #e3f2fd;
-  color: #1565c0;
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .source-badge.autobot_monitor {
-  background: #fce4ec;
-  color: #c62828;
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .alert-description {
-  font-size: 0.85em;
-  color: #555;
-  margin-bottom: 8px;
-  padding: 8px;
-  background: #f5f5f5;
-  border-radius: 4px;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-2);
+  padding: var(--spacing-2);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
 }
 
 .alert-name {
-  font-size: 0.75em;
-  color: #888;
-  margin-top: 8px;
-  font-family: monospace;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  margin-top: var(--spacing-2);
+  font-family: var(--font-mono);
 }
 
 .no-alerts {
   text-align: center;
-  padding: 40px 20px;
-  color: #4caf50;
+  padding: var(--spacing-10) var(--spacing-5);
+  color: var(--color-success);
 }
 
 .no-alerts i {
-  font-size: 2em;
-  margin-bottom: 10px;
+  font-size: var(--text-2xl);
+  margin-bottom: var(--spacing-2-5);
   display: block;
 }
 </style>
