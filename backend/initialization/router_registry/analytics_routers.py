@@ -24,7 +24,7 @@ ANALYTICS_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     # Core analytics
     ("backend.api.analytics", "/analytics", ["analytics"], "analytics"),
     ("backend.api.codebase_analytics", "/analytics", ["codebase-analytics"], "codebase_analytics"),
-    ("backend.api.analytics_unified", "", ["unified-analytics", "analytics"], "analytics_unified"),
+    ("backend.api.analytics_reporting", "", ["analytics-reporting", "analytics"], "analytics_reporting"),  # Issue #708: renamed from analytics_unified
     # Code analysis
     ("backend.api.analytics_evolution", "/evolution", ["code-evolution", "analytics"], "analytics_evolution"),  # Issue #570: Fix prefix
     ("backend.api.analytics_debt", "/debt", ["technical-debt", "analytics"], "analytics_debt"),  # Issue #570: Fix prefix
@@ -48,7 +48,7 @@ ANALYTICS_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("backend.api.analytics_pattern_learning", "/pattern-learning", ["pattern-learning", "analytics", "self-improving"], "analytics_pattern_learning"),
     ("backend.api.analytics_continuous_learning", "/continuous-learning", ["continuous-learning", "analytics", "learning"], "analytics_continuous_learning"),
     # Advanced analytics - Issue #59
-    ("backend.api.analytics_advanced", "", ["advanced-analytics", "analytics", "bi"], "analytics_advanced"),
+    ("backend.api.analytics_maintenance", "", ["analytics-maintenance", "analytics", "bi"], "analytics_maintenance"),  # Issue #708: renamed from analytics_advanced
 ]
 
 

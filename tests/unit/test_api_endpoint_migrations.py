@@ -11450,7 +11450,7 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
     # Test 1: execute_enhanced_goal decorator presence
     def test_execute_enhanced_goal_decorator_present(self):
         """Test execute_enhanced_goal has @with_error_handling decorator"""
-        from backend.api.agent_enhanced import execute_enhanced_goal
+        from backend.api.agent import execute_enhanced_goal
 
         source = inspect.getsource(execute_enhanced_goal)
         self.assertIn(
@@ -11472,7 +11472,7 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
     # Test 2: execute_enhanced_goal Mixed Pattern compliance
     def test_execute_enhanced_goal_mixed_pattern(self):
         """Test execute_enhanced_goal uses Mixed Pattern - preserves nested try-catches"""
-        from backend.api.agent_enhanced import execute_enhanced_goal
+        from backend.api.agent import execute_enhanced_goal
 
         source = inspect.getsource(execute_enhanced_goal)
         # Should have nested try-catches for: agent list, KB enhancement, AIStackError
@@ -11490,7 +11490,7 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
     # Test 3: execute_enhanced_goal business logic preserved
     def test_execute_enhanced_goal_business_logic(self):
         """Test execute_enhanced_goal preserves business logic - HTTPException for unavailable agents"""
-        from backend.api.agent_enhanced import execute_enhanced_goal
+        from backend.api.agent import execute_enhanced_goal
 
         source = inspect.getsource(execute_enhanced_goal)
         # Should raise HTTPException for unavailable agents
@@ -11505,7 +11505,7 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
     # Test 4: coordinate_multi_agent_task decorator presence
     def test_coordinate_multi_agent_task_decorator_present(self):
         """Test coordinate_multi_agent_task has @with_error_handling decorator"""
-        from backend.api.agent_enhanced import coordinate_multi_agent_task
+        from backend.api.agent import coordinate_multi_agent_task
 
         source = inspect.getsource(coordinate_multi_agent_task)
         self.assertIn(
@@ -11527,7 +11527,7 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
     # Test 5: coordinate_multi_agent_task Mixed Pattern compliance
     def test_coordinate_multi_agent_task_mixed_pattern(self):
         """Test coordinate_multi_agent_task uses Mixed Pattern - preserves AIStackError handling"""
-        from backend.api.agent_enhanced import coordinate_multi_agent_task
+        from backend.api.agent import coordinate_multi_agent_task
 
         source = inspect.getsource(coordinate_multi_agent_task)
         # Should have try-except AIStackError
@@ -11538,7 +11538,7 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
     # Test 6: coordinate_multi_agent_task business logic preserved
     def test_coordinate_multi_agent_task_business_logic(self):
         """Test coordinate_multi_agent_task preserves business logic - validates agent availability"""
-        from backend.api.agent_enhanced import coordinate_multi_agent_task
+        from backend.api.agent import coordinate_multi_agent_task
 
         source = inspect.getsource(coordinate_multi_agent_task)
         # Should validate agent availability
@@ -11552,7 +11552,7 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
     # Test 7: comprehensive_research_task decorator presence
     def test_comprehensive_research_task_decorator_present(self):
         """Test comprehensive_research_task has @with_error_handling decorator"""
-        from backend.api.agent_enhanced import comprehensive_research_task
+        from backend.api.agent import comprehensive_research_task
 
         source = inspect.getsource(comprehensive_research_task)
         self.assertIn(
@@ -11574,7 +11574,7 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
     # Test 8: comprehensive_research_task Mixed Pattern compliance
     def test_comprehensive_research_task_mixed_pattern(self):
         """Test comprehensive_research_task uses Mixed Pattern - preserves nested try-catches"""
-        from backend.api.agent_enhanced import comprehensive_research_task
+        from backend.api.agent import comprehensive_research_task
 
         source = inspect.getsource(comprehensive_research_task)
         # Should have outer try-except AIStackError
@@ -11591,7 +11591,7 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
     # Test 9: comprehensive_research_task business logic preserved
     def test_comprehensive_research_task_business_logic(self):
         """Test comprehensive_research_task preserves business logic - research agents and KB integration"""
-        from backend.api.agent_enhanced import comprehensive_research_task
+        from backend.api.agent import comprehensive_research_task
 
         source = inspect.getsource(comprehensive_research_task)
         # Should setup research agents
@@ -11606,7 +11606,7 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
     # Test 10: Batch 70 consistency - all endpoints use same error category
     def test_batch70_error_category_consistency(self):
         """Test all batch 70 endpoints use SERVER_ERROR category"""
-        from backend.api.agent_enhanced import (
+        from backend.api.agent import (
             comprehensive_research_task,
             coordinate_multi_agent_task,
             execute_enhanced_goal,
@@ -11627,7 +11627,7 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
     # Test 11: Batch 70 consistency - all endpoints use same error code prefix
     def test_batch70_error_prefix_consistency(self):
         """Test all batch 70 endpoints use AGENT_ENHANCED error code prefix"""
-        from backend.api.agent_enhanced import (
+        from backend.api.agent import (
             comprehensive_research_task,
             coordinate_multi_agent_task,
             execute_enhanced_goal,
@@ -11648,7 +11648,7 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
     # Test 12: Batch 70 consistency - all endpoints follow Mixed Pattern
     def test_batch70_mixed_pattern_consistency(self):
         """Test all batch 70 endpoints follow Mixed Pattern (have nested error handling)"""
-        from backend.api.agent_enhanced import (
+        from backend.api.agent import (
             comprehensive_research_task,
             coordinate_multi_agent_task,
             execute_enhanced_goal,
@@ -11670,7 +11670,7 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
     # Test 13: Batch 70 consistency - all decorators before function definition
     def test_batch70_decorator_placement(self):
         """Test all batch 70 decorators are placed before async def"""
-        from backend.api.agent_enhanced import (
+        from backend.api.agent import (
             comprehensive_research_task,
             coordinate_multi_agent_task,
             execute_enhanced_goal,
@@ -11693,7 +11693,7 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
     # Test 14: Batch 70 AIStackError handling preservation
     def test_batch70_ai_stack_error_handling(self):
         """Test batch 70 endpoints preserve AIStackError specific handling"""
-        from backend.api.agent_enhanced import (
+        from backend.api.agent import (
             comprehensive_research_task,
             coordinate_multi_agent_task,
             execute_enhanced_goal,
@@ -11723,7 +11723,7 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
 
     def test_analyze_development_task_decorator_present(self):
         """Test analyze_development_task has @with_error_handling decorator"""
-        from backend.api.agent_enhanced import analyze_development_task
+        from backend.api.agent import analyze_development_task
 
         source = inspect.getsource(analyze_development_task)
         self.assertIn("@with_error_handling", source)
@@ -11732,7 +11732,7 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
 
     def test_analyze_development_task_mixed_pattern(self):
         """Test analyze_development_task uses Mixed Pattern - preserves nested try-catch"""
-        from backend.api.agent_enhanced import analyze_development_task
+        from backend.api.agent import analyze_development_task
 
         source = inspect.getsource(analyze_development_task)
         # Should have nested try-catch for AIStackError
@@ -11744,7 +11744,7 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
 
     def test_analyze_development_task_ai_stack_error_handling(self):
         """Test analyze_development_task preserves AIStackError specific handling"""
-        from backend.api.agent_enhanced import analyze_development_task
+        from backend.api.agent import analyze_development_task
 
         source = inspect.getsource(analyze_development_task)
         self.assertIn("except AIStackError", source)
@@ -11752,7 +11752,7 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
 
     def test_list_available_agents_decorator_present(self):
         """Test list_available_agents has @with_error_handling decorator"""
-        from backend.api.agent_enhanced import list_available_agents
+        from backend.api.agent import list_available_agents
 
         source = inspect.getsource(list_available_agents)
         self.assertIn("@with_error_handling", source)
@@ -11761,7 +11761,7 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
 
     def test_list_available_agents_mixed_pattern(self):
         """Test list_available_agents uses Mixed Pattern - preserves nested try-catch"""
-        from backend.api.agent_enhanced import list_available_agents
+        from backend.api.agent import list_available_agents
 
         source = inspect.getsource(list_available_agents)
         # Should have nested try-catch for AIStackError
@@ -11773,7 +11773,7 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
 
     def test_list_available_agents_ai_stack_error_handling(self):
         """Test list_available_agents preserves AIStackError specific handling"""
-        from backend.api.agent_enhanced import list_available_agents
+        from backend.api.agent import list_available_agents
 
         source = inspect.getsource(list_available_agents)
         self.assertIn("except AIStackError", source)
@@ -11781,7 +11781,7 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
 
     def test_get_agents_status_decorator_present(self):
         """Test get_agents_status has @with_error_handling decorator"""
-        from backend.api.agent_enhanced import get_agents_status
+        from backend.api.agent import get_agents_status
 
         source = inspect.getsource(get_agents_status)
         self.assertIn("@with_error_handling", source)
@@ -11790,7 +11790,7 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
 
     def test_get_agents_status_mixed_pattern(self):
         """Test get_agents_status uses Mixed Pattern - preserves nested try-catch"""
-        from backend.api.agent_enhanced import get_agents_status
+        from backend.api.agent import get_agents_status
 
         source = inspect.getsource(get_agents_status)
         # Should have nested try-catch for AIStackError
@@ -11802,7 +11802,7 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
 
     def test_get_agents_status_ai_stack_error_handling(self):
         """Test get_agents_status preserves AIStackError specific handling"""
-        from backend.api.agent_enhanced import get_agents_status
+        from backend.api.agent import get_agents_status
 
         source = inspect.getsource(get_agents_status)
         self.assertIn("except AIStackError", source)
@@ -11810,7 +11810,7 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch71_decorator_placement(self):
         """Test batch 71 endpoints have decorators in correct order"""
-        from backend.api.agent_enhanced import (
+        from backend.api.agent import (
             analyze_development_task,
             get_agents_status,
             list_available_agents,
@@ -11833,7 +11833,7 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch71_error_category_consistency(self):
         """Test batch 71 endpoints all use ErrorCategory.SERVER_ERROR"""
-        from backend.api.agent_enhanced import (
+        from backend.api.agent import (
             analyze_development_task,
             get_agents_status,
             list_available_agents,
@@ -11853,7 +11853,7 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch71_error_prefix_consistency(self):
         """Test batch 71 endpoints all use AGENT_ENHANCED prefix"""
-        from backend.api.agent_enhanced import (
+        from backend.api.agent import (
             analyze_development_task,
             get_agents_status,
             list_available_agents,
@@ -11873,7 +11873,7 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch71_mixed_pattern_consistency(self):
         """Test batch 71 endpoints all use Mixed Pattern (preserve nested try-catch)"""
-        from backend.api.agent_enhanced import (
+        from backend.api.agent import (
             analyze_development_task,
             get_agents_status,
             list_available_agents,
@@ -11894,7 +11894,7 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch71_ai_stack_error_handling(self):
         """Test batch 71 endpoints preserve AIStackError specific handling"""
-        from backend.api.agent_enhanced import (
+        from backend.api.agent import (
             analyze_development_task,
             get_agents_status,
             list_available_agents,
@@ -11923,7 +11923,7 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_receive_goal_compat_decorator_present(self):
         """Test receive_goal_compat has @with_error_handling decorator"""
-        from backend.api.agent_enhanced import receive_goal_compat
+        from backend.api.agent import receive_goal_compat
 
         source = inspect.getsource(receive_goal_compat)
         self.assertIn("@with_error_handling", source)
@@ -11932,7 +11932,7 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_receive_goal_compat_mixed_pattern(self):
         """Test receive_goal_compat uses Mixed Pattern - preserves outer try-catch"""
-        from backend.api.agent_enhanced import receive_goal_compat
+        from backend.api.agent import receive_goal_compat
 
         source = inspect.getsource(receive_goal_compat)
         # Should preserve outer try-catch for fallback behavior
@@ -11944,7 +11944,7 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_receive_goal_compat_fallback_logic(self):
         """Test receive_goal_compat preserves fallback business logic"""
-        from backend.api.agent_enhanced import receive_goal_compat
+        from backend.api.agent import receive_goal_compat
 
         source = inspect.getsource(receive_goal_compat)
         # Should have fallback behavior on exception
@@ -11953,7 +11953,7 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_enhanced_agent_health_decorator_present(self):
         """Test enhanced_agent_health has @with_error_handling decorator"""
-        from backend.api.agent_enhanced import enhanced_agent_health
+        from backend.api.agent import enhanced_agent_health
 
         source = inspect.getsource(enhanced_agent_health)
         self.assertIn("@with_error_handling", source)
@@ -11962,7 +11962,7 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_enhanced_agent_health_mixed_pattern(self):
         """Test enhanced_agent_health uses Mixed Pattern - preserves outer try-catch"""
-        from backend.api.agent_enhanced import enhanced_agent_health
+        from backend.api.agent import enhanced_agent_health
 
         source = inspect.getsource(enhanced_agent_health)
         # Should preserve outer try-catch for degraded status business logic
@@ -11974,7 +11974,7 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_enhanced_agent_health_degraded_logic(self):
         """Test enhanced_agent_health preserves degraded status business logic"""
-        from backend.api.agent_enhanced import enhanced_agent_health
+        from backend.api.agent import enhanced_agent_health
 
         source = inspect.getsource(enhanced_agent_health)
         # Should return degraded status on exception
@@ -11983,7 +11983,7 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch72_decorator_placement(self):
         """Test batch 72 endpoints have decorators in correct order"""
-        from backend.api.agent_enhanced import (
+        from backend.api.agent import (
             enhanced_agent_health,
             receive_goal_compat,
         )
@@ -12001,7 +12001,7 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch72_error_category_consistency(self):
         """Test batch 72 endpoints all use ErrorCategory.SERVER_ERROR"""
-        from backend.api.agent_enhanced import (
+        from backend.api.agent import (
             enhanced_agent_health,
             receive_goal_compat,
         )
@@ -12016,7 +12016,7 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch72_error_prefix_consistency(self):
         """Test batch 72 endpoints all use AGENT_ENHANCED prefix"""
-        from backend.api.agent_enhanced import (
+        from backend.api.agent import (
             enhanced_agent_health,
             receive_goal_compat,
         )
@@ -12031,7 +12031,7 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch72_mixed_pattern_consistency(self):
         """Test batch 72 endpoints all use Mixed Pattern (preserve outer try-catch)"""
-        from backend.api.agent_enhanced import (
+        from backend.api.agent import (
             enhanced_agent_health,
             receive_goal_compat,
         )
@@ -12047,7 +12047,7 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch72_business_logic_preservation(self):
         """Test batch 72 endpoints preserve business logic (fallback/degraded responses)"""
-        from backend.api.agent_enhanced import (
+        from backend.api.agent import (
             enhanced_agent_health,
             receive_goal_compat,
         )

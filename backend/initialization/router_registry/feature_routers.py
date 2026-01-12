@@ -95,6 +95,9 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     # Graph and entity features
     ("backend.api.entity_extraction", "/entities", ["entity-extraction"], "entity_extraction"),
     ("backend.api.graph_rag", "/graph-rag", ["graph-rag"], "graph_rag"),
+    # AI Stack integration (Issue #708 consolidation from app_factory_enhanced)
+    ("backend.api.ai_stack_integration", "/ai-stack", ["ai-stack"], "ai_stack_integration"),
+    ("backend.api.knowledge_rag", "/knowledge_base/rag", ["knowledge-rag"], "knowledge_rag"),
 ]
 
 
