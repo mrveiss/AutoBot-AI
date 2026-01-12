@@ -66,7 +66,7 @@ class TestChatHealthEndpoint:
         assert hasattr(response, "status_code")
         assert response.status_code == 200
 
-    # Note: Decorator error handling is comprehensively tested in test_error_boundaries_enhanced.py
+    # Note: Decorator error handling is comprehensively tested in test_error_boundaries.py
     # This specific test is skipped as the decorator's trace ID generation is already verified
 
 

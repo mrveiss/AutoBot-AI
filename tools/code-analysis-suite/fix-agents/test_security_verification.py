@@ -141,8 +141,8 @@ def test_file_integrity(file_path: str) -> bool:
 def main():
     """Run comprehensive security fix verification."""
     if len(sys.argv) != 2:
-        logger.info("Usage: python test_security_fix.py <html_file_path>")
-        logger.info("Example: python test_security_fix.py tests/playwright-report/index.html")
+        logger.info("Usage: python test_security_verification.py <html_file_path>")
+        logger.info("Example: python test_security_verification.py tests/playwright-report/index.html")
         sys.exit(1)
 
     file_path = sys.argv[1]
