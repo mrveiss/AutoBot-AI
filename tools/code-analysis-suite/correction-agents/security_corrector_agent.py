@@ -632,8 +632,8 @@ class SecurityFixAgent:
 def main():
     """Main entry point."""
     if len(sys.argv) != 2:
-        logger.info("Usage: python security_fix_agent.py <file_or_directory_path>")
-        logger.info("Example: python security_fix_agent.py /path/to/playwright-report/")
+        logger.info("Usage: python security_corrector_agent.py <file_or_directory_path>")
+        logger.info("Example: python security_corrector_agent.py /path/to/playwright-report/")
         sys.exit(1)
 
     target_path = sys.argv[1]

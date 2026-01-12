@@ -549,7 +549,7 @@ To restore original files:
 cp .accessibility-fix-backups/ComponentName.vue.YYYYMMDD_HHMMSS.backup autobot-vue/src/components/ComponentName.vue
 
 # Restore all files (if needed)
-python3 code-analysis-suite/fix-agents/restore_accessibility_backups.py
+python3 code-analysis-suite/correction-agents/restore_accessibility_backups.py
 ```
 
 ## Next Steps
