@@ -55,6 +55,7 @@ from src.utils.file_categorization import (
 
 from .analyzers import analyze_python_file, analyze_javascript_vue_file, analyze_documentation_file
 from .storage import get_code_collection_async, get_redis_connection_async
+from .types import FileAnalysisResult, ParallelProcessingStats
 
 logger = logging.getLogger(__name__)
 
@@ -155,6 +156,23 @@ try:
 except ValueError:
     logger.warning("Invalid CODEBASE_INDEX_EMBED_BATCH_SIZE, using default 100")
     EMBEDDING_BATCH_SIZE = 100
+
+# Issue #711: Parallel file processing concurrency
+# Controls how many files can be analyzed concurrently during scanning
+# Higher values = faster scanning but more memory/CPU usage
+# Default: 50, Range: 1-200
+try:
+    _parallel_concurrency = int(os.getenv("CODEBASE_INDEX_PARALLEL_FILES", "50"))
+    PARALLEL_FILE_CONCURRENCY = max(1, min(_parallel_concurrency, 200))
+except ValueError:
+    logger.warning("Invalid CODEBASE_INDEX_PARALLEL_FILES, using default 50")
+    PARALLEL_FILE_CONCURRENCY = 50
+
+# Issue #711: Enable parallel file processing mode
+# When True, files are processed in parallel using asyncio.gather with semaphore
+# When False, falls back to sequential processing (original behavior)
+# Default: True (parallel mode enabled)
+PARALLEL_MODE_ENABLED = os.getenv("CODEBASE_PARALLEL_MODE", "true").lower() == "true"
 
 # Redis key prefix for file hashes (used for incremental indexing)
 FILE_HASH_REDIS_PREFIX = "codebase:file_hash:"
@@ -1420,6 +1438,476 @@ def _calculate_analysis_statistics(analysis_results: Dict) -> None:
 # =============================================================================
 
 
+# =============================================================================
+# Issue #711: Parallel File Processing Functions
+# =============================================================================
+
+
+def _determine_analyzer_type(extension: str) -> Tuple[Optional[str], str]:
+    """
+    Determine analyzer type and stat key from file extension.
+
+    Issue #711: Extracted helper for _analyze_single_file.
+
+    Args:
+        extension: File extension (lowercase, e.g., ".py")
+
+    Returns:
+        Tuple of (analyzer_type, stat_key)
+    """
+    for ext_set, s_key, a_type in _FILE_TYPE_MAP:
+        if extension in ext_set:
+            return a_type, s_key
+    return None, "other_files"
+
+
+async def _run_file_analyzer(
+    file_path: Path,
+    analyzer_type: Optional[str],
+) -> Optional[Dict]:
+    """
+    Run the appropriate analyzer for a file.
+
+    Issue #711: Extracted helper for _analyze_single_file.
+
+    Args:
+        file_path: Path to the file to analyze
+        analyzer_type: Type of analyzer ("python", "js", "doc", None)
+
+    Returns:
+        Analysis dict or None if no analyzer or error
+    """
+    try:
+        if analyzer_type == "python":
+            return await analyze_python_file(str(file_path))
+        elif analyzer_type == "js":
+            return await asyncio.to_thread(
+                analyze_javascript_vue_file, str(file_path)
+            )
+        elif analyzer_type == "doc":
+            return await asyncio.to_thread(
+                analyze_documentation_file, str(file_path)
+            )
+    except Exception as e:
+        logger.debug("Error analyzing file %s: %s", file_path, e)
+    return None
+
+
+def _enrich_items_with_metadata(
+    items: List[Dict],
+    relative_path: str,
+    file_category: str,
+) -> List[Dict]:
+    """
+    Add file_path and file_category to analysis items.
+
+    Issue #711: Extracted helper for _build_file_analysis_result.
+
+    Args:
+        items: List of item dicts (functions, classes, etc.)
+        relative_path: Relative path to add
+        file_category: Category to add
+
+    Returns:
+        New list with enriched items
+    """
+    enriched = []
+    for item in items:
+        item_copy = dict(item)
+        item_copy["file_path"] = relative_path
+        item_copy["file_category"] = file_category
+        enriched.append(item_copy)
+    return enriched
+
+
+def _build_file_analysis_result(
+    file_path: Path,
+    relative_path: str,
+    extension: str,
+    file_category: str,
+    file_hash: str,
+    file_analysis: Dict,
+    analyzer_type: Optional[str],
+    stat_key: str,
+) -> FileAnalysisResult:
+    """
+    Build FileAnalysisResult from analysis dict.
+
+    Issue #711: Extracted helper for _analyze_single_file.
+    """
+    return FileAnalysisResult(
+        file_path=file_path,
+        relative_path=relative_path,
+        extension=extension,
+        file_category=file_category,
+        was_processed=True,
+        was_skipped_unchanged=False,
+        file_hash=file_hash,
+        functions=_enrich_items_with_metadata(
+            file_analysis.get("functions", []), relative_path, file_category
+        ),
+        classes=_enrich_items_with_metadata(
+            file_analysis.get("classes", []), relative_path, file_category
+        ),
+        imports=file_analysis.get("imports", []),
+        hardcodes=_enrich_items_with_metadata(
+            file_analysis.get("hardcodes", []), relative_path, file_category
+        ),
+        problems=_enrich_items_with_metadata(
+            file_analysis.get("problems", []), relative_path, file_category
+        ),
+        technical_debt=file_analysis.get("technical_debt", []),
+        line_count=file_analysis.get("line_count", 0),
+        code_lines=file_analysis.get("code_lines", 0),
+        comment_lines=file_analysis.get("comment_lines", 0),
+        docstring_lines=file_analysis.get("docstring_lines", 0),
+        blank_lines=file_analysis.get("blank_lines", 0),
+        documentation_lines=file_analysis.get("documentation_lines", 0),
+        analyzer_type=analyzer_type,
+        stat_key=stat_key,
+    )
+
+
+async def _analyze_single_file(
+    file_path: Path,
+    root_path_obj: Path,
+    redis_client=None,
+) -> FileAnalysisResult:
+    """
+    Analyze a single file and return immutable FileAnalysisResult.
+
+    Issue #711: This function does NOT mutate any shared state.
+    All results are returned in a FileAnalysisResult dataclass,
+    enabling safe parallel processing with asyncio.gather().
+    """
+    extension = file_path.suffix.lower()
+    relative_path = str(file_path.relative_to(root_path_obj))
+    file_category = _get_file_category(file_path)
+
+    # Base result for invalid/skipped files
+    base_result = FileAnalysisResult(
+        file_path=file_path,
+        relative_path=relative_path,
+        extension=extension,
+        file_category=file_category,
+    )
+
+    # Check if file exists and is not in skip directories
+    try:
+        is_file = await _run_in_indexing_thread(file_path.is_file)
+    except Exception as e:
+        logger.debug("Error checking if path is file %s: %s", file_path, e)
+        return base_result
+
+    if not is_file or any(skip_dir in file_path.parts for skip_dir in SKIP_DIRS):
+        return base_result
+
+    # Check if file needs reindexing (Issue #539)
+    needs_reindex, current_hash = await _file_needs_reindex(
+        file_path, relative_path, redis_client
+    )
+    if not needs_reindex:
+        return FileAnalysisResult(
+            file_path=file_path, relative_path=relative_path, extension=extension,
+            file_category=file_category, was_processed=False,
+            was_skipped_unchanged=True, file_hash=current_hash,
+        )
+
+    # Determine analyzer and run analysis
+    analyzer_type, stat_key = _determine_analyzer_type(extension)
+    file_analysis = await _run_file_analyzer(file_path, analyzer_type)
+
+    # Build result
+    if file_analysis:
+        result = _build_file_analysis_result(
+            file_path, relative_path, extension, file_category,
+            current_hash, file_analysis, analyzer_type, stat_key
+        )
+    else:
+        result = FileAnalysisResult(
+            file_path=file_path, relative_path=relative_path, extension=extension,
+            file_category=file_category, was_processed=True,
+            was_skipped_unchanged=False, file_hash=current_hash,
+            analyzer_type=analyzer_type, stat_key=stat_key,
+        )
+
+    # Store file hash for incremental indexing (Issue #539)
+    if current_hash and redis_client:
+        await _store_file_hash(redis_client, relative_path, current_hash)
+
+    return result
+
+
+async def _analyze_with_semaphore(
+    file_path: Path,
+    root_path_obj: Path,
+    semaphore: asyncio.Semaphore,
+    redis_client=None,
+) -> FileAnalysisResult:
+    """
+    Analyze a single file with semaphore-based rate limiting.
+
+    Issue #711: Wrapper for _analyze_single_file that acquires
+    semaphore before processing to limit concurrency.
+
+    Args:
+        file_path: Path to the file to analyze
+        root_path_obj: Root path for relative path computation
+        semaphore: Semaphore for concurrency control
+        redis_client: Optional Redis client for incremental indexing
+
+    Returns:
+        FileAnalysisResult from _analyze_single_file
+    """
+    async with semaphore:
+        return await _analyze_single_file(file_path, root_path_obj, redis_client)
+
+
+async def _process_files_parallel(
+    all_files: List[Path],
+    root_path_obj: Path,
+    redis_client=None,
+    progress_callback=None,
+    total_files: int = 0,
+) -> List[FileAnalysisResult]:
+    """
+    Process files in parallel using asyncio.gather with semaphore rate limiting.
+
+    Issue #711: Core parallel processing function that replaces sequential
+    file iteration. Returns list of FileAnalysisResult objects for
+    thread-safe aggregation.
+
+    Args:
+        all_files: List of file paths to process
+        root_path_obj: Root path for relative path computation
+        redis_client: Optional Redis client for incremental indexing
+        progress_callback: Optional callback for progress updates
+        total_files: Total file count for progress calculation
+
+    Returns:
+        List of FileAnalysisResult objects (one per file)
+    """
+    if not all_files:
+        return []
+
+    semaphore = asyncio.Semaphore(PARALLEL_FILE_CONCURRENCY)
+    results: List[FileAnalysisResult] = []
+
+    # Process in batches for progress tracking
+    batch_size = max(100, PARALLEL_FILE_CONCURRENCY * 2)
+    total = len(all_files)
+
+    logger.info(
+        "[Parallel] Processing %d files with concurrency=%d, batch_size=%d",
+        total, PARALLEL_FILE_CONCURRENCY, batch_size
+    )
+
+    files_completed = 0
+
+    for batch_start in range(0, total, batch_size):
+        batch_end = min(batch_start + batch_size, total)
+        batch_files = all_files[batch_start:batch_end]
+
+        # Create tasks for this batch
+        tasks = [
+            _analyze_with_semaphore(f, root_path_obj, semaphore, redis_client)
+            for f in batch_files
+        ]
+
+        # Process batch in parallel
+        batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Collect results, handle exceptions
+        for i, result in enumerate(batch_results):
+            if isinstance(result, Exception):
+                # Create error result for failed file
+                file_path = batch_files[i]
+                logger.debug("Error processing %s: %s", file_path, result)
+                results.append(FileAnalysisResult(
+                    file_path=file_path,
+                    relative_path=str(file_path.relative_to(root_path_obj)),
+                    extension=file_path.suffix.lower(),
+                    file_category=_get_file_category(file_path),
+                    was_processed=False,
+                    was_skipped_unchanged=False,
+                ))
+            else:
+                results.append(result)
+
+        files_completed += len(batch_files)
+
+        # Progress update
+        if progress_callback:
+            percent = int((files_completed / total) * 100)
+            await progress_callback(
+                operation="Scanning files (parallel)",
+                current=files_completed,
+                total=total_files or total,
+                current_file=f"Batch {batch_start // batch_size + 1} complete",
+            )
+
+        # Yield to event loop between batches
+        await asyncio.sleep(0)
+
+    logger.info("[Parallel] Completed processing %d files", len(results))
+    return results
+
+
+def _aggregate_from_file_result(
+    analysis_results: Dict,
+    result: FileAnalysisResult,
+) -> None:
+    """
+    Aggregate a single FileAnalysisResult into the main results dict.
+
+    Issue #711: Helper for single-pass aggregation from immutable results.
+    This is called sequentially after parallel processing completes.
+
+    Args:
+        analysis_results: Main results dictionary to update
+        result: Single FileAnalysisResult to aggregate
+    """
+    if not result.was_processed:
+        return
+
+    relative_path = result.relative_path
+    file_category = result.file_category
+    stats = analysis_results["stats"]
+
+    # Store file analysis dict
+    analysis_results["files"][relative_path] = result.to_dict()
+
+    # Update file type stats
+    if result.stat_key:
+        stats[result.stat_key] = stats.get(result.stat_key, 0) + 1
+    else:
+        stats["other_files"] = stats.get("other_files", 0) + 1
+
+    stats["total_files"] += 1
+
+    # Update category stats
+    stats["lines_by_category"][file_category] += result.line_count
+    stats["files_by_category"][file_category] += 1
+
+    # Update line counts for countable categories
+    is_countable = file_category in (
+        FILE_CATEGORY_CODE, FILE_CATEGORY_CONFIG, FILE_CATEGORY_TEST
+    )
+    if is_countable:
+        stats["total_lines"] += result.line_count
+        stats["total_functions"] += len(result.functions)
+        stats["total_classes"] += len(result.classes)
+        stats["code_lines"] += result.code_lines
+        stats["comment_lines"] += result.comment_lines
+        stats["docstring_lines"] += result.docstring_lines
+        stats["blank_lines"] += result.blank_lines
+
+    stats["documentation_lines"] += result.documentation_lines
+
+    # Aggregate lists
+    analysis_results["all_functions"].extend(result.functions)
+    analysis_results["all_classes"].extend(result.classes)
+    analysis_results["all_hardcodes"].extend(result.hardcodes)
+    analysis_results["all_problems"].extend(result.problems)
+    analysis_results["problems_by_category"][file_category].extend(result.problems)
+
+
+def _aggregate_all_results(
+    all_results: List[FileAnalysisResult],
+) -> Dict:
+    """
+    Aggregate all FileAnalysisResult objects into a single results dictionary.
+
+    Issue #711: Thread-safe single-pass aggregation after parallel processing.
+    This runs AFTER all parallel processing is complete, operating on
+    immutable input data, so there are no thread-safety concerns.
+
+    Args:
+        all_results: List of FileAnalysisResult from parallel processing
+
+    Returns:
+        Complete analysis_results dictionary matching existing format
+    """
+    analysis_results = _create_empty_analysis_results()
+
+    for result in all_results:
+        _aggregate_from_file_result(analysis_results, result)
+
+    _calculate_analysis_statistics(analysis_results)
+    return analysis_results
+
+
+async def _iterate_and_process_files_parallel(
+    all_files: list,
+    root_path_obj: Path,
+    immediate_store_collection,
+    progress_callback,
+    total_files: int,
+    redis_client=None,
+) -> Tuple[Dict, int, int]:
+    """
+    Process files in parallel and return aggregated results.
+
+    Issue #711: New parallel processing implementation that returns
+    aggregated results instead of mutating shared state.
+
+    Args:
+        all_files: List of file paths to process
+        root_path_obj: Root path for relative path computation
+        immediate_store_collection: ChromaDB collection for problem storage
+        progress_callback: Callback for progress updates
+        total_files: Total file count for progress
+        redis_client: Optional Redis client for incremental indexing
+
+    Returns:
+        Tuple of (analysis_results dict, files_processed, files_skipped)
+    """
+    import time
+    start_time = time.time()
+
+    # Process all files in parallel
+    all_results = await _process_files_parallel(
+        all_files, root_path_obj, redis_client, progress_callback, total_files
+    )
+
+    # Single-pass aggregation (thread-safe)
+    if progress_callback:
+        await progress_callback(
+            operation="Aggregating results",
+            current=0,
+            total=len(all_results),
+            current_file="Aggregating analysis results...",
+        )
+
+    analysis_results = _aggregate_all_results(all_results)
+
+    # Store all problems to ChromaDB in batch
+    if immediate_store_collection and analysis_results["all_problems"]:
+        await _store_problems_batch_to_chromadb(
+            immediate_store_collection,
+            analysis_results["all_problems"],
+            0
+        )
+
+    # Calculate statistics
+    files_processed = sum(1 for r in all_results if r.was_processed)
+    files_skipped = sum(1 for r in all_results if r.was_skipped_unchanged)
+
+    elapsed = time.time() - start_time
+    logger.info(
+        "[Parallel] Processed %d files, skipped %d, in %.2fs (%.1f files/sec)",
+        files_processed, files_skipped, elapsed,
+        files_processed / elapsed if elapsed > 0 else 0
+    )
+
+    return analysis_results, files_processed, files_skipped
+
+
+# =============================================================================
+# End of Issue #711 Parallel Processing Functions
+# =============================================================================
+
+
 async def _process_single_file(
     file_path: Path,
     root_path_obj: Path,
@@ -1485,25 +1973,31 @@ async def _iterate_and_process_files(
     Issue #398: Extracted from scan_codebase to reduce method length.
     Issue #539: Added incremental indexing - returns (processed, skipped) counts.
     Issue #659: Added batch parallel processing for 3-5x speedup.
-                Note: Sequential processing preserved to avoid race conditions
-                on shared analysis_results dict. Parallelism applied within
-                individual file I/O operations via thread pool.
+    Issue #711: Added parallel mode with PARALLEL_MODE_ENABLED flag.
+                When enabled, uses asyncio.gather() with semaphore for
+                true parallel processing with thread-safe aggregation.
     """
+    # Issue #711: Use parallel processing when enabled
+    if PARALLEL_MODE_ENABLED:
+        logger.info(
+            "[Issue #711] Parallel mode enabled (concurrency=%d)",
+            PARALLEL_FILE_CONCURRENCY
+        )
+        parallel_results, files_processed, files_skipped = await _iterate_and_process_files_parallel(
+            all_files, root_path_obj, immediate_store_collection,
+            progress_callback, total_files, redis_client
+        )
+        # Update analysis_results with parallel results
+        analysis_results.update(parallel_results)
+        return files_processed, files_skipped
+
+    # Sequential processing fallback (original implementation)
+    logger.info("[Issue #711] Sequential mode (parallel disabled)")
     files_processed = 0
     files_skipped = 0
 
-    # Issue #659: While full parallel processing with asyncio.gather would be
-    # faster, the shared analysis_results dict mutations in _process_single_file
-    # and _aggregate_file_analysis are not thread-safe. To avoid race conditions,
-    # we process files sequentially but still benefit from:
-    # 1. Thread pool for file I/O (_run_in_indexing_thread)
-    # 2. Async operations that yield control during awaits
-    # 3. Batch progress updates to reduce overhead
-    #
-    # A future optimization could collect file analysis results and aggregate
-    # them in a thread-safe manner after parallel processing completes.
-
-    progress_interval = max(10, PARALLEL_FILE_PROCESSING // 5)  # Update every ~20% of batch
+    # Issue #659: Sequential processing with thread pool for file I/O
+    progress_interval = max(10, PARALLEL_FILE_PROCESSING // 5)
 
     for file_path in all_files:
         processed, skipped = await _process_single_file(
@@ -1584,7 +2078,10 @@ async def scan_codebase(
                 files_processed, files_skipped
             )
 
-        _calculate_analysis_statistics(analysis_results)
+        # Issue #711: Statistics already calculated in parallel mode
+        # Only calculate for sequential mode (parallel mode does it in _aggregate_all_results)
+        if not PARALLEL_MODE_ENABLED:
+            _calculate_analysis_statistics(analysis_results)
         return analysis_results
 
     except Exception as e:
