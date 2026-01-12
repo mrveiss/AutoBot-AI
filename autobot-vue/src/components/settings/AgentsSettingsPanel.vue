@@ -284,33 +284,34 @@ const handleAgentTypeToggle = (typeId: string) => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .sub-tab-content {
-  padding: 1rem 0;
+  padding: var(--spacing-4) 0;
 }
 
 .sub-tab-content h3 {
-  margin: 0 0 20px 0;
-  color: #2c3e50;
-  font-weight: 600;
-  font-size: 18px;
-  border-bottom: 2px solid #3498db;
-  padding-bottom: 8px;
+  margin: 0 0 var(--spacing-5) 0;
+  color: var(--text-primary);
+  font-weight: var(--font-semibold);
+  font-size: 1.125rem;
+  border-bottom: 2px solid var(--color-primary);
+  padding-bottom: var(--spacing-2);
 }
 
 .sub-tab-content h4 {
-  margin: 0 0 16px 0;
-  color: #34495e;
-  font-weight: 500;
-  font-size: 16px;
+  margin: 0 0 var(--spacing-4) 0;
+  color: var(--text-secondary);
+  font-weight: var(--font-medium);
+  font-size: var(--text-base);
 }
 
 .setting-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  padding: 12px 0;
-  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: var(--spacing-4);
+  padding: var(--spacing-3) 0;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .setting-item:last-child {
@@ -319,21 +320,23 @@ const handleAgentTypeToggle = (typeId: string) => {
 }
 
 .setting-item label {
-  font-weight: 500;
-  color: #34495e;
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
   flex: 1;
-  margin-right: 16px;
+  margin-right: var(--spacing-4);
   cursor: pointer;
 }
 
 .setting-item input,
 .setting-item select {
   min-width: 200px;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-  transition: border-color 0.2s ease;
+  padding: var(--spacing-2) var(--spacing-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  transition: border-color var(--duration-200) var(--ease-in-out);
 }
 
 .setting-item input[type='checkbox'] {
@@ -341,117 +344,117 @@ const handleAgentTypeToggle = (typeId: string) => {
   width: 20px;
   height: 20px;
   cursor: pointer;
-  accent-color: #007acc;
+  accent-color: var(--color-primary);
 }
 
 .setting-item input:focus,
 .setting-item select:focus {
   outline: none;
-  border-color: #007acc;
-  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-bg-transparent);
 }
 
 .advanced-section {
-  margin-top: 24px;
-  padding: 16px;
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 8px;
+  margin-top: var(--spacing-6);
+  padding: var(--spacing-4);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
 }
 
 .agent-types-section {
-  margin-top: 24px;
+  margin-top: var(--spacing-6);
 }
 
 .agent-types-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .agent-type-card {
-  padding: 16px;
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 8px;
-  transition: all 0.2s;
+  padding: var(--spacing-4);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  transition: all var(--duration-200) var(--ease-in-out);
 }
 
 .agent-type-card.enabled {
-  background: rgba(0, 122, 204, 0.05);
-  border-color: #007acc;
+  background: var(--color-primary-bg-transparent);
+  border-color: var(--color-primary);
 }
 
 .agent-type-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-2);
 }
 
 .agent-type-header label {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  color: #2c3e50;
+  gap: var(--spacing-2);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
   cursor: pointer;
 }
 
 .agent-type-header i {
   width: 20px;
   text-align: center;
-  color: #007acc;
+  color: var(--color-primary);
 }
 
 .agent-type-description {
   margin: 0;
-  font-size: 13px;
-  color: #6c757d;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
   padding-left: 28px;
 }
 
 .agent-status-section {
-  margin-top: 24px;
-  padding: 16px;
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 8px;
+  margin-top: var(--spacing-6);
+  padding: var(--spacing-4);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
 }
 
 .status-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .status-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .status-label {
-  font-size: 12px;
-  color: #6c757d;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
   text-transform: uppercase;
 }
 
 .status-value {
-  font-size: 24px;
-  font-weight: 600;
-  color: #2c3e50;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .status-value.error {
-  color: #dc3545;
+  color: var(--color-error);
 }
 
 @media (max-width: 768px) {
   .setting-item {
     flex-direction: column;
     align-items: stretch;
-    gap: 8px;
+    gap: var(--spacing-2);
   }
 
   .setting-item label {

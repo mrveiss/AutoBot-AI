@@ -333,15 +333,16 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .hardware-settings-container {
-  padding: 20px;
+  padding: var(--spacing-5);
 }
 
 .hardware-settings-container h3 {
-  margin: 0 0 24px 0;
-  color: #2c3e50;
-  font-size: 20px;
-  font-weight: 600;
+  margin: 0 0 var(--spacing-6) 0;
+  color: var(--text-primary);
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
   display: flex;
   align-items: center;
 }
@@ -350,60 +351,60 @@ onMounted(() => {
 .hardware-status-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 20px;
-  margin-bottom: 30px;
+  gap: var(--spacing-5);
+  margin-bottom: var(--spacing-8);
 }
 
 .hardware-card {
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 8px;
-  padding: 20px;
-  transition: all 0.2s;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-5);
+  transition: all var(--duration-200) var(--ease-in-out);
 }
 
 .hardware-card.available {
-  border-color: #28a745;
-  background: rgba(40, 167, 69, 0.05);
+  border-color: var(--color-success);
+  background: var(--color-success-bg-transparent);
 }
 
 .hardware-card.unavailable {
-  border-color: #dc3545;
-  background: rgba(220, 53, 69, 0.05);
+  border-color: var(--color-error);
+  background: var(--color-error-bg-transparent);
 }
 
 .hardware-card.testing,
 .hardware-card.checking {
-  border-color: #ffc107;
-  background: rgba(255, 193, 7, 0.05);
+  border-color: var(--color-warning);
+  background: var(--color-warning-bg-transparent);
 }
 
 .hardware-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: var(--spacing-2-5);
+  margin-bottom: var(--spacing-3);
 }
 
 .hardware-header i {
-  font-size: 20px;
-  color: #6c757d;
+  font-size: var(--text-xl);
+  color: var(--text-tertiary);
 }
 
 .hardware-header h4 {
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #495057;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
 }
 
 .hardware-status {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-  font-size: 14px;
-  color: #495057;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-3);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .status-indicator {
@@ -413,53 +414,53 @@ onMounted(() => {
 }
 
 .status-indicator.available {
-  background: #28a745;
+  background: var(--color-success);
 }
 
 .status-indicator.unavailable {
-  background: #dc3545;
+  background: var(--color-error);
 }
 
 .status-indicator.testing,
 .status-indicator.checking {
-  background: #ffc107;
+  background: var(--color-warning);
 }
 
 .status-indicator.unknown,
 .status-indicator.error {
-  background: #6c757d;
+  background: var(--text-tertiary);
 }
 
 .hardware-details {
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
 }
 
 .detail-item {
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
-  margin-bottom: 4px;
-  color: #6c757d;
+  font-size: var(--text-xs);
+  margin-bottom: var(--spacing-1);
+  color: var(--text-tertiary);
 }
 
 .test-hardware-btn {
   width: 100%;
-  padding: 8px;
+  padding: var(--spacing-2);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 14px;
-  background: #007acc;
-  color: white;
-  transition: all 0.2s;
+  font-size: var(--text-sm);
+  background: var(--color-primary);
+  color: var(--text-on-primary);
+  transition: all var(--duration-200) var(--ease-in-out);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .test-hardware-btn:hover:not(:disabled) {
-  background: #005fa3;
+  background: var(--color-primary-hover);
 }
 
 .test-hardware-btn:disabled {
@@ -469,25 +470,25 @@ onMounted(() => {
 
 /* Hardware Config Section */
 .hardware-config-section {
-  margin-top: 20px;
-  padding: 20px;
-  background: #f8f9fa;
-  border-radius: 8px;
+  margin-top: var(--spacing-5);
+  padding: var(--spacing-5);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
 }
 
 .hardware-config-section h4 {
-  margin: 0 0 16px 0;
-  color: #495057;
-  font-size: 16px;
-  font-weight: 500;
+  margin: 0 0 var(--spacing-4) 0;
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
 }
 
 .setting-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 0;
-  border-bottom: 1px solid #e9ecef;
+  padding: var(--spacing-3) 0;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .setting-item:last-child {
@@ -495,66 +496,30 @@ onMounted(() => {
 }
 
 .setting-item label {
-  font-size: 14px;
-  color: #495057;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .setting-item input[type="checkbox"] {
   width: 18px;
   height: 18px;
   cursor: pointer;
+  accent-color: var(--color-primary);
 }
 
 .setting-item input[type="number"] {
   width: 80px;
-  padding: 6px 10px;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  font-size: 14px;
+  padding: var(--spacing-1-5) var(--spacing-2-5);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
-/* Dark theme support */
-@media (prefers-color-scheme: dark) {
-  .hardware-settings-container h3 {
-    color: #ffffff;
-  }
-
-  .hardware-card {
-    background: #2d2d2d;
-    border-color: #555;
-  }
-
-  .hardware-card.available {
-    background: rgba(40, 167, 69, 0.1);
-  }
-
-  .hardware-card.unavailable {
-    background: rgba(220, 53, 69, 0.1);
-  }
-
-  .hardware-header h4,
-  .hardware-status {
-    color: #ffffff;
-  }
-
-  .hardware-config-section {
-    background: #2d2d2d;
-  }
-
-  .hardware-config-section h4,
-  .setting-item label {
-    color: #ffffff;
-  }
-
-  .setting-item {
-    border-color: #555;
-  }
-
-  .setting-item input[type="number"] {
-    background: #3d3d3d;
-    border-color: #555;
-    color: #ffffff;
-  }
+.setting-item input[type="number"]:focus {
+  outline: none;
+  border-color: var(--color-primary);
 }
 
 /* Mobile responsive */
