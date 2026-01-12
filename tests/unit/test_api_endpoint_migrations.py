@@ -20557,14 +20557,14 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertTrue(hasattr(kb_librarian, "KBQueryResponse"))
 
     # ==============================================
-    # BATCH 119: knowledge_fresh.py - COMPLETE (100%)
+    # BATCH 119: knowledge_debug.py - COMPLETE (100%)
     # ==============================================
 
     def test_batch_119_get_fresh_knowledge_stats_mixed_pattern(self):
         """Verify get_fresh_knowledge_stats endpoint uses Mixed Pattern"""
-        from backend.api import knowledge_fresh
+        from backend.api import knowledge_debug
 
-        source = inspect.getsource(knowledge_fresh.get_fresh_knowledge_stats)
+        source = inspect.getsource(knowledge_debug.get_fresh_knowledge_stats)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="get_fresh_knowledge_stats"', source)
@@ -20574,9 +20574,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_119_debug_redis_connection_mixed_pattern(self):
         """Verify debug_redis_connection endpoint uses Mixed Pattern"""
-        from backend.api import knowledge_fresh
+        from backend.api import knowledge_debug
 
-        source = inspect.getsource(knowledge_fresh.debug_redis_connection)
+        source = inspect.getsource(knowledge_debug.debug_redis_connection)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="debug_redis_connection"', source)
@@ -20586,9 +20586,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_119_rebuild_search_index_mixed_pattern(self):
         """Verify rebuild_search_index endpoint uses Mixed Pattern"""
-        from backend.api import knowledge_fresh
+        from backend.api import knowledge_debug
 
-        source = inspect.getsource(knowledge_fresh.rebuild_search_index)
+        source = inspect.getsource(knowledge_debug.rebuild_search_index)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="rebuild_search_index"', source)
@@ -20596,14 +20596,14 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("try:", source)
         self.assertIn("except Exception", source)
 
-    def test_batch_119_all_knowledge_fresh_endpoints_have_decorator(self):
-        """Verify all knowledge_fresh endpoints have @with_error_handling decorator"""
-        from backend.api import knowledge_fresh
+    def test_batch_119_all_knowledge_debug_endpoints_have_decorator(self):
+        """Verify all knowledge_debug endpoints have @with_error_handling decorator"""
+        from backend.api import knowledge_debug
 
         endpoint_functions = [
-            knowledge_fresh.get_fresh_knowledge_stats,
-            knowledge_fresh.debug_redis_connection,
-            knowledge_fresh.rebuild_search_index,
+            knowledge_debug.get_fresh_knowledge_stats,
+            knowledge_debug.debug_redis_connection,
+            knowledge_debug.rebuild_search_index,
         ]
 
         for func in endpoint_functions:
@@ -20614,14 +20614,14 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
                 f"Endpoint {func.__name__} missing @with_error_handling decorator",
             )
 
-    def test_batch_119_knowledge_fresh_100_percent_milestone(self):
-        """Verify knowledge_fresh.py has reached 100% migration"""
-        from backend.api import knowledge_fresh
+    def test_batch_119_knowledge_debug_100_percent_milestone(self):
+        """Verify knowledge_debug.py has reached 100% migration"""
+        from backend.api import knowledge_debug
 
         endpoint_functions = [
-            knowledge_fresh.get_fresh_knowledge_stats,
-            knowledge_fresh.debug_redis_connection,
-            knowledge_fresh.rebuild_search_index,
+            knowledge_debug.get_fresh_knowledge_stats,
+            knowledge_debug.debug_redis_connection,
+            knowledge_debug.rebuild_search_index,
         ]
 
         migrated_count = sum(
@@ -20641,9 +20641,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_119_migration_preserves_fresh_kb_operations(self):
         """Verify migration preserves fresh KB instance operations"""
-        from backend.api import knowledge_fresh
+        from backend.api import knowledge_debug
 
-        source = inspect.getsource(knowledge_fresh.get_fresh_knowledge_stats)
+        source = inspect.getsource(knowledge_debug.get_fresh_knowledge_stats)
 
         # Check fresh instance creation
         self.assertIn("KnowledgeBase()", source)
@@ -20654,9 +20654,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_119_migration_preserves_redis_debug_operations(self):
         """Verify migration preserves Redis debug operations"""
-        from backend.api import knowledge_fresh
+        from backend.api import knowledge_debug
 
-        source = inspect.getsource(knowledge_fresh.debug_redis_connection)
+        source = inspect.getsource(knowledge_debug.debug_redis_connection)
 
         # Check Redis operations preserved
         self.assertIn("get_redis_client", source)
@@ -20668,9 +20668,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_119_migration_preserves_index_rebuild_operations(self):
         """Verify migration preserves index rebuild operations"""
-        from backend.api import knowledge_fresh
+        from backend.api import knowledge_debug
 
-        source = inspect.getsource(knowledge_fresh.rebuild_search_index)
+        source = inspect.getsource(knowledge_debug.rebuild_search_index)
 
         # Check rebuild operations preserved
         self.assertIn("KnowledgeBase()", source)
@@ -20680,18 +20680,18 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_119_migration_preserves_error_response_format(self):
         """Verify migration preserves error response dict format"""
-        from backend.api import knowledge_fresh
+        from backend.api import knowledge_debug
 
         # Check all endpoints return error dicts
-        source_stats = inspect.getsource(knowledge_fresh.get_fresh_knowledge_stats)
+        source_stats = inspect.getsource(knowledge_debug.get_fresh_knowledge_stats)
         self.assertIn('"error"', source_stats)
         self.assertIn('"status"', source_stats)
 
-        source_redis = inspect.getsource(knowledge_fresh.debug_redis_connection)
+        source_redis = inspect.getsource(knowledge_debug.debug_redis_connection)
         self.assertIn('"redis_connection"', source_redis)
         self.assertIn('"error"', source_redis)
 
-        source_rebuild = inspect.getsource(knowledge_fresh.rebuild_search_index)
+        source_rebuild = inspect.getsource(knowledge_debug.rebuild_search_index)
         self.assertIn('"error"', source_rebuild)
         self.assertIn('"success"', source_rebuild)
 
@@ -26640,14 +26640,14 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("Query", metrics_source)
 
     # ==============================================
-    # BATCH 153: knowledge_enhanced.py - COMPLETE (100%)
+    # BATCH 153: knowledge_ai_stack.py - COMPLETE (100%)
     # ==============================================
 
     def test_batch_153_enhanced_search_simple_pattern(self):
         """Verify enhanced_search endpoint uses Simple Pattern"""
-        from backend.api import knowledge_enhanced
+        from backend.api import knowledge_ai_stack
 
-        source = inspect.getsource(knowledge_enhanced.enhanced_search)
+        source = inspect.getsource(knowledge_ai_stack.enhanced_search)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="enhanced_search"', source)
@@ -26655,9 +26655,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_153_rag_search_simple_pattern(self):
         """Verify rag_search endpoint uses Simple Pattern"""
-        from backend.api import knowledge_enhanced
+        from backend.api import knowledge_ai_stack
 
-        source = inspect.getsource(knowledge_enhanced.rag_search)
+        source = inspect.getsource(knowledge_ai_stack.rag_search)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="rag_search"', source)
@@ -26665,9 +26665,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_153_extract_knowledge_simple_pattern(self):
         """Verify extract_knowledge endpoint uses Simple Pattern"""
-        from backend.api import knowledge_enhanced
+        from backend.api import knowledge_ai_stack
 
-        source = inspect.getsource(knowledge_enhanced.extract_knowledge)
+        source = inspect.getsource(knowledge_ai_stack.extract_knowledge)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="extract_knowledge"', source)
@@ -26675,9 +26675,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_153_analyze_documents_simple_pattern(self):
         """Verify analyze_documents endpoint uses Simple Pattern"""
-        from backend.api import knowledge_enhanced
+        from backend.api import knowledge_ai_stack
 
-        source = inspect.getsource(knowledge_enhanced.analyze_documents)
+        source = inspect.getsource(knowledge_ai_stack.analyze_documents)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="analyze_documents"', source)
@@ -26685,9 +26685,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_153_reformulate_query_simple_pattern(self):
         """Verify reformulate_query endpoint uses Simple Pattern"""
-        from backend.api import knowledge_enhanced
+        from backend.api import knowledge_ai_stack
 
-        source = inspect.getsource(knowledge_enhanced.reformulate_query)
+        source = inspect.getsource(knowledge_ai_stack.reformulate_query)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="reformulate_query"', source)
@@ -26695,9 +26695,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_153_get_system_knowledge_insights_simple_pattern(self):
         """Verify get_system_knowledge_insights endpoint uses Simple Pattern"""
-        from backend.api import knowledge_enhanced
+        from backend.api import knowledge_ai_stack
 
-        source = inspect.getsource(knowledge_enhanced.get_system_knowledge_insights)
+        source = inspect.getsource(knowledge_ai_stack.get_system_knowledge_insights)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="get_system_knowledge_insights"', source)
@@ -26705,9 +26705,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_153_get_enhanced_stats_simple_pattern(self):
         """Verify get_enhanced_stats endpoint uses Simple Pattern"""
-        from backend.api import knowledge_enhanced
+        from backend.api import knowledge_ai_stack
 
-        source = inspect.getsource(knowledge_enhanced.get_enhanced_stats)
+        source = inspect.getsource(knowledge_ai_stack.get_enhanced_stats)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="get_enhanced_stats"', source)
@@ -26715,27 +26715,27 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_153_enhanced_knowledge_health_simple_pattern(self):
         """Verify enhanced_knowledge_health endpoint uses Simple Pattern"""
-        from backend.api import knowledge_enhanced
+        from backend.api import knowledge_ai_stack
 
-        source = inspect.getsource(knowledge_enhanced.enhanced_knowledge_health)
+        source = inspect.getsource(knowledge_ai_stack.enhanced_knowledge_health)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="enhanced_knowledge_health"', source)
         self.assertIn('error_code_prefix="KNOWLEDGE_ENHANCED"', source)
 
-    def test_batch_153_all_knowledge_enhanced_endpoints_have_decorator(self):
-        """Verify all knowledge_enhanced endpoints have @with_error_handling decorator"""
-        from backend.api import knowledge_enhanced
+    def test_batch_153_all_knowledge_ai_stack_endpoints_have_decorator(self):
+        """Verify all knowledge_ai_stack endpoints have @with_error_handling decorator"""
+        from backend.api import knowledge_ai_stack
 
         endpoint_functions = [
-            knowledge_enhanced.enhanced_search,
-            knowledge_enhanced.rag_search,
-            knowledge_enhanced.extract_knowledge,
-            knowledge_enhanced.analyze_documents,
-            knowledge_enhanced.reformulate_query,
-            knowledge_enhanced.get_system_knowledge_insights,
-            knowledge_enhanced.get_enhanced_stats,
-            knowledge_enhanced.enhanced_knowledge_health,
+            knowledge_ai_stack.enhanced_search,
+            knowledge_ai_stack.rag_search,
+            knowledge_ai_stack.extract_knowledge,
+            knowledge_ai_stack.analyze_documents,
+            knowledge_ai_stack.reformulate_query,
+            knowledge_ai_stack.get_system_knowledge_insights,
+            knowledge_ai_stack.get_enhanced_stats,
+            knowledge_ai_stack.enhanced_knowledge_health,
         ]
 
         for func in endpoint_functions:
@@ -26746,19 +26746,19 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
                 f"Endpoint {func.__name__} missing @with_error_handling decorator",
             )
 
-    def test_batch_153_knowledge_enhanced_100_percent_milestone(self):
-        """Verify knowledge_enhanced.py has reached 100% migration"""
-        from backend.api import knowledge_enhanced
+    def test_batch_153_knowledge_ai_stack_100_percent_milestone(self):
+        """Verify knowledge_ai_stack.py has reached 100% migration"""
+        from backend.api import knowledge_ai_stack
 
         endpoint_functions = [
-            knowledge_enhanced.enhanced_search,
-            knowledge_enhanced.rag_search,
-            knowledge_enhanced.extract_knowledge,
-            knowledge_enhanced.analyze_documents,
-            knowledge_enhanced.reformulate_query,
-            knowledge_enhanced.get_system_knowledge_insights,
-            knowledge_enhanced.get_enhanced_stats,
-            knowledge_enhanced.enhanced_knowledge_health,
+            knowledge_ai_stack.enhanced_search,
+            knowledge_ai_stack.rag_search,
+            knowledge_ai_stack.extract_knowledge,
+            knowledge_ai_stack.analyze_documents,
+            knowledge_ai_stack.reformulate_query,
+            knowledge_ai_stack.get_system_knowledge_insights,
+            knowledge_ai_stack.get_enhanced_stats,
+            knowledge_ai_stack.enhanced_knowledge_health,
         ]
 
         migrated_count = sum(
@@ -26778,37 +26778,37 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_153_migration_preserves_ai_stack_integration(self):
         """Verify migration preserves AI Stack client integration"""
-        from backend.api import knowledge_enhanced
+        from backend.api import knowledge_ai_stack
 
         # Verify AI Stack client dependency injection
-        enhanced_search_source = inspect.getsource(knowledge_enhanced.enhanced_search)
+        enhanced_search_source = inspect.getsource(knowledge_ai_stack.enhanced_search)
         self.assertIn("get_ai_stack_client", enhanced_search_source)
         self.assertIn("ai_client", enhanced_search_source)
 
         # Verify RAG query functionality
-        rag_source = inspect.getsource(knowledge_enhanced.rag_search)
+        rag_source = inspect.getsource(knowledge_ai_stack.rag_search)
         self.assertIn("rag_query", rag_source)
 
     def test_batch_153_migration_preserves_rag_capabilities(self):
         """Verify migration preserves RAG (Retrieval-Augmented Generation) capabilities"""
-        from backend.api import knowledge_enhanced
+        from backend.api import knowledge_ai_stack
 
         # Verify RAG search functionality
-        rag_source = inspect.getsource(knowledge_enhanced.rag_search)
+        rag_source = inspect.getsource(knowledge_ai_stack.rag_search)
         self.assertIn("rag_query", rag_source)
         self.assertIn("documents", rag_source)
 
         # Verify enhanced search combines RAG
-        enhanced_source = inspect.getsource(knowledge_enhanced.enhanced_search)
+        enhanced_source = inspect.getsource(knowledge_ai_stack.enhanced_search)
         self.assertIn("include_rag", enhanced_source)
         self.assertIn("rag_enhanced", enhanced_source)
 
     def test_batch_153_migration_preserves_knowledge_extraction(self):
         """Verify migration preserves knowledge extraction functionality"""
-        from backend.api import knowledge_enhanced
+        from backend.api import knowledge_ai_stack
 
         # Verify extraction endpoint
-        extract_source = inspect.getsource(knowledge_enhanced.extract_knowledge)
+        extract_source = inspect.getsource(knowledge_ai_stack.extract_knowledge)
         self.assertIn("extract_knowledge", extract_source)
         self.assertIn("auto_store", extract_source)
         self.assertIn("store_fact", extract_source)
@@ -26818,34 +26818,34 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_153_migration_preserves_document_analysis(self):
         """Verify migration preserves document analysis functionality"""
-        from backend.api import knowledge_enhanced
+        from backend.api import knowledge_ai_stack
 
         # Verify document analysis endpoint
-        analyze_source = inspect.getsource(knowledge_enhanced.analyze_documents)
+        analyze_source = inspect.getsource(knowledge_ai_stack.analyze_documents)
         self.assertIn("analyze_documents", analyze_source)
         self.assertIn("analysis_type", analyze_source)
 
     def test_batch_153_migration_preserves_query_reformulation(self):
         """Verify migration preserves query reformulation functionality"""
-        from backend.api import knowledge_enhanced
+        from backend.api import knowledge_ai_stack
 
         # Verify reformulation endpoint
-        reformulate_source = inspect.getsource(knowledge_enhanced.reformulate_query)
+        reformulate_source = inspect.getsource(knowledge_ai_stack.reformulate_query)
         self.assertIn("reformulate_query", reformulate_source)
         self.assertIn("context", reformulate_source)
 
     def test_batch_153_migration_preserves_pydantic_models(self):
         """Verify migration preserves Pydantic request models"""
-        from backend.api import knowledge_enhanced
+        from backend.api import knowledge_ai_stack
 
         # Verify request models are defined
-        self.assertTrue(hasattr(knowledge_enhanced, "EnhancedSearchRequest"))
-        self.assertTrue(hasattr(knowledge_enhanced, "KnowledgeExtractionRequest"))
-        self.assertTrue(hasattr(knowledge_enhanced, "DocumentAnalysisRequest"))
-        self.assertTrue(hasattr(knowledge_enhanced, "RAGQueryRequest"))
+        self.assertTrue(hasattr(knowledge_ai_stack, "EnhancedSearchRequest"))
+        self.assertTrue(hasattr(knowledge_ai_stack, "KnowledgeExtractionRequest"))
+        self.assertTrue(hasattr(knowledge_ai_stack, "DocumentAnalysisRequest"))
+        self.assertTrue(hasattr(knowledge_ai_stack, "RAGQueryRequest"))
 
         # Verify models are used in endpoints
-        enhanced_search_source = inspect.getsource(knowledge_enhanced.enhanced_search)
+        enhanced_search_source = inspect.getsource(knowledge_ai_stack.enhanced_search)
         self.assertIn("EnhancedSearchRequest", enhanced_search_source)
 
     # ==============================================

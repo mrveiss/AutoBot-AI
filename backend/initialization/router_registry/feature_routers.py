@@ -86,7 +86,9 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     # Knowledge and conversation
     ("backend.api.knowledge_test", "/knowledge-test", ["knowledge-test"], "knowledge_test"),
     ("backend.api.knowledge_maintenance", "/knowledge-maintenance", ["knowledge-maintenance"], "knowledge_maintenance"),
-    ("backend.api.knowledge_unified", "/knowledge", ["knowledge-unified", "documentation"], "knowledge_unified"),
+    ("backend.api.knowledge_search_unified", "/knowledge", ["knowledge-unified", "documentation"], "knowledge_search_unified"),  # Issue #708: renamed from knowledge_unified
+    ("backend.api.knowledge_ai_stack", "/knowledge-enhanced", ["knowledge-enhanced", "ai-stack"], "knowledge_ai_stack"),  # Issue #708: renamed from knowledge_enhanced
+    ("backend.api.knowledge_debug", "/knowledge-debug", ["knowledge-debug"], "knowledge_debug"),  # Issue #708: renamed from knowledge_fresh
     ("backend.api.conversation_files", "/conversation-files", ["conversation-files"], "conversation_files"),
     ("backend.api.chat_knowledge", "/chat-knowledge", ["chat-knowledge"], "chat_knowledge"),
     # NPU and Redis
