@@ -2050,3 +2050,33 @@ async def control_documentation_watcher(request: dict, req: Request):
 
 from backend.api.knowledge_maintenance import router as maintenance_router
 router.include_router(maintenance_router)
+
+# ===== CONSOLIDATED KNOWLEDGE ROUTERS (Issue #708) =====
+# These routers were previously registered separately in feature_routers.py
+# Now consolidated under the main knowledge router for cleaner organization
+
+# AI Stack RAG Integration - Enhanced search, knowledge extraction, document analysis
+# Provides: /search/enhanced, /search/rag, /extract, /analyze/documents, /query/reformulate,
+#           /system/insights, /stats/enhanced, /health/enhanced
+try:
+    from backend.api.knowledge_ai_stack import router as ai_stack_router
+    router.include_router(ai_stack_router, prefix="/ai-stack", tags=["knowledge-enhanced", "ai-stack"])
+except ImportError as e:
+    logging.warning("AI Stack knowledge router not available: %s", e)
+
+# Debug/Testing Endpoints - Fresh stats, Redis debug, index rebuild
+# Provides: /fresh_stats, /debug_redis, /rebuild_index
+try:
+    from backend.api.knowledge_debug import router as debug_router
+    router.include_router(debug_router, prefix="/debug", tags=["knowledge-debug"])
+except ImportError as e:
+    logging.warning("Knowledge debug router not available: %s", e)
+
+# Unified Search - Combined search across all knowledge sources
+# Provides: /unified/search, /unified/stats, /unified/context, /unified/documentation/*,
+#           /unified/graph (for KnowledgeGraph.vue visualization)
+try:
+    from backend.api.knowledge_search_combined import router as unified_router
+    router.include_router(unified_router, tags=["knowledge-unified", "documentation"])
+except ImportError as e:
+    logging.warning("Unified knowledge search router not available: %s", e)
