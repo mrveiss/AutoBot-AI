@@ -54,7 +54,7 @@ from src.utils.file_categorization import (
 )
 
 from .analyzers import analyze_python_file, analyze_javascript_vue_file, analyze_documentation_file
-from .storage import get_code_collection_async, get_redis_connection_async
+from .storage import get_code_collection_async, get_redis_connection, get_redis_connection_async
 from .types import FileAnalysisResult, ParallelProcessingStats
 
 logger = logging.getLogger(__name__)

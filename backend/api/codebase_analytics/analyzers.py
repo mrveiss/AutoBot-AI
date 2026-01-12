@@ -6,6 +6,7 @@ Code analysis functions for codebase analytics
 """
 
 import ast
+import asyncio
 import json
 import logging
 import re
@@ -1271,7 +1272,12 @@ async def analyze_python_file(file_path: str, use_llm: bool = False) -> Metadata
             logger.debug("Race condition detection skipped for %s: %s", file_path, e)
 
         # Phase 5: Code intelligence analyzers
-        code_intel_problems = _run_code_intelligence_analyzers(file_path)
+        # Issue #711: Run in thread pool to prevent event loop blocking.
+        # These analyzers contain blocking subprocess calls (git log with 30-60s timeouts)
+        # that would otherwise starve the event loop during parallel indexing.
+        code_intel_problems = await asyncio.to_thread(
+            _run_code_intelligence_analyzers, file_path
+        )
         problems.extend(code_intel_problems)
 
         # Phase 6: Count line types (Issue #368)

@@ -9,6 +9,7 @@ Distributes TLS certificates to AutoBot VMs via SSH.
 Handles secure file transfer and permission management.
 
 Inspired by oVirt's certificate distribution during host deployment.
+Issue #697: Added OpenTelemetry tracing for SSH operations.
 """
 
 import asyncio
@@ -18,10 +19,15 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import asyncssh
+from opentelemetry import trace
+from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from src.pki.config import TLSConfig, VM_DEFINITIONS, VMCertificateInfo
 
 logger = logging.getLogger(__name__)
+
+# Issue #697: Get tracer for PKI operations
+_tracer = trace.get_tracer("autobot.pki.distributor", "2.0.0")
 
 
 @dataclass
@@ -167,61 +173,93 @@ class CertificateDistributor:
         Distribute certificates to a single VM.
 
         Issue #665: Refactored to use extracted helper methods.
+        Issue #697: Added OpenTelemetry tracing for SSH operations.
         """
         logger.info(f"Distributing certificates to {vm_info.name} ({vm_info.ip})")
 
-        try:
-            async with asyncssh.connect(
-                vm_info.ip,
-                username=self.config.ssh_user,
-                client_keys=[str(self.config.ssh_key_path)],
-                known_hosts=None,  # TODO: Use proper known_hosts in production
-                connect_timeout=10,
-            ) as conn:
-                remote_dir = self.config.remote_cert_dir
+        # Issue #697: Create span for SSH certificate distribution
+        with _tracer.start_as_current_span(
+            "ssh.distribute_certificates",
+            kind=SpanKind.CLIENT,
+            attributes={
+                "ssh.target_vm": vm_info.name,
+                "ssh.target_ip": vm_info.ip,
+                "ssh.user": self.config.ssh_user,
+                "pki.operation": "distribute",
+            },
+        ) as span:
+            try:
+                async with asyncssh.connect(
+                    vm_info.ip,
+                    username=self.config.ssh_user,
+                    client_keys=[str(self.config.ssh_key_path)],
+                    known_hosts=None,  # TODO: Use proper known_hosts in production
+                    connect_timeout=10,
+                ) as conn:
+                    remote_dir = self.config.remote_cert_dir
 
-                # Prepare directory (Issue #665: uses helper)
-                await self._prepare_remote_directory(conn, remote_dir)
+                    # Prepare directory (Issue #665: uses helper)
+                    await self._prepare_remote_directory(conn, remote_dir)
 
-                # Copy all certificates (Issue #665: uses helper)
-                files_copied = await self._copy_certificates(conn, vm_info, remote_dir)
-
-                # Set final ownership to root
-                await conn.run(f"sudo chown root:root {remote_dir}/*.pem", check=True)
-
-                # Verify certificate on remote
-                ca_remote = f"{remote_dir}/ca-cert.pem"
-                cert_remote = f"{remote_dir}/server-cert.pem"
-                verify_result = await conn.run(
-                    f"openssl verify -CAfile {ca_remote} {cert_remote}",
-                )
-                if verify_result.returncode != 0:
-                    raise RuntimeError(
-                        f"Certificate verification failed: {verify_result.stderr}"
+                    # Copy all certificates (Issue #665: uses helper)
+                    files_copied = await self._copy_certificates(
+                        conn, vm_info, remote_dir
                     )
 
-                logger.info(f"Successfully distributed certificates to {vm_info.name}")
+                    # Set final ownership to root
+                    await conn.run(
+                        f"sudo chown root:root {remote_dir}/*.pem", check=True
+                    )
+
+                    # Verify certificate on remote
+                    ca_remote = f"{remote_dir}/ca-cert.pem"
+                    cert_remote = f"{remote_dir}/server-cert.pem"
+                    verify_result = await conn.run(
+                        f"openssl verify -CAfile {ca_remote} {cert_remote}",
+                    )
+                    if verify_result.returncode != 0:
+                        raise RuntimeError(
+                            f"Certificate verification failed: {verify_result.stderr}"
+                        )
+
+                    # Issue #697: Record success attributes
+                    if span.is_recording():
+                        span.set_attribute("ssh.files_copied", len(files_copied))
+                        span.set_status(Status(StatusCode.OK))
+
+                    logger.info(
+                        f"Successfully distributed certificates to {vm_info.name}"
+                    )
+                    return DistributionResult(
+                        vm_name=vm_info.name,
+                        success=True,
+                        message="Certificates distributed and verified",
+                        files_copied=files_copied,
+                    )
+
+            except asyncssh.Error as e:
+                logger.error(f"SSH error distributing to {vm_info.name}: {e}")
+                # Issue #697: Record SSH error on span
+                if span.is_recording():
+                    span.set_status(Status(StatusCode.ERROR, f"SSH error: {e}"))
+                    span.record_exception(e)
+                    span.set_attribute("ssh.error_type", "asyncssh_error")
                 return DistributionResult(
                     vm_name=vm_info.name,
-                    success=True,
-                    message="Certificates distributed and verified",
-                    files_copied=files_copied,
+                    success=False,
+                    message=f"SSH error: {e}",
                 )
-
-        except asyncssh.Error as e:
-            logger.error(f"SSH error distributing to {vm_info.name}: {e}")
-            return DistributionResult(
-                vm_name=vm_info.name,
-                success=False,
-                message=f"SSH error: {e}",
-            )
-        except Exception as e:
-            logger.error(f"Error distributing to {vm_info.name}: {e}")
-            return DistributionResult(
-                vm_name=vm_info.name,
-                success=False,
-                message=str(e),
-            )
+            except Exception as e:
+                logger.error(f"Error distributing to {vm_info.name}: {e}")
+                # Issue #697: Record general error on span
+                if span.is_recording():
+                    span.set_status(Status(StatusCode.ERROR, str(e)))
+                    span.record_exception(e)
+                return DistributionResult(
+                    vm_name=vm_info.name,
+                    success=False,
+                    message=str(e),
+                )
 
     async def _copy_file(
         self,

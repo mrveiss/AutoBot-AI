@@ -325,6 +325,19 @@ check_vm_services() {
         echo -e "${YELLOW}    Start with: bash scripts/vm-management/start-redis.sh${NC}"
     fi
 
+    # Check Grafana dashboards sync (Issue #697)
+    echo -n "  Grafana Dashboards (${VMS["redis"]})... "
+    if [ -f "scripts/utilities/sync-grafana-dashboards.sh" ]; then
+        if ./scripts/utilities/sync-grafana-dashboards.sh --check --quiet 2>/dev/null; then
+            echo -e "${GREEN}✅ Synced${NC}"
+        else
+            echo -e "${YELLOW}⚠️ Out of sync${NC}"
+            echo -e "${YELLOW}    Sync with: ./scripts/utilities/sync-grafana-dashboards.sh${NC}"
+        fi
+    else
+        echo -e "${YELLOW}⚠️ Sync script not found${NC}"
+    fi
+
     # Check other services
     local services=("npu-worker" "ai-stack" "browser")
     local ports=($NPU_WORKER_PORT $AI_STACK_PORT $BROWSER_PORT)
@@ -1074,6 +1087,12 @@ main() {
     # Start frontend in dev mode if requested
     if [ "$DEV_MODE" = true ]; then
         start_frontend_dev
+    fi
+
+    # Sync Grafana dashboards (Issue #697)
+    if [ -f "scripts/utilities/sync-grafana-dashboards.sh" ]; then
+        log "Syncing Grafana dashboards..."
+        ./scripts/utilities/sync-grafana-dashboards.sh --quiet || true
     fi
 
     # Wait for backend to be fully ready (reduced time)

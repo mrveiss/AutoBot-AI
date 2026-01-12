@@ -149,6 +149,7 @@ async def _init_distributed_tracing(app: FastAPI, update_status_fn):
     Initialize OpenTelemetry distributed tracing with Jaeger export.
 
     Issue #281: Extracted helper for distributed tracing initialization.
+    Issue #697: Enhanced with Redis, aiohttp instrumentation and sampling.
 
     Args:
         app: FastAPI application instance
@@ -165,11 +166,15 @@ async def _init_distributed_tracing(app: FastAPI, update_status_fn):
             enable_console_export=False,  # Set True for debugging
         )
         if success:
-            # Instrument FastAPI for automatic tracing
-            tracing.instrument_fastapi(app)
+            # Issue #697: Instrument all supported libraries (FastAPI, Redis, aiohttp)
+            results = tracing.instrument_all(app)
+            instrumented = [k for k, v in results.items() if v]
             await update_status_fn("distributed_tracing", "ready")
             log_initialization_step(
-                "Distributed Tracing", "OpenTelemetry tracing initialized", 90, True
+                "Distributed Tracing",
+                f"OpenTelemetry initialized ({', '.join(instrumented)})",
+                90,
+                True,
             )
         else:
             await update_status_fn("distributed_tracing", "disabled")

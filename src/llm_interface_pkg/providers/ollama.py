@@ -6,6 +6,7 @@ Ollama Provider - Handler for Ollama LLM requests with streaming support.
 
 Extracted from llm_interface.py as part of Issue #381 god class refactoring.
 Issue #551: Added proper async cancellation handling and timeout fixes.
+Issue #697: Added OpenTelemetry tracing spans for LLM inference.
 """
 
 import asyncio
@@ -16,6 +17,8 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
 
 import aiohttp
+from opentelemetry import trace
+from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from src.circuit_breaker import circuit_breaker_async
 from src.unified_config_manager import UnifiedConfigManager
@@ -26,6 +29,9 @@ from ..streaming import StreamingManager
 
 logger = logging.getLogger(__name__)
 config = UnifiedConfigManager()
+
+# Issue #697: Get tracer for LLM operations
+_tracer = trace.get_tracer("autobot.llm.ollama", "2.0.0")
 
 
 class OllamaProvider:
@@ -331,6 +337,8 @@ class OllamaProvider:
         """
         Enhanced Ollama chat completion with improved streaming.
 
+        Issue #697: Added OpenTelemetry tracing for LLM inference monitoring.
+
         Args:
             request: LLM request object
 
@@ -346,50 +354,80 @@ class OllamaProvider:
         use_streaming = self.streaming_manager.should_use_streaming(model)
         data = self.build_request_data(request, model, use_streaming)
 
-        start_time = time.time()
+        # Issue #697: Create span for LLM inference with model attributes
+        with _tracer.start_as_current_span(
+            "llm.inference",
+            kind=SpanKind.CLIENT,
+            attributes={
+                "llm.provider": "ollama",
+                "llm.model": model,
+                "llm.streaming": use_streaming,
+                "llm.request_id": request.request_id,
+                "llm.temperature": request.temperature,
+                "llm.prompt_messages": len(request.messages),
+            },
+        ) as span:
+            start_time = time.time()
 
-        try:
-            if use_streaming:
-                response = await self.stream_response(
-                    url, headers, data, request.request_id, model
-                )
-                self.streaming_manager.record_success(model)
-            else:
-                response = await self.non_streaming_request(
-                    url, headers, data, request.request_id
-                )
+            try:
+                if use_streaming:
+                    response = await self.stream_response(
+                        url, headers, data, request.request_id, model
+                    )
+                    self.streaming_manager.record_success(model)
+                else:
+                    response = await self.non_streaming_request(
+                        url, headers, data, request.request_id
+                    )
 
-            processing_time = time.time() - start_time
-
-            if not isinstance(response, dict):
-                logger.error(
-                    f"Streaming response is not a dict: {type(response)} - {response}"
-                )
-                response = {"message": {"content": str(response)}, "model": model}
-
-            content = self.extract_content(response)
-            return self.build_response(
-                content, response, model, processing_time, request.request_id
-            )
-
-        except Exception as e:
-            if use_streaming:
-                self.streaming_manager.record_failure(model)
-                logger.error("Streaming REQUIRED but failed for %s: %s", model, e)
                 processing_time = time.time() - start_time
 
-                response = self.build_error_response(model, e)
+                if not isinstance(response, dict):
+                    logger.error(
+                        f"Streaming response is not a dict: {type(response)} - {response}"
+                    )
+                    response = {"message": {"content": str(response)}, "model": model}
+
                 content = self.extract_content(response)
+
+                # Issue #697: Record response attributes on span
+                if span.is_recording():
+                    span.set_attribute("llm.duration_ms", processing_time * 1000)
+                    span.set_attribute("llm.response_length", len(content))
+                    span.set_status(Status(StatusCode.OK))
+
                 return self.build_response(
-                    content,
-                    response,
-                    model,
-                    processing_time,
-                    request.request_id,
-                    fallback_used=True,
+                    content, response, model, processing_time, request.request_id
                 )
 
-            raise e
+            except Exception as e:
+                # Issue #697: Record error on span
+                if span.is_recording():
+                    span.set_status(Status(StatusCode.ERROR, str(e)))
+                    span.record_exception(e)
+                    span.set_attribute("llm.error", True)
+
+                if use_streaming:
+                    self.streaming_manager.record_failure(model)
+                    logger.error("Streaming REQUIRED but failed for %s: %s", model, e)
+                    processing_time = time.time() - start_time
+
+                    response = self.build_error_response(model, e)
+                    content = self.extract_content(response)
+
+                    if span.is_recording():
+                        span.set_attribute("llm.fallback_used", True)
+
+                    return self.build_response(
+                        content,
+                        response,
+                        model,
+                        processing_time,
+                        request.request_id,
+                        fallback_used=True,
+                    )
+
+                raise e
 
 
 __all__ = [

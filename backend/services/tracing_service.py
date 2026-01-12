@@ -2,7 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Distributed Tracing Service with OpenTelemetry (Issue #57)
+Distributed Tracing Service with OpenTelemetry (Issue #57, #697)
 
 Provides centralized OpenTelemetry configuration for distributed tracing
 across the 5-VM AutoBot infrastructure (see NetworkConstants for IPs):
@@ -19,6 +19,9 @@ Features:
 - Custom attributes for AutoBot-specific data
 - OTLP export to Jaeger/Zipkin
 - Graceful fallback when tracing is unavailable
+- Redis auto-instrumentation (Issue #697)
+- aiohttp client auto-instrumentation (Issue #697)
+- Configurable sampling strategy (Issue #697)
 """
 
 import logging
@@ -36,6 +39,11 @@ from opentelemetry.propagators.b3 import B3MultiFormat
 from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_VERSION
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
+from opentelemetry.sdk.trace.sampling import (
+    ParentBasedTraceIdRatio,
+    ALWAYS_ON,
+    ALWAYS_OFF,
+)
 from opentelemetry.trace import Status, StatusCode, SpanKind
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
@@ -96,6 +104,12 @@ class TracingService:
             "false"
         ).lower() == "true"
 
+        # Issue #697: Configurable sampling strategy
+        # AUTOBOT_TRACE_SAMPLE_RATE: 0.0-1.0 (0.1 = 10% sampling in production)
+        self._sample_rate = float(os.getenv("AUTOBOT_TRACE_SAMPLE_RATE", "1.0"))
+        self._redis_instrumented = False
+        self._aiohttp_instrumented = False
+
         TracingService._initialized = True
 
     def _resolve_service_name(self, service_name: Optional[str]) -> str:
@@ -131,6 +145,26 @@ class TracingService:
             "deployment.environment": os.getenv("AUTOBOT_ENV", "development"),
             "service.namespace": "autobot",
         })
+
+    def _create_sampler(self):
+        """
+        Create trace sampler based on configuration (Issue #697).
+
+        Uses ParentBasedTraceIdRatio for probabilistic sampling that respects
+        parent span decisions (ensures complete traces).
+
+        Returns:
+            Configured sampler instance
+        """
+        if self._sample_rate <= 0.0:
+            logger.info("Trace sampling disabled (rate=0.0)")
+            return ALWAYS_OFF
+        elif self._sample_rate >= 1.0:
+            logger.info("Trace sampling: all traces (rate=1.0)")
+            return ALWAYS_ON
+        else:
+            logger.info("Trace sampling: %.1f%% of traces", self._sample_rate * 100)
+            return ParentBasedTraceIdRatio(self._sample_rate)
 
     def _setup_exporters(self, enable_console_export: bool) -> None:
         """
@@ -193,8 +227,11 @@ class TracingService:
             # Create resource with service information (Issue #665: uses helper)
             resource = self._create_resource()
 
-            # Create tracer provider
-            self._provider = TracerProvider(resource=resource)
+            # Issue #697: Create sampler for trace sampling strategy
+            sampler = self._create_sampler()
+
+            # Create tracer provider with sampling
+            self._provider = TracerProvider(resource=resource, sampler=sampler)
 
             # Configure exporters (Issue #665: uses helper)
             self._setup_exporters(enable_console_export)
@@ -252,6 +289,106 @@ class TracingService:
         except Exception as e:
             logger.error("Failed to instrument FastAPI: %s", e)
             return False
+
+    def instrument_redis(self) -> bool:
+        """
+        Instrument Redis clients for automatic tracing (Issue #697).
+
+        Auto-traces all Redis operations including GET, SET, HGET, LPUSH, etc.
+        Works with both sync and async Redis clients.
+
+        Returns:
+            True if instrumentation succeeded
+        """
+        if not self._enabled:
+            logger.warning("Tracing not enabled, skipping Redis instrumentation")
+            return False
+
+        if self._redis_instrumented:
+            logger.debug("Redis already instrumented, skipping")
+            return True
+
+        try:
+            from opentelemetry.instrumentation.redis import RedisInstrumentor
+
+            RedisInstrumentor().instrument(tracer_provider=self._provider)
+            self._redis_instrumented = True
+            logger.info("Redis instrumented for distributed tracing")
+            return True
+        except ImportError:
+            logger.warning(
+                "opentelemetry-instrumentation-redis not installed. "
+                "Run: pip install opentelemetry-instrumentation-redis"
+            )
+            return False
+        except Exception as e:
+            logger.error("Failed to instrument Redis: %s", e)
+            return False
+
+    def instrument_aiohttp(self) -> bool:
+        """
+        Instrument aiohttp client for automatic tracing (Issue #697).
+
+        Auto-traces all outgoing HTTP requests made with aiohttp.ClientSession,
+        including trace context propagation to downstream services.
+
+        Returns:
+            True if instrumentation succeeded
+        """
+        if not self._enabled:
+            logger.warning("Tracing not enabled, skipping aiohttp instrumentation")
+            return False
+
+        if self._aiohttp_instrumented:
+            logger.debug("aiohttp already instrumented, skipping")
+            return True
+
+        try:
+            from opentelemetry.instrumentation.aiohttp_client import (
+                AioHttpClientInstrumentor,
+            )
+
+            AioHttpClientInstrumentor().instrument(tracer_provider=self._provider)
+            self._aiohttp_instrumented = True
+            logger.info("aiohttp client instrumented for distributed tracing")
+            return True
+        except ImportError:
+            logger.warning(
+                "opentelemetry-instrumentation-aiohttp-client not installed. "
+                "Run: pip install opentelemetry-instrumentation-aiohttp-client"
+            )
+            return False
+        except Exception as e:
+            logger.error("Failed to instrument aiohttp: %s", e)
+            return False
+
+    def instrument_all(self, app=None) -> Dict[str, bool]:
+        """
+        Instrument all supported libraries (Issue #697).
+
+        Convenience method to instrument FastAPI, Redis, and aiohttp in one call.
+
+        Args:
+            app: Optional FastAPI application instance
+
+        Returns:
+            Dictionary of instrumentation results
+        """
+        results = {
+            "redis": self.instrument_redis(),
+            "aiohttp": self.instrument_aiohttp(),
+        }
+
+        if app is not None:
+            results["fastapi"] = self.instrument_fastapi(app)
+
+        successful = sum(1 for v in results.values() if v)
+        logger.info(
+            "Instrumentation complete: %d/%d libraries instrumented",
+            successful,
+            len(results),
+        )
+        return results
 
     @property
     def tracer(self) -> Optional[trace.Tracer]:
