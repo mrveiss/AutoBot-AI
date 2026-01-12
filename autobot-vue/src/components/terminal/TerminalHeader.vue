@@ -90,46 +90,47 @@ defineEmits<Emits>()
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .window-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #2d2d2d;
-  padding: 8px 16px;
-  border-bottom: 1px solid #333;
+  background-color: var(--bg-secondary);
+  padding: var(--spacing-2) var(--spacing-4);
+  border-bottom: 1px solid var(--border-subtle);
   user-select: none;
 }
 
 .window-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 600;
+  gap: var(--spacing-2);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
 }
 
 .terminal-icon {
-  font-size: 16px;
+  font-size: var(--text-base);
 }
 
 .window-controls {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .control-button {
-  background-color: #444;
-  border: 1px solid #666;
-  color: #fff;
-  padding: 4px 8px;
-  border-radius: 3px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  color: var(--text-on-primary);
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 12px;
-  transition: all 0.2s;
+  font-size: var(--text-xs);
+  transition: all var(--duration-200) var(--ease-in-out);
 }
 
 .control-button:hover:not(:disabled) {
-  background-color: #555;
+  background-color: var(--bg-hover);
   transform: translateY(-1px);
 }
 
@@ -139,63 +140,63 @@ defineEmits<Emits>()
 }
 
 .control-button.danger:hover:not(:disabled) {
-  background-color: #dc3545;
+  background-color: var(--color-error);
 }
 
 /* Emergency control button styles */
 .control-button.emergency-kill {
-  background-color: #dc3545;
-  color: white;
-  font-weight: bold;
-  border-color: #c82333;
+  background-color: var(--color-error);
+  color: var(--text-on-error);
+  font-weight: var(--font-bold);
+  border-color: var(--color-error-hover);
 }
 
 .control-button.emergency-kill:hover:not(:disabled) {
-  background-color: #c82333;
-  border-color: #bd2130;
+  background-color: var(--color-error-hover);
+  border-color: var(--color-error-active);
   transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+  box-shadow: var(--shadow-error);
 }
 
 .control-button.interrupt {
-  background-color: #ffc107;
-  color: #212529;
-  border-color: #e0a800;
+  background-color: var(--color-warning);
+  color: var(--text-primary-dark);
+  border-color: var(--color-warning-hover);
 }
 
 .control-button.interrupt:hover:not(:disabled) {
-  background-color: #e0a800;
-  border-color: #d39e00;
+  background-color: var(--color-warning-hover);
+  border-color: var(--color-warning-active);
 }
 
 .control-button.takeover {
-  background-color: #17a2b8;
-  color: white;
-  border-color: #138496;
-  font-weight: 600;
+  background-color: var(--color-info);
+  color: var(--text-on-primary);
+  border-color: var(--color-info-hover);
+  font-weight: var(--font-semibold);
 }
 
 .control-button.takeover:hover:not(:disabled) {
-  background-color: #138496;
-  border-color: #0c7084;
+  background-color: var(--color-info-hover);
+  border-color: var(--color-info-active);
 }
 
 .control-button.takeover.active {
-  background-color: #28a745;
-  border-color: #1e7e34;
+  background-color: var(--color-success);
+  border-color: var(--color-success-hover);
   animation: pulse-success 2s infinite;
 }
 
 .control-button.takeover.active:hover {
-  background-color: #218838;
+  background-color: var(--color-success-hover);
 }
 
 @keyframes pulse-success {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.4);
+    box-shadow: 0 0 0 0 var(--color-success-bg);
   }
   50% {
-    box-shadow: 0 0 0 8px rgba(40, 167, 69, 0);
+    box-shadow: 0 0 0 8px transparent;
   }
 }
 </style>

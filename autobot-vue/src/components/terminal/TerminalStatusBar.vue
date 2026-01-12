@@ -47,47 +47,48 @@ const connectionStatusText = computed(() => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .terminal-status-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #1e1e1e;
-  padding: 4px 16px;
-  border-bottom: 1px solid #333;
-  font-size: 11px;
-  color: #888;
+  background-color: var(--bg-tertiary);
+  padding: var(--spacing-1) var(--spacing-4);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .status-left, .status-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .connection-status {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .status-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: #dc3545;
+  background-color: var(--color-error);
 }
 
 .connection-status.connected .status-dot {
-  background-color: #28a745;
+  background-color: var(--color-success);
 }
 
 .connection-status.connecting .status-dot {
-  background-color: #ffc107;
+  background-color: var(--color-warning);
   animation: pulse 1s infinite;
 }
 
 .connection-status.error .status-dot {
-  background-color: #dc3545;
+  background-color: var(--color-error);
   animation: flash 0.5s infinite;
 }
 
