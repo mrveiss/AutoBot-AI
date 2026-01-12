@@ -1663,6 +1663,57 @@ async def _analyze_with_semaphore(
         return await _analyze_single_file(file_path, root_path_obj, redis_client)
 
 
+def _create_error_result(
+    file_path: Path, root_path_obj: Path
+) -> "FileAnalysisResult":
+    """
+    Create FileAnalysisResult for a failed file processing.
+
+    Issue #665: Extracted from _process_files_parallel to reduce function length.
+
+    Args:
+        file_path: Path to the file that failed
+        root_path_obj: Root path for relative path computation
+
+    Returns:
+        FileAnalysisResult with was_processed=False
+    """
+    return FileAnalysisResult(
+        file_path=file_path,
+        relative_path=str(file_path.relative_to(root_path_obj)),
+        extension=file_path.suffix.lower(),
+        file_category=_get_file_category(file_path),
+        was_processed=False,
+        was_skipped_unchanged=False,
+    )
+
+
+async def _process_batch_results(
+    batch_results: List,
+    batch_files: List[Path],
+    root_path_obj: Path,
+    results: List["FileAnalysisResult"],
+) -> None:
+    """
+    Process batch results, handling exceptions and collecting results.
+
+    Issue #665: Extracted from _process_files_parallel to reduce function length.
+
+    Args:
+        batch_results: Results from asyncio.gather (may include exceptions)
+        batch_files: List of files in this batch
+        root_path_obj: Root path for relative path computation
+        results: List to append results to
+    """
+    for i, result in enumerate(batch_results):
+        if isinstance(result, Exception):
+            file_path = batch_files[i]
+            logger.debug("Error processing %s: %s", file_path, result)
+            results.append(_create_error_result(file_path, root_path_obj))
+        else:
+            results.append(result)
+
+
 async def _process_files_parallel(
     all_files: List[Path],
     root_path_obj: Path,
@@ -1673,9 +1724,7 @@ async def _process_files_parallel(
     """
     Process files in parallel using asyncio.gather with semaphore rate limiting.
 
-    Issue #711: Core parallel processing function that replaces sequential
-    file iteration. Returns list of FileAnalysisResult objects for
-    thread-safe aggregation.
+    Issue #665: Refactored to use extracted helper methods.
 
     Args:
         all_files: List of file paths to process
@@ -1692,8 +1741,6 @@ async def _process_files_parallel(
 
     semaphore = asyncio.Semaphore(PARALLEL_FILE_CONCURRENCY)
     results: List[FileAnalysisResult] = []
-
-    # Process in batches for progress tracking
     batch_size = max(100, PARALLEL_FILE_CONCURRENCY * 2)
     total = len(all_files)
 
@@ -1708,37 +1755,19 @@ async def _process_files_parallel(
         batch_end = min(batch_start + batch_size, total)
         batch_files = all_files[batch_start:batch_end]
 
-        # Create tasks for this batch
         tasks = [
             _analyze_with_semaphore(f, root_path_obj, semaphore, redis_client)
             for f in batch_files
         ]
 
-        # Process batch in parallel
         batch_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Collect results, handle exceptions
-        for i, result in enumerate(batch_results):
-            if isinstance(result, Exception):
-                # Create error result for failed file
-                file_path = batch_files[i]
-                logger.debug("Error processing %s: %s", file_path, result)
-                results.append(FileAnalysisResult(
-                    file_path=file_path,
-                    relative_path=str(file_path.relative_to(root_path_obj)),
-                    extension=file_path.suffix.lower(),
-                    file_category=_get_file_category(file_path),
-                    was_processed=False,
-                    was_skipped_unchanged=False,
-                ))
-            else:
-                results.append(result)
+        # Issue #665: Use helper for result processing
+        await _process_batch_results(batch_results, batch_files, root_path_obj, results)
 
         files_completed += len(batch_files)
 
-        # Progress update
         if progress_callback:
-            percent = int((files_completed / total) * 100)
             await progress_callback(
                 operation="Scanning files (parallel)",
                 current=files_completed,
@@ -1746,7 +1775,6 @@ async def _process_files_parallel(
                 current_file=f"Batch {batch_start // batch_size + 1} complete",
             )
 
-        # Yield to event loop between batches
         await asyncio.sleep(0)
 
     logger.info("[Parallel] Completed processing %d files", len(results))

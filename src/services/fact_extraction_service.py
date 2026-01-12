@@ -552,6 +552,64 @@ class FactExtractionService:
             # Get all facts
             return await self.redis_client.smembers(self.fact_index_key)
 
+    async def _batch_retrieve_facts(
+        self, fact_ids_list: List[str]
+    ) -> List[Optional[str]]:
+        """
+        Batch retrieve fact data from Redis.
+
+        Issue #665: Extracted from get_facts_by_criteria to reduce function length.
+
+        Args:
+            fact_ids_list: List of fact IDs to retrieve
+
+        Returns:
+            List of fact data strings (or None for missing facts)
+        """
+        pipe = self.redis_client.pipeline()
+        for fact_id in fact_ids_list:
+            fact_key = f"{self.fact_storage_prefix}{fact_id}"
+            pipe.hget(fact_key, "data")
+        return await pipe.execute()
+
+    def _filter_and_deserialize_fact(
+        self,
+        fact_id: str,
+        fact_data: Optional[str],
+        active_only: bool,
+        min_confidence: Optional[float],
+    ) -> Optional[AtomicFact]:
+        """
+        Deserialize and filter a single fact.
+
+        Issue #665: Extracted from get_facts_by_criteria to reduce function length.
+
+        Args:
+            fact_id: Fact identifier
+            fact_data: Serialized fact data
+            active_only: Whether to filter inactive facts
+            min_confidence: Minimum confidence threshold
+
+        Returns:
+            AtomicFact if passes filters, None otherwise
+        """
+        if not fact_data:
+            return None
+
+        try:
+            fact_dict = json.loads(fact_data)
+            fact = AtomicFact.from_dict(fact_dict)
+
+            if active_only and not fact.is_active:
+                return None
+            if min_confidence and fact.confidence < min_confidence:
+                return None
+
+            return fact
+        except Exception as e:
+            logger.error("Error deserializing fact %s: %s", fact_id, e)
+            return None
+
     async def get_facts_by_criteria(
         self,
         source: Optional[str] = None,
@@ -563,6 +621,8 @@ class FactExtractionService:
     ) -> List[AtomicFact]:
         """
         Retrieve facts based on various criteria.
+
+        Issue #665: Refactored to use extracted helper methods.
 
         Args:
             source: Filter by source
@@ -580,7 +640,6 @@ class FactExtractionService:
                 logger.warning("Redis client not available")
                 return []
 
-            # Build candidate keys and get fact IDs (Issue #281: uses helpers)
             candidate_keys = self._build_criteria_candidate_keys(
                 source, fact_type, temporal_type
             )
@@ -589,41 +648,22 @@ class FactExtractionService:
             if not fact_ids:
                 return []
 
-            # Retrieve and filter facts
-            facts = []
             # Get more IDs to account for filtering
             fact_ids_list = list(fact_ids)[: limit * 2]
 
-            # Batch retrieve facts
-            pipe = self.redis_client.pipeline()
-            for fact_id in fact_ids_list:
-                fact_key = f"{self.fact_storage_prefix}{fact_id}"
-                pipe.hget(fact_key, "data")
+            # Issue #665: Use helper for batch retrieval
+            fact_data_list = await self._batch_retrieve_facts(fact_ids_list)
 
-            fact_data_list = await pipe.execute()
-
+            # Issue #665: Use helper for filtering
+            facts = []
             for fact_id, fact_data in zip(fact_ids_list, fact_data_list):
-                if not fact_data:
-                    continue
-
-                try:
-                    fact_dict = json.loads(fact_data)
-                    fact = AtomicFact.from_dict(fact_dict)
-
-                    # Apply additional filters
-                    if active_only and not fact.is_active:
-                        continue
-                    if min_confidence and fact.confidence < min_confidence:
-                        continue
-
+                fact = self._filter_and_deserialize_fact(
+                    fact_id, fact_data, active_only, min_confidence
+                )
+                if fact:
                     facts.append(fact)
-
                     if len(facts) >= limit:
                         break
-
-                except Exception as e:
-                    logger.error("Error deserializing fact %s: %s", fact_id, e)
-                    continue
 
             logger.debug("Retrieved %s facts matching criteria", len(facts))
             return facts

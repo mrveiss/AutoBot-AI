@@ -419,6 +419,72 @@ async def websocket_test_endpoint(websocket: WebSocket):
         logger.info("Test WebSocket disconnected")
 
 
+def _get_chat_history_manager(websocket: WebSocket):
+    """
+    Get chat_history_manager from WebSocket app.state.
+
+    Issue #665: Extracted from websocket_endpoint to reduce function length.
+
+    Args:
+        websocket: WebSocket connection
+
+    Returns:
+        chat_history_manager or None if not available
+    """
+    try:
+        if hasattr(websocket.scope.get("app"), "state"):
+            manager = getattr(
+                websocket.scope["app"].state, "chat_history_manager", None
+            )
+            if manager:
+                logger.info("Successfully accessed chat_history_manager from app.state")
+            else:
+                logger.warning("chat_history_manager not available in app.state")
+            return manager
+        logger.warning("app.state not available in WebSocket scope")
+        return None
+    except Exception as e:
+        logger.error("Failed to access chat_history_manager: %s", e)
+        return None
+
+
+def _register_event_manager_broadcast(broadcast_event: Callable) -> None:
+    """
+    Register broadcast function with event manager.
+
+    Issue #665: Extracted from websocket_endpoint to reduce function length.
+
+    Args:
+        broadcast_event: Broadcast callback function
+    """
+    try:
+        from src.event_manager import event_manager
+
+        event_manager.register_websocket_broadcast(broadcast_event)
+        logger.info("Successfully registered WebSocket broadcast with event manager")
+    except ImportError as e:
+        logger.warning("Event manager not available, continuing without it: %s", e)
+    except Exception as e:
+        logger.warning("Failed to register WebSocket broadcast, continuing: %s", e)
+
+
+def _unregister_event_manager_broadcast() -> None:
+    """
+    Unregister broadcast function from event manager.
+
+    Issue #665: Extracted from websocket_endpoint to reduce function length.
+    """
+    try:
+        from src.event_manager import event_manager
+
+        event_manager.register_websocket_broadcast(None)
+        logger.info("WebSocket broadcast unregistered from event manager")
+    except ImportError:
+        logger.debug("Event manager not available for cleanup")
+    except Exception as e:
+        logger.error("Error during event manager cleanup: %s", e)
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="websocket_endpoint",
@@ -429,80 +495,39 @@ async def websocket_endpoint(websocket: WebSocket):
     """
     WebSocket endpoint for real-time event stream between backend and frontend.
 
-    Handles:
-    - Real-time event broadcasting from backend to frontend
-    - Chat history integration for all events
-    - Event type mapping and message formatting
+    Issue #665: Refactored to use extracted helper methods.
     """
-    chat_history_manager = None
-
     try:
         await websocket.accept()
         logger.info("WebSocket connected from client: %s", websocket.client)
 
-        # Send immediate connection confirmation
         await websocket.send_json(
             {
                 "type": "connection_established",
                 "payload": {"message": "WebSocket connected successfully"},
             }
         )
-
     except Exception as e:
         logger.error("Failed to accept WebSocket connection: %s", e, exc_info=True)
         return
 
-    # Access chat_history_manager from app.state via scope with error handling
-    try:
-        if hasattr(websocket.scope.get("app"), "state"):
-            chat_history_manager = getattr(
-                websocket.scope["app"].state, "chat_history_manager", None
-            )
-            if chat_history_manager:
-                logger.info("Successfully accessed chat_history_manager from app.state")
-            else:
-                logger.warning("chat_history_manager not available in app.state")
-        else:
-            logger.warning("app.state not available in WebSocket scope")
-    except Exception as e:
-        logger.error("Failed to access chat_history_manager: %s", e)
-        # Don't send error to client here, just continue without chat history
+    # Issue #665: Use helper for chat history manager access
+    chat_history_manager = _get_chat_history_manager(websocket)
 
-    # Create broadcast event handler (Issue #315 - refactored)
     broadcast_event = await _create_broadcast_event_handler(websocket, chat_history_manager)
 
-    # Register the broadcast function with the event manager
-    try:
-        from src.event_manager import event_manager
-
-        event_manager.register_websocket_broadcast(broadcast_event)
-        logger.info("Successfully registered WebSocket broadcast with event manager")
-    except ImportError as e:
-        logger.warning("Event manager not available, continuing without it: %s", e)
-        # Continue without event manager - this is not critical
-    except Exception as e:
-        logger.warning("Failed to register WebSocket broadcast, continuing: %s", e)
-        # Continue without event manager registration - this is not critical
+    # Issue #665: Use helper for event manager registration
+    _register_event_manager_broadcast(broadcast_event)
 
     try:
-        # Keep connection alive and handle incoming messages (Issue #315 - refactored)
         await _websocket_message_receive_loop(websocket)
-
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected normally")
     except Exception as e:
         logger.error("WebSocket error: %s", e, exc_info=True)
     finally:
-        # Unregister the broadcast function when connection closes
-        try:
-            from src.event_manager import event_manager
-
-            event_manager.register_websocket_broadcast(None)
-            logger.info("WebSocket broadcast unregistered from event manager")
-        except ImportError:
-            logger.debug("Event manager not available for cleanup")
-        except Exception as e:
-            logger.error("Error during event manager cleanup: %s", e)
+        # Issue #665: Use helper for cleanup
+        _unregister_event_manager_broadcast()
         logger.info("WebSocket connection cleanup completed")
 
 
