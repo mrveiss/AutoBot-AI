@@ -47,30 +47,31 @@ const isActiveTab = (tabId: string): boolean => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .settings-tab-navigation {
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-5);
 }
 
 .unsaved-changes-indicator {
-  background: linear-gradient(45deg, #ff6b35, #ff8e3c);
-  color: white;
-  padding: 12px 16px;
-  border-radius: 8px;
-  margin-bottom: 20px;
+  background: linear-gradient(45deg, var(--color-warning), var(--color-warning-hover));
+  color: var(--text-on-primary);
+  padding: var(--spacing-3) var(--spacing-4);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-5);
   display: flex;
   align-items: center;
-  font-weight: 500;
-  box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3);
+  font-weight: var(--font-medium);
+  box-shadow: var(--shadow-md);
 }
 
 .unsaved-changes-indicator i {
-  margin-right: 12px;
-  font-size: 16px;
+  margin-right: var(--spacing-3);
+  font-size: var(--text-base);
 }
 
 .settings-tabs {
   display: flex;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-default);
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -83,62 +84,40 @@ const isActiveTab = (tabId: string): boolean => {
 .settings-tab-link {
   background: none;
   border: none;
-  padding: 12px 20px;
+  padding: var(--spacing-3) var(--spacing-5);
   cursor: pointer;
   border-bottom: 3px solid transparent;
-  transition: all 0.2s ease;
+  transition: all var(--duration-200) var(--ease-in-out);
   white-space: nowrap;
-  color: #666;
-  font-weight: 500;
+  color: var(--text-secondary);
+  font-weight: var(--font-medium);
   min-width: 100px;
   text-decoration: none;
   text-align: center;
 }
 
 .settings-tab-link:hover {
-  background-color: #f5f5f5;
-  color: #333;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 .settings-tab-link.active {
-  border-bottom-color: #007acc;
-  color: #007acc;
-  background-color: #f9f9f9;
+  border-bottom-color: var(--color-primary);
+  color: var(--color-primary);
+  background-color: var(--bg-tertiary);
 }
 
 .settings-tab-link:focus {
   outline: none;
-  box-shadow: inset 0 0 0 2px #007acc;
-}
-
-/* Dark theme support */
-@media (prefers-color-scheme: dark) {
-  .settings-tabs {
-    border-bottom-color: #444;
-  }
-
-  .settings-tab-link {
-    color: #ccc;
-  }
-
-  .settings-tab-link:hover {
-    background-color: #333;
-    color: #fff;
-  }
-
-  .settings-tab-link.active {
-    background-color: #2d2d2d;
-    color: #4fc3f7;
-    border-bottom-color: #4fc3f7;
-  }
+  box-shadow: inset 0 0 0 2px var(--color-primary);
 }
 
 /* Mobile responsive */
 @media (max-width: 768px) {
   .settings-tab-link {
-    padding: 10px 16px;
+    padding: var(--spacing-2-5) var(--spacing-4);
     min-width: 80px;
-    font-size: 14px;
+    font-size: var(--text-sm);
   }
 }
 </style>

@@ -223,33 +223,34 @@ const handleForceCleanup = () => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .sub-tab-content {
-  padding: 1rem 0;
+  padding: var(--spacing-4) 0;
 }
 
 .sub-tab-content h3 {
-  margin: 0 0 20px 0;
-  color: #2c3e50;
-  font-weight: 600;
-  font-size: 18px;
-  border-bottom: 2px solid #3498db;
-  padding-bottom: 8px;
+  margin: 0 0 var(--spacing-5) 0;
+  color: var(--text-primary);
+  font-weight: var(--font-semibold);
+  font-size: 1.125rem;
+  border-bottom: 2px solid var(--color-primary);
+  padding-bottom: var(--spacing-2);
 }
 
 .sub-tab-content h4 {
-  margin: 0 0 16px 0;
-  color: #34495e;
-  font-weight: 500;
-  font-size: 16px;
+  margin: 0 0 var(--spacing-4) 0;
+  color: var(--text-secondary);
+  font-weight: var(--font-medium);
+  font-size: var(--text-base);
 }
 
 .setting-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  padding: 12px 0;
-  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: var(--spacing-4);
+  padding: var(--spacing-3) 0;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .setting-item:last-child {
@@ -258,128 +259,130 @@ const handleForceCleanup = () => {
 }
 
 .setting-item label {
-  font-weight: 500;
-  color: #34495e;
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
   flex: 1;
-  margin-right: 16px;
+  margin-right: var(--spacing-4);
   cursor: pointer;
 }
 
 .setting-item input,
 .setting-item select {
   min-width: 200px;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-  transition: border-color 0.2s ease;
+  padding: var(--spacing-2) var(--spacing-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  transition: border-color var(--duration-200) var(--ease-in-out);
 }
 
 .setting-item input[type='checkbox'] {
   min-width: auto;
-  width: 20px;
-  height: 20px;
+  width: 1.25rem;
+  height: 1.25rem;
   cursor: pointer;
-  accent-color: #007acc;
+  accent-color: var(--color-primary);
 }
 
 .setting-item input:focus,
 .setting-item select:focus {
   outline: none;
-  border-color: #007acc;
-  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-bg-transparent);
 }
 
 .provider-section {
-  margin-top: 20px;
-  padding: 16px;
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 8px;
+  margin-top: var(--spacing-5);
+  padding: var(--spacing-4);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
 }
 
 .memory-status-section {
-  margin-top: 24px;
-  padding: 16px;
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 8px;
+  margin-top: var(--spacing-6);
+  padding: var(--spacing-4);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
 }
 
 .status-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-4);
 }
 
 .status-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .status-label {
-  font-size: 12px;
-  color: #6c757d;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
   text-transform: uppercase;
 }
 
 .status-value {
-  font-size: 16px;
-  font-weight: 600;
-  color: #2c3e50;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .status-actions {
   display: flex;
-  gap: 8px;
-  padding-top: 16px;
-  border-top: 1px solid #dee2e6;
+  gap: var(--spacing-2);
+  padding-top: var(--spacing-4);
+  border-top: 1px solid var(--border-default);
 }
 
 .danger-btn {
-  padding: 8px 16px;
+  padding: var(--spacing-2) var(--spacing-4);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 14px;
-  background: #dc3545;
-  color: white;
-  transition: all 0.2s;
+  font-size: var(--text-sm);
+  background: var(--color-error);
+  color: var(--text-on-primary);
+  transition: all var(--duration-200) var(--ease-in-out);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .danger-btn:hover {
-  background: #c82333;
+  background: var(--color-error-hover);
 }
 
 .secondary-btn {
-  padding: 8px 16px;
-  border: 1px solid #6c757d;
-  border-radius: 4px;
+  padding: var(--spacing-2) var(--spacing-4);
+  border: 1px solid var(--text-tertiary);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 14px;
-  background: white;
-  color: #6c757d;
-  transition: all 0.2s;
+  font-size: var(--text-sm);
+  background: var(--bg-primary);
+  color: var(--text-tertiary);
+  transition: all var(--duration-200) var(--ease-in-out);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .secondary-btn:hover {
-  background: #6c757d;
-  color: white;
+  background: var(--text-tertiary);
+  color: var(--text-on-primary);
 }
 
 @media (max-width: 768px) {
   .setting-item {
     flex-direction: column;
     align-items: stretch;
-    gap: 8px;
+    gap: var(--spacing-2);
   }
 
   .setting-item label {

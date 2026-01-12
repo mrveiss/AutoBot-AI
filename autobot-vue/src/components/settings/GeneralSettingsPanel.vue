@@ -385,81 +385,82 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .sub-tab-content {
-  padding: 1rem 0;
+  padding: var(--spacing-4) 0;
 }
 
 .sub-tab-content h3 {
-  margin: 0 0 20px 0;
-  color: #2c3e50;
-  font-weight: 600;
-  font-size: 18px;
-  border-bottom: 2px solid #3498db;
-  padding-bottom: 8px;
+  margin: 0 0 var(--spacing-5) 0;
+  color: var(--text-primary);
+  font-weight: var(--font-semibold);
+  font-size: 1.125rem;
+  border-bottom: 2px solid var(--color-primary);
+  padding-bottom: var(--spacing-2);
 }
 
 .connection-status-banner {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px;
-  border-radius: 8px;
-  margin-bottom: 20px;
+  padding: var(--spacing-4);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-5);
   border: 1px solid;
 }
 
 .connection-status-banner.connected {
-  background: #d4edda;
-  border-color: #c3e6cb;
-  color: #155724;
+  background: var(--color-success-bg);
+  border-color: var(--color-success-border);
+  color: var(--color-success);
 }
 
 .connection-status-banner.disconnected {
-  background: #f8d7da;
-  border-color: #f5c6cb;
-  color: #721c24;
+  background: var(--color-error-bg);
+  border-color: var(--color-error-border);
+  color: var(--color-error);
 }
 
 .connection-status-banner.testing {
-  background: #fff3cd;
-  border-color: #ffeaa7;
-  color: #856404;
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
+  color: var(--color-warning);
 }
 
 .connection-status-banner.unknown {
-  background: #e2e3e5;
-  border-color: #d6d8db;
-  color: #383d41;
+  background: var(--bg-tertiary);
+  border-color: var(--border-default);
+  color: var(--text-secondary);
 }
 
 .status-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .status-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .test-connection-btn,
 .refresh-status-btn {
-  padding: 6px 12px;
+  padding: var(--spacing-1-5) var(--spacing-3);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
+  font-size: var(--text-sm);
+  transition: all var(--duration-200) var(--ease-in-out);
 }
 
 .test-connection-btn {
-  background: #007acc;
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .test-connection-btn:hover:not(:disabled) {
-  background: #005fa3;
+  background: var(--color-primary-hover);
 }
 
 .test-connection-btn:disabled {
@@ -468,16 +469,16 @@ onMounted(() => {
 }
 
 .refresh-status-btn {
-  background: #6c757d;
-  color: white;
+  background: var(--text-tertiary);
+  color: var(--text-on-primary);
 }
 
 .refresh-status-btn:hover {
-  background: #545b62;
+  background: var(--text-secondary);
 }
 
 .response-time {
-  font-size: 12px;
+  font-size: var(--text-xs);
   opacity: 0.8;
 }
 
@@ -485,9 +486,9 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  padding: 12px 0;
-  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: var(--spacing-4);
+  padding: var(--spacing-3) 0;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .setting-item:last-child {
@@ -496,43 +497,45 @@ onMounted(() => {
 }
 
 .setting-item label {
-  font-weight: 500;
-  color: #34495e;
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
   flex: 1;
-  margin-right: 16px;
+  margin-right: var(--spacing-4);
   cursor: pointer;
 }
 
 .setting-item input,
 .setting-item select {
   min-width: 200px;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-  transition: border-color 0.2s ease;
+  padding: var(--spacing-2) var(--spacing-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  transition: border-color var(--duration-200) var(--ease-in-out);
 }
 
 .setting-item input[type='checkbox'] {
   min-width: auto;
-  width: 20px;
-  height: 20px;
+  width: 1.25rem;
+  height: 1.25rem;
   cursor: pointer;
-  accent-color: #007acc;
+  accent-color: var(--color-primary);
 }
 
 .setting-item input:focus,
 .setting-item select:focus {
   outline: none;
-  border-color: #007acc;
-  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-bg-transparent);
 }
 
 .input-group {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .input-group input {
@@ -540,48 +543,48 @@ onMounted(() => {
 }
 
 .validate-path-btn {
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  background: #17a2b8;
-  color: white;
-  font-size: 12px;
+  background: var(--color-info);
+  color: var(--text-on-primary);
+  font-size: var(--text-xs);
   white-space: nowrap;
 }
 
 .validate-path-btn:hover {
-  background: #138496;
+  background: var(--color-info-hover);
 }
 
 .validation-message {
-  font-size: 12px;
-  margin-top: 4px;
-  padding: 4px 8px;
-  border-radius: 4px;
+  font-size: var(--text-xs);
+  margin-top: var(--spacing-1);
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-sm);
 }
 
 .validation-message.error {
-  background: #f8d7da;
-  color: #721c24;
-  border: 1px solid #f5c6cb;
+  background: var(--color-error-bg);
+  color: var(--color-error);
+  border: 1px solid var(--color-error-border);
 }
 
 .validation-message.success {
-  background: #d4edda;
-  color: #155724;
-  border: 1px solid #c3e6cb;
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  border: 1px solid var(--color-success-border);
 }
 
 .validation-error {
-  border-color: #dc3545 !important;
-  box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.2) !important;
+  border-color: var(--color-error) !important;
+  box-shadow: 0 0 0 2px var(--color-error-bg-transparent) !important;
 }
 
 @media (max-width: 768px) {
   .connection-status-banner {
     flex-direction: column;
-    gap: 12px;
+    gap: var(--spacing-3);
     align-items: stretch;
   }
 
@@ -592,7 +595,7 @@ onMounted(() => {
   .setting-item {
     flex-direction: column;
     align-items: stretch;
-    gap: 8px;
+    gap: var(--spacing-2);
   }
 
   .setting-item label {

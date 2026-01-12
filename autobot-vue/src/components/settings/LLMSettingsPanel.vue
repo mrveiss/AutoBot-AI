@@ -368,90 +368,91 @@ const refreshLLMModels = async () => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .sub-tab-content {
-  padding: 1rem 0;
+  padding: var(--spacing-4) 0;
 }
 
 .llm-status-display {
-  background: var(--bg-tertiary, #334155);
-  border-radius: 8px;
-  padding: 1rem;
-  margin-bottom: 1.5rem;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: var(--spacing-4);
   align-items: center;
   justify-content: space-between;
 }
 
 .current-llm-info {
-  font-size: 0.95rem;
+  font-size: var(--text-sm);
 }
 
 .health-indicator {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  font-size: 0.9rem;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
 }
 
 .health-indicator.healthy {
-  background: rgba(16, 185, 129, 0.2);
-  color: #10b981;
+  background: var(--color-success-bg-transparent);
+  color: var(--color-success);
 }
 
 .health-indicator.degraded {
-  background: rgba(245, 158, 11, 0.2);
-  color: #f59e0b;
+  background: var(--color-warning-bg-transparent);
+  color: var(--color-warning);
 }
 
 .health-indicator.unhealthy {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
+  background: var(--color-error-bg-transparent);
+  color: var(--color-error);
 }
 
 .health-indicator.unknown {
-  background: rgba(148, 163, 184, 0.2);
-  color: #94a3b8;
+  background: var(--bg-tertiary-transparent);
+  color: var(--text-tertiary);
 }
 
 .llm-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .test-llm-btn,
 .refresh-models-btn {
-  padding: 0.5rem 1rem;
+  padding: var(--spacing-2) var(--spacing-4);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-  transition: all 0.2s;
+  gap: var(--spacing-2);
+  font-size: var(--text-sm);
+  transition: all var(--duration-200) var(--ease-in-out);
 }
 
 .test-llm-btn {
-  background: var(--primary-color, #667eea);
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .test-llm-btn:hover:not(:disabled) {
-  background: var(--primary-hover, #5a6fd6);
+  background: var(--color-primary-hover);
 }
 
 .refresh-models-btn {
-  background: var(--bg-secondary, #1e293b);
-  color: var(--text-primary, #f8fafc);
-  border: 1px solid var(--border-color, #475569);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
 }
 
 .refresh-models-btn:hover:not(:disabled) {
-  background: var(--bg-tertiary, #334155);
+  background: var(--bg-tertiary);
 }
 
 .test-llm-btn:disabled,
@@ -461,36 +462,36 @@ const refreshLLMModels = async () => {
 }
 
 .setting-item {
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .setting-item label {
   display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-  color: var(--text-secondary, #e2e8f0);
+  margin-bottom: var(--spacing-2);
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
 }
 
 .setting-item input,
 .setting-item select {
   width: 100%;
-  padding: 0.75rem;
-  border: 1px solid var(--border-color, #475569);
-  border-radius: 4px;
-  background: var(--bg-secondary, #1e293b);
-  color: var(--text-primary, #f8fafc);
-  font-size: 0.95rem;
+  padding: var(--spacing-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
 }
 
 .setting-item input:focus,
 .setting-item select:focus {
   outline: none;
-  border-color: var(--primary-color, #667eea);
+  border-color: var(--color-primary);
 }
 
 .input-group {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .input-group input {
@@ -498,42 +499,42 @@ const refreshLLMModels = async () => {
 }
 
 .test-endpoint-btn {
-  padding: 0.75rem 1rem;
-  background: var(--bg-tertiary, #334155);
-  border: 1px solid var(--border-color, #475569);
-  border-radius: 4px;
-  color: var(--text-primary, #f8fafc);
+  padding: var(--spacing-3) var(--spacing-4);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200) var(--ease-in-out);
 }
 
 .test-endpoint-btn:hover {
-  background: var(--bg-secondary, #1e293b);
-  border-color: var(--primary-color, #667eea);
+  background: var(--bg-secondary);
+  border-color: var(--color-primary);
 }
 
 .validation-error {
-  border-color: #ef4444 !important;
+  border-color: var(--color-error) !important;
 }
 
 .provider-section {
-  margin-top: 1.5rem;
-  padding: 1rem;
-  background: var(--bg-secondary, #1e293b);
-  border-radius: 8px;
-  border: 1px solid var(--border-color, #475569);
+  margin-top: var(--spacing-6);
+  padding: var(--spacing-4);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
 }
 
 .provider-config {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border-color, #475569);
+  margin-top: var(--spacing-4);
+  padding-top: var(--spacing-4);
+  border-top: 1px solid var(--border-default);
 }
 
 .model-selection {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .model-selection select {
@@ -541,7 +542,7 @@ const refreshLLMModels = async () => {
 }
 
 .loading-indicator {
-  font-size: 0.85rem;
-  color: var(--text-muted, #94a3b8);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 </style>
