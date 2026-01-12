@@ -276,11 +276,13 @@ const scenarios: Scenario[] = [
             </div>
           </div>
         `,
+        // Issue #704: Note - inline styles in dynamic component templates
+        // These use CSS custom properties with fallbacks for runtime rendering
         style: `
           .success-component {
             padding: 2rem;
-            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-            border: 2px solid #28a745;
+            background: linear-gradient(135deg, var(--color-success-bg, #d4edda) 0%, var(--color-success-bg-hover, #c3e6cb) 100%);
+            border: 2px solid var(--color-success, #28a745);
             border-radius: 12px;
             text-align: center;
           }
