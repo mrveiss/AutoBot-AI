@@ -103,13 +103,14 @@ const fileIcon = computed(() => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .content-pane {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: white;
-  border-left: 1px solid #e2e8f0;
+  background: var(--bg-primary);
+  border-left: 1px solid var(--border-default);
 }
 
 .placeholder-state {
@@ -118,27 +119,27 @@ const fileIcon = computed(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 3rem;
+  padding: var(--spacing-8);
   text-align: center;
-  color: #94a3b8;
+  color: var(--text-tertiary);
 }
 
 .placeholder-state i {
-  font-size: 3rem;
-  margin-bottom: 1rem;
+  font-size: var(--text-4xl);
+  margin-bottom: var(--spacing-4);
   opacity: 0.5;
 }
 
 .placeholder-state h4 {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #64748b;
-  margin-bottom: 0.5rem;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-2);
 }
 
 .placeholder-state p {
-  font-size: 0.875rem;
-  color: #94a3b8;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
 }
 
 .file-viewer {
@@ -152,42 +153,42 @@ const fileIcon = computed(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  padding: var(--spacing-4) var(--spacing-6);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .file-info {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .file-info i {
-  font-size: 1.5rem;
-  color: #3b82f6;
+  font-size: var(--text-2xl);
+  color: var(--color-primary);
 }
 
 .file-info h4 {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #1e293b;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
   margin: 0;
 }
 
 .file-meta {
-  font-size: 0.75rem;
-  color: #64748b;
-  margin: 0.25rem 0 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin: var(--spacing-1) 0 0 0;
 }
 
 .close-btn {
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .close-btn:hover {
-  color: #1e293b;
-  background: #e2e8f0;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
 }
 
 .file-content {
@@ -203,28 +204,28 @@ const fileIcon = computed(() => {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .loading-content i,
 .error-content i {
-  font-size: 2rem;
-  margin-bottom: 1rem;
+  font-size: var(--text-3xl);
+  margin-bottom: var(--spacing-4);
 }
 
 .error-content {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .content-display {
   margin: 0;
-  padding: 1rem;
-  background: #f8fafc;
-  border-radius: 0.5rem;
-  font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
-  font-size: 0.875rem;
-  line-height: 1.6;
-  color: #334155;
+  padding: var(--spacing-4);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  color: var(--text-primary);
   white-space: pre-wrap;
   word-wrap: break-word;
   overflow-x: auto;

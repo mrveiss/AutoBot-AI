@@ -214,34 +214,35 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .failed-vectorizations-manager {
-  background: white;
-  border-radius: 0.5rem;
-  padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-6);
+  box-shadow: var(--shadow-sm);
 }
 
 .manager-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
-  padding-bottom: 1rem;
-  border-bottom: 2px solid #f3f4f6;
+  margin-bottom: var(--spacing-6);
+  padding-bottom: var(--spacing-4);
+  border-bottom: 2px solid var(--border-default);
 }
 
 .manager-header h3 {
   margin: 0;
-  font-size: 1.25rem;
-  color: #dc2626;
+  font-size: var(--text-xl);
+  color: var(--color-error);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .header-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 /* Button spacing handled by BaseButton */
@@ -249,87 +250,87 @@ onMounted(() => {
 .loading-state,
 .error-state {
   text-align: center;
-  padding: 3rem 1rem;
-  color: #6b7280;
+  padding: var(--spacing-8) var(--spacing-4);
+  color: var(--text-secondary);
 }
 
 .loading-state i,
 .error-state i {
-  font-size: 3rem;
-  margin-bottom: 1rem;
+  font-size: var(--text-4xl);
+  margin-bottom: var(--spacing-4);
   display: block;
 }
 
 .error-state {
-  color: #dc2626;
+  color: var(--color-error);
 }
 
 .failed-jobs-list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .failed-job-card {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 0.5rem;
-  padding: 1rem;
-  transition: all 0.2s;
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
+  transition: all var(--duration-200);
 }
 
 .failed-job-card:hover {
-  box-shadow: 0 4px 6px rgba(220, 38, 38, 0.1);
+  box-shadow: var(--shadow-md);
 }
 
 .job-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--spacing-3);
 }
 
 .job-id {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-weight: 500;
-  color: #374151;
+  gap: var(--spacing-2);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
 }
 
 .fact-id {
-  font-family: monospace;
-  font-size: 0.875rem;
-  background: white;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  background: var(--bg-primary);
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-sm);
 }
 
 .job-time {
-  font-size: 0.75rem;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .job-error {
   display: flex;
   align-items: flex-start;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  background: white;
-  border-radius: 0.375rem;
-  margin-bottom: 1rem;
-  font-size: 0.875rem;
-  color: #dc2626;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3);
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-4);
+  font-size: var(--text-sm);
+  color: var(--color-error);
 }
 
 .job-error i {
   flex-shrink: 0;
-  margin-top: 0.125rem;
+  margin-top: var(--spacing-px);
 }
 
 .job-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 /* Button styling handled by BaseButton component */

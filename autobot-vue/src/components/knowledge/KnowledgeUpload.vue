@@ -475,123 +475,126 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .knowledge-upload {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
 }
 
 .upload-header {
-  margin-bottom: 2rem;
+  margin-bottom: var(--spacing-8);
 }
 
 .upload-header h3 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #1f2937;
-  margin-bottom: 0.5rem;
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-2);
 }
 
 .upload-description {
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .upload-methods {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-  gap: 1.5rem;
+  gap: var(--spacing-6);
 }
 
 .upload-method {
-  background: white;
-  border: 2px solid #e5e7eb;
-  border-radius: 0.5rem;
+  background: var(--bg-primary);
+  border: 2px solid var(--border-default);
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
 .method-header {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1rem 1.5rem;
-  background: #f9fafb;
-  border-bottom: 1px solid #e5e7eb;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4) var(--spacing-6);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .method-header i {
-  font-size: 1.25rem;
-  color: #3b82f6;
+  font-size: var(--text-xl);
+  color: var(--color-primary);
 }
 
 .method-header h4 {
-  font-weight: 600;
-  color: #1f2937;
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .method-content {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
 }
 
 .form-group {
-  margin-bottom: 1.25rem;
+  margin-bottom: var(--spacing-5);
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-  color: #374151;
-  font-size: 0.875rem;
+  margin-bottom: var(--spacing-2);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
 }
 
 .form-input,
 .form-textarea,
 .form-select {
   width: 100%;
-  padding: 0.625rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  transition: all 0.2s;
+  padding: var(--spacing-2-5);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  transition: all var(--duration-200);
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .form-input:focus,
 .form-textarea:focus,
 .form-select:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: var(--ring-primary);
 }
 
 .char-count {
   text-align: right;
-  font-size: 0.75rem;
-  color: #6b7280;
-  margin-top: 0.25rem;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin-top: var(--spacing-1);
 }
 
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .submit-btn {
   width: 100%;
-  padding: 0.75rem;
-  background: #3b82f6;
-  color: white;
+  padding: var(--spacing-3);
+  background: var(--color-primary);
+  color: var(--text-on-primary);
   border: none;
-  border-radius: 0.375rem;
-  font-weight: 500;
+  border-radius: var(--radius-md);
+  font-weight: var(--font-medium);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  transition: all 0.2s;
+  gap: var(--spacing-2);
+  transition: all var(--duration-200);
 }
 
 .submit-btn:hover:not(:disabled) {
-  background: #2563eb;
+  background: var(--color-primary-hover);
 }
 
 .submit-btn:disabled {
@@ -601,139 +604,139 @@ onMounted(() => {
 
 /* File upload styles */
 .file-drop-zone {
-  border: 2px dashed #d1d5db;
-  border-radius: 0.5rem;
-  padding: 2rem;
+  border: 2px dashed var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-8);
   text-align: center;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
   cursor: pointer;
 }
 
 .file-drop-zone.dragging {
-  border-color: #3b82f6;
-  background: #eff6ff;
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
 }
 
 .drop-icon {
-  font-size: 3rem;
-  color: #9ca3af;
-  margin-bottom: 1rem;
+  font-size: var(--text-4xl);
+  color: var(--text-tertiary);
+  margin-bottom: var(--spacing-4);
 }
 
 .drop-text {
-  color: #4b5563;
-  margin-bottom: 0.5rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-2);
 }
 
 .browse-btn {
-  color: #3b82f6;
+  color: var(--color-primary);
   text-decoration: underline;
   background: none;
   border: none;
   cursor: pointer;
-  font-weight: 500;
+  font-weight: var(--font-medium);
 }
 
 .browse-btn:hover {
-  color: #2563eb;
+  color: var(--color-primary-hover);
 }
 
 .drop-hint {
-  font-size: 0.875rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .selected-files {
-  margin-top: 1rem;
+  margin-top: var(--spacing-4);
 }
 
 .selected-files h5 {
-  font-weight: 500;
-  color: #374151;
-  margin-bottom: 0.5rem;
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-2);
 }
 
 .file-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem;
-  background: #f9fafb;
-  border-radius: 0.375rem;
-  margin-bottom: 0.5rem;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-2);
 }
 
 .file-name {
   flex: 1;
-  color: #374151;
-  font-size: 0.875rem;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
 }
 
 .file-size {
-  color: #6b7280;
-  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
 }
 
 .remove-file-btn {
   width: 1.5rem;
   height: 1.5rem;
   border: none;
-  background: #ef4444;
-  color: white;
-  border-radius: 0.25rem;
+  background: var(--color-error);
+  color: var(--text-on-primary);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .remove-file-btn:hover {
-  background: #dc2626;
+  background: var(--color-error-hover);
 }
 
 /* Progress styles */
 .upload-progress {
-  margin-top: 1.5rem;
-  padding: 1rem;
-  background: #f9fafb;
-  border-radius: 0.5rem;
+  margin-top: var(--spacing-6);
+  padding: var(--spacing-4);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
 }
 
 .progress-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
 }
 
 .progress-header h4 {
-  font-weight: 500;
-  color: #374151;
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
 }
 
 .progress-percentage {
-  font-weight: 600;
-  color: #3b82f6;
+  font-weight: var(--font-semibold);
+  color: var(--color-primary);
 }
 
 .progress-bar {
   height: 0.5rem;
-  background: #e5e7eb;
-  border-radius: 0.25rem;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
   overflow: hidden;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
 }
 
 .progress-fill {
   height: 100%;
-  background: #3b82f6;
-  transition: width 0.3s ease;
+  background: var(--color-primary);
+  transition: width var(--duration-300) ease;
 }
 
 .progress-status {
-  font-size: 0.875rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 
