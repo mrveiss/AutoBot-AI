@@ -269,11 +269,58 @@ class VisionProcessor(BaseModalProcessor):
                     generated_ids, skip_special_tokens=True
                 )[0].strip()
 
-    async def _process_image(self, input_data: MultiModalInput) -> Dict[str, Any]:
-        """Process single image with GPU-accelerated CLIP and BLIP-2 models"""
+    def _build_image_result(
+        self,
+        image: Image.Image,
+        caption: str,
+        clip_features: Any,
+        vqa_answer: str,
+        question: str,
+    ) -> Dict[str, Any]:
+        """
+        Build image analysis result dictionary.
 
-        # Guard clause: Check if models are available (Issue #315 - early return)
-        # Issue #466: Raise error instead of returning placeholder data
+        Issue #665: Extracted from _process_image to reduce function length.
+
+        Args:
+            image: Processed PIL image
+            caption: Generated image caption
+            clip_features: CLIP feature tensor or None
+            vqa_answer: Visual QA answer or None
+            question: Visual QA question or None
+
+        Returns:
+            Dictionary with analysis results
+        """
+        result = {
+            "type": "image_analysis",
+            "caption": caption,
+            "confidence": 0.95 if caption else 0.0,
+            "processing_device": str(self.device),
+            "image_size": image.size,
+        }
+
+        if clip_features is not None:
+            result["clip_features"] = clip_features.cpu().numpy().tolist()
+            result["clip_features_shape"] = list(clip_features.shape)
+
+        if vqa_answer:
+            result["vqa_answer"] = vqa_answer
+            result["vqa_question"] = question
+
+        if torch.cuda.is_available():
+            result["gpu_memory_used_mb"] = torch.cuda.memory_allocated() / 1024 / 1024
+            result["gpu_memory_cached_mb"] = torch.cuda.memory_reserved() / 1024 / 1024
+
+        return result
+
+    async def _process_image(self, input_data: MultiModalInput) -> Dict[str, Any]:
+        """
+        Process single image with GPU-accelerated CLIP and BLIP-2 models.
+
+        Issue #665: Refactored to use _build_image_result helper.
+        """
+        # Guard clause: Check if models are available
         if (
             not VISION_MODELS_AVAILABLE
             or self.clip_model is None
@@ -286,63 +333,29 @@ class VisionProcessor(BaseModalProcessor):
             )
 
         try:
-            # Prepare image (Issue #315 - extracted method)
+            # Process image with extracted methods
             image = await self._load_image(input_data.data)
-
-            # Process with CLIP for embeddings (Issue #315 - extracted method)
             clip_features = self._process_clip_features(image)
-
-            # Process with BLIP-2 for captioning (Issue #315 - extracted method)
             caption = self._generate_caption(image)
 
-            # Visual Question Answering if a question is provided
-            vqa_answer = None
-            question = None
-            if "question" in input_data.metadata and input_data.metadata["question"]:
+            # Visual Question Answering if provided
+            vqa_answer, question = None, None
+            if input_data.metadata.get("question"):
                 question = input_data.metadata["question"]
                 vqa_answer = self._answer_visual_question(image, question)
 
-            # Clear GPU cache if using CUDA
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-            # Prepare result
-            result = {
-                "type": "image_analysis",
-                "caption": caption,
-                "confidence": 0.95 if caption else 0.0,
-                "processing_device": str(self.device),
-                "image_size": image.size,
-            }
-
-            # Add CLIP features if available
-            if clip_features is not None:
-                result["clip_features"] = clip_features.cpu().numpy().tolist()
-                result["clip_features_shape"] = list(clip_features.shape)
-
-            # Add VQA answer if available
-            if vqa_answer:
-                result["vqa_answer"] = vqa_answer
-                result["vqa_question"] = question
-
-            # Add GPU memory usage if CUDA is available
-            if torch.cuda.is_available():
-                result["gpu_memory_used_mb"] = (
-                    torch.cuda.memory_allocated() / 1024 / 1024
-                )
-                result["gpu_memory_cached_mb"] = (
-                    torch.cuda.memory_reserved() / 1024 / 1024
-                )
-
-            return result
+            # Issue #665: Use helper to build result
+            return self._build_image_result(
+                image, caption, clip_features, vqa_answer, question
+            )
 
         except Exception as e:
             self.logger.error("Error during GPU-accelerated image processing: %s", e)
-            # Clear GPU cache on error
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-
-            # Return error result
             return {
                 "type": "image_analysis",
                 "error": str(e),

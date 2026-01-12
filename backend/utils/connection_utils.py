@@ -240,57 +240,63 @@ class ConnectionTester:
             }
 
     @staticmethod
+    def _get_redis_config_values() -> tuple:
+        """
+        Load Redis host and port from configuration.
+
+        Issue #665: Extracted from test_redis_connection to reduce function length.
+
+        Returns:
+            Tuple of (redis_host, redis_port, error_response or None)
+        """
+        # Check task_transport config (backwards compatibility)
+        task_transport_config = global_config_manager.get("task_transport", {})
+
+        if task_transport_config.get("type") == "redis":
+            redis_config = task_transport_config.get("redis", {})
+            host = redis_config.get(
+                "host", os.getenv("AUTOBOT_REDIS_HOST", "localhost")
+            )
+            port = redis_config.get(
+                "port",
+                int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT))),
+            )
+            return host, port, None
+
+        # Check memory.redis config (current structure)
+        memory_config = global_config_manager.get("memory", {})
+        redis_config = memory_config.get("redis", {})
+
+        if not redis_config.get("enabled", False):
+            return None, None, {
+                "status": "not_configured",
+                "message": "Redis is not enabled in memory configuration",
+            }
+
+        host = redis_config.get("host", os.getenv("AUTOBOT_REDIS_HOST", "localhost"))
+        port = redis_config.get(
+            "port",
+            int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT))),
+        )
+        return host, port, None
+
+    @staticmethod
     def test_redis_connection() -> Metadata:
-        """Test Redis connection with current configuration"""
+        """
+        Test Redis connection with current configuration.
+
+        Issue #665: Refactored to use _get_redis_config_values helper.
+        """
         try:
-            # First check task_transport config (backwards compatibility)
-            task_transport_config = global_config_manager.get("task_transport", {})
-            redis_config = None
-            redis_host = None
-            redis_port = None
-
-            if task_transport_config.get("type") == "redis":
-                redis_config = task_transport_config.get("redis", {})
-                redis_host = redis_config.get(
-                    "host", os.getenv("AUTOBOT_REDIS_HOST", "localhost")
-                )
-                redis_port = redis_config.get(
-                    "port",
-                    int(
-                        os.getenv(
-                            "AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT)
-                        )
-                    ),
-                )
-            else:
-                # Check memory.redis config (current structure)
-                memory_config = global_config_manager.get("memory", {})
-                redis_config = memory_config.get("redis", {})
-
-                if redis_config.get("enabled", False):
-                    redis_host = redis_config.get(
-                        "host", os.getenv("AUTOBOT_REDIS_HOST", "localhost")
-                    )
-                    redis_port = redis_config.get(
-                        "port",
-                        int(
-                            os.getenv(
-                                "AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT)
-                            )
-                        ),
-                    )
-                else:
-                    return {
-                        "status": "not_configured",
-                        "message": "Redis is not enabled in memory configuration",
-                    }
+            # Issue #665: Use helper for config loading
+            redis_host, redis_port, error = ConnectionTester._get_redis_config_values()
+            if error:
+                return error
 
             if not redis_host or not redis_port:
                 return {
                     "status": "not_configured",
-                    "message": (
-                        "Redis configuration is incomplete (missing host or port)"
-                    ),
+                    "message": "Redis configuration is incomplete (missing host or port)",
                 }
 
             redis_client = get_redis_client()
@@ -308,9 +314,7 @@ class ConnectionTester:
 
             return {
                 "status": "connected",
-                "message": (
-                    f"Successfully connected to Redis at {redis_host}:{redis_port}"
-                ),
+                "message": f"Successfully connected to Redis at {redis_host}:{redis_port}",
                 "host": redis_host,
                 "port": redis_port,
                 "redis_search_module_loaded": redis_search_module_loaded,

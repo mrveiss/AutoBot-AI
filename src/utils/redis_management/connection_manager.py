@@ -267,62 +267,76 @@ class RedisConnectionManager:
         logger.error("Redis '%s' did not become ready within %ss", database_name, max_wait)
         return False
 
+    def _build_async_pool_params(
+        self, config: RedisConfig, database_name: str
+    ) -> dict:
+        """
+        Build connection pool parameters for async Redis.
+
+        Issue #665: Extracted from _create_async_pool_with_retry to reduce function length.
+
+        Args:
+            config: Redis configuration
+            database_name: Name of database for logging
+
+        Returns:
+            Dictionary of pool parameters
+        """
+        pool_params = {
+            "host": config.host,
+            "port": config.port,
+            "db": config.db,
+            "password": config.password,
+            "decode_responses": config.decode_responses,
+            "max_connections": config.max_connections,
+            "socket_timeout": config.socket_timeout,
+            "socket_connect_timeout": config.socket_connect_timeout,
+            "socket_keepalive": config.socket_keepalive,
+            "socket_keepalive_options": config.socket_keepalive_options
+            or self._tcp_keepalive_options,
+            "retry_on_timeout": config.retry_on_timeout,
+            "health_check_interval": 0,
+        }
+
+        # Add TLS parameters if enabled
+        if config.ssl:
+            import ssl
+            ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+            if config.ssl_ca_certs:
+                ssl_context.load_verify_locations(config.ssl_ca_certs)
+            if config.ssl_certfile and config.ssl_keyfile:
+                ssl_context.load_cert_chain(config.ssl_certfile, config.ssl_keyfile)
+            pool_params["ssl"] = ssl_context
+            logger.info(f"TLS enabled for Redis connection '{database_name}'")
+
+        return pool_params
+
     async def _create_async_pool_with_retry(
         self, database_name: str, config: RedisConfig
     ) -> async_redis.ConnectionPool:
         """
         Create async pool with retry logic.
 
+        Issue #665: Refactored to use _build_async_pool_params helper.
+
         Features:
         - Manual retry with exponential backoff
         - Up to 5 attempts
-        - Retries on ConnectionError and TimeoutError
-        - Loading dataset handling
         - TCP keepalive configuration
         """
-        logger.warning(
-            f"Creating async pool for '{database_name}' with MANUAL RETRY"
-        )
-        max_attempts = 5
-        base_wait = 2
-        max_wait = 30
+        logger.warning(f"Creating async pool for '{database_name}' with MANUAL RETRY")
+        max_attempts, base_wait, max_wait = 5, 2, 30
 
         for attempt in range(max_attempts):
             try:
-                # Build connection parameters
-                pool_params = {
-                    "host": config.host,
-                    "port": config.port,
-                    "db": config.db,
-                    "password": config.password,
-                    "decode_responses": config.decode_responses,
-                    "max_connections": config.max_connections,
-                    "socket_timeout": config.socket_timeout,
-                    "socket_connect_timeout": config.socket_connect_timeout,
-                    "socket_keepalive": config.socket_keepalive,
-                    "socket_keepalive_options": config.socket_keepalive_options
-                    or self._tcp_keepalive_options,
-                    "retry_on_timeout": config.retry_on_timeout,
-                    "health_check_interval": 0,  # Disable auto health checks
-                }
-
-                # Add TLS parameters if enabled
-                if config.ssl:
-                    import ssl
-                    ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-                    if config.ssl_ca_certs:
-                        ssl_context.load_verify_locations(config.ssl_ca_certs)
-                    if config.ssl_certfile and config.ssl_keyfile:
-                        ssl_context.load_cert_chain(config.ssl_certfile, config.ssl_keyfile)
-                    pool_params["ssl"] = ssl_context
-                    logger.info(f"TLS enabled for Redis connection '{database_name}'")
-
+                # Issue #665: Use helper to build params
+                pool_params = self._build_async_pool_params(config, database_name)
                 pool = async_redis.ConnectionPool(**pool_params)
 
                 # Test connection and wait for Redis to be ready
                 client = async_redis.Redis(connection_pool=pool)
                 ready = await self._wait_for_redis_ready(client, database_name)
-                await client.aclose()  # Close test client
+                await client.aclose()
 
                 if not ready:
                     await pool.disconnect()
@@ -330,9 +344,7 @@ class RedisConnectionManager:
                         f"Redis database '{database_name}' not ready after waiting"
                     )
 
-                logger.info(
-                    f"Created async pool for '{database_name}' with retry protection"
-                )
+                logger.info(f"Created async pool for '{database_name}' with retry protection")
                 return pool
 
             except (ConnectionError, asyncio.TimeoutError) as e:

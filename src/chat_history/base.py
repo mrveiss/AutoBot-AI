@@ -39,6 +39,72 @@ class ChatHistoryBase:
     - Performance optimization settings
     """
 
+    def _load_config_values(
+        self,
+        history_file: Optional[str],
+        use_redis: Optional[bool],
+        redis_host: Optional[str],
+        redis_port: Optional[int],
+    ) -> None:
+        """
+        Load configuration values from config manager with overrides.
+
+        Issue #665: Extracted from __init__ to reduce function length.
+
+        Args:
+            history_file: Optional override for history file path
+            use_redis: Optional override for Redis usage flag
+            redis_host: Optional override for Redis host
+            redis_port: Optional override for Redis port
+        """
+        from src.unified_config_manager import UnifiedConfigManager
+
+        data_config = global_config_manager.get("data", {})
+        redis_config = global_config_manager.get_redis_config()
+        unified_config = UnifiedConfigManager()
+
+        self.history_file = history_file or data_config.get(
+            "chat_history_file",
+            os.getenv("AUTOBOT_CHAT_HISTORY_FILE", "data/chat_history.json"),
+        )
+        self.use_redis = (
+            use_redis if use_redis is not None else redis_config.get("enabled", False)
+        )
+        self.redis_host = redis_host or redis_config.get(
+            "host", os.getenv("REDIS_HOST", unified_config.get_host("redis"))
+        )
+        self.redis_port = redis_port or redis_config.get(
+            "port",
+            int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT))),
+        )
+
+    def _init_state_and_settings(self) -> None:
+        """
+        Initialize instance state and performance settings.
+
+        Issue #665: Extracted from __init__ to reduce function length.
+        """
+        # Message history storage
+        self.history: list = []
+        self.redis_client = None
+        self.encryption_enabled = is_encryption_enabled()
+
+        # Performance optimization settings
+        self.max_messages = 10000
+        self.cleanup_threshold = 12000
+        self.max_session_files = 1000
+        self.memory_check_counter = 0
+        self.memory_check_interval = 50
+        self._counter_lock = threading.Lock()
+        self._session_save_counter = 0
+
+        # Memory Graph integration
+        self.memory_graph: Optional[AutoBotMemoryGraph] = None
+        self.memory_graph_enabled = False
+
+        # Context window management
+        self.context_manager = ContextWindowManager()
+
     def __init__(
         self,
         history_file: Optional[str] = None,
@@ -49,57 +115,17 @@ class ChatHistoryBase:
         """
         Initialize the ChatHistoryManager base with performance optimizations.
 
+        Issue #665: Refactored to use extracted helper methods.
+
         Args:
             history_file: Path to the JSON file for persistent storage.
             use_redis: If True, attempts to use Redis for active memory storage.
             redis_host: Hostname for Redis server.
             redis_port: Port for Redis server.
         """
-        # Load configuration from centralized config manager
-        data_config = global_config_manager.get("data", {})
-        redis_config = global_config_manager.get_redis_config()
-
-        # Set values using configuration with environment variable overrides
-        self.history_file = history_file or data_config.get(
-            "chat_history_file",
-            os.getenv("AUTOBOT_CHAT_HISTORY_FILE", "data/chat_history.json"),
-        )
-        self.use_redis = (
-            use_redis if use_redis is not None else redis_config.get("enabled", False)
-        )
-
-        # Use config system instead of hardcoded IP fallback
-        from src.unified_config_manager import UnifiedConfigManager
-
-        unified_config = UnifiedConfigManager()
-        self.redis_host = redis_host or redis_config.get(
-            "host", os.getenv("REDIS_HOST", unified_config.get_host("redis"))
-        )
-        self.redis_port = redis_port or redis_config.get(
-            "port",
-            int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT))),
-        )
-
-        # Message history storage
-        self.history: list = []
-        self.redis_client = None
-        self.encryption_enabled = is_encryption_enabled()
-
-        # Performance optimization settings
-        self.max_messages = 10000  # Maximum messages per session
-        self.cleanup_threshold = 12000  # Cleanup trigger (120% of max)
-        self.max_session_files = 1000  # Maximum session files to keep
-        self.memory_check_counter = 0  # Counter for periodic memory checks
-        self.memory_check_interval = 50  # Check memory every N operations
-        self._counter_lock = threading.Lock()  # Lock for thread-safe counter access
-        self._session_save_counter = 0  # Counter for periodic session file cleanup
-
-        # Memory Graph integration for entity tracking
-        self.memory_graph: Optional[AutoBotMemoryGraph] = None
-        self.memory_graph_enabled = False
-
-        # Context window management for model-aware message limits
-        self.context_manager = ContextWindowManager()
+        # Issue #665: Use helpers for configuration and state setup
+        self._load_config_values(history_file, use_redis, redis_host, redis_port)
+        self._init_state_and_settings()
 
         logger.info(
             "PERFORMANCE: ChatHistoryManager initialized with memory protection - "
@@ -109,16 +135,10 @@ class ChatHistoryBase:
         )
         logger.info("✅ Context window manager initialized with model-aware limits")
 
-        # Initialize encryption
+        # Initialize subsystems
         self._init_encryption()
-
-        # Initialize Redis client
         self._init_redis()
-
-        # Ensure data directory exists
         self._ensure_data_directory_exists()
-
-        # Load history (now just initializes empty - per-session files used)
         self._load_history()
 
         logger.info(

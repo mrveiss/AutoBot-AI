@@ -316,92 +316,119 @@ def get_sessions_redis_compat() -> RedisCompatibilityWrapper:
     return get_redis_client_compat("sessions")
 
 
+async def _run_migration_tests(
+    compat: RedisCompatibilityWrapper, test_key: str, test_value: str
+) -> dict:
+    """
+    Run individual async Redis operation tests with timing.
+
+    Issue #665: Extracted from test_async_migration to reduce function length.
+
+    Args:
+        compat: Redis compatibility wrapper instance
+        test_key: Key to use for testing
+        test_value: Value to use for testing
+
+    Returns:
+        Dictionary of test results with timing information
+    """
+    import time
+
+    tests = {}
+
+    # Test async set
+    start = time.time()
+    set_result = await compat.aset(test_key, test_value, ex=60)
+    tests["async_set"] = {
+        "success": set_result is True,
+        "response_time_ms": round((time.time() - start) * 1000, 2),
+    }
+
+    # Test async get
+    start = time.time()
+    get_result = await compat.aget(test_key)
+    tests["async_get"] = {
+        "success": get_result == test_value,
+        "response_time_ms": round((time.time() - start) * 1000, 2),
+        "value_match": get_result == test_value,
+    }
+
+    # Test async delete
+    start = time.time()
+    del_result = await compat.adelete(test_key)
+    tests["async_delete"] = {
+        "success": del_result == 1,
+        "response_time_ms": round((time.time() - start) * 1000, 2),
+    }
+
+    # Test async ping
+    start = time.time()
+    ping_result = await compat.aping()
+    tests["async_ping"] = {
+        "success": ping_result is True,
+        "response_time_ms": round((time.time() - start) * 1000, 2),
+    }
+
+    return tests
+
+
+def _build_migration_results(database: str, tests: dict) -> dict:
+    """
+    Build final migration test results from individual test results.
+
+    Issue #665: Extracted from test_async_migration to reduce function length.
+
+    Args:
+        database: Database name being tested
+        tests: Dictionary of individual test results
+
+    Returns:
+        Complete migration results dictionary
+    """
+    all_passed = all(t.get("success", False) for t in tests.values())
+    avg_time = sum(t.get("response_time_ms", 0) for t in tests.values()) / len(tests)
+
+    return {
+        "database": database,
+        "tests": tests,
+        "overall_success": all_passed,
+        "migration_ready": all_passed,
+        "average_response_time": round(avg_time, 2),
+    }
+
+
 # Migration helper functions
 async def test_async_migration(database: str = "main") -> dict:
     """
-    Test async Redis operations for migration validation
+    Test async Redis operations for migration validation.
+
+    Issue #665: Refactored to use extracted helper methods.
 
     Returns:
         dict: Test results and performance metrics
     """
     import time
 
-    results = {
-        "database": database,
-        "tests": {},
-        "overall_success": False,
-        "migration_ready": False,
-    }
-
     try:
         compat = get_redis_client_compat(database)
-
-        # Test basic operations
         test_key = f"migration_test_{int(time.time())}"
         test_value = "async_migration_test_value"
 
-        # Test async set
-        start_time = time.time()
-        set_result = await compat.aset(test_key, test_value, ex=60)
-        set_time = (time.time() - start_time) * 1000
+        # Issue #665: Use helper to run tests
+        tests = await _run_migration_tests(compat, test_key, test_value)
 
-        # Test async get
-        start_time = time.time()
-        get_result = await compat.aget(test_key)
-        get_time = (time.time() - start_time) * 1000
-
-        # Test async delete
-        start_time = time.time()
-        del_result = await compat.adelete(test_key)
-        del_time = (time.time() - start_time) * 1000
-
-        # Test async ping
-        start_time = time.time()
-        ping_result = await compat.aping()
-        ping_time = (time.time() - start_time) * 1000
-
-        results["tests"] = {
-            "async_set": {
-                "success": set_result is True,
-                "response_time_ms": round(set_time, 2),
-            },
-            "async_get": {
-                "success": get_result == test_value,
-                "response_time_ms": round(get_time, 2),
-                "value_match": get_result == test_value,
-            },
-            "async_delete": {
-                "success": del_result == 1,
-                "response_time_ms": round(del_time, 2),
-            },
-            "async_ping": {
-                "success": ping_result is True,
-                "response_time_ms": round(ping_time, 2),
-            },
-        }
-
-        # Check overall success
-        all_tests_passed = all(
-            test_data.get("success", False) for test_data in results["tests"].values()
-        )
-
-        results["overall_success"] = all_tests_passed
-        results["migration_ready"] = all_tests_passed
-        results["average_response_time"] = round(
-            sum(
-                test_data.get("response_time_ms", 0)
-                for test_data in results["tests"].values()
-            )
-            / len(results["tests"]),
-            2,
-        )
+        # Issue #665: Use helper to build results
+        return _build_migration_results(database, tests)
 
     except Exception as e:
-        results["error"] = str(e)
-        results["migration_ready"] = False
         logger.error("Async migration test failed for database '%s': %s", database, e)
-
-    return results
+        return {
+            "database": database,
+            "tests": {},
+            "overall_success": False,
+            "migration_ready": False,
+            "error": str(e),
+        }
 
 
 async def migrate_sync_to_async_example():
