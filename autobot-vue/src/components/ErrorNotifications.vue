@@ -116,10 +116,11 @@ const toggleDetails = (id: string) => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .error-notifications-container {
   position: fixed;
-  top: 1rem;
-  right: 1rem;
+  top: var(--spacing-4);
+  right: var(--spacing-4);
   z-index: 9999;
   max-width: 420px;
   width: 100%;
@@ -127,9 +128,9 @@ const toggleDetails = (id: string) => {
 
 @media (max-width: 640px) {
   .error-notifications-container {
-    top: 0.5rem;
-    right: 0.5rem;
-    left: 0.5rem;
+    top: var(--spacing-2);
+    right: var(--spacing-2);
+    left: var(--spacing-2);
     max-width: none;
   }
 }
@@ -137,33 +138,33 @@ const toggleDetails = (id: string) => {
 .notification {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
-  padding: 1rem;
-  margin-bottom: 0.5rem;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  border-left: 4px solid #cbd5e0;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
+  margin-bottom: var(--spacing-2);
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  border-left: 4px solid var(--border-default);
   backdrop-filter: blur(10px);
 }
 
 .notification-error {
-  border-left-color: #f56565;
-  background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 50%);
+  border-left-color: var(--color-error);
+  background: var(--color-error-bg);
 }
 
 .notification-warning {
-  border-left-color: #ed8936;
-  background: linear-gradient(135deg, #fffaf0 0%, #feebc8 50%);
+  border-left-color: var(--color-warning);
+  background: var(--color-warning-bg);
 }
 
 .notification-info {
-  border-left-color: #4299e1;
-  background: linear-gradient(135deg, #ebf8ff 0%, #bee3f8 50%);
+  border-left-color: var(--color-info);
+  background: var(--color-info-bg);
 }
 
 .notification-icon {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   flex-shrink: 0;
   margin-top: 0.125rem;
 }
@@ -176,24 +177,24 @@ const toggleDetails = (id: string) => {
 .notification-message {
   margin: 0;
   line-height: 1.4;
-  color: #1a202c;
-  font-weight: 500;
+  color: var(--text-primary);
+  font-weight: var(--font-medium);
 }
 
 .notification-stack {
-  margin-top: 0.5rem;
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 4px;
-  padding: 0.5rem;
+  margin-top: var(--spacing-2);
+  background: var(--bg-tertiary-transparent);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-2);
   max-height: 150px;
   overflow-y: auto;
 }
 
 .notification-stack pre {
   margin: 0;
-  font-family: 'Monaco', 'Menlo', monospace;
-  font-size: 0.75rem;
-  color: #4a5568;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
   white-space: pre-wrap;
   word-break: break-all;
 }
@@ -201,65 +202,65 @@ const toggleDetails = (id: string) => {
 .notification-actions {
   display: flex;
   align-items: flex-start;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
   flex-shrink: 0;
 }
 
 .notification-btn {
-  background: rgba(0, 0, 0, 0.1);
+  background: var(--bg-tertiary-transparent);
   border: none;
-  border-radius: 4px;
-  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-1) var(--spacing-2);
   cursor: pointer;
-  font-size: 0.75rem;
-  transition: all 0.2s;
-  color: #4a5568;
+  font-size: var(--text-xs);
+  transition: all var(--duration-200) var(--ease-in-out);
+  color: var(--text-secondary);
 }
 
 .notification-btn:hover {
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-tertiary);
 }
 
 .notification-btn-close {
-  background: rgba(239, 68, 68, 0.1);
-  color: #dc2626;
+  background: var(--color-error-bg-transparent);
+  color: var(--color-error);
 }
 
 .notification-btn-close:hover {
-  background: rgba(239, 68, 68, 0.2);
+  background: var(--color-error-bg);
 }
 
 .notification-btn-ghost {
   background: transparent;
-  padding: 0.25rem;
+  padding: var(--spacing-1);
   min-width: 1.5rem;
 }
 
 .notification-actions-bar {
   display: flex;
   justify-content: center;
-  padding: 0.5rem;
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 8px;
+  padding: var(--spacing-2);
+  background: var(--bg-primary-transparent);
+  border-radius: var(--radius-lg);
   backdrop-filter: blur(10px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
 }
 
 .notification-btn-clear {
-  background: #4299e1;
-  color: white;
-  padding: 0.5rem 1rem;
-  font-weight: 500;
+  background: var(--color-info);
+  color: var(--text-on-primary);
+  padding: var(--spacing-2) var(--spacing-4);
+  font-weight: var(--font-medium);
 }
 
 .notification-btn-clear:hover {
-  background: #3182ce;
+  background: var(--color-info-hover);
 }
 
 /* Transition animations */
 .notification-enter-active,
 .notification-leave-active {
-  transition: all 0.3s ease;
+  transition: all var(--duration-300) var(--ease-in-out);
 }
 
 .notification-enter-from {
@@ -273,6 +274,6 @@ const toggleDetails = (id: string) => {
 }
 
 .notification-move {
-  transition: transform 0.3s ease;
+  transition: transform var(--duration-300) var(--ease-in-out);
 }
 </style>

@@ -971,20 +971,21 @@ onMounted(() => {
   background: var(--bg-quaternary);
 }
 
+/* Issue #704: Migrated severity colors to CSS design tokens */
 .issue-card.critical {
-  border-left-color: #ef4444;
+  border-left-color: var(--color-error);
 }
 
 .issue-card.high {
-  border-left-color: #f59e0b;
+  border-left-color: var(--color-warning);
 }
 
 .issue-card.medium {
-  border-left-color: #eab308;
+  border-left-color: var(--chart-yellow);
 }
 
 .issue-card.low {
-  border-left-color: #22c55e;
+  border-left-color: var(--color-success);
 }
 
 .issue-header {

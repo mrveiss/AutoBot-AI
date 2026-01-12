@@ -355,21 +355,22 @@ const resetToDefaults = () => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .notification-auto-hide h4,
 .notification-test h4,
 .notification-status h4 {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 0.5rem;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-2);
 }
 
 .setting-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 0;
-  border-bottom: 1px solid #f3f4f6;
+  padding: var(--spacing-3) 0;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .setting-item:last-child {
@@ -378,8 +379,8 @@ const resetToDefaults = () => {
 
 .setting-item label {
   flex: 1;
-  font-weight: 500;
-  color: #374151;
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
 }
 
 .setting-item label.with-description {
@@ -388,41 +389,45 @@ const resetToDefaults = () => {
 }
 
 .setting-item .description {
-  font-size: 0.75rem;
-  font-weight: normal;
-  color: #6b7280;
-  margin-top: 0.25rem;
+  font-size: var(--text-xs);
+  font-weight: var(--font-normal);
+  color: var(--text-secondary);
+  margin-top: var(--spacing-1);
 }
 
 .setting-item input,
 .setting-item select {
-  margin-left: 1rem;
+  margin-left: var(--spacing-4);
   flex-shrink: 0;
 }
 
 .setting-item input[type="checkbox"] {
   transform: scale(1.2);
+  accent-color: var(--color-primary);
 }
 
 .setting-item input[type="number"] {
-  padding: 0.25rem 0.5rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.25rem;
+  padding: var(--spacing-1) var(--spacing-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
   text-align: center;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .setting-item select {
-  padding: 0.25rem 0.5rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.25rem;
-  background-color: white;
+  padding: var(--spacing-1) var(--spacing-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .text-xs {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .text-sm {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 </style>

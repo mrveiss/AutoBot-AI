@@ -408,12 +408,13 @@ export default {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .log-viewer {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--surface-ground);
-  border-radius: 6px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
@@ -421,39 +422,39 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
-  background: var(--surface-section);
-  border-bottom: 1px solid var(--surface-border);
+  padding: var(--spacing-4);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .log-selector {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .log-selector select {
-  padding: 0.5rem 1rem;
-  border: 1px solid var(--surface-border);
-  border-radius: 4px;
-  background: var(--surface-ground);
-  color: var(--text-color);
+  padding: var(--spacing-2) var(--spacing-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
   min-width: 300px;
 }
 
 .log-filters {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   align-items: center;
 }
 
 .log-filters select,
 .log-filters input {
-  padding: 0.5rem;
-  border: 1px solid var(--surface-border);
-  border-radius: 4px;
-  background: var(--surface-ground);
-  color: var(--text-color);
+  padding: var(--spacing-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .log-filters input[type="number"] {
@@ -462,57 +463,57 @@ export default {
 
 .log-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .log-actions button {
-  padding: 0.5rem 1rem;
-  border: 1px solid var(--surface-border);
-  border-radius: 4px;
-  background: var(--surface-card);
-  color: var(--text-color);
+  padding: var(--spacing-2) var(--spacing-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200) var(--ease-in-out);
 }
 
 .log-actions button:hover {
-  background: var(--surface-hover);
+  background: var(--bg-secondary);
 }
 
 .log-actions button.active {
-  background: var(--primary-color);
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .search-panel {
   display: flex;
-  gap: 0.5rem;
-  padding: 1rem;
-  background: var(--surface-section);
-  border-bottom: 1px solid var(--surface-border);
+  gap: var(--spacing-2);
+  padding: var(--spacing-4);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .search-input {
   flex: 1;
-  padding: 0.5rem 1rem;
-  border: 1px solid var(--surface-border);
-  border-radius: 4px;
-  background: var(--surface-ground);
-  color: var(--text-color);
+  padding: var(--spacing-2) var(--spacing-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .log-content {
   flex: 1;
   overflow: auto;
-  padding: 1rem;
-  background: #1e1e1e;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  padding: var(--spacing-4);
+  background: var(--bg-code);
+  font-family: var(--font-mono);
 }
 
 .log-text {
   margin: 0;
-  color: #d4d4d4;
-  font-size: 13px;
+  color: var(--text-code);
+  font-size: var(--text-sm);
   line-height: 1.5;
   white-space: pre-wrap;
   word-wrap: break-word;
@@ -524,20 +525,20 @@ export default {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: var(--text-color-secondary);
-  font-size: 1.2rem;
-  gap: 0.5rem;
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
+  gap: var(--spacing-2);
 }
 
 .error {
-  color: var(--red-500);
+  color: var(--color-error);
 }
 
 .log-status {
-  padding: 0.5rem 1rem;
-  background: var(--surface-section);
-  border-top: 1px solid var(--surface-border);
-  color: var(--text-color-secondary);
-  font-size: 0.875rem;
+  padding: var(--spacing-2) var(--spacing-4);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 </style>
