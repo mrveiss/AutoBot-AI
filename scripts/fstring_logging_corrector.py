@@ -7,9 +7,9 @@ Fix f-string logging statements to use lazy evaluation.
 Issue #401: Converts logger.xxx(f"...{var}...") to logger.xxx("...%s...", var)
 
 Usage:
-    python scripts/fix_fstring_logging.py --directory src/services/
-    python scripts/fix_fstring_logging.py --directory src/security/
-    python scripts/fix_fstring_logging.py --file src/services/temporal_invalidation_service.py
+    python scripts/fstring_logging_corrector.py --directory src/services/
+    python scripts/fstring_logging_corrector.py --directory src/security/
+    python scripts/fstring_logging_corrector.py --file src/services/temporal_invalidation_service.py
 """
 
 import argparse
@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 
-def fix_fstring_logging(content: str) -> tuple[str, int]:
+def fstring_logging_corrector(content: str) -> tuple[str, int]:
     """
     Convert f-string logging to lazy evaluation %s-style.
 
@@ -219,7 +219,7 @@ def process_file(filepath: Path, dry_run: bool = False) -> int:
         print(f"Error reading {filepath}: {e}")
         return 0
 
-    fixed_content, fixes = fix_fstring_logging(content)
+    fixed_content, fixes = fstring_logging_corrector(content)
 
     if fixes > 0:
         if dry_run:

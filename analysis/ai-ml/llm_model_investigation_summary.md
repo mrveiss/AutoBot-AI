@@ -125,9 +125,9 @@ CPU-FALLBACK:
 ## 🚀 Implementation Scripts Created
 
 ### 1. 📜 Quick Fix Script
-**File:** `scripts/ai-ml/fix_critical_model_references.py`
+**File:** `scripts/ai-ml/model_references_corrector.py`
 **Purpose:** Apply immediate fixes to broken model references
-**Usage:** `python scripts/ai-ml/fix_critical_model_references.py`
+**Usage:** `python scripts/ai-ml/model_references_corrector.py`
 
 ### 2. 🤖 Comprehensive Optimization Script
 **File:** `scripts/ai-ml/optimize_llm_models.py`
@@ -160,7 +160,7 @@ ollama pull phi3:3.8b
 ollama pull codellama:7b-instruct
 
 # 2. Apply remaining configuration fixes
-python scripts/ai-ml/fix_critical_model_references.py
+python scripts/ai-ml/model_references_corrector.py
 
 # 3. Test system functionality
 bash run_autobot.sh --dev --no-build

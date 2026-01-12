@@ -252,10 +252,10 @@ class E501Fixer:
 def main():
     """Main entry point."""
     if len(sys.argv) < 2:
-        print("Usage: python fix_e501_violations.py <file1> [file2] ...")
+        print("Usage: python e501_violations_corrector.py <file1> [file2] ...")
         print("\nExample:")
-        print("  python fix_e501_violations.py src/chat_workflow_manager.py")
-        print("  python fix_e501_violations.py backend/api/*.py")
+        print("  python e501_violations_corrector.py src/chat_workflow_manager.py")
+        print("  python e501_violations_corrector.py backend/api/*.py")
         sys.exit(1)
 
     fixer = E501Fixer(max_length=100)

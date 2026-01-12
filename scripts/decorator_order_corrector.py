@@ -22,7 +22,7 @@ import re
 from pathlib import Path
 
 
-def fix_decorator_order_in_file(file_path: Path) -> tuple[int, list[str]]:
+def decorator_order_corrector_in_file(file_path: Path) -> tuple[int, list[str]]:
     """
     Fix decorator order in a single file.
 
@@ -121,7 +121,7 @@ def main():
     print("🔧 Fixing decorator order in backend/api/*.py files...\n")
 
     for py_file in sorted(backend_api.glob("*.py")):
-        fixed_count, fixes = fix_decorator_order_in_file(py_file)
+        fixed_count, fixes = decorator_order_corrector_in_file(py_file)
 
         if fixed_count > 0:
             total_fixes += fixed_count

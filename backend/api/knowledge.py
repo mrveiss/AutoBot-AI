@@ -2076,7 +2076,7 @@ except ImportError as e:
 # Provides: /unified/search, /unified/stats, /unified/context, /unified/documentation/*,
 #           /unified/graph (for KnowledgeGraph.vue visualization)
 try:
-    from backend.api.knowledge_search_combined import router as unified_router
+    from backend.api.knowledge_search_aggregator import router as unified_router
     router.include_router(unified_router, tags=["knowledge-unified", "documentation"])
 except ImportError as e:
     logging.warning("Unified knowledge search router not available: %s", e)

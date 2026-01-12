@@ -7,7 +7,7 @@ Model References Verification Script
 Verifies that all model references use ModelConstants from src/constants/model_constants.py
 
 Usage:
-    python scripts/ai-ml/fix_critical_model_references.py
+    python scripts/ai-ml/model_references_corrector.py
 
 This script checks that the codebase properly uses centralized ModelConstants
 instead of hardcoded model names.

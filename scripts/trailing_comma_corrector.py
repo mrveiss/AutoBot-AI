@@ -56,7 +56,7 @@ def find_trailing_comma_tuples(content: str, filepath: str) -> list[dict]:
     return issues
 
 
-def fix_trailing_comma(content: str, issues: list[dict]) -> str:
+def trailing_comma_corrector(content: str, issues: list[dict]) -> str:
     """Remove trailing commas from identified issues."""
     lines = content.split("\n")
 
@@ -82,7 +82,7 @@ def process_file(filepath: Path, dry_run: bool = False) -> tuple[int, list[dict]
     issues = find_trailing_comma_tuples(content, str(filepath))
 
     if issues and not dry_run:
-        fixed_content = fix_trailing_comma(content, issues)
+        fixed_content = trailing_comma_corrector(content, issues)
         filepath.write_text(fixed_content, encoding="utf-8")
 
     return len(issues), issues

@@ -115,7 +115,7 @@ git log --since="2025-01-01" --name-only --pretty=format: -- "*.md" "docs/" | so
 python scripts/direct_kb_populate.py
 
 # Or use API approach
-python scripts/fix_search.py
+python scripts/search_corrector.py
 ```
 
 #### Automated Update Workflow

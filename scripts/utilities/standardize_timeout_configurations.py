@@ -110,11 +110,11 @@ class TimeoutConfigurationAnalyzer:
         redis_files = [
             'src/redis_pool_manager.py',
             'backend/utils/async_redis_manager.py',
-            'fix_analytics_redis_timeout.py',
+            'analytics_redis_timeout_corrector.py',
             'reorganize_redis_databases.py',
             'create_code_vector_knowledge.py',
             'migrate_vectors_to_db0.py',
-            'fix_index_dimensions.py',
+            'index_dimensions_corrector.py',
             'analyze_code_vectors_for_issues.py'
         ]
 

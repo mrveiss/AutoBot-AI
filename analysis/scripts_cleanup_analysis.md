@@ -65,9 +65,9 @@ Found **87 fix/test scripts** across the scripts directory. These scripts fall i
 
 **Scripts**:
 - `scripts/populate_kb_fixed.py` - Populates KB with ChromaDB (avoids Redis dimension issues)
-- `scripts/fix_search.py` - Fixes search functionality
-- `scripts/fix_kb_dimensions.py` - Fixes knowledge base dimension issues
-- `scripts/utilities/fix_settings_loading.py` - Fixes settings loading
+- `scripts/search_corrector.py` - Fixes search functionality
+- `scripts/kb_dimensions_corrector.py` - Fixes knowledge base dimension issues
+- `scripts/utilities/settings_loading_corrector.py` - Fixes settings loading
 - `scripts/utilities/browser_settings_utility.js` - Browser settings fixes
 - `scripts/utilities/frontend_api_utility.js` - Frontend API integration fixes
 
@@ -280,11 +280,11 @@ Found **87 fix/test scripts** across the scripts directory. These scripts fall i
    - Add unit tests
 
 2. **Integrate search fixes** into main search implementation:
-   - Move logic from `fix_search.py`
+   - Move logic from `search_corrector.py`
    - Add regression tests
 
 3. **Integrate KB dimension fixes** into knowledge_base.py:
-   - Move logic from `fix_kb_dimensions.py`
+   - Move logic from `kb_dimensions_corrector.py`
    - Add validation
 
 4. **Integrate settings/browser/API fixes** into respective components:
