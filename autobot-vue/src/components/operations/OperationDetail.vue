@@ -218,14 +218,15 @@ async function copyId() {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .operation-detail {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  padding: 1.5rem;
-  background-color: white;
-  border-radius: 0.5rem;
-  border: 1px solid var(--blue-gray-200);
+  gap: var(--spacing-5);
+  padding: var(--spacing-6);
+  background-color: var(--bg-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
   max-height: 80vh;
   overflow-y: auto;
 }
@@ -239,12 +240,12 @@ async function copyId() {
 .header-left {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .type-icon {
-  font-size: 1.5rem;
-  color: var(--blue-600);
+  font-size: var(--text-2xl);
+  color: var(--color-info);
   margin-top: 0.125rem;
 }
 
@@ -254,66 +255,66 @@ async function copyId() {
 }
 
 .operation-name {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--blue-gray-900);
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
   margin: 0;
 }
 
 .operation-type {
-  font-size: 0.875rem;
-  color: var(--blue-gray-500);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
 }
 
 .close-btn {
-  padding: 0.5rem;
+  padding: var(--spacing-2);
   background: none;
   border: none;
-  color: var(--blue-gray-400);
+  color: var(--text-tertiary);
   cursor: pointer;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
 }
 
 .close-btn:hover {
-  background-color: var(--blue-gray-100);
-  color: var(--blue-gray-600);
+  background-color: var(--bg-tertiary);
+  color: var(--text-secondary);
 }
 
 .status-section {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   flex-wrap: wrap;
 }
 
 .status-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.75rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  border-radius: 9999px;
+  gap: var(--spacing-1-5);
+  padding: var(--spacing-1-5) var(--spacing-3);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  border-radius: var(--radius-full);
 }
 
 .priority-badge {
   display: inline-flex;
   align-items: center;
-  padding: 0.375rem 0.75rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  border-radius: 9999px;
-  background-color: var(--blue-gray-100);
-  color: var(--blue-gray-700);
+  padding: var(--spacing-1-5) var(--spacing-3);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  border-radius: var(--radius-full);
+  background-color: var(--bg-tertiary);
+  color: var(--text-secondary);
 }
 
 .priority-high {
-  background-color: #fef3c7;
-  color: #92400e;
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning-dark, #92400e);
 }
 
 .priority-critical {
-  background-color: #fee2e2;
-  color: #991b1b;
+  background-color: var(--color-error-bg);
+  color: var(--color-error-dark, #991b1b);
 }
 
 .section-title {

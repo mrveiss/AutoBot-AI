@@ -592,8 +592,9 @@ export default {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .optimized-rum-dashboard {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: var(--font-sans, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif);
 }
 
 /* Custom scrollbar */
@@ -602,17 +603,17 @@ export default {
 }
 
 .overflow-y-auto::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 3px;
+  background: var(--scrollbar-track, #f1f1f1);
+  border-radius: var(--radius-sm);
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
+  background: var(--scrollbar-thumb, #c1c1c1);
+  border-radius: var(--radius-sm);
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb:hover {
-  background: #a1a1a1;
+  background: var(--scrollbar-thumb-hover, #a1a1a1);
 }
 
 /* Smooth transitions */

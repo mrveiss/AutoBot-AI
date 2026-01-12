@@ -524,6 +524,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .novnc-viewer {
   height: calc(100vh - 120px);
 }
@@ -531,29 +532,29 @@ onUnmounted(() => {
 .connection-status {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  margin-left: 1rem;
+  gap: var(--spacing-1);
+  font-size: var(--text-xs);
+  margin-left: var(--spacing-4);
 }
 
 .status-dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
-  transition: background-color 0.3s ease;
+  border-radius: var(--radius-full);
+  transition: background-color var(--duration-300) var(--ease-in-out);
 }
 
 .connection-status.connected .status-dot {
-  background: #10b981; /* green */
+  background: var(--color-success);
 }
 
 .connection-status.connecting .status-dot {
-  background: #f59e0b; /* yellow */
+  background: var(--color-warning);
   animation: pulse 1.5s infinite;
 }
 
 .connection-status.disconnected .status-dot {
-  background: #ef4444; /* red */
+  background: var(--color-error);
 }
 
 @keyframes pulse {

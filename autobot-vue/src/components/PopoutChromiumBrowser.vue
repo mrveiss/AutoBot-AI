@@ -996,14 +996,15 @@ export default {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .chromium-browser-container {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #f5f5f5;
-  border-radius: 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
 }
 
 .browser-header {
@@ -1021,17 +1022,17 @@ export default {
 }
 
 .browser-btn {
-  padding: 6px 8px;
+  padding: var(--spacing-1-5) var(--spacing-2);
   border: none;
   background: transparent;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background-color 0.2s;
-  font-size: 14px;
+  transition: background-color var(--duration-200);
+  font-size: var(--text-sm);
 }
 
 .browser-btn:hover {
-  background-color: rgba(0, 0, 0, 0.1);
+  background-color: var(--bg-tertiary-transparent);
 }
 
 .browser-btn:disabled {
@@ -1040,16 +1041,16 @@ export default {
 }
 
 .nav-btn {
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  background: white;
-  border-radius: 6px;
+  padding: var(--spacing-2) var(--spacing-3);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .nav-btn:hover:not(:disabled) {
-  background-color: #f3f4f6;
+  background-color: var(--bg-tertiary);
 }
 
 .nav-btn:disabled {
@@ -1062,16 +1063,16 @@ export default {
 }
 
 .automation-card {
-  background: white;
-  padding: 12px;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-surface);
+  padding: var(--spacing-3);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
 }
 
 .playwright-status-panel {
   position: absolute;
-  top: 20px;
-  right: 20px;
+  top: var(--spacing-5);
+  right: var(--spacing-5);
   width: 300px;
   z-index: 20;
 }

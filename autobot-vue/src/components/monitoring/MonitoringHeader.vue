@@ -71,60 +71,61 @@ const connectionStatusText = computed(() => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .dashboard-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30px;
-  background: white;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  margin-bottom: var(--spacing-8);
+  background: var(--bg-surface);
+  padding: var(--spacing-5);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
 }
 
 .header-title h1 {
   margin: 0;
-  color: #333;
-  font-size: 1.8em;
+  color: var(--text-primary);
+  font-size: var(--text-2xl);
 }
 
 .header-title .subtitle {
-  margin: 5px 0 0 0;
-  color: #666;
-  font-size: 0.9em;
+  margin: var(--spacing-1) 0 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 .monitoring-controls {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: var(--spacing-4);
 }
 
 .status-indicator {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.9em;
+  gap: var(--spacing-2);
+  font-size: var(--text-sm);
 }
 
 .status-dot {
   width: 10px;
   height: 10px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
 }
 
 .status-dot.connected {
-  background: #4caf50;
-  box-shadow: 0 0 8px rgba(76, 175, 80, 0.5);
+  background: var(--color-success);
+  box-shadow: 0 0 8px var(--color-success-bg-transparent);
 }
 
 .status-dot.connecting {
-  background: #ff9800;
+  background: var(--color-warning);
   animation: pulse 1s infinite;
 }
 
 .status-dot.disconnected {
-  background: #f44336;
+  background: var(--color-error);
 }
 
 @keyframes pulse {

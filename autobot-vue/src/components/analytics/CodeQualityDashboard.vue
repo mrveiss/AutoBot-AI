@@ -960,6 +960,7 @@ watch(selectedPeriod, () => {
 </script>
 
 <style scoped>
+/* Issue #704: Uses CSS design tokens via getCssVar() helper */
 .code-quality-dashboard {
   padding: var(--spacing-6);
   background: var(--bg-primary);

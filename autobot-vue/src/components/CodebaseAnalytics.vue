@@ -6423,6 +6423,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 </script>
 
 <style scoped>
+/* Issue #704: Uses CSS design tokens via getCssVar() helper */
 .codebase-analytics {
   padding: 20px;
   background: var(--bg-primary);

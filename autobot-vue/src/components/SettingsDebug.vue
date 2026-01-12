@@ -101,52 +101,53 @@ const testSettingsPanel = async () => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .settings-debug {
-  padding: 20px;
-  font-family: monospace;
+  padding: var(--spacing-5);
+  font-family: var(--font-mono);
 }
 
 .debug-info {
-  background: #f5f5f5;
-  padding: 15px;
-  border-radius: 5px;
-  margin: 10px 0;
+  background: var(--bg-tertiary);
+  padding: var(--spacing-4);
+  border-radius: var(--radius-md);
+  margin: var(--spacing-2-5) 0;
 }
 
 .error {
-  background: #ffebee;
-  color: #c62828;
-  padding: 10px;
-  border-radius: 4px;
-  margin: 5px 0;
+  background: var(--color-error-bg);
+  color: var(--color-error-dark, #c62828);
+  padding: var(--spacing-2-5);
+  border-radius: var(--radius-sm);
+  margin: var(--spacing-1) 0;
 }
 
 .success {
-  background: #e8f5e8;
-  color: #2e7d32;
-  padding: 10px;
-  border-radius: 4px;
-  margin: 5px 0;
+  background: var(--color-success-bg);
+  color: var(--color-success-dark, #2e7d32);
+  padding: var(--spacing-2-5);
+  border-radius: var(--radius-sm);
+  margin: var(--spacing-1) 0;
 }
 
 .test-button {
-  background: #2196f3;
-  color: white;
+  background: var(--color-info);
+  color: var(--text-on-primary);
   border: none;
-  padding: 10px 20px;
-  border-radius: 4px;
+  padding: var(--spacing-2-5) var(--spacing-5);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  margin: 10px 0;
+  margin: var(--spacing-2-5) 0;
 }
 
 .test-button:hover {
-  background: #1976d2;
+  background: var(--color-info-hover);
 }
 
 pre {
-  background: #f5f5f5;
-  padding: 10px;
-  border-radius: 4px;
+  background: var(--bg-tertiary);
+  padding: var(--spacing-2-5);
+  border-radius: var(--radius-sm);
   overflow-x: auto;
   white-space: pre-wrap;
 }

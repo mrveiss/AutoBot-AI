@@ -1073,6 +1073,7 @@ watch(selectedScope, () => {
 </script>
 
 <style scoped>
+/* Issue #704: Uses CSS design tokens via getCssVar() helper */
 .secrets-manager-n8n {
   display: flex;
   height: 100%;

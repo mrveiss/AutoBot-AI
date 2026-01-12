@@ -94,40 +94,41 @@ defineEmits<Emits>()
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .integration-actions {
-  background: #f8f9fa;
-  border-radius: 10px;
-  padding: 25px;
-  margin-bottom: 30px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-6);
+  margin-bottom: var(--spacing-8);
+  box-shadow: var(--shadow-md);
 }
 
 .section-header h3 {
-  margin: 0 0 20px 0;
-  color: #2c3e50;
-  font-size: 1.2rem;
+  margin: 0 0 var(--spacing-5) 0;
+  color: var(--text-primary);
+  font-size: var(--text-lg);
 }
 
 .section-header h3 i {
-  margin-right: 10px;
-  color: #3498db;
+  margin-right: var(--spacing-2-5);
+  color: var(--color-info);
 }
 
 .action-buttons {
   display: flex;
-  gap: 15px;
-  margin-bottom: 25px;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
   flex-wrap: wrap;
 }
 
 .action-info {
-  color: #7f8c8d;
+  color: var(--text-tertiary);
 }
 
 .action-info .info-item {
-  margin-bottom: 10px;
-  padding: 10px 0;
-  border-bottom: 1px solid #ecf0f1;
+  margin-bottom: var(--spacing-2-5);
+  padding: var(--spacing-2-5) 0;
+  border-bottom: 1px solid var(--border-light);
   display: block;
 }
 
@@ -136,7 +137,7 @@ defineEmits<Emits>()
 }
 
 .action-info .info-item strong {
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 @media (max-width: 768px) {

@@ -95,71 +95,74 @@ defineEmits<Emits>()
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .search-input {
   display: flex;
-  gap: 15px;
-  margin-bottom: 25px;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
 }
 
 .form-input {
   flex: 1;
-  padding: 12px 16px;
-  border: 2px solid #ecf0f1;
-  border-radius: 6px;
-  font-size: 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
+  border: 2px solid var(--border-light, #ecf0f1);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .form-input:focus {
   outline: none;
-  border-color: #3498db;
+  border-color: var(--color-info);
 }
 
 .search-results h4 {
-  margin-bottom: 20px;
-  color: #2c3e50;
+  margin-bottom: var(--spacing-5);
+  color: var(--text-primary);
 }
 
 .result-list {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: var(--spacing-4);
 }
 
 .result-item {
-  background: white;
-  padding: 15px;
-  border-radius: 8px;
-  border-left: 4px solid #3498db;
+  background: var(--bg-surface, white);
+  padding: var(--spacing-4);
+  border-radius: var(--radius-lg);
+  border-left: 4px solid var(--color-info);
 }
 
 .result-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .result-header strong {
-  color: #2c3e50;
-  font-family: 'Courier New', monospace;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
 }
 
 .relevance-score {
-  font-size: 0.8rem;
-  color: #7f8c8d;
-  background: #ecf0f1;
-  padding: 2px 8px;
-  border-radius: 12px;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  background: var(--bg-tertiary);
+  padding: var(--spacing-0-5) var(--spacing-2);
+  border-radius: var(--radius-full);
 }
 
 .result-purpose {
-  color: #2c3e50;
-  margin-bottom: 8px;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-2);
 }
 
 .result-meta {
-  font-size: 0.8rem;
-  color: #7f8c8d;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 
 .source {

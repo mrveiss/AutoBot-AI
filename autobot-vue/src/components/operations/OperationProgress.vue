@@ -86,14 +86,15 @@ const progressBarClasses = computed(() => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .operation-progress {
   width: 100%;
 }
 
 .progress-bar-container {
   width: 100%;
-  background-color: var(--blue-gray-200);
-  border-radius: 9999px;
+  background-color: var(--bg-tertiary);
+  border-radius: var(--radius-full);
   overflow: hidden;
 }
 
@@ -111,39 +112,39 @@ const progressBarClasses = computed(() => {
 
 .progress-bar {
   height: 100%;
-  transition: width 0.3s ease;
-  border-radius: 9999px;
+  transition: width var(--duration-300) var(--ease-in-out);
+  border-radius: var(--radius-full);
 }
 
 .progress-info {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 0.25rem;
-  font-size: 0.75rem;
-  color: var(--blue-gray-600);
+  margin-top: var(--spacing-1);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .progress-percentage {
-  font-weight: 600;
+  font-weight: var(--font-semibold);
 }
 
 .progress-items {
-  color: var(--blue-gray-500);
+  color: var(--text-tertiary);
 }
 
 .progress-step {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.375rem;
-  font-size: 0.75rem;
-  color: var(--blue-gray-600);
+  gap: var(--spacing-2);
+  margin-top: var(--spacing-1-5);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .step-icon {
   font-size: 0.625rem;
-  color: var(--blue-500);
+  color: var(--color-info);
 }
 
 .step-text {
@@ -154,16 +155,16 @@ const progressBarClasses = computed(() => {
 
 /* Status-specific styles */
 .status-running .progress-percentage {
-  color: var(--blue-600);
+  color: var(--color-info);
 }
 
 .status-completed .progress-percentage {
-  color: var(--green-600);
+  color: var(--color-success);
 }
 
 .status-failed .progress-percentage,
 .status-timeout .progress-percentage {
-  color: var(--red-600);
+  color: var(--color-error);
 }
 
 /* Tailwind-like utility classes */

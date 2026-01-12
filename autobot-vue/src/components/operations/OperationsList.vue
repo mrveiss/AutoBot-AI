@@ -160,6 +160,7 @@ function canResumeOperation(operation: Operation): boolean {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .operations-list {
   display: flex;
   flex-direction: column;
@@ -169,26 +170,26 @@ function canResumeOperation(operation: Operation): boolean {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 3rem 1rem;
+  padding: var(--spacing-12) var(--spacing-4);
   text-align: center;
 }
 
 .empty-icon {
-  font-size: 3rem;
-  color: var(--blue-gray-300);
-  margin-bottom: 1rem;
+  font-size: var(--text-4xl);
+  color: var(--text-tertiary);
+  margin-bottom: var(--spacing-4);
 }
 
 .empty-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--blue-gray-600);
-  margin: 0 0 0.5rem 0;
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
+  margin: 0 0 var(--spacing-2) 0;
 }
 
 .empty-text {
-  font-size: 0.875rem;
-  color: var(--blue-gray-500);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
   margin: 0;
   max-width: 400px;
 }
@@ -197,9 +198,9 @@ function canResumeOperation(operation: Operation): boolean {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem;
-  padding: 2rem;
-  color: var(--blue-gray-500);
+  gap: var(--spacing-3);
+  padding: var(--spacing-8);
+  color: var(--text-tertiary);
 }
 
 .table-container {
@@ -209,34 +210,34 @@ function canResumeOperation(operation: Operation): boolean {
 .operations-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .operations-table th {
   text-align: left;
-  padding: 0.75rem 1rem;
-  font-weight: 600;
-  color: var(--blue-gray-600);
-  background-color: var(--blue-gray-50);
-  border-bottom: 1px solid var(--blue-gray-200);
+  padding: var(--spacing-3) var(--spacing-4);
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
+  background-color: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .operations-table td {
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--blue-gray-100);
+  padding: var(--spacing-3) var(--spacing-4);
+  border-bottom: 1px solid var(--border-light);
 }
 
 .operation-row {
   cursor: pointer;
-  transition: background-color 0.15s;
+  transition: background-color var(--duration-150);
 }
 
 .operation-row:hover {
-  background-color: var(--blue-gray-50);
+  background-color: var(--bg-tertiary);
 }
 
 .row-selected {
-  background-color: #eff6ff !important;
+  background-color: var(--color-info-bg) !important;
 }
 
 .status-badge {

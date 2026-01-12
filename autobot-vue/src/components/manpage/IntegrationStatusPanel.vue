@@ -124,82 +124,83 @@ const { formatDate } = useKnowledgeBase()
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .status-info {
-  padding: 20px;
+  padding: var(--spacing-5);
 }
 
 .not-integrated,
 .error-state {
   display: flex;
   align-items: center;
-  gap: 15px;
-  padding: 20px;
-  border-radius: 8px;
-  background: white;
+  gap: var(--spacing-4);
+  padding: var(--spacing-5);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
 }
 
 .not-integrated {
-  border-left: 4px solid #3498db;
+  border-left: 4px solid var(--color-info);
 }
 
 .not-integrated i {
-  color: #3498db;
-  font-size: 1.5rem;
+  color: var(--color-info);
+  font-size: var(--text-2xl);
 }
 
 .error-state {
-  border-left: 4px solid #e74c3c;
+  border-left: 4px solid var(--color-error);
 }
 
 .error-state i {
-  color: #e74c3c;
-  font-size: 1.5rem;
+  color: var(--color-error);
+  font-size: var(--text-2xl);
 }
 
 .integration-stats {
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-5);
 }
 
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 20px;
-  margin-bottom: 20px;
+  gap: var(--spacing-5);
+  margin-bottom: var(--spacing-5);
 }
 
 .stat-item {
   text-align: center;
-  padding: 15px;
-  background: #ecf0f1;
-  border-radius: 8px;
+  padding: var(--spacing-4);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
 }
 
 .stat-number {
-  font-size: 2rem;
-  font-weight: bold;
-  color: #2c3e50;
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
 }
 
 .stat-label {
-  color: #7f8c8d;
-  font-size: 0.9rem;
-  margin-top: 5px;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  margin-top: var(--spacing-1);
 }
 
 .integration-date {
-  color: #7f8c8d;
-  margin-bottom: 20px;
+  color: var(--text-tertiary);
+  margin-bottom: var(--spacing-5);
 }
 
 .integration-date i {
-  margin-right: 8px;
+  margin-right: var(--spacing-2);
 }
 
 .available-commands h4 {
-  margin-bottom: 15px;
-  color: #2c3e50;
+  margin-bottom: var(--spacing-4);
+  color: var(--text-primary);
 }
 
 .command-tags {

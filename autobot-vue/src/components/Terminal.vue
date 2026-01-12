@@ -538,30 +538,31 @@ onUnmounted(() => {
   word-wrap: break-word;
 }
 
+/* Issue #704: Migrated terminal colors to CSS design tokens */
 .line-prefix {
-  color: #6c757d;
+  color: var(--text-tertiary, #6c757d);
   user-select: none;
 }
 
 .command {
-  color: #ffffff;
-  font-weight: 500;
+  color: var(--text-on-primary, #ffffff);
+  font-weight: var(--font-medium);
 }
 
 .output {
-  color: #e9ecef;
+  color: var(--text-primary-light, #e9ecef);
 }
 
 .success {
-  color: #28a745;
+  color: var(--color-success, #28a745);
 }
 
 .error {
-  color: #dc3545;
+  color: var(--color-error, #dc3545);
 }
 
 .info {
-  color: #17a2b8;
+  color: var(--color-info, #17a2b8);
 }
 
 .terminal-prompt {

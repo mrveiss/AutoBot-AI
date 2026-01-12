@@ -698,19 +698,20 @@ onMounted(() => {
   gap: 0.5rem;
 }
 
+/* Issue #704: Migrated to CSS design tokens */
 .loading-overlay {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--overlay-bg, rgba(0, 0, 0, 0.5));
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
-  color: white;
+  gap: var(--spacing-4);
+  color: var(--text-on-primary);
   z-index: 100;
 }
 
@@ -730,18 +731,18 @@ onMounted(() => {
 }
 
 .rank-1 {
-  background: linear-gradient(135deg, #ffd700, #ffb700);
-  color: #1a1a1a;
+  background: linear-gradient(135deg, var(--color-rank-gold, #ffd700), var(--color-rank-gold-dark, #ffb700));
+  color: var(--text-dark, #1a1a1a);
 }
 
 .rank-2 {
-  background: linear-gradient(135deg, #c0c0c0, #a0a0a0);
-  color: #1a1a1a;
+  background: linear-gradient(135deg, var(--color-rank-silver, #c0c0c0), var(--color-rank-silver-dark, #a0a0a0));
+  color: var(--text-dark, #1a1a1a);
 }
 
 .rank-3 {
-  background: linear-gradient(135deg, #cd7f32, #b87333);
-  color: white;
+  background: linear-gradient(135deg, var(--color-rank-bronze, #cd7f32), var(--color-rank-bronze-dark, #b87333));
+  color: var(--text-on-primary);
 }
 
 .popularity-bar {

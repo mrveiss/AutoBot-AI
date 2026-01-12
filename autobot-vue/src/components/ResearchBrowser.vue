@@ -724,6 +724,7 @@ export default {
   @apply hover:shadow-md transition-shadow duration-150;
 }
 
+/* Issue #704: Migrated to CSS design tokens */
 /* Loading indicator bar */
 .loading-indicator {
   position: fixed;
@@ -737,7 +738,7 @@ export default {
 
 .loading-bar {
   height: 100%;
-  background: linear-gradient(90deg, #3b82f6, #60a5fa, #3b82f6);
+  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-light, #60a5fa), var(--color-primary));
   background-size: 200% 100%;
   animation: loading 1.5s ease-in-out infinite;
 }
