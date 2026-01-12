@@ -204,7 +204,7 @@ TestSystemPromptLoading::test_conversation_continuation_rules_in_prompt PASSED
    - Regression prevention test for exact bug
    - Async integration tests
 
-3. **`docs/fixes/CONVERSATION_TERMINATION_BUG_FIX.md`**
+3. **`docs/fixes/CONVERSATION_TERMINATION_RESOLUTION.md`**
    - This comprehensive documentation
 
 ## Verification

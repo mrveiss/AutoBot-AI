@@ -152,12 +152,12 @@ backend/services/
 └── llm_cost_tracker.py        # LLM cost tracking
 
 backend/api/
-├── analytics_advanced.py      # Predictive maintenance & optimization
+├── analytics_maintenance.py      # Predictive maintenance & optimization
 ├── analytics_behavior.py      # User behavior endpoints
 ├── analytics_agents.py        # Agent analytics endpoints
 ├── analytics_cost.py          # Cost analytics endpoints
 ├── analytics_export.py        # Export functionality
-└── analytics_unified.py       # Unified dashboard
+└── analytics_reporting.py       # Unified dashboard
 ```
 
 ### Frontend Components

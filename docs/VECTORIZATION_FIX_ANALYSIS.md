@@ -23,7 +23,7 @@
 **Issue:** Still uses RedisVectorStore
 **Action:** Either remove or add deprecation warnings
 
-#### C. backend/api/knowledge_fresh.py
+#### C. backend/api/knowledge_debug.py
 **Status:** Needs investigation (likely has same issue)
 
 ### 2. Documentation Updates

@@ -468,7 +468,7 @@ self.redis_host = redis_host or redis_config.get(
 
 **Affected Files:**
 - `src/utils/async_redis_manager.py:279`
-- `backend/api/knowledge_fresh.py:105`
+- `backend/api/knowledge_debug.py:105`
 - `monitoring/performance_monitor.py:140`
 - (See audit report for complete list)
 
