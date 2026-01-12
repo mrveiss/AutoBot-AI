@@ -127,30 +127,33 @@ class CircuitBreaker:
     def _add_call_record(
         self, duration: float, success: bool, exception_type: str = None
     ):
-        """Add a call record to history"""
-        with self._lock:
-            record = CallRecord(
-                timestamp=time.time(),
-                duration=duration,
-                success=success,
-                exception_type=exception_type,
-            )
+        """Add a call record to history.
 
-            self.call_history.append(record)
+        Note: Caller must hold self._lock when calling this method.
+        Issue #712: Removed nested lock to fix deadlock bug.
+        """
+        record = CallRecord(
+            timestamp=time.time(),
+            duration=duration,
+            success=success,
+            exception_type=exception_type,
+        )
 
-            # Maintain history size limit
-            if len(self.call_history) > self.max_history_size:
-                self.call_history = self.call_history[-self.max_history_size :]
+        self.call_history.append(record)
 
-            # Update statistics
-            self.stats["total_calls"] += 1
-            if success:
-                self.stats["successful_calls"] += 1
-            else:
-                self.stats["failed_calls"] += 1
+        # Maintain history size limit
+        if len(self.call_history) > self.max_history_size:
+            self.call_history = self.call_history[-self.max_history_size :]
 
-            if duration > self.config.slow_call_threshold:
-                self.stats["slow_calls"] += 1
+        # Update statistics
+        self.stats["total_calls"] += 1
+        if success:
+            self.stats["successful_calls"] += 1
+        else:
+            self.stats["failed_calls"] += 1
+
+        if duration > self.config.slow_call_threshold:
+            self.stats["slow_calls"] += 1
 
     def _evaluate_performance(self) -> bool:
         """Evaluate if performance metrics indicate the service should be opened"""
@@ -240,14 +243,13 @@ class CircuitBreaker:
 
     def _record_failure(self, duration: float, exception: Exception):
         """Record a failed call"""
-        if not self._should_monitor_exception(exception):
-            # Don't count this as a circuit breaker failure
-            self._add_call_record(
-                duration, success=False, exception_type=type(exception).__name__
-            )
-            return
-
         with self._lock:
+            if not self._should_monitor_exception(exception):
+                # Don't count this as a circuit breaker failure
+                self._add_call_record(
+                    duration, success=False, exception_type=type(exception).__name__
+                )
+                return
             self._add_call_record(
                 duration, success=False, exception_type=type(exception).__name__
             )
