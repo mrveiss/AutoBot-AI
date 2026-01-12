@@ -299,46 +299,61 @@ class LogPatternMiner:
             confidence=confidence,
         )
 
-    def detect_anomalies(
-        self, log_lines: List[Tuple[str, str, str]], patterns: List[LogPattern]
+    def _detect_error_spikes(
+        self,
+        error_counts: Dict[str, int],
+        hourly_counts: Dict[str, Dict[str, int]],
     ) -> List[LogAnomaly]:
-        """Detect anomalies in log data"""
+        """
+        Detect error spike anomalies in log data.
+
+        Issue #665: Extracted from detect_anomalies to reduce function length.
+
+        Args:
+            error_counts: Error counts by hour
+            hourly_counts: All log counts by hour and source
+
+        Returns:
+            List of error spike anomalies
+        """
         anomalies = []
+        if not error_counts:
+            return anomalies
 
-        # Group logs by hour for spike detection
-        hourly_counts: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
-        error_counts: Dict[str, int] = defaultdict(int)
+        avg_errors = sum(error_counts.values()) / len(error_counts)
+        for hour, count in error_counts.items():
+            if count > avg_errors * 3 and count > 5:  # 3x average and >5 errors
+                anomalies.append(self._create_anomaly(
+                    anomaly_id=f"error_spike_{hour}",
+                    anomaly_type="error_surge",
+                    severity="high" if count > avg_errors * 5 else "medium",
+                    description=f"Error spike detected: {count} errors vs {avg_errors:.1f} average",
+                    timestamp=hour,
+                    affected_sources=list(
+                        set(s for lines in hourly_counts.values() for s in lines)
+                    ),
+                    metric_before=avg_errors,
+                    metric_after=float(count),
+                    confidence=min(0.95, 0.5 + (count / avg_errors) * 0.1),
+                ))
+        return anomalies
 
-        for line, source, _ in log_lines:
-            ts = self.extract_timestamp(line)
-            if ts:
-                hour_key = ts.strftime("%Y-%m-%d %H:00")
-                hourly_counts[hour_key][source] += 1
+    def _detect_new_error_patterns(
+        self,
+        patterns: List[LogPattern],
+    ) -> List[LogAnomaly]:
+        """
+        Detect new high-frequency error pattern anomalies.
 
-                level = self.extract_log_level(line)
-                if level in ERROR_LEVELS:  # O(1) lookup (Issue #326)
-                    error_counts[hour_key] += 1
+        Issue #665: Extracted from detect_anomalies to reduce function length.
 
-        # Detect error spikes
-        if error_counts:
-            avg_errors = sum(error_counts.values()) / len(error_counts)
-            for hour, count in error_counts.items():
-                if count > avg_errors * 3 and count > 5:  # 3x average and >5 errors
-                    anomalies.append(self._create_anomaly(
-                        anomaly_id=f"error_spike_{hour}",
-                        anomaly_type="error_surge",
-                        severity="high" if count > avg_errors * 5 else "medium",
-                        description=f"Error spike detected: {count} errors vs {avg_errors:.1f} average",
-                        timestamp=hour,
-                        affected_sources=list(
-                            set(s for lines in hourly_counts.values() for s in lines)
-                        ),
-                        metric_before=avg_errors,
-                        metric_after=float(count),
-                        confidence=min(0.95, 0.5 + (count / avg_errors) * 0.1),
-                    ))
+        Args:
+            patterns: List of log patterns to analyze
 
-        # Detect sudden pattern appearances (new patterns)
+        Returns:
+            List of new pattern anomalies
+        """
+        anomalies = []
         for pattern in patterns:
             if pattern.occurrences >= 10 and pattern.frequency_per_hour > 50:
                 if pattern.is_error_pattern:
@@ -353,27 +368,82 @@ class LogPatternMiner:
                         metric_after=pattern.frequency_per_hour,
                         confidence=0.85,
                     ))
+        return anomalies
 
-        # Detect log gaps (periods with no logs)
-        if hourly_counts:
-            hours = sorted(hourly_counts)
-            for i in range(1, len(hours)):
-                prev_hour = datetime.strptime(hours[i - 1], "%Y-%m-%d %H:00")
-                curr_hour = datetime.strptime(hours[i], "%Y-%m-%d %H:00")
-                gap = (curr_hour - prev_hour).total_seconds() / 3600
+    def _detect_log_gaps(
+        self,
+        hourly_counts: Dict[str, Dict[str, int]],
+    ) -> List[LogAnomaly]:
+        """
+        Detect log gap anomalies (periods with no logs).
 
-                if gap > 2:  # More than 2 hours gap
-                    anomalies.append(self._create_anomaly(
-                        anomaly_id=f"log_gap_{hours[i-1]}",
-                        anomaly_type="gap",
-                        severity="medium" if gap < 6 else "high",
-                        description=f"Log gap detected: {gap:.1f} hours without logs",
-                        timestamp=hours[i - 1],
-                        affected_sources=list(hourly_counts[hours[i - 1]].keys()),
-                        metric_before=sum(hourly_counts[hours[i - 1]].values()),
-                        metric_after=0,
-                        confidence=0.9,
-                    ))
+        Issue #665: Extracted from detect_anomalies to reduce function length.
+
+        Args:
+            hourly_counts: Log counts by hour and source
+
+        Returns:
+            List of log gap anomalies
+        """
+        anomalies = []
+        if not hourly_counts:
+            return anomalies
+
+        hours = sorted(hourly_counts)
+        for i in range(1, len(hours)):
+            prev_hour = datetime.strptime(hours[i - 1], "%Y-%m-%d %H:00")
+            curr_hour = datetime.strptime(hours[i], "%Y-%m-%d %H:00")
+            gap = (curr_hour - prev_hour).total_seconds() / 3600
+
+            if gap > 2:  # More than 2 hours gap
+                anomalies.append(self._create_anomaly(
+                    anomaly_id=f"log_gap_{hours[i-1]}",
+                    anomaly_type="gap",
+                    severity="medium" if gap < 6 else "high",
+                    description=f"Log gap detected: {gap:.1f} hours without logs",
+                    timestamp=hours[i - 1],
+                    affected_sources=list(hourly_counts[hours[i - 1]].keys()),
+                    metric_before=sum(hourly_counts[hours[i - 1]].values()),
+                    metric_after=0,
+                    confidence=0.9,
+                ))
+        return anomalies
+
+    def detect_anomalies(
+        self, log_lines: List[Tuple[str, str, str]], patterns: List[LogPattern]
+    ) -> List[LogAnomaly]:
+        """
+        Detect anomalies in log data.
+
+        Issue #665: Refactored to use extracted helper methods for each
+        anomaly type detection.
+
+        Args:
+            log_lines: List of (line, source, context) tuples
+            patterns: List of detected log patterns
+
+        Returns:
+            List of detected anomalies
+        """
+        # Group logs by hour for spike detection
+        hourly_counts: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        error_counts: Dict[str, int] = defaultdict(int)
+
+        for line, source, _ in log_lines:
+            ts = self.extract_timestamp(line)
+            if ts:
+                hour_key = ts.strftime("%Y-%m-%d %H:00")
+                hourly_counts[hour_key][source] += 1
+
+                level = self.extract_log_level(line)
+                if level in ERROR_LEVELS:  # O(1) lookup (Issue #326)
+                    error_counts[hour_key] += 1
+
+        # Issue #665: Use extracted helpers for each anomaly type
+        anomalies = []
+        anomalies.extend(self._detect_error_spikes(error_counts, hourly_counts))
+        anomalies.extend(self._detect_new_error_patterns(patterns))
+        anomalies.extend(self._detect_log_gaps(hourly_counts))
 
         return anomalies
 

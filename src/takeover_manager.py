@@ -100,22 +100,37 @@ class TakeoverManager:
 
         logger.info("Takeover Manager initialized")
 
-    async def request_takeover(
+    def _create_takeover_request(
         self,
+        request_id: str,
         trigger: TakeoverTrigger,
         reason: str,
-        requesting_agent: Optional[str] = None,
-        affected_tasks: Optional[List[str]] = None,
-        priority: TaskPriority = TaskPriority.HIGH,
-        context_data: Optional[Dict[str, Any]] = None,
-        timeout_minutes: Optional[int] = None,
-        auto_approve: bool = False,
-    ) -> str:
-        """Request human takeover of autonomous operations"""
+        requesting_agent: Optional[str],
+        affected_tasks: Optional[List[str]],
+        priority: TaskPriority,
+        context_data: Optional[Dict[str, Any]],
+        timeout_minutes: Optional[int],
+        auto_approve: bool,
+    ) -> TakeoverRequest:
+        """
+        Create a TakeoverRequest object with computed fields.
 
-        request_id = f"takeover_{int(time.time() * 1000)}"
+        Issue #665: Extracted from request_takeover to reduce function length.
 
-        # Calculate expiration
+        Args:
+            request_id: Unique request identifier
+            trigger: Type of takeover trigger
+            reason: Reason for takeover request
+            requesting_agent: Agent requesting takeover
+            affected_tasks: List of affected task IDs
+            priority: Request priority
+            context_data: Additional context
+            timeout_minutes: Optional timeout override
+            auto_approve: Whether to auto-approve
+
+        Returns:
+            Configured TakeoverRequest object
+        """
         timeout = (
             timedelta(minutes=timeout_minutes)
             if timeout_minutes
@@ -123,8 +138,7 @@ class TakeoverManager:
         )
         expires_at = datetime.now() + timeout
 
-        # Create takeover request
-        request = TakeoverRequest(
+        return TakeoverRequest(
             request_id=request_id,
             trigger=trigger,
             priority=priority,
@@ -137,7 +151,29 @@ class TakeoverManager:
             auto_approve=auto_approve or trigger in self.auto_approve_triggers,
         )
 
-        # Record in memory system
+    def _record_takeover_in_memory(
+        self,
+        trigger: TakeoverTrigger,
+        reason: str,
+        priority: TaskPriority,
+        requesting_agent: Optional[str],
+        affected_tasks: Optional[List[str]],
+    ) -> str:
+        """
+        Record takeover request in memory system.
+
+        Issue #665: Extracted from request_takeover to reduce function length.
+
+        Args:
+            trigger: Type of takeover trigger
+            reason: Reason for takeover request
+            priority: Request priority
+            requesting_agent: Agent requesting takeover
+            affected_tasks: List of affected task IDs
+
+        Returns:
+            Task ID from memory system
+        """
         task_id = self.memory_manager.create_task_record(
             task_name="Takeover Request",
             description=f"Human takeover requested: {reason}",
@@ -150,20 +186,57 @@ class TakeoverManager:
                 "requesting_agent": requesting_agent,
             },
         )
-
         self.memory_manager.start_task(task_id)
+        return task_id
 
-        # Store request
+    async def request_takeover(
+        self,
+        trigger: TakeoverTrigger,
+        reason: str,
+        requesting_agent: Optional[str] = None,
+        affected_tasks: Optional[List[str]] = None,
+        priority: TaskPriority = TaskPriority.HIGH,
+        context_data: Optional[Dict[str, Any]] = None,
+        timeout_minutes: Optional[int] = None,
+        auto_approve: bool = False,
+    ) -> str:
+        """
+        Request human takeover of autonomous operations.
+
+        Issue #665: Refactored to use extracted helper methods.
+
+        Args:
+            trigger: Type of takeover trigger
+            reason: Reason for takeover request
+            requesting_agent: Agent requesting takeover
+            affected_tasks: List of affected task IDs
+            priority: Request priority
+            context_data: Additional context
+            timeout_minutes: Optional timeout override
+            auto_approve: Whether to auto-approve
+
+        Returns:
+            Request ID for tracking
+        """
+        request_id = f"takeover_{int(time.time() * 1000)}"
+
+        # Issue #665: Use helper to create request
+        request = self._create_takeover_request(
+            request_id, trigger, reason, requesting_agent, affected_tasks,
+            priority, context_data, timeout_minutes, auto_approve
+        )
+
+        # Issue #665: Use helper to record in memory
+        self._record_takeover_in_memory(
+            trigger, reason, priority, requesting_agent, affected_tasks
+        )
+
+        # Store request and execute handlers
         self.pending_requests[request_id] = request
-
-        # Execute trigger handlers
         await self._execute_trigger_handlers(request)
 
         # Auto-pause affected tasks if critical
-        if trigger in {
-            TakeoverTrigger.CRITICAL_ERROR,
-            TakeoverTrigger.SECURITY_CONCERN,
-        }:
+        if trigger in {TakeoverTrigger.CRITICAL_ERROR, TakeoverTrigger.SECURITY_CONCERN}:
             await self._pause_affected_tasks(request.affected_tasks)
 
         # Auto-approve if configured
@@ -171,8 +244,6 @@ class TakeoverManager:
             await self._auto_approve_request(request_id)
 
         logger.info("Takeover requested: %s - %s - %s", request_id, trigger.value, reason)
-
-        # Notify state change callbacks
         await self._notify_state_change("request_created", request_id)
 
         return request_id

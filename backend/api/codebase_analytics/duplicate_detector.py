@@ -1011,12 +1011,83 @@ class DuplicateCodeDetector(_BaseClass):
         )
         return duplicates
 
+    async def _collect_all_duplicates(
+        self,
+        all_blocks: List[CodeBlock],
+    ) -> List[DuplicatePair]:
+        """
+        Collect duplicates using all detection methods.
+
+        Issue #665: Extracted from run_analysis_async to reduce function length.
+
+        Args:
+            all_blocks: List of code blocks to analyze
+
+        Returns:
+            List of all detected duplicate pairs
+        """
+        # Group blocks by hash for exact matches
+        hash_groups: Dict[str, List[CodeBlock]] = defaultdict(list)
+        for block in all_blocks:
+            hash_groups[block.content_hash].append(block)
+
+        # Find duplicates using all methods
+        seen_pairs: Set[Tuple[str, str]] = set()
+        duplicates = self._find_exact_duplicates(hash_groups, seen_pairs)
+        duplicates.extend(self._find_similar_duplicates(all_blocks, seen_pairs))
+
+        # Add semantic duplicates if enabled
+        if self.use_semantic_analysis:
+            semantic_dups = await self._find_semantic_duplicates_async(all_blocks, seen_pairs)
+            duplicates.extend(semantic_dups)
+
+        return duplicates
+
+    def _build_duplicate_analysis(
+        self,
+        duplicates: List[DuplicatePair],
+        files_count: int,
+    ) -> DuplicateAnalysis:
+        """
+        Build DuplicateAnalysis from duplicate pairs.
+
+        Issue #665: Extracted from run_analysis_async to reduce function length.
+
+        Args:
+            duplicates: List of detected duplicate pairs
+            files_count: Number of files analyzed
+
+        Returns:
+            DuplicateAnalysis with statistics
+        """
+        # Sort and optionally limit results
+        duplicates.sort(key=lambda x: x.similarity, reverse=True)
+        if MAX_DUPLICATES_RETURNED > 0:
+            duplicates = duplicates[:MAX_DUPLICATES_RETURNED]
+
+        # Calculate statistics
+        high_count, medium_count, low_count, total_lines = self._calculate_statistics(
+            duplicates
+        )
+
+        return DuplicateAnalysis(
+            total_duplicates=len(duplicates),
+            high_similarity_count=high_count,
+            medium_similarity_count=medium_count,
+            low_similarity_count=low_count,
+            total_duplicate_lines=total_lines,
+            duplicates=duplicates,
+            files_analyzed=files_count,
+            scan_timestamp=datetime.now().isoformat(),
+        )
+
     async def run_analysis_async(self) -> DuplicateAnalysis:
         """
         Run duplicate code analysis with semantic similarity.
 
         Issue #554: Async version that includes LLM-based semantic
         duplicate detection in addition to hash and token methods.
+        Issue #665: Refactored to use extracted helper methods.
 
         Returns:
             DuplicateAnalysis with all detected duplicates (including semantic)
@@ -1038,41 +1109,11 @@ class DuplicateCodeDetector(_BaseClass):
         all_blocks = self._extract_all_blocks(files)
         logger.info("Extracted %d code blocks", len(all_blocks))
 
-        # Group blocks by hash for exact matches
-        hash_groups: Dict[str, List[CodeBlock]] = defaultdict(list)
-        for block in all_blocks:
-            hash_groups[block.content_hash].append(block)
+        # Issue #665: Use helper to collect duplicates
+        duplicates = await self._collect_all_duplicates(all_blocks)
 
-        # Find duplicates using all methods
-        seen_pairs: Set[Tuple[str, str]] = set()
-        duplicates = self._find_exact_duplicates(hash_groups, seen_pairs)
-        duplicates.extend(self._find_similar_duplicates(all_blocks, seen_pairs))
-
-        # Add semantic duplicates if enabled
-        if self.use_semantic_analysis:
-            semantic_dups = await self._find_semantic_duplicates_async(all_blocks, seen_pairs)
-            duplicates.extend(semantic_dups)
-
-        # Sort and optionally limit results
-        duplicates.sort(key=lambda x: x.similarity, reverse=True)
-        if MAX_DUPLICATES_RETURNED > 0:
-            duplicates = duplicates[:MAX_DUPLICATES_RETURNED]
-
-        # Calculate statistics
-        high_count, medium_count, low_count, total_lines = self._calculate_statistics(
-            duplicates
-        )
-
-        analysis = DuplicateAnalysis(
-            total_duplicates=len(duplicates),
-            high_similarity_count=high_count,
-            medium_similarity_count=medium_count,
-            low_similarity_count=low_count,
-            total_duplicate_lines=total_lines,
-            duplicates=duplicates,
-            files_analyzed=len(files),
-            scan_timestamp=datetime.now().isoformat(),
-        )
+        # Issue #665: Use helper to build analysis
+        analysis = self._build_duplicate_analysis(duplicates, len(files))
 
         # Cache results
         if self.use_semantic_analysis:
@@ -1085,7 +1126,8 @@ class DuplicateCodeDetector(_BaseClass):
 
         logger.info(
             "Duplicate detection complete: %d duplicates found (%d high, %d medium, %d low)",
-            len(duplicates), high_count, medium_count, low_count
+            analysis.total_duplicates, analysis.high_similarity_count,
+            analysis.medium_similarity_count, analysis.low_similarity_count
         )
 
         return analysis
