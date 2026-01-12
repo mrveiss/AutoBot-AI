@@ -162,14 +162,62 @@ def requires_service_auth(path: str) -> bool:
 # ============================================================================
 
 
+async def _handle_auth_success(
+    request: Request, service_info: dict, path: str
+) -> None:
+    """
+    Handle successful service authentication.
+
+    Issue #665: Extracted from enforce_service_auth to reduce function length.
+
+    Args:
+        request: FastAPI request object
+        service_info: Validated service information
+        path: Request path
+    """
+    request.state.service_id = service_info["service_id"]
+    request.state.authenticated = True
+
+    logger.info(
+        "Service authenticated successfully",
+        service_id=service_info["service_id"],
+        path=path,
+        method=request.method,
+    )
+
+
+def _handle_auth_failure(e: HTTPException, path: str, method: str) -> JSONResponse:
+    """
+    Handle service authentication failure.
+
+    Issue #665: Extracted from enforce_service_auth to reduce function length.
+
+    Args:
+        e: HTTPException from authentication
+        path: Request path
+        method: HTTP method
+
+    Returns:
+        JSONResponse with error details
+    """
+    logger.error(
+        "Service authentication FAILED - request BLOCKED",
+        path=path,
+        method=method,
+        error=str(e.detail),
+        status_code=e.status_code,
+    )
+    return JSONResponse(
+        status_code=e.status_code,
+        content={"detail": e.detail, "authenticated": False},
+    )
+
+
 async def enforce_service_auth(request: Request, call_next):
     """
     Enforce service authentication on required endpoints.
 
-    Logic:
-    1. If path is exempt → Allow through (frontend access)
-    2. If path requires service auth → Validate authentication
-    3. If path is neither → Allow through (default open)
+    Issue #665: Refactored to use extracted helper methods.
 
     Args:
         request: FastAPI request object
@@ -177,9 +225,6 @@ async def enforce_service_auth(request: Request, call_next):
 
     Returns:
         Response from downstream middleware/endpoint
-
-    Raises:
-        HTTPException: If service authentication fails on required endpoint
     """
     path = request.url.path
 
@@ -195,37 +240,13 @@ async def enforce_service_auth(request: Request, call_next):
         )
 
         try:
-            # Validate service authentication using shared validation function
             service_info = await validate_service_auth(request)
-
-            # Add service info to request state for downstream use
-            request.state.service_id = service_info["service_id"]
-            request.state.authenticated = True
-
-            logger.info(
-                "Service authenticated successfully",
-                service_id=service_info["service_id"],
-                path=path,
-                method=request.method,
-            )
+            await _handle_auth_success(request, service_info, path)
 
         except HTTPException as e:
-            # Authentication failed - block request in enforcement mode
-            logger.error(
-                "Service authentication FAILED - request BLOCKED",
-                path=path,
-                method=request.method,
-                error=str(e.detail),
-                status_code=e.status_code,
-            )
-            # Return proper JSON response instead of raising exception
-            return JSONResponse(
-                status_code=e.status_code,
-                content={"detail": e.detail, "authenticated": False},
-            )
+            return _handle_auth_failure(e, path, request.method)
 
         except Exception as e:
-            # Unexpected error during authentication
             logger.error(
                 "Service authentication error",
                 path=path,

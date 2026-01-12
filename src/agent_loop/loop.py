@@ -114,6 +114,52 @@ class AgentLoop:
     # Main Entry Points
     # =========================================================================
 
+    def _init_task_context(
+        self,
+        task_id: str,
+        task_description: str,
+        initial_context: Optional[dict],
+    ) -> None:
+        """
+        Initialize task context and state for new task.
+
+        Issue #665: Extracted from run_task to reduce function length.
+
+        Args:
+            task_id: Task identifier
+            task_description: Description of the task
+            initial_context: Optional initial context/metadata
+        """
+        self._current_context = TaskContext(
+            task_id=task_id,
+            description=task_description,
+            metadata=initial_context or {},
+        )
+        self._state = LoopState.INITIALIZING
+        self._iteration_count = 0
+        self._consecutive_errors = 0
+
+    async def _execute_main_loop(self) -> list[IterationResult]:
+        """
+        Execute the main iteration loop.
+
+        Issue #665: Extracted from run_task to reduce function length.
+
+        Returns:
+            List of iteration results
+        """
+        self._state = LoopState.RUNNING
+        results: list[IterationResult] = []
+
+        while self._should_continue():
+            iteration_result = await self._run_iteration()
+            results.append(iteration_result)
+
+            if not iteration_result.should_continue:
+                break
+
+        return results
+
     async def run_task(
         self,
         task_description: str,
@@ -122,6 +168,8 @@ class AgentLoop:
     ) -> dict[str, Any]:
         """
         Run a complete task through the agent loop.
+
+        Issue #665: Refactored to use extracted helper methods.
 
         Args:
             task_description: Description of the task to perform
@@ -132,19 +180,10 @@ class AgentLoop:
             Dict with task results
         """
         task_id = task_id or f"task-{uuid.uuid4().hex[:12]}"
-
         logger.info("AgentLoop: Starting task %s: %s", task_id, task_description[:100])
 
-        # Initialize context
-        self._current_context = TaskContext(
-            task_id=task_id,
-            description=task_description,
-            metadata=initial_context or {},
-        )
-
-        self._state = LoopState.INITIALIZING
-        self._iteration_count = 0
-        self._consecutive_errors = 0
+        # Issue #665: Use helper for context initialization
+        self._init_task_context(task_id, task_description, initial_context)
 
         try:
             # Phase 0: Create plan if planner available
@@ -154,30 +193,17 @@ class AgentLoop:
                     context=initial_context,
                 )
                 self._current_context.plan_id = plan.plan_id
-                logger.info(
-                    "AgentLoop: Plan created with %d steps", len(plan.steps)
-                )
+                logger.info("AgentLoop: Plan created with %d steps", len(plan.steps))
 
-            # Main loop
-            self._state = LoopState.RUNNING
-            results: list[IterationResult] = []
-
-            while self._should_continue():
-                iteration_result = await self._run_iteration()
-                results.append(iteration_result)
-
-                if not iteration_result.should_continue:
-                    break
+            # Issue #665: Use helper for main loop execution
+            results = await self._execute_main_loop()
 
             # Complete
             self._state = LoopState.COMPLETING
-
-            # Think before completion (mandatory)
             if self.config.think_on_completion:
                 await self._think_before_completion()
 
             self._state = LoopState.COMPLETED
-
             return self._build_result(results)
 
         except asyncio.CancelledError:

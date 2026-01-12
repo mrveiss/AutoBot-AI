@@ -282,6 +282,67 @@ async def list_sessions(request: Request):
     )
 
 
+async def _track_session_in_memory_graph(
+    request: Request,
+    session_id: str,
+    session_title: str,
+    user_data: Optional[dict],
+    request_id: str,
+) -> None:
+    """
+    Track session creation in memory graph.
+
+    Issue #665: Extracted from create_session to reduce function length.
+    Issue #608: Memory graph tracking for sessions.
+
+    Args:
+        request: FastAPI request with app state
+        session_id: Created session ID
+        session_title: Session title
+        user_data: Authenticated user data
+        request_id: Request tracking ID
+    """
+    memory_graph: Optional[AutoBotMemoryGraph] = getattr(
+        request.app.state, "memory_graph", None
+    )
+    if not memory_graph or not user_data:
+        return
+
+    try:
+        user_id = user_data.get("user_id") or user_data.get("username", "anonymous")
+        username = user_data.get("username", "anonymous")
+
+        # Create user entity (idempotent - returns existing if found)
+        await memory_graph.create_user_entity(
+            user_id=user_id,
+            username=username,
+            metadata={"source": "session_creation"},
+        )
+
+        # Create chat session entity linked to user
+        await memory_graph.create_chat_session_entity(
+            session_id=session_id,
+            owner_id=user_id,
+            title=session_title,
+            metadata={
+                "created_via": "api",
+                "request_id": request_id,
+            },
+        )
+        logger.debug(
+            "Memory graph entities created for session %s, user %s",
+            session_id,
+            username,
+        )
+    except Exception as graph_error:
+        # Non-critical: log warning but don't fail session creation
+        logger.warning(
+            "Failed to create memory graph entities for session %s: %s",
+            session_id,
+            graph_error,
+        )
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_session",
@@ -289,14 +350,15 @@ async def list_sessions(request: Request):
 )
 @router.post("/chat/sessions")
 async def create_session(session_data: SessionCreate, request: Request):
-    """Create a new chat session"""
+    """
+    Create a new chat session.
+
+    Issue #665: Refactored to use extracted helper for memory graph tracking.
+    """
     request_id = generate_request_id()
     log_request_context(request, "create_session", request_id)
 
-    # Get dependencies from request state
     chat_history_manager = get_chat_history_manager(request)
-
-    # Generate new session
     session_id = generate_chat_session_id()
     session_title = session_data.title or DEFAULT_SESSION_TITLE
 
@@ -308,7 +370,6 @@ async def create_session(session_data: SessionCreate, request: Request):
         metadata["username"] = user_data["username"]  # For backward compatibility
         logger.info("Session %s created with owner: %s", session_id, user_data['username'])
 
-    # Create session
     session = await chat_history_manager.create_session(
         session_id=session_id,
         title=session_title,
@@ -321,44 +382,10 @@ async def create_session(session_data: SessionCreate, request: Request):
         {"title": session_title, "request_id": request_id},
     )
 
-    # Issue #608: Create user and session entities in memory graph for tracking
-    memory_graph: Optional[AutoBotMemoryGraph] = getattr(
-        request.app.state, "memory_graph", None
+    # Issue #665: Use helper for memory graph tracking
+    await _track_session_in_memory_graph(
+        request, session_id, session_title, user_data, request_id
     )
-    if memory_graph and user_data:
-        try:
-            user_id = user_data.get("user_id") or user_data.get("username", "anonymous")
-            username = user_data.get("username", "anonymous")
-
-            # Create user entity (idempotent - returns existing if found)
-            await memory_graph.create_user_entity(
-                user_id=user_id,
-                username=username,
-                metadata={"source": "session_creation"},
-            )
-
-            # Create chat session entity linked to user
-            await memory_graph.create_chat_session_entity(
-                session_id=session_id,
-                owner_id=user_id,
-                title=session_title,
-                metadata={
-                    "created_via": "api",
-                    "request_id": request_id,
-                },
-            )
-            logger.debug(
-                "Memory graph entities created for session %s, user %s",
-                session_id,
-                username,
-            )
-        except Exception as graph_error:
-            # Non-critical: log warning but don't fail session creation
-            logger.warning(
-                "Failed to create memory graph entities for session %s: %s",
-                session_id,
-                graph_error,
-            )
 
     return create_success_response(
         data=session,

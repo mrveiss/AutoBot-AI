@@ -309,6 +309,35 @@ class ChatKnowledgeService:
 
         return None
 
+    def _should_skip_retrieval(
+        self, intent_result: QueryIntentResult, force_retrieval: bool
+    ) -> bool:
+        """
+        Determine if knowledge retrieval should be skipped.
+
+        Issue #665: Extracted from smart_retrieve_knowledge to reduce function length.
+
+        Args:
+            intent_result: Query intent detection result
+            force_retrieval: If True, never skip retrieval
+
+        Returns:
+            True if retrieval should be skipped
+        """
+        if force_retrieval:
+            return False
+
+        if not intent_result.should_use_knowledge:
+            logger.info(
+                "[Smart RAG] Skipping retrieval - intent=%s, confidence=%.2f, reason=%s",
+                intent_result.intent.value,
+                intent_result.confidence,
+                intent_result.reasoning
+            )
+            return True
+
+        return False
+
     async def smart_retrieve_knowledge(
         self,
         query: str,
@@ -321,11 +350,7 @@ class ChatKnowledgeService:
         """
         Smart knowledge retrieval with intent detection.
 
-        Issue #249 Phase 2: Uses query intent detection to decide whether
-        to perform knowledge retrieval, optimizing performance by skipping
-        RAG for queries that don't need it.
-
-        Issue #556: Added categories parameter and smart category selection.
+        Issue #665: Refactored to use extracted helper methods.
 
         Args:
             query: User's chat message/query
@@ -334,27 +359,15 @@ class ChatKnowledgeService:
             force_retrieval: If True, bypass intent detection and always retrieve
             categories: Optional list of categories to filter results
             enable_smart_categories: If True, automatically select categories
-                                    based on query intent
 
         Returns:
             Tuple of (context_string, citations, intent_result)
-            - context_string: Knowledge context for LLM prompt (empty if skipped)
-            - citations: List of citation dicts (empty if skipped)
-            - intent_result: The intent detection result for logging/debugging
         """
         start_time = time.time()
-
-        # Detect query intent
         intent_result = self.intent_detector.detect_intent(query)
 
-        # Decide whether to retrieve knowledge
-        if not force_retrieval and not intent_result.should_use_knowledge:
-            logger.info(
-                "[Smart RAG] Skipping retrieval - intent=%s, confidence=%.2f, reason=%s",
-                intent_result.intent.value,
-                intent_result.confidence,
-                intent_result.reasoning
-            )
+        # Issue #665: Use helper for skip decision
+        if self._should_skip_retrieval(intent_result, force_retrieval):
             return "", [], intent_result
 
         # Issue #556: Smart category selection if not explicitly provided
@@ -364,7 +377,6 @@ class ChatKnowledgeService:
                 intent_result, query
             )
 
-        # Perform retrieval
         logger.info(
             "[Smart RAG] Retrieving - intent=%s, confidence=%.2f, categories=%s",
             intent_result.intent.value,
@@ -379,10 +391,9 @@ class ChatKnowledgeService:
             categories=effective_categories,
         )
 
-        retrieval_time = time.time() - start_time
         logger.info(
             "[Smart RAG] Completed in %.3fs - %d citations found",
-            retrieval_time,
+            time.time() - start_time,
             len(citations)
         )
 
