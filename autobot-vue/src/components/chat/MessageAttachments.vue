@@ -104,55 +104,56 @@ const formatSize = (bytes: number): string => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .message-attachments {
-  margin-top: 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  margin-top: var(--spacing-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
 .attachment-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
-  font-size: 13px;
-  font-weight: 500;
-  color: #64748b;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2-5) var(--spacing-3-5);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-default);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
 }
 
 .attachment-list {
-  padding: 4px;
+  padding: var(--spacing-1);
 }
 
 .attachment-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 6px;
+  gap: var(--spacing-2-5);
+  padding: var(--spacing-2-5) var(--spacing-3);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background var(--duration-200) var(--ease-in-out);
 }
 
 .attachment-item:hover {
-  background: #f1f5f9;
+  background: var(--bg-hover);
 }
 
 .attachment-item i:first-child {
   width: 20px;
   text-align: center;
-  color: #64748b;
-  font-size: 16px;
+  color: var(--text-secondary);
+  font-size: var(--text-base);
 }
 
 .attachment-name {
   flex: 1;
   min-width: 0;
-  font-size: 13px;
-  color: #334155;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -160,8 +161,8 @@ const formatSize = (bytes: number): string => {
 
 .attachment-size {
   flex-shrink: 0;
-  font-size: 12px;
-  color: #94a3b8;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 
 .attachment-download {
@@ -173,15 +174,15 @@ const formatSize = (bytes: number): string => {
   justify-content: center;
   border: none;
   background: transparent;
-  color: #64748b;
-  border-radius: 4px;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200) var(--ease-in-out);
 }
 
 .attachment-download:hover {
-  background: #e2e8f0;
-  color: #334155;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 @media (max-width: 640px) {
