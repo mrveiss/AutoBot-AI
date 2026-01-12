@@ -91,29 +91,30 @@ defineEmits<Emits>()
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .main-categories {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1rem;
-  padding: 1.5rem;
-  background: #f8fafc;
+  gap: var(--spacing-4);
+  padding: var(--spacing-6);
+  background: var(--bg-secondary);
 }
 
 .main-category-card {
   display: flex;
-  gap: 1rem;
-  padding: 1.25rem;
-  background: white;
-  border-radius: 0.75rem;
+  gap: var(--spacing-4);
+  padding: var(--spacing-5);
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
   border: 2px solid transparent;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200) var(--ease-in-out);
 }
 
 .main-category-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
 }
 
 .category-icon {
@@ -122,8 +123,8 @@ defineEmits<Emits>()
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.75rem;
-  color: white;
+  border-radius: var(--radius-lg);
+  color: var(--text-on-primary);
   font-size: 1.25rem;
   flex-shrink: 0;
 }
@@ -134,51 +135,51 @@ defineEmits<Emits>()
 }
 
 .category-info h3 {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0 0 0.25rem 0;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-1) 0;
 }
 
 .category-info p {
-  font-size: 0.75rem;
-  color: #64748b;
-  margin: 0 0 0.75rem 0;
-  line-height: 1.4;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin: 0 0 var(--spacing-3) 0;
+  line-height: var(--leading-normal);
 }
 
 .category-stats {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .fact-count {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: #3b82f6;
-  background: #eff6ff;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.375rem;
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-md);
 }
 
 .populate-btn {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.75rem;
-  font-size: 0.75rem;
+  gap: var(--spacing-1-5);
+  padding: var(--spacing-1-5) var(--spacing-3);
+  font-size: var(--text-xs);
 }
 
 .populate-btn i {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 @media (max-width: 640px) {
   .main-categories {
     grid-template-columns: 1fr;
-    padding: 1rem;
+    padding: var(--spacing-4);
   }
 
   .main-category-card {

@@ -3,7 +3,7 @@
     <div class="message-header">
       <div class="flex items-center gap-1.5">
         <div class="message-avatar assistant">
-          <LoadingSpinner variant="pulse" size="sm" color="#3b82f6" />
+          <LoadingSpinner variant="pulse" size="sm" color="var(--color-primary)" />
         </div>
         <div class="message-info">
           <span class="sender-name">AI Assistant</span>
@@ -129,8 +129,12 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .typing-message {
-  @apply animate-pulse bg-gray-100 text-gray-900 border-gray-300 mr-auto ml-0 rounded-lg shadow-sm border;
+  @apply animate-pulse mr-auto ml-0 rounded-lg shadow-sm border;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--border-default);
   border-radius: 18px 18px 18px 4px;
   max-width: 85%;
   padding: 6px 10px;
@@ -145,7 +149,7 @@ onUnmounted(() => {
 }
 
 .message-avatar.assistant {
-  @apply bg-gray-600;
+  background-color: var(--bg-tertiary);
 }
 
 .message-info {
@@ -153,15 +157,18 @@ onUnmounted(() => {
 }
 
 .sender-name {
-  @apply font-semibold text-xs text-gray-900;
+  @apply font-semibold text-xs;
+  color: var(--text-primary);
 }
 
 .message-time {
-  @apply text-xs leading-tight text-gray-600;
+  @apply text-xs leading-tight;
+  color: var(--text-secondary);
 }
 
 .message-content {
-  @apply leading-snug text-sm text-gray-900;
+  @apply leading-snug text-sm;
+  color: var(--text-primary);
 }
 
 .enhanced-typing-indicator {
@@ -177,7 +184,8 @@ onUnmounted(() => {
 }
 
 .typing-dots-enhanced span {
-  @apply w-2.5 h-2.5 bg-blue-500 rounded-full;
+  @apply w-2.5 h-2.5 rounded-full;
+  background-color: var(--color-primary);
   animation: typingBounce 1.4s ease-in-out infinite both;
 }
 
@@ -198,7 +206,8 @@ onUnmounted(() => {
 }
 
 .typing-wave {
-  @apply absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-blue-400 to-transparent rounded-full;
+  @apply absolute top-0 left-0 right-0 h-1 rounded-full;
+  background: linear-gradient(to right, transparent, var(--color-primary-hover), transparent);
   animation: typingWave 2s ease-in-out infinite;
 }
 
@@ -212,10 +221,11 @@ onUnmounted(() => {
 }
 
 .typing-text {
-  @apply text-gray-600;
+  color: var(--text-secondary);
 }
 
 .typing-eta {
-  @apply text-blue-600 font-medium;
+  @apply font-medium;
+  color: var(--color-primary);
 }
 </style>

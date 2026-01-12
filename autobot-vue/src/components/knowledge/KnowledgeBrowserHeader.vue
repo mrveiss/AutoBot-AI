@@ -79,13 +79,14 @@ defineEmits<Emits>()
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .browser-header {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
-  padding: 1rem 1.5rem;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  gap: var(--spacing-4);
+  padding: var(--spacing-4) var(--spacing-6);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-default);
   align-items: center;
   justify-content: space-between;
 }
@@ -93,22 +94,22 @@ defineEmits<Emits>()
 .category-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .category-tab {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  transition: all 0.2s;
+  gap: var(--spacing-1-5);
+  padding: var(--spacing-2) var(--spacing-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  transition: all var(--duration-200) var(--ease-in-out);
 }
 
 .category-tab i {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .category-count {
@@ -117,54 +118,54 @@ defineEmits<Emits>()
   justify-content: center;
   min-width: 1.25rem;
   height: 1.25rem;
-  padding: 0 0.375rem;
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
-  font-size: 0.75rem;
-  font-weight: 600;
-  border-radius: 0.625rem;
-  margin-left: 0.25rem;
+  padding: 0 var(--spacing-1-5);
+  background: var(--color-primary-bg-transparent);
+  color: var(--color-primary);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  border-radius: var(--radius-full);
+  margin-left: var(--spacing-1);
 }
 
 .search-bar {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.5rem;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-3);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
   min-width: 250px;
   max-width: 400px;
   flex: 1;
 }
 
 .search-bar i {
-  color: #94a3b8;
-  font-size: 0.875rem;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
 }
 
 .search-input {
   flex: 1;
   border: none;
   outline: none;
-  font-size: 0.875rem;
-  color: #1e293b;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
   background: transparent;
 }
 
 .search-input::placeholder {
-  color: #94a3b8;
+  color: var(--text-tertiary);
 }
 
 .clear-btn {
-  padding: 0.25rem;
-  color: #94a3b8;
+  padding: var(--spacing-1);
+  color: var(--text-tertiary);
 }
 
 .clear-btn:hover {
-  color: #64748b;
-  background: #f1f5f9;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
 }
 
 @media (max-width: 768px) {

@@ -192,6 +192,7 @@ const formatSize = (bytes: number): string => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 /* Tree node */
 .tree-node {
   user-select: none;
@@ -200,22 +201,22 @@ const formatSize = (bytes: number): string => {
 .node-content {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-3);
   cursor: pointer;
-  border-radius: 0.375rem;
-  transition: all 0.15s;
-  margin: 0.125rem 0;
+  border-radius: var(--radius-md);
+  transition: all var(--duration-150) var(--ease-in-out);
+  margin: var(--spacing-0-5) 0;
 }
 
 .node-content:hover {
-  background: #f3f4f6;
+  background: var(--bg-secondary);
 }
 
 .node-content.is-selected {
-  background: #eff6ff;
-  color: #3b82f6;
-  font-weight: 500;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  font-weight: var(--font-medium);
 }
 
 .node-checkbox {
@@ -238,14 +239,14 @@ const formatSize = (bytes: number): string => {
   justify-content: center;
   background: none;
   border: none;
-  color: #6b7280;
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 0;
-  transition: transform 0.2s;
+  transition: transform var(--duration-200) var(--ease-in-out);
 }
 
 .expand-btn:hover {
-  color: #374151;
+  color: var(--text-primary);
 }
 
 .expand-spacer {
@@ -253,16 +254,16 @@ const formatSize = (bytes: number): string => {
 }
 
 .node-icon {
-  color: #3b82f6;
-  font-size: 0.875rem;
+  color: var(--color-primary);
+  font-size: var(--text-sm);
   min-width: 1rem;
   cursor: pointer;
 }
 
 .node-name {
   flex: 1;
-  font-size: 0.875rem;
-  color: #374151;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -270,56 +271,56 @@ const formatSize = (bytes: number): string => {
 }
 
 .folder-count {
-  font-size: 0.75rem;
-  color: #6b7280;
-  background: #f3f4f6;
-  padding: 0.125rem 0.5rem;
-  border-radius: 0.375rem;
-  margin-left: 0.5rem;
-  font-weight: 500;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  padding: var(--spacing-0-5) var(--spacing-2);
+  border-radius: var(--radius-md);
+  margin-left: var(--spacing-2);
+  font-weight: var(--font-medium);
 }
 
 .node-size {
-  font-size: 0.75rem;
-  color: #9ca3af;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 
 .unvectorized-badge {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  font-size: 0.75rem;
-  color: #dc2626;
-  background: #fef2f2;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.375rem;
-  margin-left: 0.5rem;
-  font-weight: 500;
-  border: 1px solid #fecaca;
+  gap: var(--spacing-1-5);
+  font-size: var(--text-xs);
+  color: var(--color-error);
+  background: var(--color-error-bg);
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-md);
+  margin-left: var(--spacing-2);
+  font-weight: var(--font-medium);
+  border: 1px solid var(--color-error-border);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200) var(--ease-in-out);
 }
 
 .unvectorized-badge:hover {
-  background: #fee2e2;
-  border-color: #fca5a5;
+  background: var(--color-error-bg-hover);
+  border-color: var(--color-error);
   transform: translateX(2px);
-  box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2);
+  box-shadow: var(--shadow-sm);
 }
 
 .unvectorized-badge i {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .unvectorized-badge i.fa-play-circle {
-  font-size: 0.875rem;
-  margin-left: 0.25rem;
+  font-size: var(--text-sm);
+  margin-left: var(--spacing-1);
   opacity: 0.7;
 }
 
 .unvectorized-badge:hover i.fa-play-circle {
   opacity: 1;
-  color: #b91c1c;
+  color: var(--color-error-hover);
 }
 
 .vectorize-btn {
@@ -328,29 +329,29 @@ const formatSize = (bytes: number): string => {
   justify-content: center;
   width: 1.75rem;
   height: 1.75rem;
-  background: #3b82f6;
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
   border: none;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.2s;
-  font-size: 0.75rem;
+  transition: all var(--duration-200) var(--ease-in-out);
+  font-size: var(--text-xs);
 }
 
 .vectorize-btn:hover {
-  background: #2563eb;
+  background: var(--color-primary-hover);
   transform: scale(1.1);
 }
 
 .vectorize-btn.retry-btn {
-  background: #ef4444;
+  background: var(--color-error);
 }
 
 .vectorize-btn.retry-btn:hover {
-  background: #dc2626;
+  background: var(--color-error-hover);
 }
 
 .node-children {
-  padding-left: 1.5rem;
+  padding-left: var(--spacing-6);
 }
 </style>
