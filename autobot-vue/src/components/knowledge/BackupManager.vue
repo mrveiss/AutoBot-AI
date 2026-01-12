@@ -323,63 +323,64 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/** Issue #704: Migrated to design tokens */
 .backup-manager {
-  background: white;
+  background: var(--bg-primary);
 }
 
 .section-header {
-  padding: 1.25rem;
-  border-bottom: 1px solid #e5e7eb;
-  background: #f9fafb;
+  padding: var(--spacing-5);
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-secondary);
 }
 
 .section-header h4 {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #1f2937;
-  margin: 0 0 0.25rem 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-1) 0;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .header-description {
-  color: #6b7280;
+  color: var(--text-secondary);
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .backup-content {
-  padding: 1.25rem;
+  padding: var(--spacing-5);
 }
 
 .backup-section {
-  margin-bottom: 1.5rem;
-  padding-bottom: 1.5rem;
-  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: var(--spacing-6);
+  padding-bottom: var(--spacing-6);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .backup-section h5 {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #374151;
-  margin: 0 0 1rem 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-4) 0;
 }
 
 .backup-options {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-4);
 }
 
 .option-checkbox {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   cursor: pointer;
-  font-size: 0.875rem;
-  color: #374151;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
 }
 
 .option-checkbox input[type="checkbox"] {
@@ -389,46 +390,48 @@ onMounted(() => {
 .checkmark {
   width: 1rem;
   height: 1rem;
-  border: 2px solid #d1d5db;
-  border-radius: 0.25rem;
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .option-checkbox input:checked ~ .checkmark {
-  background: #3b82f6;
-  border-color: #3b82f6;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
 }
 
 .option-checkbox input:checked ~ .checkmark::after {
   content: '\2713';
-  color: white;
+  color: var(--text-on-primary);
   font-size: 0.625rem;
 }
 
 .backup-description {
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .description-input {
   width: 100%;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
+  padding: var(--spacing-2) var(--spacing-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .description-input:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus);
 }
 
 .backups-list-section h5 {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #374151;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
   margin: 0;
 }
 
@@ -436,27 +439,27 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
 }
 
 .loading-state,
 .empty-state {
   text-align: center;
-  padding: 2rem;
-  color: #9ca3af;
+  padding: var(--spacing-8);
+  color: var(--text-tertiary);
 }
 
 .loading-state i,
 .empty-state i {
   font-size: 2rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
   display: block;
 }
 
 .backups-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   max-height: 300px;
   overflow-y: auto;
 }
@@ -464,22 +467,22 @@ onMounted(() => {
 .backup-item {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.75rem;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
+  gap: var(--spacing-4);
+  padding: var(--spacing-3);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .backup-item:hover {
-  border-color: #3b82f6;
+  border-color: var(--color-primary);
 }
 
 .backup-item.selected {
-  border-color: #3b82f6;
-  background: #eff6ff;
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
 }
 
 .backup-icon {
@@ -488,9 +491,9 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #dbeafe;
-  color: #3b82f6;
-  border-radius: 0.375rem;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  border-radius: var(--radius-md);
   font-size: 1rem;
 }
 
@@ -502,25 +505,25 @@ onMounted(() => {
 }
 
 .backup-name {
-  font-weight: 500;
-  color: #1f2937;
-  font-size: 0.875rem;
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
 }
 
 .backup-meta {
-  font-size: 0.75rem;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .backup-desc {
-  font-size: 0.75rem;
-  color: #9ca3af;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
   font-style: italic;
 }
 
 .backup-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .action-btn {
@@ -530,29 +533,29 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .action-btn.restore {
-  background: #dbeafe;
-  color: #3b82f6;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
 }
 
 .action-btn.restore:hover {
-  background: #3b82f6;
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .action-btn.delete {
-  background: #fee2e2;
-  color: #ef4444;
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .action-btn.delete:hover {
-  background: #ef4444;
-  color: white;
+  background: var(--color-error);
+  color: var(--text-on-primary);
 }
 
 .action-btn:disabled {
@@ -563,22 +566,22 @@ onMounted(() => {
 .status-message {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1rem;
-  border-radius: 0.5rem;
-  margin-top: 1rem;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
+  border-radius: var(--radius-lg);
+  margin-top: var(--spacing-4);
 }
 
 .status-message.success {
-  background: #f0fdf4;
-  border: 1px solid #10b981;
-  color: #065f46;
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success);
+  color: var(--color-success);
 }
 
 .status-message.error {
-  background: #fef2f2;
-  border: 1px solid #ef4444;
-  color: #991b1b;
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error);
+  color: var(--color-error);
 }
 
 .status-message span {
@@ -589,7 +592,7 @@ onMounted(() => {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0.25rem;
+  padding: var(--spacing-1);
   color: inherit;
   opacity: 0.7;
 }

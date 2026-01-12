@@ -2939,7 +2939,17 @@ const importTreeError = ref('')
 // Function call graph data
 const callGraphData = ref<DependencyGraph>({ nodes: [], edges: [] })
 const callGraphSummary = ref<Record<string, unknown> | null>(null)
-const callGraphOrphaned = ref<Array<Record<string, unknown>>>([])
+interface OrphanedFunction {
+  id: string
+  name: string
+  full_name: string
+  module: string
+  class: string | null
+  file: string
+  line: number
+  is_async: boolean
+}
+const callGraphOrphaned = ref<OrphanedFunction[]>([])
 const callGraphLoading = ref(false)
 const callGraphError = ref('')
 
@@ -3690,30 +3700,54 @@ const loadProjectRoot = async () => {
 }
 
 // Load all codebase analytics data (silent mode - no alerts)
+// Issue #711: Phased loading for better perceived performance
+// Phase 1: Critical data (stats, problems) - show immediately
+// Phase 2: Important data (declarations, duplicates, charts) - load next
+// Phase 3: Secondary data (call graph, analysis) - load in background
 const loadCodebaseAnalyticsData = async () => {
 
   try {
-    // Load all analytics data in parallel (silent mode)
+    // Phase 1: CRITICAL - Load stats and problems first (user sees these immediately)
+    // These are small payloads and render at the top of the page
+    logger.debug('Analytics loading: Phase 1 (critical data)')
     await Promise.all([
       getCodebaseStats(),
       getProblemsReport(),
+    ])
+
+    // Phase 2: IMPORTANT - Load primary analysis data
+    // These are medium-sized and commonly viewed
+    logger.debug('Analytics loading: Phase 2 (important data)')
+    Promise.all([
       loadDeclarations(),       // Silent version
       loadDuplicates(),         // Silent version
       loadHardcodes(),          // Silent version - hardcoded values detection
       loadChartData(),          // Load chart data for visualizations
+    ]).catch(err => logger.warn('Phase 2 loading error:', err))
+
+    // Phase 3: SECONDARY - Load heavier analysis in background
+    // These are larger payloads and don't block initial render
+    logger.debug('Analytics loading: Phase 3 (secondary data - background)')
+    Promise.all([
       loadDependencyData(),     // Load dependency analysis
       loadImportTreeData(),     // Load import tree data
-      loadCallGraphData(),      // Load function call graph
+      loadCallGraphData(),      // Load function call graph (heavy)
       loadConfigDuplicates(),   // Issue #538: Config duplicates detection
       loadApiEndpointAnalysis(), // Issue #538: API endpoint analysis
+    ]).catch(err => logger.warn('Phase 3 loading error:', err))
+
+    // Phase 4: BACKGROUND - Load remaining analytics (don't wait)
+    // These are independent scores and analyses that can load async
+    logger.debug('Analytics loading: Phase 4 (background scores)')
+    Promise.all([
       loadBugPrediction(),      // Issue #538: Bug prediction analysis
       loadSecurityScore(),      // Issue #538: Security score
       loadPerformanceScore(),   // Issue #538: Performance score
       loadRedisHealth(),        // Issue #538: Redis health score
       loadEnvironmentAnalysis(), // Issue #538: Environment analysis
       loadOwnershipAnalysis(),  // Issue #248: Code ownership analysis
-      getCrossLanguageAnalysis() // Issue #244: Cross-language pattern analysis (loads cached or empty)
-    ])
+      getCrossLanguageAnalysis() // Issue #244: Cross-language pattern analysis
+    ]).catch(err => logger.warn('Phase 4 loading error:', err))
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
@@ -4759,7 +4793,7 @@ const getHardcodesData = async () => {
     hardcodeAnalysis.value = data.hardcodes || []
 
     const hardcodeCount = hardcodeAnalysis.value.length
-    const hardcodeTypes = hardcodeCount > 0 ? [...new Set(hardcodeAnalysis.value.map(h => h.value_type))].join(', ') : 'none'
+    const hardcodeTypes = hardcodeCount > 0 ? [...new Set(hardcodeAnalysis.value.map(h => h.type))].join(', ') : 'none'
     notify(`Found ${hardcodeCount} hardcodes (${hardcodeTypes}) - ${responseTime}ms`, 'success')
   } catch (error: unknown) {
     const responseTime = Date.now() - startTime

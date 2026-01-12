@@ -325,184 +325,185 @@ const submitWithComment = () => {
 </script>
 
 <style scoped>
+/** Issue #704: Migrated to design tokens */
 .approval-confirmed,
 .approval-request {
-  margin-top: 12px;
-  border-radius: 8px;
-  padding: 12px 16px;
+  margin-top: var(--spacing-3);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-3) var(--spacing-4);
 }
 
 .approval-pre-approved {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%);
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: linear-gradient(135deg, var(--color-info-bg) 0%, rgba(59, 130, 246, 0.05) 100%);
+  border: 1px solid var(--color-info-border);
 }
 
 .approval-approved {
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(34, 197, 94, 0.05) 100%);
-  border: 1px solid rgba(34, 197, 94, 0.3);
+  background: linear-gradient(135deg, var(--color-success-bg) 0%, rgba(34, 197, 94, 0.05) 100%);
+  border: 1px solid var(--color-success-border);
 }
 
 .approval-denied {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.05) 100%);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: linear-gradient(135deg, var(--color-error-bg) 0%, rgba(239, 68, 68, 0.05) 100%);
+  border: 1px solid var(--color-error-border);
 }
 
 .approval-request {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(245, 158, 11, 0.05) 100%);
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  background: linear-gradient(135deg, var(--color-warning-bg) 0%, rgba(245, 158, 11, 0.05) 100%);
+  border: 1px solid var(--color-warning-border);
 }
 
 .approval-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-  font-size: 14px;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-3);
+  font-size: var(--text-sm);
 }
 
 .approval-details {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .approval-detail-item {
   display: flex;
-  gap: 8px;
-  font-size: 13px;
+  gap: var(--spacing-2);
+  font-size: var(--text-sm);
 }
 
 .detail-label {
-  color: #64748b;
+  color: var(--text-tertiary);
   min-width: 80px;
   flex-shrink: 0;
 }
 
 .detail-value {
-  color: #1e293b;
+  color: var(--text-primary-light);
   word-break: break-word;
 }
 
 .detail-value code {
-  background: rgba(0, 0, 0, 0.05);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 12px;
+  background: var(--bg-primary-alpha);
+  padding: var(--spacing-0-5) var(--spacing-1-5);
+  border-radius: var(--radius-default);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
 }
 
 .risk-low {
-  color: #22c55e;
+  color: var(--color-success);
 }
 
 .risk-medium {
-  color: #f59e0b;
+  color: var(--color-warning);
 }
 
 .risk-high {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .risk-critical {
-  color: #dc2626;
-  font-weight: 600;
+  color: var(--color-error-hover);
+  font-weight: var(--font-semibold);
 }
 
 .interactive-warning {
   flex-direction: column;
-  margin-top: 8px;
-  padding: 12px;
-  background: rgba(59, 130, 246, 0.05);
-  border-radius: 6px;
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  margin-top: var(--spacing-2);
+  padding: var(--spacing-3);
+  background: var(--color-info-bg);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-info-border);
 }
 
 .interactive-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
+  gap: var(--spacing-1-5);
+  margin-bottom: var(--spacing-2);
 }
 
 .interactive-info {
-  margin-left: 24px;
+  margin-left: var(--spacing-6);
 }
 
 .comment-input-section {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  margin-top: var(--spacing-3);
+  padding-top: var(--spacing-3);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .comment-textarea {
   width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 13px;
+  padding: var(--spacing-2-5) var(--spacing-3);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   resize: vertical;
   min-height: 60px;
 }
 
 .comment-textarea:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  border-color: var(--color-info);
+  box-shadow: 0 0 0 2px var(--color-info-bg);
 }
 
 .comment-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 8px;
+  gap: var(--spacing-2);
+  margin-top: var(--spacing-2);
 }
 
 .auto-approve-section {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  margin-top: var(--spacing-3);
+  padding-top: var(--spacing-3);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .auto-approve-checkbox {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   cursor: pointer;
 }
 
 .checkbox-input {
   width: 16px;
   height: 16px;
-  accent-color: #3b82f6;
+  accent-color: var(--color-info);
 }
 
 .checkbox-label {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: #475569;
+  gap: var(--spacing-1-5);
+  font-size: var(--text-sm);
+  color: var(--text-secondary-light);
 }
 
 .auto-approve-hint {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  padding: 8px 12px;
-  background: rgba(59, 130, 246, 0.05);
-  border-radius: 4px;
-  font-size: 12px;
-  color: #64748b;
+  gap: var(--spacing-1-5);
+  margin-top: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-3);
+  background: var(--color-info-bg);
+  border-radius: var(--radius-default);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 
 .approval-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  gap: var(--spacing-2);
+  margin-top: var(--spacing-4);
+  padding-top: var(--spacing-3);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .approve-btn,
@@ -511,7 +512,7 @@ const submitWithComment = () => {
 .deny-comment-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 @media (max-width: 640px) {
@@ -521,7 +522,7 @@ const submitWithComment = () => {
 
   .approval-detail-item {
     flex-direction: column;
-    gap: 2px;
+    gap: var(--spacing-0-5);
   }
 
   .detail-label {

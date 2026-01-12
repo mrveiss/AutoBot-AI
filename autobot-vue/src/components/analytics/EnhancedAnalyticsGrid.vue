@@ -233,11 +233,12 @@ const getEfficiencyClass = (score: number): string => {
 </script>
 
 <style scoped>
+/** Issue #704: Migrated to design tokens */
 .enhanced-analytics-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 20px;
-  margin-bottom: 24px;
+  gap: var(--spacing-5);
+  margin-bottom: var(--spacing-6);
 }
 
 .card-header-content {
@@ -249,23 +250,23 @@ const getEfficiencyClass = (score: number): string => {
 
 .card-header-content h3 {
   margin: 0;
-  color: #00d4ff;
-  font-size: 1rem;
+  color: var(--color-info);
+  font-size: var(--text-base);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .refresh-indicator {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.5);
+  gap: var(--spacing-1-5);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
 }
 
 .refresh-indicator.active {
-  color: #4caf50;
+  color: var(--color-success);
 }
 
 .refresh-indicator i {
@@ -275,22 +276,22 @@ const getEfficiencyClass = (score: number): string => {
 .refresh-btn {
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-muted);
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: all 0.2s;
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-default);
+  transition: all var(--duration-200);
 }
 
 .refresh-btn:hover {
-  color: #00d4ff;
-  background: rgba(0, 212, 255, 0.1);
+  color: var(--color-info);
+  background: var(--color-info-bg);
 }
 
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .metric-item,
@@ -300,54 +301,54 @@ const getEfficiencyClass = (score: number): string => {
 
 .metric-label,
 .pattern-label {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.5);
-  margin-bottom: 4px;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-1);
 }
 
 .metric-value,
 .pattern-value {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #00d4ff;
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--color-info);
 }
 
-.health-good { color: #4caf50; }
-.health-warning { color: #ff9800; }
-.health-critical { color: #f44336; }
+.health-good { color: var(--color-success); }
+.health-warning { color: var(--color-warning); }
+.health-critical { color: var(--color-error); }
 
 .communication-metrics {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .quality-metrics {
   display: flex;
-  gap: 20px;
+  gap: var(--spacing-5);
   align-items: flex-start;
 }
 
 .quality-score {
   text-align: center;
-  padding: 12px 20px;
-  border-radius: 8px;
+  padding: var(--spacing-3) var(--spacing-5);
+  border-radius: var(--radius-lg);
 }
 
-.quality-excellent { background: rgba(76, 175, 80, 0.2); }
-.quality-good { background: rgba(0, 212, 255, 0.2); }
-.quality-fair { background: rgba(255, 152, 0, 0.2); }
-.quality-poor { background: rgba(244, 67, 54, 0.2); }
+.quality-excellent { background: var(--color-success-bg); }
+.quality-good { background: var(--color-info-bg); }
+.quality-fair { background: var(--color-warning-bg); }
+.quality-poor { background: var(--color-error-bg); }
 
 .score-value {
-  font-size: 2rem;
-  font-weight: 700;
-  color: white;
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  color: var(--text-on-primary);
 }
 
 .score-label {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.6);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
 }
 
 .quality-details,
@@ -355,65 +356,65 @@ const getEfficiencyClass = (score: number): string => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .quality-item,
 .performance-item {
   display: flex;
   justify-content: space-between;
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .quality-label,
 .performance-label {
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-muted);
 }
 
 .quality-value,
 .performance-value {
-  color: white;
-  font-weight: 600;
+  color: var(--text-on-primary);
+  font-weight: var(--font-semibold);
 }
 
 .performance-metrics {
   display: flex;
-  gap: 20px;
+  gap: var(--spacing-5);
   align-items: flex-start;
 }
 
 .performance-gauge {
   text-align: center;
-  padding: 12px 20px;
-  border-radius: 8px;
+  padding: var(--spacing-3) var(--spacing-5);
+  border-radius: var(--radius-lg);
 }
 
-.efficiency-high { background: rgba(76, 175, 80, 0.2); }
-.efficiency-medium { background: rgba(255, 152, 0, 0.2); }
-.efficiency-low { background: rgba(244, 67, 54, 0.2); }
+.efficiency-high { background: var(--color-success-bg); }
+.efficiency-medium { background: var(--color-warning-bg); }
+.efficiency-low { background: var(--color-error-bg); }
 
 .gauge-value {
-  font-size: 2rem;
-  font-weight: 700;
-  color: white;
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  color: var(--text-on-primary);
 }
 
 .gauge-label {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.6);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
 }
 
 .btn-link {
   background: transparent;
-  border: 1px solid rgba(0, 212, 255, 0.3);
-  color: #00d4ff;
-  padding: 6px 12px;
-  border-radius: 4px;
+  border: 1px solid var(--color-info-border);
+  color: var(--color-info);
+  padding: var(--spacing-1-5) var(--spacing-3);
+  border-radius: var(--radius-default);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .btn-link:hover {
-  background: rgba(0, 212, 255, 0.1);
+  background: var(--color-info-bg);
 }
 </style>

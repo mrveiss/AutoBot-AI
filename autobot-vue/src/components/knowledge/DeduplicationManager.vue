@@ -348,30 +348,31 @@ const cleanupOrphans = async () => {
 </script>
 
 <style scoped>
+/** Issue #704: Migrated to design tokens */
 .deduplication-manager {
-  background: white;
-  border-radius: 0.5rem;
-  padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  margin-bottom: 1.5rem;
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-6);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: var(--spacing-6);
 }
 
 .manager-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
-  padding-bottom: 1rem;
-  border-bottom: 2px solid #f3f4f6;
+  margin-bottom: var(--spacing-6);
+  padding-bottom: var(--spacing-4);
+  border-bottom: 2px solid var(--border-subtle);
 }
 
 .manager-header h3 {
   margin: 0;
-  font-size: 1.25rem;
-  color: #1f2937;
+  font-size: var(--text-xl);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 /* Button styling handled by BaseButton component */
@@ -380,31 +381,31 @@ const cleanupOrphans = async () => {
 .error-state,
 .initial-state {
   text-align: center;
-  padding: 3rem 1rem;
-  color: #6b7280;
+  padding: var(--spacing-12) var(--spacing-4);
+  color: var(--text-secondary);
 }
 
 .scanning-state i,
 .error-state i,
 .initial-state i {
   font-size: 3rem;
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
   display: block;
 }
 
 .error-state {
-  color: #dc2626;
+  color: var(--color-error);
 }
 
 .results-container {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--spacing-6);
 }
 
 .section {
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
@@ -412,172 +413,172 @@ const cleanupOrphans = async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
-  background: #f9fafb;
-  border-bottom: 1px solid #e5e7eb;
+  padding: var(--spacing-4);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .section-header h4 {
   margin: 0;
-  font-size: 1.1rem;
-  color: #374151;
+  font-size: var(--text-lg);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .count-badge {
-  padding: 0.25rem 0.75rem;
-  background: #10b981;
-  color: white;
-  border-radius: 9999px;
-  font-size: 0.875rem;
-  font-weight: 500;
+  padding: var(--spacing-1) var(--spacing-3);
+  background: var(--color-success);
+  color: var(--text-on-primary);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
 }
 
 .count-badge.has-issues {
-  background: #ef4444;
+  background: var(--color-error);
 }
 
 .section-content {
-  padding: 1.5rem;
+  padding: var(--spacing-6);
 }
 
 .stats-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  background: #f9fafb;
-  border-radius: 0.375rem;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
+  padding: var(--spacing-4);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
 }
 
 .stat-item {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .stat-label {
-  font-size: 0.875rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .stat-value {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #1f2937;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .stat-value.warning {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .duplicates-list,
 .orphans-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
+  gap: var(--spacing-3);
+  margin-bottom: var(--spacing-6);
   max-height: 400px;
   overflow-y: auto;
 }
 
 .duplicate-group {
-  border: 1px solid #e5e7eb;
-  border-radius: 0.375rem;
-  padding: 1rem;
-  background: #fef2f2;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-4);
+  background: var(--color-error-bg);
 }
 
 .group-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-2);
 }
 
 .group-title {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-weight: 500;
-  color: #1f2937;
+  gap: var(--spacing-2);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
 }
 
 .separator {
-  color: #9ca3af;
+  color: var(--text-tertiary);
 }
 
 .group-count {
-  font-size: 0.875rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .removed-count {
-  color: #dc2626;
-  font-weight: 500;
+  color: var(--color-error);
+  font-weight: var(--font-medium);
 }
 
 .group-details {
-  padding-left: 1.5rem;
+  padding-left: var(--spacing-6);
 }
 
 .kept-fact {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  color: #059669;
+  gap: var(--spacing-2);
+  font-size: var(--text-sm);
+  color: var(--color-success);
 }
 
 .kept-fact i {
-  color: #10b981;
+  color: var(--color-success);
 }
 
 .timestamp {
-  color: #6b7280;
-  margin-left: 0.5rem;
+  color: var(--text-secondary);
+  margin-left: var(--spacing-2);
 }
 
 .orphan-item {
-  border: 1px solid #e5e7eb;
-  border-radius: 0.375rem;
-  padding: 1rem;
-  background: #fffbeb;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-4);
+  background: var(--color-warning-bg);
 }
 
 .orphan-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-  color: #92400e;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-2);
+  font-weight: var(--font-medium);
+  color: var(--color-warning);
 }
 
 .orphan-details {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  padding-left: 1.5rem;
-  font-size: 0.875rem;
+  gap: var(--spacing-1);
+  padding-left: var(--spacing-6);
+  font-size: var(--text-sm);
 }
 
 .orphan-category {
-  color: #d97706;
-  font-weight: 500;
+  color: var(--color-warning);
+  font-weight: var(--font-medium);
 }
 
 .orphan-path {
-  color: #6b7280;
-  font-family: monospace;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
 }
 
 .action-buttons {
   display: flex;
-  gap: 1rem;
+  gap: var(--spacing-4);
   justify-content: flex-end;
 }
 

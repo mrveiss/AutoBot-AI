@@ -99,91 +99,92 @@ defineEmits<Emits>()
 </script>
 
 <style scoped>
+/** Issue #704: Migrated to design tokens */
 .analytics-header {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 24px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-6);
+  margin-bottom: var(--spacing-6);
+  box-shadow: var(--shadow-lg);
 }
 
 .header-content {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .header-content h2 {
-  color: #00d4ff;
+  color: var(--color-info);
   margin: 0;
-  font-size: 1.5rem;
+  font-size: var(--text-xl);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .header-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   align-items: center;
 }
 
 .path-input {
   flex: 1;
   min-width: 300px;
-  padding: 10px 16px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  color: white;
-  font-size: 14px;
+  padding: var(--spacing-2-5) var(--spacing-4);
+  background: var(--bg-tertiary-alpha);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  color: var(--text-on-primary);
+  font-size: var(--text-sm);
 }
 
 .path-input::placeholder {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
 }
 
 .btn-primary,
 .btn-secondary,
 .btn-cancel {
-  padding: 10px 20px;
+  padding: var(--spacing-2-5) var(--spacing-5);
   border: none;
-  border-radius: 8px;
-  font-weight: 600;
+  border-radius: var(--radius-lg);
+  font-weight: var(--font-semibold);
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
-  transition: all 0.2s;
+  gap: var(--spacing-2);
+  transition: all var(--duration-200);
 }
 
 .btn-primary {
-  background: #00d4ff;
-  color: #1a1a2e;
+  background: var(--color-info);
+  color: var(--bg-secondary);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #00b8e0;
+  background: var(--color-info-dark);
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--bg-tertiary-alpha);
+  color: var(--text-on-primary);
+  border: 1px solid var(--border-subtle);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--bg-hover);
 }
 
 .btn-cancel {
-  background: #e74c3c;
-  color: white;
+  background: var(--color-error);
+  color: var(--text-on-primary);
 }
 
 .btn-cancel:hover {
-  background: #c0392b;
+  background: var(--color-error-hover);
 }
 
 .btn-primary:disabled,
@@ -193,36 +194,36 @@ defineEmits<Emits>()
 }
 
 .debug-controls {
-  margin-top: 10px;
+  margin-top: var(--spacing-2-5);
   display: flex;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   flex-wrap: wrap;
   width: 100%;
 }
 
 .btn-debug {
-  padding: 5px 10px;
-  color: white;
+  padding: var(--spacing-1-5) var(--spacing-2-5);
+  color: var(--text-on-primary);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--text-xs);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
-.btn-declarations { background: #4CAF50; }
-.btn-duplicates { background: #FF9800; }
-.btn-hardcodes { background: #F44336; }
-.btn-npu { background: #9C27B0; }
-.btn-state { background: #2196F3; }
-.btn-reset { background: #FF5722; }
-.btn-endpoints { background: #00BCD4; }
-.btn-smells { background: #E91E63; }
-.btn-health { background: #673AB7; }
-.btn-export { background: #607D8B; }
-.btn-cache { background: #795548; }
+.btn-declarations { background: var(--color-success); }
+.btn-duplicates { background: var(--color-warning); }
+.btn-hardcodes { background: var(--color-error); }
+.btn-npu { background: var(--chart-purple); }
+.btn-state { background: var(--color-info); }
+.btn-reset { background: var(--chart-orange); }
+.btn-endpoints { background: var(--chart-cyan); }
+.btn-smells { background: var(--chart-pink); }
+.btn-health { background: var(--chart-indigo); }
+.btn-export { background: var(--text-tertiary); }
+.btn-cache { background: var(--chart-brown); }
 
 .btn-debug:disabled {
   opacity: 0.5;

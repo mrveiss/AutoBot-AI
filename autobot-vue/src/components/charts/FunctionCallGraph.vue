@@ -69,6 +69,13 @@
           >
             <i class="fas fa-circle-nodes"></i>
           </button>
+          <button
+            :class="{ active: viewMode === 'orphaned' }"
+            @click="viewMode = 'orphaned'"
+            title="Orphaned Functions (unused)"
+          >
+            <i class="fas fa-unlink"></i>
+          </button>
         </div>
       </div>
 
@@ -89,6 +96,10 @@
         <div class="stat stat-unresolved" :class="{ active: resolvedFilter === 'unresolved' }" @click="toggleResolvedFilter('unresolved')">
           <span class="stat-value">{{ unresolvedCount }}</span>
           <span class="stat-label">Unresolved</span>
+        </div>
+        <div class="stat stat-orphaned" :class="{ active: viewMode === 'orphaned' }" @click="viewMode = 'orphaned'">
+          <span class="stat-value">{{ orphanedFunctions?.length || summary?.orphaned_functions || 0 }}</span>
+          <span class="stat-label">Orphaned</span>
         </div>
       </div>
 
@@ -261,6 +272,67 @@
           </button>
         </div>
       </div>
+
+      <!-- Orphaned Functions view -->
+      <div v-show="viewMode === 'orphaned'" class="orphaned-view">
+        <div class="graph-info warning">
+          <i class="fas fa-exclamation-triangle"></i>
+          <span>Functions that are defined but never called by other functions. Review for potential dead code or missing integrations.</span>
+        </div>
+
+        <!-- Orphaned functions search/filter -->
+        <div class="orphaned-controls">
+          <input
+            v-model="orphanedSearch"
+            type="text"
+            placeholder="Search orphaned functions..."
+            class="orphaned-search"
+          />
+          <select v-model="orphanedModuleFilter" class="orphaned-module-filter">
+            <option value="">All Modules</option>
+            <option v-for="mod in orphanedModules" :key="mod" :value="mod">
+              {{ truncateModule(mod || '') }}
+            </option>
+          </select>
+        </div>
+
+        <!-- Orphaned functions list - Issue #711: Virtual scrolling for performance -->
+        <div v-if="filteredOrphanedFunctions.length > 0" class="orphaned-list-container" v-bind="orphanedContainerProps">
+          <div class="orphaned-list" v-bind="orphanedListProps">
+            <div
+              v-for="{ item: func, key } in visibleOrphanedFunctions"
+              :key="key"
+              class="orphaned-item"
+              @click="emit('select', func.id)"
+            >
+              <div class="orphaned-item-header">
+                <span v-if="func.is_async" class="async-badge">async</span>
+                <span class="func-name">{{ func.name }}</span>
+                <span v-if="func.class" class="class-badge">{{ func.class }}</span>
+              </div>
+              <div class="orphaned-item-details">
+                <span class="detail-module" :title="func.module">
+                  <i class="fas fa-cube"></i> {{ truncateModule(func.module || '') }}
+                </span>
+                <span class="detail-file" :title="func.file">
+                  <i class="fas fa-file-code"></i> {{ truncateFile(func.file) }}:{{ func.line }}
+                </span>
+              </div>
+            </div>
+          </div>
+          <!-- Virtual scroll info -->
+          <div class="virtual-scroll-info">
+            <span>Showing {{ visibleOrphanedFunctions.length }} of {{ filteredOrphanedFunctions.length }} functions (scroll for more)</span>
+          </div>
+        </div>
+
+        <!-- Empty state -->
+        <div v-else class="orphaned-empty">
+          <i class="fas fa-check-circle"></i>
+          <span v-if="orphanedSearch || orphanedModuleFilter">No orphaned functions match your filter</span>
+          <span v-else>No orphaned functions detected - all functions are connected!</span>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -270,6 +342,8 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import cytoscape, { type Core, type NodeSingular } from 'cytoscape'
 // @ts-expect-error - cytoscape-fcose has no type declarations
 import fcose from 'cytoscape-fcose'
+// Issue #711: Virtual scrolling for large orphaned function lists
+import { useVirtualScrollSimple } from '@/composables/useVirtualScroll'
 
 // Register fcose layout
 cytoscape.use(fcose)
@@ -306,6 +380,7 @@ interface CallGraphData {
 interface SummaryData {
   total_functions: number
   connected_functions: number
+  orphaned_functions?: number
   total_call_relationships: number
   resolved_calls: number
   unresolved_calls: number
@@ -313,9 +388,21 @@ interface SummaryData {
   most_called: { function: string; calls: number }[]
 }
 
+interface OrphanedFunction {
+  id: string
+  name: string
+  full_name: string
+  module: string
+  class: string | null
+  file: string
+  line: number
+  is_async: boolean
+}
+
 interface Props {
   data: CallGraphData
   summary?: SummaryData
+  orphanedFunctions?: OrphanedFunction[]
   title?: string
   subtitle?: string
   height?: number | string
@@ -326,6 +413,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   title: 'Function Call Graph',
   subtitle: 'View function call relationships',
+  orphanedFunctions: () => [],
   height: 600,
   loading: false,
   error: ''
@@ -339,11 +427,16 @@ const emit = defineEmits<{
 const searchQuery = ref('')
 const filterModule = ref('')
 const resolvedFilter = ref<'all' | 'resolved' | 'unresolved'>('all')
-const viewMode = ref<'network' | 'list' | 'stats'>('network') // Default to network view
+const viewMode = ref<'network' | 'list' | 'stats' | 'orphaned'>('network') // Default to network view
 const expandedFuncs = ref<Set<string>>(new Set())
 const selectedFunc = ref<string | null>(null)
 const zoomLevel = ref(1)
 const layoutMode = ref<'force' | 'grid'>('force')
+
+// Orphaned functions state
+const orphanedSearch = ref('')
+const orphanedModuleFilter = ref('')
+// Issue #711: orphanedDisplayLimit removed - now using virtual scrolling
 
 // Cytoscape instances
 const cytoscapeContainer = ref<HTMLElement | null>(null)
@@ -389,6 +482,53 @@ const unresolvedCount = computed(() => {
   if (!props.data?.edges) return 0
   return props.data.edges.filter(e => !e.resolved).length
 })
+
+// Orphaned functions computed properties
+const orphanedModules = computed(() => {
+  if (!props.orphanedFunctions?.length) return []
+  const modules = new Set(props.orphanedFunctions.map(f => f.module).filter(Boolean))
+  return Array.from(modules).sort()
+})
+
+const filteredOrphanedFunctions = computed(() => {
+  if (!props.orphanedFunctions?.length) return []
+
+  let functions = [...props.orphanedFunctions]
+
+  // Filter by module
+  if (orphanedModuleFilter.value) {
+    functions = functions.filter(f => f.module === orphanedModuleFilter.value)
+  }
+
+  // Filter by search
+  if (orphanedSearch.value) {
+    const query = orphanedSearch.value.toLowerCase()
+    functions = functions.filter(f =>
+      f.name.toLowerCase().includes(query) ||
+      f.full_name?.toLowerCase().includes(query) ||
+      f.module?.toLowerCase().includes(query) ||
+      f.file?.toLowerCase().includes(query)
+    )
+  }
+
+  return functions
+})
+
+// Issue #711: Virtual scrolling for orphaned functions list
+// Renders only visible items for better performance with 500+ functions
+const {
+  containerProps: orphanedContainerProps,
+  listProps: orphanedListProps,
+  visibleItems: visibleOrphanedFunctions
+} = useVirtualScrollSimple(
+  filteredOrphanedFunctions,
+  80, // Item height in pixels (orphaned-item height)
+  {
+    buffer: 5,
+    containerHeight: 500,
+    getKey: (item: OrphanedFunction) => item.id
+  }
+)
 
 const filteredNodes = computed(() => {
   if (!props.data?.nodes) return []
@@ -1092,6 +1232,13 @@ function truncateModule(mod: string): string {
   return '...' + parts.slice(-2).join('.')
 }
 
+function truncateFile(filePath: string): string {
+  if (!filePath) return ''
+  const parts = filePath.split('/')
+  if (parts.length <= 2) return filePath
+  return '...' + parts.slice(-2).join('/')
+}
+
 function truncateFunc(funcId: string): string {
   const parts = funcId.split('.')
   if (parts.length <= 2) return funcId
@@ -1779,5 +1926,174 @@ watch(viewMode, async (newMode) => {
 .function-call-graph.fullscreen .cytoscape-container,
 .function-call-graph.fullscreen .cluster-container {
   min-height: calc(100vh - 260px);
+}
+
+/* Orphaned Functions View */
+.orphaned-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.graph-info.warning {
+  background: var(--color-warning-bg, rgba(245, 158, 11, 0.1));
+  color: var(--color-warning, #f59e0b);
+}
+
+.orphaned-controls {
+  display: flex;
+  gap: var(--spacing-3);
+}
+
+.orphaned-search,
+.orphaned-module-filter {
+  flex: 1;
+  padding: var(--spacing-2) var(--spacing-3);
+  font-size: var(--text-sm);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+}
+
+.orphaned-search:focus,
+.orphaned-module-filter:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.orphaned-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.orphaned-item {
+  padding: var(--spacing-3);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.orphaned-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--color-warning);
+}
+
+.orphaned-item-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-2);
+}
+
+.orphaned-item-header .func-name {
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+.orphaned-item-header .async-badge {
+  padding: 2px 6px;
+  font-size: var(--text-xs);
+  background: var(--color-info-bg);
+  color: var(--color-info);
+  border-radius: var(--radius-sm);
+}
+
+.orphaned-item-header .class-badge {
+  padding: 2px 6px;
+  font-size: var(--text-xs);
+  background: var(--color-secondary-bg, rgba(139, 92, 246, 0.1));
+  color: var(--color-secondary, #8b5cf6);
+  border-radius: var(--radius-sm);
+}
+
+.orphaned-item-details {
+  display: flex;
+  gap: var(--spacing-lg);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.orphaned-item-details i {
+  margin-right: var(--spacing-1);
+  opacity: 0.7;
+}
+
+.show-more {
+  padding: var(--spacing-3);
+  text-align: center;
+}
+
+.btn-show-more {
+  padding: var(--spacing-2) var(--spacing-4);
+  font-size: var(--text-sm);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-show-more:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.orphaned-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xl);
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.orphaned-empty i {
+  font-size: 2rem;
+  margin-bottom: var(--spacing-3);
+  color: var(--color-success);
+}
+
+/* Orphaned stat styling */
+.stat-orphaned {
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.stat-orphaned:hover,
+.stat-orphaned.active {
+  background: var(--color-warning-bg, rgba(245, 158, 11, 0.1));
+}
+
+.stat-orphaned .stat-value {
+  color: var(--color-warning, #f59e0b);
+}
+
+/* Issue #711: Virtual scroll container for orphaned functions */
+.orphaned-list-container {
+  height: 500px;
+  overflow-y: auto;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-tertiary);
+}
+
+.virtual-scroll-info {
+  position: sticky;
+  bottom: 0;
+  padding: var(--spacing-2) var(--spacing-3);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-default);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  text-align: center;
 }
 </style>

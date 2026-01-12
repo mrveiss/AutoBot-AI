@@ -274,54 +274,55 @@ const runCleanup = async () => {
 </script>
 
 <style scoped>
+/** Issue #704: Migrated to design tokens */
 .cleanup-statistics {
-  background: white;
+  background: var(--bg-primary);
 }
 
 .section-header {
-  padding: 1.25rem;
-  border-bottom: 1px solid #e5e7eb;
-  background: #f9fafb;
+  padding: var(--spacing-5);
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-secondary);
 }
 
 .section-header h4 {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #1f2937;
-  margin: 0 0 0.25rem 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-1) 0;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .header-description {
-  color: #6b7280;
+  color: var(--text-secondary);
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .cleanup-content {
-  padding: 1.25rem;
+  padding: var(--spacing-5);
 }
 
 .cleanup-options {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
+  gap: var(--spacing-3);
+  margin-bottom: var(--spacing-6);
 }
 
 .option-item {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  padding: 0.75rem 1rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-3) var(--spacing-4);
 }
 
 .option-checkbox {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   cursor: pointer;
   position: relative;
 }
@@ -334,8 +335,8 @@ const runCleanup = async () => {
 .checkmark {
   width: 1.25rem;
   height: 1.25rem;
-  border: 2px solid #d1d5db;
-  border-radius: 0.25rem;
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -343,14 +344,14 @@ const runCleanup = async () => {
 }
 
 .option-checkbox input:checked ~ .checkmark {
-  background: #3b82f6;
-  border-color: #3b82f6;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
 }
 
 .option-checkbox input:checked ~ .checkmark::after {
   content: '\2713';
-  color: white;
-  font-size: 0.75rem;
+  color: var(--text-on-primary);
+  font-size: var(--text-xs);
 }
 
 .option-text {
@@ -359,105 +360,105 @@ const runCleanup = async () => {
 }
 
 .option-text strong {
-  font-size: 0.875rem;
-  color: #1f2937;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
 }
 
 .option-text small {
-  font-size: 0.75rem;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .scan-results {
-  background: #fef3c7;
-  border: 1px solid #fde047;
-  border-radius: 0.5rem;
-  padding: 1rem;
-  margin-bottom: 1.5rem;
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
 }
 
 .scan-results h5 {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #854d0e;
-  margin: 0 0 1rem 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-warning);
+  margin: 0 0 var(--spacing-4) 0;
 }
 
 .results-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .result-item {
-  background: white;
-  border: 1px solid #fde68a;
-  border-radius: 0.375rem;
-  padding: 0.75rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-3);
   text-align: center;
 }
 
 .result-item.has-issues {
-  border-color: #ef4444;
-  background: #fef2f2;
+  border-color: var(--color-error);
+  background: var(--color-error-bg);
 }
 
 .result-item.total {
-  border-color: #f59e0b;
-  background: #fffbeb;
+  border-color: var(--color-warning);
+  background: var(--color-warning-bg);
 }
 
 .result-icon {
   font-size: 1.25rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .result-item.has-issues .result-icon {
-  color: #dc2626;
+  color: var(--color-error);
 }
 
 .result-value {
   display: block;
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #1f2937;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
 }
 
 .result-label {
-  font-size: 0.75rem;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .cleanup-actions {
   display: flex;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .status-message {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1rem;
-  border-radius: 0.5rem;
-  margin-top: 1rem;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
+  border-radius: var(--radius-lg);
+  margin-top: var(--spacing-4);
 }
 
 .status-message.success {
-  background: #f0fdf4;
-  border: 1px solid #10b981;
-  color: #065f46;
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success);
+  color: var(--color-success);
 }
 
 .status-message.error {
-  background: #fef2f2;
-  border: 1px solid #ef4444;
-  color: #991b1b;
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error);
+  color: var(--color-error);
 }
 
 .status-message.warning {
-  background: #fffbeb;
-  border: 1px solid #f59e0b;
-  color: #92400e;
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning);
+  color: var(--color-warning);
 }
 
 .status-message span {
@@ -468,7 +469,7 @@ const runCleanup = async () => {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0.25rem;
+  padding: var(--spacing-1);
   color: inherit;
   opacity: 0.7;
 }

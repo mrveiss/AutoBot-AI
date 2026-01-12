@@ -58,35 +58,36 @@ defineProps<Props>()
 </script>
 
 <style scoped>
+/** Issue #704: Migrated to design tokens */
 .stats-section {
-  margin-bottom: 24px;
+  margin-bottom: var(--spacing-6);
 }
 
 .stats-section h3 {
-  color: #00d4ff;
-  margin-bottom: 16px;
+  color: var(--color-info);
+  margin-bottom: var(--spacing-4);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
 }
 
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .stat-value {
-  font-size: 2rem;
-  font-weight: 700;
-  color: #00d4ff;
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  color: var(--color-info);
   text-align: center;
 }
 
 .stat-label {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
   text-align: center;
-  margin-top: 4px;
+  margin-top: var(--spacing-1);
 }
 </style>
