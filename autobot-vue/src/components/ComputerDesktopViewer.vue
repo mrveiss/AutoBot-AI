@@ -55,10 +55,11 @@ export default {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .computer-desktop-viewer {
-  background: linear-gradient(135deg, #fef3c7 0%, #f59e0b 100%);
-  border-radius: 8px;
-  border: 2px dashed #d97706;
+  background: linear-gradient(135deg, var(--color-warning-light) 0%, var(--color-warning) 100%);
+  border-radius: var(--radius-md);
+  border: 2px dashed var(--color-warning-dark);
   min-height: 400px;
   display: flex;
   align-items: center;

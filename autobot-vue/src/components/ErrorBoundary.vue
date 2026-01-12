@@ -197,23 +197,24 @@ defineExpose({
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .error-boundary {
-  padding: 2rem;
-  background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
-  border-radius: 12px;
-  border: 2px solid #fc8181;
-  margin: 1rem 0;
-  box-shadow: 0 4px 12px rgba(252, 129, 129, 0.15);
+  padding: var(--spacing-8);
+  background: linear-gradient(135deg, var(--color-error-light) 0%, var(--color-error-bg) 100%);
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--color-error);
+  margin: var(--spacing-4) 0;
+  box-shadow: var(--shadow-md);
 }
 
 .error-container {
   display: flex;
   align-items: flex-start;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .error-icon {
-  font-size: 2rem;
+  font-size: var(--font-size-2xl);
   flex-shrink: 0;
 }
 
@@ -222,43 +223,43 @@ defineExpose({
 }
 
 .error-title {
-  margin: 0 0 0.5rem 0;
-  color: #c53030;
-  font-size: 1.25rem;
-  font-weight: 600;
+  margin: 0 0 var(--spacing-2) 0;
+  color: var(--color-error-dark);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
 }
 
 .error-message {
-  margin: 0 0 1rem 0;
-  color: #744210;
-  line-height: 1.5;
+  margin: 0 0 var(--spacing-4) 0;
+  color: var(--text-secondary);
+  line-height: var(--leading-relaxed);
 }
 
 .error-details {
-  margin: 1rem 0;
-  padding: 1rem;
-  background: rgba(255, 255, 255, 0.7);
-  border-radius: 8px;
-  border: 1px solid #fed7d7;
+  margin: var(--spacing-4) 0;
+  padding: var(--spacing-4);
+  background: var(--bg-overlay);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-error-bg);
 }
 
 .error-details-toggle {
   cursor: pointer;
-  color: #c53030;
-  font-weight: 500;
+  color: var(--color-error-dark);
+  font-weight: var(--font-weight-medium);
 }
 
 .error-stack {
-  margin-top: 0.5rem;
-  font-family: 'Monaco', 'Menlo', monospace;
-  font-size: 0.875rem;
+  margin-top: var(--spacing-2);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
 }
 
 .stack-trace {
-  background: #f7fafc;
-  padding: 0.5rem;
-  border-radius: 4px;
-  margin-top: 0.5rem;
+  background: var(--bg-secondary);
+  padding: var(--spacing-2);
+  border-radius: var(--radius-sm);
+  margin-top: var(--spacing-2);
   overflow-x: auto;
   white-space: pre;
   max-height: 200px;
@@ -266,13 +267,13 @@ defineExpose({
 }
 
 .component-info {
-  margin-top: 0.5rem;
-  color: #744210;
+  margin-top: var(--spacing-2);
+  color: var(--text-secondary);
 }
 
 .error-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
   flex-wrap: wrap;
 }
 

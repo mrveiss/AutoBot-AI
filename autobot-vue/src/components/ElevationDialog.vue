@@ -262,13 +262,14 @@ export default {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .elevation-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: var(--bg-backdrop);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -277,14 +278,14 @@ export default {
 }
 
 .elevation-dialog {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2xl);
   width: 90vw;
   max-width: 500px;
   max-height: 80vh;
   overflow: hidden;
-  animation: slideIn 0.3s ease-out;
+  animation: slideIn var(--duration-300) var(--ease-out);
 }
 
 @keyframes slideIn {
@@ -299,59 +300,59 @@ export default {
 }
 
 .elevation-header {
-  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-  color: white;
-  padding: 20px;
+  background: linear-gradient(135deg, var(--color-error) 0%, var(--color-error-dark) 100%);
+  color: var(--text-on-primary);
+  padding: var(--spacing-5);
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .elevation-icon {
-  font-size: 32px;
+  font-size: var(--font-size-3xl);
   opacity: 0.9;
 }
 
 .elevation-title h3 {
-  margin: 0 0 4px 0;
-  font-size: 18px;
-  font-weight: 600;
+  margin: 0 0 var(--spacing-1) 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
 }
 
 .elevation-subtitle {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--font-size-sm);
   opacity: 0.9;
 }
 
 .elevation-body {
-  padding: 24px;
+  padding: var(--spacing-6);
 }
 
 .elevation-details {
-  margin-bottom: 24px;
+  margin-bottom: var(--spacing-6);
 }
 
 .elevation-details h4 {
-  margin: 0 0 12px 0;
-  color: #374151;
-  font-size: 14px;
-  font-weight: 600;
+  margin: 0 0 var(--spacing-3) 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .operation-info {
-  background: #f9fafb;
-  border-radius: 8px;
-  padding: 16px;
-  border-left: 4px solid #dc2626;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-4);
+  border-left: 4px solid var(--color-error);
 }
 
 .info-item {
   display: flex;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .info-item:last-child {
@@ -359,82 +360,82 @@ export default {
 }
 
 .label {
-  font-weight: 600;
-  color: #6b7280;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-tertiary);
   min-width: 80px;
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   text-transform: uppercase;
 }
 
 .command {
-  background: #1f2937;
-  color: #f9fafb;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 12px;
+  background: var(--bg-inverse);
+  color: var(--text-inverse);
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
 }
 
 .reason {
-  color: #374151;
+  color: var(--text-primary);
 }
 
 .elevation-form {
-  border-top: 1px solid #e5e7eb;
-  padding-top: 20px;
+  border-top: 1px solid var(--border-primary);
+  padding-top: var(--spacing-5);
 }
 
 .form-group {
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 8px;
-  font-weight: 600;
-  color: #374151;
+  margin-bottom: var(--spacing-2);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
 }
 
 .password-input-group {
   display: flex;
   align-items: center;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-md);
   overflow: hidden;
-  transition: border-color 0.2s;
+  transition: border-color var(--duration-200);
 }
 
 .password-input-group:focus-within {
-  border-color: #dc2626;
-  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+  border-color: var(--color-error);
+  box-shadow: var(--shadow-focus-error);
 }
 
 .password-input {
   flex: 1;
-  padding: 12px 16px;
+  padding: var(--spacing-3) var(--spacing-4);
   border: none;
   outline: none;
-  font-size: 14px;
+  font-size: var(--font-size-sm);
 }
 
 .password-input:disabled {
-  background: #f9fafb;
-  color: #9ca3af;
+  background: var(--bg-secondary);
+  color: var(--text-disabled);
 }
 
 .password-toggle {
-  padding: 12px 16px;
+  padding: var(--spacing-3) var(--spacing-4);
   border: none;
-  background: #f9fafb;
-  color: #6b7280;
+  background: var(--bg-secondary);
+  color: var(--text-tertiary);
   cursor: pointer;
-  border-left: 1px solid #e5e7eb;
-  transition: all 0.2s;
+  border-left: 1px solid var(--border-primary);
+  transition: all var(--duration-200);
 }
 
 .password-toggle:hover:not(:disabled) {
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .password-toggle:disabled {
@@ -443,15 +444,15 @@ export default {
 }
 
 .security-options {
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
 }
 
 .checkbox-label {
   display: flex;
   align-items: center;
   cursor: pointer;
-  color: #6b7280;
-  font-size: 14px;
+  color: var(--text-tertiary);
+  font-size: var(--font-size-sm);
 }
 
 .checkbox-label input[type="checkbox"] {
@@ -461,16 +462,16 @@ export default {
 .checkmark {
   width: 20px;
   height: 20px;
-  border: 2px solid #d1d5db;
-  border-radius: 4px;
-  margin-right: 8px;
+  border: 2px solid var(--border-secondary);
+  border-radius: var(--radius-sm);
+  margin-right: var(--spacing-2);
   position: relative;
-  transition: all 0.2s;
+  transition: all var(--duration-200);
 }
 
 .checkbox-label input[type="checkbox"]:checked + .checkmark {
-  background: #dc2626;
-  border-color: #dc2626;
+  background: var(--color-error);
+  border-color: var(--color-error);
 }
 
 .checkbox-label input[type="checkbox"]:checked + .checkmark::after {
@@ -478,69 +479,69 @@ export default {
   position: absolute;
   top: -2px;
   left: 3px;
-  color: white;
-  font-size: 14px;
-  font-weight: bold;
+  color: var(--text-on-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
 }
 
 .warning-message {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 6px;
-  padding: 12px;
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-light);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-3);
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: #991b1b;
-  font-size: 14px;
+  gap: var(--spacing-2);
+  color: var(--color-error-dark);
+  font-size: var(--font-size-sm);
 }
 
 .warning-message i {
-  font-size: 16px;
+  font-size: var(--font-size-base);
 }
 
 .elevation-footer {
-  background: #f9fafb;
-  padding: 20px 24px;
-  border-top: 1px solid #e5e7eb;
+  background: var(--bg-secondary);
+  padding: var(--spacing-5) var(--spacing-6);
+  border-top: 1px solid var(--border-primary);
 }
 
 .button-group {
   display: flex;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: var(--spacing-3);
+  margin-bottom: var(--spacing-3);
 }
 
 .security-note {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: #6b7280;
-  font-size: 12px;
+  gap: var(--spacing-2);
+  color: var(--text-tertiary);
+  font-size: var(--font-size-xs);
 }
 
 .security-note i {
-  font-size: 14px;
+  font-size: var(--font-size-sm);
 }
 
 @media (max-width: 640px) {
   .elevation-dialog {
     width: 95vw;
-    margin: 16px;
+    margin: var(--spacing-4);
   }
-  
+
   .elevation-header {
-    padding: 16px;
+    padding: var(--spacing-4);
   }
-  
+
   .elevation-body {
-    padding: 20px;
+    padding: var(--spacing-5);
   }
-  
+
   .button-group {
     flex-direction: column;
   }
-  
+
   .btn {
     width: 100%;
   }
