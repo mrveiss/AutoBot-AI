@@ -68,8 +68,8 @@ Found **87 fix/test scripts** across the scripts directory. These scripts fall i
 - `scripts/fix_search.py` - Fixes search functionality
 - `scripts/fix_kb_dimensions.py` - Fixes knowledge base dimension issues
 - `scripts/utilities/fix_settings_loading.py` - Fixes settings loading
-- `scripts/utilities/browser_settings_fix.js` - Browser settings fixes
-- `scripts/utilities/frontend_api_fix.js` - Frontend API integration fixes
+- `scripts/utilities/browser_settings_utility.js` - Browser settings fixes
+- `scripts/utilities/frontend_api_utility.js` - Frontend API integration fixes
 
 **Status**: ❌ **TEMPORARY WORKAROUNDS**
 
@@ -289,8 +289,8 @@ Found **87 fix/test scripts** across the scripts directory. These scripts fall i
 
 4. **Integrate settings/browser/API fixes** into respective components:
    - Move logic from settings_loading fix
-   - Move logic from browser_settings_fix
-   - Move logic from frontend_api_fix
+   - Move logic from browser_settings_utility
+   - Move logic from frontend_api_utility
 
 5. **Archive component fix scripts** to `archive/scripts-component-fixes-2025-10-09/`
 
