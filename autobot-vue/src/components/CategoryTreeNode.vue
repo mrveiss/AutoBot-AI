@@ -100,6 +100,7 @@ export default {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .tree-node {
   user-select: none;
 }
@@ -107,24 +108,24 @@ export default {
 .node-content {
   display: flex;
   align-items: center;
-  padding: 6px 8px;
+  padding: var(--spacing-1-5) var(--spacing-2);
   cursor: pointer;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  margin-bottom: 2px;
+  border-radius: var(--radius-sm);
+  transition: all var(--duration-200) var(--ease-in-out);
+  margin-bottom: var(--spacing-0-5);
 }
 
 .node-content:hover {
-  background-color: #e9ecef;
+  background-color: var(--bg-hover);
 }
 
 .node-content.selected {
-  background-color: #007bff;
-  color: white;
+  background-color: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .node-content.selected:hover {
-  background-color: #0056b3;
+  background-color: var(--color-primary-hover);
 }
 
 .node-icon {
@@ -132,38 +133,38 @@ export default {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-right: 6px;
-  font-size: 12px;
-  color: #6c757d;
+  margin-right: var(--spacing-1-5);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .node-content.selected .node-icon {
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .node-label {
-  font-weight: 500;
-  font-size: 14px;
+  font-weight: var(--font-medium);
+  font-size: var(--text-sm);
 }
 
 .node-description {
-  font-size: 12px;
-  color: #6c757d;
-  margin-left: 8px;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin-left: var(--spacing-2);
   font-style: italic;
 }
 
 .node-content.selected .node-description {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text-on-primary-muted);
 }
 
 .children {
-  margin-top: 2px;
+  margin-top: var(--spacing-0-5);
 }
 
 /* Animation for expansion */
 .node-icon i {
-  transition: transform 0.2s ease;
+  transition: transform var(--duration-200) var(--ease-in-out);
 }
 
 .node-content.has-children:hover .node-icon i {

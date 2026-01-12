@@ -98,11 +98,12 @@ export default {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .category-tree {
-  border: 1px solid #e9ecef;
-  border-radius: 6px;
-  padding: 8px;
-  background-color: #f8f9fa;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-2);
+  background-color: var(--bg-secondary);
   max-height: 400px;
   overflow-y: auto;
 }
@@ -113,49 +114,49 @@ export default {
 }
 
 .category-tree::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
 }
 
 .category-tree::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
+  background: var(--text-tertiary);
+  border-radius: var(--radius-sm);
 }
 
 .category-tree::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: var(--text-secondary);
 }
 
 .loading-state {
-  padding: 12px;
+  padding: var(--spacing-3);
 }
 
 .skeleton-tree {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .skeleton-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   animation: pulse 1.5s ease-in-out infinite;
 }
 
 .skeleton-icon {
   width: 20px;
   height: 20px;
-  background: #e0e0e0;
-  border-radius: 4px;
+  background: var(--border-default);
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 
 .skeleton-text {
   height: 16px;
-  background: linear-gradient(90deg, #e0e0e0 25%, #f0f0f0 50%, #e0e0e0 75%);
+  background: linear-gradient(90deg, var(--border-default) 25%, var(--bg-tertiary) 50%, var(--border-default) 75%);
   background-size: 200% 100%;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   animation: shimmer 1.5s ease-in-out infinite;
 }
 
@@ -172,5 +173,4 @@ export default {
     background-position: -200% 0;
   }
 }
-
 </style>

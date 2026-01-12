@@ -244,14 +244,15 @@ if (props.error) {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .async-error-fallback {
   min-height: 300px;
-  padding: 2rem;
-  background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
-  border-radius: 12px;
-  border: 2px solid #ffb74d;
-  margin: 1rem;
-  box-shadow: 0 4px 12px rgba(255, 183, 77, 0.15);
+  padding: var(--spacing-8);
+  background: linear-gradient(135deg, var(--color-warning-bg) 0%, var(--color-warning-bg-hover) 100%);
+  border-radius: var(--radius-xl);
+  border: 2px solid var(--color-warning);
+  margin: var(--spacing-4);
+  box-shadow: var(--shadow-warning);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -260,14 +261,14 @@ if (props.error) {
 .error-container {
   display: flex;
   align-items: flex-start;
-  gap: 1.5rem;
+  gap: var(--spacing-6);
   max-width: 600px;
   width: 100%;
 }
 
 .error-icon {
-  font-size: 3rem;
-  color: #f57c00;
+  font-size: var(--text-4xl);
+  color: var(--color-warning-hover);
   flex-shrink: 0;
   animation: pulse 2s infinite;
 }
@@ -282,62 +283,62 @@ if (props.error) {
 }
 
 .error-title {
-  margin: 0 0 0.75rem 0;
-  color: #e65100;
-  font-size: 1.5rem;
-  font-weight: 600;
+  margin: 0 0 var(--spacing-3) 0;
+  color: var(--color-warning-active);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-semibold);
 }
 
 .error-message {
-  margin: 0 0 1.5rem 0;
-  color: #bf360c;
-  line-height: 1.6;
-  font-size: 1rem;
+  margin: 0 0 var(--spacing-6) 0;
+  color: var(--color-error-hover);
+  line-height: var(--leading-relaxed);
+  font-size: var(--text-base);
 }
 
 .error-details {
-  margin: 1.5rem 0;
-  padding: 1rem;
-  background: rgba(255, 255, 255, 0.8);
-  border-radius: 8px;
-  border: 1px solid #ffcc02;
+  margin: var(--spacing-6) 0;
+  padding: var(--spacing-4);
+  background: var(--bg-primary-transparent);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-warning);
 }
 
 .error-details-toggle {
   cursor: pointer;
-  color: #f57c00;
-  font-weight: 500;
-  font-size: 0.9rem;
+  color: var(--color-warning-hover);
+  font-weight: var(--font-medium);
+  font-size: var(--text-sm);
 }
 
 .error-stack {
-  margin-top: 0.75rem;
-  font-family: 'Monaco', 'Menlo', monospace;
-  font-size: 0.875rem;
+  margin-top: var(--spacing-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
 }
 
 .stack-trace {
-  background: #f5f5f5;
-  padding: 0.75rem;
-  border-radius: 4px;
-  margin: 0.5rem 0;
+  background: var(--bg-tertiary);
+  padding: var(--spacing-3);
+  border-radius: var(--radius-sm);
+  margin: var(--spacing-2) 0;
   overflow-x: auto;
   white-space: pre;
   max-height: 200px;
   overflow-y: auto;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--border-default);
 }
 
 .error-info {
-  margin-top: 0.75rem;
-  color: #bf360c;
-  font-size: 0.875rem;
-  line-height: 1.5;
+  margin-top: var(--spacing-3);
+  color: var(--color-error-hover);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 
 .error-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   flex-wrap: wrap;
 }
 
@@ -352,32 +353,32 @@ if (props.error) {
 
 @media (max-width: 640px) {
   .async-error-fallback {
-    padding: 1rem;
-    margin: 0.5rem;
+    padding: var(--spacing-4);
+    margin: var(--spacing-2);
   }
 
   .error-container {
     flex-direction: column;
     text-align: center;
-    gap: 1rem;
+    gap: var(--spacing-4);
   }
 
   .error-icon {
-    font-size: 2rem;
+    font-size: var(--text-3xl);
   }
 
   .error-title {
-    font-size: 1.25rem;
+    font-size: var(--text-xl);
   }
 
   .error-actions {
     justify-content: center;
-    gap: 0.5rem;
+    gap: var(--spacing-2);
   }
 
   .btn {
-    padding: 0.6rem 1rem;
-    font-size: 0.85rem;
+    padding: var(--spacing-2-5) var(--spacing-4);
+    font-size: var(--text-sm);
     min-width: 80px;
   }
 }

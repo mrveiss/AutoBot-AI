@@ -175,16 +175,87 @@ def create_vulnerability_assessment_template() -> WorkflowTemplate:
     )
 
 
-def create_security_audit_template() -> WorkflowTemplate:
-    """Create security audit workflow template."""
-    return WorkflowTemplate(
-        id="security_audit",
-        name="Security Audit",
-        description="Comprehensive security audit with compliance checking",
-        category=TemplateCategory.SECURITY,
-        complexity=TaskComplexity.COMPLEX,
-        estimated_duration_minutes=45,
-        agents_involved=[
+def _create_audit_steps() -> List[WorkflowStep]:
+    """Create workflow steps for security audit template.
+
+    Issue #665: Extracted from create_security_audit_template to reduce function length.
+
+    Returns:
+        List of WorkflowStep objects defining the security audit workflow.
+    """
+    return [
+        WorkflowStep(
+            id="audit_planning",
+            agent_type="orchestrator",
+            action="Plan security audit scope and methodology",
+            description="Orchestrator: Audit Planning (requires your approval)",
+            requires_approval=True,
+            expected_duration_ms=10000,
+        ),
+        WorkflowStep(
+            id="compliance_research",
+            agent_type="research",
+            action="Research compliance requirements and security standards",
+            description="Research: Compliance Standards",
+            dependencies=["audit_planning"],
+            expected_duration_ms=30000,
+        ),
+        WorkflowStep(
+            id="asset_discovery",
+            agent_type="network_discovery",
+            action="Discover and inventory all network assets",
+            description="Network_Discovery: Asset Inventory",
+            dependencies=["audit_planning"],
+            inputs={"task_type": "asset_inventory"},
+            expected_duration_ms=25000,
+        ),
+        WorkflowStep(
+            id="security_scanning",
+            agent_type="security_scanner",
+            action="Perform comprehensive security scanning of all assets",
+            description="Security_Scanner: Comprehensive Scan",
+            dependencies=["asset_discovery"],
+            inputs={"scan_type": "comprehensive"},
+            expected_duration_ms=90000,
+        ),
+        WorkflowStep(
+            id="compliance_check",
+            agent_type="security_scanner",
+            action="Verify compliance with security standards",
+            description="Security_Scanner: Compliance Verification",
+            dependencies=["compliance_research", "security_scanning"],
+            expected_duration_ms=30000,
+        ),
+        WorkflowStep(
+            id="audit_report",
+            agent_type="orchestrator",
+            action="Generate comprehensive security audit report",
+            description="Orchestrator: Generate Audit Report (requires your approval)",
+            requires_approval=True,
+            dependencies=["compliance_check"],
+            expected_duration_ms=15000,
+        ),
+        WorkflowStep(
+            id="store_audit",
+            agent_type="knowledge_manager",
+            action="Store audit findings and recommendations",
+            description="Knowledge_Manager: Store Audit Results",
+            dependencies=["audit_report"],
+            expected_duration_ms=5000,
+        ),
+    ]
+
+
+def _create_audit_metadata() -> dict:
+    """Create metadata for security audit template.
+
+    Issue #665: Extracted from create_security_audit_template to reduce function length.
+
+    Returns:
+        Dictionary containing agents_involved and tags for the audit template.
+    """
+    return {
+        "agents_involved": [
             "librarian",
             "research",
             "security_scanner",
@@ -192,72 +263,34 @@ def create_security_audit_template() -> WorkflowTemplate:
             "orchestrator",
             "knowledge_manager",
         ],
-        tags=["security", "audit", "compliance", "assessment"],
-        variables={
+        "tags": ["security", "audit", "compliance", "assessment"],
+        "variables": {
             "audit_scope": "Scope of security audit",
             "compliance_framework": "Compliance framework (SOC2, ISO27001, PCI-DSS)",
         },
-        steps=[
-            WorkflowStep(
-                id="audit_planning",
-                agent_type="orchestrator",
-                action="Plan security audit scope and methodology",
-                description="Orchestrator: Audit Planning (requires your approval)",
-                requires_approval=True,
-                expected_duration_ms=10000,
-            ),
-            WorkflowStep(
-                id="compliance_research",
-                agent_type="research",
-                action="Research compliance requirements and security standards",
-                description="Research: Compliance Standards",
-                dependencies=["audit_planning"],
-                expected_duration_ms=30000,
-            ),
-            WorkflowStep(
-                id="asset_discovery",
-                agent_type="network_discovery",
-                action="Discover and inventory all network assets",
-                description="Network_Discovery: Asset Inventory",
-                dependencies=["audit_planning"],
-                inputs={"task_type": "asset_inventory"},
-                expected_duration_ms=25000,
-            ),
-            WorkflowStep(
-                id="security_scanning",
-                agent_type="security_scanner",
-                action="Perform comprehensive security scanning of all assets",
-                description="Security_Scanner: Comprehensive Scan",
-                dependencies=["asset_discovery"],
-                inputs={"scan_type": "comprehensive"},
-                expected_duration_ms=90000,
-            ),
-            WorkflowStep(
-                id="compliance_check",
-                agent_type="security_scanner",
-                action="Verify compliance with security standards",
-                description="Security_Scanner: Compliance Verification",
-                dependencies=["compliance_research", "security_scanning"],
-                expected_duration_ms=30000,
-            ),
-            WorkflowStep(
-                id="audit_report",
-                agent_type="orchestrator",
-                action="Generate comprehensive security audit report",
-                description="Orchestrator: Generate Audit Report (requires your approval)",
-                requires_approval=True,
-                dependencies=["compliance_check"],
-                expected_duration_ms=15000,
-            ),
-            WorkflowStep(
-                id="store_audit",
-                agent_type="knowledge_manager",
-                action="Store audit findings and recommendations",
-                description="Knowledge_Manager: Store Audit Results",
-                dependencies=["audit_report"],
-                expected_duration_ms=5000,
-            ),
-        ],
+    }
+
+
+def create_security_audit_template() -> WorkflowTemplate:
+    """Create security audit workflow template.
+
+    Issue #665: Refactored to use helper functions for reduced complexity.
+
+    Returns:
+        WorkflowTemplate for comprehensive security audit with compliance checking.
+    """
+    metadata = _create_audit_metadata()
+    return WorkflowTemplate(
+        id="security_audit",
+        name="Security Audit",
+        description="Comprehensive security audit with compliance checking",
+        category=TemplateCategory.SECURITY,
+        complexity=TaskComplexity.COMPLEX,
+        estimated_duration_minutes=45,
+        agents_involved=metadata["agents_involved"],
+        tags=metadata["tags"],
+        variables=metadata["variables"],
+        steps=_create_audit_steps(),
     )
 
 
