@@ -551,51 +551,61 @@ class CommandExecutor:
         elapsed = time.time() - start_time
         return await self._handle_poll_timeout(session, elapsed, last_output)
 
-    async def execute_in_pty(
-        self, session: AgentTerminalSession, command: str, timeout: float = 30.0
-    ) -> Metadata:
+    def _build_pty_error_result(self, error_msg: str) -> Metadata:
         """
-        Execute command directly in PTY shell (true collaboration mode).
-        User and agent work as one in the same terminal.
+        Build error result for PTY command execution failure.
 
-        IMPROVEMENTS (Issue #143):
-        - Phase 1: Intelligent return code detection with retry and fallback
-        - Phase 2: Adaptive polling with output stability detection
-        - Increased default timeout from 5s to 30s
-        - Proper error handling and comprehensive logging
+        Issue #665: Extracted from execute_in_pty to reduce function length.
+
+        Args:
+            error_msg: Error message describing the failure
+
+        Returns:
+            Dict with error status, empty stdout, error stderr, and return code 1
+        """
+        return {
+            "status": "error",
+            "stdout": "",
+            "stderr": error_msg,
+            "return_code": 1,
+        }
+
+    def _build_pty_result(self, output: str, return_code: int) -> Metadata:
+        """
+        Build result dict for PTY command execution.
+
+        Issue #665: Extracted from execute_in_pty to reduce function length.
+
+        Args:
+            output: Command output from PTY
+            return_code: Command return code
+
+        Returns:
+            Dict with status, stdout, stderr, and return_code
+        """
+        return {
+            "status": "success" if return_code == 0 else "error",
+            "stdout": output,
+            "stderr": "",  # PTY combines stdout/stderr
+            "return_code": return_code,
+        }
+
+    async def _poll_and_detect_return_code(
+        self, session: AgentTerminalSession, timeout: float
+    ) -> tuple[str, int]:
+        """
+        Poll for command output and detect return code.
+
+        Issue #665: Extracted from execute_in_pty to reduce function length.
+        Implements the pub/sub pattern via chat history to avoid race conditions.
 
         Args:
             session: Agent terminal session
-            command: Command to execute
-            timeout: Max seconds to wait for output (default: 30s)
+            timeout: Max seconds to wait for output
 
         Returns:
-            Dict with status, stdout, stderr, return_code
+            Tuple of (full_output, return_code)
         """
-        logger.info("[PTY_EXEC] Executing in PTY: %s", command)
-
-        # Write command to PTY (shell will execute it)
-        if not self._write_to_pty(session, f"{command}\n"):
-            return {
-                "status": "error",
-                "stdout": "",
-                "stderr": "Failed to write command to PTY",
-                "return_code": 1,
-            }
-
-        # CRITICAL FIX (Critical #1): Race Condition Prevention
-        # Do NOT collect from PTY output queue directly! The WebSocket handler
-        # consumes from the same queue, causing message loss (0.3-0.5s latency).
-        #
-        # SOLUTION: Use pub/sub pattern via chat history:
-        # 1. WebSocket handler receives PTY output (subscriber 1)
-        # 2. WebSocket saves output to chat history (broadcast)
-        # 3. Agent terminal polls chat history (subscriber 2)
-        # 4. No queue consumption race - both get complete output
-        #
-        # This implements the broadcast pattern recommended in code review
-        # without requiring PTY architecture changes.
-
         # Phase 2: Intelligent polling with adaptive timeouts
         logger.info(
             f"[PTY_EXEC] Starting intelligent polling (timeout={timeout}s) "
@@ -624,9 +634,33 @@ class CommandExecutor:
             f"Return code: {return_code}, Output length: {len(full_output)} chars"
         )
 
-        return {
-            "status": "success" if return_code == 0 else "error",
-            "stdout": full_output,
-            "stderr": "",  # PTY combines stdout/stderr
-            "return_code": return_code,
-        }
+        return full_output, return_code
+
+    async def execute_in_pty(
+        self, session: AgentTerminalSession, command: str, timeout: float = 30.0
+    ) -> Metadata:
+        """
+        Execute command directly in PTY shell (true collaboration mode).
+
+        Issue #665: Refactored to use helper methods for result building.
+
+        Args:
+            session: Agent terminal session
+            command: Command to execute
+            timeout: Max seconds to wait for output (default: 30s)
+
+        Returns:
+            Dict with status, stdout, stderr, return_code
+        """
+        logger.info("[PTY_EXEC] Executing in PTY: %s", command)
+
+        # Write command to PTY (shell will execute it)
+        if not self._write_to_pty(session, f"{command}\n"):
+            return self._build_pty_error_result("Failed to write command to PTY")
+
+        # Poll for output and detect return code (Issue #665: extracted)
+        full_output, return_code = await self._poll_and_detect_return_code(
+            session, timeout
+        )
+
+        return self._build_pty_result(full_output, return_code)

@@ -29,6 +29,42 @@ logger = logging.getLogger(__name__)
 # Create singleton config instance
 config = UnifiedConfigManager()
 
+# Issue #665: JavaScript snippets for content extraction
+_JS_EXTRACT_TEXT = """
+() => {
+    const scripts = document.querySelectorAll('script, style');
+    scripts.forEach(el => el.remove());
+
+    const contentSelectors = [
+        'main', 'article', '[role="main"]', '.content',
+        '#content', '.main-content', 'body'
+    ];
+
+    for (const selector of contentSelectors) {
+        const element = document.querySelector(selector);
+        if (element) {
+            return element.innerText.trim();
+        }
+    }
+    return document.body.innerText.trim();
+}
+"""
+
+_JS_EXTRACT_STRUCTURED = """
+() => {
+    const data = {};
+    data.headings = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6'))
+        .map(h => ({ level: h.tagName.toLowerCase(), text: h.innerText.trim() }))
+        .filter(h => h.text.length > 0);
+    data.links = Array.from(document.querySelectorAll('a[href]'))
+        .map(a => ({ text: a.innerText.trim(), href: a.href }))
+        .filter(l => l.text.length > 0).slice(0, 20);
+    const metaDesc = document.querySelector('meta[name="description"]');
+    data.description = metaDesc ? metaDesc.getAttribute('content') : '';
+    return data;
+}
+"""
+
 
 class ResearchBrowserSession:
     """Manages a single research browser session with user interaction capability"""
@@ -236,76 +272,24 @@ class ResearchBrowserSession:
             return {"success": False, "error": str(e)}
 
     async def extract_content(self) -> Dict[str, Any]:
-        """Extract content from current page"""
+        """
+        Extract content from current page.
+
+        Issue #665: Refactored to use module-level JS constants.
+        """
         if not self.page:
             return {"success": False, "error": "Browser not initialized"}
 
         try:
-            # Get text content
-            text_content = await self.page.evaluate(
-                """
-                () => {
-                    // Remove script and style elements
-                    const scripts = document.querySelectorAll('script, style');
-                    scripts.forEach(el => el.remove());
-
-                    // Get main content areas
-                    const contentSelectors = [
-                        'main',
-                        'article',
-                        '[role="main"]',
-                        '.content',
-                        '#content',
-                        '.main-content',
-                        'body'
-                    ];
-
-                    for (const selector of contentSelectors) {
-                        const element = document.querySelector(selector);
-                        if (element) {
-                            return element.innerText.trim();
-                        }
-                    }
-
-                    return document.body.innerText.trim();
-                }
-            """
-            )
-
-            # Get structured data
-            structured_data = await self.page.evaluate(
-                """
-                () => {
-                    const data = {};
-
-                    // Get headings
-                    data.headings = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6'))
-                        .map(h => ({
-                            level: h.tagName.toLowerCase(),
-                            text: h.innerText.trim()
-                        })).filter(h => h.text.length > 0);
-
-                    // Get links
-                    data.links = Array.from(document.querySelectorAll('a[href]'))
-                        .map(a => ({
-                            text: a.innerText.trim(),
-                            href: a.href
-                        })).filter(l => l.text.length > 0).slice(0, 20);
-
-                    // Get meta description
-                    const metaDesc = document.querySelector('meta[name="description"]');
-                    data.description = metaDesc ? metaDesc.getAttribute('content') : '';
-
-                    return data;
-                }
-            """
-            )
+            # Issue #665: Use module-level JS constants
+            text_content = await self.page.evaluate(_JS_EXTRACT_TEXT)
+            structured_data = await self.page.evaluate(_JS_EXTRACT_STRUCTURED)
 
             return {
                 "success": True,
                 "url": self.current_url,
                 "title": await self.page.title(),
-                "text_content": text_content[:5000],  # Limit content length
+                "text_content": text_content[:5000],
                 "structured_data": structured_data,
                 "content_length": len(text_content),
             }

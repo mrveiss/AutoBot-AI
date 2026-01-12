@@ -27,6 +27,55 @@ from src.constants.network_constants import NetworkConstants  # noqa: F401 - use
 logger = logging.getLogger(__name__)
 
 
+def _register_routers(app: FastAPI) -> None:
+    """
+    Register core and optional routers with the FastAPI app.
+
+    Issue #665: Extracted from create_fastapi_app to reduce function length.
+
+    Args:
+        app: FastAPI application instance
+    """
+    core_routers = load_core_routers()
+    optional_routers = load_optional_routers()
+
+    for router, prefix, tags, name in core_routers:
+        try:
+            app.include_router(router, prefix=f"/api{prefix}", tags=tags)
+            logger.info("✅ Registered core router: %s at /api%s", name, prefix)
+        except Exception as e:
+            logger.error("❌ Failed to register core router %s: %s", name, e)
+
+    for router, prefix, tags, name in optional_routers:
+        try:
+            app.include_router(router, prefix=f"/api{prefix}", tags=tags)
+            logger.info("✅ Registered optional router: %s at /api%s", name, prefix)
+        except Exception as e:
+            logger.warning("⚠️ Failed to register optional router %s: %s", name, e)
+
+    logger.info("✅ API routes configured with optional AI Stack integration")
+
+
+def _mount_static_files(app: FastAPI) -> None:
+    """
+    Mount static files directory if it exists.
+
+    Issue #665: Extracted from create_fastapi_app to reduce function length.
+
+    Args:
+        app: FastAPI application instance
+    """
+    try:
+        static_dir = Path("static")
+        if static_dir.exists():
+            app.mount("/static", StaticFiles(directory="static"), name="static")
+            logger.info("Static files mounted from static")
+        else:
+            logger.info("No static directory found, skipping static file mounting")
+    except Exception as e:
+        logger.warning("Could not mount static files: %s", e)
+
+
 class AppFactory:
     """Application factory for creating FastAPI instances with comprehensive configuration"""
 
@@ -42,7 +91,9 @@ class AppFactory:
         allow_origins: Optional[List[str]] = None,
     ) -> FastAPI:
         """
-        Create and configure FastAPI application with optimal performance settings
+        Create and configure FastAPI application with optimal performance settings.
+
+        Issue #665: Refactored to use _register_routers and _mount_static_files helpers.
 
         Args:
             title: Application title
@@ -52,66 +103,21 @@ class AppFactory:
 
         Returns:
             FastAPI: Configured FastAPI application instance
-
-        Example:
-            ```python
-            app = AppFactory.create_fastapi_app()
-            app = AppFactory.create_fastapi_app(
-                title="My App",
-                allow_origins=[f"http://localhost:{NetworkConstants.BROWSER_SERVICE_PORT}"]
-            )
-            ```
         """
-
-        # Create FastAPI app with lifespan manager
         app = FastAPI(
             title=title,
             description=description,
             version=version,
             lifespan=create_lifespan_manager(),
-            redoc_url=None,  # Disable ReDoc to save resources
+            redoc_url=None,
         )
 
-        # Configure middleware
         configure_middleware(app, allow_origins=allow_origins)
-
-        # Register root endpoints (/api/health, /api/version)
         register_root_endpoints(app)
 
-        # Load and register routers
-        core_routers = load_core_routers()
-        optional_routers = load_optional_routers()
-
-        # Register core routers
-        for router, prefix, tags, name in core_routers:
-            try:
-                app.include_router(router, prefix=f"/api{prefix}", tags=tags)
-                logger.info("✅ Registered core router: %s at /api%s", name, prefix)
-            except Exception as e:
-                logger.error("❌ Failed to register core router %s: %s", name, e)
-
-        # Register optional routers
-        for router, prefix, tags, name in optional_routers:
-            try:
-                app.include_router(router, prefix=f"/api{prefix}", tags=tags)
-                logger.info(
-                    f"✅ Successfully registered optional router: {name} at /api{prefix}"
-                )
-            except Exception as e:
-                logger.warning("⚠️ Failed to register optional router %s: %s", name, e)
-
-        logger.info("✅ API routes configured with optional AI Stack integration")
-
-        # Mount static files for serving frontend assets
-        try:
-            static_dir = Path("static")
-            if static_dir.exists():
-                app.mount("/static", StaticFiles(directory="static"), name="static")
-                logger.info("Static files mounted from static")
-            else:
-                logger.info("No static directory found, skipping static file mounting")
-        except Exception as e:
-            logger.warning("Could not mount static files: %s", e)
+        # Issue #665: Use helpers for router registration and static files
+        _register_routers(app)
+        _mount_static_files(app)
 
         logger.info("✅ FastAPI application configured successfully")
         return app

@@ -214,82 +214,57 @@ def create_enhanced_app() -> FastAPI:
     return app
 
 
+def _register_router_group(
+    api_router: APIRouter,
+    api_registry: "APIRegistry",
+    routers_config: list,
+    group_name: str,
+) -> None:
+    """
+    Register a group of routers with consistent error handling.
+
+    Issue #665: Extracted from configure_enhanced_api_routes to reduce function length.
+
+    Args:
+        api_router: Main API router to add routers to
+        api_registry: API registry for tracking
+        routers_config: List of (router, prefix, tags, name) tuples
+        group_name: Name of router group for logging
+    """
+    for router, prefix, tags, name in routers_config:
+        try:
+            router_tags: List[Union[str, Enum]] = list(tags) if tags else []
+            api_router.include_router(router, prefix=prefix, tags=router_tags)
+            api_registry.register_router(name, router, f"/api{prefix}")
+            logger.info("✅ Registered %s router: %s at /api%s", group_name, name, prefix)
+        except Exception as e:
+            logger.error("❌ Failed to register %s router %s: %s", group_name, name, e)
+
+
 def configure_enhanced_api_routes(app: FastAPI) -> None:
     """
     Configure all API routes including enhanced AI Stack endpoints.
 
-    Uses centralized router loading from backend.initialization.routers
-    to reduce coupling and improve maintainability.
+    Issue #665: Refactored to use _register_router_group helper.
     """
-    # Create API registry for tracking endpoints
     api_registry = APIRegistry()
-
-    # Create main API router
     api_router = APIRouter()
 
-    # Load core routers from centralized loader
-    core_routers_config = load_core_routers()
-
     # Enhanced AI Stack routers (not in core loader)
-    ai_enhanced_routers_config = [
+    ai_enhanced_routers = [
         (ai_stack_router, "/ai-stack", ["ai-stack"], "ai_stack_integration"),
         (chat_enhanced_router, "/chat/enhanced", ["chat-enhanced"], "chat_enhanced"),
-        (
-            knowledge_enhanced_router,
-            "/knowledge/enhanced",
-            ["knowledge-enhanced"],
-            "knowledge_enhanced",
-        ),
-        (
-            knowledge_advanced_rag_router,
-            "/knowledge_base/rag",
-            ["knowledge-advanced-rag"],
-            "knowledge_advanced_rag",
-        ),
+        (knowledge_enhanced_router, "/knowledge/enhanced", ["knowledge-enhanced"], "knowledge_enhanced"),
+        (knowledge_advanced_rag_router, "/knowledge_base/rag", ["knowledge-advanced-rag"], "knowledge_advanced_rag"),
     ]
 
-    # Register core routers
-    for router, prefix, tags, name in core_routers_config:
-        try:
-            router_tags: List[Union[str, Enum]] = list(tags) if tags else []
-            api_router.include_router(router, prefix=prefix, tags=router_tags)
-            api_registry.register_router(name, router, f"/api{prefix}")
-            logger.info("✅ Registered core router: %s at /api%s", name, prefix)
-        except Exception as e:
-            logger.error("❌ Failed to register core router %s: %s", name, e)
+    # Issue #665: Use helper for router registration
+    _register_router_group(api_router, api_registry, load_core_routers(), "core")
+    _register_router_group(api_router, api_registry, ai_enhanced_routers, "AI Stack")
+    _register_router_group(api_router, api_registry, load_optional_routers(), "optional")
 
-    # Register AI Stack enhanced routers
-    for router, prefix, tags, name in ai_enhanced_routers_config:
-        try:
-            router_tags: List[Union[str, Enum]] = list(tags) if tags else []
-            api_router.include_router(router, prefix=prefix, tags=router_tags)
-            api_registry.register_router(name, router, f"/api{prefix}")
-            logger.info("✅ Registered AI Stack router: %s at /api%s", name, prefix)
-        except Exception as e:
-            logger.error("❌ Failed to register AI Stack router %s: %s", name, e)
-
-    # Load optional routers from centralized loader
-    optional_routers = load_optional_routers()
-
-    # Register optional routers
-    for router, prefix, tags, name in optional_routers:
-        try:
-            router_tags: List[Union[str, Enum]] = list(tags) if tags else []
-            api_router.include_router(router, prefix=prefix, tags=router_tags)
-            api_registry.register_router(name, router, f"/api{prefix}")
-            logger.info(
-                f"✅ Successfully registered optional router: {name} at /api{prefix}"
-            )
-        except Exception as e:
-            logger.error("❌ Failed to register optional router %s: %s", name, e)
-
-    # Register utility endpoints
     api_registry.register_router("utility", api_router, "/api")
-
-    # Include the API router in the main app
     app.include_router(api_router, prefix="/api")
-
-    # Include WebSocket router (not in core/optional loaders)
     app.include_router(websocket_router)
 
     logger.info("✅ Enhanced API routes configured with AI Stack integration")
