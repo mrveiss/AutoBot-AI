@@ -62,26 +62,27 @@ const getActivityIcon = (type: string): string => {
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 h4 {
-  font-weight: 600;
-  color: #1f2937;
-  margin-bottom: 1rem;
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-4);
 }
 
 .activity-timeline {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--spacing-4);
   max-height: 300px;
   overflow-y: auto;
 }
 
 .activity-item {
   display: flex;
-  gap: 1rem;
-  padding: 0.75rem;
-  background: #f9fafb;
-  border-radius: 0.375rem;
+  gap: var(--spacing-4);
+  padding: var(--spacing-3);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
 }
 
 .activity-icon {
@@ -91,25 +92,25 @@ h4 {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-size: 0.875rem;
+  color: var(--text-on-primary);
+  font-size: var(--text-sm);
 }
 
-.activity-icon.created { background: #10b981; }
-.activity-icon.updated { background: #3b82f6; }
-.activity-icon.deleted { background: #ef4444; }
-.activity-icon.imported { background: #8b5cf6; }
+.activity-icon.created { background: var(--color-success); }
+.activity-icon.updated { background: var(--color-primary); }
+.activity-icon.deleted { background: var(--color-error); }
+.activity-icon.imported { background: var(--chart-purple); }
 
 .activity-content { flex: 1; }
 
 .activity-description {
-  font-size: 0.875rem;
-  color: #374151;
-  margin-bottom: 0.25rem;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-1);
 }
 
 .activity-time {
-  font-size: 0.75rem;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 </style>

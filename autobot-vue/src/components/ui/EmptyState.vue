@@ -50,66 +50,48 @@ const iconClass = computed(() => props.icon)
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .empty-state {
   text-align: center;
-  padding: 4rem 2rem;
-  color: #6b7280;
+  padding: var(--spacing-16) var(--spacing-8);
+  color: var(--text-secondary);
 }
 
 .empty-state.compact {
-  padding: 2rem 1rem;
+  padding: var(--spacing-8) var(--spacing-4);
 }
 
 .empty-icon {
-  font-size: 3rem;
-  color: #d1d5db;
-  margin-bottom: 1rem;
+  font-size: var(--text-5xl);
+  color: var(--text-tertiary);
+  margin-bottom: var(--spacing-4);
   opacity: 0.5;
 }
 
 .empty-state.compact .empty-icon {
-  font-size: 2rem;
-  margin-bottom: 0.75rem;
+  font-size: var(--text-3xl);
+  margin-bottom: var(--spacing-3);
 }
 
 .empty-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #6b7280;
-  margin-bottom: 0.5rem;
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-2);
 }
 
 .empty-state.compact .empty-title {
-  font-size: 1rem;
-  margin-bottom: 0.375rem;
+  font-size: var(--text-base);
+  margin-bottom: var(--spacing-1-5);
 }
 
 .empty-message {
-  color: #9ca3af;
-  margin-bottom: 1rem;
+  color: var(--text-tertiary);
+  margin-bottom: var(--spacing-4);
 }
 
 .empty-state.compact .empty-message {
-  font-size: 0.875rem;
-  margin-bottom: 0.75rem;
-}
-
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .empty-state {
-    color: #9ca3af;
-  }
-
-  .empty-icon {
-    color: #4b5563;
-  }
-
-  .empty-title {
-    color: #9ca3af;
-  }
-
-  .empty-message {
-    color: #6b7280;
-  }
+  font-size: var(--text-sm);
+  margin-bottom: var(--spacing-3);
 }
 </style>

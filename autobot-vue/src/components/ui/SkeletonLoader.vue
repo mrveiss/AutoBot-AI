@@ -92,14 +92,15 @@ const lineClass = computed(() => ({
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .skeleton-loader {
-  --skeleton-bg: #f3f4f6;
-  --skeleton-shimmer: #e5e7eb;
+  --skeleton-bg: var(--bg-tertiary, #f3f4f6);
+  --skeleton-shimmer: var(--border-default, #e5e7eb);
 }
 
 .skeleton-dark {
-  --skeleton-bg: #374151;
-  --skeleton-shimmer: #4b5563;
+  --skeleton-bg: var(--bg-tertiary, #374151);
+  --skeleton-shimmer: var(--border-subtle, #4b5563);
 }
 
 .skeleton-line,
@@ -172,11 +173,11 @@ const lineClass = computed(() => ({
 /* Chat message skeleton */
 .skeleton-chat-message {
   display: flex;
-  gap: 0.75rem;
-  padding: 1rem;
-  background: white;
-  border-radius: 0.5rem;
-  border: 1px solid #e5e7eb;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
 }
 
 .skeleton-avatar {
@@ -191,10 +192,10 @@ const lineClass = computed(() => ({
 
 /* Knowledge card skeleton */
 .skeleton-knowledge-card {
-  padding: 1.5rem;
-  background: white;
-  border-radius: 0.5rem;
-  border: 1px solid #e5e7eb;
+  padding: var(--spacing-6);
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
 }
 
 .skeleton-tag {
@@ -213,11 +214,11 @@ const lineClass = computed(() => ({
 .skeleton-file-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem;
-  background: white;
-  border-radius: 0.5rem;
-  border: 1px solid #e5e7eb;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3);
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
 }
 
 .skeleton-file-icon {
@@ -245,11 +246,11 @@ const lineClass = computed(() => ({
 
 .skeleton-stat-card {
   display: flex;
-  gap: 1rem;
-  padding: 1.5rem;
-  background: white;
-  border-radius: 0.5rem;
-  border: 1px solid #e5e7eb;
+  gap: var(--spacing-4);
+  padding: var(--spacing-6);
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
 }
 
 .skeleton-stat-icon {
@@ -272,8 +273,8 @@ const lineClass = computed(() => ({
 .skeleton-dark .skeleton-knowledge-card,
 .skeleton-dark .skeleton-file-item,
 .skeleton-dark .skeleton-stat-card {
-  background: #1f2937;
-  border-color: #374151;
+  background: var(--bg-secondary);
+  border-color: var(--border-subtle);
 }
 
 /* Responsive adjustments */
@@ -305,10 +306,10 @@ const lineClass = computed(() => ({
 .skeleton-loader[aria-label]::before {
   content: attr(aria-label);
   display: block;
-  font-size: 0.875rem;
-  color: #6b7280;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-2);
+  font-weight: var(--font-medium);
 }
 
 /* Accessibility */
