@@ -123,6 +123,7 @@ const tabs = ref<SettingsTab[]>([
   { id: 'user', label: 'User Management' },
   { id: 'chat', label: 'Chat' },
   { id: 'backend', label: 'Backend' },
+  { id: 'optimization', label: 'LLM Optimization' },
   { id: 'ui', label: 'UI' },
   { id: 'logging', label: 'Logging' },
   { id: 'log-forwarding', label: 'Log Forwarding' },

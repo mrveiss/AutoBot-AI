@@ -529,6 +529,17 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'optimization',
+        name: 'settings-optimization',
+        component: () => import('@/components/settings/InferenceOptimizationSettings.vue'),
+        meta: {
+          title: 'LLM Optimization',
+          parent: 'settings',
+          icon: 'fas fa-bolt',
+          description: 'LLM inference optimization: compression, caching, rate limiting (Issue #717)'
+        }
+      },
+      {
         path: 'developer',
         name: 'settings-developer',
         component: () => import('@/components/settings/DeveloperSettings.vue'),

@@ -35,6 +35,17 @@ from .providers.openai_provider import OpenAIProvider
 from .providers.transformers_provider import TransformersProvider
 from .providers.vllm_provider import VLLMProviderHandler
 from .providers.mock_handler import MockHandler, LocalHandler
+from .optimization import (
+    OptimizationRouter,
+    OptimizationConfig,
+    PromptCompressor,
+    CompressionConfig,
+    RateLimitHandler,
+    RateLimitConfig,
+    ConnectionPoolManager,
+    PoolConfig,
+    OptimizationCategory,
+)
 
 # Optional imports
 try:
@@ -107,6 +118,9 @@ class LLMInterface:
         self.request_queue = asyncio.Queue(maxsize=50)
         self.active_requests = set()
         self._init_backward_compatibility()
+
+        # Issue #717: Initialize optimization components
+        self._init_optimization()
 
         logger.info("LLM Interface initialized with all provider support")
 
@@ -220,6 +234,131 @@ class LLMInterface:
         self.streaming_failures = self._streaming_manager.streaming_failures
         self.streaming_failure_threshold = self._streaming_manager.failure_threshold
         self.streaming_reset_time = self._streaming_manager.reset_time
+
+    def _init_optimization(self) -> None:
+        """
+        Issue #717: Initialize optimization components for efficient inference.
+
+        Sets up provider-aware optimizations:
+        - Prompt compression (local + cloud)
+        - Rate limit handling (cloud)
+        - Connection pooling (cloud)
+        """
+        # Load optimization config from unified config
+        opt_config = config.get("optimization", {})
+
+        # Create optimization router
+        self._optimization_router = OptimizationRouter(
+            OptimizationConfig(
+                speculation_enabled=opt_config.get("local", {}).get(
+                    "speculation_enabled", False
+                ),
+                flash_attention_enabled=True,
+                cuda_graphs_enabled=True,
+                prompt_compression_enabled=opt_config.get("prompt_compression", {}).get(
+                    "enabled", True
+                ),
+                response_caching_enabled=opt_config.get("cache", {}).get(
+                    "enabled", True
+                ),
+            )
+        )
+
+        # Create prompt compressor
+        compression_config = opt_config.get("prompt_compression", {})
+        self._prompt_compressor = PromptCompressor(
+            CompressionConfig(
+                enabled=compression_config.get("enabled", True),
+                target_ratio=compression_config.get("target_ratio", 0.7),
+                min_length_to_compress=compression_config.get("min_length", 100),
+                preserve_code_blocks=compression_config.get("preserve_code_blocks", True),
+            )
+        )
+
+        # Create rate limit handler for cloud providers
+        cloud_config = opt_config.get("cloud", {})
+        self._rate_limiter = RateLimitHandler(
+            RateLimitConfig(
+                max_retries=cloud_config.get("retry_max_attempts", 3),
+                base_delay=cloud_config.get("retry_base_delay", 1.0),
+                max_delay=cloud_config.get("retry_max_delay", 60.0),
+            )
+        )
+
+        # Create connection pool manager for cloud providers
+        self._connection_pool = ConnectionPoolManager(
+            PoolConfig(
+                max_connections_per_host=cloud_config.get("connection_pool_size", 100),
+            )
+        )
+
+        # Optimization metrics
+        self._optimization_metrics = {
+            "prompts_compressed": 0,
+            "tokens_saved": 0,
+            "rate_limits_handled": 0,
+        }
+
+        logger.info(
+            "Optimization components initialized: compression=%s, pooling=%s",
+            compression_config.get("enabled", True),
+            cloud_config.get("connection_pool_size", 100),
+        )
+
+    def _get_provider_type_enum(self, provider: str) -> ProviderType:
+        """Convert provider string to ProviderType enum."""
+        provider_lower = provider.lower()
+        if provider_lower in ("ollama", "vllm", "transformers", "local"):
+            return ProviderType.OLLAMA if provider_lower == "ollama" else (
+                ProviderType.VLLM if provider_lower == "vllm" else (
+                    ProviderType.TRANSFORMERS if provider_lower == "transformers" else
+                    ProviderType.LOCAL
+                )
+            )
+        elif provider_lower == "openai":
+            return ProviderType.OPENAI
+        elif provider_lower == "anthropic":
+            return ProviderType.ANTHROPIC
+        return ProviderType.OLLAMA  # Default
+
+    async def _apply_prompt_compression(
+        self, messages: list, provider_type: ProviderType
+    ) -> tuple:
+        """
+        Apply prompt compression if enabled for provider.
+
+        Returns:
+            Tuple of (compressed_messages, tokens_saved)
+        """
+        if not self._optimization_router.should_apply(
+            OptimizationCategory.PROMPT_COMPRESSION, provider_type
+        ):
+            return messages, 0
+
+        total_saved = 0
+        compressed_messages = []
+
+        for msg in messages:
+            content = msg.get("content", "")
+            if not content or msg.get("role") == "system":
+                compressed_messages.append(msg)
+                continue
+
+            result = self._prompt_compressor.compress(content)
+            tokens_saved = result.original_tokens - result.compressed_tokens
+            total_saved += tokens_saved
+
+            compressed_messages.append({
+                **msg,
+                "content": result.compressed_text,
+            })
+
+        if total_saved > 0:
+            self._optimization_metrics["prompts_compressed"] += 1
+            self._optimization_metrics["tokens_saved"] += total_saved
+            logger.debug("Compressed prompts, saved %d tokens", total_saved)
+
+        return compressed_messages, total_saved
 
     def reload_ollama_configuration(self):
         """Runtime reload of Ollama configuration."""
@@ -455,6 +594,7 @@ class LLMInterface:
     ) -> LLMResponse:
         """
         Issue #665: Extracted from chat_completion to reduce function length.
+        Issue #717: Added optimization layer for prompt compression and rate limiting.
 
         Execute the chat request with caching, fallback, and metrics.
 
@@ -471,6 +611,12 @@ class LLMInterface:
         """
         provider, model_name = self._determine_provider_and_model(llm_type, **kwargs)
         messages = self._setup_system_prompt(messages, llm_type)
+
+        # Issue #717: Apply prompt compression optimization
+        provider_type = self._get_provider_type_enum(provider)
+        messages, tokens_saved = await self._apply_prompt_compression(
+            messages, provider_type
+        )
 
         # Check L1/L2 cache first (unless skip_cache=True)
         cache_key = None
@@ -562,6 +708,7 @@ class LLMInterface:
         Execute request with provider fallback chain.
 
         Issue #551: Restored from archived llm_interface_unified.py
+        Issue #717: Added rate limit handling for cloud providers.
         Automatically fails over to backup providers on error.
 
         Args:
@@ -587,7 +734,18 @@ class LLMInterface:
         for provider_name in provider_order:
             try:
                 handler = self.provider_routing[provider_name]
-                response = await handler(request)
+
+                # Issue #717: Apply rate limit handling for cloud providers
+                provider_type = self._get_provider_type_enum(provider_name)
+                if self._optimization_router.should_apply(
+                    OptimizationCategory.RATE_LIMIT_HANDLING, provider_type
+                ):
+                    response = await self._rate_limiter.execute_with_retry(
+                        lambda h=handler, r=request: h(r),
+                        provider=provider_name,
+                    )
+                else:
+                    response = await handler(request)
 
                 # Check for error in response
                 if response.error:
@@ -797,10 +955,19 @@ class LLMInterface:
         return []
 
     def get_metrics(self) -> Dict[str, Any]:
-        """Get performance metrics including cache statistics."""
+        """Get performance metrics including cache and optimization statistics."""
         metrics = self._metrics.copy()
         # Issue #551: Include L1/L2 cache metrics
         metrics["cache"] = self._response_cache.get_metrics()
+        # Issue #717: Include optimization metrics
+        metrics["optimization"] = {
+            **self._optimization_metrics,
+            "rate_limiter": self._rate_limiter.get_metrics(),
+            "connection_pools": self._connection_pool.get_metrics(),
+            "router_summary": self._optimization_router.get_optimization_summary(
+                ProviderType.OLLAMA
+            ),
+        }
         return metrics
 
     def get_cache_metrics(self) -> Dict[str, Any]:
@@ -928,6 +1095,12 @@ class LLMInterface:
             await self._vllm_handler.cleanup()
         except Exception as e:
             logger.warning("Error cleaning up vLLM provider: %s", e)
+
+        # Issue #717: Cleanup optimization resources
+        try:
+            await self._connection_pool.close_all()
+        except Exception as e:
+            logger.warning("Error cleaning up connection pool: %s", e)
 
 
 __all__ = [

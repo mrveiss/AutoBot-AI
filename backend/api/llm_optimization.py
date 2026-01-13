@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from src.config import UnifiedConfigManager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.model_optimizer import TaskRequest, get_model_optimizer
+from src.llm_interface import LLMInterface
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -44,6 +45,40 @@ class ModelPerformanceData(BaseModel):
     response_tokens: int
     success: bool
     user_rating: Optional[float] = None
+
+
+class InferenceOptimizationSettings(BaseModel):
+    """Settings for inference optimization (Issue #717)."""
+
+    # Prompt compression
+    prompt_compression_enabled: bool = True
+    prompt_compression_ratio: float = 0.7
+    prompt_compression_min_length: int = 100
+    prompt_compression_preserve_code: bool = True
+    prompt_compression_aggressive: bool = False
+
+    # Response caching
+    cache_enabled: bool = True
+    cache_l1_size: int = 100
+    cache_l2_ttl: int = 300
+
+    # Cloud optimizations
+    cloud_connection_pool_size: int = 100
+    cloud_batch_window_ms: int = 50
+    cloud_max_batch_size: int = 10
+    cloud_retry_max_attempts: int = 3
+    cloud_retry_base_delay: float = 1.0
+    cloud_retry_max_delay: float = 60.0
+
+    # Local optimizations (vLLM/Ollama)
+    local_speculation_enabled: bool = False
+    local_speculation_draft_model: str = ""
+    local_speculation_num_tokens: int = 5
+    local_speculation_use_ngram: bool = False
+    local_quantization_type: str = "none"
+    local_vllm_multi_step: int = 8
+    local_vllm_prefix_caching: bool = True
+    local_vllm_async_output: bool = True
 
 
 @with_error_handling(
@@ -478,4 +513,264 @@ async def get_optimization_config():
         logger.error("Error getting optimization config: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to get optimization config: {str(e)}"
+        )
+
+
+# ============================================================================
+# Issue #717: Inference Optimization Settings Endpoints
+# ============================================================================
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_inference_optimization_settings",
+    error_code_prefix="LLM_OPTIMIZATION",
+)
+@router.get("/inference/settings")
+async def get_inference_optimization_settings():
+    """
+    Get current inference optimization settings (Issue #717).
+
+    Returns settings for:
+    - Prompt compression
+    - Response caching
+    - Cloud optimizations (connection pooling, batching, rate limiting)
+    - Local optimizations (speculative decoding, quantization, vLLM)
+    """
+    try:
+        opt_config = config.get("optimization", {})
+
+        settings = InferenceOptimizationSettings(
+            # Prompt compression
+            prompt_compression_enabled=opt_config.get("prompt_compression", {}).get(
+                "enabled", True
+            ),
+            prompt_compression_ratio=opt_config.get("prompt_compression", {}).get(
+                "target_ratio", 0.7
+            ),
+            prompt_compression_min_length=opt_config.get("prompt_compression", {}).get(
+                "min_length", 100
+            ),
+            prompt_compression_preserve_code=opt_config.get("prompt_compression", {}).get(
+                "preserve_code_blocks", True
+            ),
+            prompt_compression_aggressive=opt_config.get("prompt_compression", {}).get(
+                "aggressive_mode", False
+            ),
+            # Response caching
+            cache_enabled=opt_config.get("cache", {}).get("enabled", True),
+            cache_l1_size=opt_config.get("cache", {}).get("l1_size", 100),
+            cache_l2_ttl=opt_config.get("cache", {}).get("l2_ttl", 300),
+            # Cloud optimizations
+            cloud_connection_pool_size=opt_config.get("cloud", {}).get(
+                "connection_pool_size", 100
+            ),
+            cloud_batch_window_ms=opt_config.get("cloud", {}).get(
+                "batch_window_ms", 50
+            ),
+            cloud_max_batch_size=opt_config.get("cloud", {}).get("max_batch_size", 10),
+            cloud_retry_max_attempts=opt_config.get("cloud", {}).get(
+                "retry_max_attempts", 3
+            ),
+            cloud_retry_base_delay=opt_config.get("cloud", {}).get(
+                "retry_base_delay", 1.0
+            ),
+            cloud_retry_max_delay=opt_config.get("cloud", {}).get(
+                "retry_max_delay", 60.0
+            ),
+            # Local optimizations
+            local_speculation_enabled=opt_config.get("local", {}).get(
+                "speculation_enabled", False
+            ),
+            local_speculation_draft_model=opt_config.get("local", {}).get(
+                "speculation_draft_model", ""
+            ),
+            local_speculation_num_tokens=opt_config.get("local", {}).get(
+                "speculation_num_tokens", 5
+            ),
+            local_speculation_use_ngram=opt_config.get("local", {}).get(
+                "speculation_use_ngram", False
+            ),
+            local_quantization_type=opt_config.get("local", {}).get(
+                "quantization_type", "none"
+            ),
+            local_vllm_multi_step=opt_config.get("local", {}).get("vllm_multi_step", 8),
+            local_vllm_prefix_caching=opt_config.get("local", {}).get(
+                "vllm_prefix_caching", True
+            ),
+            local_vllm_async_output=opt_config.get("local", {}).get(
+                "vllm_async_output", True
+            ),
+        )
+
+        return {
+            "settings": settings.model_dump(),
+            "timestamp": time.time(),
+        }
+
+    except Exception as e:
+        logger.error("Error getting inference optimization settings: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get inference optimization settings: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_inference_optimization_settings",
+    error_code_prefix="LLM_OPTIMIZATION",
+)
+@router.post("/inference/settings")
+async def update_inference_optimization_settings(settings: InferenceOptimizationSettings):
+    """
+    Update inference optimization settings (Issue #717).
+
+    Saves settings to config and updates runtime configuration.
+    """
+    try:
+        # Build optimization config structure
+        optimization_config = {
+            "prompt_compression": {
+                "enabled": settings.prompt_compression_enabled,
+                "target_ratio": settings.prompt_compression_ratio,
+                "min_length": settings.prompt_compression_min_length,
+                "preserve_code_blocks": settings.prompt_compression_preserve_code,
+                "aggressive_mode": settings.prompt_compression_aggressive,
+            },
+            "cache": {
+                "enabled": settings.cache_enabled,
+                "l1_size": settings.cache_l1_size,
+                "l2_ttl": settings.cache_l2_ttl,
+            },
+            "cloud": {
+                "connection_pool_size": settings.cloud_connection_pool_size,
+                "batch_window_ms": settings.cloud_batch_window_ms,
+                "max_batch_size": settings.cloud_max_batch_size,
+                "retry_max_attempts": settings.cloud_retry_max_attempts,
+                "retry_base_delay": settings.cloud_retry_base_delay,
+                "retry_max_delay": settings.cloud_retry_max_delay,
+            },
+            "local": {
+                "speculation_enabled": settings.local_speculation_enabled,
+                "speculation_draft_model": settings.local_speculation_draft_model,
+                "speculation_num_tokens": settings.local_speculation_num_tokens,
+                "speculation_use_ngram": settings.local_speculation_use_ngram,
+                "quantization_type": settings.local_quantization_type,
+                "vllm_multi_step": settings.local_vllm_multi_step,
+                "vllm_prefix_caching": settings.local_vllm_prefix_caching,
+                "vllm_async_output": settings.local_vllm_async_output,
+            },
+        }
+
+        # Save to config
+        config.set("optimization", optimization_config)
+        config.save()
+
+        logger.info("Inference optimization settings updated")
+
+        return {
+            "status": "success",
+            "message": "Inference optimization settings updated",
+            "settings": settings.model_dump(),
+            "timestamp": time.time(),
+        }
+
+    except Exception as e:
+        logger.error("Error updating inference optimization settings: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update inference optimization settings: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_inference_metrics",
+    error_code_prefix="LLM_OPTIMIZATION",
+)
+@router.get("/inference/metrics")
+async def get_inference_metrics():
+    """
+    Get inference optimization metrics (Issue #717).
+
+    Returns real-time metrics from the LLMInterface optimization layer.
+    """
+    try:
+        llm_interface = LLMInterface()
+        metrics = llm_interface.get_metrics()
+
+        return {
+            "optimization": metrics.get("optimization", {}),
+            "cache": metrics.get("cache", {}),
+            "provider_usage": metrics.get("provider_usage", {}),
+            "total_requests": metrics.get("total_requests", 0),
+            "avg_response_time": metrics.get("avg_response_time", 0.0),
+            "fallback_count": metrics.get("fallback_count", 0),
+            "timestamp": time.time(),
+        }
+
+    except Exception as e:
+        logger.error("Error getting inference metrics: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get inference metrics: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_provider_optimization_summary",
+    error_code_prefix="LLM_OPTIMIZATION",
+)
+@router.get("/inference/provider/{provider_type}/optimizations")
+async def get_provider_optimization_summary(provider_type: str):
+    """
+    Get optimization summary for a specific provider type (Issue #717).
+
+    Args:
+        provider_type: Provider type (ollama, openai, anthropic, vllm, etc.)
+
+    Returns applicable optimizations for the provider.
+    """
+    try:
+        from src.llm_interface_pkg.types import ProviderType
+        from src.llm_interface_pkg.optimization import get_optimization_router
+
+        # Map provider string to enum
+        provider_map = {
+            "ollama": ProviderType.OLLAMA,
+            "openai": ProviderType.OPENAI,
+            "anthropic": ProviderType.ANTHROPIC,
+            "vllm": ProviderType.VLLM,
+            "transformers": ProviderType.TRANSFORMERS,
+            "local": ProviderType.LOCAL,
+        }
+
+        provider_enum = provider_map.get(provider_type.lower())
+        if not provider_enum:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown provider type: {provider_type}. "
+                f"Valid types: {list(provider_map.keys())}",
+            )
+
+        router = get_optimization_router()
+        summary = router.get_optimization_summary(provider_enum)
+
+        return {
+            "provider": provider_type,
+            "is_local": router.is_local_provider(provider_enum),
+            "is_cloud": router.is_cloud_provider(provider_enum),
+            "optimizations": summary,
+            "timestamp": time.time(),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error getting provider optimization summary: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get provider optimization summary: {str(e)}",
         )
