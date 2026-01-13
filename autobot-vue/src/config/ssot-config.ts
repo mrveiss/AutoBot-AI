@@ -534,6 +534,14 @@ export function getWebsocketUrl(): string {
 }
 
 /**
+ * Get Backend WebSocket URL (alias for getWebsocketUrl).
+ * Used by SSHTerminal and other WebSocket-based components.
+ */
+export function getBackendWsUrl(): string {
+  return getConfig().websocketUrl;
+}
+
+/**
  * Get API timeout in milliseconds (backward compatibility).
  */
 export function getApiTimeout(): number {
