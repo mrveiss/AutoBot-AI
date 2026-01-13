@@ -267,6 +267,17 @@ const routes: RouteRecordRaw[] = [
           title: 'Agent Registry',
           parent: 'tools'
         }
+      },
+      {
+        path: 'vision',
+        name: 'tools-vision',
+        component: () => import('@/views/VisionMultimodalView.vue'),
+        meta: {
+          title: 'Vision & Multimodal',
+          parent: 'tools',
+          icon: 'fas fa-eye',
+          description: 'AI-powered vision and multimodal processing (Issue #582)'
+        }
       }
     ]
   },
@@ -339,6 +350,28 @@ const routes: RouteRecordRaw[] = [
           title: 'Error Monitoring',
           parent: 'monitoring',
           description: 'Real-time error tracking and system health monitoring (Issue #579)'
+        }
+      },
+      {
+        path: 'validation',
+        name: 'monitoring-validation',
+        component: () => import('@/components/monitoring/validation/SystemValidationDashboard.vue'),
+        meta: {
+          title: 'System Validation',
+          parent: 'monitoring',
+          icon: 'fas fa-check-circle',
+          description: 'System validation dashboard with VM health monitoring (Issue #581)'
+        }
+      },
+      {
+        path: 'control',
+        name: 'monitoring-control',
+        component: () => import('@/views/AdvancedControlView.vue'),
+        meta: {
+          title: 'Session Control',
+          parent: 'monitoring',
+          icon: 'fas fa-gamepad',
+          description: 'Advanced control and session takeover management (Issue #583)'
         }
       }
     ]
