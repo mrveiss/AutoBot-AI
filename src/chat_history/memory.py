@@ -10,6 +10,9 @@ Provides memory optimization for chat history:
 - Session file cleanup
 - Garbage collection management
 - Memory statistics
+
+Issue #718: Uses dedicated thread pool for file I/O to prevent blocking
+when the main asyncio thread pool is saturated by indexing operations.
 """
 
 import asyncio
@@ -17,6 +20,8 @@ import gc
 import logging
 import os
 from typing import Any, Dict
+
+from src.chat_history.file_io import run_in_chat_io_executor
 
 logger = logging.getLogger(__name__)
 
@@ -84,17 +89,18 @@ class MemoryMixin:
         """Clean up old session files."""
         try:
             chats_directory = self._get_chats_directory()
-            dir_exists = await asyncio.to_thread(os.path.exists, chats_directory)
+            # Issue #718: Use dedicated executor to avoid blocking on saturated pool
+            dir_exists = await run_in_chat_io_executor(os.path.exists, chats_directory)
             if not dir_exists:
                 return
 
             # Get all chat files sorted by modification time
             chat_files = []
-            filenames = await asyncio.to_thread(os.listdir, chats_directory)
+            filenames = await run_in_chat_io_executor(os.listdir, chats_directory)
             for filename in filenames:
                 if filename.startswith("chat_") and filename.endswith(".json"):
                     file_path = os.path.join(chats_directory, filename)
-                    mtime = await asyncio.to_thread(os.path.getmtime, file_path)
+                    mtime = await run_in_chat_io_executor(os.path.getmtime, file_path)
                     chat_files.append((file_path, mtime, filename))
 
             # Sort by modification time (newest first)
@@ -105,7 +111,7 @@ class MemoryMixin:
                 files_to_remove = chat_files[self.max_session_files:]
                 for file_path, _, filename in files_to_remove:
                     try:
-                        await asyncio.to_thread(os.remove, file_path)
+                        await run_in_chat_io_executor(os.remove, file_path)
                         logger.info("CLEANUP: Removed old session file: %s", filename)
                     except Exception as e:
                         logger.error("Failed to remove session file %s: %s", filename, e)

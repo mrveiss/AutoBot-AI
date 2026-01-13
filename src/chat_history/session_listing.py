@@ -8,6 +8,9 @@ Provides session listing functionality:
 - Full session listing with metadata
 - Fast session listing using file metadata only
 - Orphaned terminal file detection and recovery
+
+Issue #718: Uses dedicated thread pool for file I/O to prevent blocking
+when the main asyncio thread pool is saturated by indexing operations.
 """
 
 import asyncio
@@ -18,6 +21,8 @@ from datetime import datetime
 from typing import Any, Dict, List
 
 import aiofiles
+
+from src.chat_history.file_io import run_in_chat_io_executor
 
 logger = logging.getLogger(__name__)
 
@@ -71,16 +76,16 @@ class SessionListingMixin:
             chats_directory = self._get_chats_directory()
 
             # Ensure chats directory exists
-            dir_exists = await asyncio.to_thread(os.path.exists, chats_directory)
+            dir_exists = await run_in_chat_io_executor(os.path.exists, chats_directory)
             if not dir_exists:
-                await asyncio.to_thread(os.makedirs, chats_directory, exist_ok=True)
+                await run_in_chat_io_executor(os.makedirs, chats_directory, exist_ok=True)
                 return sessions
 
             # Clean up old session files if needed
             await self._cleanup_old_session_files()
 
             # Look for chat files in the chats directory (both old and new formats)
-            filenames = await asyncio.to_thread(os.listdir, chats_directory)
+            filenames = await run_in_chat_io_executor(os.listdir, chats_directory)
             for filename in filenames:
                 # Support both formats: chat_{uuid}.json and {uuid}_chat.json
                 chat_id = None
@@ -165,7 +170,7 @@ class SessionListingMixin:
             Session dict or None on error
         """
         try:
-            stat = await asyncio.to_thread(os.stat, chat_path)
+            stat = await run_in_chat_io_executor(os.stat, chat_path)
             created_time = datetime.fromtimestamp(stat.st_ctime).isoformat()
             last_modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
             file_size = stat.st_size
@@ -203,13 +208,13 @@ class SessionListingMixin:
             chats_directory = self._get_chats_directory()
 
             # Ensure chats directory exists
-            dir_exists = await asyncio.to_thread(os.path.exists, chats_directory)
+            dir_exists = await run_in_chat_io_executor(os.path.exists, chats_directory)
             if not dir_exists:
-                await asyncio.to_thread(os.makedirs, chats_directory, exist_ok=True)
+                await run_in_chat_io_executor(os.makedirs, chats_directory, exist_ok=True)
                 return sessions
 
             # Process each chat file
-            filenames = await asyncio.to_thread(os.listdir, chats_directory)
+            filenames = await run_in_chat_io_executor(os.listdir, chats_directory)
             for filename in filenames:
                 chat_id = _extract_chat_id_from_filename(filename)
                 if not chat_id:
@@ -264,7 +269,7 @@ class SessionListingMixin:
         """
         chat_file = os.path.join(chats_directory, f"{session_id}_chat.json")
 
-        chat_file_exists = await asyncio.to_thread(os.path.exists, chat_file)
+        chat_file_exists = await run_in_chat_io_executor(os.path.exists, chat_file)
         if chat_file_exists:
             return None
 
@@ -283,7 +288,7 @@ class SessionListingMixin:
         async with aiofiles.open(chat_file, "w", encoding="utf-8") as f:
             await f.write(json.dumps(empty_chat, indent=2, ensure_ascii=False))
 
-        stat = await asyncio.to_thread(os.stat, chat_file)
+        stat = await run_in_chat_io_executor(os.stat, chat_file)
         created_time = datetime.fromtimestamp(stat.st_ctime).isoformat()
         last_modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
 
@@ -322,7 +327,7 @@ class SessionListingMixin:
         orphaned_sessions_created = 0
 
         try:
-            orphan_filenames = await asyncio.to_thread(os.listdir, chats_directory)
+            orphan_filenames = await run_in_chat_io_executor(os.listdir, chats_directory)
 
             for filename in orphan_filenames:
                 session_id = self._extract_session_id_from_terminal_file(filename)
