@@ -129,14 +129,21 @@ class OperationIntegrationManager:
         await self.operation_manager.start_background_processor()
 
         # Subscribe to progress updates for WebSocket broadcasting
-        async def progress_callback(progress_data):
+        # Note: OperationProgressTracker uses subscribe_to_progress method
+        # We use "*" as wildcard operation_id for global subscriptions
+        async def progress_callback(operation):
             """Broadcast progress updates to connected WebSocket clients."""
+            progress_data = {
+                "operation_id": operation.operation_id,
+                "progress": operation.progress.progress_percent,
+                "current_step": operation.progress.current_step,
+            }
             await self._broadcast_progress_update(progress_data)
 
-        # Register callback for all future operations
-        self.operation_manager.progress_tracker.progress_callbacks["*"] = [
-            progress_callback
-        ]
+        # Register callback for global progress updates
+        await self.operation_manager.progress_tracker.subscribe_to_progress(
+            "*", progress_callback
+        )
 
     async def shutdown(self):
         """Shutdown the integration manager"""
