@@ -394,6 +394,18 @@ const routes: RouteRecordRaw[] = [
           title: 'Threat Intelligence Settings',
           parent: 'analytics'
         }
+      },
+      {
+        path: 'audit',
+        name: 'analytics-audit',
+        component: () => import('@/views/AuditLogsView.vue'),
+        meta: {
+          title: 'Audit Logs',
+          parent: 'analytics',
+          icon: 'fas fa-shield-halved',
+          description: 'Security audit logging and monitoring (Issue #578)',
+          requiresAuth: true
+        }
       }
     ]
   },
