@@ -6,6 +6,9 @@ Secure File Management API
 
 This module provides secure file management endpoints with proper sandboxing,
 path traversal protection, and authentication/authorization.
+
+Issue #718: Uses dedicated thread pool for file I/O to prevent blocking
+when the main asyncio thread pool is saturated by indexing operations.
 """
 
 import asyncio
@@ -23,6 +26,7 @@ from fastapi.security import HTTPBearer
 from pydantic import BaseModel, field_validator
 
 from backend.utils.paths_manager import ensure_data_directory, get_data_path
+from backend.utils.io_executor import run_in_file_executor
 from src.auth_middleware import auth_middleware
 from src.security_layer import SecurityLayer
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
@@ -312,11 +316,11 @@ async def list_files(request: Request, path: str = ""):
 
     target_path = validate_and_resolve_path(path)
 
-    # Issue #358: Use asyncio.to_thread for blocking file I/O operations
-    if not await asyncio.to_thread(target_path.exists):
+    # Issue #358/#718: Use dedicated executor for non-blocking file I/O
+    if not await run_in_file_executor(target_path.exists):
         raise HTTPException(status_code=404, detail="Directory not found")
 
-    if not await asyncio.to_thread(target_path.is_dir):
+    if not await run_in_file_executor(target_path.is_dir):
         raise HTTPException(status_code=400, detail="Path is not a directory")
 
     # Issue #358: Wrap blocking directory listing in thread
@@ -347,7 +351,7 @@ async def list_files(request: Request, path: str = ""):
 
         return files, total_size, total_files, total_directories
 
-    files, total_size, total_files, total_directories = await asyncio.to_thread(
+    files, total_size, total_files, total_directories = await run_in_file_executor(
         _list_directory_sync
     )
 
@@ -474,7 +478,7 @@ async def _write_upload_file(target_file: Path, content: bytes, overwrite: bool)
         HTTPException: If file exists without overwrite or write fails
     """
     # Issue #358: Check if file exists in thread to avoid blocking
-    file_exists = await asyncio.to_thread(target_file.exists)
+    file_exists = await run_in_file_executor(target_file.exists)
     if file_exists and not overwrite:
         raise HTTPException(
             status_code=409,
@@ -534,9 +538,9 @@ async def _delete_file_item(
 
     Issue #398: Extracted from delete_file to reduce method length.
     """
-    file_stat = await asyncio.to_thread(target_path.stat)
+    file_stat = await run_in_file_executor(target_path.stat)
     file_size = file_stat.st_size
-    await asyncio.to_thread(target_path.unlink)
+    await run_in_file_executor(target_path.unlink)
 
     security_layer.audit_log(
         "file_delete",
@@ -563,11 +567,11 @@ async def _delete_directory_item(
     Issue #398: Extracted from delete_file to reduce method length.
     """
     try:
-        await asyncio.to_thread(target_path.rmdir)
+        await run_in_file_executor(target_path.rmdir)
         delete_type = "directory"
         extra = {}
     except OSError:
-        await asyncio.to_thread(shutil.rmtree, target_path)
+        await run_in_file_executor(shutil.rmtree, target_path)
         delete_type = "directory_recursive"
         extra = {"warning": "recursive_delete_performed"}
 
@@ -635,7 +639,7 @@ async def upload_file(
     # Validate and resolve target directory
     target_dir = validate_and_resolve_path(path)
     # Issue #358: mkdir in thread to avoid blocking
-    await asyncio.to_thread(lambda: target_dir.mkdir(parents=True, exist_ok=True))
+    await run_in_file_executor(lambda: target_dir.mkdir(parents=True, exist_ok=True))
 
     # Prepare target file path
     target_file = target_dir / file.filename
@@ -685,15 +689,15 @@ async def download_file(request: Request, path: str):
 
     target_file = validate_and_resolve_path(path)
 
-    # Issue #358: Use asyncio.to_thread for blocking file I/O operations
-    if not await asyncio.to_thread(target_file.exists):
+    # Issue #358/#718: Use dedicated executor for non-blocking file I/O
+    if not await run_in_file_executor(target_file.exists):
         raise HTTPException(status_code=404, detail="File not found")
 
-    if not await asyncio.to_thread(target_file.is_file):
+    if not await run_in_file_executor(target_file.is_file):
         raise HTTPException(status_code=400, detail="Path is not a file")
 
     # Issue #358: Get file stat in thread to avoid blocking
-    file_stat = await asyncio.to_thread(target_file.stat)
+    file_stat = await run_in_file_executor(target_file.stat)
 
     # Enhanced audit logging with authenticated user
     security_layer = get_security_layer(request)
@@ -742,16 +746,16 @@ async def view_file(request: Request, path: str):
 
     target_file = validate_and_resolve_path(path)
 
-    # Issue #358: Use asyncio.to_thread for blocking file I/O operations
-    if not await asyncio.to_thread(target_file.exists):
+    # Issue #358/#718: Use dedicated executor for non-blocking file I/O
+    if not await run_in_file_executor(target_file.exists):
         raise HTTPException(status_code=404, detail="File not found")
 
-    if not await asyncio.to_thread(target_file.is_file):
+    if not await run_in_file_executor(target_file.is_file):
         raise HTTPException(status_code=400, detail="Path is not a file")
 
     # Issue #358: Get file info in thread to avoid blocking
     relative_path = str(target_file.relative_to(SANDBOXED_ROOT))
-    file_info = await asyncio.to_thread(get_file_info, target_file, relative_path)
+    file_info = await run_in_file_executor(get_file_info, target_file, relative_path)
 
     # Try to read content for text files
     content = None
@@ -808,26 +812,26 @@ async def rename_file_or_directory(
 
     source_path = validate_and_resolve_path(path)
 
-    # Issue #358: Use asyncio.to_thread for blocking file I/O operations
-    if not await asyncio.to_thread(source_path.exists):
+    # Issue #358/#718: Use dedicated executor for non-blocking file I/O
+    if not await run_in_file_executor(source_path.exists):
         raise HTTPException(status_code=404, detail="File or directory not found")
 
     # Create new path with same parent directory
     target_path = source_path.parent / new_name
 
-    if await asyncio.to_thread(target_path.exists):
+    if await run_in_file_executor(target_path.exists):
         raise HTTPException(
             status_code=409,
             detail=f"A file or directory named '{new_name}' already exists",
         )
 
     # Issue #358: Perform rename in thread to avoid blocking
-    await asyncio.to_thread(source_path.rename, target_path)
+    await run_in_file_executor(source_path.rename, target_path)
 
     # Issue #358: Get info for the renamed item in thread
     relative_path = str(target_path.relative_to(SANDBOXED_ROOT))
-    item_info = await asyncio.to_thread(get_file_info, target_path, relative_path)
-    is_directory = await asyncio.to_thread(target_path.is_dir)
+    item_info = await run_in_file_executor(get_file_info, target_path, relative_path)
+    is_directory = await run_in_file_executor(target_path.is_dir)
 
     # Enhanced audit logging
     security_layer = get_security_layer(request)
@@ -877,16 +881,16 @@ async def preview_file(request: Request, path: str):
 
     target_file = validate_and_resolve_path(path)
 
-    # Issue #358: Use asyncio.to_thread for blocking file I/O operations
-    if not await asyncio.to_thread(target_file.exists):
+    # Issue #358/#718: Use dedicated executor for non-blocking file I/O
+    if not await run_in_file_executor(target_file.exists):
         raise HTTPException(status_code=404, detail="File not found")
 
-    if not await asyncio.to_thread(target_file.is_file):
+    if not await run_in_file_executor(target_file.is_file):
         raise HTTPException(status_code=400, detail="Path is not a file")
 
     # Issue #358: Get file info in thread to avoid blocking
     relative_path = str(target_file.relative_to(SANDBOXED_ROOT))
-    file_info = await asyncio.to_thread(get_file_info, target_file, relative_path)
+    file_info = await run_in_file_executor(get_file_info, target_file, relative_path)
 
     # Determine file type
     file_type = "binary"
@@ -947,11 +951,11 @@ async def delete_file(request: Request, path: str):
     request.state.user = user_data
     target_path = validate_and_resolve_path(path)
 
-    if not await asyncio.to_thread(target_path.exists):
+    if not await run_in_file_executor(target_path.exists):
         raise HTTPException(status_code=404, detail="File or directory not found")
 
     security_layer = get_security_layer(request)
-    is_file = await asyncio.to_thread(target_path.is_file)
+    is_file = await run_in_file_executor(target_path.is_file)
 
     if is_file:
         return await _delete_file_item(
@@ -997,16 +1001,16 @@ async def create_directory(
     parent_dir = validate_and_resolve_path(path)
     new_dir = parent_dir / name
 
-    # Issue #358: Use asyncio.to_thread for blocking file I/O operations
-    if await asyncio.to_thread(new_dir.exists):
+    # Issue #358/#718: Use dedicated executor for non-blocking file I/O
+    if await run_in_file_executor(new_dir.exists):
         raise HTTPException(status_code=409, detail="Directory already exists")
 
     # Issue #358: mkdir in thread to avoid blocking
-    await asyncio.to_thread(lambda: new_dir.mkdir(parents=True, exist_ok=False))
+    await run_in_file_executor(lambda: new_dir.mkdir(parents=True, exist_ok=False))
 
     # Issue #358: Get directory info in thread to avoid blocking
     relative_path = str(new_dir.relative_to(SANDBOXED_ROOT))
-    dir_info = await asyncio.to_thread(get_file_info, new_dir, relative_path)
+    dir_info = await run_in_file_executor(get_file_info, new_dir, relative_path)
 
     # Enhanced audit logging with authenticated user
     security_layer = get_security_layer(request)
@@ -1050,11 +1054,11 @@ async def get_directory_tree(request: Request, path: str = ""):
 
     target_path = validate_and_resolve_path(path)
 
-    # Issue #358: Use asyncio.to_thread for blocking file I/O operations
-    if not await asyncio.to_thread(target_path.exists):
+    # Issue #358/#718: Use dedicated executor for non-blocking file I/O
+    if not await run_in_file_executor(target_path.exists):
         raise HTTPException(status_code=404, detail="Directory not found")
 
-    if not await asyncio.to_thread(target_path.is_dir):
+    if not await run_in_file_executor(target_path.is_dir):
         raise HTTPException(status_code=400, detail="Path is not a directory")
 
     def build_tree(directory: Path, relative_base: Path) -> dict:
@@ -1092,7 +1096,7 @@ async def get_directory_tree(request: Request, path: str = ""):
             return []
 
     # Issue #358: Run entire recursive tree building in thread to avoid blocking
-    tree_data = await asyncio.to_thread(build_tree, target_path, SANDBOXED_ROOT)
+    tree_data = await run_in_file_executor(build_tree, target_path, SANDBOXED_ROOT)
 
     return {"path": path, "tree": tree_data}
 
@@ -1131,7 +1135,7 @@ async def get_file_stats(request: Request):
 
         return total_files, total_directories, total_size
 
-    total_files, total_directories, total_size = await asyncio.to_thread(
+    total_files, total_directories, total_size = await run_in_file_executor(
         _collect_stats_sync
     )
 

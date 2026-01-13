@@ -4,6 +4,9 @@
 """
 Unified Log Viewer API
 Provides endpoints to read and stream AutoBot logs from both files and Docker containers
+
+Issue #718: Uses dedicated thread pool for log I/O to prevent blocking
+when the main asyncio thread pool is saturated by indexing operations.
 """
 
 import asyncio
@@ -23,6 +26,7 @@ from fastapi.responses import StreamingResponse
 from src.constants.path_constants import PATH
 from src.constants.threshold_constants import TimingConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from backend.utils.io_executor import run_in_log_executor
 
 logger = logging.getLogger(__name__)
 
@@ -176,12 +180,12 @@ async def _collect_file_logs(
     Returns:
         List of parsed log entries
     """
-    log_dir_exists = await asyncio.to_thread(LOG_DIR.exists)
+    log_dir_exists = await run_in_log_executor(LOG_DIR.exists)
     if not log_dir_exists:
         return []
 
     # Issue #358 - use lambda for proper glob() execution in thread
-    log_files = await asyncio.to_thread(lambda: list(LOG_DIR.glob("*.log")))
+    log_files = await run_in_log_executor(lambda: list(LOG_DIR.glob("*.log")))
 
     # Filter files first
     filtered_files = [
@@ -300,19 +304,19 @@ async def _get_file_log_sources() -> List[Metadata]:
 
     Issue #370: Optimized to stat files in parallel using asyncio.gather().
     """
-    log_dir_exists = await asyncio.to_thread(LOG_DIR.exists)
+    log_dir_exists = await run_in_log_executor(LOG_DIR.exists)
     if not log_dir_exists:
         return []
 
     # Issue #358 - use lambda for proper glob() execution in thread
-    log_files = await asyncio.to_thread(lambda: list(LOG_DIR.glob("*.log")))
+    log_files = await run_in_log_executor(lambda: list(LOG_DIR.glob("*.log")))
     if not log_files:
         return []
 
     # Issue #370: Stat all files in parallel
     async def get_file_info(file_path):
         """Get metadata for a single log file."""
-        stat = await asyncio.to_thread(file_path.stat)
+        stat = await run_in_log_executor(file_path.stat)
         return {
             "name": file_path.name,
             "type": "file",
@@ -397,11 +401,11 @@ async def get_log_sources():
 
 async def _get_most_recent_log_file(log_dir: str) -> Optional[str]:
     """Get the most recently modified log file (Issue #315 - extracted helper)."""
-    log_dir_exists = await asyncio.to_thread(os.path.exists, log_dir)
+    log_dir_exists = await run_in_log_executor(os.path.exists, log_dir)
     if not log_dir_exists:
         return None
 
-    all_files = await asyncio.to_thread(os.listdir, log_dir)
+    all_files = await run_in_log_executor(os.listdir, log_dir)
     log_files = [f for f in all_files if f.endswith(".log")]
     if not log_files:
         return None
@@ -413,7 +417,7 @@ async def _get_most_recent_log_file(log_dir: str) -> Optional[str]:
 
     mtimes = {}
     for f in log_files:
-        mtimes[f] = await asyncio.to_thread(get_mtime, f)
+        mtimes[f] = await run_in_log_executor(get_mtime, f)
 
     log_files.sort(key=lambda f: mtimes[f], reverse=True)
     return log_files[0]
@@ -490,14 +494,14 @@ async def read_log(
     """Read log file content"""
     try:
         file_path = LOG_DIR / filename
-        file_exists = await asyncio.to_thread(file_path.exists)
-        is_file = await asyncio.to_thread(file_path.is_file) if file_exists else False
+        file_exists = await run_in_log_executor(file_path.exists)
+        is_file = await run_in_log_executor(file_path.is_file) if file_exists else False
         if not file_exists or not is_file:
             raise HTTPException(status_code=404, detail="Log file not found")
 
         # Security check - ensure file is within LOG_DIR
-        resolved_path = await asyncio.to_thread(file_path.resolve)
-        resolved_log_dir = await asyncio.to_thread(LOG_DIR.resolve)
+        resolved_path = await run_in_log_executor(file_path.resolve)
+        resolved_log_dir = await run_in_log_executor(LOG_DIR.resolve)
         if not str(resolved_path).startswith(str(resolved_log_dir)):
             raise HTTPException(status_code=403, detail="Access denied")
 
@@ -751,14 +755,14 @@ async def stream_log(filename: str):
     """Stream log file content"""
     try:
         file_path = LOG_DIR / filename
-        file_exists = await asyncio.to_thread(file_path.exists)
-        is_file = await asyncio.to_thread(file_path.is_file) if file_exists else False
+        file_exists = await run_in_log_executor(file_path.exists)
+        is_file = await run_in_log_executor(file_path.is_file) if file_exists else False
         if not file_exists or not is_file:
             raise HTTPException(status_code=404, detail="Log file not found")
 
         # Security check
-        resolved_path = await asyncio.to_thread(file_path.resolve)
-        resolved_log_dir = await asyncio.to_thread(LOG_DIR.resolve)
+        resolved_path = await run_in_log_executor(file_path.resolve)
+        resolved_log_dir = await run_in_log_executor(LOG_DIR.resolve)
         if not str(resolved_path).startswith(str(resolved_log_dir)):
             raise HTTPException(status_code=403, detail="Access denied")
 
@@ -794,16 +798,16 @@ async def tail_log(websocket: WebSocket, filename: str):
 
     try:
         file_path = LOG_DIR / filename
-        file_exists = await asyncio.to_thread(file_path.exists)
-        is_file = await asyncio.to_thread(file_path.is_file) if file_exists else False
+        file_exists = await run_in_log_executor(file_path.exists)
+        is_file = await run_in_log_executor(file_path.is_file) if file_exists else False
         if not file_exists or not is_file:
             await websocket.send_json({"error": "Log file not found"})
             await websocket.close()
             return
 
         # Security check
-        resolved_path = await asyncio.to_thread(file_path.resolve)
-        resolved_log_dir = await asyncio.to_thread(LOG_DIR.resolve)
+        resolved_path = await run_in_log_executor(file_path.resolve)
+        resolved_log_dir = await run_in_log_executor(LOG_DIR.resolve)
         if not str(resolved_path).startswith(str(resolved_log_dir)):
             await websocket.send_json({"error": "Access denied"})
             await websocket.close()
@@ -888,12 +892,12 @@ async def search_logs(
 
         if filename:
             file_path = LOG_DIR / filename
-            file_exists = await asyncio.to_thread(file_path.exists)
+            file_exists = await run_in_log_executor(file_path.exists)
             if file_exists:
                 files_to_search.append(file_path)
         else:
             # Issue #358 - use lambda for proper glob() execution in thread
-            files_to_search = await asyncio.to_thread(lambda: list(LOG_DIR.glob("*.log")))
+            files_to_search = await run_in_log_executor(lambda: list(LOG_DIR.glob("*.log")))
 
         for file_path in files_to_search:
             if len(results) >= max_results:
@@ -930,14 +934,14 @@ async def clear_log(filename: str):
     """Clear a log file (truncate to 0 bytes)"""
     try:
         file_path = LOG_DIR / filename
-        file_exists = await asyncio.to_thread(file_path.exists)
-        is_file = await asyncio.to_thread(file_path.is_file) if file_exists else False
+        file_exists = await run_in_log_executor(file_path.exists)
+        is_file = await run_in_log_executor(file_path.is_file) if file_exists else False
         if not file_exists or not is_file:
             raise HTTPException(status_code=404, detail="Log file not found")
 
         # Security check
-        resolved_path = await asyncio.to_thread(file_path.resolve)
-        resolved_log_dir = await asyncio.to_thread(LOG_DIR.resolve)
+        resolved_path = await run_in_log_executor(file_path.resolve)
+        resolved_log_dir = await run_in_log_executor(LOG_DIR.resolve)
         if not str(resolved_path).startswith(str(resolved_log_dir)):
             raise HTTPException(status_code=403, detail="Access denied")
 
