@@ -35,20 +35,29 @@ class FileIOMixin:
     - self._periodic_memory_check(): method
     """
 
-    async def _atomic_write(self, file_path: str, content: str) -> None:
+    async def _atomic_write(
+        self, file_path: str, content: str, timeout_seconds: float = 30.0
+    ) -> None:
         """
         Atomic file write with exclusive locking to prevent data corruption.
 
-        Uses fcntl.flock() for process-level locking and atomic rename to ensure
-        that concurrent writes don't corrupt the file.
+        Uses fcntl.flock() with non-blocking mode and retry logic to prevent
+        indefinite blocking during I/O contention (e.g., during heavy indexing).
+
+        Issue #718: Added timeout parameter and non-blocking lock acquisition
+        to prevent chat save timeouts during heavy system load.
 
         Args:
             file_path: Target file path
             content: Content to write
+            timeout_seconds: Maximum time to wait for lock (default 30s)
 
         Raises:
+            TimeoutError: If lock cannot be acquired within timeout
             Exception: If write fails (temp file is cleaned up automatically)
         """
+        import time
+
         dir_path = os.path.dirname(file_path)
 
         # Create temporary file in same directory (required for atomic rename)
@@ -57,8 +66,31 @@ class FileIOMixin:
         )
 
         try:
-            # Acquire exclusive lock on the file descriptor
-            await asyncio.to_thread(fcntl.flock, fd, fcntl.LOCK_EX)
+            # Issue #718: Use non-blocking lock with retry to prevent indefinite blocking
+            start_time = time.monotonic()
+            lock_acquired = False
+            retry_delay = 0.1  # Start with 100ms delay
+
+            while (time.monotonic() - start_time) < timeout_seconds:
+                try:
+                    # Try non-blocking lock
+                    await asyncio.to_thread(
+                        fcntl.flock, fd, fcntl.LOCK_EX | fcntl.LOCK_NB
+                    )
+                    lock_acquired = True
+                    break
+                except BlockingIOError:
+                    # Lock is held by another process, wait and retry
+                    await asyncio.sleep(retry_delay)
+                    # Exponential backoff with cap at 1 second
+                    retry_delay = min(retry_delay * 1.5, 1.0)
+
+            if not lock_acquired:
+                elapsed = time.monotonic() - start_time
+                raise TimeoutError(
+                    f"Could not acquire file lock for {file_path} "
+                    f"after {elapsed:.1f}s (timeout: {timeout_seconds}s)"
+                )
 
             # Write content to temporary file using aiofiles for async I/O
             os.close(fd)  # Close fd so aiofiles can open it
@@ -70,8 +102,20 @@ class FileIOMixin:
 
             logger.debug("Atomic write completed: %s", file_path)
 
+        except TimeoutError:
+            # Re-raise timeout errors without logging as error (expected under load)
+            logger.warning(
+                "Atomic write lock timeout for %s - system may be under heavy I/O load",
+                file_path
+            )
+            raise
+
         except Exception as e:
-            # Cleanup temporary file on failure
+            logger.error("Atomic write failed for %s: %s", file_path, e)
+            raise e
+
+        finally:
+            # Issue #718: Always cleanup temporary file
             try:
                 temp_exists = await asyncio.to_thread(os.path.exists, temp_path)
                 if temp_exists:
@@ -80,9 +124,6 @@ class FileIOMixin:
                 logger.warning(
                     f"Failed to cleanup temp file {temp_path}: {cleanup_error}"
                 )
-
-            logger.error("Atomic write failed for %s: %s", file_path, e)
-            raise e
 
     async def _save_history(self):
         """
