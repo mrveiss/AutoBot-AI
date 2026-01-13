@@ -255,34 +255,17 @@ const connectionStatus = computed(() => {
 })
 
 // FIXED: Tool URLs - Replace async computed with ref and async loader
+// Issue #715: VNC URL is now dynamically set based on user-selected infrastructure hosts
+// The legacy novncUrl is kept for backwards compatibility but actual VNC connections
+// are handled by HostSelector in ChatTabContent.vue
 const novncUrl = ref('')
 
-// Async function to load NoVNC URL
+// Legacy function - kept for backwards compatibility
+// Issue #715: VNC startup check removed - users now select their own VNC hosts
+// from infrastructure hosts configured in secrets management
 const loadNovncUrl = async () => {
-  // AUTOMATIC VNC RESTART: Ensure VNC server is running before connecting
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/vnc/ensure-running`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    })
-
-    if (response.ok) {
-      const result = await response.json()
-      logger.debug('VNC status:', { status: result.status, message: result.message })
-    } else {
-      logger.warn('VNC ensure-running check failed:', response.status)
-      notify('VNC server check failed - desktop may not be available', 'warning')
-    }
-  } catch (error) {
-    logger.warn('Failed to check VNC status:', error)
-    // Continue anyway - VNC might be running, but notify user
-    notify('Could not verify VNC server status', 'warning')
-  }
-
-  // CRITICAL FIX: Use frontend proxy route for Desktop VNC (not Playwright VNC)
-  // Frontend VM proxies /tools/novnc to Desktop VNC on Main Machine
-  // Note: Browser VM has its own noVNC (separate from desktop)
+  // Legacy fallback URL for tools/desktop VNC (not chat VNC)
+  // Chat VNC now uses dynamic host selection via HostSelector component
   const baseUrl = '/tools/novnc/vnc.html'
 
   if (!store.currentSessionId) {

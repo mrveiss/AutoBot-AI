@@ -276,13 +276,21 @@ class ConversationHandlerMixin:
         """
         # DEDUPLICATION FIX (Issue #177): Check if last entry has same user message
         # This prevents duplicate entries when both terminal service and chat flow persist
+        # Issue #715: Also handles updating placeholder entries from _register_user_message_in_history
         if session.conversation_history:
             last_entry = session.conversation_history[-1]
             if last_entry.get("user") == message:
-                # Same user message - append new response to existing assistant response
                 existing_response = last_entry.get("assistant", "")
-                # Only append if the new response is different and not already included
-                if llm_response not in existing_response:
+                if not existing_response:
+                    # Issue #715: Empty placeholder from _register_user_message_in_history
+                    # Just set the response directly
+                    last_entry["assistant"] = llm_response
+                    logger.debug(
+                        f"[_persist_conversation] Filled placeholder entry for session "
+                        f"{session_id}"
+                    )
+                elif llm_response not in existing_response:
+                    # Same user message with existing response - append new response
                     last_entry["assistant"] = f"{existing_response}\n\n{llm_response}"
                     logger.debug(
                         f"[_persist_conversation] Appended to existing entry for session "
@@ -312,4 +320,44 @@ class ConversationHandlerMixin:
         await asyncio.gather(
             self._save_conversation_history(session_id, session.conversation_history),
             self._append_to_transcript(session_id, message, llm_response),
+        )
+
+    def _register_user_message_in_history(
+        self, session: WorkflowSession, message: str
+    ) -> None:
+        """
+        Register user message in session history immediately (before LLM call).
+
+        Issue #715: Fixes race condition where concurrent messages don't see
+        each other's context. By adding the user message to conversation_history
+        immediately (with empty assistant placeholder), subsequent concurrent
+        messages will at least see the user part of previous messages in context.
+
+        This is called before the LLM generates a response. The placeholder
+        assistant response will be updated by _persist_conversation once the
+        actual response is ready.
+
+        Args:
+            session: Workflow session object
+            message: User message to register
+        """
+        # Check if this message is already registered (deduplication)
+        if session.conversation_history:
+            last_entry = session.conversation_history[-1]
+            if last_entry.get("user") == message:
+                # Already registered (possibly from a retry or rapid double-send)
+                logger.debug(
+                    "[_register_user_message] Message already in history, skipping"
+                )
+                return
+
+        # Add user message with empty placeholder for assistant response
+        # The placeholder will be filled by _persist_conversation
+        session.conversation_history.append({
+            "user": message,
+            "assistant": ""  # Placeholder, will be updated when response is ready
+        })
+        logger.debug(
+            "[_register_user_message] Registered user message in history "
+            "(history length: %d)", len(session.conversation_history)
         )

@@ -148,6 +148,12 @@ from backend.api.terminal_handlers import (
     session_manager,
 )
 
+# Import SSH terminal handlers for infrastructure host connections (Issue #715)
+from backend.api.ssh_terminal_handlers import (
+    SSHTerminalWebSocket,
+    ssh_terminal_manager,
+)
+
 # Import tool management router (extracted from this file - Issue #185)
 from backend.api.terminal_tools import router as tools_router
 
@@ -728,6 +734,103 @@ async def secure_terminal_websocket_compat(websocket: WebSocket, session_id: str
     await consolidated_terminal_websocket(websocket, session_id)
 
 
+# SSH Terminal WebSocket (Issue #715 - Infrastructure host connections)
+
+
+@router.websocket("/ws/ssh/{host_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="ssh_terminal_websocket",
+    error_code_prefix="TERMINAL",
+)
+async def ssh_terminal_websocket(
+    websocket: WebSocket,
+    host_id: str,
+    conversation_id: str = None,
+):
+    """
+    WebSocket endpoint for SSH terminal connections to infrastructure hosts.
+
+    Issue #715: Connects to user-defined infrastructure hosts stored in secrets.
+
+    Args:
+        host_id: Infrastructure host ID from secrets system
+        conversation_id: Optional chat conversation ID for output logging
+
+    Message Protocol:
+        Client → Server:
+            {"type": "input", "text": "ls -la\\n"}
+            {"type": "resize", "rows": 24, "cols": 80}
+            {"type": "ping"}
+
+        Server → Client:
+            {"type": "output", "content": "..."}
+            {"type": "connected", "content": "...", "host": {...}}
+            {"type": "error", "content": "..."}
+            {"type": "terminal_closed", "content": "..."}
+    """
+    await websocket.accept()
+
+    # Generate unique session ID
+    session_id = f"ssh-{host_id}-{uuid.uuid4().hex[:8]}"
+
+    try:
+        # Get Redis client for logging
+        redis_client = None
+        try:
+            from backend.dependencies import get_async_redis_client
+            redis_client = await get_async_redis_client(database="main")
+        except Exception as e:
+            logger.warning("Could not get Redis client for SSH terminal logging: %s", e)
+
+        # Create SSH terminal handler
+        terminal = SSHTerminalWebSocket(
+            websocket=websocket,
+            session_id=session_id,
+            host_id=host_id,
+            conversation_id=conversation_id,
+            redis_client=redis_client,
+        )
+
+        # Register with SSH terminal manager
+        await ssh_terminal_manager.add_session(session_id, terminal)
+
+        # Start SSH session
+        if not await terminal.start():
+            logger.error("Failed to start SSH terminal session for host: %s", host_id)
+            return
+
+        logger.info(
+            "SSH WebSocket connection established: %s -> host %s",
+            session_id, host_id
+        )
+
+        # Handle WebSocket communication
+        try:
+            while terminal.active:
+                data = await websocket.receive_text()
+                message = json.loads(data)
+                await terminal.handle_message(message)
+
+        except WebSocketDisconnect:
+            logger.info("SSH WebSocket disconnected: %s", session_id)
+        except Exception as e:
+            logger.error("Error in SSH WebSocket handling: %s", e)
+            await websocket.send_text(
+                json.dumps({
+                    "type": "error",
+                    "content": f"SSH terminal error: {str(e)}",
+                    "timestamp": time.time(),
+                })
+            )
+
+    except Exception as e:
+        logger.error("Error establishing SSH WebSocket connection: %s", e)
+    finally:
+        # Clean up
+        await ssh_terminal_manager.close_session(session_id)
+
+
 # Information endpoints
 
 
@@ -750,12 +853,14 @@ async def terminal_info():
             "Workflow automation control integration",
             "Multi-level security controls",
             "Backward compatibility with existing endpoints",
+            "SSH connections to user-defined infrastructure hosts",
         ],
         "endpoints": {
             "sessions": "/api/terminal/sessions",
             "websocket_primary": "/api/terminal/ws/{session_id}",
             "websocket_simple": "/api/terminal/ws/simple/{session_id}",
             "websocket_secure": "/api/terminal/ws/secure/{session_id}",
+            "websocket_ssh": "/api/terminal/ws/ssh/{host_id}",
         },
         "security_levels": [level.value for level in SecurityLevel],
         "consolidated_from": [

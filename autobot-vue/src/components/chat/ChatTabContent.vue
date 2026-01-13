@@ -32,16 +32,25 @@
       />
     </div>
 
-    <!-- noVNC Tab Content -->
+    <!-- noVNC Tab Content (Issue #715: Dynamic hosts from user config) -->
     <div v-else-if="activeTab === 'novnc'" class="flex-1 flex flex-col min-h-0">
       <div class="flex-1 flex flex-col bg-black">
-        <div class="flex justify-between items-center bg-gray-800 text-white px-4 py-2 text-sm">
-          <span>
-            <i class="fas fa-desktop mr-2"></i>
-            Remote Desktop (Chat Session: {{ currentSessionId?.slice(-8) || 'N/A' }})
-          </span>
+        <!-- Host selector header for VNC -->
+        <div class="vnc-header flex justify-between items-center bg-gray-800 text-white px-4 py-2 text-sm">
+          <div class="flex items-center gap-3">
+            <i class="fas fa-desktop"></i>
+            <HostSelector
+              ref="vncHostSelectorRef"
+              v-model="selectedVncHost"
+              :chat-id="currentSessionId"
+              required-capability="vnc"
+              @host-selected="onVncHostSelected"
+              @open-secrets-manager="emit('open-secrets-manager')"
+            />
+          </div>
           <a
-            :href="novncUrl"
+            v-if="selectedVncHost && dynamicVncUrl"
+            :href="dynamicVncUrl"
             target="_blank"
             class="text-indigo-300 hover:text-indigo-100 underline"
             title="Open noVNC in new window"
@@ -50,35 +59,73 @@
             Open in New Window
           </a>
         </div>
-        <iframe
-          :key="`desktop-${currentSessionId}`"
-          :src="novncUrl"
-          class="flex-1 w-full border-0"
-          title="noVNC Remote Desktop"
-          allowfullscreen
-        ></iframe>
+        <!-- VNC content - show iframe when host selected -->
+        <template v-if="selectedVncHost && dynamicVncUrl">
+          <iframe
+            :key="`vnc-${selectedVncHost.id}`"
+            :src="dynamicVncUrl"
+            class="flex-1 w-full border-0"
+            title="noVNC Remote Desktop"
+            allowfullscreen
+          ></iframe>
+        </template>
+        <!-- Empty state when no host selected -->
+        <div v-else class="flex-1 flex items-center justify-center text-gray-400">
+          <div class="text-center">
+            <i class="fas fa-desktop text-5xl mb-4 opacity-50"></i>
+            <p class="text-lg mb-2">Select a VNC Host</p>
+            <p class="text-sm text-gray-500">
+              Choose a host with VNC capability from your configured infrastructure hosts.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Persisted Terminal Component - rendered outside conditional chain to preserve state -->
+    <!-- Persisted Terminal Component with Host Selector (Issue #715: SSH to user hosts) -->
     <div
       v-if="terminalMounted"
       v-show="activeTab === 'terminal'"
       class="absolute inset-0 flex flex-col min-h-0"
     >
-      <ChatTerminal
-        :key="currentSessionId || 'terminal'"
+      <!-- SSH Host selector header for terminal -->
+      <div class="terminal-host-header flex items-center gap-3 px-3 py-2 bg-gray-800 border-b border-gray-700">
+        <HostSelector
+          ref="sshHostSelectorRef"
+          v-model="selectedSshHost"
+          :chat-id="currentSessionId"
+          required-capability="ssh"
+          @host-selected="onSshHostSelected"
+          @open-secrets-manager="emit('open-secrets-manager')"
+        />
+        <span v-if="selectedSshHost" class="text-xs text-gray-400">
+          Connected to: {{ selectedSshHost.name }}
+        </span>
+      </div>
+      <!-- SSH Terminal iframe or component -->
+      <SSHTerminal
+        v-if="selectedSshHost"
+        :key="`ssh-${selectedSshHost.id}-${currentSessionId}`"
+        :host-id="selectedSshHost.id"
         :chat-session-id="currentSessionId"
-        :auto-connect="true"
-        :allow-user-takeover="true"
         class="flex-1"
       />
+      <!-- Empty state when no host selected -->
+      <div v-else class="flex-1 flex items-center justify-center bg-gray-900 text-gray-400">
+        <div class="text-center">
+          <i class="fas fa-terminal text-5xl mb-4 opacity-50"></i>
+          <p class="text-lg mb-2">Select an SSH Host</p>
+          <p class="text-sm text-gray-500">
+            Choose a host to connect via SSH from your configured infrastructure hosts.
+          </p>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('ChatTabContent')
@@ -88,15 +135,63 @@ import ChatMessages from './ChatMessages.vue'
 import ChatInput from './ChatInput.vue'
 import FileBrowser from '@/components/FileBrowser.vue'
 import ChatBrowser from '@/components/ChatBrowser.vue'  // Issue #73: Browser sessions tied to chat
-import ChatTerminal from '@/components/ChatTerminal.vue'
+import HostSelector from '@/components/HostSelector.vue'  // Issue #715: Dynamic host selection
+import SSHTerminal from '@/components/SSHTerminal.vue'    // Issue #715: SSH terminal component
+
+/**
+ * Infrastructure host type for SSH/VNC connections.
+ * Issue #715: Dynamic host management via secrets.
+ */
+interface InfrastructureHost {
+  id: string
+  name: string
+  host: string
+  ssh_port?: number
+  vnc_port?: number
+  capabilities?: string[]
+}
+
+/** Tool call structure detected from chat messages. */
+interface ToolCall {
+  command: string
+  host: string
+  purpose: string
+  params: Record<string, unknown>
+}
 
 interface Props {
   activeTab: string
   currentSessionId: string | null
-  novncUrl: string
+  novncUrl: string  // Legacy - kept for backwards compatibility
 }
 
 const props = defineProps<Props>()
+
+// Host selection state (Issue #715)
+const selectedSshHost = ref<InfrastructureHost | null>(null)
+const selectedVncHost = ref<InfrastructureHost | null>(null)
+const sshHostSelectorRef = ref<InstanceType<typeof HostSelector>>()
+const vncHostSelectorRef = ref<InstanceType<typeof HostSelector>>()
+
+// Dynamic VNC URL based on selected host
+const dynamicVncUrl = computed(() => {
+  if (!selectedVncHost.value) return null
+  const host = selectedVncHost.value
+  // noVNC websockify URL format: ws://host:vncport
+  // The backend VNC proxy will handle the connection
+  return `http://${host.host}:${host.vnc_port || 6080}/vnc.html?autoconnect=true`
+})
+
+// Host selection handlers
+const onSshHostSelected = (host: InfrastructureHost) => {
+  logger.info('SSH host selected:', host.name, host.host)
+  selectedSshHost.value = host
+}
+
+const onVncHostSelected = (host: InfrastructureHost) => {
+  logger.info('VNC host selected:', host.name, host.host)
+  selectedVncHost.value = host
+}
 
 // Terminal mounting state - only mount terminal when first accessed
 const terminalMounted = ref(false)
@@ -118,18 +213,14 @@ watch(() => props.activeTab, (newTab) => {
   }
 }, { immediate: true })
 
-// Define emits to propagate tool call events to parent
+// Define emits to propagate events to parent
 const emit = defineEmits<{
-  'tool-call-detected': [toolCall: {
-    command: string
-    host: string
-    purpose: string
-    params: Record<string, any>
-  }]
+  'tool-call-detected': [toolCall: ToolCall]
+  'open-secrets-manager': []  // Issue #715: Open secrets manager to add hosts
 }>()
 
 // Handler for tool call detection from ChatMessages
-const handleToolCallDetected = (toolCall: any) => {
+const handleToolCallDetected = (toolCall: ToolCall) => {
   logger.info('Propagating TOOL_CALL to ChatInterface:', toolCall)
   emit('tool-call-detected', toolCall)
 }

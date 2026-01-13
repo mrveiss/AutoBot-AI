@@ -334,7 +334,175 @@
             </div>
           </div>
 
-          <div class="form-row" v-if="!showEditModal">
+          <!-- Infrastructure Host Form Fields -->
+          <template v-if="secretForm.type === 'infrastructure_host'">
+            <!-- Host & Port Row -->
+            <div class="form-row two-col">
+              <div class="form-group">
+                <label>Host/IP <span class="required">*</span></label>
+                <input
+                  type="text"
+                  v-model="secretForm.host"
+                  required
+                  placeholder="192.168.1.100 or hostname.example.com"
+                  class="form-input"
+                />
+              </div>
+              <div class="form-group">
+                <label>SSH Port</label>
+                <input
+                  type="number"
+                  v-model.number="secretForm.ssh_port"
+                  placeholder="22"
+                  class="form-input"
+                  min="1"
+                  max="65535"
+                />
+              </div>
+            </div>
+
+            <!-- Username & Auth Type -->
+            <div class="form-row two-col">
+              <div class="form-group">
+                <label>Username <span class="required">*</span></label>
+                <input
+                  type="text"
+                  v-model="secretForm.username"
+                  required
+                  placeholder="root"
+                  class="form-input"
+                />
+              </div>
+              <div class="form-group">
+                <label>Authentication <span class="required">*</span></label>
+                <select v-model="secretForm.auth_type" class="form-input">
+                  <option value="ssh_key">SSH Key</option>
+                  <option value="password">Password</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- SSH Key (if auth_type is ssh_key) -->
+            <div class="form-row" v-if="secretForm.auth_type === 'ssh_key' && !showEditModal">
+              <div class="form-group">
+                <label>SSH Private Key <span class="required">*</span></label>
+                <div class="secret-input-wrapper">
+                  <textarea
+                    v-model="secretForm.ssh_key"
+                    required
+                    placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;..."
+                    class="form-input secret-input"
+                    :class="{ 'secret-masked': !showValue }"
+                    rows="6"
+                  ></textarea>
+                  <button
+                    type="button"
+                    @click="toggleValueVisibility"
+                    class="toggle-visibility"
+                    :title="showValue ? 'Hide key' : 'Show key'"
+                  >
+                    <i :class="showValue ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                  </button>
+                </div>
+                <small class="input-hint">Paste your entire private key including BEGIN/END markers</small>
+              </div>
+            </div>
+
+            <!-- SSH Password (if auth_type is password) -->
+            <div class="form-row" v-if="secretForm.auth_type === 'password' && !showEditModal">
+              <div class="form-group">
+                <label>SSH Password <span class="required">*</span></label>
+                <div class="secret-input-wrapper">
+                  <input
+                    type="password"
+                    v-model="secretForm.ssh_password"
+                    required
+                    placeholder="Enter SSH password"
+                    class="form-input secret-input"
+                    autocomplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    @click="toggleValueVisibility"
+                    class="toggle-visibility"
+                    :title="showValue ? 'Hide password' : 'Show password'"
+                  >
+                    <i :class="showValue ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Capabilities -->
+            <div class="form-row">
+              <div class="form-group">
+                <label>Capabilities</label>
+                <div class="capability-checkboxes">
+                  <label class="checkbox-option">
+                    <input type="checkbox" value="ssh" v-model="secretForm.capabilities" disabled checked />
+                    <i class="fas fa-terminal"></i>
+                    <span>SSH (Always enabled)</span>
+                  </label>
+                  <label class="checkbox-option">
+                    <input type="checkbox" value="vnc" v-model="secretForm.capabilities" />
+                    <i class="fas fa-desktop"></i>
+                    <span>VNC Desktop</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- VNC Settings (if VNC enabled) -->
+            <div class="form-row two-col" v-if="secretForm.capabilities.includes('vnc')">
+              <div class="form-group">
+                <label>VNC Port <span class="required">*</span></label>
+                <input
+                  type="number"
+                  v-model.number="secretForm.vnc_port"
+                  required
+                  placeholder="5901"
+                  class="form-input"
+                  min="1"
+                  max="65535"
+                />
+              </div>
+              <div class="form-group" v-if="!showEditModal">
+                <label>VNC Password</label>
+                <input
+                  type="password"
+                  v-model="secretForm.vnc_password"
+                  placeholder="VNC password (optional)"
+                  class="form-input"
+                  autocomplete="new-password"
+                />
+              </div>
+            </div>
+
+            <!-- OS & Purpose (metadata for knowledge base) -->
+            <div class="form-row two-col">
+              <div class="form-group">
+                <label>Operating System</label>
+                <input
+                  type="text"
+                  v-model="secretForm.os"
+                  placeholder="e.g., Ubuntu 22.04, CentOS 8"
+                  class="form-input"
+                />
+              </div>
+              <div class="form-group">
+                <label>Purpose/Role</label>
+                <input
+                  type="text"
+                  v-model="secretForm.purpose"
+                  placeholder="e.g., Web server, Database host"
+                  class="form-input"
+                />
+              </div>
+            </div>
+          </template>
+
+          <!-- Standard Secret Value Field (non-infrastructure_host) -->
+          <div class="form-row" v-else-if="!showEditModal">
             <div class="form-group">
               <label>{{ getValueLabel(secretForm.type) }} <span class="required">*</span></label>
               <div class="secret-input-wrapper">
@@ -587,6 +755,7 @@ const credentialCategories = computed(() => [
   { type: 'token', label: 'Tokens', icon: 'fas fa-ticket-alt', color: getCssVar('--chart-purple', '#8b5cf6') },
   { type: 'password', label: 'Passwords', icon: 'fas fa-lock', color: getCssVar('--chart-pink', '#ec4899') },
   { type: 'ssh_key', label: 'SSH Keys', icon: 'fas fa-terminal', color: getCssVar('--chart-teal', '#14b8a6') },
+  { type: 'infrastructure_host', label: 'Infrastructure Hosts', icon: 'fas fa-server', color: getCssVar('--chart-blue', '#3b82f6') },
   { type: 'database_url', label: 'Database', icon: 'fas fa-database', color: getCssVar('--color-warning', '#f59e0b') },
   { type: 'certificate', label: 'Certificates', icon: 'fas fa-certificate', color: getCssVar('--color-success', '#10b981') },
   { type: 'other', label: 'Other', icon: 'fas fa-ellipsis-h', color: getCssVar('--text-tertiary', '#6b7280') },
@@ -602,6 +771,7 @@ const credentialTemplates = computed(() => [
   { id: 'redis', name: 'Redis', description: 'Redis connection', icon: 'fas fa-layer-group', color: getCssVar('--chart-red', '#dc382d'), type: 'database_url' },
   { id: 'ssh', name: 'SSH Key', description: 'Server access', icon: 'fas fa-terminal', color: getCssVar('--bg-primary', '#000'), type: 'ssh_key' },
   { id: 'slack', name: 'Slack', description: 'Slack bot token', icon: 'fab fa-slack', color: getCssVar('--chart-purple', '#4a154b'), type: 'token' },
+  { id: 'server', name: 'Server Host', description: 'SSH/VNC server access', icon: 'fas fa-server', color: getCssVar('--chart-blue', '#3b82f6'), type: 'infrastructure_host' },
 ]);
 
 // State
@@ -640,7 +810,19 @@ const secretForm = reactive({
   value: '',
   description: '',
   expires_at: '',
-  tags: [] as string[]
+  tags: [] as string[],
+  // Infrastructure host specific fields
+  host: '',
+  ssh_port: 22,
+  vnc_port: null as number | null,
+  username: 'root',
+  auth_type: 'ssh_key' as 'ssh_key' | 'password',
+  ssh_key: '',
+  ssh_password: '',
+  vnc_password: '',
+  capabilities: ['ssh'] as string[],
+  os: '',
+  purpose: ''
 });
 const tagsInput = ref('');
 const viewingSecret = ref<any>(null);
@@ -714,6 +896,18 @@ const isFormValid = computed(() => {
   if (!secretForm.type) return false;
   if (!secretForm.name.trim()) return false;
   if (!secretForm.scope) return false;
+
+  // Infrastructure host has different validation
+  if (secretForm.type === 'infrastructure_host') {
+    if (!secretForm.host.trim()) return false;
+    if (!secretForm.username.trim()) return false;
+    if (secretForm.auth_type === 'ssh_key' && !showEditModal.value && !secretForm.ssh_key.trim()) return false;
+    if (secretForm.auth_type === 'password' && !showEditModal.value && !secretForm.ssh_password.trim()) return false;
+    if (secretForm.capabilities.includes('vnc') && !secretForm.vnc_port) return false;
+    return true;
+  }
+
+  // Standard secrets require value
   if (!showEditModal.value && !secretForm.value.trim()) return false;
   return true;
 });
@@ -933,6 +1127,16 @@ const saveSecret = async () => {
   saving.value = true;
   try {
     const appStore = useAppStore();
+
+    // Handle infrastructure_host type separately via dedicated API
+    if (secretForm.type === 'infrastructure_host') {
+      await saveInfrastructureHost(appStore);
+      closeModals();
+      await loadSecrets();
+      return;
+    }
+
+    // Standard secret handling
     const secretData: any = {
       name: secretForm.name,
       type: secretForm.type,
@@ -956,6 +1160,58 @@ const saveSecret = async () => {
     logger.error('Failed to save secret:', error);
   } finally {
     saving.value = false;
+  }
+};
+
+/**
+ * Save infrastructure host via dedicated API endpoint.
+ * Infrastructure hosts have structured fields (host, port, username, etc.)
+ * instead of a single 'value' field.
+ */
+const saveInfrastructureHost = async (appStore: any) => {
+  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://172.16.168.20:8001';
+
+  const hostData = {
+    name: secretForm.name,
+    host: secretForm.host,
+    username: secretForm.username,
+    auth_type: secretForm.auth_type,
+    ssh_key: secretForm.auth_type === 'ssh_key' ? secretForm.ssh_key : undefined,
+    ssh_password: secretForm.auth_type === 'password' ? secretForm.ssh_password : undefined,
+    vnc_password: secretForm.capabilities.includes('vnc') ? secretForm.vnc_password : undefined,
+    ssh_port: secretForm.ssh_port,
+    vnc_port: secretForm.capabilities.includes('vnc') ? secretForm.vnc_port : undefined,
+    capabilities: secretForm.capabilities,
+    description: secretForm.description,
+    tags: secretForm.tags,
+    os: secretForm.os || undefined,
+    purpose: secretForm.purpose || undefined,
+    scope: secretForm.scope,
+    chat_id: secretForm.scope === 'chat' ? (secretForm.chat_id || appStore.currentSessionId) : undefined,
+  };
+
+  if (showEditModal.value) {
+    // Update existing host
+    const response = await fetch(`${backendUrl}/api/infrastructure/hosts/${secretForm.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(hostData),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to update host');
+    }
+  } else {
+    // Create new host
+    const response = await fetch(`${backendUrl}/api/infrastructure/hosts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(hostData),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to create host');
+    }
   }
 };
 
@@ -986,7 +1242,19 @@ const resetForm = () => {
     value: '',
     description: '',
     expires_at: '',
-    tags: []
+    tags: [],
+    // Infrastructure host specific fields
+    host: '',
+    ssh_port: 22,
+    vnc_port: null,
+    username: 'root',
+    auth_type: 'ssh_key',
+    ssh_key: '',
+    ssh_password: '',
+    vnc_password: '',
+    capabilities: ['ssh'],
+    os: '',
+    purpose: ''
   });
   tagsInput.value = '';
   showValue.value = false;
@@ -2103,6 +2371,67 @@ watch(selectedScope, () => {
 .btn-danger:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Infrastructure Host Form Styles */
+.capability-checkboxes {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.checkbox-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+}
+
+.checkbox-option:hover {
+  background: var(--bg-hover);
+  border-color: var(--color-primary);
+}
+
+.checkbox-option input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+
+.checkbox-option input[type="checkbox"]:disabled {
+  cursor: default;
+}
+
+.checkbox-option:has(input:checked) {
+  background: var(--color-primary-bg);
+  border-color: var(--color-primary);
+}
+
+.checkbox-option:has(input:disabled) {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.checkbox-option i {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.checkbox-option:has(input:checked) i {
+  color: var(--color-primary);
+}
+
+.checkbox-option span {
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
 /* Responsive */

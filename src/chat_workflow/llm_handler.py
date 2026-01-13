@@ -101,13 +101,28 @@ class LLMHandlerMixin:
 NEVER teach commands - ALWAYS execute them."""
 
     def _build_conversation_context(self, session: WorkflowSession) -> str:
-        """Build conversation context from recent history."""
+        """Build conversation context from recent history.
+
+        Issue #715: Now handles incomplete entries (empty assistant response)
+        that are registered before LLM call to fix race conditions.
+        """
         if not session.conversation_history:
             return ""
+
+        # Filter out incomplete entries (where assistant response is empty placeholder)
+        # These are messages currently being processed
+        complete_messages = [
+            msg for msg in session.conversation_history
+            if msg.get("assistant")  # Only include if assistant response exists
+        ]
+
+        if not complete_messages:
+            return ""
+
         context_parts = ["\n**Recent Context:**\n"]
         context_parts.extend(
             f"User: {msg['user']}\nYou: {msg['assistant']}\n\n"
-            for msg in session.conversation_history[-2:]
+            for msg in complete_messages[-2:]
         )
         return "".join(context_parts)
 
