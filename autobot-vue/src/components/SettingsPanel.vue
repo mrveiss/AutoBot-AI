@@ -1,13 +1,14 @@
 <template>
   <ErrorBoundary fallback="Settings panel failed to load.">
-<div class="settings-panel">
-  <!-- Tab Navigation (now using router-links) -->
+<div class="settings-panel-layout">
+  <!-- Sidebar Navigation -->
   <SettingsTabNavigation
     :hasUnsavedChanges="hasUnsavedChanges"
     :tabs="tabs"
   />
 
-  <div class="settings-content">
+  <!-- Main Content -->
+  <main class="settings-content">
     <!-- Loading indicator -->
     <div v-if="settingsLoadingStatus === 'loading'" class="settings-loading">
       <div class="loading-spinner"></div>
@@ -21,36 +22,38 @@
     </div>
 
     <!-- Router View for Settings Sub-routes -->
-    <router-view
-      v-if="isSettingsLoaded"
-      :settings="settings"
-      :isSettingsLoaded="isSettingsLoaded"
-      :healthStatus="healthStatus"
-      :cacheConfig="cacheConfig"
-      :cacheActivity="cacheActivity"
-      :cacheStats="cacheStats"
-      :isSaving="isSaving"
-      :isClearing="isClearing"
-      :cacheApiAvailable="cacheApiAvailable"
-      :activeBackendSubTab="activeBackendSubTab"
-      @setting-changed="handleSettingChanged"
-      @change="markAsChanged"
-      @subtab-changed="activeBackendSubTab = $event"
-      @cache-config-changed="updateCacheConfig"
-      @save-cache-config="saveCacheConfig"
-      @refresh-cache-activity="refreshCacheActivity"
-      @refresh-cache-stats="refreshCacheStats"
-      @clear-cache="clearCache"
-      @clear-redis-cache="clearRedisCache"
-      @clear-cache-type="clearCacheType"
-      @warmup-caches="warmupCaches"
-      @prompt-selected="selectPrompt"
-      @edited-content-changed="updatePromptEditedContent"
-      @selected-prompt-cleared="clearSelectedPrompt"
-      @load-prompts="loadPrompts"
-      @save-prompt="savePrompt"
-      @revert-prompt-to-default="revertPromptToDefault"
-    />
+    <div class="settings-content-inner">
+      <router-view
+        v-if="isSettingsLoaded"
+        :settings="settings"
+        :isSettingsLoaded="isSettingsLoaded"
+        :healthStatus="healthStatus"
+        :cacheConfig="cacheConfig"
+        :cacheActivity="cacheActivity"
+        :cacheStats="cacheStats"
+        :isSaving="isSaving"
+        :isClearing="isClearing"
+        :cacheApiAvailable="cacheApiAvailable"
+        :activeBackendSubTab="activeBackendSubTab"
+        @setting-changed="handleSettingChanged"
+        @change="markAsChanged"
+        @subtab-changed="activeBackendSubTab = $event"
+        @cache-config-changed="updateCacheConfig"
+        @save-cache-config="saveCacheConfig"
+        @refresh-cache-activity="refreshCacheActivity"
+        @refresh-cache-stats="refreshCacheStats"
+        @clear-cache="clearCache"
+        @clear-redis-cache="clearRedisCache"
+        @clear-cache-type="clearCacheType"
+        @warmup-caches="warmupCaches"
+        @prompt-selected="selectPrompt"
+        @edited-content-changed="updatePromptEditedContent"
+        @selected-prompt-cleared="clearSelectedPrompt"
+        @load-prompts="loadPrompts"
+        @save-prompt="savePrompt"
+        @revert-prompt-to-default="revertPromptToDefault"
+      />
+    </div>
 
     <!-- Save Settings Button -->
     <div v-if="isSettingsLoaded && hasUnsavedChanges" class="settings-actions">
@@ -63,7 +66,7 @@
         Discard Changes
       </button>
     </div>
-  </div>
+  </main>
 </div>
   </ErrorBoundary>
 </template>
@@ -830,21 +833,28 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* Issue #704: Migrated to design tokens from design-tokens.css */
+/* Issue #704: Sidebar layout matching SecretsManager style */
 
-.settings-panel {
-  padding: var(--spacing-5);
-  max-width: var(--content-max-width);
-  margin: 0 auto;
-  background: var(--bg-secondary);
-  min-height: var(--view-min-height);
+.settings-panel-layout {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg-primary);
 }
 
 .settings-content {
-  background: var(--bg-card);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+  min-width: 0;
+}
+
+.settings-content-inner {
+  flex: 1;
+  min-height: 0; /* Required for flex child to shrink and enable overflow */
+  overflow-y: auto;
+  padding: 24px;
 }
 
 .settings-loading {
@@ -888,7 +898,7 @@ onMounted(async () => {
 .settings-actions {
   display: flex;
   gap: var(--spacing-4);
-  padding: var(--spacing-6);
+  padding: var(--spacing-4) var(--spacing-6);
   background: var(--bg-secondary);
   border-top: 1px solid var(--border-default);
   justify-content: flex-end;
@@ -937,13 +947,14 @@ onMounted(async () => {
   background: var(--color-secondary-hover);
 }
 
-/* Dark theme support - now handled by design tokens automatically */
-/* The design tokens are already dark-theme by default */
-
 /* Mobile responsive */
 @media (max-width: 768px) {
-  .settings-panel {
-    padding: var(--spacing-3);
+  .settings-panel-layout {
+    flex-direction: column;
+  }
+
+  .settings-content-inner {
+    padding: 16px;
   }
 
   .settings-actions {

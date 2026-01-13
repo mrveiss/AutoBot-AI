@@ -1,9 +1,7 @@
 <template>
-  <div class="settings-view view-container">
-    <div class="container mx-auto px-4 pt-4 pb-6">
-      <!-- Settings Panel Component -->
-      <SettingsPanel />
-    </div>
+  <div class="settings-view">
+    <!-- Settings Panel Component with sidebar layout -->
+    <SettingsPanel />
   </div>
 </template>
 
@@ -13,5 +11,11 @@ import SettingsPanel from '@/components/SettingsPanel.vue'
 </script>
 
 <style scoped>
-/* View-specific styles only - scroll styling provided by .view-container (Issue #548) */
+/* Full height layout for sidebar navigation */
+.settings-view {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 </style>

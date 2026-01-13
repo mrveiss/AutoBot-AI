@@ -1,24 +1,30 @@
 <template>
-  <div class="settings-tab-navigation">
+  <aside class="settings-sidebar">
+    <div class="sidebar-header">
+      <h3><i class="fas fa-cog"></i> Settings</h3>
+    </div>
+
     <!-- Unsaved Changes Indicator -->
     <div v-if="hasUnsavedChanges" class="unsaved-changes-indicator">
       <i class="fas fa-exclamation-circle"></i>
-      <span>You have unsaved changes. Click "Save Settings" to apply them.</span>
+      <span>Unsaved changes</span>
     </div>
 
-    <div class="settings-tabs">
+    <!-- Category Navigation -->
+    <nav class="category-nav">
       <router-link
         v-for="tab in tabs"
         :key="tab.id"
         :to="`/settings/${tab.id}`"
-        class="settings-tab-link"
+        class="category-item"
         :class="{ active: isActiveTab(tab.id) }"
         :aria-label="tab.label"
       >
-        {{ tab.label }}
+        <i :class="getTabIcon(tab.id)"></i>
+        <span>{{ tab.label }}</span>
       </router-link>
-    </div>
-  </div>
+    </nav>
+  </aside>
 </template>
 
 <script setup lang="ts">
@@ -44,80 +50,162 @@ const isActiveTab = (tabId: string): boolean => {
   return currentPath === `/settings/${tabId}` ||
          route.name === `settings-${tabId}`
 }
+
+// Map tab IDs to appropriate icons
+const getTabIcon = (tabId: string): string => {
+  const iconMap: Record<string, string> = {
+    'user': 'fas fa-users',
+    'chat': 'fas fa-comments',
+    'backend': 'fas fa-server',
+    'optimization': 'fas fa-bolt',
+    'ui': 'fas fa-palette',
+    'logging': 'fas fa-file-alt',
+    'log-forwarding': 'fas fa-share-alt',
+    'cache': 'fas fa-database',
+    'prompts': 'fas fa-edit',
+    'infrastructure': 'fas fa-network-wired',
+    'developer': 'fas fa-code',
+    'feature-flags': 'fas fa-flag'
+  }
+  return iconMap[tabId] || 'fas fa-cog'
+}
 </script>
 
 <style scoped>
-/* Issue #704: Migrated to CSS design tokens */
-.settings-tab-navigation {
-  margin-bottom: var(--spacing-5);
+/* Issue #704: Sidebar navigation style matching SecretsManager */
+.settings-sidebar {
+  width: 240px;
+  min-width: 240px;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-default);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+}
+
+.sidebar-header {
+  padding: 20px;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.sidebar-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sidebar-header i {
+  color: var(--color-primary);
 }
 
 .unsaved-changes-indicator {
-  background: linear-gradient(45deg, var(--color-warning), var(--color-warning-hover));
-  color: var(--text-on-primary);
-  padding: var(--spacing-3) var(--spacing-4);
-  border-radius: var(--radius-lg);
-  margin-bottom: var(--spacing-5);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  padding: 10px 20px;
   display: flex;
   align-items: center;
-  font-weight: var(--font-medium);
-  box-shadow: var(--shadow-md);
+  gap: 8px;
+  font-weight: 500;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border-default);
 }
 
 .unsaved-changes-indicator i {
-  margin-right: var(--spacing-3);
-  font-size: var(--text-base);
+  font-size: 14px;
 }
 
-.settings-tabs {
+.category-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 0;
+}
+
+.category-item {
   display: flex;
-  border-bottom: 1px solid var(--border-default);
-  overflow-x: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.settings-tabs::-webkit-scrollbar {
-  display: none;
-}
-
-.settings-tab-link {
-  background: none;
-  border: none;
-  padding: var(--spacing-3) var(--spacing-5);
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
   cursor: pointer;
-  border-bottom: 3px solid transparent;
-  transition: all var(--duration-200) var(--ease-in-out);
-  white-space: nowrap;
+  transition: all 0.15s;
   color: var(--text-secondary);
-  font-weight: var(--font-medium);
-  min-width: 100px;
   text-decoration: none;
-  text-align: center;
 }
 
-.settings-tab-link:hover {
-  background-color: var(--bg-secondary);
+.category-item:hover {
+  background: var(--bg-hover);
   color: var(--text-primary);
 }
 
-.settings-tab-link.active {
-  border-bottom-color: var(--color-primary);
+.category-item.active {
+  background: var(--color-primary-bg);
   color: var(--color-primary);
-  background-color: var(--bg-tertiary);
+  border-right: 3px solid var(--color-primary);
 }
 
-.settings-tab-link:focus {
-  outline: none;
-  box-shadow: inset 0 0 0 2px var(--color-primary);
+.category-item i {
+  width: 20px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.category-item span {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* Scrollbar styling */
+.category-nav::-webkit-scrollbar {
+  width: 6px;
+}
+
+.category-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.category-nav::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+}
+
+.category-nav::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 /* Mobile responsive */
 @media (max-width: 768px) {
-  .settings-tab-link {
-    padding: var(--spacing-2-5) var(--spacing-4);
-    min-width: 80px;
-    font-size: var(--text-sm);
+  .settings-sidebar {
+    width: 100%;
+    min-width: 100%;
+    max-height: 200px;
+    border-right: none;
+    border-bottom: 1px solid var(--border-default);
+  }
+
+  .category-nav {
+    display: flex;
+    flex-wrap: wrap;
+    padding: 8px;
+    gap: 4px;
+  }
+
+  .category-item {
+    padding: 8px 12px;
+    border-radius: 6px;
+    flex: 0 0 auto;
+  }
+
+  .category-item.active {
+    border-right: none;
+    border-radius: 6px;
+  }
+
+  .category-item span {
+    font-size: 12px;
   }
 }
 </style>
