@@ -68,12 +68,8 @@ export interface UserStatistics {
   period_days: number;
 }
 
-export interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  message?: string;
-  error?: string;
-}
+// Re-export ApiResponse from canonical source for convenience
+export type { ApiResponse } from '@/types/api';
 
 /**
  * Feature Flags API Client

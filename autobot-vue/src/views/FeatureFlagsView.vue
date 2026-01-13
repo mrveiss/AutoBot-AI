@@ -294,6 +294,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { createLogger } from '@/utils/debugUtils';
+import { useToast } from '@/composables/useToast';
 import {
   featureFlagsApiClient,
   type EnforcementMode,
@@ -310,6 +311,7 @@ import AccessMetrics from '@/components/feature-flags/AccessMetrics.vue';
 import FlagChangeHistory from '@/components/feature-flags/FlagChangeHistory.vue';
 
 const logger = createLogger('FeatureFlagsView');
+const { showToast } = useToast();
 
 // State
 const loading = ref(false);
@@ -448,11 +450,14 @@ const handleModeUpdate = async (newMode: EnforcementMode) => {
       currentMode.value = newMode;
       // Refresh to get updated history
       await loadFeatureFlagsStatus();
+      showToast(`Enforcement mode updated to ${newMode}`, 'success');
       logger.info('Enforcement mode updated to:', newMode);
     } else {
+      showToast(response.error || 'Failed to update enforcement mode', 'error');
       logger.error('Failed to update enforcement mode:', response.error);
     }
   } catch (err) {
+    showToast('Failed to update enforcement mode', 'error');
     logger.error('Failed to update enforcement mode:', err);
   } finally {
     modeUpdateLoading.value = false;
@@ -466,11 +471,14 @@ const handleAddEndpoint = async (endpoint: string, mode: EnforcementMode) => {
 
     if (response.success) {
       endpointOverrides.value = { ...endpointOverrides.value, [endpoint]: mode };
+      showToast('Endpoint override added', 'success');
       logger.info('Added endpoint enforcement:', endpoint, mode);
     } else {
+      showToast(response.error || 'Failed to add endpoint override', 'error');
       logger.error('Failed to add endpoint enforcement:', response.error);
     }
   } catch (err) {
+    showToast('Failed to add endpoint override', 'error');
     logger.error('Failed to add endpoint enforcement:', err);
   } finally {
     endpointLoading.value = false;
@@ -490,11 +498,14 @@ const handleRemoveEndpoint = async (endpoint: string) => {
       const newOverrides = { ...endpointOverrides.value };
       delete newOverrides[endpoint];
       endpointOverrides.value = newOverrides;
+      showToast('Endpoint override removed', 'success');
       logger.info('Removed endpoint enforcement:', endpoint);
     } else {
+      showToast(response.error || 'Failed to remove endpoint override', 'error');
       logger.error('Failed to remove endpoint enforcement:', response.error);
     }
   } catch (err) {
+    showToast('Failed to remove endpoint override', 'error');
     logger.error('Failed to remove endpoint enforcement:', err);
   } finally {
     endpointLoading.value = false;
