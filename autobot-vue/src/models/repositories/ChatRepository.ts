@@ -454,20 +454,14 @@ export class ChatRepository {
     try {
       // CRITICAL FIX Issue #259: Wrap messages in 'data' object to match backend expectation
       // Backend expects: { data: { messages: [...], name: "..." } }
-      // Issue #718: Use longer timeout (90s) for save operations during heavy I/O load
       const response = await this.post(`/api/chats/${params.chatId}/save`, {
         data: {
           messages: params.messages,
           name: params.name || ''
         }
-      }, { timeout: 90000 })
+      })
       return response.data || response
     } catch (error: any) {
-      // Issue #718: Provide better error message for timeout during heavy load
-      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-        logger.warn('Chat save timeout - system may be under heavy I/O load (indexing)')
-        throw new Error('Chat save timed out - system is busy. Will retry on next auto-save.')
-      }
       logger.error('Failed to save chat messages:', error)
       throw error
     }

@@ -8,6 +8,9 @@ Provides file-based operations for chat history:
 - Atomic file writes to prevent corruption
 - Session file export in multiple formats
 - Legacy history save operations
+
+Issue #718: Uses dedicated thread pool for file I/O to prevent blocking
+when the main asyncio thread pool is saturated by indexing operations.
 """
 
 import asyncio
@@ -16,11 +19,35 @@ import json
 import logging
 import os
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 import aiofiles
 
 logger = logging.getLogger(__name__)
+
+# Issue #718: Dedicated thread pool for chat file I/O operations
+# This prevents chat saves from being blocked when the main asyncio thread pool
+# is saturated by heavy operations like ChromaDB indexing
+_CHAT_IO_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="chat_io_")
+
+
+async def run_in_chat_io_executor(func, *args):
+    """Run a function in the dedicated chat I/O thread pool.
+
+    Issue #718: Module-level function for use across all chat history mixins.
+    Uses dedicated thread pool to prevent blocking when the main asyncio
+    thread pool is saturated by indexing operations.
+
+    Args:
+        func: Function to run
+        *args: Arguments to pass to the function
+
+    Returns:
+        Result of the function call
+    """
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(_CHAT_IO_EXECUTOR, func, *args)
 
 
 class FileIOMixin:
@@ -35,62 +62,41 @@ class FileIOMixin:
     - self._periodic_memory_check(): method
     """
 
-    async def _atomic_write(
-        self, file_path: str, content: str, timeout_seconds: float = 30.0
-    ) -> None:
+    async def _run_in_io_executor(self, func, *args):
+        """Run a function in the dedicated chat I/O thread pool.
+
+        Issue #718: Uses dedicated thread pool to prevent blocking when the
+        main asyncio thread pool is saturated by indexing operations.
+        """
+        return await run_in_chat_io_executor(func, *args)
+
+    async def _atomic_write(self, file_path: str, content: str) -> None:
         """
         Atomic file write with exclusive locking to prevent data corruption.
 
-        Uses fcntl.flock() with non-blocking mode and retry logic to prevent
-        indefinite blocking during I/O contention (e.g., during heavy indexing).
-
-        Issue #718: Added timeout parameter and non-blocking lock acquisition
-        to prevent chat save timeouts during heavy system load.
+        Issue #718: Uses dedicated thread pool for file I/O operations to
+        prevent blocking when the main asyncio pool is saturated by indexing.
+        Temp files are created in the same directory as the target (required
+        for atomic os.replace to work on the same filesystem).
 
         Args:
             file_path: Target file path
             content: Content to write
-            timeout_seconds: Maximum time to wait for lock (default 30s)
 
         Raises:
-            TimeoutError: If lock cannot be acquired within timeout
             Exception: If write fails (temp file is cleaned up automatically)
         """
-        import time
-
         dir_path = os.path.dirname(file_path)
 
         # Create temporary file in same directory (required for atomic rename)
-        fd, temp_path = await asyncio.to_thread(
-            tempfile.mkstemp, dir=dir_path, prefix=".tmp_chat_", suffix=".json"
+        # Issue #718: Use dedicated executor to avoid blocking on saturated pool
+        fd, temp_path = await self._run_in_io_executor(
+            tempfile.mkstemp, dir_path, ".tmp_chat_", ".json"
         )
 
         try:
-            # Issue #718: Use non-blocking lock with retry to prevent indefinite blocking
-            start_time = time.monotonic()
-            lock_acquired = False
-            retry_delay = 0.1  # Start with 100ms delay
-
-            while (time.monotonic() - start_time) < timeout_seconds:
-                try:
-                    # Try non-blocking lock
-                    await asyncio.to_thread(
-                        fcntl.flock, fd, fcntl.LOCK_EX | fcntl.LOCK_NB
-                    )
-                    lock_acquired = True
-                    break
-                except BlockingIOError:
-                    # Lock is held by another process, wait and retry
-                    await asyncio.sleep(retry_delay)
-                    # Exponential backoff with cap at 1 second
-                    retry_delay = min(retry_delay * 1.5, 1.0)
-
-            if not lock_acquired:
-                elapsed = time.monotonic() - start_time
-                raise TimeoutError(
-                    f"Could not acquire file lock for {file_path} "
-                    f"after {elapsed:.1f}s (timeout: {timeout_seconds}s)"
-                )
+            # Acquire exclusive lock - use dedicated executor
+            await self._run_in_io_executor(fcntl.flock, fd, fcntl.LOCK_EX)
 
             # Write content to temporary file using aiofiles for async I/O
             os.close(fd)  # Close fd so aiofiles can open it
@@ -98,31 +104,22 @@ class FileIOMixin:
                 await f.write(content)
 
             # Atomic rename (cross-platform atomic operation)
-            await asyncio.to_thread(os.replace, temp_path, file_path)
+            await self._run_in_io_executor(os.replace, temp_path, file_path)
 
             logger.debug("Atomic write completed: %s", file_path)
-
-        except TimeoutError:
-            # Re-raise timeout errors without logging as error (expected under load)
-            logger.warning(
-                "Atomic write lock timeout for %s - system may be under heavy I/O load",
-                file_path
-            )
-            raise
 
         except Exception as e:
             logger.error("Atomic write failed for %s: %s", file_path, e)
             raise e
 
         finally:
-            # Issue #718: Always cleanup temporary file
+            # Always cleanup temporary file if it exists
             try:
-                temp_exists = await asyncio.to_thread(os.path.exists, temp_path)
-                if temp_exists:
-                    await asyncio.to_thread(os.unlink, temp_path)
+                if await self._run_in_io_executor(os.path.exists, temp_path):
+                    await self._run_in_io_executor(os.unlink, temp_path)
             except Exception as cleanup_error:
                 logger.warning(
-                    f"Failed to cleanup temp file {temp_path}: {cleanup_error}"
+                    "Failed to cleanup temp file %s: %s", temp_path, cleanup_error
                 )
 
     async def _save_history(self):
@@ -146,11 +143,11 @@ class FileIOMixin:
         # Also save to Redis if enabled for fast access
         if self.use_redis and self.redis_client:
             try:
-                # Issue #361 - avoid blocking
-                await asyncio.to_thread(
+                # Issue #718: Use dedicated executor to avoid blocking on saturated pool
+                await self._run_in_io_executor(
                     self.redis_client.set, "autobot:chat_history", json.dumps(self.history)
                 )
-                await asyncio.to_thread(
+                await self._run_in_io_executor(
                     self.redis_client.expire, "autobot:chat_history", 86400
                 )  # 1 day TTL
             except Exception as e:

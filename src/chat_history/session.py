@@ -22,6 +22,8 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 
+from src.chat_history.file_io import run_in_chat_io_executor
+
 logger = logging.getLogger(__name__)
 
 
@@ -72,13 +74,13 @@ class SessionMixin:
         """Resolve session file path with backward compatibility. (Issue #315 - extracted)"""
         # Try new naming convention first: {uuid}_chat.json
         chat_file = f"{chats_directory}/{session_id}_chat.json"
-        file_exists = await asyncio.to_thread(os.path.exists, chat_file)
+        file_exists = await run_in_chat_io_executor(os.path.exists, chat_file)
         if file_exists:
             return chat_file
 
         # Backward compatibility: try old naming convention
         chat_file_old = f"{chats_directory}/chat_{session_id}.json"
-        old_file_exists = await asyncio.to_thread(os.path.exists, chat_file_old)
+        old_file_exists = await run_in_chat_io_executor(os.path.exists, chat_file_old)
         if old_file_exists:
             logger.debug("Using legacy file format for session %s", session_id)
             return chat_file_old
@@ -90,7 +92,7 @@ class SessionMixin:
         self, session_id: str, chat_file: str, chats_directory: str
     ) -> Dict[str, Any]:
         """Load existing chat data with backward compatibility. (Issue #315 - extracted)"""
-        file_exists = await asyncio.to_thread(os.path.exists, chat_file)
+        file_exists = await run_in_chat_io_executor(os.path.exists, chat_file)
         if file_exists:
             try:
                 async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
@@ -102,7 +104,7 @@ class SessionMixin:
 
         # Try old format for backward compatibility
         chat_file_old = f"{chats_directory}/chat_{session_id}.json"
-        old_file_exists = await asyncio.to_thread(os.path.exists, chat_file_old)
+        old_file_exists = await run_in_chat_io_executor(os.path.exists, chat_file_old)
         if old_file_exists:
             try:
                 async with aiofiles.open(chat_file_old, "r", encoding="utf-8") as f:
@@ -295,7 +297,7 @@ class SessionMixin:
             await self._async_cache_session(cache_key, chat_data)
             # Update recent chats sorted set for fast listing
             # Issue #361 - avoid blocking
-            await asyncio.to_thread(
+            await run_in_chat_io_executor(
                 self.redis_client.zadd, "chat:recent", {session_id: time.time()}
             )
             logger.debug("Cached session %s in Redis", session_id)
@@ -394,9 +396,9 @@ class SessionMixin:
         """
         try:
             chats_directory = self._get_chats_directory()
-            dir_exists = await asyncio.to_thread(os.path.exists, chats_directory)
+            dir_exists = await run_in_chat_io_executor(os.path.exists, chats_directory)
             if not dir_exists:
-                await asyncio.to_thread(os.makedirs, chats_directory, exist_ok=True)
+                await run_in_chat_io_executor(os.makedirs, chats_directory, exist_ok=True)
 
             chat_file = f"{chats_directory}/{session_id}_chat.json"
             current_time = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -517,30 +519,30 @@ class SessionMixin:
 
             # Delete new format file
             chat_file_new = f"{chats_directory}/{session_id}_chat.json"
-            new_exists = await asyncio.to_thread(os.path.exists, chat_file_new)
+            new_exists = await run_in_chat_io_executor(os.path.exists, chat_file_new)
             if new_exists:
-                await asyncio.to_thread(os.remove, chat_file_new)
+                await run_in_chat_io_executor(os.remove, chat_file_new)
                 deleted = True
 
             # Delete old format file if exists
             chat_file_old = f"{chats_directory}/chat_{session_id}.json"
-            old_exists = await asyncio.to_thread(os.path.exists, chat_file_old)
+            old_exists = await run_in_chat_io_executor(os.path.exists, chat_file_old)
             if old_exists:
-                await asyncio.to_thread(os.remove, chat_file_old)
+                await run_in_chat_io_executor(os.remove, chat_file_old)
                 deleted = True
 
             # Delete companion files (terminal logs, transcripts, etc.)
             terminal_log = f"{chats_directory}/{session_id}_terminal.log"
-            log_exists = await asyncio.to_thread(os.path.exists, terminal_log)
+            log_exists = await run_in_chat_io_executor(os.path.exists, terminal_log)
             if log_exists:
-                await asyncio.to_thread(os.remove, terminal_log)
+                await run_in_chat_io_executor(os.remove, terminal_log)
                 logger.debug("Deleted terminal log for session %s", session_id)
 
             # Delete terminal transcript file
             terminal_transcript = f"{chats_directory}/{session_id}_terminal_transcript.txt"
-            transcript_exists = await asyncio.to_thread(os.path.exists, terminal_transcript)
+            transcript_exists = await run_in_chat_io_executor(os.path.exists, terminal_transcript)
             if transcript_exists:
-                await asyncio.to_thread(os.remove, terminal_transcript)
+                await run_in_chat_io_executor(os.remove, terminal_transcript)
                 logger.debug("Deleted terminal transcript for session %s", session_id)
 
             # Clear Redis cache
@@ -548,8 +550,8 @@ class SessionMixin:
                 try:
                     cache_key = f"chat:session:{session_id}"
                     # Issue #361 - avoid blocking
-                    await asyncio.to_thread(self.redis_client.delete, cache_key)
-                    await asyncio.to_thread(
+                    await run_in_chat_io_executor(self.redis_client.delete, cache_key)
+                    await run_in_chat_io_executor(
                         self.redis_client.zrem, "chat:recent", session_id
                     )
                     logger.debug("Cleared Redis cache for session %s", session_id)
@@ -583,11 +585,11 @@ class SessionMixin:
 
             # Try new format first
             chat_file = f"{chats_directory}/{session_id}_chat.json"
-            file_exists = await asyncio.to_thread(os.path.exists, chat_file)
+            file_exists = await run_in_chat_io_executor(os.path.exists, chat_file)
             if not file_exists:
                 # Try old format
                 chat_file = f"{chats_directory}/chat_{session_id}.json"
-                old_exists = await asyncio.to_thread(os.path.exists, chat_file)
+                old_exists = await run_in_chat_io_executor(os.path.exists, chat_file)
                 if not old_exists:
                     logger.warning("Session %s not found for update", session_id)
                     return False
@@ -641,11 +643,11 @@ class SessionMixin:
 
             # Try new format first
             chat_file = f"{chats_directory}/{session_id}_chat.json"
-            file_exists = await asyncio.to_thread(os.path.exists, chat_file)
+            file_exists = await run_in_chat_io_executor(os.path.exists, chat_file)
             if not file_exists:
                 # Try old format
                 chat_file = f"{chats_directory}/chat_{session_id}.json"
-                old_exists = await asyncio.to_thread(os.path.exists, chat_file)
+                old_exists = await run_in_chat_io_executor(os.path.exists, chat_file)
                 if not old_exists:
                     logger.warning("Chat session %s not found for name update", session_id)
                     return False
@@ -694,7 +696,7 @@ class SessionMixin:
             chat_file = f"{chats_directory}/{session_id}_chat.json"
 
             # Try new format first
-            file_exists = await asyncio.to_thread(os.path.exists, chat_file)
+            file_exists = await run_in_chat_io_executor(os.path.exists, chat_file)
             if file_exists:
                 async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
                     file_content = await f.read()
