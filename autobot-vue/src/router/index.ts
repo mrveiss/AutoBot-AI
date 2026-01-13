@@ -18,6 +18,7 @@ import SecretsView from '@/views/SecretsView.vue'
 import SettingsView from '@/views/SettingsView.vue'
 import InfrastructureManager from '@/views/InfrastructureManager.vue'
 import AnalyticsView from '@/views/AnalyticsView.vue'
+import FeatureFlagsView from '@/views/FeatureFlagsView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
 
 // Route configuration
@@ -329,6 +330,16 @@ const routes: RouteRecordRaw[] = [
           title: 'Operations',
           parent: 'monitoring'
         }
+      },
+      {
+        path: 'errors',
+        name: 'monitoring-errors',
+        component: () => import('@/components/monitoring/errors/ErrorMonitoringDashboard.vue'),
+        meta: {
+          title: 'Error Monitoring',
+          parent: 'monitoring',
+          description: 'Real-time error tracking and system health monitoring (Issue #579)'
+        }
       }
     ]
   },
@@ -557,6 +568,17 @@ const routes: RouteRecordRaw[] = [
           parent: 'settings',
           icon: 'fas fa-shield-halved',
           description: 'Claude Code-style permission system'
+        }
+      },
+      {
+        path: 'feature-flags',
+        name: 'settings-feature-flags',
+        component: FeatureFlagsView,
+        meta: {
+          title: 'Feature Flags',
+          parent: 'settings',
+          icon: 'fas fa-flag',
+          description: 'Manage access control feature flags and enforcement modes (Issue #580)'
         }
       }
     ]
