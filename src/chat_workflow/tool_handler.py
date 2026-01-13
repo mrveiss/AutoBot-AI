@@ -156,18 +156,26 @@ class ToolHandlerMixin:
             logger.error("Failed to initialize terminal tool: %s", e)
             self.terminal_tool = None
 
-    def _parse_tool_calls(self, text: str) -> List[Dict[str, Any]]:
+    def _parse_tool_calls(
+        self, text: str, is_first_iteration: bool = False
+    ) -> List[Dict[str, Any]]:
         """
         Parse tool calls from LLM response using XML-style markers.
 
         Supports both uppercase and lowercase tags, and handles HTML entities.
         Issue #650: Fixed regex to handle nested JSON in params.
+        Issue #716: Enforces single tool call per iteration - only returns FIRST valid tool call.
+                    This prevents executing multiple steps before seeing results from each.
+        Issue #716: Plan-first execution - if this is the first iteration AND the response
+                    contains a [PLANNING] block, return empty list to show plan first.
+                    Tool calls will be extracted on the next continuation iteration.
 
         Args:
             text: LLM response text
+            is_first_iteration: Whether this is the first iteration (no execution history yet)
 
         Returns:
-            List of tool call dictionaries
+            List containing at most ONE tool call dictionary (single-step execution)
         """
         logger.debug(
             "[_parse_tool_calls] Searching for TOOL_CALL markers in text of length %d", len(text)
@@ -177,10 +185,22 @@ class ToolHandlerMixin:
         text = html.unescape(text)
 
         has_tool_call = ('<TOOL_CALL' in text) or ('<tool_call' in text)
+        has_planning = '[PLANNING]' in text or '[planning]' in text.lower()
+
         logger.debug(
-            "[_parse_tool_calls] Checking if '<TOOL_CALL' or '<tool_call' exists in text: %s",
-            has_tool_call
+            "[_parse_tool_calls] has_tool_call=%s, has_planning=%s, is_first_iteration=%s",
+            has_tool_call, has_planning, is_first_iteration
         )
+
+        # Issue #716: Plan-first execution - show plan before executing
+        # If this is the first iteration and LLM generated a plan, defer tool execution
+        # so the user sees the plan first. Execution will happen on next iteration.
+        if is_first_iteration and has_planning and has_tool_call:
+            logger.info(
+                "[Issue #716] Plan-first execution: First iteration with planning block detected. "
+                "Deferring tool execution to show plan first. Tool calls will execute on next iteration."
+            )
+            return []
 
         tool_calls = []
 
@@ -205,6 +225,16 @@ class ToolHandlerMixin:
                     "[_parse_tool_calls] Found TOOL_CALL #%d: name=%s, params=%s",
                     match_count, tool_name, params
                 )
+                # Issue #716: CRITICAL - Only process ONE tool call per iteration
+                # Multi-step tasks require seeing results before deciding next step
+                # This enforces: plan → execute step 1 → see results → decide step 2
+                if tool_name == "execute_command":
+                    logger.info(
+                        "[Issue #716] Single-step execution enforced: returning first "
+                        "execute_command tool call only (found %d total so far)",
+                        match_count
+                    )
+                    break  # Stop after first execute_command
             except json.JSONDecodeError as e:
                 logger.error("Failed to parse tool call params: %s", e)
                 # Issue #650: Include total length for debugging truncated params
@@ -215,12 +245,12 @@ class ToolHandlerMixin:
                 continue
 
         logger.info(
-            "[_parse_tool_calls] Total matches found: %d, successfully parsed: %d",
+            "[_parse_tool_calls] Total matches found: %d, returning: %d (single-step enforced)",
             match_count, len(tool_calls)
         )
 
         # Issue #650: Add warning when TOOL_CALL tags found but parsing failed
-        if not tool_calls and has_tool_call:
+        if not tool_calls and has_tool_call and not (is_first_iteration and has_planning):
             logger.warning(
                 "[Issue #650] TOOL_CALL tag found but regex didn't match! "
                 "Response snippet: %s", text[:500]

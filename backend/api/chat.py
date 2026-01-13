@@ -181,8 +181,12 @@ def _get_message_signature(msg: Dict) -> tuple:
     """
     Create a unique signature for message deduplication (Issue #281: extracted).
 
+    Issue #716: Fixed to deduplicate assistant messages with identical content.
+    Previously, streaming messages with same content but different IDs would
+    both be kept, causing duplicate "Hello there!" type issues.
+
     For user messages, use sender + content for deduplication.
-    For streaming responses, use sender + messageType (content changes during streaming).
+    For assistant messages, use sender + content (truncated) for deduplication.
     For terminal/system messages, use ID if available, else timestamp + content prefix.
     """
     message_type = msg.get("messageType", msg.get("type", "default"))
@@ -193,9 +197,13 @@ def _get_message_signature(msg: Dict) -> tuple:
     if sender == "user":
         return ("user", text_content[:200])
 
-    # For STREAMING responses: use sender + messageType
-    if message_type in STREAMING_MESSAGE_TYPES:
-        return (sender, message_type, "streaming")
+    # Issue #716: For ASSISTANT messages, use content for deduplication
+    # This prevents duplicate messages with same content but different IDs
+    if sender == "assistant":
+        # Use first 300 chars of content - enough to identify unique messages
+        # while handling minor whitespace differences
+        normalized_content = text_content.strip()[:300]
+        return ("assistant", message_type, normalized_content)
 
     # For TERMINAL/SYSTEM messages: use ID if available
     msg_id = msg.get("id") or msg.get("messageId")

@@ -150,15 +150,21 @@ class StreamingMessage:
         """
         Convert to WorkflowMessage for yielding.
 
+        Issue #716: Applies filter to remove internal continuation prompts
+        that LLM sometimes echoes back. These should never be shown to users.
+
         Returns:
             WorkflowMessage with streaming metadata for frontend handling
         """
         # Import here to avoid circular dependency
         from src.async_chat_workflow import WorkflowMessage
 
+        # Issue #716: Filter internal prompts from content before sending to frontend
+        filtered_content = self._filter_internal_prompts(self.content)
+
         return WorkflowMessage(
             type=self.type,
-            content=self.content,
+            content=filtered_content,
             id=self.id,  # Use same ID for stable identity
             metadata={
                 **self.metadata,
@@ -168,6 +174,39 @@ class StreamingMessage:
                 "streaming": True,
             },
         )
+
+    def _filter_internal_prompts(self, text: str) -> str:
+        """Filter out internal continuation prompts that LLM echoes back (Issue #716).
+
+        The LLM sometimes echoes the continuation instructions we send it, which
+        should never be shown to the user.
+
+        Args:
+            text: Content that may contain echoed internal prompts
+
+        Returns:
+            Text with internal prompts removed
+        """
+        import re
+
+        # Patterns for internal prompts that should not be shown to users
+        patterns = [
+            re.compile(r"\*\*CRITICAL MULTI-STEP TASK INSTRUCTIONS.*?\*\*YOUR RESPONSE:\*\*", re.DOTALL | re.IGNORECASE),
+            re.compile(r"User is in the middle of a multi-step task\. \d+ step\(s\) have been completed\."),
+            re.compile(r"\*\*ORIGINAL USER REQUEST \(analyze this.*?\)\:\*\*"),
+            re.compile(r"\*\*DECISION PROCESS:\*\*.*?\*\*IF TASK IS COMPLETE\*\*.*?TOOL_CALL", re.DOTALL | re.IGNORECASE),
+            re.compile(r"\*\*IF MORE STEPS NEEDED\*\*.*?`<TOOL_CALL", re.DOTALL),
+            re.compile(r"---\s*\n\*\*CRITICAL MULTI-STEP.*?---", re.DOTALL | re.IGNORECASE),
+        ]
+
+        filtered = text
+        for pattern in patterns:
+            filtered = pattern.sub("", filtered)
+
+        # Clean up multiple newlines
+        filtered = re.sub(r"\n{3,}", "\n\n", filtered)
+
+        return filtered.strip() if filtered != text else text
 
     def to_dict(self) -> Dict[str, Any]:
         """

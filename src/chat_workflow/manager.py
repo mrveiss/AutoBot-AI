@@ -45,6 +45,16 @@ _BLOCK_CONTENT_TYPES: FrozenSet[str] = frozenset({"thought", "planning"})
 _TOOL_CALL_OPEN_RE = re.compile(r"<TOOL_\s+CALL")
 _TOOL_CALL_CLOSE_RE = re.compile(r"</TOOL_\s+CALL>")
 
+# Issue #716: Patterns for internal prompts that should not be shown to users
+# These are continuation instructions that LLM sometimes echoes back
+_INTERNAL_PROMPT_PATTERNS = [
+    re.compile(r"\*\*CRITICAL MULTI-STEP TASK INSTRUCTIONS.*?\*\*YOUR RESPONSE:\*\*", re.DOTALL | re.IGNORECASE),
+    re.compile(r"User is in the middle of a multi-step task\. \d+ step\(s\) have been completed\."),
+    re.compile(r"\*\*ORIGINAL USER REQUEST \(analyze this.*?\)\:\*\*"),
+    re.compile(r"\*\*DECISION PROCESS:\*\*.*?\*\*IF TASK IS COMPLETE\*\*.*?TOOL_CALL", re.DOTALL | re.IGNORECASE),
+    re.compile(r"\*\*IF MORE STEPS NEEDED\*\*.*?`<TOOL_CALL", re.DOTALL),
+]
+
 
 class ChatWorkflowManager(
     ConversationHandlerMixin,
@@ -149,6 +159,34 @@ class ChatWorkflowManager(
         text = _TOOL_CALL_OPEN_RE.sub("<TOOL_CALL", text)
         text = _TOOL_CALL_CLOSE_RE.sub("</TOOL_CALL>", text)
         return text
+
+    def _filter_internal_prompts(self, text: str) -> str:
+        """Filter out internal continuation prompts that LLM echoes back (Issue #716).
+
+        The LLM sometimes echoes the continuation instructions we send it, which
+        should never be shown to the user. This filters those out.
+
+        Args:
+            text: LLM response text that may contain echoed internal prompts
+
+        Returns:
+            Text with internal prompts removed
+        """
+        filtered = text
+        for pattern in _INTERNAL_PROMPT_PATTERNS:
+            filtered = pattern.sub("", filtered)
+
+        # Also clean up any resulting multiple newlines
+        filtered = re.sub(r"\n{3,}", "\n\n", filtered)
+
+        if filtered != text:
+            logger.debug(
+                "[Issue #716] Filtered internal prompts from LLM response "
+                "(original: %d chars, filtered: %d chars)",
+                len(text), len(filtered)
+            )
+
+        return filtered.strip()
 
     def _find_last_tag_positions(self, content: str) -> Dict[str, int]:
         """Find last occurrence positions of thought/planning tags."""
@@ -698,7 +736,10 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
             "[Issue #651] Iteration %d: Response has TOOL_CALL tag: %s, snippet: %s",
             iteration, has_tool_call_tag, llm_response[:500].replace('\n', ' ')
         )
-        tool_calls = self._parse_tool_calls(llm_response)
+        # Issue #716: Pass iteration info for plan-first execution
+        # On first iteration, if there's a planning block, defer tool execution to show plan first
+        is_first_iteration = (iteration == 1)
+        tool_calls = self._parse_tool_calls(llm_response, is_first_iteration=is_first_iteration)
         logger.info("[Issue #352] Iteration %d: Parsed %d tool calls", iteration, len(tool_calls))
         yield (llm_response, tool_calls)
 
@@ -1376,6 +1417,10 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         workflow_messages: List[WorkflowMessage],
     ):
         """Execute the main LLM workflow. Yields WorkflowMessages."""
+        # Issue #715: Register user message in history BEFORE building LLM context
+        # This fixes race condition where concurrent messages don't see each other
+        self._register_user_message_in_history(session, message)
+
         # Stage 2: Prepare LLM request parameters (includes RAG knowledge retrieval)
         use_knowledge = context.get("use_knowledge", True) if context else True
         llm_params = await self._prepare_llm_request_params(
