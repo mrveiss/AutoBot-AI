@@ -158,6 +158,16 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
+        // Issue #586: Entity Extraction & Graph RAG Manager
+        path: 'entities',
+        name: 'knowledge-entities',
+        component: () => import('@/components/knowledge/EntityGraphManager.vue'),
+        meta: {
+          title: 'Entity Graph Manager',
+          parent: 'knowledge'
+        }
+      },
+      {
         path: 'maintenance',
         name: 'knowledge-maintenance',
         component: () => import('@/components/knowledge/KnowledgeMaintenance.vue'),
