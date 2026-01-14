@@ -616,7 +616,13 @@ start_backend_optimized() {
 
     # Start Celery worker for async task processing (RBAC, background jobs, etc.)
     log "Starting Celery worker for async task processing..."
-    nohup celery -A backend.celery_app worker --loglevel=info > logs/celery.log 2>&1 &
+    nohup celery -A backend.celery_app worker \
+        --loglevel=info \
+        --concurrency=4 \
+        --queues=deployments,provisioning,services \
+        --max-tasks-per-child=50 \
+        --hostname=autobot-worker@%h \
+        > logs/celery.log 2>&1 &
     local celery_pid=$!
 
     # Brief wait to verify Celery started

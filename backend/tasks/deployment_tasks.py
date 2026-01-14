@@ -34,19 +34,24 @@ def _create_deployment_event_callback(task, ip_address: str, role: str):
     Returns:
         Callback function for Ansible event handling
     """
+    # Capture task_id at creation time to avoid None in callback context
+    task_id = task.request.id
+
     def event_callback(event):
         """Publish Ansible events to Celery state for real-time monitoring."""
         event_type = event.get("event", "unknown")
-        task.update_state(
-            state="PROGRESS",
-            meta={
-                "event_type": event_type,
-                "event_data": event.get("event_data", {}),
-                "host": ip_address,
-                "role": role,
-                "stdout": event.get("stdout", ""),
-            },
-        )
+        # Only update state if we have a valid task_id
+        if task_id:
+            task.update_state(
+                state="PROGRESS",
+                meta={
+                    "event_type": event_type,
+                    "event_data": event.get("event_data", {}),
+                    "host": ip_address,
+                    "role": role,
+                    "stdout": event.get("stdout", ""),
+                },
+            )
         if event_type in _DEPLOYMENT_LOGGABLE_EVENTS:
             logger.info("Deployment event [%s]: %s", ip_address, event_type)
     return event_callback
@@ -130,13 +135,18 @@ def deploy_host(self, host_config: Metadata, force_redeploy: bool = False):
     Returns:
         Dict with deployment results
     """
+    # Create event callback here where task.request.id is valid
+    ip_address = host_config.get("ip_address", "unknown")
+    role = host_config.get("role", "unknown")
+    event_callback = _create_deployment_event_callback(self, ip_address, role)
+
     # Run in asyncio event loop
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
     try:
         result = loop.run_until_complete(
-            _deploy_host_async(self, host_config, force_redeploy)
+            _deploy_host_async(self, host_config, force_redeploy, event_callback)
         )
         return result
     except Exception as e:
@@ -146,13 +156,14 @@ def deploy_host(self, host_config: Metadata, force_redeploy: bool = False):
         loop.close()
 
 
-async def _deploy_host_async(task, host_config: Metadata, force_redeploy: bool):
+async def _deploy_host_async(task, host_config: Metadata, force_redeploy: bool, event_callback):
     """Async implementation of host deployment (Issue #398: refactored to use helpers).
 
     Args:
         task: Celery task instance
         host_config: Host configuration dictionary
         force_redeploy: Force redeployment flag
+        event_callback: Pre-created event callback with valid task_id
 
     Returns:
         Dict with deployment results
@@ -170,8 +181,7 @@ async def _deploy_host_async(task, host_config: Metadata, force_redeploy: bool):
 
     logger.info("Starting deployment for host %s with role %s", ip_address, role)
 
-    # Issue #398: Use extracted helpers
-    event_callback = _create_deployment_event_callback(task, ip_address, role)
+    # Issue #398: Use extracted helpers (event_callback passed from sync context)
     inventory = _build_ansible_inventory(role, ip_address, ssh_user, ssh_key_path, ssh_port)
     extra_vars = {"role_name": role, "target_host": ip_address, "force_redeploy": force_redeploy}
 
@@ -305,20 +315,25 @@ def _create_rbac_event_callback(task):
     Returns:
         Callback function for Ansible event handling
     """
+    # Capture task_id at creation time to avoid None in callback context
+    task_id = task.request.id
+
     def event_callback(event):
         """Publish Ansible events to Celery state for real-time monitoring."""
         event_type = event.get("event", "unknown")
         event_data = event.get("event_data", {})
         task_name = event_data.get("task", "")
-        task.update_state(
-            state="PROGRESS",
-            meta={
-                "event_type": event_type,
-                "task_name": task_name,
-                "stdout": event.get("stdout", ""),
-                "step": "initializing",
-            },
-        )
+        # Only update state if we have a valid task_id
+        if task_id:
+            task.update_state(
+                state="PROGRESS",
+                meta={
+                    "event_type": event_type,
+                    "task_name": task_name,
+                    "stdout": event.get("stdout", ""),
+                    "step": "initializing",
+                },
+            )
         if event_type in _RBAC_LOGGABLE_EVENTS:
             logger.info("RBAC init event: %s - %s", event_type, task_name)
     return event_callback
@@ -343,12 +358,15 @@ def initialize_rbac(self, create_admin: bool = False, admin_username: str = "adm
     Returns:
         Dict with initialization results
     """
+    # Create event callback here where task.request.id is valid
+    event_callback = _create_rbac_event_callback(self)
+
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
     try:
         result = loop.run_until_complete(
-            _initialize_rbac_async(self, create_admin, admin_username)
+            _initialize_rbac_async(self, create_admin, admin_username, event_callback)
         )
         return result
     except Exception as e:
@@ -358,7 +376,7 @@ def initialize_rbac(self, create_admin: bool = False, admin_username: str = "adm
         loop.close()
 
 
-async def _initialize_rbac_async(task, create_admin: bool, admin_username: str):
+async def _initialize_rbac_async(task, create_admin: bool, admin_username: str, event_callback):
     """
     Async implementation of RBAC initialization (Issue #687).
 
@@ -366,6 +384,7 @@ async def _initialize_rbac_async(task, create_admin: bool, admin_username: str):
         task: Celery task instance
         create_admin: Whether to create admin user
         admin_username: Admin username
+        event_callback: Pre-created event callback with valid task_id
 
     Returns:
         Dict with initialization results
@@ -392,7 +411,7 @@ async def _initialize_rbac_async(task, create_admin: bool, admin_username: str):
     }
 
     try:
-        event_callback = _create_rbac_event_callback(task)
+        # event_callback passed from sync context where task_id is valid
         playbook_path = await executor.get_playbook_path("setup-rbac.yml")
 
         runner = await executor.run_playbook(
@@ -444,23 +463,28 @@ def _create_system_update_event_callback(task, update_type: str):
     Returns:
         Callback function for Ansible event handling
     """
+    # Capture task_id at creation time to avoid None in callback context
+    task_id = task.request.id
+
     def event_callback(event):
         """Publish Ansible events to Celery state for real-time monitoring."""
         event_type = event.get("event", "unknown")
         event_data = event.get("event_data", {})
         task_name = event_data.get("task", "")
         host = event_data.get("host", "localhost")
-        task.update_state(
-            state="PROGRESS",
-            meta={
-                "event_type": event_type,
-                "task_name": task_name,
-                "host": host,
-                "stdout": event.get("stdout", ""),
-                "update_type": update_type,
-                "step": "updating",
-            },
-        )
+        # Only update state if we have a valid task_id
+        if task_id:
+            task.update_state(
+                state="PROGRESS",
+                meta={
+                    "event_type": event_type,
+                    "task_name": task_name,
+                    "host": host,
+                    "stdout": event.get("stdout", ""),
+                    "update_type": update_type,
+                    "step": "updating",
+                },
+            )
         if event_type in _SYSTEM_UPDATE_LOGGABLE_EVENTS:
             logger.info("System update event [%s]: %s - %s", update_type, event_type, task_name)
     return event_callback
@@ -491,12 +515,15 @@ def run_system_update(
     Returns:
         Dict with update results
     """
+    # Create event callback here where task.request.id is valid
+    event_callback = _create_system_update_event_callback(self, update_type)
+
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
     try:
         result = loop.run_until_complete(
-            _run_system_update_async(self, update_type, target_groups, dry_run, force_update)
+            _run_system_update_async(self, update_type, target_groups, dry_run, force_update, event_callback)
         )
         return result
     except Exception as e:
@@ -628,6 +655,7 @@ async def _run_system_update_async(
     target_groups: list | None,
     dry_run: bool,
     force_update: bool,
+    event_callback,
 ):
     """
     Async implementation of system updates (Issue #544).
@@ -638,6 +666,7 @@ async def _run_system_update_async(
         target_groups: Target host groups
         dry_run: Preview mode
         force_update: Force update flag
+        event_callback: Pre-created event callback with valid task_id
 
     Returns:
         Dict with update results
@@ -659,7 +688,7 @@ async def _run_system_update_async(
     extra_vars = _build_update_extra_vars(dry_run, force_update, target_groups)
 
     try:
-        event_callback = _create_system_update_event_callback(task, update_type)
+        # event_callback passed from sync context where task_id is valid
         playbook_path = await executor.get_playbook_path(playbook_name)
 
         runner = await executor.run_playbook(
@@ -699,11 +728,14 @@ def check_available_updates(self):
     Returns:
         Dict with available updates
     """
+    # Capture task_id here where it's valid
+    task_id = self.request.id
+
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
     try:
-        result = loop.run_until_complete(_check_available_updates_async(self))
+        result = loop.run_until_complete(_check_available_updates_async(self, task_id))
         return result
     except Exception as e:
         logger.exception("Update check task failed: %s", e)
@@ -712,22 +744,25 @@ def check_available_updates(self):
         loop.close()
 
 
-async def _check_available_updates_async(task):
+async def _check_available_updates_async(task, task_id):
     """
     Async implementation of update check (Issue #544).
 
     Args:
         task: Celery task instance
+        task_id: Pre-captured task ID from sync context
 
     Returns:
         Dict with available updates
     """
     logger.info("Checking for available updates")
 
-    task.update_state(
-        state="PROGRESS",
-        meta={"step": "checking_python", "message": "Checking Python dependencies..."},
-    )
+    # Only update state if we have a valid task_id
+    if task_id:
+        task.update_state(
+            state="PROGRESS",
+            meta={"step": "checking_python", "message": "Checking Python dependencies..."},
+        )
 
     python_updates = []
     system_updates = []
@@ -751,10 +786,12 @@ async def _check_available_updates_async(task):
     except Exception as e:
         logger.warning("pip-audit failed: %s", e)
 
-    task.update_state(
-        state="PROGRESS",
-        meta={"step": "checking_system", "message": "Checking system packages..."},
-    )
+    # Only update state if we have a valid task_id
+    if task_id:
+        task.update_state(
+            state="PROGRESS",
+            meta={"step": "checking_system", "message": "Checking system packages..."},
+        )
 
     # Check system packages with apt
     try:

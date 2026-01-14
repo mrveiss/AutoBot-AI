@@ -36,7 +36,19 @@ fi
 # Load environment variables
 if [ -f ".env" ]; then
     echo "[2/4] Loading environment variables from .env..."
-    export $(grep -v '^#' .env | xargs)
+    # Strip comments (both full-line and inline) and empty lines before exporting
+    set -a  # auto-export all variables
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # Skip empty lines and comment-only lines
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+        # Remove inline comments (everything after # with optional leading space)
+        line="${line%%[[:space:]]#*}"
+        # Remove trailing whitespace
+        line="${line%"${line##*[![:space:]]}"}"
+        # Only export if line contains = and is not empty
+        [[ "$line" == *"="* ]] && eval "export $line" 2>/dev/null || true
+    done < .env
+    set +a
 fi
 
 # Set default Celery configuration if not in .env
