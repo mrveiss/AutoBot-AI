@@ -187,6 +187,66 @@ The passwordless sudo configuration is secure because:
 - SSH only accepts key-based authentication
 - Firewall rules restrict access to the internal network
 
+## Emergency Recovery (Lockout Prevention)
+
+### Recovery Methods
+
+If SSH key authentication fails, you have these fallback options:
+
+#### 1. Password Authentication (Recommended)
+
+Force password auth from the client:
+
+```bash
+# Emergency SSH with password
+ssh -o PreferredAuthentications=password -o PubkeyAuthentication=no autobot@172.16.168.21
+
+# For Ansible operations
+ansible all -i inventory/production.yml -m ping \
+  -e "ansible_ssh_pass=autobot" \
+  -e "ansible_ssh_private_key_file="
+```
+
+#### 2. Hyper-V Console Access
+
+If network access is completely lost:
+
+1. Open Hyper-V Manager
+2. Connect to VM console
+3. Login as `autobot` with password
+4. Fix SSH keys: `cat ~/.ssh/authorized_keys`
+
+#### 3. Re-deploy SSH Key
+
+```bash
+# From WSL, re-copy the SSH key
+ssh-copy-id -i ~/.ssh/autobot_key.pub -o PreferredAuthentications=password autobot@172.16.168.21
+```
+
+### Preventing Lockouts
+
+1. **Never disable password auth on VM sshd** - Keep as fallback
+2. **Backup SSH keys** - Copy `~/.ssh/autobot_key*` to secure location
+3. **Test recovery** - Periodically verify password login works
+4. **Document passwords** - Keep in vault.yml (encrypted)
+
+### Key Recovery Commands
+
+```bash
+# Check if key exists
+ls -la ~/.ssh/autobot_key
+
+# Verify key permissions (should be 600)
+chmod 600 ~/.ssh/autobot_key
+
+# Test key authentication
+ssh -v autobot@172.16.168.21
+
+# Regenerate key if corrupted
+ssh-keygen -t rsa -b 4096 -f ~/.ssh/autobot_key -N ''
+ssh-copy-id -i ~/.ssh/autobot_key.pub autobot@172.16.168.21
+```
+
 ## Troubleshooting
 
 ### SSH Connection Fails
