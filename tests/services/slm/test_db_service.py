@@ -144,36 +144,37 @@ class TestSLMRoleCRUD:
     def test_create_role(self, slm_db):
         """Test creating a new role."""
         role = slm_db.create_role(
-            name="redis",
-            description="Redis Stack data layer",
+            name="test-redis",
+            description="Test Redis Stack data layer",
             service_type="stateful",
             services=["redis-stack-server"],
             health_checks=[{"type": "tcp", "port": 6379}],
         )
         assert role.id is not None
-        assert role.name == "redis"
+        assert role.name == "test-redis"
         assert role.service_type.value == "stateful"
 
     def test_get_role_by_name(self, slm_db):
         """Test retrieving role by name."""
         slm_db.create_role(
-            name="frontend",
-            description="Vue.js frontend",
+            name="test-frontend",
+            description="Test Vue.js frontend",
             service_type="stateless",
             services=["nginx"],
         )
-        role = slm_db.get_role_by_name("frontend")
+        role = slm_db.get_role_by_name("test-frontend")
         assert role is not None
         assert "nginx" in role.services
 
     def test_get_all_roles(self, slm_db):
         """Test retrieving all roles."""
-        slm_db.create_role(name="redis", service_type="stateful")
-        slm_db.create_role(name="frontend", service_type="stateless")
-        slm_db.create_role(name="npu", service_type="stateless")
+        slm_db.create_role(name="test-db", service_type="stateful")
+        slm_db.create_role(name="test-web", service_type="stateless")
+        slm_db.create_role(name="test-worker", service_type="stateless")
 
         roles = slm_db.get_all_roles()
-        assert len(roles) == 3
+        # 3 custom + 5 default = 8 total
+        assert len(roles) == 8
 
 
 class TestSLMStatistics:
@@ -190,14 +191,14 @@ class TestSLMStatistics:
         slm_db.update_node_state(node1.id, NodeState.PENDING, trigger="test")
         slm_db.update_node_state(node2.id, NodeState.PENDING, trigger="test")
 
-        # Create roles
-        slm_db.create_role(name="redis", service_type="stateful")
-        slm_db.create_role(name="frontend", service_type="stateless")
+        # Create custom roles (5 default roles already exist)
+        slm_db.create_role(name="test-service-1", service_type="stateful")
+        slm_db.create_role(name="test-service-2", service_type="stateless")
 
         stats = slm_db.get_statistics()
 
         assert stats["total_nodes"] == 3
         assert stats["nodes_by_state"]["unknown"] == 1
         assert stats["nodes_by_state"]["pending"] == 2
-        assert stats["total_roles"] == 2
+        assert stats["total_roles"] == 7  # 5 default + 2 custom
         assert stats["total_transitions"] == 2

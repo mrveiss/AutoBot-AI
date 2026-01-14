@@ -58,7 +58,82 @@ class SLMDatabaseService:
         self.SessionLocal = sessionmaker(bind=self.engine, expire_on_commit=False)
         self.state_machine = SLMStateMachine()
 
+        # Initialize default roles if database is new
+        self._init_default_roles()
+
         logger.info("SLM database initialized at %s", db_path)
+
+    def _init_default_roles(self):
+        """Initialize default roles if database is empty."""
+        with self.SessionLocal() as session:
+            count = session.query(SLMRole).count()
+            if count > 0:
+                return
+
+            default_roles = [
+                {
+                    "name": "frontend",
+                    "description": "Vue.js frontend server",
+                    "service_type": "stateless",
+                    "services": ["nginx", "autobot-frontend"],
+                    "health_checks": [{"type": "tcp", "port": 5173}],
+                    "install_playbook": "ansible/playbooks/deploy_frontend.yml",
+                },
+                {
+                    "name": "redis",
+                    "description": "Redis Stack data layer",
+                    "service_type": "stateful",
+                    "services": ["redis-stack-server"],
+                    "health_checks": [{"type": "tcp", "port": 6379}],
+                    "install_playbook": "ansible/playbooks/deploy_redis.yml",
+                    "required_tags": ["has_ssd"],
+                },
+                {
+                    "name": "npu-worker",
+                    "description": "NPU hardware acceleration worker",
+                    "service_type": "stateless",
+                    "services": ["autobot-npu-worker"],
+                    "health_checks": [{"type": "tcp", "port": 8081}],
+                    "install_playbook": "ansible/playbooks/deploy_npu.yml",
+                    "required_tags": ["has_npu"],
+                },
+                {
+                    "name": "ai-stack",
+                    "description": "AI processing stack with Ollama",
+                    "service_type": "stateful",
+                    "services": ["ollama", "autobot-ai-stack"],
+                    "health_checks": [{"type": "tcp", "port": 8080}],
+                    "install_playbook": "ansible/playbooks/deploy_ai_stack.yml",
+                    "required_tags": ["has_gpu"],
+                },
+                {
+                    "name": "browser",
+                    "description": "Playwright browser automation",
+                    "service_type": "stateless",
+                    "services": ["autobot-browser"],
+                    "health_checks": [{"type": "tcp", "port": 3000}],
+                    "install_playbook": "ansible/playbooks/deploy_browser.yml",
+                },
+            ]
+
+            for role_data in default_roles:
+                # Convert string to ServiceType enum
+                service_type_str = role_data.get("service_type", "stateless")
+                service_type_enum = ServiceType.STATEFUL if service_type_str == "stateful" else ServiceType.STATELESS
+
+                role = SLMRole(
+                    name=role_data["name"],
+                    description=role_data.get("description", ""),
+                    service_type=service_type_enum,
+                    services=role_data.get("services", []),
+                    required_tags=role_data.get("required_tags", []),
+                    health_checks=role_data.get("health_checks", []),
+                    install_playbook=role_data.get("install_playbook"),
+                )
+                session.add(role)
+
+            session.commit()
+            logger.info("Initialized %d default SLM roles", len(default_roles))
 
     # ==================== Node Management ====================
 
