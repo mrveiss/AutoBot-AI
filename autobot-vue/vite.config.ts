@@ -97,26 +97,35 @@ export default defineConfig(({ mode }) => {
         'X-AutoBot-Build': env.npm_package_version || 'dev'
       },
       proxy: {
+        // WebSocket endpoints under /api need ws: true
+        // SSH Terminal WebSocket (Issue #715)
+        '/api/terminal/ws': {
+          target: `${config.protocol}://${config.backend.host}:${config.backend.port}`,
+          changeOrigin: true,
+          secure: false,
+          ws: true,  // Enable WebSocket support for terminal connections
+          timeout: 300000, // 5 minutes for long-running terminal sessions
+        },
+        // General WebSocket proxy under /api/ws
+        '/api/ws': {
+          target: `${config.protocol}://${config.backend.host}:${config.backend.port}`,
+          changeOrigin: true,
+          secure: false,
+          ws: true,  // Enable WebSocket support
+          timeout: 300000,
+        },
         '/api': {
           target: `${config.protocol}://${config.backend.host}:${config.backend.port}`,
           changeOrigin: true,
           secure: false,
           timeout: 300000, // 5 minutes for long-running analytics operations
-          configure: (proxy, options) => {
-            proxy.on('error', (err, req, res) => {
-              console.error('Proxy error:', err);
-            });
-            proxy.on('proxyReq', (proxyReq, req, res) => {
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq) => {
               // Add cache-busting headers to proxied requests
               proxyReq.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
               proxyReq.setHeader('X-Cache-Bust', Date.now().toString());
-
-              // Only log proxy requests in debug mode to reduce noise
-              if (env.NODE_ENV === 'development' && env.DEBUG_PROXY === 'true') {
-                console.debug('Proxying request:', req.method, req.url, 'to', options.target);
-              }
             });
-            proxy.on('proxyRes', (proxyRes, req, res) => {
+            proxy.on('proxyRes', (proxyRes) => {
               // Force no-cache on API responses
               proxyRes.headers['cache-control'] = 'no-cache, no-store, must-revalidate';
               proxyRes.headers['pragma'] = 'no-cache';
@@ -129,17 +138,6 @@ export default defineConfig(({ mode }) => {
           ws: true,
           changeOrigin: true,
           timeout: 300000, // 5 minutes for long-running WebSocket operations
-          configure: (proxy, options) => {
-            proxy.on('error', (err, req, res) => {
-              console.error('WebSocket proxy error:', err);
-            });
-            proxy.on('proxyReqWs', (proxyReq, req, socket) => {
-              console.log('WebSocket proxy request:', req.url);
-            });
-            proxy.on('proxyRes', (proxyRes, req, res) => {
-              console.log('WebSocket proxy response:', proxyRes.statusCode);
-            });
-          }
         },
         '/vnc-proxy': {
           target: env.VITE_PLAYWRIGHT_VNC_URL || `${config.protocol}://${config.browser.host}:${config.browser.port}`,
@@ -152,14 +150,6 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           ws: true,  // Enable WebSocket support for noVNC
           rewrite: (path) => path.replace(/^\/tools\/novnc/, ''),
-          configure: (proxy, options) => {
-            proxy.on('error', (err, req, res) => {
-              console.error('noVNC proxy error:', err);
-            });
-            proxy.on('proxyReq', (proxyReq, req, res) => {
-              console.log('noVNC proxy request:', req.url);
-            });
-          }
         }
       }
     },
