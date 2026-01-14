@@ -401,6 +401,7 @@ class SLMDeployment(Base):
     # Deployment configuration
     target_nodes = Column(JSON, default=list)  # List of node names/IDs
     strategy = Column(SQLEnum(DeploymentStrategy), nullable=False)
+    strategy_params = Column(JSON)  # Strategy configuration parameters
 
     # Deployment state
     status = Column(String(50), nullable=False, index=True)  # queued, running, success, failed
@@ -417,6 +418,7 @@ class SLMDeployment(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     started_at = Column(DateTime)
     completed_at = Column(DateTime)
+    rollback_at = Column(DateTime)  # When rollback occurred
 
     def __repr__(self):
         """Return string representation of SLMDeployment."""
@@ -435,7 +437,7 @@ class SLMMaintenanceWindow(Base):
     __tablename__ = 'slm_maintenance_windows'
 
     id = Column(Integer, primary_key=True)
-    node_name = Column(String(100), nullable=False, index=True)
+    node_id = Column(String(36), ForeignKey('slm_nodes.id', ondelete='CASCADE'), nullable=False, index=True)
 
     # Maintenance details
     maintenance_type = Column(SQLEnum(MaintenanceType), nullable=False)
@@ -452,6 +454,7 @@ class SLMMaintenanceWindow(Base):
     approved_by = Column(String(100))
     approved_at = Column(DateTime)
     status = Column(String(50), default='pending', nullable=False, index=True)
+    executed = Column(Boolean, default=False)  # Whether maintenance was executed
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -459,6 +462,6 @@ class SLMMaintenanceWindow(Base):
     def __repr__(self):
         """Return string representation of SLMMaintenanceWindow."""
         return (
-            f"<SLMMaintenanceWindow(id={self.id}, node='{self.node_name}', "
+            f"<SLMMaintenanceWindow(id={self.id}, node_id='{self.node_id}', "
             f"type='{self.maintenance_type}', status='{self.status}')>"
         )

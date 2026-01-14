@@ -237,6 +237,7 @@ class TestSLMDeployment:
             role_name="redis-server",
             target_nodes=["node1", "node2"],
             strategy=DeploymentStrategy.SEQUENTIAL,
+            strategy_params={"batch_size": 2, "delay_seconds": 30},
             status="in_progress",
             initiated_by="admin",
         )
@@ -248,6 +249,8 @@ class TestSLMDeployment:
         assert retrieved is not None
         assert retrieved.role_name == "redis-server"
         assert retrieved.strategy == DeploymentStrategy.SEQUENTIAL
+        assert retrieved.strategy_params == {"batch_size": 2, "delay_seconds": 30}
+        assert retrieved.rollback_at is None
 
 
 class TestSLMMaintenanceWindow:
@@ -255,14 +258,26 @@ class TestSLMMaintenanceWindow:
 
     def test_create_maintenance_window(self, db_session):
         """Test creating a maintenance window."""
+        # Create a node first
+        node = SLMNode(
+            name="test-node",
+            ip_address="172.16.168.40",
+            ssh_port=22,
+            ssh_user="autobot",
+            state=NodeState.ONLINE,
+        )
+        db_session.add(node)
+        db_session.commit()
+
         now = datetime.utcnow()
         window = SLMMaintenanceWindow(
-            node_name="test-node",
+            node_id=node.id,
             maintenance_type=MaintenanceType.PLANNED,
             scheduled_start=now + timedelta(hours=1),
             scheduled_end=now + timedelta(hours=2),
             reason="System updates",
             approved_by="admin",
+            executed=False,
         )
         db_session.add(window)
         db_session.commit()
@@ -270,5 +285,6 @@ class TestSLMMaintenanceWindow:
         # Verify
         retrieved = db_session.query(SLMMaintenanceWindow).first()
         assert retrieved is not None
-        assert retrieved.node_name == "test-node"
+        assert retrieved.node_id == node.id
         assert retrieved.maintenance_type == MaintenanceType.PLANNED
+        assert retrieved.executed is False
