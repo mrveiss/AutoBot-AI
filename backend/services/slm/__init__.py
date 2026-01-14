@@ -16,9 +16,11 @@ from backend.services.slm.state_machine import (
     InvalidStateTransition,
     VALID_TRANSITIONS,
 )
+from backend.services.slm.db_service import SLMDatabaseService
 
 __all__ = [
     "SLMStateMachine",
     "InvalidStateTransition",
     "VALID_TRANSITIONS",
+    "SLMDatabaseService",
 ]
