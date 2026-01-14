@@ -1,7 +1,7 @@
 <template>
   <BaseModal
     v-model="modelVisible"
-    title="Add New Node"
+    :title="modalTitle"
     size="large"
     :closeOnOverlay="!isSubmitting"
   >
@@ -242,10 +242,10 @@
       <div class="form-section">
         <h5 class="section-title">
           <i class="fas fa-cog"></i>
-          Enrollment Options
+          {{ isEditMode ? 'Update Options' : 'Enrollment Options' }}
         </h5>
 
-        <div class="form-group">
+        <div class="form-group" v-if="!isEditMode">
           <label class="checkbox-label">
             <input type="checkbox" v-model="formData.auto_enroll" />
             Start enrollment immediately after adding
@@ -254,6 +254,35 @@
             If enabled, the node will be automatically enrolled with Ansible after being added.
             This includes installing dependencies, deploying certificates, and configuring services.
           </p>
+        </div>
+
+        <!-- Edit mode: Update and deploy options -->
+        <div v-if="isEditMode" class="edit-options">
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" v-model="formData.deploy_pki" />
+              Deploy PKI certificates after update
+            </label>
+            <p class="help-text">
+              If a password is provided, it will be used to connect and deploy PKI certificates.
+              After successful deployment, authentication will switch to PKI.
+            </p>
+          </div>
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" v-model="formData.run_enrollment" />
+              Re-run enrollment tasks
+            </label>
+            <p class="help-text">
+              Run Ansible enrollment to update dependencies and services on the node.
+            </p>
+          </div>
+        </div>
+
+        <!-- Password provides PKI migration notice -->
+        <div v-if="isEditMode && formData.auth_method === 'password' && formData.password" class="info-notice">
+          <i class="fas fa-info-circle"></i>
+          <span>Password will be used to establish connection and deploy PKI certificates.</span>
         </div>
       </div>
 
@@ -284,8 +313,8 @@
         class="submit-btn"
         :disabled="!canSubmit || isSubmitting"
       >
-        <i :class="isSubmitting ? 'fas fa-spinner fa-spin' : 'fas fa-plus'"></i>
-        {{ isSubmitting ? 'Adding...' : 'Add Node' }}
+        <i :class="isSubmitting ? 'fas fa-spinner fa-spin' : (isEditMode ? 'fas fa-save' : 'fas fa-plus')"></i>
+        {{ isSubmitting ? (isEditMode ? 'Saving...' : 'Adding...') : (isEditMode ? 'Save Changes' : 'Add Node') }}
       </button>
     </template>
   </BaseModal>
@@ -320,6 +349,20 @@ interface FormData {
   ssh_key_path: string
   role: string
   auto_enroll: boolean
+  // Edit mode options
+  deploy_pki: boolean
+  run_enrollment: boolean
+}
+
+// Node data for edit mode
+interface EditNodeData {
+  id: string
+  name: string
+  ip_address: string
+  ssh_user: string
+  ssh_port: number
+  auth_method: 'password' | 'pki'
+  role: string
 }
 
 interface TestResult {
@@ -327,19 +370,59 @@ interface TestResult {
   message: string
 }
 
+// Issue #695: Replace node data - when replacing a host
+interface ReplaceNodeData {
+  id: string
+  name: string
+  role: string
+}
+
 // Props
 interface Props {
   visible: boolean
   availableRoles: NodeRole[]
+  editNode?: EditNodeData | null  // If provided, modal is in edit mode
+  replaceNode?: ReplaceNodeData | null  // Issue #695: If provided, modal is in replace mode
 }
 
 const props = defineProps<Props>()
+
+// Computed for edit mode
+const isEditMode = computed(() => !!props.editNode)
+// Issue #695: Computed for replace mode
+const isReplaceMode = computed(() => !!props.replaceNode)
 
 // Emits
 const emit = defineEmits<{
   'update:visible': [value: boolean]
   close: []
   submit: [data: {
+    hostname: string
+    ip_address: string
+    ssh_user: string
+    ssh_port: number
+    auth_method: 'password' | 'pki'
+    password?: string
+    ssh_key?: string
+    role: string
+    auto_enroll: boolean
+  }]
+  update: [data: {
+    id: string
+    hostname: string
+    ip_address: string
+    ssh_user: string
+    ssh_port: number
+    auth_method: 'password' | 'pki'
+    password?: string
+    ssh_key?: string
+    role: string
+    deploy_pki: boolean
+    run_enrollment: boolean
+  }]
+  // Issue #695: Replace host event
+  replace: [data: {
+    oldNodeId: string
     hostname: string
     ip_address: string
     ssh_user: string
@@ -370,6 +453,8 @@ const formData = ref<FormData>({
   ssh_key_path: '',
   role: '',
   auto_enroll: true,
+  deploy_pki: true,
+  run_enrollment: false,
 })
 
 const errors = ref<Record<string, string>>({})
@@ -380,6 +465,13 @@ const isSubmitting = ref(false)
 const testResult = ref<TestResult | null>(null)
 
 // Computed
+// Issue #695: Modal title based on mode
+const modalTitle = computed(() => {
+  if (isEditMode.value) return 'Edit Node'
+  if (isReplaceMode.value) return `Replace Host: ${props.replaceNode?.name || ''}`
+  return 'Add New Node'
+})
+
 const selectedRoleDetails = computed(() => {
   if (!formData.value.role) return null
   return props.availableRoles.find(r => r.id === formData.value.role)
@@ -401,10 +493,84 @@ const canSubmit = computed(() => {
 watch(() => props.visible, (visible) => {
   if (!visible) {
     resetForm()
+  } else if (visible && props.editNode) {
+    // Populate form with edit node data
+    populateEditData()
+  } else if (visible && props.replaceNode) {
+    // Issue #695: Pre-select role for replace mode
+    populateReplaceData()
+  }
+})
+
+// Also watch editNode changes while modal is open
+watch(() => props.editNode, (editNode) => {
+  if (props.visible && editNode) {
+    populateEditData()
+  }
+})
+
+// Issue #695: Watch replaceNode changes
+watch(() => props.replaceNode, (replaceNode) => {
+  if (props.visible && replaceNode) {
+    populateReplaceData()
   }
 })
 
 // Methods
+function populateEditData() {
+  if (!props.editNode) return
+
+  formData.value = {
+    hostname: props.editNode.name,
+    ip_address: props.editNode.ip_address,
+    ssh_port: props.editNode.ssh_port,
+    auth_method: props.editNode.auth_method,
+    ssh_user: props.editNode.ssh_user,
+    password: '',  // Never pre-fill password
+    has_sudo: true,
+    ssh_key: '',
+    ssh_key_path: '',
+    role: props.editNode.role,
+    auto_enroll: false,
+    deploy_pki: props.editNode.auth_method === 'password',  // Default to deploy PKI if using password
+    run_enrollment: false,
+  }
+
+  // Clear any previous errors
+  errors.value = {}
+  testResult.value = null
+
+  logger.info('Populated edit form for node: %s', props.editNode.name)
+}
+
+// Issue #695: Populate form for replace mode - pre-select role, clear other fields
+function populateReplaceData() {
+  if (!props.replaceNode) return
+
+  // Reset to defaults but with role pre-selected
+  formData.value = {
+    hostname: '',
+    ip_address: '',
+    ssh_port: 22,
+    auth_method: 'password',
+    ssh_user: 'autobot',
+    password: '',
+    has_sudo: true,
+    ssh_key: '',
+    ssh_key_path: '',
+    role: props.replaceNode.role,  // Pre-select the role from the node being replaced
+    auto_enroll: true,
+    deploy_pki: true,
+    run_enrollment: false,
+  }
+
+  // Clear any previous errors
+  errors.value = {}
+  testResult.value = null
+
+  logger.info('Replace mode: pre-selected role %s from node %s', props.replaceNode.role, props.replaceNode.name)
+}
+
 function validateField(field: string) {
   const value = formData.value[field as keyof FormData]
 
@@ -530,17 +696,49 @@ async function submitForm() {
   isSubmitting.value = true
 
   try {
-    emit('submit', {
-      hostname: formData.value.hostname,
-      ip_address: formData.value.ip_address,
-      ssh_user: formData.value.ssh_user,
-      ssh_port: formData.value.ssh_port,
-      auth_method: formData.value.auth_method,
-      password: formData.value.auth_method === 'password' ? formData.value.password : undefined,
-      ssh_key: getSshKey(),
-      role: formData.value.role,
-      auto_enroll: formData.value.auto_enroll,
-    })
+    if (isEditMode.value && props.editNode) {
+      // Edit mode - emit update event
+      emit('update', {
+        id: props.editNode.id,
+        hostname: formData.value.hostname,
+        ip_address: formData.value.ip_address,
+        ssh_user: formData.value.ssh_user,
+        ssh_port: formData.value.ssh_port,
+        auth_method: formData.value.auth_method,
+        password: formData.value.password || undefined,  // Include password if provided (for connection/PKI deploy)
+        ssh_key: getSshKey(),
+        role: formData.value.role,
+        deploy_pki: formData.value.deploy_pki,
+        run_enrollment: formData.value.run_enrollment,
+      })
+    } else if (isReplaceMode.value && props.replaceNode) {
+      // Issue #695: Replace mode - emit replace event with old node ID
+      emit('replace', {
+        oldNodeId: props.replaceNode.id,
+        hostname: formData.value.hostname,
+        ip_address: formData.value.ip_address,
+        ssh_user: formData.value.ssh_user,
+        ssh_port: formData.value.ssh_port,
+        auth_method: formData.value.auth_method,
+        password: formData.value.auth_method === 'password' ? formData.value.password : undefined,
+        ssh_key: getSshKey(),
+        role: formData.value.role,
+        auto_enroll: formData.value.auto_enroll,
+      })
+    } else {
+      // Add mode - emit submit event
+      emit('submit', {
+        hostname: formData.value.hostname,
+        ip_address: formData.value.ip_address,
+        ssh_user: formData.value.ssh_user,
+        ssh_port: formData.value.ssh_port,
+        auth_method: formData.value.auth_method,
+        password: formData.value.auth_method === 'password' ? formData.value.password : undefined,
+        ssh_key: getSshKey(),
+        role: formData.value.role,
+        auto_enroll: formData.value.auto_enroll,
+      })
+    }
 
     closeModal()
   } catch (error) {
@@ -567,6 +765,8 @@ function resetForm() {
     ssh_key_path: '',
     role: '',
     auto_enroll: true,
+    deploy_pki: true,
+    run_enrollment: false,
   }
   errors.value = {}
   testResult.value = null
@@ -882,6 +1082,30 @@ function resetForm() {
   margin: 0;
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+/* Edit Mode Options */
+.edit-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.info-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--color-info-bg, rgba(59, 130, 246, 0.1));
+  border: 1px solid var(--color-info, #3b82f6);
+  border-radius: 6px;
+  color: var(--color-info, #3b82f6);
+  font-size: 13px;
+  margin-top: 12px;
+}
+
+.info-notice i {
+  flex-shrink: 0;
 }
 
 /* Modal Actions */

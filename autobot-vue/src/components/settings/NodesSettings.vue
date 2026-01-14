@@ -30,6 +30,11 @@
         <span class="stat-value">{{ stats.error }}</span>
         <span class="stat-label">Error</span>
       </div>
+      <!-- Issue #695: Auto-testing indicator -->
+      <div v-if="isAutoTesting" class="stat-item testing">
+        <i class="fas fa-spinner fa-spin"></i>
+        <span class="stat-label">Testing...</span>
+      </div>
     </div>
 
     <!-- Loading State -->
@@ -94,6 +99,40 @@
             </div>
           </div>
           <div class="node-actions">
+            <!-- Issue #695: Check for updates button -->
+            <button
+              v-if="node.status === 'online'"
+              @click.stop="checkNodeUpdates(node)"
+              class="action-btn check-updates"
+              :disabled="checkingUpdatesNodeId === node.id"
+              :title="getUpdateTooltip(node)"
+            >
+              <i :class="checkingUpdatesNodeId === node.id ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
+              <span v-if="availableUpdates[node.id]?.count" class="update-badge">
+                {{ availableUpdates[node.id].count }}
+              </span>
+            </button>
+            <!-- Issue #695: Per-node update button - opens lifecycle/update history panel -->
+            <button
+              v-if="node.status === 'online'"
+              @click.stop="openLifecyclePanel(node)"
+              class="action-btn update"
+              title="View Update History"
+            >
+              <i class="fas fa-history"></i>
+              <span v-if="availableUpdates[node.id]?.count" class="update-badge">
+                {{ availableUpdates[node.id].count }}
+              </span>
+            </button>
+            <!-- Edit node button -->
+            <button
+              v-if="node.status !== 'enrolling'"
+              @click.stop="openEditModal(node)"
+              class="action-btn edit"
+              title="Edit Node"
+            >
+              <i class="fas fa-edit"></i>
+            </button>
             <button
               v-if="node.status !== 'enrolling'"
               @click.stop="testNodeConnection(node)"
@@ -137,6 +176,26 @@
                 <span class="detail-label">OS</span>
                 <span class="detail-value">{{ node.os }}</span>
               </div>
+              <!-- Issue #695: Certificate status display -->
+              <div class="detail-item certificate-status-item">
+                <span class="detail-label">Certificate</span>
+                <div class="certificate-status-row">
+                  <span
+                    class="cert-badge"
+                    :class="getCertificateStatusClass(node)"
+                  >
+                    <i :class="getCertificateIcon(node)"></i>
+                    {{ getCertificateLabel(node) }}
+                  </span>
+                  <button
+                    class="cert-manage-btn"
+                    @click.stop="openCertificateModal(node)"
+                    title="Manage Certificate"
+                  >
+                    <i class="fas fa-cog"></i>
+                  </button>
+                </div>
+              </div>
             </div>
 
             <!-- Enrollment Progress (if enrolling) -->
@@ -177,10 +236,11 @@
                 <i class="fas fa-exchange-alt"></i>
                 Reassign Role
               </button>
+              <!-- Issue #695: Replace Host - available for any node to swap hardware -->
               <button
-                v-if="node.status === 'error'"
                 @click="showReplaceModal(node)"
                 class="btn-secondary"
+                title="Replace this host with a new machine (same role)"
               >
                 <i class="fas fa-sync"></i>
                 Replace Host
@@ -195,12 +255,16 @@
       </div>
     </div>
 
-    <!-- Add Node Modal -->
+    <!-- Add Node Modal (also used for Edit and Replace) -->
     <AddNodeModal
       :visible="showAddNodeModal"
       :available-roles="availableRoles"
-      @close="showAddNodeModal = false"
+      :edit-node="editNodeData"
+      :replace-node="replaceHostNode"
+      @close="closeAddNodeModal"
       @submit="handleAddNode"
+      @update="handleUpdateNode"
+      @replace="handleReplaceNode"
     />
 
     <!-- Reassign Role Modal -->
@@ -275,6 +339,194 @@
         </button>
       </template>
     </BaseModal>
+
+    <!-- Issue #695: Lifecycle Panel Modal with Update Actions -->
+    <BaseModal
+      v-model="showLifecyclePanel"
+      :title="'Update History: ' + lifecycleNodeName"
+      size="large"
+    >
+      <NodeLifecyclePanel
+        v-if="lifecycleNodeId"
+        :nodeId="lifecycleNodeId"
+        :nodeName="lifecycleNodeName"
+        :availableUpdates="lifecycleNodeId ? availableUpdates[lifecycleNodeId] : undefined"
+        :isUpdating="updatingNodeId === lifecycleNodeId"
+        :isCheckingUpdates="checkingUpdatesNodeId === lifecycleNodeId"
+        @close="closeLifecyclePanel"
+        @checkUpdates="handleCheckUpdatesFromPanel"
+        @applyUpdates="handleApplyUpdatesFromPanel"
+      />
+    </BaseModal>
+
+    <!-- Issue #695: Certificate Management Modal -->
+    <BaseModal
+      v-model="showCertificateModal"
+      :title="'Certificate: ' + (certificateNode?.name || '')"
+      size="medium"
+    >
+      <div class="certificate-modal" v-if="certificateNode">
+        <!-- Loading State -->
+        <div v-if="isCertLoading" class="cert-loading">
+          <i class="fas fa-spinner fa-spin"></i>
+          <span>Loading certificate information...</span>
+        </div>
+
+        <!-- Error State -->
+        <div v-else-if="certActionError" class="alert alert-danger">
+          <i class="fas fa-exclamation-triangle"></i>
+          <span>{{ certActionError }}</span>
+        </div>
+
+        <!-- Certificate Info -->
+        <div v-else-if="certificateInfo" class="cert-info">
+          <div class="cert-status-header">
+            <span
+              class="cert-badge large"
+              :class="'cert-' + certificateInfo.status"
+            >
+              <i :class="getCertificateIconByStatus(certificateInfo.status)"></i>
+              {{ formatCertStatus(certificateInfo.status) }}
+            </span>
+            <span v-if="certificateInfo.days_remaining !== undefined" class="days-remaining">
+              {{ certificateInfo.days_remaining }} days remaining
+            </span>
+          </div>
+
+          <div class="cert-details" v-if="certificateInfo.status !== 'not_deployed'">
+            <div class="cert-detail-row" v-if="certificateInfo.expires_at">
+              <span class="cert-detail-label">Expires</span>
+              <span class="cert-detail-value">{{ formatDate(certificateInfo.expires_at) }}</span>
+            </div>
+            <div class="cert-detail-row" v-if="certificateInfo.subject">
+              <span class="cert-detail-label">Subject</span>
+              <span class="cert-detail-value">{{ certificateInfo.subject }}</span>
+            </div>
+            <div class="cert-detail-row" v-if="certificateInfo.issuer">
+              <span class="cert-detail-label">Issuer</span>
+              <span class="cert-detail-value">{{ certificateInfo.issuer }}</span>
+            </div>
+            <div class="cert-detail-row" v-if="certificateInfo.fingerprint">
+              <span class="cert-detail-label">Fingerprint</span>
+              <span class="cert-detail-value mono">{{ certificateInfo.fingerprint }}</span>
+            </div>
+          </div>
+
+          <div v-if="certificateInfo.message" class="cert-message">
+            <i class="fas fa-info-circle"></i>
+            {{ certificateInfo.message }}
+          </div>
+
+          <!-- Auth Method Info -->
+          <div class="auth-method-section">
+            <h5>Authentication Method</h5>
+            <div class="auth-current">
+              <i :class="certificateNode.auth_method === 'pki' ? 'fas fa-key' : 'fas fa-lock'"></i>
+              <span>{{ certificateNode.auth_method === 'pki' ? 'PKI (SSH Key)' : 'Password' }}</span>
+            </div>
+            <p v-if="certificateNode.auth_method === 'password'" class="auth-warning">
+              <i class="fas fa-exclamation-triangle"></i>
+              Password authentication is less secure. Consider switching to PKI.
+            </p>
+          </div>
+        </div>
+
+        <!-- No Certificate Info -->
+        <div v-else class="cert-not-loaded">
+          <p>Click "Check Status" to load certificate information.</p>
+        </div>
+      </div>
+
+      <template #actions>
+        <button @click="closeCertificateModal" class="cancel-btn">Close</button>
+        <button
+          @click="checkCertificateStatus"
+          class="btn-secondary"
+          :disabled="isCertActionInProgress"
+        >
+          <i :class="isCertActionInProgress ? 'fas fa-spinner fa-spin' : 'fas fa-sync'"></i>
+          Check Status
+        </button>
+        <button
+          v-if="certificateInfo?.status === 'expiring_soon' || certificateInfo?.status === 'expired'"
+          @click="renewCertificate"
+          class="btn-primary"
+          :disabled="isCertActionInProgress"
+        >
+          <i :class="isCertActionInProgress ? 'fas fa-spinner fa-spin' : 'fas fa-redo'"></i>
+          Renew
+        </button>
+        <button
+          v-if="certificateInfo?.status === 'not_deployed' || certificateNode?.auth_method === 'password'"
+          @click="deployCertificate"
+          class="btn-primary"
+          :disabled="isCertActionInProgress"
+        >
+          <i :class="isCertActionInProgress ? 'fas fa-spinner fa-spin' : 'fas fa-upload'"></i>
+          Deploy PKI
+        </button>
+        <button
+          v-if="certificateNode?.auth_method === 'password' && certificateInfo?.status === 'valid'"
+          @click="switchToPKI"
+          class="save-btn"
+          :disabled="isCertActionInProgress"
+        >
+          <i :class="isCertActionInProgress ? 'fas fa-spinner fa-spin' : 'fas fa-exchange-alt'"></i>
+          Switch to PKI
+        </button>
+      </template>
+    </BaseModal>
+
+    <!-- Issue #695: Available Updates Modal -->
+    <BaseModal
+      v-model="showUpdatesModal"
+      :title="`Available Updates - ${updatesModalNode?.name || 'Node'}`"
+      @close="closeUpdatesModal"
+    >
+      <div class="updates-modal" v-if="updatesModalNode">
+        <div class="updates-summary">
+          <div class="summary-item">
+            <span class="summary-number">{{ updatesModalPackages.length }}</span>
+            <span class="summary-label">Total Updates</span>
+          </div>
+          <div class="summary-item security">
+            <span class="summary-number">{{ updatesModalPackages.filter(p => p.is_security).length }}</span>
+            <span class="summary-label">Security</span>
+          </div>
+        </div>
+
+        <div class="packages-list">
+          <div
+            v-for="pkg in updatesModalPackages"
+            :key="pkg.name"
+            class="package-item"
+            :class="{ security: pkg.is_security }"
+          >
+            <div class="package-name">
+              {{ pkg.name }}
+              <span v-if="pkg.is_security" class="security-badge">Security</span>
+            </div>
+            <div class="package-versions">
+              <span class="version old">{{ pkg.current_version || 'N/A' }}</span>
+              <i class="fas fa-arrow-right"></i>
+              <span class="version new">{{ pkg.new_version }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <button @click="closeUpdatesModal" class="cancel-btn">Close</button>
+        <button
+          @click="updateNode(updatesModalNode!); closeUpdatesModal()"
+          class="primary-btn"
+          :disabled="updatingNodeId === updatesModalNode?.id"
+        >
+          <i :class="updatingNodeId === updatesModalNode?.id ? 'fas fa-spinner fa-spin' : 'fas fa-download'"></i>
+          Apply Updates
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -282,6 +534,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import AddNodeModal from './AddNodeModal.vue'
+import NodeLifecyclePanel from './NodeLifecyclePanel.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { getBackendUrl } from '@/config/ssot-config'
 
@@ -308,6 +561,7 @@ interface InfrastructureNode {
   os?: string
   created_at: string
   last_seen?: string
+  certificate?: CertificateInfo
 }
 
 interface NodeRole {
@@ -316,6 +570,20 @@ interface NodeRole {
   description: string
   services: string[]
   default_port?: number
+}
+
+// Issue #695: Certificate status types
+type CertificateStatus = 'valid' | 'expiring_soon' | 'expired' | 'invalid' | 'not_deployed' | 'unknown'
+
+interface CertificateInfo {
+  status: CertificateStatus
+  expires_at?: string
+  days_remaining?: number
+  subject?: string
+  issuer?: string
+  serial_number?: string
+  fingerprint?: string
+  message?: string
 }
 
 // Props
@@ -334,6 +602,7 @@ const emit = defineEmits<{
 const nodes = ref<InfrastructureNode[]>([])
 const availableRoles = ref<NodeRole[]>([])
 const isLoading = ref(true)
+const isAutoTesting = ref(false)  // Issue #695: Track auto-test phase
 const loadError = ref<string | null>(null)
 const expandedNodeId = ref<string | null>(null)
 const testingNodeId = ref<string | null>(null)
@@ -345,9 +614,45 @@ const showReassignRoleModal = ref(false)
 const showRemoveModal = ref(false)
 const selectedNode = ref<InfrastructureNode | null>(null)
 const newRole = ref('')
+
+// Edit node state
+interface EditNodeData {
+  id: string
+  name: string
+  ip_address: string
+  ssh_user: string
+  ssh_port: number
+  auth_method: 'password' | 'pki'
+  role: string
+}
+const editNodeData = ref<EditNodeData | null>(null)
 const forceRemove = ref(false)
+
+// Issue #695: Replace host state - tracks node being replaced
+const replaceHostNode = ref<InfrastructureNode | null>(null)
 const isReassigning = ref(false)
 const isRemoving = ref(false)
+
+// Issue #695: Lifecycle and update state
+const showLifecyclePanel = ref(false)
+const lifecycleNodeId = ref<string | null>(null)
+const lifecycleNodeName = ref('')
+const updatingNodeId = ref<string | null>(null)
+const checkingUpdatesNodeId = ref<string | null>(null)
+const updateType = ref<'dependencies' | 'system'>('dependencies')
+// Issue #695: Available updates per node (keyed by node_id)
+const availableUpdates = ref<Record<string, { count: number; security: number; lastCheck: string }>>({})
+const showUpdatesModal = ref(false)
+const updatesModalNode = ref<InfrastructureNode | null>(null)
+const updatesModalPackages = ref<Array<{ name: string; current_version: string; new_version: string; is_security: boolean }>>([])
+
+// Issue #695: Certificate management state
+const showCertificateModal = ref(false)
+const certificateNode = ref<InfrastructureNode | null>(null)
+const certificateInfo = ref<CertificateInfo | null>(null)
+const isCertLoading = ref(false)
+const isCertActionInProgress = ref(false)
+const certActionError = ref<string | null>(null)
 
 // Enrollment steps for progress display
 const enrollmentSteps = [
@@ -501,6 +806,172 @@ async function handleAddNode(formData: {
   }
 }
 
+// Open modal in edit mode
+function openEditModal(node: InfrastructureNode) {
+  editNodeData.value = {
+    id: node.id,
+    name: node.name,
+    ip_address: node.ip_address,
+    ssh_user: node.ssh_user,
+    ssh_port: node.ssh_port,
+    auth_method: node.auth_method,
+    role: node.role,
+  }
+  showAddNodeModal.value = true
+}
+
+// Close add/edit modal and reset edit data
+function closeAddNodeModal() {
+  showAddNodeModal.value = false
+  editNodeData.value = null
+  replaceHostNode.value = null  // Issue #695: Also reset replace mode
+}
+
+// Handle node update from edit modal
+async function handleUpdateNode(formData: {
+  id: string
+  hostname: string
+  ip_address: string
+  ssh_user: string
+  ssh_port: number
+  auth_method: 'password' | 'pki'
+  password?: string
+  ssh_key?: string
+  role: string
+  deploy_pki: boolean
+  run_enrollment: boolean
+}) {
+  closeAddNodeModal()
+
+  try {
+    const backendUrl = getBackendUrl()
+    const response = await fetch(`${backendUrl}/api/infrastructure/nodes/${formData.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: formData.hostname,
+        ip_address: formData.ip_address,
+        ssh_user: formData.ssh_user,
+        ssh_port: formData.ssh_port,
+        auth_method: formData.auth_method,
+        password: formData.password,
+        ssh_key: formData.ssh_key,
+        role: formData.role,
+        deploy_pki: formData.deploy_pki,
+        run_enrollment: formData.run_enrollment,
+      }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'Failed to update node')
+    }
+
+    const updatedNode = await response.json()
+
+    // Update local state
+    const idx = nodes.value.findIndex(n => n.id === formData.id)
+    if (idx !== -1) {
+      nodes.value[idx] = {
+        ...nodes.value[idx],
+        name: updatedNode.name || formData.hostname,
+        ip_address: updatedNode.ip_address || formData.ip_address,
+        ssh_user: updatedNode.ssh_user || formData.ssh_user,
+        ssh_port: updatedNode.ssh_port || formData.ssh_port,
+        auth_method: updatedNode.auth_method || formData.auth_method,
+        role: updatedNode.role || formData.role,
+      }
+    }
+
+    emit('change')
+    logger.info('Node updated: %s', formData.hostname)
+
+    // If run_enrollment was requested, start it
+    if (formData.run_enrollment) {
+      const node = nodes.value.find(n => n.id === formData.id)
+      if (node) {
+        enrollNode(node)
+      }
+    }
+  } catch (error) {
+    logger.error('Failed to update node:', error)
+  }
+}
+
+// Issue #695: Handle replace host - add new node, then remove old node on success
+async function handleReplaceNode(formData: {
+  oldNodeId: string
+  hostname: string
+  ip_address: string
+  ssh_user: string
+  ssh_port: number
+  auth_method: 'password' | 'pki'
+  password?: string
+  ssh_key?: string
+  role: string
+  auto_enroll: boolean
+}) {
+  closeAddNodeModal()
+  logger.info('Replacing node %s with new host %s', formData.oldNodeId, formData.hostname)
+
+  try {
+    const backendUrl = getBackendUrl()
+
+    // Step 1: Add the new node
+    const addResponse = await fetch(`${backendUrl}/api/infrastructure/nodes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: formData.hostname,
+        ip_address: formData.ip_address,
+        ssh_port: formData.ssh_port,
+        ssh_user: formData.ssh_user,
+        auth_method: formData.auth_method,
+        password: formData.password,
+        ssh_key: formData.ssh_key,
+        role: formData.role,
+        auto_enroll: formData.auto_enroll,
+      }),
+    })
+
+    if (!addResponse.ok) {
+      const error = await addResponse.json()
+      throw new Error(error.detail || 'Failed to add replacement node')
+    }
+
+    const newNode = await addResponse.json()
+    logger.info('Replacement node added: %s', newNode.name)
+
+    // Add to local list
+    nodes.value.push({
+      ...newNode,
+      metrics: null,
+    })
+
+    // Step 2: Remove the old node (force=true to bypass safety checks during replacement)
+    const deleteResponse = await fetch(
+      `${backendUrl}/api/infrastructure/nodes/${formData.oldNodeId}?force=true`,
+      { method: 'DELETE' }
+    )
+
+    if (!deleteResponse.ok) {
+      logger.warn('Failed to remove old node %s - new node still added', formData.oldNodeId)
+    } else {
+      logger.info('Old node %s removed', formData.oldNodeId)
+      // Remove from local list
+      const oldIdx = nodes.value.findIndex(n => n.id === formData.oldNodeId)
+      if (oldIdx !== -1) {
+        nodes.value.splice(oldIdx, 1)
+      }
+    }
+
+    emit('change')
+    logger.info('Host replacement completed: %s', formData.hostname)
+  } catch (error) {
+    logger.error('Failed to replace host:', error)
+  }
+}
+
 async function enrollNode(node: InfrastructureNode) {
   enrollingNodeId.value = node.id
 
@@ -573,8 +1044,13 @@ async function reassignRole() {
 }
 
 function showReplaceModal(node: InfrastructureNode) {
-  // For replace host, we show add modal with role pre-selected
+  // Issue #695: Replace Host - opens add modal with role pre-selected
+  // After new host enrolls successfully, the old node will be removed
+  logger.info('Replace host initiated for node: %s (role: %s)', node.name, node.role)
+  replaceHostNode.value = node
   selectedNode.value = node
+  // Clear edit mode - this is a new node addition with role pre-selected
+  editNodeData.value = null
   showAddNodeModal.value = true
 }
 
@@ -612,10 +1088,412 @@ async function removeNode() {
   }
 }
 
+// Issue #695: Lifecycle panel functions
+function openLifecyclePanel(node: InfrastructureNode) {
+  lifecycleNodeId.value = node.id
+  lifecycleNodeName.value = node.name
+  showLifecyclePanel.value = true
+}
+
+function closeLifecyclePanel() {
+  showLifecyclePanel.value = false
+  lifecycleNodeId.value = null
+}
+
+// Handle check updates from lifecycle panel
+function handleCheckUpdatesFromPanel() {
+  if (!lifecycleNodeId.value) return
+  const node = nodes.value.find(n => n.id === lifecycleNodeId.value)
+  if (node) {
+    checkNodeUpdates(node)
+  }
+}
+
+// Handle apply updates from lifecycle panel
+function handleApplyUpdatesFromPanel() {
+  logger.info('handleApplyUpdatesFromPanel called, lifecycleNodeId: %s', lifecycleNodeId.value)
+  if (!lifecycleNodeId.value) {
+    logger.warn('No lifecycleNodeId set, cannot apply updates')
+    return
+  }
+  const node = nodes.value.find(n => n.id === lifecycleNodeId.value)
+  logger.info('Found node for update: %s', node?.name || 'NOT FOUND')
+  if (node) {
+    // Issue #695: Use 'system' update type for lifecycle panel since we check apt packages
+    updateNode(node, 'system')
+  }
+}
+
+// Issue #695: Per-node update function
+async function updateNode(node: InfrastructureNode, type?: 'dependencies' | 'system') {
+  const effectiveType = type || updateType.value
+  logger.info('updateNode called for: %s (id: %s), type: %s', node.name, node.id, effectiveType)
+  if (updatingNodeId.value === node.id) {
+    logger.warn('Update already in progress for node %s, skipping', node.id)
+    return
+  }
+
+  updatingNodeId.value = node.id
+  logger.info('Starting update for node %s, updateType: %s', node.name, effectiveType)
+
+  try {
+    const backendUrl = getBackendUrl()
+    logger.info('Calling POST %s/api/infrastructure/nodes/%s/update', backendUrl, node.id)
+    const response = await fetch(`${backendUrl}/api/infrastructure/nodes/${node.id}/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        update_type: effectiveType,
+        dry_run: false,
+        force: false,
+      }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'Failed to start update')
+    }
+
+    const result = await response.json()
+    logger.info('Update started for %s: task %s', node.name, result.task_id)
+
+    // The update progress will be tracked via lifecycle events
+  } catch (error) {
+    logger.error('Failed to update node %s:', node.name, error)
+  } finally {
+    // Don't clear updatingNodeId immediately - wait for lifecycle event
+    setTimeout(() => {
+      if (updatingNodeId.value === node.id) {
+        updatingNodeId.value = null
+      }
+    }, 2000)
+  }
+}
+
+// Issue #695: Check for available updates function
+async function checkNodeUpdates(node: InfrastructureNode) {
+  if (checkingUpdatesNodeId.value === node.id) return
+
+  checkingUpdatesNodeId.value = node.id
+
+  try {
+    const backendUrl = getBackendUrl()
+    const response = await fetch(`${backendUrl}/api/infrastructure/nodes/${node.id}/check-updates`)
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'Failed to check for updates')
+    }
+
+    const result = await response.json()
+
+    // Store the update count
+    availableUpdates.value[node.id] = {
+      count: result.update_count,
+      security: result.security_count,
+      lastCheck: result.last_check,
+    }
+
+    // If updates found, show the modal with package details
+    if (result.update_count > 0) {
+      updatesModalNode.value = node
+      updatesModalPackages.value = result.packages
+      showUpdatesModal.value = true
+    }
+
+    logger.info('Check updates for %s: %d packages available', node.name, result.update_count)
+  } catch (error) {
+    logger.error('Failed to check updates for node %s:', node.name, error)
+  } finally {
+    checkingUpdatesNodeId.value = null
+  }
+}
+
+// Issue #695: Get tooltip text for update button
+function getUpdateTooltip(node: InfrastructureNode): string {
+  const updates = availableUpdates.value[node.id]
+  if (!updates) return 'Check for Updates'
+  if (updates.count === 0) return 'No updates available'
+  return `${updates.count} updates available (${updates.security} security)`
+}
+
+// Issue #695: Auto-test all nodes on page load to update their status
+async function autoTestAllNodes() {
+  // Only test nodes that are in pending/unknown state or haven't been seen recently
+  const nodesToTest = nodes.value.filter(n =>
+    n.status === 'pending' ||
+    n.status === 'offline' ||
+    !n.last_seen ||
+    // Also test nodes not seen in the last 5 minutes
+    (n.last_seen && (Date.now() - new Date(n.last_seen).getTime()) > 5 * 60 * 1000)
+  )
+
+  if (nodesToTest.length === 0) {
+    logger.info('No nodes need auto-testing')
+    return
+  }
+
+  isAutoTesting.value = true
+  logger.info('Auto-testing %d nodes on page load', nodesToTest.length)
+
+  try {
+    // Test all nodes in parallel (limit concurrent tests to avoid overwhelming)
+    const batchSize = 5
+    for (let i = 0; i < nodesToTest.length; i += batchSize) {
+      const batch = nodesToTest.slice(i, i + batchSize)
+      await Promise.all(batch.map(node => testNodeConnectionSilent(node)))
+    }
+
+    logger.info('Auto-test completed for all nodes')
+  } finally {
+    isAutoTesting.value = false
+  }
+}
+
+// Issue #695: Silent version of testNodeConnection for auto-testing (no UI feedback during batch)
+async function testNodeConnectionSilent(node: InfrastructureNode) {
+  try {
+    const backendUrl = getBackendUrl()
+    const response = await fetch(`${backendUrl}/api/infrastructure/nodes/${node.id}/test`, {
+      method: 'POST',
+    })
+
+    const result = await response.json()
+
+    if (result.success) {
+      // Update node status
+      const idx = nodes.value.findIndex(n => n.id === node.id)
+      if (idx !== -1) {
+        nodes.value[idx].status = 'online'
+        nodes.value[idx].last_seen = new Date().toISOString()
+        // Also update OS info if returned
+        if (result.os) {
+          nodes.value[idx].os = result.os
+        }
+        // Update metrics if returned
+        if (result.metrics) {
+          nodes.value[idx].metrics = result.metrics
+        }
+      }
+      logger.debug('Auto-test: %s is online', node.name)
+    } else {
+      // Mark as offline if test fails
+      const idx = nodes.value.findIndex(n => n.id === node.id)
+      if (idx !== -1 && nodes.value[idx].status !== 'enrolling') {
+        nodes.value[idx].status = 'offline'
+      }
+      logger.debug('Auto-test: %s is offline (%s)', node.name, result.error)
+    }
+  } catch (error) {
+    // Mark as offline on error
+    const idx = nodes.value.findIndex(n => n.id === node.id)
+    if (idx !== -1 && nodes.value[idx].status !== 'enrolling') {
+      nodes.value[idx].status = 'offline'
+    }
+    logger.debug('Auto-test: %s connection error', node.name, error)
+  }
+}
+
+// Issue #695: Close updates modal
+function closeUpdatesModal() {
+  showUpdatesModal.value = false
+  updatesModalNode.value = null
+  updatesModalPackages.value = []
+}
+
+// Issue #695: Certificate management functions
+function openCertificateModal(node: InfrastructureNode) {
+  certificateNode.value = node
+  certificateInfo.value = node.certificate || null
+  certActionError.value = null
+  showCertificateModal.value = true
+
+  // Auto-check status if not already loaded
+  if (!certificateInfo.value) {
+    checkCertificateStatus()
+  }
+}
+
+function closeCertificateModal() {
+  showCertificateModal.value = false
+  certificateNode.value = null
+  certificateInfo.value = null
+  certActionError.value = null
+}
+
+async function checkCertificateStatus() {
+  if (!certificateNode.value) return
+
+  isCertLoading.value = true
+  certActionError.value = null
+
+  try {
+    const backendUrl = getBackendUrl()
+    const response = await fetch(
+      `${backendUrl}/api/infrastructure/nodes/${certificateNode.value.id}/certificate`
+    )
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'Failed to check certificate status')
+    }
+
+    const data = await response.json()
+    certificateInfo.value = data
+
+    // Update node in the list
+    const idx = nodes.value.findIndex(n => n.id === certificateNode.value?.id)
+    if (idx !== -1) {
+      nodes.value[idx].certificate = data
+    }
+
+    logger.info('Certificate status for %s: %s', certificateNode.value.name, data.status)
+  } catch (error) {
+    logger.error('Failed to check certificate status:', error)
+    certActionError.value = error instanceof Error ? error.message : 'Unknown error'
+  } finally {
+    isCertLoading.value = false
+  }
+}
+
+async function renewCertificate() {
+  await executeCertificateAction('renew')
+}
+
+async function deployCertificate() {
+  await executeCertificateAction('deploy')
+}
+
+async function executeCertificateAction(action: 'renew' | 'deploy' | 'revoke') {
+  if (!certificateNode.value) return
+
+  isCertActionInProgress.value = true
+  certActionError.value = null
+
+  try {
+    const backendUrl = getBackendUrl()
+    const response = await fetch(
+      `${backendUrl}/api/infrastructure/nodes/${certificateNode.value.id}/certificate`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      }
+    )
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || `Failed to ${action} certificate`)
+    }
+
+    const result = await response.json()
+    logger.info('Certificate %s for %s: task %s', action, certificateNode.value.name, result.task_id)
+
+    // Refresh status after a delay
+    setTimeout(checkCertificateStatus, 2000)
+  } catch (error) {
+    logger.error('Certificate action %s failed:', action, error)
+    certActionError.value = error instanceof Error ? error.message : 'Unknown error'
+  } finally {
+    isCertActionInProgress.value = false
+  }
+}
+
+async function switchToPKI() {
+  if (!certificateNode.value) return
+
+  isCertActionInProgress.value = true
+  certActionError.value = null
+
+  try {
+    const backendUrl = getBackendUrl()
+    const response = await fetch(
+      `${backendUrl}/api/infrastructure/nodes/${certificateNode.value.id}/auth`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_method: 'pki' }),
+      }
+    )
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'Failed to switch to PKI')
+    }
+
+    const result = await response.json()
+    logger.info('Auth switch to PKI for %s: task %s', certificateNode.value.name, result.task_id)
+
+    // Update local state
+    const idx = nodes.value.findIndex(n => n.id === certificateNode.value?.id)
+    if (idx !== -1) {
+      nodes.value[idx].auth_method = 'pki'
+    }
+    if (certificateNode.value) {
+      certificateNode.value.auth_method = 'pki'
+    }
+
+    emit('change')
+  } catch (error) {
+    logger.error('Failed to switch to PKI:', error)
+    certActionError.value = error instanceof Error ? error.message : 'Unknown error'
+  } finally {
+    isCertActionInProgress.value = false
+  }
+}
+
+// Certificate status helper functions
+function getCertificateStatusClass(node: InfrastructureNode): string {
+  const status = node.certificate?.status || 'unknown'
+  return `cert-${status}`
+}
+
+function getCertificateIcon(node: InfrastructureNode): string {
+  return getCertificateIconByStatus(node.certificate?.status || 'unknown')
+}
+
+function getCertificateIconByStatus(status: CertificateStatus): string {
+  switch (status) {
+    case 'valid':
+      return 'fas fa-shield-check'
+    case 'expiring_soon':
+      return 'fas fa-exclamation-triangle'
+    case 'expired':
+      return 'fas fa-times-circle'
+    case 'invalid':
+      return 'fas fa-ban'
+    case 'not_deployed':
+      return 'fas fa-question-circle'
+    default:
+      return 'fas fa-question'
+  }
+}
+
+function getCertificateLabel(node: InfrastructureNode): string {
+  return formatCertStatus(node.certificate?.status || 'unknown')
+}
+
+function formatCertStatus(status: CertificateStatus): string {
+  switch (status) {
+    case 'valid':
+      return 'Valid'
+    case 'expiring_soon':
+      return 'Expiring Soon'
+    case 'expired':
+      return 'Expired'
+    case 'invalid':
+      return 'Invalid'
+    case 'not_deployed':
+      return 'Not Deployed'
+    default:
+      return 'Unknown'
+  }
+}
+
 // WebSocket for real-time updates
 function connectWebSocket() {
   const backendUrl = getBackendUrl()
-  const wsUrl = backendUrl.replace(/^http/, 'ws') + '/ws/infrastructure/nodes'
+  const wsUrl = backendUrl.replace(/^http/, 'ws') + '/api/ws/infrastructure/nodes'
 
   try {
     ws = new WebSocket(wsUrl)
@@ -708,6 +1586,8 @@ function getStepIcon(currentStep: number | undefined, stepIndex: number): string
 onMounted(async () => {
   await Promise.all([fetchNodes(), fetchRoles()])
   connectWebSocket()
+  // Issue #695: Auto-test nodes on page load so they don't show as yellow/pending
+  autoTestAllNodes()
 })
 
 onUnmounted(() => {
@@ -723,6 +1603,8 @@ onUnmounted(() => {
 <style scoped>
 .nodes-settings {
   padding: 0;
+  /* Let parent settings-content-inner handle scrolling */
+  /* Removed max-height to work with flex parent layout */
 }
 
 /* Header */
@@ -808,6 +1690,19 @@ onUnmounted(() => {
 
 .stat-item.error .stat-value {
   color: var(--color-danger);
+}
+
+/* Issue #695: Auto-testing indicator */
+.stat-item.testing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-info);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.stat-item.testing i {
+  font-size: 18px;
 }
 
 /* Loading/Error/Empty States */
@@ -992,6 +1887,28 @@ onUnmounted(() => {
 .action-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Issue #695: Update history button styles */
+.action-btn.update {
+  position: relative;
+  border-color: var(--color-info);
+  color: var(--color-info);
+}
+
+.action-btn.update:hover:not(:disabled) {
+  background: var(--color-info-bg);
+  color: var(--color-info);
+}
+
+.action-btn.edit {
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
+.action-btn.edit:hover {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 /* Node Details */
@@ -1257,5 +2174,352 @@ onUnmounted(() => {
     flex: 1;
     justify-content: center;
   }
+}
+
+/* Issue #695: Certificate Status Styles */
+.certificate-status-item {
+  min-width: 180px;
+}
+
+.certificate-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cert-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.cert-badge.large {
+  padding: 8px 14px;
+  font-size: 14px;
+}
+
+.cert-badge i {
+  font-size: 12px;
+}
+
+.cert-badge.large i {
+  font-size: 14px;
+}
+
+/* Certificate status colors */
+.cert-valid {
+  background: var(--color-success-bg, rgba(34, 197, 94, 0.15));
+  color: var(--color-success, #22c55e);
+}
+
+.cert-expiring_soon {
+  background: var(--color-warning-bg, rgba(245, 158, 11, 0.15));
+  color: var(--color-warning, #f59e0b);
+}
+
+.cert-expired {
+  background: var(--color-danger-bg, rgba(239, 68, 68, 0.15));
+  color: var(--color-danger, #ef4444);
+}
+
+.cert-invalid {
+  background: var(--color-danger-bg, rgba(239, 68, 68, 0.15));
+  color: var(--color-danger, #ef4444);
+}
+
+.cert-not_deployed {
+  background: var(--bg-tertiary, rgba(100, 116, 139, 0.15));
+  color: var(--text-secondary, #64748b);
+}
+
+.cert-unknown {
+  background: var(--bg-tertiary, rgba(100, 116, 139, 0.15));
+  color: var(--text-tertiary, #94a3b8);
+}
+
+.cert-manage-btn {
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+
+.cert-manage-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* Certificate Modal Styles */
+.certificate-modal {
+  padding: 8px 0;
+}
+
+.cert-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px;
+  color: var(--text-tertiary);
+}
+
+.cert-not-loaded {
+  text-align: center;
+  padding: 24px;
+  color: var(--text-tertiary);
+}
+
+.cert-info {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cert-status-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.days-remaining {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.cert-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+}
+
+.cert-detail-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.cert-detail-label {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.cert-detail-value {
+  font-size: 13px;
+  color: var(--text-primary);
+  text-align: right;
+  word-break: break-all;
+}
+
+.cert-detail-value.mono {
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.cert-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px;
+  background: var(--color-info-bg, rgba(59, 130, 246, 0.1));
+  border-radius: 6px;
+  color: var(--color-info, #3b82f6);
+  font-size: 13px;
+}
+
+.cert-message i {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.auth-method-section {
+  padding-top: 16px;
+  border-top: 1px solid var(--border-light);
+}
+
+.auth-method-section h5 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.auth-current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.auth-current i {
+  color: var(--color-primary);
+}
+
+.auth-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 0 0;
+  padding: 10px 14px;
+  background: var(--color-warning-bg, rgba(245, 158, 11, 0.1));
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--color-warning, #f59e0b);
+}
+
+.auth-warning i {
+  flex-shrink: 0;
+}
+
+/* Issue #695: Check Updates Button Styles */
+.action-btn.check-updates {
+  position: relative;
+  background-color: var(--color-info-bg, rgba(59, 130, 246, 0.1));
+  color: var(--color-info, #3b82f6);
+}
+
+.action-btn.check-updates:hover:not(:disabled) {
+  background-color: var(--color-info, #3b82f6);
+  color: white;
+}
+
+.update-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: var(--color-danger, #ef4444);
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Issue #695: Updates Modal Styles */
+.updates-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.updates-summary {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+}
+
+.summary-item {
+  flex: 1;
+  text-align: center;
+}
+
+.summary-item .summary-number {
+  display: block;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.summary-item .summary-label {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+}
+
+.summary-item.security .summary-number {
+  color: var(--color-warning, #f59e0b);
+}
+
+.packages-list {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.package-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  border-left: 3px solid var(--border-light);
+}
+
+.package-item.security {
+  border-left-color: var(--color-warning, #f59e0b);
+  background: var(--color-warning-bg, rgba(245, 158, 11, 0.05));
+}
+
+.package-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.security-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: var(--color-warning, #f59e0b);
+  color: white;
+  border-radius: 4px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.package-versions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.package-versions .version {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.package-versions .version.old {
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+}
+
+.package-versions .version.new {
+  background: var(--color-success-bg, rgba(16, 185, 129, 0.1));
+  color: var(--color-success, #10b981);
+}
+
+.package-versions i {
+  color: var(--text-tertiary);
+  font-size: 10px;
 }
 </style>
