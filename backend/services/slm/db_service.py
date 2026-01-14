@@ -113,6 +113,26 @@ class SLMDatabaseService:
                 query = query.filter(SLMNode.state == state)
             return query.all()
 
+    def delete_node(self, node_id: str) -> bool:
+        """
+        Delete a node by ID.
+
+        Args:
+            node_id: Node ID to delete
+
+        Returns:
+            True if node was deleted, False if not found
+        """
+        with self.SessionLocal() as session:
+            node = session.query(SLMNode).filter(SLMNode.id == node_id).first()
+            if not node:
+                return False
+
+            session.delete(node)
+            session.commit()
+            logger.info("Deleted node: %s", node_id)
+            return True
+
     def update_node_state(
         self,
         node_id: str,
@@ -167,7 +187,13 @@ class SLMDatabaseService:
         health_data: Dict,
         heartbeat_time: Optional[datetime] = None,
     ) -> SLMNode:
-        """Update node health data and heartbeat."""
+        """
+        Update node health data and heartbeat.
+
+        Note: health_data is accepted for API compatibility but currently
+        not persisted. Future enhancement could store metrics in a separate
+        health_metrics table for historical tracking.
+        """
         with self.SessionLocal() as session:
             node = session.query(SLMNode).filter(SLMNode.id == node_id).first()
             if not node:
@@ -179,6 +205,7 @@ class SLMDatabaseService:
 
             session.commit()
             session.refresh(node)
+            logger.debug("Updated health for node %s: %s", node.name, health_data)
             return node
 
     def increment_failure_count(self, node_id: str) -> int:

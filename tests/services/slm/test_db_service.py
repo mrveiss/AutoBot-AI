@@ -10,14 +10,15 @@ from backend.services.slm.db_service import SLMDatabaseService
 from backend.services.slm.state_machine import InvalidStateTransition
 
 
+@pytest.fixture
+def slm_db(tmp_path):
+    """Create SLM database service with temp database."""
+    db_path = tmp_path / "test_slm.db"
+    return SLMDatabaseService(db_path=str(db_path))
+
+
 class TestSLMNodeCRUD:
     """Test SLM node CRUD operations."""
-
-    @pytest.fixture
-    def slm_db(self, tmp_path):
-        """Create SLM database service with temp database."""
-        db_path = tmp_path / "test_slm.db"
-        return SLMDatabaseService(db_path=str(db_path))
 
     def test_create_node(self, slm_db):
         """Test creating a new node."""
@@ -120,15 +121,25 @@ class TestSLMNodeCRUD:
         count2 = slm_db.increment_failure_count(node.id)
         assert count2 == 2
 
+    def test_delete_node(self, slm_db):
+        """Test deleting a node."""
+        node = slm_db.create_node(name="delete-test", ip_address="192.168.1.200")
+        node_id = node.id
+
+        result = slm_db.delete_node(node_id)
+        assert result is True
+
+        # Verify it's deleted
+        assert slm_db.get_node(node_id) is None
+
+    def test_delete_nonexistent_node(self, slm_db):
+        """Test deleting a non-existent node returns False."""
+        result = slm_db.delete_node("nonexistent-id")
+        assert result is False
+
 
 class TestSLMRoleCRUD:
     """Test SLM role CRUD operations."""
-
-    @pytest.fixture
-    def slm_db(self, tmp_path):
-        """Create SLM database service with temp database."""
-        db_path = tmp_path / "test_slm.db"
-        return SLMDatabaseService(db_path=str(db_path))
 
     def test_create_role(self, slm_db):
         """Test creating a new role."""
@@ -167,12 +178,6 @@ class TestSLMRoleCRUD:
 
 class TestSLMStatistics:
     """Test SLM statistics generation."""
-
-    @pytest.fixture
-    def slm_db(self, tmp_path):
-        """Create SLM database service with temp database."""
-        db_path = tmp_path / "test_slm.db"
-        return SLMDatabaseService(db_path=str(db_path))
 
     def test_get_statistics(self, slm_db):
         """Test getting SLM statistics."""
