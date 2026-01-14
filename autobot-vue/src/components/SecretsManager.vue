@@ -732,6 +732,7 @@ import { useAppStore } from '../stores/useAppStore';
 import { createLogger } from '@/utils/debugUtils';
 import { formatDateTime } from '@/utils/formatHelpers';
 import { useDebounce } from '@/composables/useDebounce';
+import { getBackendUrl } from '@/config/ssot-config';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import BaseModal from '@/components/ui/BaseModal.vue';
@@ -916,12 +917,54 @@ const isFormValid = computed(() => {
 const loadSecrets = async () => {
   loading.value = true;
   try {
-    const [secretsResponse, statsResponse] = await Promise.all([
+    const backendUrl = getBackendUrl();
+
+    // Fetch secrets and stats - infrastructure_host is now a regular secret type
+    const [secretsResponse, statsResponse, legacyHostsResponse] = await Promise.all([
       secretsApiClient.getSecrets({}),
-      secretsApiClient.getSecretsStats()
+      secretsApiClient.getSecretsStats(),
+      // Also fetch legacy hosts for backwards compatibility (will be migrated eventually)
+      fetch(`${backendUrl}/api/infrastructure/hosts`).then(r => r.ok ? r.json() : { hosts: [] }).catch(() => ({ hosts: [] }))
     ]);
-    secrets.value = secretsResponse.secrets || [];
-    stats.value = statsResponse;
+
+    // Convert legacy infrastructure hosts to secret-like format for unified display
+    const legacyInfraSecrets = (legacyHostsResponse.hosts || []).map((host: any) => ({
+      id: host.id,
+      name: host.name,
+      type: 'infrastructure_host',
+      scope: host.scope || 'general',
+      chat_id: host.chat_id,
+      description: host.description || `${host.username}@${host.host}:${host.ssh_port}`,
+      tags: host.tags || [],
+      created_at: host.created_at,
+      updated_at: host.updated_at,
+      expires_at: null,
+      metadata: {
+        host: host.host,
+        ssh_port: host.ssh_port,
+        vnc_port: host.vnc_port,
+        username: host.username,
+        auth_type: host.auth_type,
+        capabilities: host.capabilities
+      },
+      _isLegacyHost: true  // Flag for legacy hosts that need different delete API
+    }));
+
+    // Merge regular secrets with legacy infrastructure hosts
+    // (new infra hosts are already in secrets with type=infrastructure_host)
+    secrets.value = [...(secretsResponse.secrets || []), ...legacyInfraSecrets];
+
+    // Update stats
+    const legacyInfraCount = legacyInfraSecrets.length;
+    stats.value = {
+      ...statsResponse,
+      total_secrets: (statsResponse.total_secrets || 0) + legacyInfraCount,
+      by_type: {
+        ...statsResponse.by_type,
+        infrastructure_host: (statsResponse.by_type?.infrastructure_host || 0) + legacyInfraCount
+      }
+    };
+
     showTemplates.value = secrets.value.length === 0;
   } catch (error) {
     logger.error('Failed to load secrets:', error);
@@ -1053,6 +1096,19 @@ const openCreateModal = () => {
 
 const viewSecret = async (secret: any) => {
   try {
+    // Handle infrastructure hosts - show connection info instead of raw credential
+    if (secret.type === 'infrastructure_host') {
+      const meta = secret.metadata || {};
+      viewingSecret.value = {
+        ...secret,
+        value: `${meta.username || 'root'}@${meta.host || 'unknown'}:${meta.ssh_port || 22}`,
+        _isInfraHost: true
+      };
+      showSecretValue.value = false;
+      showViewModal.value = true;
+      return;
+    }
+
     const response = await secretsApiClient.getSecret(secret.id, { chatId: secret.chat_id });
     viewingSecret.value = response;
     showSecretValue.value = false;
@@ -1072,6 +1128,20 @@ const editSecret = (secret: any) => {
   secretForm.expires_at = secret.expires_at ? new Date(secret.expires_at).toISOString().slice(0, 16) : '';
   secretForm.tags = [...(secret.tags || [])];
   tagsInput.value = secretForm.tags.join(', ');
+
+  // Populate infrastructure host specific fields from metadata
+  if (secret.type === 'infrastructure_host' && secret.metadata) {
+    const meta = secret.metadata;
+    secretForm.host = meta.host || '';
+    secretForm.ssh_port = meta.ssh_port || 22;
+    secretForm.vnc_port = meta.vnc_port || null;
+    secretForm.username = meta.username || 'root';
+    secretForm.auth_type = meta.auth_type || 'password';
+    secretForm.capabilities = meta.capabilities || ['ssh'];
+    secretForm.os = meta.os || '';
+    secretForm.purpose = meta.purpose || '';
+  }
+
   showViewModal.value = false;
   showEditModal.value = true;
 };
@@ -1091,7 +1161,19 @@ const deleteSecret = async () => {
 
   deleting.value = true;
   try {
-    await secretsApiClient.deleteSecret(deletingSecret.value.id, { chatId: deletingSecret.value.chat_id });
+    // Handle legacy infrastructure hosts differently (they use old API)
+    if (deletingSecret.value._isLegacyHost) {
+      const backendUrl = getBackendUrl();
+      const response = await fetch(`${backendUrl}/api/infrastructure/hosts/${deletingSecret.value.id}`, {
+        method: 'DELETE'
+      });
+      if (!response.ok) {
+        throw new Error('Failed to delete infrastructure host');
+      }
+    } else {
+      // All secrets (including new infrastructure_host type) use unified secrets API
+      await secretsApiClient.deleteSecret(deletingSecret.value.id, { chatId: deletingSecret.value.chat_id });
+    }
     showDeleteModal.value = false;
     deletingSecret.value = null;
     await loadSecrets();
@@ -1128,15 +1210,7 @@ const saveSecret = async () => {
   try {
     const appStore = useAppStore();
 
-    // Handle infrastructure_host type separately via dedicated API
-    if (secretForm.type === 'infrastructure_host') {
-      await saveInfrastructureHost(appStore);
-      closeModals();
-      await loadSecrets();
-      return;
-    }
-
-    // Standard secret handling
+    // Build base secret data
     const secretData: any = {
       name: secretForm.name,
       type: secretForm.type,
@@ -1147,10 +1221,37 @@ const saveSecret = async () => {
       tags: secretForm.tags
     };
 
+    // Handle infrastructure_host type - store host info in metadata, credential in value
+    if (secretForm.type === 'infrastructure_host') {
+      secretData.metadata = {
+        host: secretForm.host,
+        ssh_port: secretForm.ssh_port,
+        vnc_port: secretForm.vnc_port,
+        username: secretForm.username,
+        auth_type: secretForm.auth_type,
+        capabilities: secretForm.capabilities,
+        os: secretForm.os || null,
+        purpose: secretForm.purpose || null
+      };
+      // Store the actual credential (password or SSH key) in the encrypted value field
+      if (!showEditModal.value) {
+        secretData.value = secretForm.auth_type === 'ssh_key'
+          ? secretForm.ssh_key
+          : secretForm.ssh_password;
+      }
+      // Auto-generate description if empty
+      if (!secretData.description) {
+        secretData.description = `${secretForm.username}@${secretForm.host}:${secretForm.ssh_port}`;
+      }
+    }
+
     if (showEditModal.value) {
       await secretsApiClient.updateSecret(secretForm.id, secretData, { chatId: secretData.chat_id });
     } else {
-      secretData.value = secretForm.value;
+      // For non-infrastructure_host types, use the standard value field
+      if (secretForm.type !== 'infrastructure_host') {
+        secretData.value = secretForm.value;
+      }
       await secretsApiClient.createSecret(secretData);
     }
 
@@ -1160,58 +1261,6 @@ const saveSecret = async () => {
     logger.error('Failed to save secret:', error);
   } finally {
     saving.value = false;
-  }
-};
-
-/**
- * Save infrastructure host via dedicated API endpoint.
- * Infrastructure hosts have structured fields (host, port, username, etc.)
- * instead of a single 'value' field.
- */
-const saveInfrastructureHost = async (appStore: any) => {
-  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://172.16.168.20:8001';
-
-  const hostData = {
-    name: secretForm.name,
-    host: secretForm.host,
-    username: secretForm.username,
-    auth_type: secretForm.auth_type,
-    ssh_key: secretForm.auth_type === 'ssh_key' ? secretForm.ssh_key : undefined,
-    ssh_password: secretForm.auth_type === 'password' ? secretForm.ssh_password : undefined,
-    vnc_password: secretForm.capabilities.includes('vnc') ? secretForm.vnc_password : undefined,
-    ssh_port: secretForm.ssh_port,
-    vnc_port: secretForm.capabilities.includes('vnc') ? secretForm.vnc_port : undefined,
-    capabilities: secretForm.capabilities,
-    description: secretForm.description,
-    tags: secretForm.tags,
-    os: secretForm.os || undefined,
-    purpose: secretForm.purpose || undefined,
-    scope: secretForm.scope,
-    chat_id: secretForm.scope === 'chat' ? (secretForm.chat_id || appStore.currentSessionId) : undefined,
-  };
-
-  if (showEditModal.value) {
-    // Update existing host
-    const response = await fetch(`${backendUrl}/api/infrastructure/hosts/${secretForm.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(hostData),
-    });
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to update host');
-    }
-  } else {
-    // Create new host
-    const response = await fetch(`${backendUrl}/api/infrastructure/hosts`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(hostData),
-    });
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to create host');
-    }
   }
 };
 

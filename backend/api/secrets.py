@@ -112,6 +112,7 @@ class SecretType(str, Enum):
     TOKEN = "token"
     CERTIFICATE = "certificate"
     DATABASE_URL = "database_url"
+    INFRASTRUCTURE_HOST = "infrastructure_host"  # SSH/VNC host credentials
     OTHER = "other"
 
 

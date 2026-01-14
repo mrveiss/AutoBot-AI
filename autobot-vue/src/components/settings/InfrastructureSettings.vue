@@ -12,6 +12,14 @@
       </button>
       <button
         class="infrastructure-tab"
+        :class="{ active: activeSubTab === 'nodes' }"
+        @click="activeSubTab = 'nodes'"
+      >
+        <i class="fas fa-server mr-2"></i>
+        Nodes
+      </button>
+      <button
+        class="infrastructure-tab"
         :class="{ active: activeSubTab === 'npu-workers' }"
         @click="activeSubTab = 'npu-workers'"
       >
@@ -204,6 +212,11 @@
     </BaseModal>
     </div>
 
+    <!-- Nodes Tab (Issue #695) -->
+    <div v-show="activeSubTab === 'nodes'">
+      <NodesSettings :isSettingsLoaded="isSettingsLoaded" @change="$emit('change')" />
+    </div>
+
     <!-- NPU Workers Tab -->
     <div v-show="activeSubTab === 'npu-workers'">
       <NPUWorkersSettings :isSettingsLoaded="isSettingsLoaded" @change="$emit('change')" />
@@ -234,6 +247,7 @@ import NPUWorkersSettings from './NPUWorkersSettings.vue'
 import DataStorageSettings from './DataStorageSettings.vue'
 import HardwareSettings from './HardwareSettings.vue'
 import ServicesSettings from './ServicesSettings.vue'
+import NodesSettings from './NodesSettings.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { getBackendUrl } from '@/config/ssot-config'
 
@@ -241,7 +255,7 @@ const logger = createLogger('InfrastructureSettings')
 const userStore = useUserStore()
 
 // Sub-tab state
-const activeSubTab = ref<'updates' | 'npu-workers' | 'data-storage' | 'hardware' | 'services'>('updates')
+const activeSubTab = ref<'updates' | 'nodes' | 'npu-workers' | 'data-storage' | 'hardware' | 'services'>('updates')
 
 // Props
 interface Props {

@@ -94,6 +94,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     # NPU and Redis
     ("backend.api.npu_workers", "", ["npu-workers"], "npu_workers"),
     ("backend.api.redis_service", "/redis-service", ["redis-service"], "redis_service"),
+    # Infrastructure nodes (Issue #695)
+    ("backend.api.infrastructure_nodes", "", ["infrastructure-nodes"], "infrastructure_nodes"),
     # Graph and entity features
     ("backend.api.entity_extraction", "/entities", ["entity-extraction"], "entity_extraction"),
     ("backend.api.graph_rag", "/graph-rag", ["graph-rag"], "graph_rag"),

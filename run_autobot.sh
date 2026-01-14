@@ -280,12 +280,12 @@ check_vm_health() {
         echo -e "${RED}❌${NC}"
     fi
 
-    # NPU Worker - Optional, check but don't count against health
+    # NPU Worker - Optional, configured via Infrastructure settings and Ansible provisioned
     echo -n "  NPU Worker (optional)... "
     if timeout 3 curl -s "http://${VMS["npu-worker"]}:$NPU_WORKER_PORT" >/dev/null 2>&1; then
         echo -e "${GREEN}✅${NC}"
     else
-        echo -e "${YELLOW}⚠️ Not running${NC}"
+        echo -e "${CYAN}ℹ️ Add via http://172.16.168.21:5173/settings/infrastructure (NPU Workers tab)${NC}"
     fi
 
     local health_percentage=$((healthy_vms * 100 / total_required_vms))
@@ -325,14 +325,19 @@ check_vm_services() {
         echo -e "${YELLOW}    Start with: bash scripts/vm-management/start-redis.sh${NC}"
     fi
 
-    # Check Grafana dashboards sync (Issue #697)
+    # Check Grafana dashboards sync (Issue #697) - Auto-sync if out of sync
     echo -n "  Grafana Dashboards (${VMS["redis"]})... "
     if [ -f "scripts/utilities/sync-grafana-dashboards.sh" ]; then
         if ./scripts/utilities/sync-grafana-dashboards.sh --check --quiet 2>/dev/null; then
             echo -e "${GREEN}✅ Synced${NC}"
         else
-            echo -e "${YELLOW}⚠️ Out of sync${NC}"
-            echo -e "${YELLOW}    Sync with: ./scripts/utilities/sync-grafana-dashboards.sh${NC}"
+            echo -e "${YELLOW}⚠️ Out of sync - auto-syncing...${NC}"
+            if ./scripts/utilities/sync-grafana-dashboards.sh --quiet 2>/dev/null; then
+                echo -e "${GREEN}    ✅ Auto-synced successfully${NC}"
+            else
+                echo -e "${RED}    ❌ Auto-sync failed${NC}"
+                echo -e "${YELLOW}    Manual sync: ./scripts/utilities/sync-grafana-dashboards.sh${NC}"
+            fi
         fi
     else
         echo -e "${YELLOW}⚠️ Sync script not found${NC}"
@@ -351,10 +356,11 @@ check_vm_services() {
         # Use service-specific health checks based on setup.sh implementation
         case $service in
             "npu-worker")
+                # NPU Workers are Linux hosts added via Infrastructure settings and provisioned with Ansible
                 if timeout 5 curl -s "http://$vm_ip:$port" >/dev/null 2>&1; then
                     echo -e "${GREEN}✅ Running${NC}"
                 else
-                    echo -e "${YELLOW}⚠️ Not running (optional - AI acceleration helper)${NC}"
+                    echo -e "${CYAN}ℹ️  Add via /settings/infrastructure (NPU Workers tab)${NC}"
                 fi
                 ;;
             "ai-stack")
@@ -400,20 +406,7 @@ show_system_status() {
     check_vm_services
     echo ""
 
-    # VNC Desktop Status
-    echo -e "${CYAN}🖥️  VNC Desktop (WSL):${NC}"
-    local xvfb_status=$(systemctl is-active xvfb@1 2>/dev/null || echo "inactive")
-    local vnc_status=$(systemctl is-active vncserver@1 2>/dev/null || echo "inactive")
-    local novnc_status=$(systemctl is-active novnc 2>/dev/null || echo "inactive")
-
-    if [ "$xvfb_status" = "active" ] && [ "$vnc_status" = "active" ] && [ "$novnc_status" = "active" ]; then
-        echo -e "${GREEN}  ✅ VNC Services Running${NC}"
-        echo -e "${BLUE}    Web URL: http://localhost:6080/vnc.html${NC}"
-    else
-        echo -e "${YELLOW}  ⚠️  VNC Not Running${NC}"
-        echo -e "${BLUE}    Start with: bash run_autobot.sh --desktop${NC}"
-    fi
-    echo ""
+    # Note: VNC/WSL hosts are configured via Settings → Secrets menu, not checked during startup
 
     # Access Points
     echo -e "${CYAN}🌐 Access Points:${NC}"

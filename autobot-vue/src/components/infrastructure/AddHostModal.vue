@@ -68,117 +68,69 @@
                 />
               </div>
 
-              <!-- SSH User -->
-              <div>
-                <label for="ssh_user" class="block text-sm font-medium text-gray-700 mb-1">
-                  SSH User <span class="text-red-500">*</span>
-                </label>
-                <input
-                  v-model="formData.ssh_user"
-                  type="text"
-                  id="ssh_user"
-                  required
-                  class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  placeholder="root"
-                />
-              </div>
-
-              <!-- Authentication Type -->
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">
-                  Authentication Method
-                </label>
-                <div class="flex space-x-4">
-                  <label class="flex items-center">
-                    <input
-                      v-model="authType"
-                      type="radio"
-                      value="key"
-                      class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                    />
-                    <span class="ml-2 text-sm text-gray-700">SSH Key</span>
+              <!-- SSH User and Port -->
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label for="ssh_user" class="block text-sm font-medium text-gray-700 mb-1">
+                    SSH User <span class="text-red-500">*</span>
                   </label>
-                  <label class="flex items-center">
-                    <input
-                      v-model="authType"
-                      type="radio"
-                      value="password"
-                      class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                    />
-                    <span class="ml-2 text-sm text-gray-700">Password</span>
+                  <input
+                    v-model="formData.ssh_user"
+                    type="text"
+                    id="ssh_user"
+                    required
+                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    placeholder="autobot"
+                  />
+                </div>
+                <div>
+                  <label for="ssh_port" class="block text-sm font-medium text-gray-700 mb-1">
+                    SSH Port
                   </label>
+                  <input
+                    v-model.number="formData.ssh_port"
+                    type="number"
+                    id="ssh_port"
+                    min="1"
+                    max="65535"
+                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    placeholder="22"
+                  />
                 </div>
               </div>
 
-              <!-- SSH Key Path (if key auth) -->
-              <div v-if="authType === 'key'">
-                <label for="ssh_key_path" class="block text-sm font-medium text-gray-700 mb-1">
-                  SSH Key Path
-                </label>
-                <input
-                  v-model="formData.ssh_key_path"
-                  type="text"
-                  id="ssh_key_path"
-                  class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  placeholder="~/.ssh/id_rsa"
-                />
-                <p class="mt-1 text-xs text-gray-500">Leave empty to use default SSH key</p>
-              </div>
-
-              <!-- SSH Password (if password auth) -->
-              <div v-if="authType === 'password'">
+              <!-- SSH Password -->
+              <div>
                 <label for="ssh_password" class="block text-sm font-medium text-gray-700 mb-1">
-                  SSH Password
+                  SSH Password <span class="text-red-500">*</span>
                 </label>
                 <input
                   v-model="formData.ssh_password"
                   type="password"
                   id="ssh_password"
+                  required
                   class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   placeholder="••••••••"
                 />
+                <p class="mt-1 text-xs text-gray-500">After adding the host, you can provision an SSH key for passwordless access.</p>
               </div>
 
-              <!-- Description -->
+              <!-- Role (required) -->
               <div>
-                <label for="description" class="block text-sm font-medium text-gray-700 mb-1">
-                  Description
+                <label for="role" class="block text-sm font-medium text-gray-700 mb-1">
+                  Role <span class="text-red-500">*</span>
                 </label>
-                <textarea
-                  v-model="formData.description"
-                  id="description"
-                  rows="2"
+                <select
+                  v-model="formData.role"
+                  id="role"
+                  required
                   class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  placeholder="Production web server"
-                ></textarea>
-              </div>
-
-              <!-- Ansible Group -->
-              <div>
-                <label for="ansible_group" class="block text-sm font-medium text-gray-700 mb-1">
-                  Ansible Group
-                </label>
-                <input
-                  v-model="formData.ansible_group"
-                  type="text"
-                  id="ansible_group"
-                  class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  placeholder="webservers"
-                />
-              </div>
-
-              <!-- Tags -->
-              <div>
-                <label for="tags" class="block text-sm font-medium text-gray-700 mb-1">
-                  Tags
-                </label>
-                <input
-                  v-model="tagsInput"
-                  type="text"
-                  id="tags"
-                  class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  placeholder="production, web, nginx (comma-separated)"
-                />
+                >
+                  <option value="" disabled>Select a role</option>
+                  <option v-for="role in availableRoles" :key="role.name" :value="role.name">
+                    {{ role.name }} - {{ role.description }}
+                  </option>
+                </select>
               </div>
 
               <!-- Actions -->
@@ -214,10 +166,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, defineProps, defineEmits, watch } from 'vue'
+import { ref, defineProps, defineEmits, watch, onMounted } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
+import { getBackendUrl } from '@/config/ssot-config'
 
 const logger = createLogger('AddHostModal')
+
+interface Role {
+  id: number
+  name: string
+  description: string
+}
 
 defineProps<{
   visible: boolean
@@ -225,22 +184,36 @@ defineProps<{
 
 const emit = defineEmits<{
   close: []
-  submit: [formData: Record<string, any>]
+  submit: [formData: FormData]
 }>()
 
-const authType = ref<'key' | 'password'>('key')
-const tagsInput = ref('')
 const isSubmitting = ref(false)
+const availableRoles = ref<Role[]>([])
 
 const formData = ref({
   hostname: '',
   ip_address: '',
-  ssh_user: '',
-  ssh_key_path: '',
+  ssh_user: 'autobot',
+  ssh_port: 22,
   ssh_password: '',
-  description: '',
-  ansible_group: '',
-  tags: [] as string[]
+  role: ''
+})
+
+// Fetch available roles
+async function fetchRoles() {
+  try {
+    const backendUrl = getBackendUrl()
+    const response = await fetch(`${backendUrl}/api/iac/roles`)
+    if (response.ok) {
+      availableRoles.value = await response.json()
+    }
+  } catch (error) {
+    logger.error('Failed to fetch roles:', error)
+  }
+}
+
+onMounted(() => {
+  fetchRoles()
 })
 
 // Reset form when modal closes
@@ -254,45 +227,30 @@ function resetForm() {
   formData.value = {
     hostname: '',
     ip_address: '',
-    ssh_user: '',
-    ssh_key_path: '',
+    ssh_user: 'autobot',
+    ssh_port: 22,
     ssh_password: '',
-    description: '',
-    ansible_group: '',
-    tags: []
+    role: ''
   }
-  tagsInput.value = ''
-  authType.value = 'key'
 }
 
 async function handleSubmit() {
   isSubmitting.value = true
 
   try {
-    // Parse tags
-    const tags = tagsInput.value
-      .split(',')
-      .map(t => t.trim())
-      .filter(t => t.length > 0)
+    // Create FormData for multipart submission (required by backend)
+    const submitFormData = new FormData()
 
-    // Prepare form data - only include relevant auth field
-    const submitData: any = {
-      hostname: formData.value.hostname,
-      ip_address: formData.value.ip_address,
-      ssh_user: formData.value.ssh_user,
-      description: formData.value.description,
-      ansible_group: formData.value.ansible_group,
-      tags
-    }
+    // Required fields
+    submitFormData.append('hostname', formData.value.hostname)
+    submitFormData.append('ip_address', formData.value.ip_address)
+    submitFormData.append('role', formData.value.role)
+    submitFormData.append('ssh_port', String(formData.value.ssh_port))
+    submitFormData.append('ssh_user', formData.value.ssh_user)
+    submitFormData.append('auth_method', 'password')
+    submitFormData.append('password', formData.value.ssh_password)
 
-    // Add auth-specific field
-    if (authType.value === 'key') {
-      submitData.ssh_key_path = formData.value.ssh_key_path
-    } else {
-      submitData.ssh_password = formData.value.ssh_password
-    }
-
-    emit('submit', submitData)
+    emit('submit', submitFormData)
     resetForm()
   } catch (error) {
     logger.error('Error submitting form:', error)
