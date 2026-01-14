@@ -415,5 +415,12 @@ secrets/
 vault.yml
 vault.yaml
 *-vault.yml
+# Issue #700: Vault password files
+.vault_pass
+.vault_password
+*vault_pass*
+*vault_password*
+ansible/inventory/group_vars/vault.yml
+
 .claude/agents-optimized/
 .claude/.optimization_cache.json

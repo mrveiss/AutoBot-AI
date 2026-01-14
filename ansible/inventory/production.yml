@@ -5,11 +5,14 @@
 all:
   vars:
     # Global SSH and connection settings - UPDATED FOR PROVIDED VMs
+    # Issue #700: SSH key authentication (no plaintext passwords)
     ansible_user: autobot
-    ansible_password: autobot
+    ansible_ssh_private_key_file: ~/.ssh/autobot_key
     ansible_become: yes
-    ansible_become_password: autobot
-    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+    # Become password from vault (only needed if passwordless sudo not configured)
+    # To use: ansible-playbook ... --ask-vault-pass
+    # ansible_become_password: "{{ vault_become_password_autobot }}"
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=accept-new'
     ansible_python_interpreter: /usr/bin/python3
     
     # Global network configuration - UPDATED FOR 172.16.168.x SUBNET
@@ -64,7 +67,9 @@ all:
         autobot-host:
           ansible_connection: local    # This is the local WSL machine
           ansible_host: 127.0.0.1      # Local connection
-          ansible_become_password: kali # Local sudo password
+          ansible_become: no           # Issue #700: Disable become for local host by default
+          # Enable become when needed with: --extra-vars "ansible_become=yes"
+          # Or use: --ask-become-pass for operations requiring sudo
           vm_id: "autobot-wsl-machine"
           vm_role: "wsl-host"
           vm_hostname: "autobot-host"

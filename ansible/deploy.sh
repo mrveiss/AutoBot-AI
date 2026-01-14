@@ -14,6 +14,11 @@ PLAYBOOK_DIR="$ANSIBLE_DIR/playbooks"
 LOG_DIR="/tmp/autobot-deployment"
 LOG_FILE="$LOG_DIR/deployment-$(date +%Y%m%d-%H%M%S).log"
 
+# Issue #700: Vault configuration
+VAULT_PASSWORD_FILE="${VAULT_PASSWORD_FILE:-}"
+USE_VAULT="${USE_VAULT:-false}"
+ASK_BECOME_PASS="${ASK_BECOME_PASS:-false}"
+
 # Create log directory
 mkdir -p "$LOG_DIR"
 
@@ -113,28 +118,42 @@ run_playbook() {
     local playbook="$1"
     local description="$2"
     local extra_args="${3:-}"
-    
+
     log "INFO" "🚀 Starting: $description"
     log "DEBUG" "Running playbook: $playbook"
-    
+
     local playbook_path="$PLAYBOOK_DIR/$playbook"
     if [[ ! -f "$playbook_path" ]]; then
         error_exit "Playbook not found: $playbook_path"
     fi
-    
+
     # Build ansible command
     local ansible_cmd="ansible-playbook -i $INVENTORY_FILE $playbook_path"
-    
+
     # Add extra arguments if provided
     if [[ -n "$extra_args" ]]; then
         ansible_cmd="$ansible_cmd $extra_args"
     fi
-    
+
+    # Issue #700: Add vault support
+    if [[ "$USE_VAULT" == "true" ]]; then
+        if [[ -n "$VAULT_PASSWORD_FILE" && -f "$VAULT_PASSWORD_FILE" ]]; then
+            ansible_cmd="$ansible_cmd --vault-password-file=$VAULT_PASSWORD_FILE"
+        else
+            ansible_cmd="$ansible_cmd --ask-vault-pass"
+        fi
+    fi
+
+    # Issue #700: Add become password prompt if needed
+    if [[ "$ASK_BECOME_PASS" == "true" ]]; then
+        ansible_cmd="$ansible_cmd --ask-become-pass"
+    fi
+
     # Add verbosity if debug mode
     if [[ "${DEBUG:-false}" == "true" ]]; then
         ansible_cmd="$ansible_cmd -vvv"
     fi
-    
+
     # Execute playbook
     if eval "$ansible_cmd"; then
         success "$description completed successfully"
@@ -420,6 +439,21 @@ health_check() {
     validate_deployment
 }
 
+# Issue #700: Setup passwordless sudo on all VMs
+setup_passwordless_sudo() {
+    log "INFO" "🔐 Setting up passwordless sudo for autobot user..."
+    log "INFO" "This requires one-time password authentication"
+
+    # Force ask-become-pass for this operation
+    local saved_ask_become="$ASK_BECOME_PASS"
+    ASK_BECOME_PASS="true"
+
+    run_playbook "setup-passwordless-sudo.yml" "Passwordless sudo configuration"
+
+    ASK_BECOME_PASS="$saved_ask_become"
+    success "Passwordless sudo configured - future operations won't require passwords"
+}
+
 # Usage information
 show_usage() {
     cat << EOF
@@ -438,6 +472,12 @@ OPTIONS:
   --restart           Restart AutoBot services
   --health-check      Validate all services are healthy
   --rollback          Rollback to previous version
+
+  Security & Authentication (Issue #700):
+  --setup-sudo        Configure passwordless sudo for autobot user (one-time setup)
+  --ask-become-pass   Prompt for become (sudo) password
+  --use-vault         Use Ansible Vault for encrypted credentials
+  --vault-file FILE   Path to vault password file (default: prompt)
 
   Dependency Patching (Issue #682):
   --patch-dependencies        Update Python dependencies with CVE fixes (rolling update)
@@ -473,6 +513,15 @@ EXAMPLES:
   # Emergency stop
   $0 --stop
 
+  # First-time setup: configure passwordless sudo (Issue #700)
+  $0 --setup-sudo
+
+  # Deploy with vault-encrypted credentials
+  $0 --use-vault --full
+
+  # Deploy with become password prompt (if sudo not passwordless)
+  $0 --ask-become-pass --services
+
 PREREQUISITES:
   1. Ansible installed and configured
   2. SSH key generated and copied to all VMs:
@@ -480,6 +529,13 @@ PREREQUISITES:
      ssh-copy-id -i ~/.ssh/autobot_key.pub autobot@VM_IP
   3. Update inventory/production.yml with actual VM IP addresses
   4. VMs running Ubuntu 22.04 LTS with 'autobot' user
+  5. (Optional) Run --setup-sudo once to enable passwordless sudo
+
+SECURITY (Issue #700):
+  - SSH key authentication is used (no password auth)
+  - Become passwords stored in encrypted vault (inventory/group_vars/vault.yml)
+  - Run --setup-sudo to configure passwordless sudo (recommended)
+  - To encrypt vault: ansible-vault encrypt inventory/group_vars/vault.yml
 
 EOF
 }
@@ -557,6 +613,27 @@ main() {
                 check_prerequisites
                 test_connectivity
                 rollback_deployment
+                ;;
+            # Issue #700: Security & Authentication options
+            --setup-sudo)
+                check_prerequisites
+                test_connectivity
+                setup_passwordless_sudo
+                ;;
+            --ask-become-pass)
+                ASK_BECOME_PASS="true"
+                ;;
+            --use-vault)
+                USE_VAULT="true"
+                ;;
+            --vault-file)
+                shift
+                if [[ -n "${1:-}" && ! "$1" =~ ^-- ]]; then
+                    VAULT_PASSWORD_FILE="$1"
+                    USE_VAULT="true"
+                else
+                    error_exit "--vault-file requires a file path argument"
+                fi
                 ;;
             --patch-dependencies)
                 check_prerequisites
