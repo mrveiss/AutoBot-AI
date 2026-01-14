@@ -8,15 +8,28 @@
       v-model="selectedHostId"
       @change="handleHostChange"
       class="host-select"
-      :disabled="disabled"
+      :disabled="disabled || loading"
     >
-      <option
-        v-for="host in hosts"
-        :key="host.id"
-        :value="host.id"
-      >
-        {{ host.name }} ({{ host.ip }})
-      </option>
+      <!-- Infrastructure hosts from API (Issue #715) -->
+      <optgroup v-if="infrastructureHosts.length > 0" label="Infrastructure Hosts">
+        <option
+          v-for="host in infrastructureHosts"
+          :key="host.id"
+          :value="host.id"
+        >
+          {{ host.name }} ({{ host.ip }})
+        </option>
+      </optgroup>
+      <!-- Default VM hosts -->
+      <optgroup label="AutoBot VMs">
+        <option
+          v-for="host in defaultHosts"
+          :key="host.id"
+          :value="host.id"
+        >
+          {{ host.name }} ({{ host.ip }})
+        </option>
+      </optgroup>
     </select>
     <div v-if="showDescription && selectedHostConfig" class="host-description">
       <i class="fas fa-info-circle text-blue-500 mr-1"></i>
@@ -26,11 +39,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useTerminalStore, AVAILABLE_HOSTS, type HostConfig } from '@/composables/useTerminalStore'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('HostSelector')
+
+/**
+ * Infrastructure host from API (Issue #715).
+ */
+interface InfrastructureHost {
+  id: string
+  name: string
+  host: string
+  ssh_port?: number
+  vnc_port?: number
+  capabilities?: string[]
+  description?: string
+  os?: string
+}
 
 // Props
 interface Props {
@@ -58,11 +85,53 @@ const terminalStore = useTerminalStore()
 
 // Local state
 const selectedHostId = ref(props.modelValue)
+const infrastructureHosts = ref<HostConfig[]>([])
+const loading = ref(false)
 
 // Computed
-const selectedHostConfig = computed(() => {
-  return props.hosts.find(host => host.id === selectedHostId.value)
+const defaultHosts = computed(() => props.hosts)
+
+const allHosts = computed(() => {
+  return [...infrastructureHosts.value, ...defaultHosts.value]
 })
+
+const selectedHostConfig = computed(() => {
+  return allHosts.value.find(host => host.id === selectedHostId.value)
+})
+
+// Load infrastructure hosts from API (Issue #715)
+const loadInfrastructureHosts = async () => {
+  loading.value = true
+  try {
+    // Use relative URL to go through Vite proxy
+    const response = await fetch('/api/infrastructure/hosts')
+    if (!response.ok) {
+      throw new Error(`Failed to load hosts: ${response.statusText}`)
+    }
+    const data = await response.json()
+
+    // Convert infrastructure hosts to HostConfig format
+    infrastructureHosts.value = (data.hosts || []).map((h: InfrastructureHost) => ({
+      id: h.id,
+      name: h.name,
+      ip: h.host,
+      port: h.ssh_port || 22,
+      description: h.description || `${h.os || 'Host'} - ${h.capabilities?.join(', ') || 'SSH'}`
+    }))
+
+    logger.info(`Loaded ${infrastructureHosts.value.length} infrastructure hosts`)
+
+    // If no host is selected yet and we have infrastructure hosts, select the first one
+    if (!selectedHostId.value && infrastructureHosts.value.length > 0) {
+      selectedHostId.value = infrastructureHosts.value[0].id
+      handleHostChange()
+    }
+  } catch (error) {
+    logger.error('Failed to load infrastructure hosts:', error)
+  } finally {
+    loading.value = false
+  }
+}
 
 // Methods
 const handleHostChange = () => {
@@ -95,6 +164,11 @@ watch(() => terminalStore.selectedHost, (newHost) => {
     selectedHostId.value = newHost.id
   }
 }, { immediate: true })
+
+// Load infrastructure hosts on mount
+onMounted(() => {
+  loadInfrastructureHosts()
+})
 </script>
 
 <style scoped>
