@@ -26,6 +26,7 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("backend.api.websockets", "", ["websockets"], "websockets"),
     ("backend.api.workflow", "/workflow", ["workflow"], "workflow"),
     ("backend.api.batch", "/batch", ["batch"], "batch"),
+    ("backend.api.batch_jobs", "/batch-jobs", ["batch-jobs", "management"], "batch_jobs"),
     ("backend.services.advanced_workflow", "/orchestrator", ["orchestrator"], "orchestrator"),
     ("backend.services.workflow_automation", "/workflow-automation", ["workflow-automation"], "workflow_automation"),
     # Logging and configuration

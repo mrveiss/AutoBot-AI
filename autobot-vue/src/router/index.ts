@@ -279,6 +279,17 @@ const routes: RouteRecordRaw[] = [
           icon: 'fas fa-eye',
           description: 'AI-powered vision and multimodal processing (Issue #582)'
         }
+      },
+      {
+        path: 'batch-processing',
+        name: 'tools-batch-processing',
+        component: () => import('@/views/BatchProcessingView.vue'),
+        meta: {
+          title: 'Batch Processing',
+          parent: 'tools',
+          icon: 'fas fa-layer-group',
+          description: 'Batch job processing manager (Issue #584)'
+        }
       }
     ]
   },
