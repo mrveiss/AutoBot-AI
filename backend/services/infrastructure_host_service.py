@@ -606,3 +606,15 @@ def get_infrastructure_host_service() -> InfrastructureHostService:
             if _infrastructure_host_service is None:
                 _infrastructure_host_service = InfrastructureHostService()
     return _infrastructure_host_service
+
+
+def reset_infrastructure_host_service() -> None:
+    """Reset the infrastructure host service singleton.
+
+    Use this when the underlying secrets service has been reset and needs
+    to be reinitialized.
+    """
+    global _infrastructure_host_service
+    with _infrastructure_host_service_lock:
+        _infrastructure_host_service = None
+        logger.info("InfrastructureHostService singleton reset")

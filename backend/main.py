@@ -16,6 +16,15 @@ the best features from all previous implementations:
 
 import os
 import sys
+from pathlib import Path
+
+# Load environment variables from .env file BEFORE any other imports
+# This ensures AUTOBOT_SECRETS_KEY is available for SecretsService
+from dotenv import load_dotenv
+
+_env_path = Path(__file__).parent.parent / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path)
 
 # CRITICAL: Disable HuggingFace tokenizers parallelism BEFORE any imports
 # This prevents deadlocks when using run_in_executor() with forked processes

@@ -54,10 +54,24 @@ class SecretsService:
         if encryption_key:
             self.cipher = Fernet(encryption_key.encode())
         else:
-            # Generate a new key from config or environment
-            env_key = config_manager.get("security.secrets_key", None)
+            # Check multiple sources for the encryption key
+            # 1. Environment variable (direct)
+            # 2. Config manager (may map from env)
+            # 3. Key file in data directory
+            import os
+            env_key = os.getenv("AUTOBOT_SECRETS_KEY")
+            if not env_key:
+                env_key = config_manager.get("security.secrets_key", None)
+            if not env_key:
+                # Try loading from key file
+                key_file = Path(self.db_path).parent / "secrets.key"
+                if key_file.exists():
+                    env_key = key_file.read_text().strip()
+                    logger.info("Loaded encryption key from %s", key_file)
+
             if env_key:
                 self.cipher = Fernet(env_key.encode())
+                logger.info("Secrets encryption initialized with configured key")
             else:
                 # Generate and save a new key
                 key = Fernet.generate_key()
@@ -657,3 +671,15 @@ def get_secrets_service() -> SecretsService:
             if _secrets_service is None:
                 _secrets_service = SecretsService()
     return _secrets_service
+
+
+def reset_secrets_service() -> None:
+    """Reset the secrets service singleton (forces reload with fresh config).
+
+    Use this when encryption key configuration changes and the service needs
+    to reinitialize with the new key.
+    """
+    global _secrets_service
+    with _secrets_service_lock:
+        _secrets_service = None
+        logger.info("SecretsService singleton reset - will reinitialize on next access")
