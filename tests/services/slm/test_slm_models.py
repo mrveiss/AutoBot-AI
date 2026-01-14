@@ -184,6 +184,33 @@ class TestSLMStateTransition:
         retrieved = db_session.query(SLMNode).filter_by(name="test-node").first()
         assert len(retrieved.state_transitions) == 3
 
+    def test_cascade_delete_with_node(self, db_session):
+        """Test that deleting node cascades to transitions."""
+        node = SLMNode(
+            name="cascade-test",
+            ip_address="192.168.1.200",
+            state=NodeState.ONLINE.value,
+        )
+        db_session.add(node)
+        db_session.commit()
+
+        transition = SLMStateTransition(
+            node_id=node.id,
+            from_state=NodeState.PENDING.value,
+            to_state=NodeState.ONLINE.value,
+            trigger="test",
+        )
+        db_session.add(transition)
+        db_session.commit()
+
+        # Delete the node
+        db_session.delete(node)
+        db_session.commit()
+
+        # Verify transition is also deleted
+        remaining = db_session.query(SLMStateTransition).filter_by(node_id=node.id).all()
+        assert len(remaining) == 0
+
 
 class TestSLMRole:
     """Test SLMRole model."""

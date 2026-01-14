@@ -305,6 +305,12 @@ class SLMNode(Base):
         cascade="all, delete-orphan",
         order_by="SLMStateTransition.timestamp.desc()"
     )
+    maintenance_windows = relationship(
+        "SLMMaintenanceWindow",
+        back_populates="node",
+        cascade="all, delete-orphan",
+        order_by="SLMMaintenanceWindow.scheduled_start"
+    )
 
     def __repr__(self):
         """Return string representation of SLMNode."""
@@ -458,6 +464,9 @@ class SLMMaintenanceWindow(Base):
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationship
+    node = relationship("SLMNode", back_populates="maintenance_windows")
 
     def __repr__(self):
         """Return string representation of SLMMaintenanceWindow."""
