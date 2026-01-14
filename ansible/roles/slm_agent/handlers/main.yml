@@ -1,0 +1,28 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# SLM Agent Role - Handlers
+
+- name: Reload systemd
+  systemd:
+    daemon_reload: yes
+  become: yes
+
+- name: Restart SLM agent
+  systemd:
+    name: autobot-agent
+    state: restarted
+  become: yes
+
+- name: Stop SLM agent
+  systemd:
+    name: autobot-agent
+    state: stopped
+  become: yes
+
+- name: Start SLM agent
+  systemd:
+    name: autobot-agent
+    state: started
+  become: yes

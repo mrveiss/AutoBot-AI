@@ -1,0 +1,73 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# SLM Node Agent systemd service unit
+# Managed by Ansible - do not edit manually
+# Node: {{ slm_node_id }}
+# Generated: {{ ansible_date_time.iso8601 }}
+
+[Unit]
+Description=AutoBot SLM Node Agent
+Documentation=https://github.com/mrveiss/AutoBot-AI
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ slm_agent_user }}
+Group={{ slm_agent_group }}
+WorkingDirectory={{ slm_agent_dir }}
+
+# Environment variables
+Environment=SLM_NODE_ID={{ slm_node_id }}
+Environment=SLM_ADMIN_URL={{ slm_admin_url }}
+Environment=PYTHONPATH={{ slm_agent_dir }}
+Environment=PYTHONUNBUFFERED=1
+
+# Agent execution
+ExecStart=/usr/bin/python3 -m slm.agent.agent \
+    --admin-url {{ slm_admin_url }} \
+    --node-id {{ slm_node_id }} \
+    --interval {{ slm_heartbeat_interval }}{% if slm_services_to_monitor | length > 0 %} \
+    --services {{ slm_services_to_monitor | join(' ') }}{% endif %}{% if slm_agent_debug %} \
+    --debug{% endif %}
+
+
+# Restart policy
+Restart=always
+RestartSec={{ slm_agent_restart_sec }}
+
+# Watchdog (systemd will restart if agent becomes unresponsive)
+WatchdogSec={{ slm_agent_watchdog_sec }}
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths={{ slm_agent_data_dir }}
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+MemoryDenyWriteExecute=true
+LockPersonality=true
+
+# Capabilities
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# System call filtering
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+[Install]
+WantedBy=multi-user.target
