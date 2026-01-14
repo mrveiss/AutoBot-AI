@@ -49,6 +49,7 @@ from backend.api.vnc_proxy import router as vnc_proxy_router
 from backend.api.voice import router as voice_router
 from backend.api.wake_word import router as wake_word_router
 from backend.api.infrastructure_hosts import router as infrastructure_hosts_router
+from backend.api.slm import nodes_router, heartbeats_router
 
 
 def _get_system_routers() -> list:
@@ -87,6 +88,8 @@ def _get_service_routers() -> list:
         (vnc_router, "/vnc", ["vnc"], "vnc"),
         (vnc_proxy_router, "/vnc-proxy", ["vnc-proxy"], "vnc_proxy"),
         (infrastructure_hosts_router, "", ["infrastructure"], "infrastructure_hosts"),
+        (nodes_router, "/v1", ["slm-nodes"], "slm_nodes"),
+        (heartbeats_router, "/v1", ["slm-heartbeats"], "slm_heartbeats"),
     ]
 
 
