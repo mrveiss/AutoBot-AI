@@ -457,6 +457,17 @@
     <!-- Toast Notifications Container (Issue #502) -->
     <ToastContainer />
 
+    <!-- Host Selection Dialog for Agent SSH Actions -->
+    <HostSelectionDialog
+      :show="hostSelectionState.showDialog"
+      :command="hostSelectionState.pendingRequest?.command"
+      :purpose="hostSelectionState.pendingRequest?.purpose"
+      :request-id="hostSelectionState.pendingRequest?.requestId"
+      @selected="onHostSelected"
+      @cancelled="onHostSelectionCancelled"
+      @close="onHostSelectionClose"
+    />
+
     <!-- Main Content Area with Router -->
     <main id="main-content" class="flex-1 overflow-hidden" role="main">
       <!-- Unified Loading System -->
@@ -490,6 +501,8 @@ import { useSystemStatus } from '@/composables/useSystemStatus'
 import SystemStatusNotification from '@/components/SystemStatusNotification.vue';
 import CaptchaNotification from '@/components/research/CaptchaNotification.vue';
 import ToastContainer from '@/components/ui/ToastContainer.vue';
+import HostSelectionDialog from '@/components/HostSelectionDialog.vue';
+import { useHostSelection } from '@/composables/useHostSelection';
 import { cacheBuster } from '@/utils/CacheBuster.js';
 import { optimizedHealthMonitor } from '@/utils/OptimizedHealthMonitor.js';
 import { initializeNotificationBridge } from '@/utils/notificationBridge';
@@ -504,6 +517,7 @@ export default {
     SystemStatusNotification,
     CaptchaNotification,
     ToastContainer,
+    HostSelectionDialog,
     UnifiedLoadingView,
   },
 
@@ -526,6 +540,34 @@ export default {
       refreshSystemStatus,
       updateSystemStatus
     } = useSystemStatus()
+
+    // Host selection composable for agent SSH actions
+    const {
+      showDialog: hostSelectionShowDialog,
+      pendingRequest: hostSelectionPendingRequest,
+      handleHostSelected,
+      handleDialogCancelled,
+      handleDialogClose
+    } = useHostSelection()
+
+    // Create reactive state object for host selection
+    const hostSelectionState = computed(() => ({
+      showDialog: hostSelectionShowDialog.value,
+      pendingRequest: hostSelectionPendingRequest.value
+    }))
+
+    // Host selection event handlers
+    const onHostSelected = (result: { host: any; rememberChoice: boolean }) => {
+      handleHostSelected(result)
+    }
+
+    const onHostSelectionCancelled = () => {
+      handleDialogCancelled()
+    }
+
+    const onHostSelectionClose = () => {
+      handleDialogClose()
+    }
 
     // Reactive data (non-status related)
     const showMobileNav = ref(false);
@@ -808,6 +850,12 @@ export default {
       getSystemStatusDescription,
       refreshSystemStatus,
       updateSystemStatus,
+
+      // Host selection (for agent SSH actions)
+      hostSelectionState,
+      onHostSelected,
+      onHostSelectionCancelled,
+      onHostSelectionClose,
     };
   }
 };

@@ -119,7 +119,6 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import { getBackendUrl } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
 
 const logger = createLogger('HostSelector');
@@ -197,7 +196,6 @@ const toggleExpanded = () => {
 const loadHosts = async () => {
   loading.value = true;
   try {
-    const backendUrl = getBackendUrl();
     const params = new URLSearchParams();
 
     if (props.requiredCapability) {
@@ -207,8 +205,10 @@ const loadHosts = async () => {
       params.append('chat_id', props.chatId);
     }
 
+    // Use relative URL to go through Vite proxy in dev mode
+    // This ensures the request works regardless of browser origin
     const response = await fetch(
-      `${backendUrl}/api/infrastructure/hosts?${params.toString()}`
+      `/api/infrastructure/hosts?${params.toString()}`
     );
 
     if (!response.ok) {

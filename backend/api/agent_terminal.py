@@ -305,6 +305,30 @@ class InterruptRequest(BaseModel):
     user_id: str = Field(..., description="User requesting control")
 
 
+class HostSelectionRequest(BaseModel):
+    """Request for agent to select an infrastructure host"""
+
+    agent_session_id: Optional[str] = Field(None, description="Agent terminal session ID")
+    command: Optional[str] = Field(None, description="Command to execute on host")
+    purpose: Optional[str] = Field(None, description="Purpose of the SSH action")
+    preferred_host_id: Optional[str] = Field(None, description="Preferred host ID if any")
+    allow_auto_select: bool = Field(
+        True, description="Allow auto-selection if default host is set"
+    )
+
+
+class HostSelectionResponse(BaseModel):
+    """Response to host selection request"""
+
+    request_id: str = Field(..., description="Unique request ID for tracking")
+    status: str = Field(..., description="pending_selection, selected, or cancelled")
+    selected_host_id: Optional[str] = Field(None, description="Selected host ID")
+    selected_host_name: Optional[str] = Field(None, description="Selected host name")
+    connection_info: Optional[Dict] = Field(
+        None, description="Connection details (host, port, username)"
+    )
+
+
 # Dependency for AgentTerminalService
 # CRITICAL: Use singleton pattern to maintain sessions across requests
 
@@ -724,4 +748,236 @@ async def agent_terminal_info():
             "approval_workflow": "HIGH/DANGEROUS commands require user approval",
             "user_control": "Users can interrupt and take control at any time",
         },
+    }
+
+
+# ============================================================================
+# Host Selection API Endpoints
+# ============================================================================
+# These endpoints enable agents to request host selection for SSH actions.
+# The frontend displays a dialog similar to command approval for host selection.
+# ============================================================================
+
+import uuid
+from datetime import datetime
+
+# In-memory store for pending host selection requests
+# In production, this would use Redis for persistence
+_pending_host_selections: Dict[str, Dict] = {}
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="request_host_selection",
+    error_code_prefix="AGENT_TERMINAL",
+)
+@router.post("/host-selection/request")
+async def request_host_selection(request: HostSelectionRequest):
+    """
+    Agent requests host selection for SSH action.
+
+    This endpoint creates a pending host selection request that the frontend
+    will display to the user. The user selects from available infrastructure
+    hosts, and the selection is returned via the /host-selection/{request_id}
+    endpoint.
+
+    Flow:
+    1. Agent calls POST /host-selection/request with command/purpose
+    2. Backend returns request_id with status="pending_selection"
+    3. Frontend shows HostSelectionDialog to user
+    4. User selects host and calls POST /host-selection/{request_id}/select
+    5. Agent polls GET /host-selection/{request_id} to get selection result
+    """
+    request_id = str(uuid.uuid4())
+
+    # Create pending selection request
+    _pending_host_selections[request_id] = {
+        "request_id": request_id,
+        "agent_session_id": request.agent_session_id,
+        "command": request.command,
+        "purpose": request.purpose,
+        "preferred_host_id": request.preferred_host_id,
+        "allow_auto_select": request.allow_auto_select,
+        "status": "pending_selection",
+        "selected_host_id": None,
+        "selected_host_name": None,
+        "connection_info": None,
+        "created_at": datetime.now().isoformat(),
+        "updated_at": None,
+    }
+
+    logger.info(f"Host selection requested: {request_id}")
+
+    return {
+        "request_id": request_id,
+        "status": "pending_selection",
+        "message": "Host selection dialog should be shown to user",
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_host_selection",
+    error_code_prefix="AGENT_TERMINAL",
+)
+@router.get("/host-selection/{request_id}")
+async def get_host_selection(request_id: str):
+    """
+    Get the status/result of a host selection request.
+
+    Agent polls this endpoint to check if user has made a selection.
+
+    Returns:
+    - status: "pending_selection", "selected", or "cancelled"
+    - If selected: includes host details and connection info
+    """
+    if request_id not in _pending_host_selections:
+        raise HTTPException(
+            status_code=404, detail=f"Host selection request {request_id} not found"
+        )
+
+    selection = _pending_host_selections[request_id]
+
+    return {
+        "request_id": selection["request_id"],
+        "status": selection["status"],
+        "selected_host_id": selection["selected_host_id"],
+        "selected_host_name": selection["selected_host_name"],
+        "connection_info": selection["connection_info"],
+        "created_at": selection["created_at"],
+        "updated_at": selection["updated_at"],
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="submit_host_selection",
+    error_code_prefix="AGENT_TERMINAL",
+)
+@router.post("/host-selection/{request_id}/select")
+async def submit_host_selection(
+    request_id: str,
+    host_id: str,
+    host_name: str,
+    host: str,
+    ssh_port: int = 22,
+    username: str = "root",
+    remember_choice: bool = False,
+):
+    """
+    User submits their host selection.
+
+    Called by frontend when user selects a host from the dialog.
+
+    Args:
+        request_id: The pending selection request ID
+        host_id: Selected host ID from secrets
+        host_name: Display name of the host
+        host: Hostname or IP address
+        ssh_port: SSH port number
+        username: SSH username
+        remember_choice: Whether to use this host for future SSH commands
+    """
+    if request_id not in _pending_host_selections:
+        raise HTTPException(
+            status_code=404, detail=f"Host selection request {request_id} not found"
+        )
+
+    selection = _pending_host_selections[request_id]
+
+    if selection["status"] != "pending_selection":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Host selection request {request_id} is not pending (status: {selection['status']})",
+        )
+
+    # Update selection with user's choice
+    selection["status"] = "selected"
+    selection["selected_host_id"] = host_id
+    selection["selected_host_name"] = host_name
+    selection["connection_info"] = {
+        "host": host,
+        "ssh_port": ssh_port,
+        "username": username,
+    }
+    selection["updated_at"] = datetime.now().isoformat()
+    selection["remember_choice"] = remember_choice
+
+    logger.info(
+        f"Host selected for request {request_id}: {host_name} ({username}@{host}:{ssh_port})"
+    )
+
+    return {
+        "status": "selected",
+        "request_id": request_id,
+        "selected_host_id": host_id,
+        "selected_host_name": host_name,
+        "connection_info": selection["connection_info"],
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cancel_host_selection",
+    error_code_prefix="AGENT_TERMINAL",
+)
+@router.post("/host-selection/{request_id}/cancel")
+async def cancel_host_selection(request_id: str):
+    """
+    User cancels host selection.
+
+    Called by frontend when user closes the dialog without selecting.
+    """
+    if request_id not in _pending_host_selections:
+        raise HTTPException(
+            status_code=404, detail=f"Host selection request {request_id} not found"
+        )
+
+    selection = _pending_host_selections[request_id]
+
+    if selection["status"] != "pending_selection":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Host selection request {request_id} is not pending (status: {selection['status']})",
+        )
+
+    # Mark as cancelled
+    selection["status"] = "cancelled"
+    selection["updated_at"] = datetime.now().isoformat()
+
+    logger.info(f"Host selection cancelled for request {request_id}")
+
+    return {
+        "status": "cancelled",
+        "request_id": request_id,
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_pending_host_selections",
+    error_code_prefix="AGENT_TERMINAL",
+)
+@router.get("/host-selection")
+async def list_pending_host_selections():
+    """
+    List all pending host selection requests.
+
+    Frontend uses this to show any pending selection dialogs on page load.
+    """
+    pending = [
+        {
+            "request_id": s["request_id"],
+            "command": s["command"],
+            "purpose": s["purpose"],
+            "created_at": s["created_at"],
+        }
+        for s in _pending_host_selections.values()
+        if s["status"] == "pending_selection"
+    ]
+
+    return {
+        "status": "success",
+        "pending_count": len(pending),
+        "pending_selections": pending,
     }

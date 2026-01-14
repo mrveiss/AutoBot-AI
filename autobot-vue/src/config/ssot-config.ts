@@ -534,11 +534,17 @@ export function getWebsocketUrl(): string {
 }
 
 /**
- * Get Backend WebSocket URL (alias for getWebsocketUrl).
- * Used by SSHTerminal and other WebSocket-based components.
+ * Get Backend WebSocket URL base (without /ws suffix).
+ * Used by SSHTerminal and other WebSocket-based components that need
+ * to build their own WebSocket paths (e.g., /api/terminal/ws/ssh/{host_id}).
+ *
+ * Note: This differs from getWebsocketUrl() which includes /ws suffix
+ * for the main chat WebSocket endpoint.
  */
 export function getBackendWsUrl(): string {
-  return getConfig().websocketUrl;
+  const backendUrl = getConfig().backendUrl;
+  // Convert http(s) to ws(s) protocol
+  return backendUrl.replace(/^http/, 'ws');
 }
 
 /**

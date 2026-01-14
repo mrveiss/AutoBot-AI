@@ -24,7 +24,6 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
-import { getBackendWsUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('SSHTerminal')
@@ -140,11 +139,15 @@ const connect = () => {
   errorMessage.value = ''
 
   try {
-    const wsUrl = getBackendWsUrl()
     const params = props.chatSessionId
       ? `?conversation_id=${props.chatSessionId}`
       : ''
-    const url = `${wsUrl}/api/terminal/ws/ssh/${props.hostId}${params}`
+
+    // Build WebSocket URL using current page location
+    // This ensures the WebSocket goes through the Vite proxy in dev mode
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.host
+    const url = `${protocol}//${host}/api/terminal/ws/ssh/${props.hostId}${params}`
 
     logger.info(`Connecting to SSH WebSocket: ${url}`)
 
