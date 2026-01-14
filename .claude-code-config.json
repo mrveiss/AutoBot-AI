@@ -1,31 +1,13 @@
 {
   "mcpServers": {
-    "filesystem": {
-      "command": "mcp-server-filesystem",
-      "args": ["/home/kali/Desktop/AutoBot"]
-    },
     "puppeteer": {
       "command": "mcp-server-puppeteer"
-    },
-    "sequential-thinking": {
-      "command": "mcp-server-sequential-thinking"
     },
     "github": {
       "command": "github-project-manager-mcp",
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PAT}"
       }
-    },
-    "code-index": {
-      "command": "mcp-server-code-index",
-      "args": ["/home/kali/Desktop/AutoBot"]
-    },
-    "me-zero": {
-      "command": "mcp-server-me-zero"
-    },
-    "sqlite": {
-      "command": "npx",
-      "args": ["-y", "mcp-sqlite", "/home/kali/Desktop/AutoBot/data/autobot.db"]
     }
   }
 }
