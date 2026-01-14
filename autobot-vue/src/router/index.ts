@@ -13,6 +13,7 @@ setupAsyncComponentErrorHandler()
 import ChatView from '@/views/ChatView.vue'
 import KnowledgeView from '@/views/KnowledgeView.vue'
 import ToolsView from '@/views/ToolsView.vue'
+import WorkflowBuilderView from '@/views/WorkflowBuilderView.vue'
 import MonitoringView from '@/views/MonitoringView.vue'
 import SecretsView from '@/views/SecretsView.vue'
 import SettingsView from '@/views/SettingsView.vue'
@@ -280,6 +281,17 @@ const routes: RouteRecordRaw[] = [
         }
       }
     ]
+  },
+  {
+    path: '/automation',
+    name: 'automation',
+    component: WorkflowBuilderView,
+    meta: {
+      title: 'Workflow Automation',
+      icon: 'fas fa-project-diagram',
+      description: 'Visual workflow builder and automation (Issue #585)',
+      requiresAuth: false
+    }
   },
   {
     path: '/monitoring',
@@ -817,7 +829,7 @@ router.beforeEach(async (to, from, next) => {
     // Update active tab in store (with null safety)
     if (to.name && typeof to.name === 'string' && appStore && typeof appStore.updateRoute === 'function') {
       const tabName = to.name.split('-')[0] // Extract main section
-      const validTabs = ['chat', 'knowledge', 'tools', 'monitoring', 'operations', 'analytics', 'infrastructure', 'secrets', 'settings'] as const
+      const validTabs = ['chat', 'knowledge', 'tools', 'automation', 'monitoring', 'operations', 'analytics', 'infrastructure', 'secrets', 'settings'] as const
       type ValidTab = typeof validTabs[number]
 
       if ((validTabs as readonly string[]).includes(tabName)) {
