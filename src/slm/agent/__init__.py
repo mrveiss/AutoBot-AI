@@ -11,5 +11,6 @@ Lightweight agent deployed to each managed node for:
 """
 
 from src.slm.agent.health_collector import HealthCollector
+from src.slm.agent.agent import SLMAgent
 
-__all__ = ["HealthCollector"]
+__all__ = ["HealthCollector", "SLMAgent"]

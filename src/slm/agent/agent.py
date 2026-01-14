@@ -28,7 +28,8 @@ from src.slm.agent.health_collector import HealthCollector
 
 logger = logging.getLogger(__name__)
 
-# Default configuration
+# Standalone agent defaults - agent runs on remote VMs, not AutoBot main host
+# These are configured via CLI args or environment variables at deployment
 DEFAULT_ADMIN_URL = "https://172.16.168.10:8443"
 DEFAULT_HEARTBEAT_INTERVAL = 30  # seconds
 DEFAULT_BUFFER_DB = "/var/lib/autobot-agent/events.db"
@@ -98,7 +99,7 @@ class SLMAgent:
                     url,
                     json=payload,
                     timeout=aiohttp.ClientTimeout(total=10),
-                    ssl=False,  # TODO: Add mTLS
+                    ssl=False,  # mTLS pending PKI setup (Issue #725)
                 ) as response:
                     if response.status == 200:
                         logger.debug("Heartbeat sent successfully")
@@ -138,7 +139,7 @@ class SLMAgent:
                     url,
                     json=payload,
                     timeout=aiohttp.ClientTimeout(total=30),
-                    ssl=False,
+                    ssl=False,  # mTLS pending PKI setup (Issue #725)
                 ) as response:
                     if response.status == 200:
                         # Mark as synced
