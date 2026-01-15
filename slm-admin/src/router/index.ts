@@ -54,7 +54,50 @@ const router = createRouter({
       path: '/monitoring',
       name: 'monitoring',
       component: () => import('@/views/MonitoringView.vue'),
-      meta: { title: 'Monitoring' }
+      meta: { title: 'Monitoring' },
+      children: [
+        {
+          path: '',
+          name: 'monitoring-default',
+          redirect: '/monitoring/system'
+        },
+        {
+          path: 'system',
+          name: 'monitoring-system',
+          component: () => import('@/views/monitoring/SystemMonitor.vue'),
+          meta: { title: 'System Monitor', parent: 'monitoring' }
+        },
+        {
+          path: 'infrastructure',
+          name: 'monitoring-infrastructure',
+          component: () => import('@/views/monitoring/InfrastructureMonitor.vue'),
+          meta: { title: 'Infrastructure', parent: 'monitoring' }
+        },
+        {
+          path: 'logs',
+          name: 'monitoring-logs',
+          component: () => import('@/views/monitoring/LogViewer.vue'),
+          meta: { title: 'Log Viewer', parent: 'monitoring' }
+        },
+        {
+          path: 'dashboards',
+          name: 'monitoring-dashboards',
+          component: () => import('@/views/monitoring/GrafanaDashboards.vue'),
+          meta: { title: 'Grafana Dashboards', parent: 'monitoring' }
+        },
+        {
+          path: 'alerts',
+          name: 'monitoring-alerts',
+          component: () => import('@/views/monitoring/AlertsMonitor.vue'),
+          meta: { title: 'Alerts', parent: 'monitoring' }
+        },
+        {
+          path: 'errors',
+          name: 'monitoring-errors',
+          component: () => import('@/views/monitoring/ErrorMonitor.vue'),
+          meta: { title: 'Error Monitoring', parent: 'monitoring' }
+        },
+      ]
     },
     {
       path: '/security',

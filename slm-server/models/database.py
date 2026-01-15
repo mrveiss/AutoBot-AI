@@ -71,6 +71,11 @@ class Node(Base):
     status = Column(String(20), default=NodeStatus.PENDING.value)
     roles = Column(JSON, default=list)
 
+    # SSH connectivity
+    ssh_user = Column(String(64), default="autobot")
+    ssh_port = Column(Integer, default=22)
+    auth_method = Column(String(20), default="key")
+
     # Health metrics
     cpu_percent = Column(Float, default=0.0)
     memory_percent = Column(Float, default=0.0)

@@ -221,6 +221,11 @@ def _parse_cli_args():
         help="Systemd services to monitor",
     )
     parser.add_argument(
+        "--buffer-db",
+        default=os.environ.get("SLM_BUFFER_DB", DEFAULT_BUFFER_DB),
+        help="Path to buffer database",
+    )
+    parser.add_argument(
         "--debug",
         action="store_true",
         help="Enable debug logging",
@@ -260,6 +265,7 @@ def main():
     agent = SLMAgent(
         admin_url=args.admin_url,
         heartbeat_interval=args.interval,
+        buffer_db=args.buffer_db,
         services=args.services,
         node_id=args.node_id,
     )

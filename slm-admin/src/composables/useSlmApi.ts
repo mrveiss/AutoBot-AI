@@ -34,9 +34,59 @@ import type {
 // SLM Admin uses the local SLM backend API
 const API_BASE = '/api'
 
+// Backend response types (different from frontend SLMNode)
+interface BackendNodeResponse {
+  id: number
+  node_id: string
+  hostname: string
+  ip_address: string
+  status: string
+  roles: string[]
+  cpu_percent: number
+  memory_percent: number
+  disk_percent: number
+  last_heartbeat: string | null
+  agent_version: string | null
+  os_info: string | null
+  created_at: string
+  updated_at: string
+  ssh_user?: string
+  ssh_port?: number
+  auth_method?: string
+}
+
 interface NodesResponse {
-  nodes: SLMNode[]
+  nodes: BackendNodeResponse[]
   total: number
+}
+
+/**
+ * Maps backend node response to frontend SLMNode type
+ * Backend stores metrics directly, frontend expects nested health object
+ */
+function mapBackendNode(node: BackendNodeResponse): SLMNode {
+  return {
+    node_id: node.node_id,
+    hostname: node.hostname,
+    ip_address: node.ip_address,
+    status: node.status as SLMNode['status'],
+    roles: node.roles as SLMNode['roles'],
+    ssh_user: node.ssh_user,
+    ssh_port: node.ssh_port,
+    auth_method: node.auth_method as SLMNode['auth_method'],
+    health: {
+      status: node.status === 'online' ? 'healthy' :
+              node.status === 'degraded' ? 'degraded' :
+              node.status === 'error' ? 'unhealthy' : 'unknown',
+      cpu_percent: node.cpu_percent,
+      memory_percent: node.memory_percent,
+      disk_percent: node.disk_percent,
+      last_heartbeat: node.last_heartbeat,
+      services: [],
+    },
+    created_at: node.created_at,
+    updated_at: node.updated_at,
+  }
 }
 
 interface DeploymentsResponse {
@@ -81,12 +131,12 @@ export function useSlmApi() {
   // Nodes
   async function getNodes(): Promise<SLMNode[]> {
     const response = await client.get<NodesResponse>('/nodes')
-    return response.data.nodes
+    return response.data.nodes.map(mapBackendNode)
   }
 
   async function getNode(nodeId: string): Promise<SLMNode> {
-    const response = await client.get<SLMNode>(`/nodes/${nodeId}`)
-    return response.data
+    const response = await client.get<BackendNodeResponse>(`/nodes/${nodeId}`)
+    return mapBackendNode(response.data)
   }
 
   async function getNodeHealth(nodeId: string): Promise<NodeHealth> {
@@ -95,13 +145,13 @@ export function useSlmApi() {
   }
 
   async function registerNode(nodeData: NodeCreate): Promise<SLMNode> {
-    const response = await client.post<SLMNode>('/nodes', nodeData)
-    return response.data
+    const response = await client.post<BackendNodeResponse>('/nodes', nodeData)
+    return mapBackendNode(response.data)
   }
 
   async function updateNode(nodeId: string, data: NodeUpdate): Promise<SLMNode> {
-    const response = await client.patch<SLMNode>(`/nodes/${nodeId}`, data)
-    return response.data
+    const response = await client.patch<BackendNodeResponse>(`/nodes/${nodeId}`, data)
+    return mapBackendNode(response.data)
   }
 
   async function deleteNode(nodeId: string): Promise<void> {
@@ -109,8 +159,8 @@ export function useSlmApi() {
   }
 
   async function updateNodeRoles(nodeId: string, roles: NodeRole[]): Promise<SLMNode> {
-    const response = await client.patch<SLMNode>(`/nodes/${nodeId}/roles`, { roles })
-    return response.data
+    const response = await client.patch<BackendNodeResponse>(`/nodes/${nodeId}/roles`, { roles })
+    return mapBackendNode(response.data)
   }
 
   async function enrollNode(nodeId: string): Promise<ActionResponse> {
