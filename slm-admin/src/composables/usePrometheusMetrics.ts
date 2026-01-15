@@ -169,7 +169,7 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
 
   async function fetchServices(): Promise<void> {
     try {
-      const response = await fetch(`${backendUrl}/api/monitoring/services/health`)
+      const response = await fetch(`${backendUrl}/monitoring/services/health`)
       if (response.ok) {
         services.value = await response.json()
         error.value = null
@@ -181,7 +181,7 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
 
   async function fetchAlerts(): Promise<void> {
     try {
-      const response = await fetch(`${backendUrl}/api/monitoring/alerts/check`)
+      const response = await fetch(`${backendUrl}/monitoring/alerts/check`)
       if (response.ok) {
         alerts.value = await response.json()
         error.value = null
@@ -193,7 +193,7 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
 
   async function fetchRecommendations(): Promise<void> {
     try {
-      const response = await fetch(`${backendUrl}/api/monitoring/optimization/recommendations`)
+      const response = await fetch(`${backendUrl}/monitoring/optimization/recommendations`)
       if (response.ok) {
         recommendations.value = await response.json()
         error.value = null
@@ -205,7 +205,7 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
 
   async function fetchGPUDetails(): Promise<void> {
     try {
-      const response = await fetch(`${backendUrl}/api/monitoring/hardware/gpu`)
+      const response = await fetch(`${backendUrl}/monitoring/hardware/gpu`)
       if (response.ok) {
         gpuDetails.value = await response.json()
         error.value = null
@@ -217,7 +217,7 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
 
   async function fetchNPUDetails(): Promise<void> {
     try {
-      const response = await fetch(`${backendUrl}/api/monitoring/hardware/npu`)
+      const response = await fetch(`${backendUrl}/monitoring/hardware/npu`)
       if (response.ok) {
         npuDetails.value = await response.json()
         error.value = null
