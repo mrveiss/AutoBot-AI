@@ -27,6 +27,8 @@ import type {
   BackupRequest,
   Replication,
   ReplicationRequest,
+  RoleInfo,
+  RoleListResponse,
 } from '@/types/slm'
 
 const API_BASE = '/v1/slm'
@@ -155,6 +157,12 @@ export function useSlmApi() {
     return response.data
   }
 
+  // Roles
+  async function getRoles(): Promise<RoleInfo[]> {
+    const response = await client.get<RoleListResponse>('/deployments/roles')
+    return response.data.roles
+  }
+
   // Deployments
   async function getDeployments(): Promise<Deployment[]> {
     const response = await client.get<DeploymentsResponse>('/deployments')
@@ -257,6 +265,8 @@ export function useSlmApi() {
     // Updates
     checkUpdates,
     applyUpdates,
+    // Roles
+    getRoles,
     // Deployments
     getDeployments,
     getDeployment,

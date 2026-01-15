@@ -25,6 +25,7 @@ import type {
   CertificateInfo,
   UpdateInfo,
   ConnectionTestResult,
+  RoleInfo,
 } from '@/types/slm'
 import { useSlmApi } from '@/composables/useSlmApi'
 
@@ -51,6 +52,9 @@ export const useFleetStore = defineStore('fleet', () => {
 
   /** Cache of available updates by node ID */
   const nodeUpdates = ref<Map<string, UpdateInfo[]>>(new Map())
+
+  /** Available roles from the backend */
+  const availableRoles = ref<RoleInfo[]>([])
 
   // ============================================================
   // Getters
@@ -111,6 +115,24 @@ export const useFleetStore = defineStore('fleet', () => {
     if (!selectedNode.value) return null
     return certificateStatus.value.get(selectedNode.value.node_id) || null
   })
+
+  // ============================================================
+  // Actions - Roles
+  // ============================================================
+
+  /**
+   * Fetch available roles from API
+   */
+  async function fetchRoles(): Promise<RoleInfo[]> {
+    try {
+      const roles = await api.getRoles()
+      availableRoles.value = roles
+      return roles
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Failed to fetch roles'
+      throw err
+    }
+  }
 
   // ============================================================
   // Actions - Node Fetching
@@ -529,6 +551,7 @@ export const useFleetStore = defineStore('fleet', () => {
     nodeEvents,
     certificateStatus,
     nodeUpdates,
+    availableRoles,
 
     // Getters
     nodeList,
@@ -536,6 +559,9 @@ export const useFleetStore = defineStore('fleet', () => {
     overallHealth,
     selectedNodeEvents,
     selectedNodeCertificate,
+
+    // Actions - Roles
+    fetchRoles,
 
     // Actions - Node Fetching
     fetchNodes,

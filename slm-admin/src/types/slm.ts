@@ -8,7 +8,14 @@
 
 export type NodeStatus = 'registered' | 'pending' | 'enrolling' | 'healthy' | 'degraded' | 'unhealthy' | 'offline'
 
-export type NodeRole = 'redis' | 'llm' | 'npu' | 'browser' | 'orchestrator'
+export type NodeRole =
+  | 'slm-agent'
+  | 'redis'
+  | 'backend'
+  | 'frontend'
+  | 'npu-worker'
+  | 'browser-automation'
+  | 'monitoring'
 
 export type HealthStatus = 'healthy' | 'degraded' | 'unhealthy' | 'unknown'
 
@@ -119,6 +126,29 @@ export interface UpdateInfo {
   available_at: string
   release_notes?: string
   affected_roles?: NodeRole[]
+}
+
+/**
+ * Role category for grouping
+ */
+export type RoleCategory = 'core' | 'data' | 'application' | 'ai' | 'automation' | 'observability'
+
+/**
+ * Available role information from backend
+ */
+export interface RoleInfo {
+  name: NodeRole
+  description: string
+  category: RoleCategory
+  dependencies: NodeRole[]
+  variables: Record<string, unknown>
+}
+
+/**
+ * Response for listing available roles
+ */
+export interface RoleListResponse {
+  roles: RoleInfo[]
 }
 
 /**
