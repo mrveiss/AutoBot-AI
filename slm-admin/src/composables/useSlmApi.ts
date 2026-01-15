@@ -69,6 +69,15 @@ export function useSlmApi() {
     },
   })
 
+  // Add auth token to all requests
+  client.interceptors.request.use((config) => {
+    const token = localStorage.getItem('slm_access_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  })
+
   // Nodes
   async function getNodes(): Promise<SLMNode[]> {
     const response = await client.get<NodesResponse>('/nodes')
