@@ -8,7 +8,7 @@ Request and response models for the SLM API.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from .database import NodeStatus, DeploymentStatus, BackupStatus
@@ -65,7 +65,13 @@ class NodeCreate(BaseModel):
 
     hostname: str
     ip_address: str
-    roles: list[str] = Field(default_factory=list)
+    roles: List[str] = Field(default_factory=list)
+    ssh_user: Optional[str] = "autobot"
+    ssh_port: Optional[int] = 22
+    ssh_password: Optional[str] = None
+    auth_method: Optional[str] = "password"
+    import_existing: bool = False
+    auto_enroll: bool = False
 
 
 class NodeUpdate(BaseModel):
@@ -74,7 +80,7 @@ class NodeUpdate(BaseModel):
     hostname: Optional[str] = None
     ip_address: Optional[str] = None
     status: Optional[NodeStatus] = None
-    roles: Optional[list[str]] = None
+    roles: Optional[List[str]] = None
 
 
 class NodeResponse(BaseModel):
@@ -85,7 +91,7 @@ class NodeResponse(BaseModel):
     hostname: str
     ip_address: str
     status: str
-    roles: list[str]
+    roles: List[str]
     cpu_percent: float
     memory_percent: float
     disk_percent: float
@@ -101,7 +107,7 @@ class NodeResponse(BaseModel):
 class NodeListResponse(BaseModel):
     """Paginated node list."""
 
-    nodes: list[NodeResponse]
+    nodes: List[NodeResponse]
     total: int
     page: int
     per_page: int
@@ -115,7 +121,7 @@ class HeartbeatRequest(BaseModel):
     disk_percent: float = 0.0
     agent_version: Optional[str] = None
     os_info: Optional[str] = None
-    extra_data: dict = Field(default_factory=dict)
+    extra_data: Dict = Field(default_factory=dict)
 
 
 # =============================================================================
@@ -127,8 +133,8 @@ class DeploymentCreate(BaseModel):
     """Deployment request."""
 
     node_id: str
-    roles: list[str]
-    extra_data: dict = Field(default_factory=dict)
+    roles: List[str]
+    extra_data: Dict = Field(default_factory=dict)
 
 
 class DeploymentResponse(BaseModel):
@@ -137,7 +143,7 @@ class DeploymentResponse(BaseModel):
     id: int
     deployment_id: str
     node_id: str
-    roles: list[str]
+    roles: List[str]
     status: str
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
@@ -152,7 +158,7 @@ class DeploymentResponse(BaseModel):
 class DeploymentListResponse(BaseModel):
     """Paginated deployment list."""
 
-    deployments: list[DeploymentResponse]
+    deployments: List[DeploymentResponse]
     total: int
     page: int
     per_page: int
@@ -225,14 +231,14 @@ class RoleInfo(BaseModel):
     name: str
     description: str
     category: str
-    dependencies: list[str] = Field(default_factory=list)
-    variables: dict = Field(default_factory=dict)
+    dependencies: List[str] = Field(default_factory=list)
+    variables: Dict = Field(default_factory=dict)
 
 
 class RoleListResponse(BaseModel):
     """List of available roles."""
 
-    roles: list[RoleInfo]
+    roles: List[RoleInfo]
 
 
 # =============================================================================
@@ -257,4 +263,4 @@ class SystemMetrics(BaseModel):
     cpu_percent: float
     memory_percent: float
     disk_percent: float
-    load_average: list[float]
+    load_average: List[float]

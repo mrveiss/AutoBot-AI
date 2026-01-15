@@ -25,9 +25,10 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "sqlite+aiosqlite:///./data/slm.db"
+    database_path: str = "./data/slm.db"
 
     # Server
-    host: str = "127.0.0.1"
+    host: str = "0.0.0.0"
     port: int = 8000
     debug: bool = False
 
@@ -49,6 +50,9 @@ class Settings(BaseSettings):
 
     # Reconciliation
     reconcile_interval: int = 60  # seconds
+
+    # CORS settings
+    cors_origins: list = ["*"]
 
     class Config:
         env_prefix = "SLM_"

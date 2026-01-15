@@ -12,7 +12,7 @@ import logging
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,7 +29,7 @@ class DeploymentService:
 
     def __init__(self):
         self.ansible_dir = Path(settings.ansible_dir)
-        self._running_deployments: dict[str, asyncio.Task] = {}
+        self._running_deployments: Dict[str, asyncio.Task] = {}
 
     async def create_deployment(
         self, db: AsyncSession, deployment_data: DeploymentCreate, triggered_by: str
@@ -78,7 +78,7 @@ class DeploymentService:
         status: Optional[str] = None,
         page: int = 1,
         per_page: int = 20,
-    ) -> tuple[list[DeploymentResponse], int]:
+    ) -> Tuple[List[DeploymentResponse], int]:
         """List deployments with optional filters."""
         query = select(Deployment)
 
@@ -192,7 +192,7 @@ class DeploymentService:
                 logger.error("Deployment failed: %s - %s", deployment_id, e)
 
     async def _execute_ansible_playbook(
-        self, host: str, roles: list[str]
+        self, host: str, roles: List[str]
     ) -> str:
         """Execute an Ansible playbook for the given roles."""
         playbook_path = self.ansible_dir / "deploy.yml"

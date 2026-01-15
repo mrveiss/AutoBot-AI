@@ -6,7 +6,9 @@ SLM Deployments API Routes
 """
 
 import logging
-from typing import Annotated, Optional
+from typing import Optional
+
+from typing_extensions import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession

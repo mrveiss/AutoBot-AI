@@ -6,7 +6,7 @@
 # Override these in inventory or playbook variables
 
 # Admin connectivity
-slm_admin_url: "https://172.16.168.10:8443"
+slm_admin_url: "http://172.16.168.19:8000"
 slm_heartbeat_interval: 30
 
 # Agent user/group (should match common role's autobot user)
@@ -14,8 +14,8 @@ slm_agent_user: autobot
 slm_agent_group: autobot
 
 # Installation directories
-slm_agent_dir: /opt/autobot-agent
-slm_agent_data_dir: /var/lib/autobot-agent
+slm_agent_dir: /opt/slm-agent
+slm_agent_data_dir: /var/lib/slm-agent
 
 # Python dependencies for the agent
 slm_agent_python_packages:

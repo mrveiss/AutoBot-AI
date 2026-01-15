@@ -8,7 +8,8 @@ SLM Health API Routes
 import logging
 import os
 import time
-from typing import Annotated
+
+from typing_extensions import Annotated
 
 import psutil
 from fastapi import APIRouter, Depends

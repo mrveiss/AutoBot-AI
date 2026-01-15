@@ -15,6 +15,7 @@ import asyncio
 import json
 import logging
 import os
+import platform
 import signal
 import sqlite3
 import sys
@@ -30,9 +31,9 @@ logger = logging.getLogger(__name__)
 
 # Standalone agent defaults - agent runs on remote VMs, not AutoBot main host
 # These are configured via CLI args or environment variables at deployment
-DEFAULT_ADMIN_URL = "https://172.16.168.10:8443"
+DEFAULT_ADMIN_URL = "http://172.16.168.19:8000"
 DEFAULT_HEARTBEAT_INTERVAL = 30  # seconds
-DEFAULT_BUFFER_DB = "/var/lib/autobot-agent/events.db"
+DEFAULT_BUFFER_DB = "/var/lib/slm-agent/events.db"
 
 
 class SLMAgent:
@@ -86,15 +87,25 @@ class SLMAgent:
     async def send_heartbeat(self) -> bool:
         """Send heartbeat with health data to admin."""
         health = self.collector.collect()
+        # Payload matches HeartbeatRequest schema
+        os_info = f"{platform.system()} {platform.release()}"
         payload = {
-            "node_id": self.node_id,
-            "health": health,
-            "timestamp": datetime.utcnow().isoformat(),
+            "cpu_percent": health.get("cpu_percent", 0.0),
+            "memory_percent": health.get("memory_percent", 0.0),
+            "disk_percent": health.get("disk_percent", 0.0),
+            "agent_version": "1.0.0",
+            "os_info": os_info,
+            "extra_data": {
+                "services": health.get("services", {}),
+                "load_avg": health.get("load_avg", []),
+                "uptime_seconds": health.get("uptime_seconds", 0),
+                "hostname": health.get("hostname"),
+            },
         }
 
         try:
             async with aiohttp.ClientSession() as session:
-                url = f"{self.admin_url}/api/v1/slm/heartbeats"
+                url = f"{self.admin_url}/api/nodes/{self.node_id}/heartbeat"
                 async with session.post(
                     url,
                     json=payload,
@@ -131,7 +142,7 @@ class SLMAgent:
 
         try:
             async with aiohttp.ClientSession() as session:
-                url = f"{self.admin_url}/api/v1/slm/events/sync"
+                url = f"{self.admin_url}/api/events/sync"
                 payload = [
                     {"id": e[0], "type": e[1], "data": json.loads(e[2])}
                     for e in events
@@ -185,11 +196,7 @@ class SLMAgent:
 
 
 def _parse_cli_args():
-    """
-    Parse command-line arguments.
-
-    Related to Issue #726.
-    """
+    """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description="SLM Node Agent")
     parser.add_argument(
         "--admin-url",
@@ -222,11 +229,7 @@ def _parse_cli_args():
 
 
 def _configure_logging(debug: bool):
-    """
-    Configure logging based on debug flag.
-
-    Related to Issue #726.
-    """
+    """Configure logging based on debug flag."""
     level = logging.DEBUG if debug else logging.INFO
     logging.basicConfig(
         level=level,
@@ -235,11 +238,7 @@ def _configure_logging(debug: bool):
 
 
 def _setup_signal_handlers(agent: SLMAgent):
-    """
-    Set up signal handlers for graceful shutdown.
-
-    Related to Issue #726.
-    """
+    """Set up signal handlers for graceful shutdown."""
     def shutdown_handler(signum, frame):
         logger.info("Received signal %s, shutting down", signum)
         agent.stop()

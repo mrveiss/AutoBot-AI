@@ -51,16 +51,16 @@ class AuthService:
             expire = datetime.utcnow() + expires_delta
         else:
             expire = datetime.utcnow() + timedelta(
-                minutes=settings.jwt_expiration_minutes
+                minutes=settings.access_token_expire_minutes
             )
         to_encode.update({"exp": expire})
-        return jwt.encode(to_encode, settings.jwt_secret, algorithm=self.algorithm)
+        return jwt.encode(to_encode, settings.secret_key, algorithm=self.algorithm)
 
     def decode_token(self, token: str) -> Optional[dict]:
         """Decode and validate a JWT token."""
         try:
             payload = jwt.decode(
-                token, settings.jwt_secret, algorithms=[self.algorithm]
+                token, settings.secret_key, algorithms=[self.algorithm]
             )
             return payload
         except JWTError as e:
@@ -125,7 +125,7 @@ class AuthService:
         return TokenResponse(
             access_token=access_token,
             token_type="bearer",
-            expires_in=settings.jwt_expiration_minutes * 60,
+            expires_in=settings.access_token_expire_minutes * 60,
         )
 
 

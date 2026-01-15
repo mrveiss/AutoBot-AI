@@ -6,7 +6,8 @@ SLM Authentication API Routes
 """
 
 import logging
-from typing import Annotated
+
+from typing_extensions import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession

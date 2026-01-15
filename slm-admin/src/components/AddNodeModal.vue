@@ -370,33 +370,50 @@
 
                   <!-- Add/Replace Mode Options -->
                   <div v-if="!isEditMode" class="space-y-3">
+                    <!-- Import Existing Node Option -->
                     <label class="flex items-start gap-3 cursor-pointer">
                       <input
                         type="checkbox"
-                        v-model="formData.auto_enroll"
+                        v-model="formData.import_existing"
                         class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                       />
                       <div>
-                        <span class="text-sm text-gray-700">Start enrollment immediately after adding</span>
+                        <span class="text-sm text-gray-700 font-medium">Import existing node (no deployment)</span>
                         <p class="text-xs text-gray-500 mt-0.5">
-                          The node will be automatically enrolled with Ansible after being added, including installing dependencies and configuring services.
+                          Register an already-configured node without running Ansible. Use this for nodes that already have services running. The node will be marked as healthy immediately.
                         </p>
                       </div>
                     </label>
 
-                    <label v-if="formData.auth_method === 'password'" class="flex items-start gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        v-model="formData.deploy_pki"
-                        class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-                      />
-                      <div>
-                        <span class="text-sm text-gray-700">Deploy PKI certificates during enrollment</span>
-                        <p class="text-xs text-gray-500 mt-0.5">
-                          SSH keys will be deployed to the node for passwordless authentication in future connections.
-                        </p>
-                      </div>
-                    </label>
+                    <div v-if="!formData.import_existing" class="pl-4 border-l-2 border-gray-200 space-y-3">
+                      <label class="flex items-start gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          v-model="formData.auto_enroll"
+                          class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                        />
+                        <div>
+                          <span class="text-sm text-gray-700">Start enrollment immediately after adding</span>
+                          <p class="text-xs text-gray-500 mt-0.5">
+                            The node will be automatically enrolled with Ansible after being added, including installing dependencies and configuring services.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label v-if="formData.auth_method === 'password'" class="flex items-start gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          v-model="formData.deploy_pki"
+                          class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                        />
+                        <div>
+                          <span class="text-sm text-gray-700">Deploy PKI certificates during enrollment</span>
+                          <p class="text-xs text-gray-500 mt-0.5">
+                            SSH keys will be deployed to the node for passwordless authentication in future connections.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
                   </div>
 
                   <!-- Edit Mode Options -->
@@ -617,6 +634,7 @@ interface FormData {
   ssh_key: string
   ssh_key_path: string
   roles: NodeRole[]
+  import_existing: boolean
   auto_enroll: boolean
   deploy_pki: boolean
   run_enrollment: boolean
@@ -724,7 +742,8 @@ const formData = ref<FormData>({
   ssh_key: '',
   ssh_key_path: '',
   roles: [],
-  auto_enroll: true,
+  import_existing: false,
+  auto_enroll: false,
   deploy_pki: true,
   run_enrollment: false,
 })
@@ -812,6 +831,7 @@ function populateEditData() {
     ssh_key: '',
     ssh_key_path: '',
     roles: [...props.existingNode.roles],
+    import_existing: false,
     auto_enroll: false,
     deploy_pki: props.existingNode.auth_method === 'password',
     run_enrollment: false,
@@ -835,7 +855,8 @@ function populateReplaceData() {
     ssh_key: '',
     ssh_key_path: '',
     roles: [...props.existingNode.roles],
-    auto_enroll: true,
+    import_existing: false,
+    auto_enroll: false,
     deploy_pki: true,
     run_enrollment: false,
   }
@@ -857,7 +878,8 @@ function resetForm() {
     ssh_key: '',
     ssh_key_path: '',
     roles: [],
-    auto_enroll: true,
+    import_existing: false,
+    auto_enroll: false,
     deploy_pki: true,
     run_enrollment: false,
   }
@@ -988,6 +1010,9 @@ async function handleSubmit() {
   error.value = null
 
   try {
+    // If importing existing, skip enrollment entirely
+    const skipEnrollment = formData.value.import_existing
+
     const nodeData = {
       hostname: formData.value.hostname.trim(),
       ip_address: formData.value.ip_address.trim(),
@@ -997,8 +1022,9 @@ async function handleSubmit() {
       ssh_password: formData.value.auth_method === 'password' ? formData.value.ssh_password : undefined,
       ssh_key: getSshKey(),
       roles: formData.value.roles,
-      auto_enroll: formData.value.auto_enroll,
-      deploy_pki: formData.value.deploy_pki,
+      auto_enroll: skipEnrollment ? false : formData.value.auto_enroll,
+      deploy_pki: skipEnrollment ? false : formData.value.deploy_pki,
+      import_existing: formData.value.import_existing,
     }
 
     if (isEditMode.value && props.existingNode) {

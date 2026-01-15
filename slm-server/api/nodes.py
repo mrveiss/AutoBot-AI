@@ -7,7 +7,9 @@ SLM Nodes API Routes
 
 import logging
 import uuid
-from typing import Annotated, Optional
+from typing import Optional
+
+from typing_extensions import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
@@ -77,18 +79,33 @@ async def create_node(
         )
 
     node_id = str(uuid.uuid4())[:8]
+
+    # If importing an existing node, mark as online immediately
+    # Otherwise, mark as pending for enrollment
+    if node_data.import_existing:
+        initial_status = NodeStatus.ONLINE.value
+    else:
+        initial_status = NodeStatus.PENDING.value
+
     node = Node(
         node_id=node_id,
         hostname=node_data.hostname,
         ip_address=node_data.ip_address,
         roles=node_data.roles,
-        status=NodeStatus.PENDING.value,
+        ssh_user=node_data.ssh_user,
+        ssh_port=node_data.ssh_port,
+        auth_method=node_data.auth_method,
+        status=initial_status,
     )
     db.add(node)
     await db.commit()
     await db.refresh(node)
 
-    logger.info("Node registered: %s (%s)", node.hostname, node.ip_address)
+    if node_data.import_existing:
+        logger.info("Existing node imported: %s (%s)", node.hostname, node.ip_address)
+    else:
+        logger.info("Node registered: %s (%s)", node.hostname, node.ip_address)
+
     return NodeResponse.model_validate(node)
 
 

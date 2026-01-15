@@ -27,7 +27,8 @@ class ReconcilerService:
     def __init__(self):
         self._running = False
         self._task: Optional[asyncio.Task] = None
-        self._heartbeat_timeout = settings.heartbeat_timeout_seconds
+        # Default: 3 missed heartbeats = unhealthy
+        self._heartbeat_timeout = settings.heartbeat_interval * settings.unhealthy_threshold
 
     async def start(self) -> None:
         """Start the reconciler background task."""
@@ -61,7 +62,7 @@ class ReconcilerService:
             except Exception as e:
                 logger.error("Reconciler error: %s", e)
 
-            await asyncio.sleep(settings.reconcile_interval_seconds)
+            await asyncio.sleep(settings.reconcile_interval)
 
     async def _check_node_health(self) -> None:
         """Check node health based on heartbeats."""
@@ -129,8 +130,14 @@ class ReconcilerService:
         extra_data: Optional[dict] = None,
     ) -> Optional[Node]:
         """Update a node's heartbeat and health metrics."""
+        # Try to find by node_id first, then by hostname
         result = await db.execute(select(Node).where(Node.node_id == node_id))
         node = result.scalar_one_or_none()
+
+        if not node:
+            # Fallback: try matching by hostname
+            result = await db.execute(select(Node).where(Node.hostname == node_id))
+            node = result.scalar_one_or_none()
 
         if not node:
             return None

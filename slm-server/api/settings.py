@@ -6,7 +6,9 @@ SLM Settings API Routes
 """
 
 import logging
-from typing import Annotated
+from typing import List
+
+from typing_extensions import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -21,11 +23,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 
-@router.get("", response_model=list[SettingResponse])
+@router.get("", response_model=List[SettingResponse])
 async def list_settings(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-) -> list[SettingResponse]:
+) -> List[SettingResponse]:
     """List all settings."""
     result = await db.execute(select(Setting).order_by(Setting.key))
     settings = result.scalars().all()

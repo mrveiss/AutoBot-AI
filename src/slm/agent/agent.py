@@ -30,9 +30,9 @@ logger = logging.getLogger(__name__)
 
 # Standalone agent defaults - agent runs on remote VMs, not AutoBot main host
 # These are configured via CLI args or environment variables at deployment
-DEFAULT_ADMIN_URL = "https://172.16.168.10:8443"
+DEFAULT_ADMIN_URL = "http://172.16.168.19:8000"
 DEFAULT_HEARTBEAT_INTERVAL = 30  # seconds
-DEFAULT_BUFFER_DB = "/var/lib/autobot-agent/events.db"
+DEFAULT_BUFFER_DB = "/var/lib/slm-agent/events.db"
 
 
 class SLMAgent:
@@ -85,16 +85,27 @@ class SLMAgent:
 
     async def send_heartbeat(self) -> bool:
         """Send heartbeat with health data to admin."""
+        import platform
         health = self.collector.collect()
+        # Payload matches HeartbeatRequest schema
+        os_info = f"{platform.system()} {platform.release()}"
         payload = {
-            "node_id": self.node_id,
-            "health": health,
-            "timestamp": datetime.utcnow().isoformat(),
+            "cpu_percent": health.get("cpu_percent", 0.0),
+            "memory_percent": health.get("memory_percent", 0.0),
+            "disk_percent": health.get("disk_percent", 0.0),
+            "agent_version": "1.0.0",
+            "os_info": os_info,
+            "extra_data": {
+                "services": health.get("services", {}),
+                "load_avg": health.get("load_avg", []),
+                "uptime_seconds": health.get("uptime_seconds", 0),
+                "hostname": health.get("hostname"),
+            },
         }
 
         try:
             async with aiohttp.ClientSession() as session:
-                url = f"{self.admin_url}/api/v1/slm/heartbeats"
+                url = f"{self.admin_url}/api/nodes/{self.node_id}/heartbeat"
                 async with session.post(
                     url,
                     json=payload,

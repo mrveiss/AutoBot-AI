@@ -1,0 +1,56 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# SLM Managed Nodes Inventory
+# Nodes registered in SLM admin dashboard
+---
+all:
+  vars:
+    ansible_user: autobot
+    ansible_ssh_private_key_file: ~/.ssh/autobot_key
+    ansible_python_interpreter: /usr/bin/python3
+
+  children:
+    slm_nodes:
+      hosts:
+        # SLM Manager - main admin machine
+        00-SLM-Manager:
+          ansible_host: 172.16.168.19
+          slm_node_id: "00-SLM-Manager"
+          slm_services_to_monitor:
+            - slm-server
+
+        # Backend server
+        01-Backend:
+          ansible_host: 172.16.168.20
+          slm_node_id: "01-Backend"
+          slm_services_to_monitor:
+            - autobot-backend
+
+        # Frontend server
+        02-Frontend:
+          ansible_host: 172.16.168.21
+          slm_node_id: "02-Frontend"
+          slm_services_to_monitor:
+            - nginx
+
+        # NPU Worker
+        npu-worker:
+          ansible_host: 172.16.168.22
+          slm_node_id: "npu-worker"
+          slm_services_to_monitor:
+            - npu-worker
+
+        # Databases
+        04-Databases:
+          ansible_host: 172.16.168.23
+          slm_node_id: "04-Databases"
+          slm_services_to_monitor:
+            - redis-stack-server
+
+        # Browser automation
+        browser-automation:
+          ansible_host: 172.16.168.25
+          slm_node_id: "browser-automation"
+          slm_services_to_monitor: []
