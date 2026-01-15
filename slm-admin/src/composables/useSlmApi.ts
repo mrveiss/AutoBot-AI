@@ -12,6 +12,15 @@ import axios, { type AxiosInstance } from 'axios'
 import type {
   SLMNode,
   NodeHealth,
+  NodeCreate,
+  NodeUpdate,
+  NodeRole,
+  NodeEvent,
+  NodeEventFilters,
+  CertificateInfo,
+  UpdateInfo,
+  ConnectionTestRequest,
+  ConnectionTestResult,
   Deployment,
   DeploymentRequest,
   Backup,
@@ -73,13 +82,76 @@ export function useSlmApi() {
     return response.data
   }
 
-  async function registerNode(nodeData: Partial<SLMNode>): Promise<SLMNode> {
+  async function registerNode(nodeData: NodeCreate): Promise<SLMNode> {
     const response = await client.post<SLMNode>('/nodes', nodeData)
     return response.data
   }
 
-  async function updateNodeRoles(nodeId: string, roles: string[]): Promise<SLMNode> {
+  async function updateNode(nodeId: string, data: NodeUpdate): Promise<SLMNode> {
+    const response = await client.patch<SLMNode>(`/nodes/${nodeId}`, data)
+    return response.data
+  }
+
+  async function deleteNode(nodeId: string): Promise<void> {
+    await client.delete(`/nodes/${nodeId}`)
+  }
+
+  async function updateNodeRoles(nodeId: string, roles: NodeRole[]): Promise<SLMNode> {
     const response = await client.patch<SLMNode>(`/nodes/${nodeId}/roles`, { roles })
+    return response.data
+  }
+
+  async function enrollNode(nodeId: string): Promise<ActionResponse> {
+    const response = await client.post<ActionResponse>(`/nodes/${nodeId}/enroll`)
+    return response.data
+  }
+
+  async function testConnection(request: ConnectionTestRequest): Promise<ConnectionTestResult> {
+    const response = await client.post<ConnectionTestResult>('/nodes/test-connection', request)
+    return response.data
+  }
+
+  // Node Events
+  async function getNodeEvents(nodeId: string, filters?: NodeEventFilters): Promise<NodeEvent[]> {
+    const params = new URLSearchParams()
+    if (filters?.type) params.append('type', filters.type)
+    if (filters?.severity) params.append('severity', filters.severity)
+    if (filters?.limit) params.append('limit', filters.limit.toString())
+    if (filters?.offset) params.append('offset', filters.offset.toString())
+
+    const response = await client.get<{ events: NodeEvent[] }>(
+      `/nodes/${nodeId}/events?${params.toString()}`
+    )
+    return response.data.events
+  }
+
+  // Certificates
+  async function getCertificateStatus(nodeId: string): Promise<CertificateInfo> {
+    const response = await client.get<CertificateInfo>(`/nodes/${nodeId}/certificate`)
+    return response.data
+  }
+
+  async function renewCertificate(nodeId: string): Promise<ActionResponse> {
+    const response = await client.post<ActionResponse>(`/nodes/${nodeId}/certificate/renew`)
+    return response.data
+  }
+
+  async function deployCertificate(nodeId: string): Promise<ActionResponse> {
+    const response = await client.post<ActionResponse>(`/nodes/${nodeId}/certificate/deploy`)
+    return response.data
+  }
+
+  // Updates
+  async function checkUpdates(nodeId: string): Promise<UpdateInfo[]> {
+    const response = await client.get<{ updates: UpdateInfo[] }>(`/nodes/${nodeId}/updates`)
+    return response.data.updates
+  }
+
+  async function applyUpdates(
+    nodeId: string,
+    updateIds: string[]
+  ): Promise<{ applied_updates: string[]; failed_updates: string[] }> {
+    const response = await client.post(`/nodes/${nodeId}/updates/apply`, { update_ids: updateIds })
     return response.data
   }
 
@@ -171,7 +243,20 @@ export function useSlmApi() {
     getNode,
     getNodeHealth,
     registerNode,
+    updateNode,
+    deleteNode,
     updateNodeRoles,
+    enrollNode,
+    testConnection,
+    // Node Events
+    getNodeEvents,
+    // Certificates
+    getCertificateStatus,
+    renewCertificate,
+    deployCertificate,
+    // Updates
+    checkUpdates,
+    applyUpdates,
     // Deployments
     getDeployments,
     getDeployment,
