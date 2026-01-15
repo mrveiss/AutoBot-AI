@@ -31,3 +31,6 @@ httpx>=0.26.0
 
 # System metrics
 psutil>=5.9.0
+
+# SSH connectivity (for connection testing and node management)
+paramiko>=3.4.0
