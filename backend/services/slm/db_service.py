@@ -283,6 +283,39 @@ class SLMDatabaseService:
             logger.debug("Updated health for node %s: %s", node.name, health_data)
             return node
 
+    def assign_role_to_node(
+        self,
+        node_id: str,
+        role_name: Optional[str],
+    ) -> SLMNode:
+        """
+        Assign or remove a role from a node.
+
+        Args:
+            node_id: Node ID
+            role_name: Role name to assign, or None to remove role
+        """
+        with self.SessionLocal() as session:
+            node = session.query(SLMNode).filter(SLMNode.id == node_id).first()
+            if not node:
+                raise ValueError(f"Node not found: {node_id}")
+
+            old_role = node.current_role
+            node.current_role = role_name
+            session.commit()
+            session.refresh(node)
+
+            if role_name:
+                logger.info("Assigned role %s to node %s", role_name, node.name)
+            else:
+                logger.info(
+                    "Removed role %s from node %s",
+                    old_role or "none",
+                    node.name,
+                )
+
+            return node
+
     def increment_failure_count(self, node_id: str) -> int:
         """Increment consecutive failure count, return new count."""
         with self.SessionLocal() as session:
