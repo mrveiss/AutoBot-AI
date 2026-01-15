@@ -31,7 +31,8 @@ import type {
   RoleListResponse,
 } from '@/types/slm'
 
-const API_BASE = '/v1/slm'
+// SLM Admin uses the local SLM backend API
+const API_BASE = '/api'
 
 interface NodesResponse {
   nodes: SLMNode[]
