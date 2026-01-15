@@ -53,6 +53,7 @@ from backend.api.slm import (
     nodes_router,
     heartbeats_router,
     deployments_router,
+    stateful_router,
     websockets_router as slm_ws_router,
 )
 
@@ -96,6 +97,7 @@ def _get_service_routers() -> list:
         (nodes_router, "/v1", ["slm-nodes"], "slm_nodes"),
         (heartbeats_router, "/v1", ["slm-heartbeats"], "slm_heartbeats"),
         (deployments_router, "/v1", ["slm-deployments"], "slm_deployments"),
+        (stateful_router, "/v1", ["slm-stateful"], "slm_stateful"),
         (slm_ws_router, "/v1", ["slm-websocket"], "slm_websocket"),
     ]
 

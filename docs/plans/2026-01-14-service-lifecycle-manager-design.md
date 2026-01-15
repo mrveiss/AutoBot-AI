@@ -536,11 +536,14 @@ Phase 5: SWITCHBACK + CLEANUP
 - [x] WebSocket real-time updates (`backend/api/slm/websockets.py`)
 - [x] Auto-start reconciler on backend startup (`backend/initialization/lifespan.py`)
 
-### Phase 3: Deployments
-- [ ] Sequential deployment orchestrator
-- [ ] Blue-green with role borrowing
-- [ ] Automatic rollback on health failure
-- [ ] Maintenance window scheduling
+### Phase 3: Deployments ✅ COMPLETE
+
+- [x] Sequential deployment orchestrator (`backend/services/slm/deployment_orchestrator.py`)
+- [x] Blue-green with role borrowing (`BlueGreenStrategy`)
+- [x] Automatic rollback on health failure (configurable threshold)
+- [x] Maintenance window scheduling (`MaintenanceWindowStrategy`)
+- [x] Deployment REST API (`backend/api/slm/deployments.py`)
+- [x] Comprehensive test coverage (72 tests)
 
 ### Phase 4: Stateful Services
 - [ ] Redis replication-based updates
