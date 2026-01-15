@@ -4,13 +4,22 @@
 
 /**
  * Vue Router Configuration
+ *
+ * Handles routing and authentication guards.
  */
 
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    {
+      path: '/login',
+      name: 'login',
+      component: () => import('@/views/LoginView.vue'),
+      meta: { title: 'Login', public: true }
+    },
     {
       path: '/',
       name: 'fleet',
@@ -60,6 +69,37 @@ const router = createRouter({
       meta: { title: 'Infrastructure Tools' }
     },
   ]
+})
+
+// Authentication guard
+router.beforeEach(async (to, _from, next) => {
+  const authStore = useAuthStore()
+
+  // Public routes don't need auth
+  if (to.meta.public) {
+    // If already authenticated, redirect to home
+    if (authStore.isAuthenticated && to.name === 'login') {
+      next({ name: 'fleet' })
+      return
+    }
+    next()
+    return
+  }
+
+  // Check if authenticated
+  if (!authStore.isAuthenticated) {
+    next({ name: 'login', query: { redirect: to.fullPath } })
+    return
+  }
+
+  // Verify token is still valid
+  const isValid = await authStore.checkAuth()
+  if (!isValid) {
+    next({ name: 'login', query: { redirect: to.fullPath } })
+    return
+  }
+
+  next()
 })
 
 // Update document title on navigation

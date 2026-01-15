@@ -1,0 +1,44 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Ansible Playbook - Main Deployment Entry Point
+---
+
+- name: Deploy Roles to Target Host
+  hosts: "{{ target_host | default('all') }}"
+  become: true
+  gather_facts: true
+
+  vars:
+    target_roles: "{{ target_roles | default('slm-agent') }}"
+
+  tasks:
+    - name: Parse target roles
+      ansible.builtin.set_fact:
+        role_list: "{{ target_roles.split(',') | map('trim') | list }}"
+
+    - name: Deploy slm-agent role
+      ansible.builtin.include_role:
+        name: slm-agent
+      when: "'slm-agent' in role_list"
+
+    - name: Deploy monitoring role
+      ansible.builtin.include_role:
+        name: monitoring
+      when: "'monitoring' in role_list"
+
+    - name: Deploy redis role
+      ansible.builtin.include_role:
+        name: redis
+      when: "'redis' in role_list"
+
+    - name: Deploy backend role
+      ansible.builtin.include_role:
+        name: backend
+      when: "'backend' in role_list"
+
+    - name: Deploy frontend role
+      ansible.builtin.include_role:
+        name: frontend
+      when: "'frontend' in role_list"

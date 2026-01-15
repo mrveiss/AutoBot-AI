@@ -3,16 +3,33 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
-import { onMounted } from 'vue'
-import { RouterView } from 'vue-router'
+import { onMounted, watch, computed } from 'vue'
+import { RouterView, useRoute } from 'vue-router'
 import Sidebar from '@/components/common/Sidebar.vue'
 import { useFleetStore } from '@/stores/fleet'
+import { useAuthStore } from '@/stores/auth'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 
+const route = useRoute()
 const fleetStore = useFleetStore()
+const authStore = useAuthStore()
 const ws = useSlmWebSocket()
 
-onMounted(async () => {
+const isLoginPage = computed(() => route.name === 'login')
+
+// Watch for authentication changes
+watch(
+  () => authStore.isAuthenticated,
+  async (isAuthenticated) => {
+    if (isAuthenticated) {
+      await initializeApp()
+    } else {
+      ws.disconnect()
+    }
+  }
+)
+
+async function initializeApp(): Promise<void> {
   // Load initial fleet data
   await fleetStore.fetchNodes()
 
@@ -28,14 +45,28 @@ onMounted(async () => {
   ws.onNodeStatus((nodeId, status) => {
     fleetStore.updateNodeStatus(nodeId, status)
   })
+}
+
+onMounted(async () => {
+  if (authStore.isAuthenticated) {
+    await initializeApp()
+  }
 })
 </script>
 
 <template>
-  <div class="flex min-h-screen bg-gray-100">
-    <Sidebar />
-    <main class="flex-1 overflow-auto">
-      <RouterView />
-    </main>
-  </div>
+  <!-- Login page - no sidebar -->
+  <template v-if="isLoginPage">
+    <RouterView />
+  </template>
+
+  <!-- Authenticated pages - with sidebar -->
+  <template v-else>
+    <div class="flex min-h-screen bg-gray-100">
+      <Sidebar />
+      <main class="flex-1 overflow-auto">
+        <RouterView />
+      </main>
+    </div>
+  </template>
 </template>

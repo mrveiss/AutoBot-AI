@@ -6,10 +6,12 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useFleetStore } from '@/stores/fleet'
+import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const router = useRouter()
 const fleetStore = useFleetStore()
+const authStore = useAuthStore()
 
 const navItems = [
   { name: 'Fleet Overview', path: '/', icon: 'grid' },
@@ -35,6 +37,10 @@ const healthClass = computed(() => {
 
 function navigate(path: string): void {
   router.push(path)
+}
+
+function handleLogout(): void {
+  authStore.logout()
 }
 </script>
 
@@ -127,9 +133,29 @@ function navigate(path: string): void {
       </ul>
     </nav>
 
-    <!-- Version -->
-    <div class="p-4 border-t border-gray-800 text-xs text-gray-500">
-      SLM Admin v1.0.0
+    <!-- User & Logout -->
+    <div class="p-4 border-t border-gray-800">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center text-sm font-medium">
+            {{ authStore.user?.username?.charAt(0).toUpperCase() || 'U' }}
+          </div>
+          <div>
+            <p class="text-sm font-medium">{{ authStore.user?.username || 'User' }}</p>
+            <p class="text-xs text-gray-400">{{ authStore.isAdmin ? 'Admin' : 'User' }}</p>
+          </div>
+        </div>
+        <button
+          @click="handleLogout"
+          class="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+          title="Logout"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+        </button>
+      </div>
+      <p class="text-xs text-gray-500">SLM Admin v1.0.0</p>
     </div>
   </aside>
 </template>

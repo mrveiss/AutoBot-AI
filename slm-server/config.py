@@ -1,0 +1,62 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+SLM Server Configuration
+
+Centralized configuration for the standalone SLM backend.
+"""
+
+import os
+from pathlib import Path
+from typing import Optional
+
+from pydantic_settings import BaseSettings
+
+
+class Settings(BaseSettings):
+    """SLM Server Settings."""
+
+    # Paths
+    base_dir: Path = Path(__file__).parent.parent
+    data_dir: Path = Path(__file__).parent.parent / "data"
+    config_dir: Path = Path(__file__).parent.parent / "config"
+    ansible_dir: Path = Path(__file__).parent.parent / "ansible"
+
+    # Database
+    database_url: str = "sqlite+aiosqlite:///./data/slm.db"
+
+    # Server
+    host: str = "127.0.0.1"
+    port: int = 8000
+    debug: bool = False
+
+    # Authentication
+    secret_key: str = os.getenv("SLM_SECRET_KEY", "change-me-in-production")
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60 * 24  # 24 hours
+
+    # Monitoring
+    monitoring_mode: str = "local"  # local or remote
+    monitoring_host: Optional[str] = None
+    grafana_url: str = "http://127.0.0.1:3000"
+    prometheus_url: str = "http://127.0.0.1:9090"
+
+    # Health checks
+    heartbeat_interval: int = 30  # seconds
+    health_check_timeout: int = 10  # seconds
+    unhealthy_threshold: int = 3  # missed heartbeats
+
+    # Reconciliation
+    reconcile_interval: int = 60  # seconds
+
+    class Config:
+        env_prefix = "SLM_"
+        env_file = ".env"
+
+
+settings = Settings()
+
+# Ensure directories exist
+settings.data_dir.mkdir(parents=True, exist_ok=True)
+settings.config_dir.mkdir(parents=True, exist_ok=True)
