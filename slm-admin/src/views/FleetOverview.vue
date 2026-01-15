@@ -311,9 +311,11 @@ function handleRestart(nodeId: string): void {
     <!-- Add/Edit Node Modal -->
     <AddNodeModal
       :visible="showAddNodeModal"
+      :mode="editingNode ? 'edit' : 'add'"
       :existing-node="editingNode"
       @close="closeAddNodeModal"
-      @saved="handleNodeSaved"
+      @added="handleNodeSaved"
+      @updated="handleNodeSaved"
     />
 
     <!-- Delete Confirmation Modal -->
