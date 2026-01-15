@@ -545,10 +545,21 @@ Phase 5: SWITCHBACK + CLEANUP
 - [x] Deployment REST API (`backend/api/slm/deployments.py`)
 - [x] Comprehensive test coverage (72 tests)
 
-### Phase 4: Stateful Services
-- [ ] Redis replication-based updates
-- [ ] Backup/restore for maintenance windows
-- [ ] Data sync verification
+### Phase 4: Stateful Services ✅ COMPLETE
+
+- [x] Redis replication-based updates (`backend/services/slm/stateful_manager.py`)
+  - REPLICAOF-based replication setup with sync monitoring
+  - Replica promotion with REPLICAOF NO ONE
+  - ReplicatedSwapStrategy for zero-downtime stateful updates
+- [x] Backup/restore for maintenance windows
+  - BGSAVE-triggered RDB snapshot backups
+  - Checksum verification (MD5) for backup integrity
+  - Full restore with service stop/start cycle
+- [x] Data sync verification
+  - Keyspace analysis, memory stats, persistence status
+  - Error detection and health reporting
+- [x] Stateful services REST API (`backend/api/slm/stateful.py`)
+- [x] Comprehensive test coverage (46 tests)
 
 ### Phase 5: Admin UI
 - [ ] Vue admin dashboard
