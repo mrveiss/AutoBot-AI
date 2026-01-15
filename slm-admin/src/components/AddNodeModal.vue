@@ -582,15 +582,16 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
-import type { NodeRole } from '@/types/slm'
+import type { NodeRole, RoleInfo } from '@/types/slm'
 
 // Types
 interface NodeRoleOption {
   id: NodeRole
   name: string
   description: string
+  category: string
   services?: string[]
   default_port?: number
 }
@@ -649,44 +650,50 @@ const emit = defineEmits<{
 // API
 const api = useSlmApi()
 
-// Available roles with descriptions
-const availableRoles: NodeRoleOption[] = [
-  {
-    id: 'redis',
-    name: 'Redis',
-    description: 'Redis cache/database server',
-    services: ['redis-server'],
-    default_port: 6379,
-  },
-  {
-    id: 'llm',
-    name: 'LLM',
-    description: 'Large Language Model inference server',
-    services: ['ollama', 'vllm'],
-    default_port: 11434,
-  },
-  {
-    id: 'npu',
-    name: 'NPU',
-    description: 'Neural Processing Unit worker',
-    services: ['npu-worker'],
-    default_port: 8081,
-  },
-  {
-    id: 'browser',
-    name: 'Browser',
-    description: 'Headless browser automation',
-    services: ['playwright', 'chromium'],
-    default_port: 3000,
-  },
-  {
-    id: 'orchestrator',
-    name: 'Orchestrator',
-    description: 'Main orchestration and API server',
-    services: ['autobot-backend', 'nginx'],
-    default_port: 8001,
-  },
-]
+// Available roles fetched from backend
+const availableRoles = ref<NodeRoleOption[]>([])
+const isLoadingRoles = ref(false)
+
+// Fetch roles from backend
+async function fetchRoles() {
+  isLoadingRoles.value = true
+  try {
+    const roles = await api.getRoles()
+    availableRoles.value = roles.map((role: RoleInfo) => ({
+      id: role.name,
+      name: formatRoleName(role.name),
+      description: role.description,
+      category: role.category,
+      default_port: typeof role.variables?.port === 'number' ? role.variables.port : undefined,
+    }))
+  } catch (e) {
+    // Fallback to basic roles if API fails
+    availableRoles.value = [
+      { id: 'slm-agent', name: 'SLM Agent', description: 'SLM monitoring agent', category: 'core' },
+      { id: 'redis', name: 'Redis', description: 'Redis Stack server', category: 'data' },
+      { id: 'backend', name: 'Backend', description: 'AutoBot backend API', category: 'application' },
+      { id: 'frontend', name: 'Frontend', description: 'AutoBot Vue.js frontend', category: 'application' },
+      { id: 'npu-worker', name: 'NPU Worker', description: 'Intel NPU acceleration', category: 'ai' },
+      { id: 'browser-automation', name: 'Browser Automation', description: 'Playwright browser service', category: 'automation' },
+      { id: 'monitoring', name: 'Monitoring', description: 'Prometheus and Grafana', category: 'observability' },
+    ]
+  } finally {
+    isLoadingRoles.value = false
+  }
+}
+
+// Format role name for display
+function formatRoleName(name: string): string {
+  return name
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
+// Fetch roles on mount
+onMounted(() => {
+  fetchRoles()
+})
 
 // Key source options
 const keySourceOptions = [
@@ -744,7 +751,7 @@ const submitButtonText = computed(() => {
 })
 
 const selectedRolesDetails = computed(() => {
-  return availableRoles.filter(role => formData.value.roles.includes(role.id))
+  return availableRoles.value.filter(role => formData.value.roles.includes(role.id))
 })
 
 const canTest = computed(() => {
