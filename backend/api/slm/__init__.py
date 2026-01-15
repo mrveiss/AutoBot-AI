@@ -4,10 +4,23 @@
 """
 SLM API Package
 
-REST API endpoints for Service Lifecycle Manager.
+REST and WebSocket API endpoints for Service Lifecycle Manager.
 """
 
 from backend.api.slm.nodes import router as nodes_router
 from backend.api.slm.heartbeats import router as heartbeats_router
+from backend.api.slm.websockets import (
+    router as websockets_router,
+    get_ws_manager,
+    create_reconciler_callbacks,
+    get_health_update_callback,
+)
 
-__all__ = ["nodes_router", "heartbeats_router"]
+__all__ = [
+    "nodes_router",
+    "heartbeats_router",
+    "websockets_router",
+    "get_ws_manager",
+    "create_reconciler_callbacks",
+    "get_health_update_callback",
+]
