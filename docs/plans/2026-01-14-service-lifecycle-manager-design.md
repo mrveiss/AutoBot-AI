@@ -561,11 +561,29 @@ Phase 5: SWITCHBACK + CLEANUP
 - [x] Stateful services REST API (`backend/api/slm/stateful.py`)
 - [x] Comprehensive test coverage (46 tests)
 
-### Phase 5: Admin UI
-- [ ] Vue admin dashboard
-- [ ] Fleet overview with health status
-- [ ] Deployment wizard
-- [ ] Maintenance scheduling UI
+### Phase 5: Admin UI ✅ COMPLETE (2026-01-15)
+
+- [x] Vue admin dashboard (`slm-admin/`)
+  - Standalone Vue 3 + TypeScript + Tailwind application
+  - Deployed on 172.16.168.19 (dedicated admin host)
+  - Multi-page SPA with sidebar navigation
+- [x] Fleet overview with real-time health status
+  - NodeCard with health metrics and quick actions
+  - FleetSummary with aggregate statistics
+  - WebSocket-driven real-time updates
+- [x] Deployments page with wizard interface
+- [x] Backups page with backup/restore management
+- [x] Maintenance page with scheduling and node draining
+- [x] Migrated pages from main frontend:
+  - Settings configuration
+  - Monitoring (Grafana dashboards)
+  - Security analytics
+  - Infrastructure tools
+- [x] Core composables:
+  - `useSlmApi`: REST API integration
+  - `useSlmWebSocket`: Real-time WebSocket connection
+  - `useFleetHealth`: Aggregated fleet health state
+- [x] Deployment sync script for admin host
 
 ## Related Issues
 
