@@ -42,7 +42,12 @@ export const useAuthStore = defineStore('auth', () => {
   const isAdmin = computed(() => user.value?.isAdmin ?? false)
 
   function getApiUrl(): string {
-    return import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    // Use relative URLs in development (Vite proxy handles /api)
+    // Use env variable in production builds
+    if (import.meta.env.DEV) {
+      return ''
+    }
+    return import.meta.env.VITE_API_URL || ''
   }
 
   async function login(username: string, password: string): Promise<boolean> {
