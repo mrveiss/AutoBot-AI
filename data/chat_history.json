@@ -1,0 +1,534 @@
+[
+  {
+    "sender": "system",
+    "text": "Goal received: \"hello\n\"",
+    "messageType": "goal_received",
+    "rawData": {
+      "goal": "hello\n",
+      "use_phi2": false
+    },
+    "timestamp": "2025-07-05 10:21:59"
+  },
+  {
+    "sender": "bot",
+    "text": "{\"sequel\": \"Hello, I'm here to help you with any questions or tasks you have. How can I assist you today?\"}",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "{\"sequel\": \"Hello, I'm here to help you with any questions or tasks you have. How can I assist you today?\"}"
+    },
+    "timestamp": "2025-07-05 10:22:27"
+  },
+  {
+    "sender": "bot",
+    "text": "Here is the plan:\n{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{\\\"sequel\\\": \\\"Hello, I'm here to help you with any questions or tasks you have. How can I assist you today?\\\"}\"\n  }\n}",
+    "messageType": "plan_ready",
+    "rawData": {
+      "plan": [
+        {
+          "thoughts": [
+            "The LLM returned unexpected JSON. Responding conversationally with the raw JSON."
+          ],
+          "tool_name": "respond_conversationally",
+          "tool_args": {
+            "response_text": "{\"sequel\": \"Hello, I'm here to help you with any questions or tasks you have. How can I assist you today?\"}"
+          }
+        }
+      ],
+      "llm_response": "{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{\\\"sequel\\\": \\\"Hello, I'm here to help you with any questions or tasks you have. How can I assist you today?\\\"}\"\n  }\n}"
+    },
+    "timestamp": "2025-07-05 10:22:27"
+  },
+  {
+    "sender": "thought",
+    "text": "\"{\\n  \\\"thoughts\\\": [\\n    \\\"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\\\"\\n  ],\\n  \\\"tool_name\\\": \\\"respond_conversationally\\\",\\n  \\\"tool_args\\\": {\\n    \\\"response_text\\\": \\\"{\\\\\\\"sequel\\\\\\\": \\\\\\\"Hello, I'm here to help you with any questions or tasks you have. How can I assist you today?\\\\\\\"}\\\"\\n  }\\n}\"",
+    "messageType": "thought",
+    "rawData": {
+      "thought": "{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{\\\"sequel\\\": \\\"Hello, I'm here to help you with any questions or tasks you have. How can I assist you today?\\\"}\"\n  }\n}"
+    },
+    "timestamp": "2025-07-05 10:22:27"
+  },
+  {
+    "sender": "bot",
+    "text": "{\"sequel\": \"Hello, I'm here to help you with any questions or tasks you have. How can I assist you today?\"}",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "{\"sequel\": \"Hello, I'm here to help you with any questions or tasks you have. How can I assist you today?\"}"
+    },
+    "timestamp": "2025-07-05 10:22:27"
+  },
+  {
+    "sender": "system",
+    "text": "Goal completed. Result: {}",
+    "messageType": "goal_completed",
+    "rawData": {
+      "goal": "hello\n",
+      "result": {
+        "status": "completed",
+        "results": [
+          {
+            "status": "success",
+            "message": "Responded conversationally."
+          }
+        ],
+        "llm_response": "{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{\\\"sequel\\\": \\\"Hello, I'm here to help you with any questions or tasks you have. How can I assist you today?\\\"}\"\n  }\n}"
+      }
+    },
+    "timestamp": "2025-07-05 10:22:27"
+  },
+  {
+    "sender": "system",
+    "text": "Goal received: \"test 2\n\"",
+    "messageType": "goal_received",
+    "rawData": {
+      "goal": "test 2\n",
+      "use_phi2": false
+    },
+    "timestamp": "2025-07-05 10:58:46"
+  },
+  {
+    "sender": "bot",
+    "text": "{}",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "{}"
+    },
+    "timestamp": "2025-07-05 10:59:08"
+  },
+  {
+    "sender": "bot",
+    "text": "Here is the plan:\n{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{}\"\n  }\n}",
+    "messageType": "plan_ready",
+    "rawData": {
+      "plan": [
+        {
+          "thoughts": [
+            "The LLM returned unexpected JSON. Responding conversationally with the raw JSON."
+          ],
+          "tool_name": "respond_conversationally",
+          "tool_args": {
+            "response_text": "{}"
+          }
+        }
+      ],
+      "llm_response": "{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{}\"\n  }\n}"
+    },
+    "timestamp": "2025-07-05 10:59:08"
+  },
+  {
+    "sender": "thought",
+    "text": "\"{\\n  \\\"thoughts\\\": [\\n    \\\"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\\\"\\n  ],\\n  \\\"tool_name\\\": \\\"respond_conversationally\\\",\\n  \\\"tool_args\\\": {\\n    \\\"response_text\\\": \\\"{}\\\"\\n  }\\n}\"",
+    "messageType": "thought",
+    "rawData": {
+      "thought": "{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{}\"\n  }\n}"
+    },
+    "timestamp": "2025-07-05 10:59:08"
+  },
+  {
+    "sender": "bot",
+    "text": "{}",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "{}"
+    },
+    "timestamp": "2025-07-05 10:59:08"
+  },
+  {
+    "sender": "system",
+    "text": "Goal completed. Result: {}",
+    "messageType": "goal_completed",
+    "rawData": {
+      "goal": "test 2\n",
+      "result": {
+        "status": "completed",
+        "results": [
+          {
+            "status": "success",
+            "message": "Responded conversationally."
+          }
+        ],
+        "llm_response": "{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{}\"\n  }\n}"
+      }
+    },
+    "timestamp": "2025-07-05 10:59:08"
+  },
+  {
+    "sender": "system",
+    "text": "Goal received: \"hello\n\"",
+    "messageType": "goal_received",
+    "rawData": {
+      "goal": "hello\n",
+      "use_phi2": false
+    },
+    "timestamp": "2025-07-05 11:25:39"
+  },
+  {
+    "sender": "bot",
+    "text": "{\"goal\": \"Hello\"}",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "{\"goal\": \"Hello\"}"
+    },
+    "timestamp": "2025-07-05 11:25:45"
+  },
+  {
+    "sender": "bot",
+    "text": "Here is the plan:\n{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{\\\"goal\\\": \\\"Hello\\\"}\"\n  }\n}",
+    "messageType": "plan_ready",
+    "rawData": {
+      "plan": [
+        {
+          "thoughts": [
+            "The LLM returned unexpected JSON. Responding conversationally with the raw JSON."
+          ],
+          "tool_name": "respond_conversationally",
+          "tool_args": {
+            "response_text": "{\"goal\": \"Hello\"}"
+          }
+        }
+      ],
+      "llm_response": "{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{\\\"goal\\\": \\\"Hello\\\"}\"\n  }\n}"
+    },
+    "timestamp": "2025-07-05 11:25:45"
+  },
+  {
+    "sender": "thought",
+    "text": "\"{\\n  \\\"thoughts\\\": [\\n    \\\"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\\\"\\n  ],\\n  \\\"tool_name\\\": \\\"respond_conversationally\\\",\\n  \\\"tool_args\\\": {\\n    \\\"response_text\\\": \\\"{\\\\\\\"goal\\\\\\\": \\\\\\\"Hello\\\\\\\"}\\\"\\n  }\\n}\"",
+    "messageType": "thought",
+    "rawData": {
+      "thought": "{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{\\\"goal\\\": \\\"Hello\\\"}\"\n  }\n}"
+    },
+    "timestamp": "2025-07-05 11:25:45"
+  },
+  {
+    "sender": "bot",
+    "text": "{\"goal\": \"Hello\"}",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "{\"goal\": \"Hello\"}"
+    },
+    "timestamp": "2025-07-05 11:25:45"
+  },
+  {
+    "sender": "system",
+    "text": "Goal completed. Result: {}",
+    "messageType": "goal_completed",
+    "rawData": {
+      "goal": "hello\n",
+      "result": {
+        "status": "completed",
+        "results": [
+          {
+            "status": "success",
+            "message": "Responded conversationally."
+          }
+        ],
+        "llm_response": "{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{\\\"goal\\\": \\\"Hello\\\"}\"\n  }\n}"
+      }
+    },
+    "timestamp": "2025-07-05 11:25:45"
+  },
+  {
+    "sender": "system",
+    "text": "Goal received: \"hello\n\"",
+    "messageType": "goal_received",
+    "rawData": {
+      "goal": "hello\n",
+      "use_phi2": false
+    },
+    "timestamp": "2025-07-05 11:27:02"
+  },
+  {
+    "sender": "bot",
+    "text": "{\"sequencePoints\": [{\"index\": 0, \"statement\": \"goal = \\\"hello\\\";\"}]}",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "{\"sequencePoints\": [{\"index\": 0, \"statement\": \"goal = \\\"hello\\\";\"}]}"
+    },
+    "timestamp": "2025-07-05 11:27:08"
+  },
+  {
+    "sender": "bot",
+    "text": "Here is the plan:\n{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{\\\"sequencePoints\\\": [{\\\"index\\\": 0, \\\"statement\\\": \\\"goal = \\\\\\\"hello\\\\\\\";\\\"}]}\"\n  }\n}",
+    "messageType": "plan_ready",
+    "rawData": {
+      "plan": [
+        {
+          "thoughts": [
+            "The LLM returned unexpected JSON. Responding conversationally with the raw JSON."
+          ],
+          "tool_name": "respond_conversationally",
+          "tool_args": {
+            "response_text": "{\"sequencePoints\": [{\"index\": 0, \"statement\": \"goal = \\\"hello\\\";\"}]}"
+          }
+        }
+      ],
+      "llm_response": "{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{\\\"sequencePoints\\\": [{\\\"index\\\": 0, \\\"statement\\\": \\\"goal = \\\\\\\"hello\\\\\\\";\\\"}]}\"\n  }\n}"
+    },
+    "timestamp": "2025-07-05 11:27:08"
+  },
+  {
+    "sender": "thought",
+    "text": "\"{\\n  \\\"thoughts\\\": [\\n    \\\"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\\\"\\n  ],\\n  \\\"tool_name\\\": \\\"respond_conversationally\\\",\\n  \\\"tool_args\\\": {\\n    \\\"response_text\\\": \\\"{\\\\\\\"sequencePoints\\\\\\\": [{\\\\\\\"index\\\\\\\": 0, \\\\\\\"statement\\\\\\\": \\\\\\\"goal = \\\\\\\\\\\\\\\"hello\\\\\\\\\\\\\\\";\\\\\\\"}]}\\\"\\n  }\\n}\"",
+    "messageType": "thought",
+    "rawData": {
+      "thought": "{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{\\\"sequencePoints\\\": [{\\\"index\\\": 0, \\\"statement\\\": \\\"goal = \\\\\\\"hello\\\\\\\";\\\"}]}\"\n  }\n}"
+    },
+    "timestamp": "2025-07-05 11:27:08"
+  },
+  {
+    "sender": "bot",
+    "text": "{\"sequencePoints\": [{\"index\": 0, \"statement\": \"goal = \\\"hello\\\";\"}]}",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "{\"sequencePoints\": [{\"index\": 0, \"statement\": \"goal = \\\"hello\\\";\"}]}"
+    },
+    "timestamp": "2025-07-05 11:27:08"
+  },
+  {
+    "sender": "system",
+    "text": "Goal completed. Result: {}",
+    "messageType": "goal_completed",
+    "rawData": {
+      "goal": "hello\n",
+      "result": {
+        "status": "completed",
+        "results": [
+          {
+            "status": "success",
+            "message": "Responded conversationally."
+          }
+        ],
+        "llm_response": "{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{\\\"sequencePoints\\\": [{\\\"index\\\": 0, \\\"statement\\\": \\\"goal = \\\\\\\"hello\\\\\\\";\\\"}]}\"\n  }\n}"
+      }
+    },
+    "timestamp": "2025-07-05 11:27:08"
+  },
+  {
+    "sender": "system",
+    "text": "Goal received: \"hello\n\"",
+    "messageType": "goal_received",
+    "rawData": {
+      "goal": "hello\n",
+      "use_phi2": false
+    },
+    "timestamp": "2025-07-05 14:08:38"
+  },
+  {
+    "sender": "bot",
+    "text": "{\"sequence\": [    [\"text\", \"Hello there, how can I assist you today?\"],    [\"pause\", 1000]  ]}",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "{\"sequence\": [    [\"text\", \"Hello there, how can I assist you today?\"],    [\"pause\", 1000]  ]}"
+    },
+    "timestamp": "2025-07-05 14:09:05"
+  },
+  {
+    "sender": "bot",
+    "text": "Here is the plan:\n{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{\\\"sequence\\\": [    [\\\"text\\\", \\\"Hello there, how can I assist you today?\\\"],    [\\\"pause\\\", 1000]  ]}\"\n  }\n}",
+    "messageType": "plan_ready",
+    "rawData": {
+      "plan": [
+        {
+          "thoughts": [
+            "The LLM returned unexpected JSON. Responding conversationally with the raw JSON."
+          ],
+          "tool_name": "respond_conversationally",
+          "tool_args": {
+            "response_text": "{\"sequence\": [    [\"text\", \"Hello there, how can I assist you today?\"],    [\"pause\", 1000]  ]}"
+          }
+        }
+      ],
+      "llm_response": "{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{\\\"sequence\\\": [    [\\\"text\\\", \\\"Hello there, how can I assist you today?\\\"],    [\\\"pause\\\", 1000]  ]}\"\n  }\n}"
+    },
+    "timestamp": "2025-07-05 14:09:05"
+  },
+  {
+    "sender": "thought",
+    "text": "\"{\\n  \\\"thoughts\\\": [\\n    \\\"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\\\"\\n  ],\\n  \\\"tool_name\\\": \\\"respond_conversationally\\\",\\n  \\\"tool_args\\\": {\\n    \\\"response_text\\\": \\\"{\\\\\\\"sequence\\\\\\\": [    [\\\\\\\"text\\\\\\\", \\\\\\\"Hello there, how can I assist you today?\\\\\\\"],    [\\\\\\\"pause\\\\\\\", 1000]  ]}\\\"\\n  }\\n}\"",
+    "messageType": "thought",
+    "rawData": {
+      "thought": "{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{\\\"sequence\\\": [    [\\\"text\\\", \\\"Hello there, how can I assist you today?\\\"],    [\\\"pause\\\", 1000]  ]}\"\n  }\n}"
+    },
+    "timestamp": "2025-07-05 14:09:05"
+  },
+  {
+    "sender": "bot",
+    "text": "{\"sequence\": [    [\"text\", \"Hello there, how can I assist you today?\"],    [\"pause\", 1000]  ]}",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "{\"sequence\": [    [\"text\", \"Hello there, how can I assist you today?\"],    [\"pause\", 1000]  ]}"
+    },
+    "timestamp": "2025-07-05 14:09:05"
+  },
+  {
+    "sender": "system",
+    "text": "Goal completed. Result: {}",
+    "messageType": "goal_completed",
+    "rawData": {
+      "goal": "hello\n",
+      "result": {
+        "status": "completed",
+        "results": [
+          {
+            "status": "success",
+            "message": "Responded conversationally."
+          }
+        ],
+        "llm_response": "{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{\\\"sequence\\\": [    [\\\"text\\\", \\\"Hello there, how can I assist you today?\\\"],    [\\\"pause\\\", 1000]  ]}\"\n  }\n}"
+      }
+    },
+    "timestamp": "2025-07-05 14:09:05"
+  },
+  {
+    "sender": "system",
+    "text": "Goal received: \"hello\n\"",
+    "messageType": "goal_received",
+    "rawData": {
+      "goal": "hello\n",
+      "use_phi2": false
+    },
+    "timestamp": "2025-07-05 14:47:40"
+  },
+  {
+    "sender": "bot",
+    "text": "{\"sequelize\":{\"options\":{\"dialect\":\"postgres\",\"host\":\"localhost\",\"port\":5432,\"username\":\"postgres\",\"password\":\"your-password\",\"database\":\"your-database-name\",\"protocol\":\"postgreql\",\"define\":{\"timestamps\":true,\"freezeTableName\":true}}}}",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "{\"sequelize\":{\"options\":{\"dialect\":\"postgres\",\"host\":\"localhost\",\"port\":5432,\"username\":\"postgres\",\"password\":\"your-password\",\"database\":\"your-database-name\",\"protocol\":\"postgreql\",\"define\":{\"timestamps\":true,\"freezeTableName\":true}}}}"
+    },
+    "timestamp": "2025-07-05 14:48:23"
+  },
+  {
+    "sender": "bot",
+    "text": "Here is the plan:\n{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{\\\"sequelize\\\":{\\\"options\\\":{\\\"dialect\\\":\\\"postgres\\\",\\\"host\\\":\\\"localhost\\\",\\\"port\\\":5432,\\\"username\\\":\\\"postgres\\\",\\\"password\\\":\\\"your-password\\\",\\\"database\\\":\\\"your-database-name\\\",\\\"protocol\\\":\\\"postgreql\\\",\\\"define\\\":{\\\"timestamps\\\":true,\\\"freezeTableName\\\":true}}}}\"\n  }\n}",
+    "messageType": "plan_ready",
+    "rawData": {
+      "plan": [
+        {
+          "thoughts": [
+            "The LLM returned unexpected JSON. Responding conversationally with the raw JSON."
+          ],
+          "tool_name": "respond_conversationally",
+          "tool_args": {
+            "response_text": "{\"sequelize\":{\"options\":{\"dialect\":\"postgres\",\"host\":\"localhost\",\"port\":5432,\"username\":\"postgres\",\"password\":\"your-password\",\"database\":\"your-database-name\",\"protocol\":\"postgreql\",\"define\":{\"timestamps\":true,\"freezeTableName\":true}}}}"
+          }
+        }
+      ],
+      "llm_response": "{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{\\\"sequelize\\\":{\\\"options\\\":{\\\"dialect\\\":\\\"postgres\\\",\\\"host\\\":\\\"localhost\\\",\\\"port\\\":5432,\\\"username\\\":\\\"postgres\\\",\\\"password\\\":\\\"your-password\\\",\\\"database\\\":\\\"your-database-name\\\",\\\"protocol\\\":\\\"postgreql\\\",\\\"define\\\":{\\\"timestamps\\\":true,\\\"freezeTableName\\\":true}}}}\"\n  }\n}"
+    },
+    "timestamp": "2025-07-05 14:48:23"
+  },
+  {
+    "sender": "thought",
+    "text": "\"Thought for step 1: The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"",
+    "messageType": "thought",
+    "rawData": {
+      "thought": "Thought for step 1: The LLM returned unexpected JSON. Responding conversationally with the raw JSON."
+    },
+    "timestamp": "2025-07-05 14:48:23"
+  },
+  {
+    "sender": "bot",
+    "text": "{\"sequelize\":{\"options\":{\"dialect\":\"postgres\",\"host\":\"localhost\",\"port\":5432,\"username\":\"postgres\",\"password\":\"your-password\",\"database\":\"your-database-name\",\"protocol\":\"postgreql\",\"define\":{\"timestamps\":true,\"freezeTableName\":true}}}}",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "{\"sequelize\":{\"options\":{\"dialect\":\"postgres\",\"host\":\"localhost\",\"port\":5432,\"username\":\"postgres\",\"password\":\"your-password\",\"database\":\"your-database-name\",\"protocol\":\"postgreql\",\"define\":{\"timestamps\":true,\"freezeTableName\":true}}}}"
+    },
+    "timestamp": "2025-07-05 14:48:23"
+  },
+  {
+    "sender": "system",
+    "text": "Goal completed. Result: {}",
+    "messageType": "goal_completed",
+    "rawData": {
+      "goal": "hello\n",
+      "result": {
+        "status": "completed",
+        "results": [
+          {
+            "status": "success",
+            "message": "Responded conversationally."
+          }
+        ],
+        "llm_response": "{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{\\\"sequelize\\\":{\\\"options\\\":{\\\"dialect\\\":\\\"postgres\\\",\\\"host\\\":\\\"localhost\\\",\\\"port\\\":5432,\\\"username\\\":\\\"postgres\\\",\\\"password\\\":\\\"your-password\\\",\\\"database\\\":\\\"your-database-name\\\",\\\"protocol\\\":\\\"postgreql\\\",\\\"define\\\":{\\\"timestamps\\\":true,\\\"freezeTableName\\\":true}}}}\"\n  }\n}"
+      }
+    },
+    "timestamp": "2025-07-05 14:48:23"
+  },
+  {
+    "sender": "system",
+    "text": "Goal received: \"hello\n\"",
+    "messageType": "goal_received",
+    "rawData": {
+      "goal": "hello\n",
+      "use_phi2": false
+    },
+    "timestamp": "2025-07-05 15:02:44"
+  },
+  {
+    "sender": "bot",
+    "text": "{\"sequel\": \"Hello, how can I assist you today?\"}",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "{\"sequel\": \"Hello, how can I assist you today?\"}"
+    },
+    "timestamp": "2025-07-05 15:03:08"
+  },
+  {
+    "sender": "bot",
+    "text": "Here is the plan:\n{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{\\\"sequel\\\": \\\"Hello, how can I assist you today?\\\"}\"\n  }\n}",
+    "messageType": "plan_ready",
+    "rawData": {
+      "plan": [
+        {
+          "thoughts": [
+            "The LLM returned unexpected JSON. Responding conversationally with the raw JSON."
+          ],
+          "tool_name": "respond_conversationally",
+          "tool_args": {
+            "response_text": "{\"sequel\": \"Hello, how can I assist you today?\"}"
+          }
+        }
+      ],
+      "llm_response": "{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{\\\"sequel\\\": \\\"Hello, how can I assist you today?\\\"}\"\n  }\n}"
+    },
+    "timestamp": "2025-07-05 15:03:08"
+  },
+  {
+    "sender": "thought",
+    "text": "\"Thought for step 1: The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"",
+    "messageType": "thought",
+    "rawData": {
+      "thought": "Thought for step 1: The LLM returned unexpected JSON. Responding conversationally with the raw JSON."
+    },
+    "timestamp": "2025-07-05 15:03:08"
+  },
+  {
+    "sender": "bot",
+    "text": "{\"sequel\": \"Hello, how can I assist you today?\"}",
+    "messageType": "llm_response",
+    "rawData": {
+      "response": "{\"sequel\": \"Hello, how can I assist you today?\"}"
+    },
+    "timestamp": "2025-07-05 15:03:08"
+  },
+  {
+    "sender": "system",
+    "text": "Goal completed. Result: {}",
+    "messageType": "goal_completed",
+    "rawData": {
+      "goal": "hello\n",
+      "result": {
+        "status": "completed",
+        "results": [
+          {
+            "status": "success",
+            "message": "Responded conversationally."
+          }
+        ],
+        "llm_response": "{\n  \"thoughts\": [\n    \"The LLM returned unexpected JSON. Responding conversationally with the raw JSON.\"\n  ],\n  \"tool_name\": \"respond_conversationally\",\n  \"tool_args\": {\n    \"response_text\": \"{\\\"sequel\\\": \\\"Hello, how can I assist you today?\\\"}\"\n  }\n}"
+      }
+    },
+    "timestamp": "2025-07-05 15:03:08"
+  }
+]
