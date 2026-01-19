@@ -222,6 +222,7 @@ install_system_packages() {
         openssl \
         jq \
         rsync \
+        sshpass \
         apt-transport-https \
         software-properties-common
 

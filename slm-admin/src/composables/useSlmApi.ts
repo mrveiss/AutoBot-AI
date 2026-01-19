@@ -158,14 +158,30 @@ export function useSlmApi() {
     await client.delete(`/nodes/${nodeId}`)
   }
 
+  async function replaceNode(nodeId: string, nodeData: NodeCreate): Promise<SLMNode> {
+    const response = await client.put<BackendNodeResponse>(`/nodes/${nodeId}/replace`, nodeData)
+    return mapBackendNode(response.data)
+  }
+
   async function updateNodeRoles(nodeId: string, roles: NodeRole[]): Promise<SLMNode> {
     const response = await client.patch<BackendNodeResponse>(`/nodes/${nodeId}/roles`, { roles })
     return mapBackendNode(response.data)
   }
 
-  async function enrollNode(nodeId: string): Promise<ActionResponse> {
-    const response = await client.post<ActionResponse>(`/nodes/${nodeId}/enroll`)
+  async function enrollNode(nodeId: string, sshPassword?: string): Promise<ActionResponse> {
+    const body = sshPassword ? { ssh_password: sshPassword } : {}
+    const response = await client.post<ActionResponse>(`/nodes/${nodeId}/enroll`, body)
     return response.data
+  }
+
+  async function drainNode(nodeId: string): Promise<SLMNode> {
+    const response = await client.post<BackendNodeResponse>(`/nodes/${nodeId}/drain`)
+    return mapBackendNode(response.data)
+  }
+
+  async function resumeNode(nodeId: string): Promise<SLMNode> {
+    const response = await client.post<BackendNodeResponse>(`/nodes/${nodeId}/resume`)
+    return mapBackendNode(response.data)
   }
 
   async function testConnection(request: ConnectionTestRequest): Promise<ConnectionTestResult> {
@@ -174,6 +190,28 @@ export function useSlmApi() {
   }
 
   // Node Events
+  interface BackendNodeEvent {
+    event_id: string
+    node_id: string
+    event_type: string
+    severity: string
+    message: string
+    details: Record<string, unknown>
+    created_at: string
+  }
+
+  function mapBackendEvent(event: BackendNodeEvent): NodeEvent {
+    return {
+      id: event.event_id,
+      node_id: event.node_id,
+      type: event.event_type as NodeEvent['type'],
+      severity: event.severity as NodeEvent['severity'],
+      message: event.message,
+      timestamp: event.created_at,
+      details: event.details,
+    }
+  }
+
   async function getNodeEvents(nodeId: string, filters?: NodeEventFilters): Promise<NodeEvent[]> {
     const params = new URLSearchParams()
     if (filters?.type) params.append('type', filters.type)
@@ -181,10 +219,10 @@ export function useSlmApi() {
     if (filters?.limit) params.append('limit', filters.limit.toString())
     if (filters?.offset) params.append('offset', filters.offset.toString())
 
-    const response = await client.get<{ events: NodeEvent[] }>(
+    const response = await client.get<{ events: BackendNodeEvent[], total: number }>(
       `/nodes/${nodeId}/events?${params.toString()}`
     )
-    return response.data.events
+    return response.data.events.map(mapBackendEvent)
   }
 
   // Certificates
@@ -246,6 +284,11 @@ export function useSlmApi() {
 
   async function rollbackDeployment(deploymentId: string): Promise<ActionResponse> {
     const response = await client.post<ActionResponse>(`/deployments/${deploymentId}/rollback`)
+    return response.data
+  }
+
+  async function retryDeployment(deploymentId: string): Promise<Deployment> {
+    const response = await client.post<Deployment>(`/deployments/${deploymentId}/retry`)
     return response.data
   }
 
@@ -313,8 +356,11 @@ export function useSlmApi() {
     registerNode,
     updateNode,
     deleteNode,
+    replaceNode,
     updateNodeRoles,
     enrollNode,
+    drainNode,
+    resumeNode,
     testConnection,
     // Node Events
     getNodeEvents,
@@ -333,6 +379,7 @@ export function useSlmApi() {
     createDeployment,
     cancelDeployment,
     rollbackDeployment,
+    retryDeployment,
     // Backups
     getBackups,
     getBackup,

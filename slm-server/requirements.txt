@@ -1,6 +1,10 @@
 # SLM Server - Minimal Dependencies
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
+#
+# System dependencies (install via apt):
+#   sudo apt install sshpass  # Required for password-based SSH connections
+#
 
 # Web framework
 fastapi>=0.109.0

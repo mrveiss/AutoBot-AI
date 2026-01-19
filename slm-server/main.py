@@ -23,6 +23,7 @@ from api import (
     settings_router,
     stateful_router,
     updates_router,
+    websocket_router,
 )
 from config import settings
 from services.database import db_service
@@ -102,6 +103,7 @@ app.include_router(deployments_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
 app.include_router(stateful_router, prefix="/api")
 app.include_router(updates_router, prefix="/api")
+app.include_router(websocket_router, prefix="/api")
 
 
 @app.get("/")

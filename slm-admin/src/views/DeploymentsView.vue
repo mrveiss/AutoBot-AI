@@ -5,13 +5,17 @@
 
 import { ref, onMounted } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
-import type { Deployment, NodeRole } from '@/types/slm'
+import { createLogger } from '@/utils/debugUtils'
+import type { Deployment } from '@/types/slm'
 
+const logger = createLogger('DeploymentsView')
 const api = useSlmApi()
 
 const deployments = ref<Deployment[]>([])
 const isLoading = ref(false)
 const showWizard = ref(false)
+const isRetrying = ref<string | null>(null)
+const isCancelling = ref<string | null>(null)
 
 onMounted(async () => {
   await fetchDeployments()
@@ -23,6 +27,30 @@ async function fetchDeployments(): Promise<void> {
     deployments.value = await api.getDeployments()
   } finally {
     isLoading.value = false
+  }
+}
+
+async function handleRetry(deploymentId: string): Promise<void> {
+  isRetrying.value = deploymentId
+  try {
+    await api.retryDeployment(deploymentId)
+    await fetchDeployments()
+  } catch (err) {
+    logger.error('Failed to retry deployment:', err)
+  } finally {
+    isRetrying.value = null
+  }
+}
+
+async function handleCancel(deploymentId: string): Promise<void> {
+  isCancelling.value = deploymentId
+  try {
+    await api.cancelDeployment(deploymentId)
+    await fetchDeployments()
+  } catch (err) {
+    logger.error('Failed to cancel deployment:', err)
+  } finally {
+    isCancelling.value = null
   }
 }
 
@@ -98,15 +126,19 @@ function getStatusClass(status: string): string {
             <td class="px-6 py-4 whitespace-nowrap text-sm">
               <button
                 v-if="deployment.status === 'in_progress'"
-                class="text-red-600 hover:text-red-800"
+                @click="handleCancel(deployment.deployment_id)"
+                :disabled="isCancelling === deployment.deployment_id"
+                class="text-red-600 hover:text-red-800 disabled:opacity-50"
               >
-                Cancel
+                {{ isCancelling === deployment.deployment_id ? 'Cancelling...' : 'Cancel' }}
               </button>
               <button
                 v-else-if="deployment.status === 'failed'"
-                class="text-blue-600 hover:text-blue-800"
+                @click="handleRetry(deployment.deployment_id)"
+                :disabled="isRetrying === deployment.deployment_id"
+                class="text-blue-600 hover:text-blue-800 disabled:opacity-50"
               >
-                Retry
+                {{ isRetrying === deployment.deployment_id ? 'Retrying...' : 'Retry' }}
               </button>
             </td>
           </tr>

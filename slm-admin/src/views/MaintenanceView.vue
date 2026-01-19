@@ -5,22 +5,54 @@
 
 import { ref, computed } from 'vue'
 import { useFleetStore } from '@/stores/fleet'
+import { useSlmApi } from '@/composables/useSlmApi'
+import { createLogger } from '@/utils/debugUtils'
 
+const logger = createLogger('MaintenanceView')
 const fleetStore = useFleetStore()
+const api = useSlmApi()
+
 const nodes = computed(() => fleetStore.nodeList)
+const maintenanceNodes = computed(() => nodes.value.filter(n => n.status === 'maintenance'))
 
 const showScheduleDialog = ref(false)
-const selectedNode = ref<string | null>(null)
+const selectedDrainNode = ref<string | null>(null)
+const selectedResumeNode = ref<string | null>(null)
+const isDraining = ref(false)
+const isResuming = ref(false)
 
-function handleDrainNode(nodeId: string): void {
-  if (!confirm(`Are you sure you want to drain node ${nodeId}? This will migrate all services.`)) {
+async function handleDrainNode(nodeId: string): Promise<void> {
+  if (!confirm(`Are you sure you want to drain node ${nodeId}? This will put it in maintenance mode.`)) {
     return
   }
-  // Implementation would go here
+
+  isDraining.value = true
+  try {
+    await api.drainNode(nodeId)
+    await fleetStore.fetchNodes()
+    selectedDrainNode.value = null
+    logger.info('Node drained successfully:', nodeId)
+  } catch (err) {
+    logger.error('Failed to drain node:', err)
+    alert('Failed to drain node. Please try again.')
+  } finally {
+    isDraining.value = false
+  }
 }
 
-function handleResumeNode(nodeId: string): void {
-  // Implementation would go here
+async function handleResumeNode(nodeId: string): Promise<void> {
+  isResuming.value = true
+  try {
+    await api.resumeNode(nodeId)
+    await fleetStore.fetchNodes()
+    selectedResumeNode.value = null
+    logger.info('Node resumed successfully:', nodeId)
+  } catch (err) {
+    logger.error('Failed to resume node:', err)
+    alert('Failed to resume node. Please try again.')
+  } finally {
+    isResuming.value = false
+  }
 }
 </script>
 
@@ -52,43 +84,56 @@ function handleResumeNode(nodeId: string): void {
         <div class="border border-gray-200 rounded-lg p-4">
           <h3 class="font-medium text-gray-900 mb-2">Drain Node</h3>
           <p class="text-sm text-gray-500 mb-3">
-            Gracefully migrate all services from a node before maintenance.
+            Put a node into maintenance mode, making it unavailable for new workloads.
           </p>
           <select
-            v-model="selectedNode"
+            v-model="selectedDrainNode"
             class="input mb-2"
+            :disabled="isDraining"
           >
             <option value="">Select a node...</option>
-            <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
+            <option
+              v-for="node in nodes.filter(n => n.status !== 'maintenance')"
+              :key="node.node_id"
+              :value="node.node_id"
+            >
               {{ node.hostname }} ({{ node.ip_address }})
             </option>
           </select>
           <button
-            @click="selectedNode && handleDrainNode(selectedNode)"
-            :disabled="!selectedNode"
+            @click="selectedDrainNode && handleDrainNode(selectedDrainNode)"
+            :disabled="!selectedDrainNode || isDraining"
             class="btn btn-secondary w-full"
           >
-            Drain Node
+            {{ isDraining ? 'Draining...' : 'Drain Node' }}
           </button>
         </div>
 
         <div class="border border-gray-200 rounded-lg p-4">
           <h3 class="font-medium text-gray-900 mb-2">Resume Node</h3>
           <p class="text-sm text-gray-500 mb-3">
-            Return a drained node to active service.
+            Return a maintenance node to active service.
           </p>
           <select
+            v-model="selectedResumeNode"
             class="input mb-2"
+            :disabled="isResuming"
           >
             <option value="">Select a node...</option>
-            <option v-for="node in nodes.filter(n => n.status === 'offline')" :key="node.node_id" :value="node.node_id">
+            <option
+              v-for="node in maintenanceNodes"
+              :key="node.node_id"
+              :value="node.node_id"
+            >
               {{ node.hostname }} ({{ node.ip_address }})
             </option>
           </select>
           <button
+            @click="selectedResumeNode && handleResumeNode(selectedResumeNode)"
+            :disabled="!selectedResumeNode || isResuming"
             class="btn btn-success w-full"
           >
-            Resume Node
+            {{ isResuming ? 'Resuming...' : 'Resume Node' }}
           </button>
         </div>
 

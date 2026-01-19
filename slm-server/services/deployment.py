@@ -170,6 +170,46 @@ class DeploymentService:
 
         return DeploymentResponse.model_validate(deployment)
 
+    async def retry_deployment(
+        self, db: AsyncSession, deployment_id: str, triggered_by: str
+    ) -> Optional[DeploymentResponse]:
+        """Retry a failed deployment by creating a new deployment with same config."""
+        result = await db.execute(
+            select(Deployment).where(Deployment.deployment_id == deployment_id)
+        )
+        original = result.scalar_one_or_none()
+
+        if not original:
+            return None
+
+        if original.status != DeploymentStatus.FAILED.value:
+            raise ValueError(f"Cannot retry deployment in status: {original.status}")
+
+        # Create a new deployment with the same configuration
+        new_deployment_id = str(uuid.uuid4())[:8]
+        new_deployment = Deployment(
+            deployment_id=new_deployment_id,
+            node_id=original.node_id,
+            roles=original.roles,
+            status=DeploymentStatus.PENDING.value,
+            triggered_by=triggered_by,
+            extra_data={"retry_of": deployment_id},
+        )
+        db.add(new_deployment)
+        await db.commit()
+        await db.refresh(new_deployment)
+
+        # Start the deployment in background
+        asyncio.create_task(self._run_deployment(new_deployment_id))
+
+        logger.info(
+            "Retry deployment created: %s (retry of %s)",
+            new_deployment_id,
+            deployment_id,
+        )
+
+        return DeploymentResponse.model_validate(new_deployment)
+
     async def _run_deployment(self, deployment_id: str) -> None:
         """Execute a deployment using Ansible."""
         from services.database import db_service
@@ -263,13 +303,18 @@ class DeploymentService:
         return output
 
     async def enroll_node(
-        self, db: AsyncSession, node_id: str
+        self, db: AsyncSession, node_id: str, ssh_password: Optional[str] = None
     ) -> Tuple[bool, str]:
         """
         Enroll a node by deploying the SLM agent.
 
         This deploys the slm-agent role which installs and starts
         the agent service that sends heartbeats to the SLM backend.
+
+        Args:
+            db: Database session
+            node_id: The node ID to enroll
+            ssh_password: Optional SSH password for password-based authentication
 
         Returns: (success, message)
         """
@@ -279,7 +324,15 @@ class DeploymentService:
         if not node:
             return False, "Node not found"
 
-        if node.status not in [NodeStatus.PENDING.value, NodeStatus.ERROR.value]:
+        # Allow enrollment for pending, error, offline, or degraded nodes
+        # Degraded = reachable but no agent running - enrollment deploys the agent
+        allowed_statuses = [
+            NodeStatus.PENDING.value,
+            NodeStatus.ERROR.value,
+            NodeStatus.OFFLINE.value,
+            NodeStatus.DEGRADED.value,
+        ]
+        if node.status not in allowed_statuses:
             return False, f"Cannot enroll node in status: {node.status}"
 
         # Update status to enrolling
@@ -288,6 +341,11 @@ class DeploymentService:
 
         logger.info("Starting enrollment for node %s (%s)", node_id, node.ip_address)
 
+        # Use provided password, or fall back to stored password from node registration
+        effective_password = ssh_password
+        if not effective_password and node.extra_data:
+            effective_password = node.extra_data.get("ssh_password")
+
         try:
             # Deploy the slm-agent role
             output = await self._execute_enrollment_playbook(
@@ -295,13 +353,24 @@ class DeploymentService:
                 node_id,
                 node.ssh_user or "autobot",
                 node.ssh_port or 22,
+                ssh_password=effective_password,
             )
 
             # Mark as online - agent will send first heartbeat
             node.status = NodeStatus.ONLINE.value
+
+            # Update auth method to key-based (SSH keys deployed during enrollment)
+            node.auth_method = "key"
+
+            # Clear stored password from extra_data (no longer needed)
+            if node.extra_data and "ssh_password" in node.extra_data:
+                extra_data = dict(node.extra_data)
+                del extra_data["ssh_password"]
+                node.extra_data = extra_data
+
             await db.commit()
 
-            logger.info("Enrollment completed for node %s", node_id)
+            logger.info("Enrollment completed for node %s - auth_method set to key", node_id)
             return True, f"Agent deployed successfully. Output:\n{output}"
 
         except Exception as e:
@@ -311,14 +380,20 @@ class DeploymentService:
             return False, str(e)
 
     async def _execute_enrollment_playbook(
-        self, host: str, node_id: str, ssh_user: str, ssh_port: int
+        self, host: str, node_id: str, ssh_user: str, ssh_port: int,
+        ssh_password: Optional[str] = None
     ) -> str:
         """Execute the SLM agent enrollment playbook."""
+        import shutil
+
         playbook_path = self.ansible_dir / "enroll.yml"
 
         # Create enrollment playbook if it doesn't exist
         if not playbook_path.exists():
             await self._create_enrollment_playbook(playbook_path)
+
+        # Use external_url from config for the admin URL that nodes will use
+        admin_url = settings.external_url
 
         # Build the ansible command
         cmd = [
@@ -329,11 +404,24 @@ class DeploymentService:
             "-e", f"ansible_user={ssh_user}",
             "-e", f"ansible_port={ssh_port}",
             "-e", f"slm_node_id={node_id}",
-            "-e", "slm_admin_url=http://127.0.0.1:8000",
-            "-e", "slm_heartbeat_interval=30",
+            "-e", f"slm_admin_url={admin_url}",
+            "-e", f"slm_heartbeat_interval={settings.heartbeat_interval}",
         ]
 
-        logger.debug("Running enrollment: %s", " ".join(cmd))
+        # Add password authentication if provided
+        if ssh_password:
+            if not shutil.which("sshpass"):
+                raise RuntimeError(
+                    "Password auth requires 'sshpass'. Install: sudo apt install sshpass"
+                )
+            # Use sshpass with ansible for both SSH and sudo
+            cmd.extend([
+                "-e", "ansible_ssh_pass=" + ssh_password,
+                "-e", "ansible_become_pass=" + ssh_password,  # Also use for sudo
+                "-e", "ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'",
+            ])
+
+        logger.debug("Running enrollment: %s", " ".join(cmd[:10]) + " ...")
 
         process = await asyncio.create_subprocess_exec(
             *cmd,
@@ -350,13 +438,80 @@ class DeploymentService:
 
         return output
 
+    async def _get_slm_public_key(self) -> str:
+        """
+        Get the SLM server's SSH public key for deploying to nodes.
+
+        This enables passwordless SSH access from the SLM server to enrolled nodes.
+        The key is read from the configured path or generated if it doesn't exist.
+
+        Returns:
+            The public key content, or empty string if unavailable.
+        """
+        # Default SSH key paths for the autobot user
+        ssh_dir = Path.home() / ".ssh"
+        pubkey_path = ssh_dir / "id_rsa.pub"
+        privkey_path = ssh_dir / "id_rsa"
+
+        # Try to read existing public key
+        if pubkey_path.exists():
+            try:
+                return pubkey_path.read_text(encoding="utf-8").strip()
+            except Exception as e:
+                logger.warning("Failed to read SSH public key: %s", e)
+
+        # Generate new SSH key pair if it doesn't exist
+        if not privkey_path.exists():
+            logger.info("Generating SSH key pair for SLM server...")
+            try:
+                # Ensure .ssh directory exists with correct permissions
+                ssh_dir.mkdir(mode=0o700, exist_ok=True)
+
+                # Generate RSA key pair
+                proc = await asyncio.create_subprocess_exec(
+                    "ssh-keygen",
+                    "-t", "rsa",
+                    "-b", "4096",
+                    "-f", str(privkey_path),
+                    "-N", "",  # No passphrase
+                    "-C", "slm-server@autobot",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                _, stderr = await proc.communicate()
+
+                if proc.returncode != 0:
+                    logger.error("Failed to generate SSH key: %s", stderr.decode())
+                    return ""
+
+                logger.info("SSH key pair generated successfully")
+
+                # Read the newly generated public key
+                if pubkey_path.exists():
+                    return pubkey_path.read_text(encoding="utf-8").strip()
+
+            except Exception as e:
+                logger.error("Error generating SSH key pair: %s", e)
+
+        return ""
+
     async def _create_enrollment_playbook(self, path: Path) -> None:
         """Create the enrollment playbook for deploying SLM agent."""
+        # Get SLM server's public key for SSH key deployment
+        slm_pubkey = await self._get_slm_public_key()
+
+        # Use regular string with placeholder to avoid f-string conflicts with
+        # Ansible {{ variables }} and embedded Python f-strings
         playbook_content = """# AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 #
 # SLM Agent Enrollment Playbook
+# This playbook:
+# 1. Creates the autobot user for agent operations
+# 2. Sets up SSH key-based authentication for future passwordless access
+# 3. Installs and configures the SLM agent
+# 4. Starts the agent service for heartbeat reporting
 ---
 - name: Enroll Node - Deploy SLM Agent
   hosts: all
@@ -372,8 +527,32 @@ class DeploymentService:
       - psutil
       - requests
       - pyyaml
+    slm_server_pubkey: "__SLM_PUBKEY_PLACEHOLDER__"
 
   tasks:
+    # ==========================================================
+    # SSH Key Setup for Passwordless Future Access
+    # ==========================================================
+    - name: Ensure .ssh directory exists for autobot user
+      file:
+        path: "/home/{{ slm_agent_user }}/.ssh"
+        state: directory
+        owner: "{{ slm_agent_user }}"
+        group: "{{ slm_agent_group }}"
+        mode: '0700'
+      when: slm_server_pubkey | length > 0
+
+    - name: Deploy SLM server SSH public key for passwordless access
+      authorized_key:
+        user: "{{ slm_agent_user }}"
+        key: "{{ slm_server_pubkey }}"
+        state: present
+        comment: "SLM Server - AutoBot Fleet Management"
+      when: slm_server_pubkey | length > 0
+
+    # ==========================================================
+    # User and Directory Setup
+    # ==========================================================
     - name: Create autobot user
       user:
         name: "{{ slm_agent_user }}"
@@ -406,7 +585,7 @@ class DeploymentService:
         content: |
           # AutoBot - AI-Powered Automation Platform
           # Copyright (c) 2025 mrveiss
-          \\"\\"\\"SLM Package.\\"\\"\\"
+          '''SLM Package.'''
         dest: "{{ slm_agent_dir }}/slm/__init__.py"
         owner: "{{ slm_agent_user }}"
         group: "{{ slm_agent_group }}"
@@ -417,7 +596,7 @@ class DeploymentService:
         content: |
           # AutoBot - AI-Powered Automation Platform
           # Copyright (c) 2025 mrveiss
-          \\"\\"\\"SLM Agent Module.\\"\\"\\"
+          '''SLM Agent Module.'''
           from .agent import SLMAgent
           __all__ = ["SLMAgent"]
         dest: "{{ slm_agent_dir }}/slm/agent/__init__.py"
@@ -440,7 +619,7 @@ class DeploymentService:
           #!/usr/bin/env python3
           # AutoBot - AI-Powered Automation Platform
           # Copyright (c) 2025 mrveiss
-          \\"\\"\\"SLM Node Agent - Lightweight heartbeat agent.\\"\\"\\"
+          '''SLM Node Agent - Lightweight heartbeat agent.'''
 
           import logging
           import os
@@ -461,7 +640,7 @@ class DeploymentService:
 
 
           class SLMAgent:
-              \\"\\"\\"SLM Node Agent.\\"\\"\\"
+              '''SLM Node Agent.'''
 
               def __init__(self, config_path: str = "/opt/autobot/config.yaml"):
                   self.running = False
@@ -573,7 +752,11 @@ class DeploymentService:
         state: restarted
         daemon_reload: yes
 """
-        path.write_text(playbook_content)
+        # Substitute the SLM public key placeholder
+        playbook_content = playbook_content.replace(
+            "__SLM_PUBKEY_PLACEHOLDER__", slm_pubkey
+        )
+        path.write_text(playbook_content, encoding="utf-8")
         logger.info("Created enrollment playbook: %s", path)
 
 

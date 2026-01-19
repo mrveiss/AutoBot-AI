@@ -14,6 +14,7 @@ from .settings import router as settings_router
 from .health import router as health_router
 from .stateful import router as stateful_router
 from .updates import router as updates_router
+from .websocket import router as websocket_router
 
 __all__ = [
     "auth_router",
@@ -23,4 +24,5 @@ __all__ = [
     "health_router",
     "stateful_router",
     "updates_router",
+    "websocket_router",
 ]

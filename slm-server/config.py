@@ -17,11 +17,11 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """SLM Server Settings."""
 
-    # Paths
-    base_dir: Path = Path(__file__).parent.parent
-    data_dir: Path = Path(__file__).parent.parent / "data"
-    config_dir: Path = Path(__file__).parent.parent / "config"
-    ansible_dir: Path = Path(__file__).parent.parent / "ansible"
+    # Paths - relative to slm-server directory (where config.py lives)
+    base_dir: Path = Path(__file__).parent
+    data_dir: Path = Path(__file__).parent / "data"
+    config_dir: Path = Path(__file__).parent / "config"
+    ansible_dir: Path = Path(__file__).parent / "ansible"
 
     # Database
     database_url: str = "sqlite+aiosqlite:///./data/slm.db"
@@ -53,6 +53,14 @@ class Settings(BaseSettings):
 
     # CORS settings
     cors_origins: list = ["*"]
+
+    # External URL - the address nodes use to reach the SLM backend
+    # NOTE: Backend binds to 127.0.0.1:8000 only (systemd service setting).
+    # For agents on remote hosts, either:
+    # 1. Update /etc/systemd/system/slm-backend.service to bind 0.0.0.0
+    # 2. Or use nginx proxy URL: https://172.16.168.19
+    # For same-host agents, use localhost.
+    external_url: str = os.getenv("SLM_EXTERNAL_URL", "http://127.0.0.1:8000")
 
     class Config:
         env_prefix = "SLM_"

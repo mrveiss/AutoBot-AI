@@ -6,7 +6,7 @@
  * SLM Type Definitions
  */
 
-export type NodeStatus = 'registered' | 'pending' | 'enrolling' | 'healthy' | 'degraded' | 'unhealthy' | 'offline'
+export type NodeStatus = 'registered' | 'pending' | 'enrolling' | 'healthy' | 'degraded' | 'unhealthy' | 'offline' | 'maintenance' | 'online' | 'error'
 
 export type NodeRole =
   | 'slm-agent'

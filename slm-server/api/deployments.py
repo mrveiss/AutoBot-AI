@@ -211,3 +211,31 @@ async def rollback_deployment(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
+
+
+@router.post("/{deployment_id}/retry", response_model=DeploymentResponse)
+async def retry_deployment(
+    deployment_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+) -> DeploymentResponse:
+    """Retry a failed deployment."""
+    try:
+        deployment = await deployment_service.retry_deployment(
+            db, deployment_id, triggered_by=current_user.get("sub", "unknown")
+        )
+
+        if not deployment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Deployment not found",
+            )
+
+        logger.info("Deployment retry initiated: %s", deployment_id)
+        return deployment
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )

@@ -15,6 +15,7 @@ from typing import List, Optional
 from typing_extensions import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +25,7 @@ from models.schemas import (
     CertificateResponse,
     ConnectionTestRequest,
     ConnectionTestResponse,
+    EnrollRequest,
     HeartbeatRequest,
     NodeCreate,
     NodeEventListResponse,
@@ -96,6 +98,12 @@ async def create_node(
     else:
         initial_status = NodeStatus.PENDING.value
 
+    # Store SSH password in extra_data if provided (for enrollment)
+    # TODO: Encrypt sensitive credentials in a future security enhancement
+    extra_data = {}
+    if node_data.ssh_password and node_data.auth_method == "password":
+        extra_data["ssh_password"] = node_data.ssh_password
+
     node = Node(
         node_id=node_id,
         hostname=node_data.hostname,
@@ -105,6 +113,7 @@ async def create_node(
         ssh_port=node_data.ssh_port,
         auth_method=node_data.auth_method,
         status=initial_status,
+        extra_data=extra_data if extra_data else None,
     )
     db.add(node)
     await db.commit()
@@ -168,6 +177,36 @@ async def update_node(
     return NodeResponse.model_validate(node)
 
 
+class RolesUpdateRequest(BaseModel):
+    """Request to update node roles."""
+    roles: List[str]
+
+
+@router.patch("/{node_id}/roles", response_model=NodeResponse)
+async def update_node_roles(
+    node_id: str,
+    roles_data: RolesUpdateRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> NodeResponse:
+    """Update roles for a node."""
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Node not found",
+        )
+
+    node.roles = roles_data.roles
+    await db.commit()
+    await db.refresh(node)
+
+    logger.info("Node roles updated: %s -> %s", node_id, roles_data.roles)
+    return NodeResponse.model_validate(node)
+
+
 @router.delete("/{node_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_node(
     node_id: str,
@@ -188,6 +227,76 @@ async def delete_node(
     await db.commit()
 
     logger.info("Node deleted: %s", node_id)
+
+
+@router.put("/{node_id}/replace", response_model=NodeResponse)
+async def replace_node(
+    node_id: str,
+    node_data: NodeCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> NodeResponse:
+    """
+    Replace a node with a new one.
+
+    This removes the old node and creates a new node with the provided data.
+    The new node gets a new node_id but can optionally reuse the hostname/IP.
+    """
+    # Find the existing node
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    old_node = result.scalar_one_or_none()
+
+    if not old_node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Node not found",
+        )
+
+    # Check if new IP conflicts with another node (not the one being replaced)
+    if node_data.ip_address != old_node.ip_address:
+        existing = await db.execute(
+            select(Node).where(Node.ip_address == node_data.ip_address)
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Another node with this IP address already exists",
+            )
+
+    # Delete the old node
+    await db.delete(old_node)
+    await db.flush()
+
+    # Create new node with new ID
+    new_node_id = str(uuid.uuid4())[:8]
+
+    if node_data.import_existing:
+        initial_status = NodeStatus.ONLINE.value
+    else:
+        initial_status = NodeStatus.PENDING.value
+
+    new_node = Node(
+        node_id=new_node_id,
+        hostname=node_data.hostname,
+        ip_address=node_data.ip_address,
+        roles=node_data.roles,
+        ssh_user=node_data.ssh_user,
+        ssh_port=node_data.ssh_port,
+        auth_method=node_data.auth_method,
+        status=initial_status,
+    )
+    db.add(new_node)
+    await db.commit()
+    await db.refresh(new_node)
+
+    logger.info(
+        "Node replaced: %s -> %s (%s)",
+        node_id,
+        new_node_id,
+        new_node.hostname,
+    )
+
+    return NodeResponse.model_validate(new_node)
 
 
 @router.post("/{node_id}/heartbeat", response_model=NodeResponse)
@@ -222,17 +331,27 @@ async def enroll_node(
     node_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
+    enroll_request: Optional[EnrollRequest] = None,
 ):
     """
     Start node enrollment process.
 
     This deploys the SLM agent to the node via Ansible,
     which then starts sending heartbeats automatically.
+
+    Optionally accepts SSH credentials for password-based authentication.
     """
     from services.deployment import deployment_service
 
+    # Extract SSH password if provided
+    ssh_password = None
+    if enroll_request and enroll_request.ssh_password:
+        ssh_password = enroll_request.ssh_password
+
     # Run enrollment (deploys agent via Ansible)
-    success, message = await deployment_service.enroll_node(db, node_id)
+    success, message = await deployment_service.enroll_node(
+        db, node_id, ssh_password=ssh_password
+    )
 
     if not success:
         raise HTTPException(
@@ -252,26 +371,122 @@ async def enroll_node(
     }
 
 
+@router.post("/{node_id}/drain", response_model=NodeResponse)
+async def drain_node(
+    node_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> NodeResponse:
+    """
+    Put a node into maintenance mode (drain).
+
+    This marks the node as unavailable for new workloads
+    while allowing existing services to be migrated.
+    """
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Node not found",
+        )
+
+    if node.status == NodeStatus.MAINTENANCE.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Node is already in maintenance mode",
+        )
+
+    node.status = NodeStatus.MAINTENANCE.value
+    await db.commit()
+    await db.refresh(node)
+
+    logger.info("Node drained (maintenance mode): %s", node_id)
+    return NodeResponse.model_validate(node)
+
+
+@router.post("/{node_id}/resume", response_model=NodeResponse)
+async def resume_node(
+    node_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> NodeResponse:
+    """
+    Resume a node from maintenance mode.
+
+    This marks the node as available for workloads again.
+    """
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Node not found",
+        )
+
+    if node.status != NodeStatus.MAINTENANCE.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Node is not in maintenance mode",
+        )
+
+    node.status = NodeStatus.ONLINE.value
+    await db.commit()
+    await db.refresh(node)
+
+    logger.info("Node resumed from maintenance: %s", node_id)
+    return NodeResponse.model_validate(node)
+
+
 @router.post("/test-connection", response_model=ConnectionTestResponse)
 async def test_connection(
     request: ConnectionTestRequest,
     _: Annotated[dict, Depends(get_current_user)],
 ) -> ConnectionTestResponse:
     """Test SSH connection to a node."""
+    import shutil
+
     start_time = time.time()
 
     try:
-        # Build SSH command for connection test
-        ssh_cmd = [
-            "ssh",
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "ConnectTimeout=10",
-            "-o", "BatchMode=yes",
-            "-p", str(request.ssh_port),
-            f"{request.ssh_user}@{request.ip_address}",
-            "uname -a && cat /etc/os-release 2>/dev/null | head -5 || echo 'OS info unavailable'",
-        ]
+        remote_cmd = "uname -a && cat /etc/os-release 2>/dev/null | head -5 || echo 'OS info unavailable'"
+
+        # Build SSH command based on auth method
+        if request.auth_method == "password" and request.password:
+            # Check if sshpass is available for password auth
+            if not shutil.which("sshpass"):
+                return ConnectionTestResponse(
+                    success=False,
+                    message="Connection failed",
+                    error="Password auth requires 'sshpass'. Install: sudo apt install sshpass",
+                )
+
+            # Use sshpass for password authentication
+            ssh_cmd = [
+                "sshpass", "-p", request.password,
+                "ssh",
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "UserKnownHostsFile=/dev/null",
+                "-o", "ConnectTimeout=10",
+                "-o", "PubkeyAuthentication=no",
+                "-p", str(request.ssh_port),
+                f"{request.ssh_user}@{request.ip_address}",
+                remote_cmd,
+            ]
+        else:
+            # Use key-based authentication (BatchMode)
+            ssh_cmd = [
+                "ssh",
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "UserKnownHostsFile=/dev/null",
+                "-o", "ConnectTimeout=10",
+                "-o", "BatchMode=yes",
+                "-p", str(request.ssh_port),
+                f"{request.ssh_user}@{request.ip_address}",
+                remote_cmd,
+            ]
 
         process = await asyncio.create_subprocess_exec(
             *ssh_cmd,
@@ -296,6 +511,9 @@ async def test_connection(
             )
         else:
             error_msg = stderr.decode("utf-8", errors="replace").strip()
+            # Clean up error message - don't expose password details
+            if "sshpass" in error_msg.lower():
+                error_msg = "SSH authentication failed. Check credentials."
             return ConnectionTestResponse(
                 success=False,
                 message="Connection failed",
@@ -308,6 +526,12 @@ async def test_connection(
             success=False,
             message="Connection timed out",
             error="SSH connection timed out after 15 seconds",
+        )
+    except FileNotFoundError:
+        return ConnectionTestResponse(
+            success=False,
+            message="Connection failed",
+            error="Required tool not found. For password auth: sudo apt install sshpass",
         )
     except Exception as e:
         logger.exception("Connection test error: %s", e)
@@ -346,10 +570,13 @@ async def get_node_events(
 
     query = query.order_by(NodeEvent.created_at.desc())
 
-    # Get total count
-    count_result = await db.execute(
-        select(NodeEvent.id).where(query.whereclause or True)
-    )
+    # Get total count - build the count query with same filters
+    count_query = select(NodeEvent.id).where(NodeEvent.node_id == node_id)
+    if event_type:
+        count_query = count_query.where(NodeEvent.event_type == event_type)
+    if severity:
+        count_query = count_query.where(NodeEvent.severity == severity)
+    count_result = await db.execute(count_query)
     total = len(count_result.all())
 
     # Apply pagination

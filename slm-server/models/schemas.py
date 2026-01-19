@@ -92,6 +92,9 @@ class NodeResponse(BaseModel):
     ip_address: str
     status: str
     roles: List[str]
+    ssh_user: Optional[str] = "autobot"
+    ssh_port: Optional[int] = 22
+    auth_method: Optional[str] = "key"
     cpu_percent: float
     memory_percent: float
     disk_percent: float
@@ -122,6 +125,12 @@ class HeartbeatRequest(BaseModel):
     agent_version: Optional[str] = None
     os_info: Optional[str] = None
     extra_data: Dict = Field(default_factory=dict)
+
+
+class EnrollRequest(BaseModel):
+    """Node enrollment request with SSH credentials."""
+
+    ssh_password: Optional[str] = None
 
 
 # =============================================================================

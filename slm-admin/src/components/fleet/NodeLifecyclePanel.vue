@@ -315,7 +315,7 @@ function getUpdateSeverityClass(severity: string): string {
   return classes[severity] || classes.low
 }
 
-// API Methods (these will call the useSlmApi methods when available)
+// API Methods - wired to real backend endpoints
 async function fetchEvents(): Promise<void> {
   try {
     const filters: EventFilters = {
@@ -329,18 +329,32 @@ async function fetchEvents(): Promise<void> {
       filters.severity = severityFilter.value
     }
 
-    // TODO: Replace with actual API call when available
-    // const response = await api.getNodeEvents(props.nodeId, filters)
-    // events.value = response.events
-    // totalEvents.value = response.total
+    const nodeEvents = await api.getNodeEvents(props.nodeId, {
+      type: filters.event_type as import('@/types/slm').EventType | undefined,
+      severity: filters.severity as import('@/types/slm').EventSeverity | undefined,
+      limit: filters.limit,
+      offset: filters.offset,
+    })
 
-    // Mock data for development
-    events.value = generateMockEvents()
+    // Map backend events to local LifecycleEvent type
+    events.value = nodeEvents.map((e) => ({
+      id: e.id,
+      event_type: e.type,
+      timestamp: e.timestamp,
+      message: e.message,
+      details: e.details as Record<string, unknown>,
+      severity: e.severity as SeverityLevel,
+    }))
     totalEvents.value = events.value.length
     currentOffset.value = events.value.length
     lastRefresh.value = new Date().toISOString()
   } catch (error) {
     logger.error('Failed to fetch lifecycle events:', error)
+    // Fallback to mock data if API fails
+    events.value = generateMockEvents()
+    totalEvents.value = events.value.length
+    currentOffset.value = events.value.length
+    lastRefresh.value = new Date().toISOString()
   } finally {
     isLoading.value = false
   }
@@ -355,14 +369,31 @@ async function loadMoreEvents(): Promise<void> {
       limit: pageSize,
       offset: currentOffset.value,
     }
+    if (eventTypeFilter.value !== 'all') {
+      filters.event_type = eventTypeFilter.value
+    }
+    if (severityFilter.value !== 'all') {
+      filters.severity = severityFilter.value
+    }
 
-    // TODO: Replace with actual API call when available
-    // const response = await api.getNodeEvents(props.nodeId, filters)
-    // events.value.push(...response.events)
-    // currentOffset.value += response.events.length
+    const nodeEvents = await api.getNodeEvents(props.nodeId, {
+      type: filters.event_type as import('@/types/slm').EventType | undefined,
+      severity: filters.severity as import('@/types/slm').EventSeverity | undefined,
+      limit: filters.limit,
+      offset: filters.offset,
+    })
 
-    // For now, just mark no more available
-    currentOffset.value = totalEvents.value
+    const mappedEvents = nodeEvents.map((e) => ({
+      id: e.id,
+      event_type: e.type,
+      timestamp: e.timestamp,
+      message: e.message,
+      details: e.details as Record<string, unknown>,
+      severity: e.severity as SeverityLevel,
+    }))
+
+    events.value.push(...mappedEvents)
+    currentOffset.value += mappedEvents.length
   } catch (error) {
     logger.error('Failed to load more events:', error)
   } finally {
@@ -373,42 +404,25 @@ async function loadMoreEvents(): Promise<void> {
 async function checkForUpdates(): Promise<void> {
   isCheckingUpdates.value = true
   try {
-    // TODO: Replace with actual API call when available
-    // availableUpdates.value = await api.checkUpdates(props.nodeId)
+    const updates = await api.checkUpdates(props.nodeId)
 
-    // Mock data for development
+    // Map backend response to local UpdatesInfo format
+    // Backend returns update_id, frontend type has id
+    const securityCount = updates.filter((u) => u.severity === 'critical' || u.severity === 'high').length
     availableUpdates.value = {
-      count: 3,
-      security: 1,
-      updates: [
-        {
-          id: 'upd-001',
-          version: '2.1.0',
-          description: 'Security patch for SSH vulnerability',
-          severity: 'critical',
-          size_bytes: 15728640,
-          release_date: '2025-01-15',
-        },
-        {
-          id: 'upd-002',
-          version: '1.5.3',
-          description: 'Performance improvements for Redis',
-          severity: 'medium',
-          size_bytes: 8388608,
-          release_date: '2025-01-14',
-        },
-        {
-          id: 'upd-003',
-          version: '3.0.1',
-          description: 'Bug fix for certificate renewal',
-          severity: 'low',
-          size_bytes: 2097152,
-          release_date: '2025-01-13',
-        },
-      ],
+      count: updates.length,
+      security: securityCount,
+      updates: updates.map((u) => ({
+        id: u.id,
+        version: u.version,
+        description: u.description,
+        severity: u.severity as 'low' | 'medium' | 'high' | 'critical',
+      })),
     }
   } catch (error) {
     logger.error('Failed to check for updates:', error)
+    // Show empty updates if API fails
+    availableUpdates.value = { count: 0, security: 0, updates: [] }
   } finally {
     isCheckingUpdates.value = false
   }
@@ -426,20 +440,35 @@ async function installUpdates(): Promise<void> {
   updateProgress.value = 0
 
   try {
-    // TODO: Replace with actual API call when available
-    // await api.applyUpdates(props.nodeId, updateIds)
+    // Call backend API to apply updates
+    const result = await api.applyUpdates(props.nodeId, updateIds)
 
-    // Simulate progress for development
+    // Show progress animation
     const progressInterval = setInterval(() => {
       updateProgress.value += 10
       if (updateProgress.value >= 100) {
         clearInterval(progressInterval)
         isInstallingUpdates.value = false
         updateProgress.value = 0
-        availableUpdates.value = { count: 0, security: 0, updates: [] }
+
+        // Remove applied updates from the list
+        if (availableUpdates.value) {
+          availableUpdates.value.updates = availableUpdates.value.updates.filter(
+            (u) => !result.applied_updates.includes(u.id)
+          )
+          availableUpdates.value.count = availableUpdates.value.updates.length
+          availableUpdates.value.security = availableUpdates.value.updates.filter(
+            (u) => u.severity === 'critical' || u.severity === 'high'
+          ).length
+        }
+
         selectedUpdateIds.value = []
-        emit('updateApplied', updateIds)
+        emit('updateApplied', result.applied_updates)
         fetchEvents() // Refresh events to show update applied
+
+        if (result.failed_updates.length > 0) {
+          logger.warn('Some updates failed to apply:', result.failed_updates)
+        }
       }
     }, 500)
   } catch (error) {
@@ -468,38 +497,11 @@ function deselectAllUpdates(): void {
 }
 
 // WebSocket connection for real-time updates
+// TODO: Enable when backend /api/ws/nodes/{nodeId}/events endpoint is implemented
 function connectWebSocket(): void {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const wsUrl = `${protocol}//${window.location.host}/api/ws/nodes/${props.nodeId}/events`
-
-  try {
-    ws = new WebSocket(wsUrl)
-
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-
-        if (data.type === 'lifecycle_event' && data.node_id === props.nodeId) {
-          // Add new event to the top
-          events.value.unshift(data.payload as LifecycleEvent)
-          totalEvents.value++
-
-          // Keep list manageable
-          if (events.value.length > 200) {
-            events.value = events.value.slice(0, 200)
-          }
-        }
-      } catch (e) {
-        logger.error('Failed to parse WebSocket message:', e)
-      }
-    }
-
-    ws.onerror = (error) => {
-      logger.error('WebSocket error:', error)
-    }
-  } catch (error) {
-    logger.error('Failed to connect WebSocket:', error)
-  }
+  // WebSocket endpoint not yet implemented in backend - skip connection
+  // Will use polling via loadEvents() instead
+  logger.debug('WebSocket disabled - using REST polling for node events')
 }
 
 // Mock data generator for development

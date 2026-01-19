@@ -65,8 +65,9 @@ class ReconcilerService:
             await asyncio.sleep(settings.reconcile_interval)
 
     async def _check_node_health(self) -> None:
-        """Check node health based on heartbeats."""
+        """Check node health based on heartbeats and network reachability."""
         from services.database import db_service
+        from sqlalchemy import or_
 
         async with db_service.session() as db:
             timeout_setting = await db.execute(
@@ -78,16 +79,63 @@ class ReconcilerService:
 
             cutoff = datetime.utcnow() - timedelta(seconds=self._heartbeat_timeout)
 
-            await db.execute(
-                update(Node)
+            # Get nodes with stale or missing heartbeats
+            result = await db.execute(
+                select(Node)
                 .where(
-                    Node.status.in_([NodeStatus.ONLINE.value, NodeStatus.DEGRADED.value])
+                    Node.status.in_([
+                        NodeStatus.ONLINE.value,
+                        NodeStatus.DEGRADED.value,
+                        NodeStatus.OFFLINE.value,
+                    ])
                 )
-                .where(Node.last_heartbeat < cutoff)
-                .values(status=NodeStatus.OFFLINE.value)
+                .where(
+                    or_(
+                        Node.last_heartbeat < cutoff,
+                        Node.last_heartbeat.is_(None)
+                    )
+                )
             )
+            stale_nodes = result.scalars().all()
+
+            for node in stale_nodes:
+                # Ping to check if host is reachable
+                is_reachable = await self._ping_host(node.ip_address)
+
+                if is_reachable:
+                    # Host responds to ping but no heartbeat = degraded (agent not running)
+                    if node.status != NodeStatus.DEGRADED.value:
+                        node.status = NodeStatus.DEGRADED.value
+                        logger.info(
+                            "Node %s (%s) reachable but no heartbeat - marking degraded",
+                            node.node_id,
+                            node.ip_address,
+                        )
+                else:
+                    # Host doesn't respond to ping = offline
+                    if node.status != NodeStatus.OFFLINE.value:
+                        node.status = NodeStatus.OFFLINE.value
+                        logger.info(
+                            "Node %s (%s) unreachable - marking offline",
+                            node.node_id,
+                            node.ip_address,
+                        )
 
             await db.commit()
+
+    async def _ping_host(self, ip_address: str, timeout: int = 2) -> bool:
+        """Check if a host responds to ping."""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "ping", "-c", "1", "-W", str(timeout), ip_address,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await proc.wait()
+            return proc.returncode == 0
+        except Exception as e:
+            logger.debug("Ping failed for %s: %s", ip_address, e)
+            return False
 
     async def _reconcile_roles(self) -> None:
         """Reconcile roles on nodes if auto-reconcile is enabled."""

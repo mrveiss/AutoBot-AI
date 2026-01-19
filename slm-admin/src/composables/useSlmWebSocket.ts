@@ -11,7 +11,9 @@
 import { ref, onUnmounted } from 'vue'
 import type { SLMWebSocketMessage, NodeHealth } from '@/types/slm'
 
-const WS_URL = `ws://${window.location.host}/v1/slm/ws`
+// Use secure WebSocket (wss) when page is loaded over HTTPS
+const WS_PROTOCOL = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+const WS_URL = `${WS_PROTOCOL}//${window.location.host}/api/ws/events`
 
 export function useSlmWebSocket() {
   const socket = ref<WebSocket | null>(null)
