@@ -396,6 +396,7 @@ class DeploymentService:
         admin_url = settings.external_url
 
         # Build the ansible command
+        # Always skip host key checking for automated enrollment
         cmd = [
             "ansible-playbook",
             str(playbook_path),
@@ -406,6 +407,7 @@ class DeploymentService:
             "-e", f"slm_node_id={node_id}",
             "-e", f"slm_admin_url={admin_url}",
             "-e", f"slm_heartbeat_interval={settings.heartbeat_interval}",
+            "-e", "ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'",
         ]
 
         # Add password authentication if provided
@@ -417,8 +419,7 @@ class DeploymentService:
             # Use sshpass with ansible for both SSH and sudo
             cmd.extend([
                 "-e", "ansible_ssh_pass=" + ssh_password,
-                "-e", "ansible_become_pass=" + ssh_password,  # Also use for sudo
-                "-e", "ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'",
+                "-e", "ansible_become_pass=" + ssh_password,
             ])
 
         logger.debug("Running enrollment: %s", " ".join(cmd[:10]) + " ...")
@@ -630,7 +631,11 @@ class DeploymentService:
 
           import psutil
           import requests
+          import urllib3
           import yaml
+
+          # Suppress InsecureRequestWarning for self-signed certs
+          urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
           logging.basicConfig(
               level=logging.INFO,
@@ -669,7 +674,8 @@ class DeploymentService:
                   try:
                       health = self.collect_health()
                       url = f"{self.config['admin_url']}/api/nodes/{self.config['node_id']}/heartbeat"
-                      response = requests.post(url, json=health, timeout=10)
+                      # verify=False for self-signed certs on nginx proxy
+                      response = requests.post(url, json=health, timeout=10, verify=False)
                       response.raise_for_status()
                       logger.debug("Heartbeat sent successfully")
                       return True

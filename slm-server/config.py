@@ -54,13 +54,9 @@ class Settings(BaseSettings):
     # CORS settings
     cors_origins: list = ["*"]
 
-    # External URL - the address nodes use to reach the SLM backend
-    # NOTE: Backend binds to 127.0.0.1:8000 only (systemd service setting).
-    # For agents on remote hosts, either:
-    # 1. Update /etc/systemd/system/slm-backend.service to bind 0.0.0.0
-    # 2. Or use nginx proxy URL: https://172.16.168.19
-    # For same-host agents, use localhost.
-    external_url: str = os.getenv("SLM_EXTERNAL_URL", "http://127.0.0.1:8000")
+    # External URL - the address remote nodes use to reach the SLM backend
+    # Backend binds to 127.0.0.1:8000, so remote agents use nginx reverse proxy
+    external_url: str = os.getenv("SLM_EXTERNAL_URL", "https://172.16.168.19")
 
     class Config:
         env_prefix = "SLM_"
