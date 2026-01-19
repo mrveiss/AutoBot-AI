@@ -486,6 +486,23 @@
       </UnifiedLoadingView>
     </main>
   </div>
+
+  <!-- Global Elevation Dialog -->
+  <ElevationDialog
+    ref="elevationDialog"
+    :show="showElevationDialog"
+    :operation="elevationOperation"
+    :command="elevationCommand"
+    :reason="elevationReason"
+    :risk-level="elevationRiskLevel"
+    :request-id="elevationRequestId"
+    @approved="onElevationApproved"
+    @cancelled="onElevationCancelled"
+    @close="onElevationClose"
+  />
+
+  <!-- RUM Dashboard for Development -->
+  <RumDashboard />
 </template>
 
 <script lang="ts">

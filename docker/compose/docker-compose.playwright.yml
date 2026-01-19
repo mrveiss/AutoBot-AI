@@ -1,0 +1,39 @@
+services:
+  playwright-service:
+    image: mcr.microsoft.com/playwright:v1.54.0-jammy
+    container_name: autobot-playwright
+    network_mode: host
+    working_dir: /app
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+      - XAUTHORITY=${XAUTHORITY:-/home/kali/.Xauthority}
+      - HEADLESS=${HEADLESS:-false}
+    volumes:
+      - ./playwright-server.js:/app/server.js
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${HOME}/.Xauthority:${HOME}/.Xauthority:rw
+    # Remove /dev/dri for compatibility
+    # devices:
+    #   - /dev/dri:/dev/dri
+    command: >
+      sh -c "
+        echo '🚀 Installing dependencies...' &&
+        npm init -y &&
+        npm install playwright express &&
+        echo '🚀 Starting Playwright service with GUI support...' &&
+        echo 'Display: ${DISPLAY}' &&
+        echo 'HEADLESS: ${HEADLESS}' &&
+        export HEADLESS=false &&
+        node server.js
+      "
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  autobot-network:
+    driver: bridge

@@ -67,6 +67,10 @@ pinia.use(piniaPluginPersistedstate)
 
 // Create Vue app
 const app = createApp(App)
+app.use(router)
+
+// Install RUM plugin for development monitoring
+app.use(rumPlugin, { router })
 
 // Use plugins
 app.use(pinia)
