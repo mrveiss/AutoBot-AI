@@ -94,6 +94,58 @@ class ConnectionManager:
             },
         )
 
+    async def send_health_update(
+        self, node_id: str, cpu: float, memory: float, disk: float, status: str
+    ) -> None:
+        """Send health update to global event channel."""
+        await self.broadcast(
+            "events:global",
+            {
+                "type": "health_update",
+                "node_id": node_id,
+                "data": {
+                    "status": status,
+                    "cpu_percent": cpu,
+                    "memory_percent": memory,
+                    "disk_percent": disk,
+                },
+                "timestamp": asyncio.get_event_loop().time(),
+            },
+        )
+
+    async def send_node_status(self, node_id: str, status: str, hostname: str = None) -> None:
+        """Send node status change to global event channel."""
+        await self.broadcast(
+            "events:global",
+            {
+                "type": "node_status",
+                "node_id": node_id,
+                "data": {
+                    "status": status,
+                    "hostname": hostname,
+                },
+                "timestamp": asyncio.get_event_loop().time(),
+            },
+        )
+
+    async def send_remediation_event(
+        self, node_id: str, event_type: str, success: bool = None, message: str = None
+    ) -> None:
+        """Send remediation event to global event channel."""
+        await self.broadcast(
+            "events:global",
+            {
+                "type": "remediation_event",
+                "node_id": node_id,
+                "data": {
+                    "event_type": event_type,
+                    "success": success,
+                    "message": message,
+                },
+                "timestamp": asyncio.get_event_loop().time(),
+            },
+        )
+
 
 # Global connection manager instance
 ws_manager = ConnectionManager()

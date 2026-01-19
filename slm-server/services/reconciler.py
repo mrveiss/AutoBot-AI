@@ -158,6 +158,10 @@ class ReconcilerService:
                             node.node_id,
                             node.ip_address,
                         )
+                        # Broadcast status change via WebSocket
+                        await self._broadcast_node_status(
+                            node.node_id, NodeStatus.DEGRADED.value, node.hostname
+                        )
                 else:
                     # Host doesn't respond to ping = offline
                     if node.status != NodeStatus.OFFLINE.value:
@@ -177,6 +181,10 @@ class ReconcilerService:
                             node.node_id,
                             node.ip_address,
                         )
+                        # Broadcast status change via WebSocket
+                        await self._broadcast_node_status(
+                            node.node_id, NodeStatus.OFFLINE.value, node.hostname
+                        )
 
             await db.commit()
 
@@ -193,6 +201,26 @@ class ReconcilerService:
         except Exception as e:
             logger.debug("Ping failed for %s: %s", ip_address, e)
             return False
+
+    async def _broadcast_node_status(
+        self, node_id: str, status: str, hostname: str = None
+    ) -> None:
+        """Broadcast node status change via WebSocket."""
+        try:
+            from api.websocket import ws_manager
+            await ws_manager.send_node_status(node_id, status, hostname)
+        except Exception as e:
+            logger.debug("Failed to broadcast node status: %s", e)
+
+    async def _broadcast_remediation_event(
+        self, node_id: str, event_type: str, success: bool = None, message: str = None
+    ) -> None:
+        """Broadcast remediation event via WebSocket."""
+        try:
+            from api.websocket import ws_manager
+            await ws_manager.send_remediation_event(node_id, event_type, success, message)
+        except Exception as e:
+            logger.debug("Failed to broadcast remediation event: %s", e)
 
     async def _attempt_remediation(self) -> None:
         """Attempt to remediate degraded nodes by restarting services.
@@ -279,6 +307,11 @@ class ReconcilerService:
         db.add(event)
         await db.commit()
 
+        # Broadcast remediation started via WebSocket
+        await self._broadcast_remediation_event(
+            node_id, "started", message=f"Attempting to restart SLM agent on {node.hostname}"
+        )
+
         # Try to restart the SLM agent via SSH
         success = await self._restart_service_via_ssh(
             node.ip_address,
@@ -304,6 +337,11 @@ class ReconcilerService:
                 details={"action": "restart_agent", "success": True},
             )
             logger.info("Remediation successful for node %s", node_id)
+            # Broadcast success via WebSocket
+            await self._broadcast_remediation_event(
+                node_id, "completed", success=True,
+                message=f"Successfully restarted SLM agent on {node.hostname}"
+            )
         else:
             event = NodeEvent(
                 event_id=str(uuid.uuid4())[:16],
@@ -315,6 +353,11 @@ class ReconcilerService:
                         "attempts_remaining": MAX_REMEDIATION_ATTEMPTS - tracker["count"] - 1},
             )
             logger.warning("Remediation failed for node %s", node_id)
+            # Broadcast failure via WebSocket
+            await self._broadcast_remediation_event(
+                node_id, "completed", success=False,
+                message=f"Failed to restart SLM agent on {node.hostname}"
+            )
 
         db.add(event)
         await db.commit()
@@ -483,11 +526,22 @@ class ReconcilerService:
                 "Node %s status changed: %s -> %s",
                 node.node_id, old_status, new_status
             )
+            # Broadcast status change via WebSocket
+            await self._broadcast_node_status(node.node_id, new_status, node.hostname)
 
         node.status = new_status
 
         await db.commit()
         await db.refresh(node)
+
+        # Broadcast health update via WebSocket
+        try:
+            from api.websocket import ws_manager
+            await ws_manager.send_health_update(
+                node.node_id, cpu_percent, memory_percent, disk_percent, new_status
+            )
+        except Exception as e:
+            logger.debug("Failed to broadcast health update: %s", e)
 
         return node
 

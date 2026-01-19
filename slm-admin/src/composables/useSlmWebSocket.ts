@@ -158,6 +158,14 @@ export function useSlmWebSocket() {
     })
   }
 
+  function onRemediationEvent(
+    handler: (nodeId: string, event: { event_type: string; success?: boolean; message?: string }) => void
+  ): void {
+    messageHandlers.set('remediation_event', (message) => {
+      handler(message.node_id, message.data as { event_type: string; success?: boolean; message?: string })
+    })
+  }
+
   // Cleanup on component unmount
   onUnmounted(() => {
     disconnect()
@@ -178,5 +186,6 @@ export function useSlmWebSocket() {
     onNodeStatus,
     onDeploymentStatus,
     onBackupStatus,
+    onRemediationEvent,
   }
 }

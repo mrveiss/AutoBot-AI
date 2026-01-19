@@ -27,6 +27,12 @@ const router = createRouter({
       meta: { title: 'Fleet Overview' }
     },
     {
+      path: '/services',
+      name: 'services',
+      component: () => import('@/views/ServicesView.vue'),
+      meta: { title: 'Services' }
+    },
+    {
       path: '/deployments',
       name: 'deployments',
       component: () => import('@/views/DeploymentsView.vue'),
