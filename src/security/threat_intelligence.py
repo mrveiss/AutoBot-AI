@@ -634,20 +634,20 @@ if __name__ == "__main__":
     """Test threat intelligence service."""
 
     async def test_threat_intel():
-        print("=== Threat Intelligence Service Test ===\n")
+        logger.info("=== Threat Intelligence Service Test ===\n")
 
         service = ThreatIntelligenceService()
 
         # Check service status
         status = await service.get_service_status()
-        print("Service Status:")
+        logger.info("Service Status:")
         for name, info in status.items():
             configured = "✅" if info["configured"] else "❌"
-            print(f"  {name}: {configured} configured")
+            logger.info("  {name}: {configured} configured")
 
         if not service.is_any_service_configured:
-            print("\n⚠️ No threat intelligence services configured.")
-            print("Set VIRUSTOTAL_API_KEY and/or URLVOID_API_KEY environment variables.")
+            logger.info("\n⚠️ No threat intelligence services configured.")
+            logger.info("Set VIRUSTOTAL_API_KEY and/or URLVOID_API_KEY environment variables.")
             return
 
         # Test URLs
@@ -657,18 +657,18 @@ if __name__ == "__main__":
             "http://example-malware-test.com",
         ]
 
-        print("\nTesting URLs:")
+        logger.info("\nTesting URLs:")
         for url in test_urls:
-            print(f"\n  Checking: {url}")
+            logger.info("\n  Checking: {url}")
             result = await service.check_url_reputation(url)
-            print(f"    Overall Score: {result.overall_score:.2f}")
-            print(f"    Threat Level: {result.threat_level.value}")
-            print(f"    Sources Checked: {result.sources_checked}")
-            print(f"    Cached: {result.cached}")
+            logger.info("    Overall Score: {result.overall_score:.2f}")
+            logger.info("    Threat Level: {result.threat_level.value}")
+            logger.info("    Sources Checked: {result.sources_checked}")
+            logger.info("    Cached: {result.cached}")
 
             if result.virustotal_score is not None:
-                print(f"    VirusTotal: {result.virustotal_score:.2f}")
+                logger.info("    VirusTotal: {result.virustotal_score:.2f}")
             if result.urlvoid_score is not None:
-                print(f"    URLVoid: {result.urlvoid_score:.2f}")
+                logger.info("    URLVoid: {result.urlvoid_score:.2f}")
 
     asyncio.run(test_threat_intel())

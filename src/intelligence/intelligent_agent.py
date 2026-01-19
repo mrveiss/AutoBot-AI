@@ -834,10 +834,10 @@ if __name__ == "__main__":
         agent = IntelligentAgent(llm, kb, wn, cv)
         init_result = await agent.initialize()
 
-        print("=== Initialization Result ===")
-        print(f"Status: {init_result['status']}")
-        print(f"OS: {init_result['os_info']['os_type']}")
-        print(f"Capabilities: {init_result['capabilities']['total_count']}")
+        logger.info("=== Initialization Result ===")
+        logger.info("Status: {init_result['status']}")
+        logger.info("OS: {init_result['os_info']['os_type']}")
+        logger.info("Capabilities: {init_result['capabilities']['total_count']}")
         print()
 
         # Test natural language processing
@@ -848,14 +848,14 @@ if __name__ == "__main__":
         ]
 
         for goal in test_goals:
-            print(f"=== Testing Goal: {goal} ===")
+            logger.info("=== Testing Goal: {goal} ===")
 
             async for chunk in agent.process_natural_language_goal(goal):
                 timestamp = chunk.timestamp.split("T")[1][:8]
                 chunk_type = chunk.chunk_type.value.upper()
                 content = chunk.content
 
-                print(f"[{timestamp}] {chunk_type}: {content}")
+                logger.info("[{timestamp}] {chunk_type}: {content}")
 
                 if chunk.chunk_type == ChunkType.COMPLETE:
                     break

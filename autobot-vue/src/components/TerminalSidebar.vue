@@ -138,6 +138,9 @@
 <script>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { useTerminalService } from '@/services/TerminalService.js';
+import { createLogger } from '@/utils/debugUtils';
+
+const logger = createLogger('TerminalSidebar');
 
 export default {
   name: 'TerminalSidebar',
@@ -214,7 +217,7 @@ export default {
         });
 
       } catch (error) {
-        console.error('Failed to create terminal session:', error);
+        logger.error('Failed to create terminal session:', error);
         handleError(error.message);
       }
     };
@@ -256,7 +259,7 @@ export default {
           }
         }
       } catch (error) {
-        console.error('Failed to close session:', error);
+        logger.error('Failed to close session:', error);
       }
     };
 
@@ -377,7 +380,7 @@ export default {
     };
 
     const handleError = (error) => {
-      console.error('Terminal error:', error);
+      logger.error('Terminal error:', error);
       connectionStatus.value = 'error';
 
       if (activeSession.value) {

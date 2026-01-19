@@ -117,7 +117,7 @@ async def lifespan(app: FastAPI):
     Context manager for application startup and shutdown events.
     Replaces deprecated @app.on_event("startup") and @app.on_event("shutdown").
     """
-    print("DEBUG: Entering lifespan startup.")
+    logger.debug("Entering lifespan startup.")
     logger.info("Application lifespan startup initiated.")
 
     logger.debug("Lifespan: Initializing core components...")
@@ -210,7 +210,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown events
     logger.info("Application lifespan shutdown initiated.")
-    print("Application shutting down.")
+    logger.info("Application shutting down.")
 
 app = FastAPI(lifespan=lifespan)
 logger.info("main.py: FastAPI app initialized with lifespan.")
@@ -312,7 +312,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 chat_history_manager.add_message(sender, text, message_type, raw_data)
 
         except RuntimeError as e:
-            print(f"Error sending to WebSocket: {e}")
+            logger.error("Error sending to WebSocket: %s", e)
             pass
 
     event_manager.register_websocket_broadcast(broadcast_event)
@@ -327,7 +327,7 @@ async def websocket_endpoint(websocket: WebSocket):
             except json.JSONDecodeError:
                 pass
     except WebSocketDisconnect:
-        print("WebSocket disconnected.")
+        logger.info("WebSocket disconnected.")
     finally:
         event_manager.register_websocket_broadcast(None)
 
@@ -375,7 +375,7 @@ async def health_check(request: Request):
     
     try:
         orchestrator = getattr(request.app.state, 'orchestrator', None)
-        print(f"DEBUG: Health check - retrieved orchestrator: {orchestrator}")
+        logger.debug("Health check - retrieved orchestrator: %s", orchestrator)
         if orchestrator:
             orchestrator_status = "connected"
             logger.debug("Health check: Orchestrator instance found in app.state.")
@@ -384,7 +384,7 @@ async def health_check(request: Request):
             logger.error("Health check: Orchestrator instance NOT found in app.state.")
         
         diagnostics = getattr(request.app.state, 'diagnostics', None)
-        print(f"DEBUG: Health check - retrieved diagnostics: {diagnostics}")
+        logger.debug("Health check - retrieved diagnostics: %s", diagnostics)
         if diagnostics:
             diagnostics_status = "connected"
             logger.debug("Health check: Diagnostics instance found in app.state.")
@@ -475,9 +475,9 @@ async def update_backend_settings(request: Request, settings: dict): # Reordered
             numeric_level = getattr(logging, new_level, None)
             if isinstance(numeric_level, int):
                 logging.getLogger().setLevel(numeric_level)
-                print(f"Logging level updated to {new_level}")
+                logger.info("Logging level updated to %s", new_level)
             else:
-                print(f"Warning: Invalid logging level received: {new_level}")
+                logger.warning("Invalid logging level received: %s", new_level)
 
         if 'memory' in settings and 'redis' in settings['memory']:
             global chat_history_manager
@@ -491,7 +491,7 @@ async def update_backend_settings(request: Request, settings: dict): # Reordered
                 redis_host=redis_host,
                 redis_port=redis_port
             )
-            print(f"ChatHistoryManager updated with Redis settings: enabled={use_redis}, host={redis_host}, port={redis_port}")
+            logger.info("ChatHistoryManager updated with Redis settings: enabled=%s, host=%s, port=%s", use_redis, redis_host, redis_port)
 
         await event_manager.publish("settings_updated", {"backend_settings": settings})
         return {"message": "Backend settings updated successfully."}
@@ -674,9 +674,9 @@ async def update_settings(request: Request, settings: dict): # Reordered argumen
             numeric_level = getattr(logging, new_level, None)
             if isinstance(numeric_level, int):
                 logging.getLogger().setLevel(numeric_level)
-                print(f"Logging level updated to {new_level}")
+                logger.info("Logging level updated to %s", new_level)
             else:
-                print(f"Warning: Invalid logging level received: {new_level}")
+                logger.warning("Invalid logging level received: %s", new_level)
 
         # Update ChatHistoryManager with new Redis settings if changed
         if 'memory' in settings and 'redis' in settings['memory']:
@@ -692,7 +692,7 @@ async def update_settings(request: Request, settings: dict): # Reordered argumen
                 redis_host=redis_host,
                 redis_port=redis_port
             )
-            print(f"ChatHistoryManager updated with Redis settings: enabled={use_redis}, host={redis_host}, port={redis_port}")
+            logger.info("ChatHistoryManager updated with Redis settings: enabled=%s, host=%s, port=%s", use_redis, redis_host, redis_port)
 
         await event_manager.publish("settings_updated", {"settings": settings})
         return {"message": "Settings updated successfully."}

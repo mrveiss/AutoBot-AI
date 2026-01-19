@@ -760,7 +760,7 @@ api_key = "sk-1234567890abcdef1234567890abcdef"
 
 def process_data(items):
     for item in items:
-        print(f"Processing: {item}")  # Debug print
+        logger.info("Processing: {item}")  # Debug print
         try:
             result = transform(item)
         except:

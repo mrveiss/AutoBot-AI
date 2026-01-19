@@ -451,31 +451,31 @@ NEXT: System will be updated"""
 
     parser = SecureLLMCommandParser(strict_mode=True)
 
-    print("=== Secure LLM Command Parser Tests ===\n")
+    logger.info("=== Secure LLM Command Parser Tests ===\n")
 
     for i, test_case in enumerate(test_responses, 1):
         response = test_case["response"]
         expected_safe = test_case["expected_safe"]
         description = test_case["description"]
 
-        print(f"Test {i}: {description}")
-        print(f"Expected: {'✅ SAFE' if expected_safe else '🚨 BLOCKED'}")
+        logger.info("Test {i}: {description}")
+        logger.info("Expected: {'✅ SAFE' if expected_safe else '🚨 BLOCKED'}")
 
         validated_commands = parser.parse_commands(response, user_goal="test command")
 
         is_safe = len(validated_commands) > 0
         status = "✅ PASS" if is_safe == expected_safe else "❌ FAIL"
 
-        print(f"Result: {status} | Commands validated: {len(validated_commands)}")
+        logger.info("Result: {status} | Commands validated: {len(validated_commands)}")
 
         if validated_commands:
             for cmd in validated_commands:
-                print(f"  ✓ {cmd.command}")
+                logger.info("  ✓ {cmd.command}")
 
         print()
 
     # Show statistics
-    print("=== Parser Statistics ===")
+    logger.info("=== Parser Statistics ===")
     stats = parser.get_statistics()
     for key, value in stats.items():
-        print(f"{key}: {value}")
+        logger.info("{key}: {value}")

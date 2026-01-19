@@ -515,27 +515,27 @@ if __name__ == "__main__":
             "this is a completely unknown request",
         ]
 
-        print("=== Goal Processing Test ===")
+        logger.info("=== Goal Processing Test ===")
 
         for goal in test_goals:
-            print(f"\nGoal: {goal}")
-            print("-" * 50)
+            logger.info("\nGoal: {goal}")
+            logger.info("-" * 50)
 
             processed = await processor.process_goal(goal)
 
-            print(f"Intent: {processed.intent}")
-            print(f"Category: {processed.category.value}")
-            print(f"Confidence: {processed.confidence:.2f}")
-            print(f"Risk Level: {processed.risk_level.value}")
-            print(f"Explanation: {processed.explanation}")
+            logger.info("Intent: {processed.intent}")
+            logger.info("Category: {processed.category.value}")
+            logger.info("Confidence: {processed.confidence:.2f}")
+            logger.info("Risk Level: {processed.risk_level.value}")
+            logger.info("Explanation: {processed.explanation}")
 
             if processed.warnings:
-                print("Warnings:")
+                logger.info("Warnings:")
                 for warning in processed.warnings:
-                    print(f"  - {warning}")
+                    logger.info("  - {warning}")
 
         # Test similar intents
-        print("\n\n=== Similar Intents Test ===")
+        logger.info("\n\n=== Similar Intents Test ===")
         similar = await processor.get_similar_intents("show network info", limit=3)
 
         for suggestion in similar:

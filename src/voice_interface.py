@@ -789,7 +789,7 @@ class VoiceInterface:
 if __name__ == "__main__":
     # Ensure config.yaml exists for testing
     if not os.path.exists("config/config.yaml"):
-        print("config/config.yaml not found. Copying from template for testing.")
+        logger.info("config/config.yaml not found. Copying from template for testing.")
         os.makedirs("config", exist_ok=True)
         with open("config/config.yaml.template", "r") as f_template:
             with open("config/config.yaml", "w") as f_config:
@@ -813,14 +813,14 @@ if __name__ == "__main__":
         # to avoid unused variable warning
         pass  # Placeholder function
 
-        print("\n--- Testing Speech Recognition (speak into mic) ---")
+        logger.info("\n--- Testing Speech Recognition (speak into mic) ---")
         # result = await vi.listen_and_convert_to_text()
         # if result["status"] == "success":
-        #     print(f"You said: {result['text']}")
+        #     logger.info("You said: {result['text']}")
         # else:
-        #     print(f"Speech recognition failed: {result['message']}")
+        #     logger.info("Speech recognition failed: {result['message']}")
 
-        print("\n--- Testing Text-to-Speech ---")
+        logger.info("\n--- Testing Text-to-Speech ---")
         # await vi.speak_text("Hello, I am AutoBot. How can I help you today?")
 
         print(
@@ -828,17 +828,17 @@ if __name__ == "__main__":
             "or external trigger) ---"
         )
         # if vi.continuous_listening:
-        #     print("Continuous listening enabled. Say something...")
+        #     logger.info("Continuous listening enabled. Say something...")
         #     while True:
         #         text_result = await vi.listen_and_convert_to_text(
         #             timeout=None, phrase_time_limit=None)
         #         if text_result["status"] == "success":
-        #             print(f"Continuous: {text_result['text']}")
+        #             logger.info("Continuous: {text_result['text']}")
         #             if "stop listening" in text_result['text'].lower():
         #                 await vi.speak_text("Stopping continuous listening.")
         #                 break
         #         elif text_result["status"] == "timeout":
-        #             print("No speech detected, continuing to listen...")
+        #             logger.info("No speech detected, continuing to listen...")
         #         else:
         #             print(
         #                 "Error in continuous listening: "

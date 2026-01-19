@@ -791,8 +791,8 @@ if __name__ == "__main__":
     async def test_communication_protocol():
         """Run integration test for agent communication protocol."""
 
-        print("🧪 Testing Agent Communication Protocol")
-        print("=" * 50)
+        logger.info("🧪 Testing Agent Communication Protocol")
+        logger.info("=" * 50)
 
         manager = get_communication_manager()
 
@@ -812,7 +812,7 @@ if __name__ == "__main__":
         # Set up message handlers
         async def handle_request(message: StandardMessage) -> StandardMessage:
             """Handle incoming request and return response message."""
-            print(f"Agent 2 received request: {message.payload.content}")
+            logger.info("Agent 2 received request: {message.payload.content}")
 
             return StandardMessage(
                 header=MessageHeader(message_type=MessageType.RESPONSE),
@@ -822,25 +822,25 @@ if __name__ == "__main__":
         protocol2.register_message_handler(MessageType.REQUEST, handle_request)
 
         # Test direct communication
-        print("Testing direct agent communication...")
+        logger.info("Testing direct agent communication...")
 
         response = await send_agent_request(
             "test_agent_1", "test_agent_2", {"message": "Hello from Agent 1!"}
         )
 
-        print(f"Response received: {response}")
+        logger.info("Response received: {response}")
 
         # Test broadcast
-        print("\nTesting broadcast communication...")
+        logger.info("\nTesting broadcast communication...")
         broadcast_count = await broadcast_to_all_agents(
             "test_agent_1", {"broadcast": "Hello everyone!"}
         )
 
-        print(f"Broadcast sent to {broadcast_count} channels")
+        logger.info("Broadcast sent to {broadcast_count} channels")
 
         # Cleanup
         await manager.shutdown_all()
-        print("✅ Communication protocol test completed!")
+        logger.info("✅ Communication protocol test completed!")
 
     parser = argparse.ArgumentParser(description="Agent Communication Protocol Test")
     parser.add_argument("--test", action="store_true", help="Run communication test")
@@ -850,4 +850,4 @@ if __name__ == "__main__":
     if args.test:
         asyncio.run(test_communication_protocol())
     else:
-        print("Use --test to run the communication protocol test")
+        logger.info("Use --test to run the communication protocol test")

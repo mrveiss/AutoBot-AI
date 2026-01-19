@@ -287,6 +287,9 @@
 
 <script>
 import { ref, onMounted, nextTick, computed, watch } from 'vue';
+import { createLogger } from '@/utils/debugUtils';
+
+const logger = createLogger('ChatInterface');
 
 export default {
   name: 'ChatInterface',
@@ -468,10 +471,10 @@ export default {
           body: JSON.stringify({ settings: settings.value })
         });
         if (!response.ok) {
-          console.error('Failed to save settings to backend:', response.statusText);
+          logger.error('Failed to save settings to backend:', response.statusText);
         }
       } catch (error) {
-        console.error('Error saving settings to backend:', error);
+        logger.error('Error saving settings to backend:', error);
       }
     };
 
@@ -486,12 +489,12 @@ export default {
           body: JSON.stringify({ settings: { backend: settings.value.backend } })
         });
         if (!response.ok) {
-          console.error('Failed to save backend settings:', response.statusText);
+          logger.error('Failed to save backend settings:', response.statusText);
         } else {
-          console.log('Backend settings saved successfully.');
+          logger.info('Backend settings saved successfully.');
         }
       } catch (error) {
-        console.error('Error saving backend settings:', error);
+        logger.error('Error saving backend settings:', error);
       }
     };
 
@@ -502,12 +505,12 @@ export default {
         if (response.ok) {
           const backendSettings = await response.json();
           settings.value.backend = { ...settings.value.backend, ...backendSettings };
-          console.log('Backend settings loaded successfully.');
+          logger.info('Backend settings loaded successfully.');
         } else {
-          console.error('Failed to load backend settings:', response.statusText);
+          logger.error('Failed to load backend settings:', response.statusText);
         }
       } catch (error) {
-        console.error('Error loading backend settings:', error);
+        logger.error('Error loading backend settings:', error);
       }
     };
 
@@ -519,12 +522,12 @@ export default {
           const data = await response.json();
           prompts.value = data.prompts || [];
           defaults.value = data.defaults || {};
-          console.log(`Loaded ${prompts.value.length} system prompts from backend.`);
+          logger.info(`Loaded ${prompts.value.length} system prompts from backend.`);
         } else {
-          console.error('Failed to load system prompts:', response.statusText);
+          logger.error('Failed to load system prompts:', response.statusText);
         }
       } catch (error) {
-        console.error('Error loading system prompts:', error);
+        logger.error('Error loading system prompts:', error);
       }
     };
 
@@ -549,7 +552,7 @@ export default {
     const editPrompt = async (promptId) => {
       const prompt = prompts.value.find(p => p.id === promptId);
       if (!prompt) {
-        console.warn(`Prompt ${promptId} not found for editing.`);
+        logger.warn(`Prompt ${promptId} not found for editing.`);
         return;
       }
       const newContent = prompt(`Edit prompt: ${prompt.name}`, prompt.content);
@@ -568,12 +571,12 @@ export default {
             if (index !== -1) {
               prompts.value[index] = updatedPrompt;
             }
-            console.log(`Updated prompt ${prompt.name} successfully.`);
+            logger.info(`Updated prompt ${prompt.name} successfully.`);
           } else {
-            console.error('Failed to update prompt:', response.statusText);
+            logger.error('Failed to update prompt:', response.statusText);
           }
         } catch (error) {
-          console.error('Error updating prompt:', error);
+          logger.error('Error updating prompt:', error);
         }
       }
     };
@@ -582,7 +585,7 @@ export default {
     const revertPrompt = async (promptId) => {
       const prompt = prompts.value.find(p => p.id === promptId);
       if (!prompt) {
-        console.warn(`Prompt ${promptId} not found for reverting.`);
+        logger.warn(`Prompt ${promptId} not found for reverting.`);
         return;
       }
       if (confirm(`Are you sure you want to revert ${prompt.name} to its default content?`)) {
@@ -599,12 +602,12 @@ export default {
             if (index !== -1) {
               prompts.value[index] = updatedPrompt;
             }
-            console.log(`Reverted prompt ${prompt.name} to default successfully.`);
+            logger.info(`Reverted prompt ${prompt.name} to default successfully.`);
           } else {
-            console.error('Failed to revert prompt:', response.statusText);
+            logger.error('Failed to revert prompt:', response.statusText);
           }
         } catch (error) {
-          console.error('Error reverting prompt:', error);
+          logger.error('Error reverting prompt:', error);
         }
       }
     };
@@ -753,7 +756,7 @@ export default {
           // Always use the backend API endpoint for goal requests
           let apiEndpoint = settings.value.backend.api_endpoint;
           let goalEndpoint = '/api/chat';
-          console.log('Using API endpoint for goal request:', apiEndpoint, 'with endpoint:', goalEndpoint);
+          logger.info('Using API endpoint for goal request:', apiEndpoint, 'with endpoint:', goalEndpoint);
           
           const response = await fetch(`${apiEndpoint}${goalEndpoint}`, {
             method: 'POST',
@@ -793,7 +796,7 @@ export default {
                 });
               }
               const botResponse = await response.json();
-              console.log('Raw bot response:', botResponse);
+              logger.info('Raw bot response:', botResponse);
               let responseText = botResponse.text || JSON.stringify(botResponse);
               let responseType = botResponse.type || 'response';
               
@@ -841,7 +844,7 @@ export default {
               });
             }
           } else {
-            console.error('Failed to get bot response:', response.statusText);
+            logger.error('Failed to get bot response:', response.statusText);
             if (settings.value.message_display.show_utility) {
               messages.value.push({
                 sender: 'bot',
@@ -858,7 +861,7 @@ export default {
             });
           }
         } catch (error) {
-          console.error('Error sending message:', error);
+          logger.error('Error sending message:', error);
           if (settings.value.message_display.show_utility) {
             messages.value.push({
               sender: 'bot',
@@ -1012,7 +1015,7 @@ export default {
         // For now, use basic context
         currentChatContext.value = { chatId };
       } catch (error) {
-        console.error('Failed to load chat context:', error);
+        logger.error('Failed to load chat context:', error);
       }
     };
 
@@ -1035,7 +1038,7 @@ export default {
           type: 'upload'
         });
       } catch (error) {
-        console.error('Failed to associate file with chat:', error);
+        logger.error('Failed to associate file with chat:', error);
       }
     };
 
@@ -1055,7 +1058,7 @@ export default {
     };
 
     const onCommandApproved = (result) => {
-      console.log('Command approved:', result);
+      logger.info('Command approved:', result);
       // The dialog already sent "yes" to the backend
       showCommandDialog.value = false;
 
@@ -1074,7 +1077,7 @@ export default {
     };
 
     const onCommandDenied = (reason) => {
-      console.log('Command denied:', reason);
+      logger.info('Command denied:', reason);
       showCommandDialog.value = false;
 
       // Add denial message to chat
@@ -1095,7 +1098,7 @@ export default {
     };
 
     const onCommandCommented = (data) => {
-      console.log('Command commented:', data);
+      logger.info('Command commented:', data);
       showCommandDialog.value = false;
 
       // Add the user's feedback to chat
@@ -1212,9 +1215,9 @@ export default {
             }
 
           } catch (parseError) {
-            console.error('Edge browser compatibility error:', parseError);
-            console.error('Response status:', workflowResponse.status);
-            console.error('Response headers:', Object.fromEntries(workflowResponse.headers.entries()));
+            logger.error('Edge browser compatibility error:', parseError);
+            logger.error('Response status:', workflowResponse.status);
+            logger.error('Response headers:', Object.fromEntries(workflowResponse.headers.entries()));
 
             // Show user-friendly error message for Edge browser
             messages.value.push({
@@ -1289,7 +1292,7 @@ export default {
           }
         } else {
           // Workflow failed, try fallback to regular chat
-          console.log('Workflow failed, falling back to regular chat endpoint');
+          logger.info('Workflow failed, falling back to regular chat endpoint');
           try {
             const chatResponse = await apiClient.sendChatMessage(userInput, {
               chatId: currentChatId.value || 'default'
@@ -1334,7 +1337,7 @@ export default {
               throw new Error('Invalid response from chat endpoint');
             }
           } catch (fallbackError) {
-            console.error('Fallback chat also failed:', fallbackError);
+            logger.error('Fallback chat also failed:', fallbackError);
             messages.value.push({
               sender: 'bot',
               text: 'Error: Could not get response from server (both workflow and chat endpoints failed)',
@@ -1345,8 +1348,8 @@ export default {
         }
       } catch (error) {
         // Enhanced Edge browser compatibility error handling
-        console.error('Chat interface error:', error);
-        console.error('Error type:', error.constructor.name);
+        logger.error('Chat interface error:', error);
+        logger.error('Error type:', error.constructor.name);
 
         // Check if this is an LLM model error that requires system reload
         if (error.message && (
@@ -1408,7 +1411,7 @@ export default {
         });
 
       } catch (error) {
-        console.error('Error creating new chat:', error);
+        logger.error('Error creating new chat:', error);
         // Fallback to local chat creation
         const newChatId = `chat-${Date.now()}`;
         currentChatId.value = newChatId;
@@ -1452,10 +1455,10 @@ export default {
         // Handle 404 errors silently (expected for legacy chats)
         if (error.message && error.message.includes('404')) {
           // Legacy chats may not exist on backend - just remove from frontend silently
-          console.debug(`Chat ${targetChatId} not found on backend (legacy format) - removing from local list`);
+          logger.debug(`Chat ${targetChatId} not found on backend (legacy format) - removing from local list`);
         } else {
           // Only log unexpected errors
-          console.error('Unexpected error deleting chat:', error);
+          logger.error('Unexpected error deleting chat:', error);
         }
 
         // Always update frontend state regardless of backend result
@@ -1511,7 +1514,7 @@ export default {
         const data = await apiClient.getChatList();
         chatList.value = data.chats || [];
       } catch (error) {
-        console.error('Error loading chat list:', error);
+        logger.error('Error loading chat list:', error);
         // Fallback: create a default chat if list fails to load
         if (chatList.value.length === 0) {
           const fallbackChatId = `fallback-${Date.now()}`;
@@ -1544,7 +1547,7 @@ export default {
           chatMessages.value.scrollTop = chatMessages.value.scrollHeight;
         }
       } catch (error) {
-        console.error('Error loading chat messages:', error);
+        logger.error('Error loading chat messages:', error);
         messages.value = [];
       }
     };
@@ -1553,7 +1556,7 @@ export default {
       try {
         await apiClient.saveChatMessages(chatId, messages.value);
       } catch (error) {
-        console.error('Error saving chat messages:', error);
+        logger.error('Error saving chat messages:', error);
       }
     };
 
@@ -1583,7 +1586,7 @@ export default {
           throw new Error('System reload failed');
         }
       } catch (error) {
-        console.error('Failed to reload system:', error);
+        logger.error('Failed to reload system:', error);
 
         // Add error message to chat
         const errorMessage = {
@@ -1639,12 +1642,12 @@ export default {
           const eventData = JSON.parse(event.data);
           handleWebSocketEvent(eventData);
         } catch (error) {
-          console.error('Failed to parse WebSocket message:', error);
+          logger.error('Failed to parse WebSocket message:', error);
         }
       };
 
       websocket.value.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        logger.error('WebSocket error:', error);
       };
 
       websocket.value.onclose = () => {
@@ -2001,7 +2004,7 @@ export default {
                       return;
                     }
                 } catch (error) { // Catch for inner try block
-                  console.error('Error parsing JSON data:', error, 'from data:', dataStr);
+                  logger.error('Error parsing JSON data:', error, 'from data:', dataStr);
                   if (settings.value.message_display.show_debug) {
                     messages.value.push({
                       sender: 'debug',
@@ -2023,7 +2026,7 @@ export default {
               }
             }
           } catch (error) { // Catch for outer try block
-            console.error('Error parsing streaming data:', error, 'from chunk:', chunk);
+            logger.error('Error parsing streaming data:', error, 'from chunk:', chunk);
             if (settings.value.message_display.show_debug) {
               messages.value.push({
                 sender: 'debug',
@@ -2043,7 +2046,7 @@ export default {
           }
           readStream(); // Recursive call to continue reading the stream
         }).catch(error => { // Catch for the promise returned by reader.read().then()
-          console.error('Error reading stream:', error);
+          logger.error('Error reading stream:', error);
           if (settings.value.message_display.show_debug) {
             messages.value.push({
               sender: 'debug',
@@ -2078,12 +2081,12 @@ export default {
           messages.value = [];
           window.location.hash = `chatId=${newChatData.chatId}`;
           currentChatId.value = newChatData.chatId;
-          console.log('New Chat created:', newChatData.chatId);
+          logger.info('New Chat created:', newChatData.chatId);
           // Don't add an automatic welcome message - let the chat start clean
           // Update chat list
           chatList.value.push({ chatId: newChatData.chatId, name: newChatData.name || '' });
         } else {
-          console.error('Failed to create new chat:', response.statusText);
+          logger.error('Failed to create new chat:', response.statusText);
           messages.value.push({
             sender: 'bot',
             text: 'Failed to create new chat. Please check backend.',
@@ -2092,7 +2095,7 @@ export default {
           });
         }
       } catch (error) {
-        console.error('Error creating new chat:', error);
+        logger.error('Error creating new chat:', error);
         messages.value.push({
           sender: 'bot',
           text: 'Error creating new chat. Please check backend.',
@@ -2129,7 +2132,7 @@ export default {
         type: 'response'
       });
         } else {
-          console.error('Failed to reset chat:', response.statusText);
+          logger.error('Failed to reset chat:', response.statusText);
           messages.value.push({
             sender: 'bot',
             text: 'Failed to reset chat. Please check backend.',
@@ -2138,7 +2141,7 @@ export default {
           });
         }
       } catch (error) {
-        console.error('Error resetting chat:', error);
+        logger.error('Error resetting chat:', error);
         messages.value.push({
           sender: 'bot',
           text: 'Error resetting chat. Please check backend.',
@@ -2184,10 +2187,10 @@ export default {
               type: 'response'
             });
           } else {
-            console.log(`Chat ${chatId} deleted successfully.`);
+            logger.info(`Chat ${chatId} deleted successfully.`);
           }
         } else {
-          console.error('Failed to delete chat:', response.statusText);
+          logger.error('Failed to delete chat:', response.statusText);
           messages.value.push({
             sender: 'bot',
             text: 'Failed to delete chat. Please check backend.',
@@ -2196,7 +2199,7 @@ export default {
           });
         }
       } catch (error) {
-        console.error('Error deleting chat:', error);
+        logger.error('Error deleting chat:', error);
         messages.value.push({
           sender: 'bot',
           text: 'Error deleting chat. Please check backend.',
@@ -2212,14 +2215,14 @@ export default {
         if (response.ok) {
           const data = await response.json();
           messages.value = data;
-            console.log(`Loaded chat messages from backend for chat ${chatId}.`);
+            logger.info(`Loaded chat messages from backend for chat ${chatId}.`);
         } else {
-          console.error('Failed to load chat messages:', response.statusText);
+          logger.error('Failed to load chat messages:', response.statusText);
           // Fallback to local storage if backend fails
           const persistedMessages = localStorage.getItem(`chat_${chatId}_messages`);
           if (persistedMessages) {
             messages.value = JSON.parse(persistedMessages);
-            console.log(`Loaded chat messages from local storage for chat ${chatId}.`);
+            logger.info(`Loaded chat messages from local storage for chat ${chatId}.`);
           } else {
             messages.value = [];
             messages.value.push({
@@ -2231,12 +2234,12 @@ export default {
           }
         }
       } catch (error) {
-        console.error('Error loading chat messages:', error);
+        logger.error('Error loading chat messages:', error);
         // Fallback to local storage if backend fails
         const persistedMessages = localStorage.getItem(`chat_${chatId}_messages`);
         if (persistedMessages) {
           messages.value = JSON.parse(persistedMessages);
-            console.log(`Loaded chat messages from local storage for chat ${chatId}.`);
+            logger.info(`Loaded chat messages from local storage for chat ${chatId}.`);
         } else {
           messages.value = [];
         }
@@ -2246,7 +2249,7 @@ export default {
     const saveMessagesToStorage = async () => {
       const chatId = window.location.hash.split('chatId=')[1];
       if (!chatId) {
-        console.warn('No chat ID found to save messages.');
+        logger.warn('No chat ID found to save messages.');
         return;
       }
       // Save to local storage
@@ -2261,12 +2264,12 @@ export default {
           body: JSON.stringify({ messages: messages.value })
         });
         if (!response.ok) {
-          console.error('Failed to save chat messages to backend:', response.statusText);
+          logger.error('Failed to save chat messages to backend:', response.statusText);
         } else {
-          console.log('Chat messages saved to backend successfully.');
+          logger.info('Chat messages saved to backend successfully.');
         }
       } catch (error) {
-        console.error('Error saving chat messages to backend:', error);
+        logger.error('Error saving chat messages to backend:', error);
       }
     };
 
@@ -2282,12 +2285,12 @@ export default {
         });
         if (response.ok) {
           const result = await response.json();
-          console.log(`Backend server restart initiated: ${result.message}`);
+          logger.info(`Backend server restart initiated: ${result.message}`);
         } else {
-          console.error('Failed to restart backend server:', response.statusText);
+          logger.error('Failed to restart backend server:', response.statusText);
         }
       } catch (error) {
-        console.error('Error restarting backend server:', error);
+        logger.error('Error restarting backend server:', error);
       } finally {
         backendStarting.value = false;
       }
@@ -2300,14 +2303,14 @@ export default {
         if (response.ok) {
           const data = await response.json();
           chatList.value = data.chats || [];
-          console.log(`Loaded chat list from backend with ${chatList.value.length} chats.`);
+          logger.info(`Loaded chat list from backend with ${chatList.value.length} chats.`);
         } else {
-          console.error('Failed to load chat list from backend:', response.statusText);
+          logger.error('Failed to load chat list from backend:', response.statusText);
           // Fallback to local storage
           loadChatListFromLocalStorage();
         }
       } catch (error) {
-        console.error('Error loading chat list from backend:', error);
+        logger.error('Error loading chat list from backend:', error);
         // Fallback to local storage
         loadChatListFromLocalStorage();
       }
@@ -2324,7 +2327,7 @@ export default {
         }
       }
       chatList.value = localChats;
-      console.log(`Loaded chat list from local storage with ${localChats.length} chats.`);
+      logger.info(`Loaded chat list from local storage with ${localChats.length} chats.`);
     };
 
     // Function to switch to a different chat
@@ -2350,7 +2353,7 @@ export default {
             }
           }
         } catch (e) {
-          console.error('Error parsing chat messages for preview:', e);
+          logger.error('Error parsing chat messages for preview:', e);
         }
       }
       return '';
@@ -2365,7 +2368,7 @@ export default {
           chatList.value[chatIndex].name = newName;
           // Save updated chat list to local storage
           localStorage.setItem('chat_list', JSON.stringify(chatList.value));
-          console.log(`Updated name for chat ${chatId} to "${newName}".`);
+          logger.info(`Updated name for chat ${chatId} to "${newName}".`);
         }
       }
     };
@@ -2373,7 +2376,7 @@ export default {
     // Function to refresh chat list
     const refreshChatList = async () => {
       await loadChatList();
-      console.log(`Chat history list refreshed from backend.`);
+      logger.info(`Chat history list refreshed from backend.`);
     };
 
     // Function to handle specific chat deletion
@@ -2413,10 +2416,10 @@ export default {
               type: 'response'
             });
           } else {
-            console.log(`Chat ${chatId} deleted successfully.`);
+            logger.info(`Chat ${chatId} deleted successfully.`);
           }
         } else {
-          console.error('Failed to delete chat:', response.statusText);
+          logger.error('Failed to delete chat:', response.statusText);
           messages.value.push({
             sender: 'bot',
             text: 'Failed to delete chat. Please check backend.',
@@ -2425,7 +2428,7 @@ export default {
           });
         }
       } catch (error) {
-        console.error('Error deleting chat:', error);
+        logger.error('Error deleting chat:', error);
         messages.value.push({
           sender: 'bot',
           text: 'Error deleting chat. Please check backend.',
@@ -2444,7 +2447,7 @@ export default {
           Object.assign(settings.value, JSON.parse(savedSettings));
         }
       } catch (e) {
-        console.error('Failed to load settings:', e);
+        logger.error('Failed to load settings:', e);
         // Ensure default settings are applied
         settings.value = {
           message_display: {
@@ -2470,7 +2473,7 @@ export default {
           new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
         ]);
       } catch (error) {
-        console.warn('Chat list loading timed out or failed, using fallback');
+        logger.warn('Chat list loading timed out or failed, using fallback');
       }
 
       // Try to load the last used chat with fallback
@@ -2486,7 +2489,7 @@ export default {
           await newChat();
         }
       } catch (error) {
-        console.error('Chat initialization failed:', error);
+        logger.error('Chat initialization failed:', error);
         // Ensure we have at least a default chat for the UI to work
         if (!currentChatId.value) {
           const defaultChatId = `default-${Date.now()}`;

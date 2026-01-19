@@ -500,9 +500,9 @@ if __name__ == "__main__":
 
         try:
             result = await flaky_network_call()
-            print(f"Network call result: {result}")
+            logger.info("Network call result: {result}")
         except RetryExhaustedError as e:
-            print(f"Network call failed: {e}")
+            logger.info("Network call failed: {e}")
 
         # Example 2: Using retry mechanism directly
         retry_mechanism = RetryMechanism(
@@ -521,12 +521,12 @@ if __name__ == "__main__":
             result = await retry_mechanism.execute_async(
                 another_flaky_operation, operation_name="flaky_operation"
             )
-            print(f"Operation result: {result}")
+            logger.info("Operation result: {result}")
         except RetryExhaustedError as e:
-            print(f"Operation failed: {e}")
+            logger.info("Operation failed: {e}")
 
         # Print statistics
-        print("Retry statistics:", retry_mechanism.get_stats())
+        logger.info("Retry statistics:", retry_mechanism.get_stats())
 
     # Run example
     asyncio.run(example_usage())

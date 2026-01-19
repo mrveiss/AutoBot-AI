@@ -451,8 +451,8 @@ async def get_sandbox_examples():
                     "description": "Execute a Python script",
                     "request": {
                         "script_content": (
-                            "import sys\nprint(f'Python {sys.version}')\n"
-                            "print('Secure execution successful!')"
+                            "import sys\nlogger.info('Python {sys.version}')\n"
+                            "logger.info('Secure execution successful!')"
                         ),
                         "language": "python",
                         "security_level": "medium",

@@ -476,5 +476,5 @@ if __name__ == "__main__":
     project_root = sys.argv[1] if len(sys.argv) > 1 else "/home/kali/Desktop/AutoBot"
     result = detect_config_duplicates(project_root)
 
-    print(result["report"])
-    print(f"\nFound {result['duplicates_found']} configuration values with duplicates")
+    logger.info(result["report"])
+    logger.info("\nFound {result['duplicates_found']} configuration values with duplicates")

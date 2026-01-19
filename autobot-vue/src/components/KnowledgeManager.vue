@@ -622,6 +622,9 @@
 <script>
 import { ref, onMounted, watch } from 'vue';
 import apiClient from '../utils/ApiClient.js';
+import { createLogger } from '@/utils/debugUtils';
+
+const logger = createLogger('KnowledgeManager');
 
 export default {
   name: 'KnowledgeManager',
@@ -762,7 +765,7 @@ export default {
         try {
           settings.value = JSON.parse(savedSettings);
         } catch (e) {
-          console.error('Error loading settings:', e);
+          logger.error('Error loading settings:', e);
         }
       }
     };
@@ -779,7 +782,7 @@ export default {
         const data = await apiClient.searchKnowledge(searchQuery.value);
         searchResults.value = data.results || [];
       } catch (error) {
-        console.error('Search error:', error);
+        logger.error('Search error:', error);
         searchResults.value = [];
       } finally {
         searching.value = false;
@@ -858,7 +861,7 @@ export default {
           urlContent.value = '';
         }
       } catch (error) {
-        console.error('Add content error:', error);
+        logger.error('Add content error:', error);
         addMessage.value = 'Error adding content. Please try again.';
         addMessageType.value = 'error';
       } finally {
@@ -875,14 +878,14 @@ export default {
         knowledgeEntries.value = data.entries || [];
         filteredKnowledgeEntries.value = knowledgeEntries.value;
       } catch (error) {
-        console.error('Error loading knowledge entries:', error);
+        logger.error('Error loading knowledge entries:', error);
         // Try to use search endpoint as fallback
         try {
           const searchResponse = await apiClient.searchKnowledge('', 100);
           knowledgeEntries.value = searchResponse.results || [];
           filteredKnowledgeEntries.value = knowledgeEntries.value;
         } catch (fallbackError) {
-          console.error('Fallback search also failed:', fallbackError);
+          logger.error('Fallback search also failed:', fallbackError);
           knowledgeEntries.value = [];
           filteredKnowledgeEntries.value = [];
         }
@@ -922,7 +925,7 @@ export default {
           availableFiles.value = data.files || [];
         }
       } catch (error) {
-        console.error('Error loading files:', error);
+        logger.error('Error loading files:', error);
         availableFiles.value = [];
       }
     };
@@ -963,11 +966,11 @@ export default {
 
         } else {
           const errorText = await response.text();
-          console.error('Upload failed:', response.status, errorText);
+          logger.error('Upload failed:', response.status, errorText);
           showError(`Upload failed: ${response.statusText}`);
         }
       } catch (error) {
-        console.error('Error uploading file:', error);
+        logger.error('Error uploading file:', error);
         showError('Error uploading file: ' + error.message);
       }
 
@@ -1015,18 +1018,18 @@ export default {
                 showError('Could not extract text from PDF file');
               }
             } catch (pdfError) {
-              console.error('PDF extraction error:', pdfError);
+              logger.error('PDF extraction error:', pdfError);
               showError('PDF text extraction is not available');
             }
           } else {
             showError(`Unsupported file type: ${contentType}. Please use text files, JSON, or PDFs.`);
           }
         } else {
-          console.error('Failed to fetch file:', response.status, response.statusText);
+          logger.error('Failed to fetch file:', response.status, response.statusText);
           showError(`Failed to access file: ${response.statusText}`);
         }
       } catch (error) {
-        console.error('Error extracting file content:', error);
+        logger.error('Error extracting file content:', error);
         showError('Error extracting file content: ' + error.message);
       }
     };
@@ -1153,7 +1156,7 @@ export default {
         showSuccess(`URL content crawled successfully! Extracted ${result.content_length} characters.`);
         await loadKnowledgeEntries(); // Refresh the list
       } catch (error) {
-        console.error('Error crawling URL:', error);
+        logger.error('Error crawling URL:', error);
         showError('Failed to crawl URL: ' + error.message);
       }
     };
@@ -1212,7 +1215,7 @@ export default {
         await loadKnowledgeEntries();
         showSuccess('Entry deleted successfully');
       } catch (error) {
-        console.error('Error deleting entry:', error);
+        logger.error('Error deleting entry:', error);
         showError('Failed to delete entry: ' + error.message);
       }
     };
@@ -1255,7 +1258,7 @@ export default {
         currentEntry.value.content = result.content || result.extracted_content || '';
         showSuccess(`Content crawled successfully! Extracted ${result.content_length || currentEntry.value.content.length} characters.`);
       } catch (error) {
-        console.error('Error crawling URL in modal:', error);
+        logger.error('Error crawling URL in modal:', error);
         showError('Failed to crawl URL: ' + error.message);
       } finally {
         crawlingInModal.value = false;
@@ -1340,7 +1343,7 @@ export default {
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.error('API Response:', response.status, response.statusText, errorText);
+          logger.error('API Response:', response.status, response.statusText, errorText);
           throw new Error(`Failed to ${showEditModal.value ? 'update' : 'create'} entry: ${response.status} ${response.statusText}`);
         }
 
@@ -1375,7 +1378,7 @@ export default {
         await loadKnowledgeEntries();
         closeModals();
       } catch (error) {
-        console.error('Error saving entry:', error);
+        logger.error('Error saving entry:', error);
         showError('Failed to save entry: ' + error.message);
       } finally {
         loading.value = false;
@@ -1441,7 +1444,7 @@ export default {
 
     const showError = (message) => {
       // You can implement a toast notification system here
-      console.error('Error:', message);
+      logger.error('Error:', message);
     };
 
     // Template functionality
@@ -1488,7 +1491,7 @@ export default {
         manageMessage.value = 'Knowledge base exported successfully!';
         manageMessageType.value = 'success';
       } catch (error) {
-        console.error('Export error:', error);
+        logger.error('Export error:', error);
         manageMessage.value = 'Error exporting knowledge base.';
         manageMessageType.value = 'error';
       } finally {
@@ -1509,7 +1512,7 @@ export default {
         manageMessage.value = result.message || 'Cleanup completed successfully!';
         manageMessageType.value = 'success';
       } catch (error) {
-        console.error('Cleanup error:', error);
+        logger.error('Cleanup error:', error);
         manageMessage.value = 'Error cleaning up knowledge base.';
         manageMessageType.value = 'error';
       } finally {
@@ -1532,7 +1535,7 @@ export default {
         statsMessage.value = 'Statistics loaded successfully!';
         statsMessageType.value = 'success';
       } catch (error) {
-        console.error('Stats loading error:', error);
+        logger.error('Stats loading error:', error);
         statsMessage.value = 'Error loading statistics.';
         statsMessageType.value = 'error';
       } finally {
@@ -1551,7 +1554,7 @@ export default {
         const data = await response.json();
         categories.value = data.categories || [];
       } catch (error) {
-        console.error('Error loading categories:', error);
+        logger.error('Error loading categories:', error);
         categories.value = [];
       } finally {
         loadingCategories.value = false;
@@ -1585,7 +1588,7 @@ export default {
         const data = await response.json();
         systemKnowledge.value = data.documentation || [];
       } catch (error) {
-        console.error('Error loading system knowledge:', error);
+        logger.error('Error loading system knowledge:', error);
         systemKnowledge.value = [];
       } finally {
         loadingSystemKnowledge.value = false;
@@ -1612,7 +1615,7 @@ export default {
         showSuccess(`Documentation imported successfully! Imported ${result.count || 0} documents.`);
         await loadSystemKnowledge();
       } catch (error) {
-        console.error('Error importing documentation:', error);
+        logger.error('Error importing documentation:', error);
         showError('Failed to import documentation: ' + error.message);
       } finally {
         importingDocs.value = false;
@@ -1670,7 +1673,7 @@ export default {
         const data = await response.json();
         systemPrompts.value = data.prompts || [];
       } catch (error) {
-        console.error('Error loading system prompts:', error);
+        logger.error('Error loading system prompts:', error);
         systemPrompts.value = [];
       } finally {
         loadingSystemPrompts.value = false;
@@ -1697,7 +1700,7 @@ export default {
         showSuccess(`Prompts imported successfully! Imported ${result.count || 0} prompts.`);
         await loadSystemPrompts();
       } catch (error) {
-        console.error('Error importing prompts:', error);
+        logger.error('Error importing prompts:', error);
         showError('Failed to import prompts: ' + error.message);
       } finally {
         importingPrompts.value = false;
@@ -1791,7 +1794,7 @@ export default {
             break;
         }
       } catch (error) {
-        console.error('Error loading tab data:', error);
+        logger.error('Error loading tab data:', error);
       }
     };
 

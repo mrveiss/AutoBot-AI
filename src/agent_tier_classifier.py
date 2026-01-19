@@ -200,14 +200,14 @@ def get_tier_statistics() -> Dict[AgentTier, Dict[str, any]]:
 
 if __name__ == "__main__":
     # Print tier statistics when run directly
-    print("=== Agent Tier Classification Statistics ===\n")
+    logger.info("=== Agent Tier Classification Statistics ===\n")
 
     stats = get_tier_statistics()
     for tier, data in stats.items():
-        print(f"{tier.name}:")
-        print(f"  Count: {data['count']}")
-        print(f"  Cache Hit Rate: {data['cache_hit_rate']}")
-        print(f"  Base Prompt: {data['base_prompt']}")
+        logger.info("{tier.name}:")
+        logger.info("  Count: {data['count']}")
+        logger.info("  Cache Hit Rate: {data['cache_hit_rate']}")
+        logger.info("  Base Prompt: {data['base_prompt']}")
         print(
             f"  Agents: {', '.join(data['agents'][:5])}"
             + ("..." if len(data["agents"]) > 5 else "")

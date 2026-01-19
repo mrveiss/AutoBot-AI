@@ -193,19 +193,19 @@ def test_distributed_redis_connection() -> bool:
 
 if __name__ == "__main__":
     # Test script for distributed Redis connection
-    print("🧪 Testing Distributed Redis Connection...")
+    logger.info("🧪 Testing Distributed Redis Connection...")
 
     # Test synchronous connection
     success = test_distributed_redis_connection()
 
     # Get connection info
     info = distributed_redis_client.get_connection_info()
-    print(f"📊 Connection Info: {info}")
+    logger.info("📊 Connection Info: {info}")
 
     if success:
-        print("✅ Distributed Redis connection working correctly!")
+        logger.info("✅ Distributed Redis connection working correctly!")
     else:
-        print("❌ Distributed Redis connection failed!")
+        logger.info("❌ Distributed Redis connection failed!")
         print(
             f"Check that Redis VM ({NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT}) is accessible"
         )

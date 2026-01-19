@@ -486,7 +486,7 @@ if __name__ == "__main__":
 
     detector = PromptInjectionDetector(strict_mode=True)
 
-    print("=== Prompt Injection Detection Tests ===\n")
+    logger.info("=== Prompt Injection Detection Tests ===\n")
 
     for test_input, expected_risk in test_cases:
         result = detector.detect_injection(test_input)
@@ -501,13 +501,13 @@ if __name__ == "__main__":
         print(
             f"{status} | Risk: {result.risk_level.value:8s} | Blocked: {result.blocked}"
         )
-        print(f"Input: {test_input}")
+        logger.info("Input: {test_input}")
         if result.detected_patterns:
-            print(f"Patterns: {result.detected_patterns}")
+            logger.info("Patterns: {result.detected_patterns}")
         print()
 
     # Test context validation
-    print("=== Context Poisoning Detection Test ===\n")
+    logger.info("=== Context Poisoning Detection Test ===\n")
 
     poisoned_context = [
         {"user": "Check system info", "assistant": "Showing system information"},
@@ -518,4 +518,4 @@ if __name__ == "__main__":
     ]
 
     is_safe = detector.validate_conversation_context(poisoned_context)
-    print(f"Context validation: {'✅ SAFE' if is_safe else '🚨 POISONED'}")
+    logger.info("Context validation: {'✅ SAFE' if is_safe else '🚨 POISONED'}")

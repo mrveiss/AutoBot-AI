@@ -491,20 +491,20 @@ def get_performance_metrics() -> Dict[str, Any]:
 
 if __name__ == "__main__":
     # Performance testing
-    print("AutoBot Performance-Optimized Diagnostics Test")
-    print("=" * 50)
+    logger.info("AutoBot Performance-Optimized Diagnostics Test")
+    logger.info("=" * 50)
 
     # Test system info gathering
     system_info = get_system_info()
-    print(f"System Info: {json.dumps(system_info, indent=2)}")
+    logger.info("System Info: {json.dumps(system_info, indent=2)}")
 
     # Test memory cleanup
     cleanup_result = force_memory_cleanup()
-    print(f"Memory Cleanup: {json.dumps(cleanup_result, indent=2)}")
+    logger.info("Memory Cleanup: {json.dumps(cleanup_result, indent=2)}")
 
     # Test performance metrics
     metrics = get_performance_metrics()
-    print(f"Performance Metrics: {json.dumps(metrics, indent=2)}")
+    logger.info("Performance Metrics: {json.dumps(metrics, indent=2)}")
 
 
 # Backward compatibility aliases

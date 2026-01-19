@@ -629,7 +629,7 @@ if __name__ == "__main__":
         # Create executor
         executor = StreamingCommandExecutor(llm, validator)
 
-        print("=== Streaming Executor Test ===")
+        logger.info("=== Streaming Executor Test ===")
 
         # Test commands
         test_commands = [
@@ -643,9 +643,9 @@ if __name__ == "__main__":
         ]
 
         for command, goal in test_commands:
-            print(f"\nTesting: {command}")
-            print(f"Goal: {goal}")
-            print("-" * 50)
+            logger.info("\nTesting: {command}")
+            logger.info("Goal: {goal}")
+            logger.info("-" * 50)
 
             chunk_count = 0
             async for chunk in executor.execute_with_streaming(
@@ -655,7 +655,7 @@ if __name__ == "__main__":
                 chunk_type = chunk.chunk_type.value.upper()
                 content = chunk.content
 
-                print(f"[{timestamp}] {chunk_type}: {content}")
+                logger.info("[{timestamp}] {chunk_type}: {content}")
 
                 chunk_count += 1
                 if chunk.chunk_type == ChunkType.COMPLETE:
@@ -663,7 +663,7 @@ if __name__ == "__main__":
 
                 # Limit output for test
                 if chunk_count > 20:
-                    print("... (limiting output for test)")
+                    logger.info("... (limiting output for test)")
                     break
 
             print()

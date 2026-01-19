@@ -506,4 +506,4 @@ SSOT_VALUES_FOR_SHELL = {
 
 if __name__ == "__main__":
     # Print JSON export for shell script consumption
-    print(export_mappings_as_json())
+    logger.info(export_mappings_as_json())

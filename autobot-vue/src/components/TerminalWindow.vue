@@ -326,6 +326,9 @@ import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useTerminalService } from '@/services/TerminalService.js';
 import { useRoute, useRouter } from 'vue-router';
 import AdvancedStepConfirmationModal from './AdvancedStepConfirmationModal.vue';
+import { createLogger } from '@/utils/debugUtils';
+
+const logger = createLogger('TerminalWindow');
 
 export default {
   name: 'TerminalWindow',
@@ -435,7 +438,7 @@ export default {
     // Methods
     const connect = async () => {
       if (!sessionId.value) {
-        console.error('No session ID provided');
+        logger.error('No session ID provided');
         return;
       }
 
@@ -450,7 +453,7 @@ export default {
           onError: handleError
         });
       } catch (error) {
-        console.error('Failed to connect:', error);
+        logger.error('Failed to connect:', error);
         handleError(error.message);
       } finally {
         connecting.value = false;
@@ -645,7 +648,7 @@ export default {
           try {
             await sendSignal(sessionId.value, 'SIGKILL', process.pid);
           } catch (error) {
-            console.warn(`Failed to kill process ${process.pid}:`, error);
+            logger.warn(`Failed to kill process ${process.pid}:`, error);
           }
         }
 
@@ -663,7 +666,7 @@ export default {
         showKillConfirmation.value = false;
 
       } catch (error) {
-        console.error('Emergency kill failed:', error);
+        logger.error('Emergency kill failed:', error);
         addOutputLine({
           content: '❌ Emergency kill failed: ' + error.message,
           type: 'error',
@@ -754,7 +757,7 @@ export default {
         await sendInput(sessionId.value, JSON.stringify(controlMessage));
 
       } catch (error) {
-        console.error('Failed to send automation control:', error);
+        logger.error('Failed to send automation control:', error);
       }
     };
 
@@ -978,7 +981,7 @@ export default {
           processNextAutomationStep();
         }
       } catch (error) {
-        console.warn('Failed to parse workflow message:', error);
+        logger.warn('Failed to parse workflow message:', error);
       }
     };
 
@@ -1118,7 +1121,7 @@ export default {
       const oldStatus = connectionStatus.value;
       connectionStatus.value = status;
 
-      console.log(`Terminal status change: ${oldStatus} -> ${status}`);
+      logger.info(`Terminal status change: ${oldStatus} -> ${status}`);
 
       if (status === 'connected') {
         // Mark as not connecting anymore
@@ -1427,18 +1430,18 @@ export default {
       // Testing utilities for automated tests
       isTerminalReady: () => {
         const ready = canInput.value && terminalInput.value && !terminalInput.value.disabled;
-        console.log(`Terminal ready check: canInput=${canInput.value}, hasInput=${!!terminalInput.value}, enabled=${terminalInput.value ? !terminalInput.value.disabled : false}, result=${ready}`);
+        logger.info(`Terminal ready check: canInput=${canInput.value}, hasInput=${!!terminalInput.value}, enabled=${terminalInput.value ? !terminalInput.value.disabled : false}, result=${ready}`);
         return ready;
       },
       ensureInputFocus: () => {
         if (canInput.value && terminalInput.value) {
-          console.log('Ensuring terminal input focus...');
+          logger.info('Ensuring terminal input focus...');
           terminalInput.value.focus();
           const focused = document.activeElement === terminalInput.value;
-          console.log(`Focus result: ${focused}`);
+          logger.info(`Focus result: ${focused}`);
           return focused;
         }
-        console.log('Cannot ensure focus: canInput=', canInput.value, 'hasInput=', !!terminalInput.value);
+        logger.info('Cannot ensure focus: canInput=', canInput.value, 'hasInput=', !!terminalInput.value);
         return false;
       },
       // Additional debug utility for automated testing

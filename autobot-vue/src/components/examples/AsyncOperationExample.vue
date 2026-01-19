@@ -287,7 +287,7 @@ const logError = (err: Error) => {
     timestamp: new Date().toISOString(),
     message: err.message
   })
-  console.error('[Validation Error]', err)
+  logger.error('[Validation Error]', err)
 }
 
 const validateConfig = async () => {
@@ -318,7 +318,7 @@ const validateOp = useAsyncOperation({
       timestamp: new Date().toISOString(),
       message: err.message
     })
-    console.error('[Validation Error]', err)
+    logger.error('[Validation Error]', err)
   },
   errorMessage: 'Configuration validation failed'
 })
