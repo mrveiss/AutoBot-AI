@@ -562,6 +562,23 @@ class DeploymentService:
         comment: "SLM Server - AutoBot Fleet Management"
       when: slm_server_pubkey | length > 0
 
+    - name: Verify SSH key deployment succeeded
+      command: grep -q "SLM Server" /home/{{ slm_agent_user }}/.ssh/authorized_keys
+      register: ssh_key_check
+      changed_when: false
+      failed_when: ssh_key_check.rc != 0
+      when: slm_server_pubkey | length > 0
+
+    # ==========================================================
+    # Passwordless Sudo Configuration (#722)
+    # ==========================================================
+    - name: Configure passwordless sudo for autobot user
+      copy:
+        dest: /etc/sudoers.d/autobot-nopasswd
+        content: "{{ slm_agent_user }} ALL=(ALL) NOPASSWD: ALL"
+        mode: '0440'
+        validate: '/usr/sbin/visudo -cf %s'
+
     - name: Create agent directories
       file:
         path: "{{ item }}"

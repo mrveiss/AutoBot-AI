@@ -56,6 +56,18 @@ const isEnrolling = computed(() => {
   return props.node.status === 'enrolling'
 })
 
+const authMethodBadge = computed(() => {
+  const method = props.node.auth_method || 'password'
+  switch (method) {
+    case 'key':
+      return { label: 'SSH Key', class: 'bg-green-100 text-green-700' }
+    case 'pki':
+      return { label: 'PKI', class: 'bg-blue-100 text-blue-700' }
+    default:
+      return { label: 'Password', class: 'bg-yellow-100 text-yellow-700' }
+  }
+})
+
 function handleAction(action: string): void {
   showMenu.value = false
   emit('action', action, props.node.node_id)
@@ -167,10 +179,31 @@ function closeMenu(): void {
       </div>
     </div>
 
-    <!-- IP Address -->
-    <div class="text-sm text-gray-500 mb-3">
-      {{ node.ip_address }}
-      <span v-if="node.ssh_port && node.ssh_port !== 22" class="text-gray-400">:{{ node.ssh_port }}</span>
+    <!-- IP Address & Auth Method -->
+    <div class="flex items-center justify-between mb-3">
+      <div class="text-sm text-gray-500">
+        {{ node.ip_address }}
+        <span v-if="node.ssh_port && node.ssh_port !== 22" class="text-gray-400">:{{ node.ssh_port }}</span>
+      </div>
+      <!-- Auth Method Badge (#722) -->
+      <span
+        :class="['px-2 py-0.5 text-xs font-medium rounded', authMethodBadge.class]"
+        :title="`Authentication: ${authMethodBadge.label}`"
+      >
+        {{ authMethodBadge.label }}
+      </span>
+    </div>
+
+    <!-- Enrolling Transition Indicator (#722) -->
+    <div
+      v-if="isEnrolling"
+      class="flex items-center gap-2 px-2 py-1.5 mb-3 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700"
+    >
+      <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      <span>Transitioning to SSH key auth...</span>
     </div>
 
     <!-- Roles -->
