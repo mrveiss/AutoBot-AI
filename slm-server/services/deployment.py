@@ -532,6 +532,17 @@ class DeploymentService:
 
   tasks:
     # ==========================================================
+    # User and Directory Setup (must come first)
+    # ==========================================================
+    - name: Create autobot user
+      user:
+        name: "{{ slm_agent_user }}"
+        system: yes
+        shell: /bin/bash
+        home: "/home/{{ slm_agent_user }}"
+        create_home: yes
+
+    # ==========================================================
     # SSH Key Setup for Passwordless Future Access
     # ==========================================================
     - name: Ensure .ssh directory exists for autobot user
@@ -551,17 +562,6 @@ class DeploymentService:
         comment: "SLM Server - AutoBot Fleet Management"
       when: slm_server_pubkey | length > 0
 
-    # ==========================================================
-    # User and Directory Setup
-    # ==========================================================
-    - name: Create autobot user
-      user:
-        name: "{{ slm_agent_user }}"
-        system: yes
-        shell: /bin/bash
-        home: "/home/{{ slm_agent_user }}"
-        create_home: yes
-
     - name: Create agent directories
       file:
         path: "{{ item }}"
@@ -575,11 +575,24 @@ class DeploymentService:
         - "{{ slm_agent_dir }}/slm/agent"
         - "{{ slm_agent_data_dir }}"
 
-    - name: Install Python dependencies
+    - name: Install Python dependencies via apt (preferred)
+      apt:
+        name:
+          - python3-psutil
+          - python3-requests
+          - python3-yaml
+          - python3-urllib3
+        state: present
+        update_cache: yes
+      ignore_errors: yes
+
+    - name: Install Python dependencies via pip (fallback)
       pip:
         name: "{{ slm_agent_python_packages }}"
         state: present
         executable: pip3
+        extra_args: --break-system-packages
+      when: ansible_os_family != "Debian"
 
     - name: Deploy agent __init__.py (slm package)
       copy:
