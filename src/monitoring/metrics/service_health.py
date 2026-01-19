@@ -13,7 +13,18 @@ from prometheus_client import CollectorRegistry, Gauge, Histogram
 from .base import BaseMetricsRecorder
 
 # Service status value mapping
-_SERVICE_STATUS_VALUES = {"offline": 0, "online": 1, "degraded": 2}
+# Maps status strings to numeric values for Prometheus metrics
+# 0 = down/offline, 1 = up/healthy, 2 = warning/degraded
+_SERVICE_STATUS_VALUES = {
+    "offline": 0,
+    "error": 0,
+    "critical": 0,
+    "online": 1,
+    "healthy": 1,
+    "up": 1,
+    "warning": 2,
+    "degraded": 2,
+}
 
 
 class ServiceHealthMetricsRecorder(BaseMetricsRecorder):

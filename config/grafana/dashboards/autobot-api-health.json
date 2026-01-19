@@ -34,14 +34,16 @@
             "mode": "thresholds"
           },
           "mappings": [
-            {"options": {"0": {"text": "DOWN"}}, "type": "value"},
-            {"options": {"1": {"text": "UP"}}, "type": "value"}
+            {"options": {"0": {"text": "DOWN", "color": "red"}}, "type": "value"},
+            {"options": {"1": {"text": "UP", "color": "green"}}, "type": "value"},
+            {"options": {"2": {"text": "WARNING", "color": "yellow"}}, "type": "value"}
           ],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {"color": "red", "value": 0},
-              {"color": "green", "value": 1}
+              {"color": "green", "value": 1},
+              {"color": "yellow", "value": 2}
             ]
           }
         }
