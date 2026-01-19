@@ -765,6 +765,7 @@ _memory_manager_instance: Optional[LongTermMemoryManager] = None
 _memory_manager_lock = threading.Lock()
 
 
+
 def get_memory_manager() -> LongTermMemoryManager:
     """Get singleton instance of memory manager (thread-safe)"""
     global _memory_manager_instance

@@ -64,7 +64,9 @@ class LangChainAgentOrchestrator:
             return False
 
         if Ollama is None:
-            logging.warning("LangChain Agent Orchestrator disabled due to missing Ollama import")
+            logging.warning(
+                "LangChain Agent Orchestrator disabled due to missing Ollama import"
+            )
             self.available = False
             return False
 

@@ -11,6 +11,9 @@ import logging
 import os
 import time
 from datetime import datetime
+from typing import Any, Dict
+
+import requests
 
 import aiohttp
 
@@ -314,7 +317,9 @@ class ConnectionTester:
 
             return {
                 "status": "connected",
-                "message": f"Successfully connected to Redis at {redis_host}:{redis_port}",
+                "message": (
+                    f"Successfully connected to Redis at {redis_host}:{redis_port}"
+                ),
                 "host": redis_host,
                 "port": redis_port,
                 "redis_search_module_loaded": redis_search_module_loaded,

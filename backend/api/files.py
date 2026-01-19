@@ -190,6 +190,7 @@ def get_security_layer(request: Request) -> SecurityLayer:
 # Path validation imported from src.utils.path_validation (Issue #328 - shared utility)
 
 
+
 def validate_and_resolve_path(path: str) -> Path:
     """
     Validate and resolve a path within the sandboxed directory.
@@ -234,6 +235,7 @@ def validate_and_resolve_path(path: str) -> Path:
 
     # Return the canonical (absolute) path to prevent CWD-related issues
     return canonical_full
+
 
 
 def get_file_info(file_path: Path, relative_path: str) -> FileInfo:
