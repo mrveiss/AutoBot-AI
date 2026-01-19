@@ -70,6 +70,7 @@ export const useFleetStore = defineStore('fleet', () => {
 
     for (const node of nodes.value.values()) {
       switch (node.status) {
+        case 'online':
         case 'healthy':
           healthy++
           break
@@ -77,9 +78,12 @@ export const useFleetStore = defineStore('fleet', () => {
           degraded++
           break
         case 'unhealthy':
+        case 'error':
           unhealthy++
           break
         case 'offline':
+        case 'pending':
+        case 'enrolling':
           offline++
           break
         default:

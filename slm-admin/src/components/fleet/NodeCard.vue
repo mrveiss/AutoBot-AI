@@ -18,9 +18,12 @@ const showMenu = ref(false)
 
 const statusClass = computed(() => {
   switch (props.node.status) {
+    case 'online': return 'bg-green-500'
     case 'healthy': return 'bg-green-500'
     case 'degraded': return 'bg-yellow-500'
     case 'unhealthy': return 'bg-red-500'
+    case 'offline': return 'bg-gray-400'
+    case 'error': return 'bg-red-500'
     case 'enrolling': return 'bg-blue-500 animate-pulse'
     case 'pending': return 'bg-gray-400'
     case 'registered': return 'bg-gray-400'
