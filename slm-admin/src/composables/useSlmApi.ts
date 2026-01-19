@@ -29,6 +29,11 @@ import type {
   ReplicationRequest,
   RoleInfo,
   RoleListResponse,
+  NodeService,
+  ServiceListResponse,
+  ServiceActionResponse,
+  ServiceLogsResponse,
+  FleetServicesResponse,
 } from '@/types/slm'
 
 // SLM Admin uses the local SLM backend API
@@ -348,6 +353,78 @@ export function useSlmApi() {
     return response.data
   }
 
+  // Services (Issue #728)
+  async function getNodeServices(
+    nodeId: string,
+    options?: { status?: string; search?: string; page?: number; per_page?: number }
+  ): Promise<ServiceListResponse> {
+    const params = new URLSearchParams()
+    if (options?.status) params.append('status', options.status)
+    if (options?.search) params.append('search', options.search)
+    if (options?.page) params.append('page', options.page.toString())
+    if (options?.per_page) params.append('per_page', options.per_page.toString())
+
+    const response = await client.get<ServiceListResponse>(
+      `/nodes/${nodeId}/services?${params.toString()}`
+    )
+    return response.data
+  }
+
+  async function startService(nodeId: string, serviceName: string): Promise<ServiceActionResponse> {
+    const response = await client.post<ServiceActionResponse>(
+      `/nodes/${nodeId}/services/${serviceName}/start`
+    )
+    return response.data
+  }
+
+  async function stopService(nodeId: string, serviceName: string): Promise<ServiceActionResponse> {
+    const response = await client.post<ServiceActionResponse>(
+      `/nodes/${nodeId}/services/${serviceName}/stop`
+    )
+    return response.data
+  }
+
+  async function restartService(nodeId: string, serviceName: string): Promise<ServiceActionResponse> {
+    const response = await client.post<ServiceActionResponse>(
+      `/nodes/${nodeId}/services/${serviceName}/restart`
+    )
+    return response.data
+  }
+
+  async function getServiceLogs(
+    nodeId: string,
+    serviceName: string,
+    options?: { lines?: number; since?: string }
+  ): Promise<ServiceLogsResponse> {
+    const params = new URLSearchParams()
+    if (options?.lines) params.append('lines', options.lines.toString())
+    if (options?.since) params.append('since', options.since)
+
+    const response = await client.get<ServiceLogsResponse>(
+      `/nodes/${nodeId}/services/${serviceName}/logs?${params.toString()}`
+    )
+    return response.data
+  }
+
+  async function getFleetServices(): Promise<FleetServicesResponse> {
+    const response = await client.get<FleetServicesResponse>('/fleet/services')
+    return response.data
+  }
+
+  async function startFleetService(serviceName: string): Promise<ServiceActionResponse> {
+    const response = await client.post<ServiceActionResponse>(
+      `/fleet/services/${serviceName}/start`
+    )
+    return response.data
+  }
+
+  async function stopFleetService(serviceName: string): Promise<ServiceActionResponse> {
+    const response = await client.post<ServiceActionResponse>(
+      `/fleet/services/${serviceName}/stop`
+    )
+    return response.data
+  }
+
   return {
     // Nodes
     getNodes,
@@ -392,5 +469,14 @@ export function useSlmApi() {
     promoteReplica,
     // Verification
     verifyData,
+    // Services (Issue #728)
+    getNodeServices,
+    startService,
+    stopService,
+    restartService,
+    getServiceLogs,
+    getFleetServices,
+    startFleetService,
+    stopFleetService,
   }
 }

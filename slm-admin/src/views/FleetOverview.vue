@@ -11,6 +11,7 @@ import NodeCard from '@/components/fleet/NodeCard.vue'
 import FleetSummary from '@/components/fleet/FleetSummary.vue'
 import AddNodeModal from '@/components/AddNodeModal.vue'
 import NodeLifecyclePanel from '@/components/fleet/NodeLifecyclePanel.vue'
+import NodeServicesPanel from '@/components/fleet/NodeServicesPanel.vue'
 
 const logger = createLogger('FleetOverview')
 const fleetStore = useFleetStore()
@@ -24,6 +25,7 @@ const showAddNodeModal = ref(false)
 const showDeleteConfirm = ref(false)
 const showRoleModal = ref(false)
 const showLifecyclePanel = ref(false)
+const showServicesPanel = ref(false)
 const showConnectionTestResult = ref(false)
 
 // Selected node for actions
@@ -88,6 +90,9 @@ function handleNodeAction(action: string, nodeId: string): void {
     case 'view':
     case 'certificate':
       openLifecyclePanel(node)
+      break
+    case 'services':
+      openServicesPanel(node)
       break
     case 'restart':
       handleRestart(nodeId)
@@ -221,6 +226,16 @@ function openLifecyclePanel(node: SLMNode): void {
 
 function closeLifecyclePanel(): void {
   showLifecyclePanel.value = false
+}
+
+// Services Panel
+function openServicesPanel(node: SLMNode): void {
+  selectedNode.value = node
+  showServicesPanel.value = true
+}
+
+function closeServicesPanel(): void {
+  showServicesPanel.value = false
 }
 
 // Restart (placeholder)
@@ -558,6 +573,64 @@ function handleRestart(nodeId: string): void {
                       v-if="selectedNode"
                       :node-id="selectedNode.node_id"
                       @close="closeLifecyclePanel"
+                    />
+                  </div>
+                </div>
+              </div>
+            </Transition>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Services Panel Slide-over -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition duration-300 ease-out"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition duration-200 ease-in"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="showServicesPanel"
+          class="fixed inset-0 z-50 overflow-hidden"
+        >
+          <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="closeServicesPanel"></div>
+          <div class="fixed inset-y-0 right-0 flex max-w-full pl-10">
+            <Transition
+              enter-active-class="transform transition duration-300 ease-out"
+              enter-from-class="translate-x-full"
+              enter-to-class="translate-x-0"
+              leave-active-class="transform transition duration-200 ease-in"
+              leave-from-class="translate-x-0"
+              leave-to-class="translate-x-full"
+            >
+              <div v-if="showServicesPanel" class="w-screen max-w-3xl">
+                <div class="h-full flex flex-col bg-white shadow-xl">
+                  <!-- Header -->
+                  <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                    <div>
+                      <h2 class="text-lg font-semibold text-gray-900">Services</h2>
+                      <p class="text-sm text-gray-500">{{ selectedNode?.hostname }}</p>
+                    </div>
+                    <button
+                      @click="closeServicesPanel"
+                      class="rounded-md text-gray-400 hover:text-gray-600"
+                    >
+                      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <!-- Content -->
+                  <div class="flex-1 overflow-y-auto">
+                    <NodeServicesPanel
+                      v-if="selectedNode"
+                      :node-id="selectedNode.node_id"
+                      :node-name="selectedNode.hostname"
+                      @close="closeServicesPanel"
                     />
                   </div>
                 </div>

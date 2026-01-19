@@ -286,3 +286,64 @@ export interface FleetSummary {
   unhealthy_nodes: number
   offline_nodes: number
 }
+
+// =============================================================================
+// Service Types (Issue #728)
+// =============================================================================
+
+export type ServiceStatus = 'running' | 'stopped' | 'failed' | 'unknown'
+
+export interface NodeService {
+  id: number
+  node_id: string
+  service_name: string
+  status: ServiceStatus
+  enabled: boolean
+  description: string | null
+  active_state: string | null
+  sub_state: string | null
+  main_pid: number | null
+  memory_bytes: number | null
+  last_checked: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ServiceListResponse {
+  services: NodeService[]
+  total: number
+}
+
+export interface ServiceActionResponse {
+  action: string
+  service_name: string
+  node_id: string
+  success: boolean
+  message: string
+  job_id?: string
+}
+
+export interface ServiceLogsResponse {
+  service_name: string
+  node_id: string
+  logs: string
+  lines_returned: number
+}
+
+export interface FleetServiceStatus {
+  service_name: string
+  nodes: Array<{
+    node_id: string
+    hostname: string
+    status: ServiceStatus
+  }>
+  running_count: number
+  stopped_count: number
+  failed_count: number
+  total_nodes: number
+}
+
+export interface FleetServicesResponse {
+  services: FleetServiceStatus[]
+  total_services: number
+}
