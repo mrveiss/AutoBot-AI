@@ -1,5 +1,8 @@
 paramiko>=4.0.0
 
+# Retry logic for resilient operations
+tenacity>=8.5.0
+
 # Async SSH for PKI certificate distribution (Issue #166)
 asyncssh>=2.22.0
 

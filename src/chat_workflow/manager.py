@@ -45,6 +45,10 @@ _BLOCK_CONTENT_TYPES: FrozenSet[str] = frozenset({"thought", "planning"})
 _TOOL_CALL_OPEN_RE = re.compile(r"<TOOL_\s+CALL")
 _TOOL_CALL_CLOSE_RE = re.compile(r"</TOOL_\s+CALL>")
 
+# Issue #727: Pattern to detect completed tool call tags (for hallucination prevention)
+# Matches </tool_call>, </TOOL_CALL>, and </TOOL_ CALL> (underscore variant) with optional whitespace
+_TOOL_CALL_COMPLETE_RE = re.compile(r"</\s*tool_?\s*call\s*>", re.IGNORECASE)
+
 # Issue #716: Patterns for internal prompts that should not be shown to users
 # These are continuation instructions that LLM sometimes echoes back
 _INTERNAL_PROMPT_PATTERNS = [
@@ -538,10 +542,14 @@ class ChatWorkflowManager(
 
         Issue #656: Uses StreamingMessage for stable identity and version tracking.
         Issue #665: Refactored to extract helper functions and reduce complexity.
+        Issue #727: Stops streaming after </tool_call> to prevent hallucination display.
         """
         llm_response = ""
         current_segment = ""
         current_message_type = "response"
+
+        # Issue #727: Track tool call completion to stop streaming hallucinations
+        tool_call_completed = False
 
         # Issue #656: Use StreamingMessage for stable identity
         streaming_msg = self._init_streaming_message(
@@ -556,6 +564,26 @@ class ChatWorkflowManager(
             chunk_text, llm_response, current_segment, new_type = self._process_chunk_and_detect_type(
                 chunk_data, llm_response, current_segment, current_message_type
             )
+
+            # Issue #727: Check if tool call just completed in accumulated response
+            # Once detected, we stop yielding to frontend but continue accumulating
+            # for proper tool call parsing. Content after </tool_call> is discarded.
+            if not tool_call_completed and _TOOL_CALL_COMPLETE_RE.search(llm_response):
+                tool_call_completed = True
+                logger.info(
+                    "[Issue #727] Tool call completion detected - stopping frontend streaming "
+                    "to prevent hallucination display. Response length: %d",
+                    len(llm_response)
+                )
+
+            # Issue #727: Skip yielding to frontend after tool call is complete
+            # This prevents hallucinated fake results from being displayed
+            if tool_call_completed:
+                if chunk_data.get("done", False):
+                    self._log_stream_completion(llm_response)
+                    yield (None, llm_response, True, False)
+                    break
+                continue
 
             if chunk_text:
                 # Handle type transitions
