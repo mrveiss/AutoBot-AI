@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
-from .database import NodeStatus, DeploymentStatus, BackupStatus
+from .database import NodeStatus, DeploymentStatus, BackupStatus, ServiceStatus
 
 
 # =============================================================================
@@ -498,3 +498,86 @@ class ActionResponse(BaseModel):
     success: bool
     message: str
     resource_id: Optional[str] = None
+
+
+# =============================================================================
+# Service Schemas (Issue #728)
+# =============================================================================
+
+
+class ServiceResponse(BaseModel):
+    """Service status response."""
+
+    id: int
+    node_id: str
+    service_name: str
+    status: str
+    enabled: bool
+    description: Optional[str] = None
+    active_state: Optional[str] = None
+    sub_state: Optional[str] = None
+    main_pid: Optional[int] = None
+    memory_bytes: Optional[int] = None
+    last_checked: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ServiceListResponse(BaseModel):
+    """Service list response."""
+
+    services: List[ServiceResponse]
+    total: int
+
+
+class ServiceActionRequest(BaseModel):
+    """Service action request."""
+
+    action: str = Field(..., description="start, stop, or restart")
+
+
+class ServiceActionResponse(BaseModel):
+    """Service action response."""
+
+    action: str
+    service_name: str
+    node_id: str
+    success: bool
+    message: str
+    job_id: Optional[str] = None
+
+
+class ServiceLogsRequest(BaseModel):
+    """Service logs request."""
+
+    lines: int = Field(default=100, ge=1, le=1000)
+    since: Optional[str] = None  # e.g., "1h", "30m", "2d"
+
+
+class ServiceLogsResponse(BaseModel):
+    """Service logs response."""
+
+    service_name: str
+    node_id: str
+    logs: str
+    lines_returned: int
+
+
+class FleetServiceStatus(BaseModel):
+    """Service status across the fleet."""
+
+    service_name: str
+    nodes: List[Dict]  # [{node_id, hostname, status}]
+    running_count: int
+    stopped_count: int
+    failed_count: int
+    total_nodes: int
+
+
+class FleetServicesResponse(BaseModel):
+    """Aggregated service status across fleet."""
+
+    services: List[FleetServiceStatus]
+    total_services: int

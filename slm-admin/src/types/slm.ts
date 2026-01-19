@@ -24,17 +24,17 @@ export type AuthMethod = 'password' | 'key' | 'pki'
 export type EventSeverity = 'info' | 'warning' | 'error' | 'critical'
 
 export type EventType =
-  | 'node_registered'
-  | 'node_enrolled'
-  | 'health_changed'
+  | 'state_change'
+  | 'health_check'
   | 'deployment_started'
   | 'deployment_completed'
   | 'deployment_failed'
   | 'certificate_issued'
   | 'certificate_renewed'
   | 'certificate_expiring'
-  | 'update_available'
-  | 'update_applied'
+  | 'remediation_started'
+  | 'remediation_completed'
+  | 'manual_action'
 
 export type CertificateStatus = 'valid' | 'expiring_soon' | 'expired' | 'not_issued'
 

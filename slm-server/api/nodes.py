@@ -507,6 +507,50 @@ async def resume_node(
     return NodeResponse.model_validate(node)
 
 
+@router.post("/{node_id}/acknowledge-remediation")
+async def acknowledge_remediation(
+    node_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+):
+    """
+    Acknowledge and reset remediation tracking for a node.
+
+    Use this after manually fixing a node that exceeded automatic
+    remediation attempts. This resets the attempt counter, allowing
+    automatic remediation to try again if issues recur.
+    """
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Node not found",
+        )
+
+    # Reset the remediation tracker
+    reconciler_service.reset_remediation_tracker(node_id)
+
+    # Create acknowledgment event
+    await _create_node_event(
+        db,
+        node_id,
+        EventType.MANUAL_ACTION,
+        EventSeverity.INFO,
+        f"Remediation tracker reset for {node.hostname}",
+        {"action": "acknowledge_remediation"},
+    )
+    await db.commit()
+
+    logger.info("Remediation acknowledged for node: %s", node_id)
+    return {
+        "success": True,
+        "message": "Remediation tracker reset. Automatic remediation will retry if issues persist.",
+        "node_id": node_id,
+    }
+
+
 @router.post("/test-connection", response_model=ConnectionTestResponse)
 async def test_connection(
     request: ConnectionTestRequest,

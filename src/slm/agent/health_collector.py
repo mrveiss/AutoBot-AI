@@ -27,12 +27,14 @@ class HealthCollector:
     - System metrics (CPU, memory, disk)
     - Service status (systemd)
     - Port connectivity
+    - Service discovery (all systemd services)
     """
 
     def __init__(
         self,
         services: Optional[List[str]] = None,
         ports: Optional[List[Dict]] = None,
+        discover_services: bool = True,
     ):
         """
         Initialize health collector.
@@ -40,10 +42,12 @@ class HealthCollector:
         Args:
             services: List of systemd service names to check
             ports: List of port checks [{"host": "localhost", "port": 6379}]
+            discover_services: Whether to discover all systemd services
         """
         self.services = services or []
         self.ports = ports or []
         self.hostname = platform.node()
+        self.discover_services = discover_services
 
     def collect(self) -> Dict:
         """Collect all health metrics."""
@@ -73,6 +77,10 @@ class HealthCollector:
                 port = port_check["port"]
                 key = f"{host}:{port}"
                 health["ports"][key] = self.check_port(host, port)
+
+        # Discover all systemd services (for Issue #728)
+        if self.discover_services:
+            health["discovered_services"] = self.discover_all_services()
 
         return health
 
@@ -106,6 +114,120 @@ class HealthCollector:
                 return result == 0
         except Exception:
             return False
+
+    def discover_all_services(self) -> List[Dict]:
+        """
+        Discover all systemd services on the node.
+
+        Returns list of service info dicts with status, enabled state, etc.
+        Related to Issue #728.
+        """
+        services = []
+        try:
+            # List all loaded service units with their states
+            result = subprocess.run(
+                [
+                    "systemctl", "list-units",
+                    "--type=service",
+                    "--all",
+                    "--no-pager",
+                    "--no-legend",
+                    "--plain",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+            if result.returncode != 0:
+                logger.warning("Failed to list services: %s", result.stderr)
+                return services
+
+            # Parse output: UNIT LOAD ACTIVE SUB DESCRIPTION
+            for line in result.stdout.strip().split("\n"):
+                if not line.strip():
+                    continue
+
+                parts = line.split(None, 4)
+                if len(parts) < 4:
+                    continue
+
+                unit_name = parts[0]
+                # Skip template units and non-.service units
+                if "@" in unit_name or not unit_name.endswith(".service"):
+                    continue
+
+                service_name = unit_name.replace(".service", "")
+                load_state = parts[1]  # loaded, not-found, masked
+                active_state = parts[2]  # active, inactive, failed
+                sub_state = parts[3]  # running, dead, exited, failed
+
+                # Map to our status enum
+                if active_state == "active" and sub_state == "running":
+                    status = "running"
+                elif active_state == "failed" or sub_state == "failed":
+                    status = "failed"
+                elif active_state == "inactive":
+                    status = "stopped"
+                else:
+                    status = "unknown"
+
+                service_info = {
+                    "name": service_name,
+                    "status": status,
+                    "active_state": active_state,
+                    "sub_state": sub_state,
+                    "load_state": load_state,
+                }
+
+                # Get additional details for running services
+                if status == "running":
+                    details = self._get_service_details(service_name)
+                    service_info.update(details)
+
+                services.append(service_info)
+
+        except subprocess.TimeoutExpired:
+            logger.warning("Timeout discovering services")
+        except FileNotFoundError:
+            logger.warning("systemctl not found - not a systemd system")
+        except Exception as e:
+            logger.warning("Error discovering services: %s", e)
+
+        return services
+
+    def _get_service_details(self, service_name: str) -> Dict:
+        """Get detailed info for a specific service."""
+        details = {}
+        try:
+            # Get service properties
+            result = subprocess.run(
+                [
+                    "systemctl", "show", service_name,
+                    "--property=MainPID,MemoryCurrent,Description,UnitFileState",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+
+            if result.returncode == 0:
+                for line in result.stdout.strip().split("\n"):
+                    if "=" in line:
+                        key, value = line.split("=", 1)
+                        if key == "MainPID" and value.isdigit():
+                            details["main_pid"] = int(value)
+                        elif key == "MemoryCurrent" and value.isdigit():
+                            details["memory_bytes"] = int(value)
+                        elif key == "Description":
+                            details["description"] = value[:500]
+                        elif key == "UnitFileState":
+                            details["enabled"] = value == "enabled"
+
+        except Exception as e:
+            logger.debug("Could not get details for %s: %s", service_name, e)
+
+        return details
 
     def is_healthy(self, thresholds: Optional[Dict] = None) -> bool:
         """Quick health check against thresholds."""

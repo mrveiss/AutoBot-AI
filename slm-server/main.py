@@ -24,6 +24,8 @@ from api import (
     stateful_router,
     updates_router,
     websocket_router,
+    services_router,
+    fleet_services_router,
 )
 from config import settings
 from services.database import db_service
@@ -99,6 +101,8 @@ app.add_middleware(
 app.include_router(health_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(nodes_router, prefix="/api")
+app.include_router(services_router, prefix="/api")
+app.include_router(fleet_services_router, prefix="/api")
 app.include_router(deployments_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
 app.include_router(stateful_router, prefix="/api")

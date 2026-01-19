@@ -20,6 +20,7 @@ from sqlalchemy import (
     Text,
     JSON,
     Enum,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase
 import enum
@@ -200,6 +201,14 @@ class ReplicationStatus(str, enum.Enum):
     STOPPED = "stopped"
 
 
+class ServiceStatus(str, enum.Enum):
+    """Systemd service status enumeration."""
+    RUNNING = "running"
+    STOPPED = "stopped"
+    FAILED = "failed"
+    UNKNOWN = "unknown"
+
+
 class NodeEvent(Base):
     """Node event log for tracking lifecycle events."""
 
@@ -270,3 +279,29 @@ class UpdateInfo(Base):
     is_applied = Column(Boolean, default=False)
     applied_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Service(Base):
+    """Service tracking for systemd services on nodes."""
+
+    __tablename__ = "services"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    node_id = Column(String(64), nullable=False, index=True)
+    service_name = Column(String(128), nullable=False)
+    status = Column(String(20), default=ServiceStatus.UNKNOWN.value)
+    enabled = Column(Boolean, default=False)  # starts on boot
+    description = Column(String(512), nullable=True)
+    active_state = Column(String(32), nullable=True)  # active, inactive, failed
+    sub_state = Column(String(32), nullable=True)  # running, dead, exited
+    main_pid = Column(Integer, nullable=True)
+    memory_bytes = Column(Integer, nullable=True)
+    last_checked = Column(DateTime, nullable=True)
+    extra_data = Column(JSON, default=dict)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Composite unique constraint - one service record per node
+    __table_args__ = (
+        UniqueConstraint("node_id", "service_name", name="uq_node_service"),
+    )
