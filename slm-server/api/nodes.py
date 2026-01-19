@@ -217,34 +217,39 @@ async def node_heartbeat(
     return NodeResponse.model_validate(node)
 
 
-@router.post("/{node_id}/enroll", response_model=NodeResponse)
+@router.post("/{node_id}/enroll")
 async def enroll_node(
     node_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-) -> NodeResponse:
-    """Start node enrollment process."""
+):
+    """
+    Start node enrollment process.
+
+    This deploys the SLM agent to the node via Ansible,
+    which then starts sending heartbeats automatically.
+    """
+    from services.deployment import deployment_service
+
+    # Run enrollment (deploys agent via Ansible)
+    success, message = await deployment_service.enroll_node(db, node_id)
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=message,
+        )
+
+    # Refresh node from DB
     result = await db.execute(select(Node).where(Node.node_id == node_id))
     node = result.scalar_one_or_none()
 
-    if not node:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Node not found",
-        )
-
-    if node.status != NodeStatus.PENDING.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot enroll node in status: {node.status}",
-        )
-
-    node.status = NodeStatus.ENROLLING.value
-    await db.commit()
-    await db.refresh(node)
-
-    logger.info("Node enrollment started: %s", node_id)
-    return NodeResponse.model_validate(node)
+    logger.info("Node enrollment completed: %s", node_id)
+    return {
+        "success": True,
+        "message": "Agent deployed successfully. Node will begin sending heartbeats.",
+        "node": NodeResponse.model_validate(node) if node else None,
+    }
 
 
 @router.post("/test-connection", response_model=ConnectionTestResponse)
