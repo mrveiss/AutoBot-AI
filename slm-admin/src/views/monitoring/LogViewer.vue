@@ -98,7 +98,7 @@ function formatDate(ts: string): string {
 async function fetchLogs() {
   isLoading.value = true
   try {
-    const response = await fetch(`${backendUrl}/api/monitoring/logs?limit=500`)
+    const response = await fetch(`${backendUrl}/monitoring/logs?limit=500`)
     if (response.ok) {
       const data = await response.json()
       logs.value = data.logs ?? []

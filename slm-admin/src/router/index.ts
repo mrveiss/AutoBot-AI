@@ -48,7 +48,56 @@ const router = createRouter({
       path: '/settings',
       name: 'settings',
       component: () => import('@/views/SettingsView.vue'),
-      meta: { title: 'Settings' }
+      meta: { title: 'Settings' },
+      children: [
+        {
+          path: '',
+          name: 'settings-default',
+          redirect: '/settings/general'
+        },
+        {
+          path: 'general',
+          name: 'settings-general',
+          component: () => import('@/views/settings/GeneralSettings.vue'),
+          meta: { title: 'General Settings', parent: 'settings' }
+        },
+        {
+          path: 'infrastructure',
+          name: 'settings-infrastructure',
+          component: () => import('@/views/settings/InfrastructureSettings.vue'),
+          meta: { title: 'Infrastructure', parent: 'settings' }
+        },
+        {
+          path: 'nodes',
+          name: 'settings-nodes',
+          component: () => import('@/views/settings/NodesSettings.vue'),
+          meta: { title: 'Nodes Management', parent: 'settings' }
+        },
+        {
+          path: 'monitoring',
+          name: 'settings-monitoring',
+          component: () => import('@/views/settings/MonitoringSettings.vue'),
+          meta: { title: 'Monitoring Settings', parent: 'settings' }
+        },
+        {
+          path: 'notifications',
+          name: 'settings-notifications',
+          component: () => import('@/views/settings/NotificationsSettings.vue'),
+          meta: { title: 'Notifications', parent: 'settings' }
+        },
+        {
+          path: 'api',
+          name: 'settings-api',
+          component: () => import('@/views/settings/APISettings.vue'),
+          meta: { title: 'API Settings', parent: 'settings' }
+        },
+        {
+          path: 'backend',
+          name: 'settings-backend',
+          component: () => import('@/views/settings/BackendSettings.vue'),
+          meta: { title: 'Backend Settings', parent: 'settings' }
+        },
+      ]
     },
     {
       path: '/monitoring',

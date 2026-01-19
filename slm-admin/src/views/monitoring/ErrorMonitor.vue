@@ -132,7 +132,7 @@ function formatRelativeTime(ts: string): string {
 async function fetchErrors() {
   isLoading.value = true
   try {
-    const response = await fetch(`${backendUrl}/api/monitoring/errors`)
+    const response = await fetch(`${backendUrl}/monitoring/errors`)
     if (response.ok) {
       const data = await response.json()
       errors.value = data.errors ?? []
