@@ -33,6 +33,18 @@ prometheus_metrics = get_metrics_manager()
 _agent_instance = None
 _agent_initialization_lock = asyncio.Lock()  # Issue #395: Initialize at module level to prevent race
 
+def get_lazy_dependencies():
+    """Lazy import of heavy dependencies to prevent startup blocking"""
+    try:
+        from src.intelligence.intelligent_agent import IntelligentAgent
+        from src.knowledge_base import KnowledgeBase
+        from src.llm_interface import LLMInterface
+        from src.utils.command_validator import CommandValidator
+        from src.worker_node import WorkerNode
+        return IntelligentAgent, KnowledgeBase, LLMInterface, CommandValidator, WorkerNode
+    except ImportError as e:
+        logger.error(f"Failed to import intelligent agent dependencies: {e}")
+        raise HTTPException(status_code=503, detail="Intelligent agent dependencies not available")
 
 def get_lazy_dependencies():
     """Lazy import of heavy dependencies to prevent startup blocking"""

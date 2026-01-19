@@ -328,7 +328,11 @@ const routes: RouteRecordRaw[] = [
       {
         path: '',
         name: 'monitoring-default',
-        redirect: '/monitoring/system'
+        component: () => import('@/components/SystemMonitor.vue'),
+        meta: {
+          title: 'System Monitor',
+          parent: 'monitoring'
+        }
       },
       {
         path: 'system',

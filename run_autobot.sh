@@ -1008,6 +1008,122 @@ start_frontend_dev() {
             echo -e "${YELLOW}  💡 Check logs: ssh autobot@172.16.168.21 'tail -f /tmp/vite.log'${NC}"
             echo -e "${YELLOW}  💡 Manual start: ssh autobot@172.16.168.21 'cd autobot-vue && npm run dev -- --host 0.0.0.0 --port 5173'${NC}"
         fi
+    else
+        log "Frontend managed by Docker Compose"
+    fi
+}
+
+start_redis() {
+    log "Starting Redis service..."
+    
+    if [ "$ENV_TYPE" = "native-vm" ]; then
+        local redis_ip=${VMS["redis"]}
+        log "Connecting to Redis VM ($redis_ip)..."
+        
+        ssh -i "$SSH_KEY" "$SSH_USER@$redis_ip" << 'EOF'
+            # Stop existing Redis if running
+            sudo systemctl stop redis-server || true
+            pkill redis-server || true
+            
+            # Start Redis Stack
+            docker stop autobot-redis-stack 2>/dev/null || true
+            docker rm autobot-redis-stack 2>/dev/null || true
+            
+            docker run -d \
+                --name autobot-redis-stack \
+                --restart unless-stopped \
+                -p 6379:6379 \
+                -p 8001:8001 \
+                -v redis-data:/data \
+                redis/redis-stack:latest
+EOF
+        
+        # Verify Redis is accessible
+        local redis_ready=false
+        for i in {1..20}; do
+            if timeout 5 redis-cli -h $redis_ip ping 2>/dev/null | grep -q PONG; then
+                redis_ready=true
+                break
+            fi
+            sleep 1
+        done
+        
+        if [ "$redis_ready" = true ]; then
+            success "Redis started successfully"
+        else
+            warning "Redis may not be ready yet"
+        fi
+    else
+        log "Redis managed by Docker Compose"
+    fi
+}
+
+start_browser_service() {
+    log "Starting Browser automation service..."
+    
+    if [ "$ENV_TYPE" = "native-vm" ]; then
+        local browser_ip=${VMS["browser"]}
+        log "Connecting to Browser VM ($browser_ip)..."
+        
+        ssh -i "$SSH_KEY" "$SSH_USER@$browser_ip" << 'EOF'
+            cd /home/kali/AutoBot
+            
+            # Stop existing browser service
+            pkill -f "browser.*service" || true
+            
+            # Start browser service
+            nohup python -m browser.service --host 0.0.0.0 --port 3000 > logs/browser.log 2>&1 &
+EOF
+        
+        success "Browser service deployment initiated"
+    else
+        log "Browser service managed by Docker Compose"
+    fi
+}
+
+start_ai_stack() {
+    log "Starting AI Stack service..."
+    
+    if [ "$ENV_TYPE" = "native-vm" ]; then
+        local ai_ip=${VMS["ai-stack"]}
+        log "Connecting to AI Stack VM ($ai_ip)..."
+        
+        ssh -i "$SSH_KEY" "$SSH_USER@$ai_ip" << 'EOF'
+            cd /home/kali/AutoBot
+            
+            # Stop existing AI stack
+            pkill -f "ai.*stack" || true
+            
+            # Start AI stack
+            nohup python -m ai_stack.service --host 0.0.0.0 --port 8080 > logs/ai-stack.log 2>&1 &
+EOF
+        
+        success "AI Stack deployment initiated"
+    else
+        log "AI Stack managed by Docker Compose"
+    fi
+}
+
+start_npu_worker() {
+    log "Starting NPU Worker service..."
+    
+    if [ "$ENV_TYPE" = "native-vm" ]; then
+        local npu_ip=${VMS["npu-worker"]}
+        log "Connecting to NPU Worker VM ($npu_ip)..."
+        
+        ssh -i "$SSH_KEY" "$SSH_USER@$npu_ip" << 'EOF'
+            cd /home/kali/AutoBot
+            
+            # Stop existing NPU worker
+            pkill -f "npu.*worker" || true
+            
+            # Start NPU worker
+            nohup python -m npu_worker.service --host 0.0.0.0 --port 8081 > logs/npu-worker.log 2>&1 &
+EOF
+        
+        success "NPU Worker deployment initiated"
+    else
+        log "NPU Worker managed by Docker Compose"
     fi
 }
 

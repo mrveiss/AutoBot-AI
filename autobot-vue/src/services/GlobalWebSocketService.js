@@ -289,6 +289,11 @@ class GlobalWebSocketService {
   handleConnectionError(error) {
     this.connectionState.value = 'error'
     this.state.lastError = error.toString()
+    
+    this.trackEvent('connection_error', {
+      error: error.toString(),
+      attempt: this.reconnectAttempts
+    })
 
     this.trackEvent('connection_error', {
       error: error.toString(),

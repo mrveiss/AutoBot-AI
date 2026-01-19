@@ -18,6 +18,12 @@ from datetime import datetime
 from typing import Any, Dict, List
 
 import psutil
+import subprocess
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 
 try:
@@ -136,7 +142,7 @@ class PerformanceOptimizedDiagnostics:
         """Publish permission request and return future (Issue #315 - extracted helper)."""
         permission_future = asyncio.Future()
         await event_manager.publish(
-            "user_permission_request",
+            "log_message",
             {
                 "task_id": task_id,
                 "report": report,

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/home/kali/Desktop/AutoBot/scripts/utilities/sync-frontend.sh:*)",
+      "Bash(sshpass:*)",
+      "Bash(sshpass -p 'slm123' ssh -o StrictHostKeyChecking=no root@172.16.168.19 \"chown -R slm:slm /home/slm/slm-admin/src/\")"
+    ]
+  }
+}
