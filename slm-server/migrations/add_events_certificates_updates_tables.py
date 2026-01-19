@@ -2,12 +2,12 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Migration: Add node_events, certificates, and updates tables.
+Migration: Add node_events, certificates, and update_info tables.
 
 This adds tables for:
 - node_events: Lifecycle event tracking
 - certificates: PKI certificate management
-- updates: Update tracking and management
+- update_info: Update tracking and management
 """
 
 import logging
@@ -34,9 +34,9 @@ def migrate(db_path: str) -> None:
     certificates_exists = cursor.fetchone() is not None
 
     cursor.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='updates'"
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='update_info'"
     )
-    updates_exists = cursor.fetchone() is not None
+    update_info_exists = cursor.fetchone() is not None
 
     # Create node_events table
     if not node_events_exists:
@@ -88,30 +88,28 @@ def migrate(db_path: str) -> None:
     else:
         logger.info("certificates table already exists")
 
-    # Create updates table
-    if not updates_exists:
-        logger.info("Creating updates table...")
+    # Create update_info table
+    if not update_info_exists:
+        logger.info("Creating update_info table...")
         cursor.execute("""
-            CREATE TABLE updates (
+            CREATE TABLE update_info (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 update_id VARCHAR(64) UNIQUE NOT NULL,
                 node_id VARCHAR(64),
-                package_name VARCHAR(255) NOT NULL,
-                current_version VARCHAR(64),
-                available_version VARCHAR(64) NOT NULL,
-                update_type VARCHAR(20) DEFAULT 'package',
-                severity VARCHAR(20) DEFAULT 'normal',
+                package_name VARCHAR(128) NOT NULL,
+                current_version VARCHAR(32),
+                available_version VARCHAR(32) NOT NULL,
+                severity VARCHAR(16) DEFAULT 'low',
                 description TEXT,
                 is_applied BOOLEAN DEFAULT 0,
                 applied_at TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        cursor.execute("CREATE INDEX idx_updates_node_id ON updates(node_id)")
-        logger.info("Created updates table")
+        cursor.execute("CREATE INDEX idx_update_info_node_id ON update_info(node_id)")
+        logger.info("Created update_info table")
     else:
-        logger.info("updates table already exists")
+        logger.info("update_info table already exists")
 
     conn.commit()
     conn.close()

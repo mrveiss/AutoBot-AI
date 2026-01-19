@@ -166,3 +166,107 @@ class User(Base):
     is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     last_login = Column(DateTime, nullable=True)
+
+
+class EventType(str, enum.Enum):
+    """Node event type enumeration."""
+    STATE_CHANGE = "state_change"
+    HEALTH_CHECK = "health_check"
+    DEPLOYMENT_STARTED = "deployment_started"
+    DEPLOYMENT_COMPLETED = "deployment_completed"
+    DEPLOYMENT_FAILED = "deployment_failed"
+    CERTIFICATE_ISSUED = "certificate_issued"
+    CERTIFICATE_RENEWED = "certificate_renewed"
+    CERTIFICATE_EXPIRING = "certificate_expiring"
+    REMEDIATION_STARTED = "remediation_started"
+    REMEDIATION_COMPLETED = "remediation_completed"
+    MANUAL_ACTION = "manual_action"
+
+
+class EventSeverity(str, enum.Enum):
+    """Event severity enumeration."""
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+    CRITICAL = "critical"
+
+
+class ReplicationStatus(str, enum.Enum):
+    """Replication status enumeration."""
+    PENDING = "pending"
+    SYNCING = "syncing"
+    ACTIVE = "active"
+    FAILED = "failed"
+    STOPPED = "stopped"
+
+
+class NodeEvent(Base):
+    """Node event log for tracking lifecycle events."""
+
+    __tablename__ = "node_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    event_id = Column(String(64), unique=True, nullable=False, index=True)
+    node_id = Column(String(64), nullable=False, index=True)
+    event_type = Column(String(32), nullable=False)
+    severity = Column(String(16), default=EventSeverity.INFO.value)
+    message = Column(Text, nullable=False)
+    details = Column(JSON, default=dict)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Certificate(Base):
+    """Certificate tracking for mTLS."""
+
+    __tablename__ = "certificates"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    cert_id = Column(String(64), unique=True, nullable=False, index=True)
+    node_id = Column(String(64), nullable=False, index=True)
+    serial_number = Column(String(64), nullable=True)
+    subject = Column(String(255), nullable=True)
+    issuer = Column(String(255), nullable=True)
+    not_before = Column(DateTime, nullable=True)
+    not_after = Column(DateTime, nullable=True)
+    fingerprint = Column(String(64), nullable=True)
+    status = Column(String(20), default="pending")  # pending, active, expired, revoked
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Replication(Base):
+    """Replication tracking for stateful services."""
+
+    __tablename__ = "replications"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    replication_id = Column(String(64), unique=True, nullable=False, index=True)
+    source_node_id = Column(String(64), nullable=False)
+    target_node_id = Column(String(64), nullable=False)
+    service_type = Column(String(32), default="redis")
+    status = Column(String(20), default=ReplicationStatus.PENDING.value)
+    sync_position = Column(String(128), nullable=True)
+    lag_bytes = Column(Integer, default=0)
+    error = Column(Text, nullable=True)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class UpdateInfo(Base):
+    """Available updates tracking."""
+
+    __tablename__ = "update_info"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    update_id = Column(String(64), unique=True, nullable=False, index=True)
+    node_id = Column(String(64), nullable=True, index=True)  # null = applies to all
+    package_name = Column(String(128), nullable=False)
+    current_version = Column(String(32), nullable=True)
+    available_version = Column(String(32), nullable=False)
+    severity = Column(String(16), default="low")  # low, medium, high, critical
+    description = Column(Text, nullable=True)
+    is_applied = Column(Boolean, default=False)
+    applied_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

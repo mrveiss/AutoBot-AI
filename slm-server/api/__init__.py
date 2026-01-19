@@ -12,6 +12,8 @@ from .nodes import router as nodes_router
 from .deployments import router as deployments_router
 from .settings import router as settings_router
 from .health import router as health_router
+from .stateful import router as stateful_router
+from .updates import router as updates_router
 
 __all__ = [
     "auth_router",
@@ -19,4 +21,6 @@ __all__ = [
     "deployments_router",
     "settings_router",
     "health_router",
+    "stateful_router",
+    "updates_router",
 ]

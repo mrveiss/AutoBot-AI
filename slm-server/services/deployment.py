@@ -132,6 +132,44 @@ class DeploymentService:
 
         return DeploymentResponse.model_validate(deployment)
 
+    async def rollback_deployment(
+        self, db: AsyncSession, deployment_id: str
+    ) -> Optional[DeploymentResponse]:
+        """Rollback a completed deployment."""
+        result = await db.execute(
+            select(Deployment).where(Deployment.deployment_id == deployment_id)
+        )
+        deployment = result.scalar_one_or_none()
+
+        if not deployment:
+            return None
+
+        if deployment.status != DeploymentStatus.COMPLETED.value:
+            raise ValueError(f"Cannot rollback deployment in status: {deployment.status}")
+
+        # Get the node
+        node_result = await db.execute(
+            select(Node).where(Node.node_id == deployment.node_id)
+        )
+        node = node_result.scalar_one_or_none()
+
+        if not node:
+            raise ValueError("Node not found")
+
+        # Remove deployed roles from node
+        current_roles = set(node.roles or [])
+        deployed_roles = set(deployment.roles or [])
+        node.roles = list(current_roles - deployed_roles)
+
+        # Mark deployment as rolled back
+        deployment.status = DeploymentStatus.ROLLED_BACK.value
+        deployment.completed_at = datetime.utcnow()
+
+        await db.commit()
+        await db.refresh(deployment)
+
+        return DeploymentResponse.model_validate(deployment)
+
     async def _run_deployment(self, deployment_id: str) -> None:
         """Execute a deployment using Ansible."""
         from services.database import db_service

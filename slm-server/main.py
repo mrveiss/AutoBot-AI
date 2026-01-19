@@ -21,6 +21,8 @@ from api import (
     health_router,
     nodes_router,
     settings_router,
+    stateful_router,
+    updates_router,
 )
 from config import settings
 from services.database import db_service
@@ -98,6 +100,8 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(nodes_router, prefix="/api")
 app.include_router(deployments_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
+app.include_router(stateful_router, prefix="/api")
+app.include_router(updates_router, prefix="/api")
 
 
 @app.get("/")

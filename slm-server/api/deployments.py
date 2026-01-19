@@ -185,3 +185,29 @@ async def cancel_deployment(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
+
+
+@router.post("/{deployment_id}/rollback", response_model=DeploymentResponse)
+async def rollback_deployment(
+    deployment_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> DeploymentResponse:
+    """Rollback a completed deployment."""
+    try:
+        deployment = await deployment_service.rollback_deployment(db, deployment_id)
+
+        if not deployment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Deployment not found",
+            )
+
+        logger.info("Deployment rollback initiated: %s", deployment_id)
+        return deployment
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
