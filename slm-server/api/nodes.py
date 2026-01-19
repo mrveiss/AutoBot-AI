@@ -10,7 +10,7 @@ import logging
 import time
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from typing_extensions import Annotated
 
@@ -558,7 +558,7 @@ async def get_node_updates(
 @router.post("/{node_id}/updates/apply")
 async def apply_node_updates(
     node_id: str,
-    update_ids: list[str],
+    update_ids: List[str],
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
 ):
