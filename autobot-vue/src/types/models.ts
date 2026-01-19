@@ -98,7 +98,7 @@ export interface ChatMessage {
   text: string
   timestamp: string
   message_type?: string
-  raw_data?: Record<string, any>
+  metadata?: Record<string, any>
   session_id?: string
 }
 
@@ -509,7 +509,7 @@ export function isApiError(obj: any): obj is ApiError {
 export const DEFAULT_CHAT_MESSAGE: Partial<ChatMessage> = {
   sender: 'user',
   message_type: 'text',
-  raw_data: {}
+  metadata: {}
 }
 
 export const DEFAULT_AGENT_TASK: Partial<AgentTask> = {
