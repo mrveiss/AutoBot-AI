@@ -111,9 +111,13 @@
   tags: ['redis', 'validation']
 
 - name: "Redis | Test Redis connectivity"
-  command: redis-cli -h {{ ansible_default_ipv4.address }} -p {{ redis_port }} ping
+  command: >
+    redis-cli -h {{ ansible_default_ipv4.address }} -p {{ redis_port }}
+    {% if redis_password is defined and redis_password %}-a {{ redis_password }}{% endif %}
+    ping
   register: redis_ping
   changed_when: false
+  no_log: true  # Hide password from logs
   tags: ['redis', 'validation']
 
 - name: "Redis | Create backup directory"

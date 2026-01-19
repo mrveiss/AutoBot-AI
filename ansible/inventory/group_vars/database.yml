@@ -376,12 +376,13 @@ monitoring:
 security:
   # Redis security
   redis_security:
-    # No authentication for internal network
-    auth_enabled: false
-    
+    # Authentication enabled for security
+    auth_enabled: true
+    password: "{{ vault_redis_password }}"
+
     # Access control (Redis 6.0+)
     acl_enabled: false
-    
+
     # Network security
     protected_mode: false  # Internal network only
     bind_all_interfaces: true

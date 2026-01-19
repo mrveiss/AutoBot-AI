@@ -16,6 +16,11 @@ loglevel notice
 logfile /var/log/redis/redis-stack-server.log
 databases 16
 
+# Authentication
+{% if redis_password is defined and redis_password %}
+requirepass {{ redis_password }}
+{% endif %}
+
 # Snapshotting
 {% if redis_persistence %}
 save 900 1

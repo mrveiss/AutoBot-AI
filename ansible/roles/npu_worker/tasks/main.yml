@@ -75,10 +75,11 @@
   notify: reload firewall
   tags: ['npu_worker', 'firewall']
 
-- name: "NPU Worker | Enable NPU worker service"
+- name: "NPU Worker | Enable and start NPU worker service"
   systemd:
     name: autobot-npu-worker
     enabled: yes
+    state: started
     daemon_reload: yes
   become: yes
   tags: ['npu_worker', 'service']
