@@ -322,15 +322,14 @@ async function fetchEvents(): Promise<void> {
       limit: pageSize,
       offset: 0,
     }
-    if (eventTypeFilter.value !== 'all') {
-      filters.event_type = eventTypeFilter.value
-    }
+    // Note: Don't send event_type filter to API - we filter by category client-side
+    // The API expects exact event types (e.g., 'deployment_completed') but UI filters
+    // by category (e.g., 'deployment'). Client-side filteredEvents handles this.
     if (severityFilter.value !== 'all') {
       filters.severity = severityFilter.value
     }
 
     const nodeEvents = await api.getNodeEvents(props.nodeId, {
-      type: filters.event_type as import('@/types/slm').EventType | undefined,
       severity: filters.severity as import('@/types/slm').EventSeverity | undefined,
       limit: filters.limit,
       offset: filters.offset,
@@ -369,15 +368,12 @@ async function loadMoreEvents(): Promise<void> {
       limit: pageSize,
       offset: currentOffset.value,
     }
-    if (eventTypeFilter.value !== 'all') {
-      filters.event_type = eventTypeFilter.value
-    }
+    // Note: Don't send event_type filter to API - we filter by category client-side
     if (severityFilter.value !== 'all') {
       filters.severity = severityFilter.value
     }
 
     const nodeEvents = await api.getNodeEvents(props.nodeId, {
-      type: filters.event_type as import('@/types/slm').EventType | undefined,
       severity: filters.severity as import('@/types/slm').EventSeverity | undefined,
       limit: filters.limit,
       offset: filters.offset,

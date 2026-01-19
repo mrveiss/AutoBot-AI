@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.database import Certificate, Node, NodeEvent, NodeStatus
+from models.database import Certificate, EventSeverity, EventType, Node, NodeEvent, NodeStatus
 from models.schemas import (
     CertificateActionResponse,
     CertificateResponse,
@@ -40,6 +40,28 @@ from services.reconciler import reconciler_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["nodes"])
+
+
+async def _create_node_event(
+    db: AsyncSession,
+    node_id: str,
+    event_type: EventType,
+    severity: EventSeverity,
+    message: str,
+    details: dict = None,
+) -> NodeEvent:
+    """Helper to create a node lifecycle event."""
+    event = NodeEvent(
+        event_id=str(uuid.uuid4())[:16],
+        node_id=node_id,
+        event_type=event_type.value,
+        severity=severity.value,
+        message=message,
+        details=details or {},
+    )
+    db.add(event)
+    await db.flush()  # Flush but don't commit - let caller handle transaction
+    return event
 
 
 @router.get("", response_model=NodeListResponse)
@@ -116,13 +138,26 @@ async def create_node(
         extra_data=extra_data if extra_data else None,
     )
     db.add(node)
+    await db.flush()
+
+    # Create registration event
+    event_msg = f"Node registered: {node.hostname} ({node.ip_address})"
+    if node_data.import_existing:
+        event_msg = f"Existing node imported: {node.hostname} ({node.ip_address})"
+
+    await _create_node_event(
+        db,
+        node_id,
+        EventType.STATE_CHANGE,
+        EventSeverity.INFO,
+        event_msg,
+        {"status": initial_status, "roles": node_data.roles, "import_existing": node_data.import_existing},
+    )
+
     await db.commit()
     await db.refresh(node)
 
-    if node_data.import_existing:
-        logger.info("Existing node imported: %s (%s)", node.hostname, node.ip_address)
-    else:
-        logger.info("Node registered: %s (%s)", node.hostname, node.ip_address)
+    logger.info(event_msg)
 
     return NodeResponse.model_validate(node)
 
@@ -348,12 +383,33 @@ async def enroll_node(
     if enroll_request and enroll_request.ssh_password:
         ssh_password = enroll_request.ssh_password
 
+    # Create enrollment started event
+    await _create_node_event(
+        db,
+        node_id,
+        EventType.DEPLOYMENT_STARTED,
+        EventSeverity.INFO,
+        f"Enrollment started for node {node_id}",
+        {"auth_method": "password" if ssh_password else "key"},
+    )
+    await db.commit()
+
     # Run enrollment (deploys agent via Ansible)
     success, message = await deployment_service.enroll_node(
         db, node_id, ssh_password=ssh_password
     )
 
     if not success:
+        # Create enrollment failed event
+        await _create_node_event(
+            db,
+            node_id,
+            EventType.DEPLOYMENT_FAILED,
+            EventSeverity.ERROR,
+            f"Enrollment failed for node {node_id}: {message}",
+            {"error": message},
+        )
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=message,
@@ -362,6 +418,17 @@ async def enroll_node(
     # Refresh node from DB
     result = await db.execute(select(Node).where(Node.node_id == node_id))
     node = result.scalar_one_or_none()
+
+    # Create enrollment completed event
+    await _create_node_event(
+        db,
+        node_id,
+        EventType.DEPLOYMENT_COMPLETED,
+        EventSeverity.INFO,
+        f"Enrollment completed for node {node_id}",
+        {"hostname": node.hostname if node else None, "status": node.status if node else None},
+    )
+    await db.commit()
 
     logger.info("Node enrollment completed: %s", node_id)
     return {
@@ -527,11 +594,18 @@ async def test_connection(
             message="Connection timed out",
             error="SSH connection timed out after 15 seconds",
         )
-    except FileNotFoundError:
+    except FileNotFoundError as e:
+        error_msg = str(e)
+        if "ssh" in error_msg.lower():
+            return ConnectionTestResponse(
+                success=False,
+                message="Connection failed",
+                error="SSH client not found. Install: sudo apt install openssh-client",
+            )
         return ConnectionTestResponse(
             success=False,
             message="Connection failed",
-            error="Required tool not found. For password auth: sudo apt install sshpass",
+            error=f"Required tool not found: {error_msg}",
         )
     except Exception as e:
         logger.exception("Connection test error: %s", e)

@@ -19,7 +19,7 @@ export type NodeRole =
 
 export type HealthStatus = 'healthy' | 'degraded' | 'unhealthy' | 'unknown'
 
-export type AuthMethod = 'password' | 'pki'
+export type AuthMethod = 'password' | 'key' | 'pki'
 
 export type EventSeverity = 'info' | 'warning' | 'error' | 'critical'
 

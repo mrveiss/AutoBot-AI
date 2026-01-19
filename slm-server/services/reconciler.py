@@ -15,8 +15,10 @@ from typing import Optional
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import uuid
+
 from config import settings
-from models.database import Node, NodeStatus, Setting
+from models.database import EventSeverity, EventType, Node, NodeEvent, NodeStatus, Setting
 
 logger = logging.getLogger(__name__)
 
@@ -101,11 +103,22 @@ class ReconcilerService:
             for node in stale_nodes:
                 # Ping to check if host is reachable
                 is_reachable = await self._ping_host(node.ip_address)
+                old_status = node.status
 
                 if is_reachable:
                     # Host responds to ping but no heartbeat = degraded (agent not running)
                     if node.status != NodeStatus.DEGRADED.value:
                         node.status = NodeStatus.DEGRADED.value
+                        # Create degraded event
+                        event = NodeEvent(
+                            event_id=str(uuid.uuid4())[:16],
+                            node_id=node.node_id,
+                            event_type=EventType.HEALTH_CHECK.value,
+                            severity=EventSeverity.WARNING.value,
+                            message=f"Node {node.hostname} reachable but agent not responding",
+                            details={"old_status": old_status, "reason": "no_heartbeat"},
+                        )
+                        db.add(event)
                         logger.info(
                             "Node %s (%s) reachable but no heartbeat - marking degraded",
                             node.node_id,
@@ -115,6 +128,16 @@ class ReconcilerService:
                     # Host doesn't respond to ping = offline
                     if node.status != NodeStatus.OFFLINE.value:
                         node.status = NodeStatus.OFFLINE.value
+                        # Create offline event
+                        event = NodeEvent(
+                            event_id=str(uuid.uuid4())[:16],
+                            node_id=node.node_id,
+                            event_type=EventType.HEALTH_CHECK.value,
+                            severity=EventSeverity.ERROR.value,
+                            message=f"Node {node.hostname} is unreachable",
+                            details={"old_status": old_status, "reason": "unreachable"},
+                        )
+                        db.add(event)
                         logger.info(
                             "Node %s (%s) unreachable - marking offline",
                             node.node_id,
@@ -202,7 +225,37 @@ class ReconcilerService:
         if extra_data:
             node.extra_data = {**(node.extra_data or {}), **extra_data}
 
+        old_status = node.status
         new_status = self._calculate_node_status(cpu_percent, memory_percent, disk_percent)
+
+        # Create event if status changed
+        if old_status != new_status:
+            severity = EventSeverity.INFO
+            if new_status in [NodeStatus.ERROR.value, NodeStatus.OFFLINE.value]:
+                severity = EventSeverity.ERROR
+            elif new_status == NodeStatus.DEGRADED.value:
+                severity = EventSeverity.WARNING
+
+            event = NodeEvent(
+                event_id=str(uuid.uuid4())[:16],
+                node_id=node.node_id,
+                event_type=EventType.HEALTH_CHECK.value,
+                severity=severity.value,
+                message=f"Node status changed from {old_status} to {new_status}",
+                details={
+                    "old_status": old_status,
+                    "new_status": new_status,
+                    "cpu_percent": cpu_percent,
+                    "memory_percent": memory_percent,
+                    "disk_percent": disk_percent,
+                },
+            )
+            db.add(event)
+            logger.info(
+                "Node %s status changed: %s -> %s",
+                node.node_id, old_status, new_status
+            )
+
         node.status = new_status
 
         await db.commit()
