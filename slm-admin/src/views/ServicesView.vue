@@ -154,7 +154,7 @@ async function fetchServices(): Promise<void> {
 
 async function handleFleetAction(
   serviceName: string,
-  action: 'start' | 'stop'
+  action: 'start' | 'stop' | 'restart'
 ): Promise<void> {
   if (isActionInProgress.value) return
 
@@ -166,12 +166,15 @@ async function handleFleetAction(
     let result
     if (action === 'start') {
       result = await api.startFleetService(serviceName)
-    } else {
+    } else if (action === 'stop') {
       result = await api.stopFleetService(serviceName)
+    } else {
+      result = await api.restartFleetService(serviceName)
     }
 
     if (result.success) {
-      // Refresh services list
+      // WebSocket will update the UI in real-time, no need to refetch
+      // But we can still refresh to get any new services
       await fetchServices()
     } else {
       errorMessage.value = result.message
@@ -462,6 +465,27 @@ onUnmounted(() => {
               </svg>
               <svg v-else class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                 <rect x="6" y="6" width="12" height="12" />
+              </svg>
+            </button>
+
+            <!-- Restart All -->
+            <button
+              @click="handleFleetAction(service.service_name, 'restart')"
+              :disabled="isActionInProgress"
+              class="p-1.5 text-blue-600 hover:bg-blue-50 rounded disabled:opacity-50"
+              title="Restart on all nodes"
+            >
+              <svg
+                v-if="actionService === service.service_name && actionType === 'restart'"
+                class="w-5 h-5 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+              </svg>
+              <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
             </button>
           </div>

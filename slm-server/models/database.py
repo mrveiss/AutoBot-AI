@@ -181,6 +181,8 @@ class EventType(str, enum.Enum):
     CERTIFICATE_EXPIRING = "certificate_expiring"
     REMEDIATION_STARTED = "remediation_started"
     REMEDIATION_COMPLETED = "remediation_completed"
+    ROLLBACK_STARTED = "rollback_started"
+    ROLLBACK_COMPLETED = "rollback_completed"
     MANUAL_ACTION = "manual_action"
 
 
@@ -305,3 +307,23 @@ class Service(Base):
     __table_args__ = (
         UniqueConstraint("node_id", "service_name", name="uq_node_service"),
     )
+
+
+class MaintenanceWindow(Base):
+    """Maintenance window scheduling for nodes."""
+
+    __tablename__ = "maintenance_windows"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    window_id = Column(String(64), unique=True, nullable=False, index=True)
+    node_id = Column(String(64), nullable=True, index=True)  # null = all nodes
+    start_time = Column(DateTime, nullable=False)
+    end_time = Column(DateTime, nullable=False)
+    reason = Column(String(512), nullable=True)
+    auto_drain = Column(Boolean, default=False)  # drain services before maintenance
+    suppress_alerts = Column(Boolean, default=True)  # suppress alerts during window
+    suppress_remediation = Column(Boolean, default=True)  # suppress auto-remediation
+    status = Column(String(20), default="scheduled")  # scheduled, active, completed, cancelled
+    created_by = Column(String(64), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

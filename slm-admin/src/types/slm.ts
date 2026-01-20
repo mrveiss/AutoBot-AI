@@ -34,6 +34,8 @@ export type EventType =
   | 'certificate_expiring'
   | 'remediation_started'
   | 'remediation_completed'
+  | 'rollback_started'
+  | 'rollback_completed'
   | 'manual_action'
 
 export type CertificateStatus = 'valid' | 'expiring_soon' | 'expired' | 'not_issued'
@@ -273,7 +275,7 @@ export interface MaintenanceWindow {
 }
 
 export interface SLMWebSocketMessage {
-  type: 'health_update' | 'deployment_status' | 'backup_status' | 'node_status'
+  type: 'health_update' | 'deployment_status' | 'backup_status' | 'node_status' | 'remediation_event' | 'service_status' | 'rollback_event'
   node_id: string
   data: Record<string, unknown>
   timestamp: string

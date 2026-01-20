@@ -29,7 +29,6 @@ import type {
   ReplicationRequest,
   RoleInfo,
   RoleListResponse,
-  NodeService,
   ServiceListResponse,
   ServiceActionResponse,
   ServiceLogsResponse,
@@ -425,6 +424,13 @@ export function useSlmApi() {
     return response.data
   }
 
+  async function restartFleetService(serviceName: string): Promise<ServiceActionResponse> {
+    const response = await client.post<ServiceActionResponse>(
+      `/fleet/services/${serviceName}/restart`
+    )
+    return response.data
+  }
+
   return {
     // Nodes
     getNodes,
@@ -478,5 +484,6 @@ export function useSlmApi() {
     getFleetServices,
     startFleetService,
     stopFleetService,
+    restartFleetService,
   }
 }

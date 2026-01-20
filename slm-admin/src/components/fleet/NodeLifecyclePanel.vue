@@ -126,6 +126,7 @@ const eventTypeOptions = [
   { value: 'deployment', label: 'Deployment' },
   { value: 'health', label: 'Health Checks' },
   { value: 'remediation', label: 'Remediation' },
+  { value: 'rollback', label: 'Rollback' },
   { value: 'update', label: 'Updates' },
   { value: 'maintenance', label: 'Maintenance' },
   { value: 'certificate', label: 'Certificates' },
@@ -169,6 +170,7 @@ const updatesSummary = computed(() => {
 function getEventCategory(eventType: string): string {
   if (eventType.includes('enrollment')) return 'enrollment'
   if (eventType.includes('deployment')) return 'deployment'
+  if (eventType.includes('rollback')) return 'rollback'
   if (eventType.includes('health')) return 'health'
   if (eventType.includes('update')) return 'update'
   if (eventType.includes('maintenance')) return 'maintenance'

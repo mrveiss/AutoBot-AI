@@ -186,6 +186,24 @@ export function useSlmWebSocket() {
     })
   }
 
+  function onRollbackEvent(
+    handler: (nodeId: string, data: {
+      deployment_id: string
+      event_type: string
+      success?: boolean
+      message?: string
+    }) => void
+  ): void {
+    messageHandlers.set('rollback_event', (message) => {
+      handler(message.node_id, message.data as {
+        deployment_id: string
+        event_type: string
+        success?: boolean
+        message?: string
+      })
+    })
+  }
+
   // Cleanup on component unmount
   onUnmounted(() => {
     disconnect()
@@ -208,5 +226,6 @@ export function useSlmWebSocket() {
     onBackupStatus,
     onRemediationEvent,
     onServiceStatus,
+    onRollbackEvent,
   }
 }
