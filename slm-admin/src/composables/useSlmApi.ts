@@ -434,6 +434,18 @@ export function useSlmApi() {
     return response.data
   }
 
+  async function updateServiceCategory(
+    serviceName: string,
+    category: 'autobot' | 'system'
+  ): Promise<{ service_name: string; category: string; nodes_updated: number }> {
+    const response = await client.patch<{
+      service_name: string
+      category: string
+      nodes_updated: number
+    }>(`/fleet/services/${serviceName}/category`, { category })
+    return response.data
+  }
+
   // Maintenance Windows
   async function getMaintenanceWindows(options?: {
     node_id?: string
@@ -549,6 +561,7 @@ export function useSlmApi() {
     startFleetService,
     stopFleetService,
     restartFleetService,
+    updateServiceCategory,
     // Maintenance Windows
     getMaintenanceWindows,
     getActiveMaintenanceWindows,

@@ -26,6 +26,7 @@ from models.schemas import (
     ServiceListResponse,
     ServiceActionResponse,
     ServiceLogsResponse,
+    ServiceCategoryUpdate,
     FleetServiceStatus,
     FleetServicesResponse,
 )
@@ -510,12 +511,16 @@ async def get_fleet_services(
     nodes = {n.node_id: n for n in nodes_result.scalars().all()}
 
     # Aggregate by service name
-    service_map: dict[str, list] = {}
+    # Store both node_statuses and category (take first one found)
+    service_map: dict[str, dict] = {}
     for svc in all_services:
         if svc.service_name not in service_map:
-            service_map[svc.service_name] = []
+            service_map[svc.service_name] = {
+                "nodes": [],
+                "category": getattr(svc, "category", "system") or "system",
+            }
         node = nodes.get(svc.node_id)
-        service_map[svc.service_name].append({
+        service_map[svc.service_name]["nodes"].append({
             "node_id": svc.node_id,
             "hostname": node.hostname if node else "unknown",
             "status": svc.status,
@@ -523,7 +528,8 @@ async def get_fleet_services(
 
     # Build response
     fleet_services = []
-    for service_name, node_statuses in service_map.items():
+    for service_name, data in service_map.items():
+        node_statuses = data["nodes"]
         running = sum(1 for n in node_statuses if n["status"] == "running")
         stopped = sum(1 for n in node_statuses if n["status"] == "stopped")
         failed = sum(1 for n in node_statuses if n["status"] == "failed")
@@ -531,6 +537,7 @@ async def get_fleet_services(
         fleet_services.append(
             FleetServiceStatus(
                 service_name=service_name,
+                category=data["category"],
                 nodes=node_statuses,
                 running_count=running,
                 stopped_count=stopped,
@@ -543,6 +550,50 @@ async def get_fleet_services(
         services=fleet_services,
         total_services=len(fleet_services),
     )
+
+
+@fleet_router.patch("/services/{service_name}/category")
+async def update_service_category(
+    service_name: str,
+    update: ServiceCategoryUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> dict:
+    """
+    Update the category for a service across all nodes.
+
+    This is an admin override - manually categorize a service as
+    'autobot' or 'system' across all nodes that have it.
+    """
+    # Find all service records with this name
+    query = select(Service).where(Service.service_name == service_name)
+    result = await db.execute(query)
+    services = result.scalars().all()
+
+    if not services:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Service {service_name} not found on any node",
+        )
+
+    # Update category on all records
+    for svc in services:
+        svc.category = update.category
+
+    await db.commit()
+
+    logger.info(
+        "Service %s category updated to %s across %d nodes",
+        service_name,
+        update.category,
+        len(services),
+    )
+
+    return {
+        "service_name": service_name,
+        "category": update.category,
+        "nodes_updated": len(services),
+    }
 
 
 @fleet_router.post(

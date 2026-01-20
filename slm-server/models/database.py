@@ -211,6 +211,12 @@ class ServiceStatus(str, enum.Enum):
     UNKNOWN = "unknown"
 
 
+class ServiceCategory(str, enum.Enum):
+    """Service category enumeration for filtering."""
+    AUTOBOT = "autobot"
+    SYSTEM = "system"
+
+
 class NodeEvent(Base):
     """Node event log for tracking lifecycle events."""
 
@@ -292,6 +298,7 @@ class Service(Base):
     node_id = Column(String(64), nullable=False, index=True)
     service_name = Column(String(128), nullable=False)
     status = Column(String(20), default=ServiceStatus.UNKNOWN.value)
+    category = Column(String(20), default=ServiceCategory.SYSTEM.value, index=True)
     enabled = Column(Boolean, default=False)  # starts on boot
     description = Column(String(512), nullable=True)
     active_state = Column(String(32), nullable=True)  # active, inactive, failed

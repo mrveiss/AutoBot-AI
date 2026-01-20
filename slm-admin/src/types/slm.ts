@@ -316,11 +316,14 @@ export interface FleetSummary {
 
 export type ServiceStatus = 'running' | 'stopped' | 'failed' | 'unknown'
 
+export type ServiceCategory = 'autobot' | 'system'
+
 export interface NodeService {
   id: number
   node_id: string
   service_name: string
   status: ServiceStatus
+  category: ServiceCategory
   enabled: boolean
   description: string | null
   active_state: string | null
@@ -355,6 +358,7 @@ export interface ServiceLogsResponse {
 
 export interface FleetServiceStatus {
   service_name: string
+  category: ServiceCategory
   nodes: Array<{
     node_id: string
     hostname: string
@@ -364,6 +368,10 @@ export interface FleetServiceStatus {
   stopped_count: number
   failed_count: number
   total_nodes: number
+}
+
+export interface ServiceCategoryUpdateRequest {
+  category: ServiceCategory
 }
 
 export interface FleetServicesResponse {

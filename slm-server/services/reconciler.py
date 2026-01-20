@@ -28,9 +28,11 @@ from models.database import (
     NodeEvent,
     NodeStatus,
     Service,
+    ServiceCategory,
     ServiceStatus,
     Setting,
 )
+from services.service_categorizer import categorize_service
 
 logger = logging.getLogger(__name__)
 
@@ -826,11 +828,13 @@ class ReconcilerService:
                 service.description = svc_data.get("description")
                 service.last_checked = now
             else:
-                # Create new
+                # Create new - auto-categorize based on service name
+                category = categorize_service(service_name)
                 service = Service(
                     node_id=node_id,
                     service_name=service_name,
                     status=status,
+                    category=category,
                     active_state=svc_data.get("active_state"),
                     sub_state=svc_data.get("sub_state"),
                     main_pid=svc_data.get("main_pid"),

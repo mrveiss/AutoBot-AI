@@ -512,6 +512,7 @@ class ServiceResponse(BaseModel):
     node_id: str
     service_name: str
     status: str
+    category: str = "system"  # autobot or system
     enabled: bool
     description: Optional[str] = None
     active_state: Optional[str] = None
@@ -565,10 +566,17 @@ class ServiceLogsResponse(BaseModel):
     lines_returned: int
 
 
+class ServiceCategoryUpdate(BaseModel):
+    """Request to update service category."""
+
+    category: str = Field(..., pattern="^(autobot|system)$")
+
+
 class FleetServiceStatus(BaseModel):
     """Service status across the fleet."""
 
     service_name: str
+    category: str = "system"  # autobot or system
     nodes: List[Dict]  # [{node_id, hostname, status}]
     running_count: int
     stopped_count: int

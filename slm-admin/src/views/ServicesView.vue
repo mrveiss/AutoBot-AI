@@ -8,6 +8,7 @@
  *
  * Provides a centralized view of all systemd services across the fleet
  * with the ability to start/stop services across multiple nodes.
+ * Supports filtering by category (AutoBot vs System services).
  *
  * Related to Issue #728
  */
@@ -17,7 +18,7 @@ import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
 import { createLogger } from '@/utils/debugUtils'
-import type { FleetServiceStatus, ServiceStatus } from '@/types/slm'
+import type { FleetServiceStatus, ServiceStatus, ServiceCategory } from '@/types/slm'
 
 const logger = createLogger('ServicesView')
 const api = useSlmApi()
@@ -34,6 +35,7 @@ const lastRefresh = ref<string | null>(null)
 // Filters
 const searchQuery = ref('')
 const statusFilter = ref<string>('all')
+const categoryFilter = ref<ServiceCategory | 'all'>('autobot') // Default to AutoBot
 const autoRefresh = ref(true)
 const autoRefreshInterval = 15000
 
@@ -41,6 +43,10 @@ const autoRefreshInterval = 15000
 const isActionInProgress = ref(false)
 const actionService = ref<string | null>(null)
 const actionType = ref<string | null>(null)
+
+// Category change state
+const categoryMenuOpen = ref<string | null>(null)
+const isCategoryChanging = ref(false)
 
 // Refresh interval
 let refreshInterval: ReturnType<typeof setInterval> | null = null
@@ -54,9 +60,23 @@ const statusOptions = [
   { value: 'mixed', label: 'Mixed Status' },
 ]
 
-// Computed
+// Category counts
+const categoryCounts = computed(() => {
+  const autobot = services.value.filter(s => s.category === 'autobot').length
+  const system = services.value.filter(s => s.category === 'system').length
+  return { autobot, system, all: services.value.length }
+})
+
+// Computed - services filtered by category first, then other filters
+const categoryFilteredServices = computed(() => {
+  if (categoryFilter.value === 'all') {
+    return services.value
+  }
+  return services.value.filter(s => s.category === categoryFilter.value)
+})
+
 const filteredServices = computed(() => {
-  let filtered = services.value
+  let filtered = categoryFilteredServices.value
 
   // Apply status filter
   if (statusFilter.value !== 'all') {
@@ -84,11 +104,13 @@ const filteredServices = computed(() => {
   return filtered
 })
 
+// Summary stats based on currently filtered category
 const summaryStats = computed(() => {
-  const total = services.value.length
-  const allRunning = services.value.filter(s => s.running_count === s.total_nodes).length
-  const allStopped = services.value.filter(s => s.stopped_count === s.total_nodes).length
-  const hasFailed = services.value.filter(s => s.failed_count > 0).length
+  const categoryServices = categoryFilteredServices.value
+  const total = categoryServices.length
+  const allRunning = categoryServices.filter(s => s.running_count === s.total_nodes).length
+  const allStopped = categoryServices.filter(s => s.stopped_count === s.total_nodes).length
+  const hasFailed = categoryServices.filter(s => s.failed_count > 0).length
   const mixed = total - allRunning - allStopped
 
   return { total, allRunning, allStopped, hasFailed, mixed }
@@ -116,6 +138,12 @@ function getNodeStatusDot(status: ServiceStatus): string {
     case 'failed': return 'bg-red-500'
     default: return 'bg-yellow-500'
   }
+}
+
+function getCategoryBadgeClass(category: ServiceCategory): string {
+  return category === 'autobot'
+    ? 'bg-primary-100 text-primary-700 border-primary-200'
+    : 'bg-slate-100 text-slate-600 border-slate-200'
 }
 
 function formatRelativeTime(timestamp: string | null): string {
@@ -173,8 +201,6 @@ async function handleFleetAction(
     }
 
     if (result.success) {
-      // WebSocket will update the UI in real-time, no need to refetch
-      // But we can still refresh to get any new services
       await fetchServices()
     } else {
       errorMessage.value = result.message
@@ -189,7 +215,47 @@ async function handleFleetAction(
   }
 }
 
-// Watch auto-refresh changes
+async function handleCategoryChange(
+  serviceName: string,
+  newCategory: ServiceCategory
+): Promise<void> {
+  if (isCategoryChanging.value) return
+
+  isCategoryChanging.value = true
+  categoryMenuOpen.value = null
+
+  try {
+    await api.updateServiceCategory(serviceName, newCategory)
+    // Update local state
+    const service = services.value.find(s => s.service_name === serviceName)
+    if (service) {
+      service.category = newCategory
+    }
+    logger.info(`Service ${serviceName} category changed to ${newCategory}`)
+  } catch (error) {
+    logger.error(`Failed to update category for ${serviceName}:`, error)
+    errorMessage.value = `Failed to update category for ${serviceName}`
+  } finally {
+    isCategoryChanging.value = false
+  }
+}
+
+function toggleCategoryMenu(serviceName: string): void {
+  if (categoryMenuOpen.value === serviceName) {
+    categoryMenuOpen.value = null
+  } else {
+    categoryMenuOpen.value = serviceName
+  }
+}
+
+// Close menu when clicking outside
+function handleClickOutside(event: MouseEvent): void {
+  const target = event.target as HTMLElement
+  if (!target.closest('.category-menu-container')) {
+    categoryMenuOpen.value = null
+  }
+}
+
 function toggleAutoRefresh(): void {
   autoRefresh.value = !autoRefresh.value
   if (autoRefresh.value) {
@@ -205,7 +271,6 @@ function handleServiceStatusUpdate(
   nodeId: string,
   data: { service_name: string; status: string; action?: string; success: boolean; message?: string }
 ): void {
-  // Find the service in our list and update its node status
   const serviceIndex = services.value.findIndex(s => s.service_name === data.service_name)
   if (serviceIndex === -1) return
 
@@ -213,15 +278,10 @@ function handleServiceStatusUpdate(
   const nodeIndex = service.nodes.findIndex(n => n.node_id === nodeId)
   if (nodeIndex === -1) return
 
-  // Update the node status
   service.nodes[nodeIndex].status = data.status as ServiceStatus
-
-  // Recalculate counts
   service.running_count = service.nodes.filter(n => n.status === 'running').length
   service.stopped_count = service.nodes.filter(n => n.status === 'stopped').length
   service.failed_count = service.nodes.filter(n => n.status === 'failed').length
-
-  // Update the service in the array to trigger reactivity
   services.value[serviceIndex] = { ...service }
 
   logger.debug('Service status updated via WebSocket:', data.service_name, nodeId, data.status)
@@ -231,8 +291,6 @@ function handleServiceStatusUpdate(
 onMounted(() => {
   fetchServices()
   fleetStore.fetchNodes()
-
-  // Setup WebSocket for real-time updates
   connect()
   subscribeAll()
   onServiceStatus(handleServiceStatusUpdate)
@@ -240,12 +298,15 @@ onMounted(() => {
   if (autoRefresh.value) {
     refreshInterval = setInterval(fetchServices, autoRefreshInterval)
   }
+
+  document.addEventListener('click', handleClickOutside)
 })
 
 onUnmounted(() => {
   if (refreshInterval) {
     clearInterval(refreshInterval)
   }
+  document.removeEventListener('click', handleClickOutside)
 })
 </script>
 
@@ -344,6 +405,43 @@ onUnmounted(() => {
     <!-- Filter Bar -->
     <div class="card mb-6">
       <div class="flex items-center gap-4 p-4">
+        <!-- Category Toggle Buttons -->
+        <div class="flex rounded-lg border border-gray-300 overflow-hidden">
+          <button
+            @click="categoryFilter = 'autobot'"
+            :class="[
+              'px-3 py-1.5 text-sm font-medium transition-colors',
+              categoryFilter === 'autobot'
+                ? 'bg-primary-600 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-50'
+            ]"
+          >
+            AutoBot ({{ categoryCounts.autobot }})
+          </button>
+          <button
+            @click="categoryFilter = 'system'"
+            :class="[
+              'px-3 py-1.5 text-sm font-medium transition-colors border-l border-gray-300',
+              categoryFilter === 'system'
+                ? 'bg-primary-600 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-50'
+            ]"
+          >
+            System ({{ categoryCounts.system }})
+          </button>
+          <button
+            @click="categoryFilter = 'all'"
+            :class="[
+              'px-3 py-1.5 text-sm font-medium transition-colors border-l border-gray-300',
+              categoryFilter === 'all'
+                ? 'bg-primary-600 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-50'
+            ]"
+          >
+            All ({{ categoryCounts.all }})
+          </button>
+        </div>
+
         <!-- Search -->
         <div class="flex-1 relative">
           <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -412,8 +510,52 @@ onUnmounted(() => {
       >
         <!-- Service Header -->
         <div class="flex items-start justify-between mb-3">
-          <div>
-            <h3 class="font-semibold text-gray-900">{{ service.service_name }}</h3>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <h3 class="font-semibold text-gray-900 truncate">{{ service.service_name }}</h3>
+              <!-- Category Badge with dropdown -->
+              <div class="relative category-menu-container">
+                <button
+                  @click.stop="toggleCategoryMenu(service.service_name)"
+                  :class="[
+                    'inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded border cursor-pointer hover:opacity-80',
+                    getCategoryBadgeClass(service.category)
+                  ]"
+                  :title="`Category: ${service.category} (click to change)`"
+                >
+                  {{ service.category === 'autobot' ? 'AutoBot' : 'System' }}
+                  <svg class="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <!-- Dropdown menu -->
+                <div
+                  v-if="categoryMenuOpen === service.service_name"
+                  class="absolute left-0 mt-1 w-32 bg-white rounded-lg shadow-lg border border-gray-200 z-10"
+                >
+                  <button
+                    @click="handleCategoryChange(service.service_name, 'autobot')"
+                    :disabled="isCategoryChanging"
+                    :class="[
+                      'w-full px-3 py-2 text-left text-sm hover:bg-gray-50 rounded-t-lg',
+                      service.category === 'autobot' ? 'bg-primary-50 text-primary-700' : 'text-gray-700'
+                    ]"
+                  >
+                    AutoBot
+                  </button>
+                  <button
+                    @click="handleCategoryChange(service.service_name, 'system')"
+                    :disabled="isCategoryChanging"
+                    :class="[
+                      'w-full px-3 py-2 text-left text-sm hover:bg-gray-50 rounded-b-lg border-t border-gray-100',
+                      service.category === 'system' ? 'bg-slate-50 text-slate-700' : 'text-gray-700'
+                    ]"
+                  >
+                    System
+                  </button>
+                </div>
+              </div>
+            </div>
             <span
               :class="[
                 'inline-flex items-center px-2 py-0.5 mt-1 text-xs font-medium rounded border',
@@ -423,7 +565,7 @@ onUnmounted(() => {
               {{ getServiceStatusText(service) }}
             </span>
           </div>
-          <div class="flex items-center gap-1">
+          <div class="flex items-center gap-1 ml-2">
             <!-- Start All -->
             <button
               v-if="service.stopped_count > 0"
