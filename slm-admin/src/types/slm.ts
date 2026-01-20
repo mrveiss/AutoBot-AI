@@ -265,13 +265,34 @@ export interface ReplicationRequest {
 }
 
 export interface MaintenanceWindow {
-  id: string
-  node_id: string
+  id: number
+  window_id: string
+  node_id: string | null
   start_time: string
   end_time: string
-  reason: string
+  reason: string | null
   auto_drain: boolean
+  suppress_alerts: boolean
+  suppress_remediation: boolean
+  status: 'scheduled' | 'active' | 'completed' | 'cancelled'
+  created_by: string | null
   created_at: string
+  updated_at: string
+}
+
+export interface MaintenanceWindowCreate {
+  node_id?: string
+  start_time: string
+  end_time: string
+  reason?: string
+  auto_drain?: boolean
+  suppress_alerts?: boolean
+  suppress_remediation?: boolean
+}
+
+export interface MaintenanceWindowListResponse {
+  windows: MaintenanceWindow[]
+  total: number
 }
 
 export interface SLMWebSocketMessage {

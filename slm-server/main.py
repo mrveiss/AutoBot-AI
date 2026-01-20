@@ -19,6 +19,7 @@ from api import (
     auth_router,
     deployments_router,
     health_router,
+    maintenance_router,
     nodes_router,
     settings_router,
     stateful_router,
@@ -107,6 +108,7 @@ app.include_router(deployments_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
 app.include_router(stateful_router, prefix="/api")
 app.include_router(updates_router, prefix="/api")
+app.include_router(maintenance_router, prefix="/api")
 app.include_router(websocket_router, prefix="/api")
 
 

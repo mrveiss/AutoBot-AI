@@ -234,6 +234,7 @@ class ReconcilerService:
         - Auto-restart: Restart failed services via SSH
         - Human required: Re-enrollment requires manual approval
         - Rate limited: Max 3 attempts per node, 5 min cooldown
+        - Respects maintenance windows: Skip nodes in maintenance
         """
         from services.database import db_service
 
@@ -254,6 +255,14 @@ class ReconcilerService:
             degraded_nodes = result.scalars().all()
 
             for node in degraded_nodes:
+                # Check if node is in maintenance window with remediation suppression
+                if await self._is_remediation_suppressed(db, node.node_id):
+                    logger.debug(
+                        "Skipping remediation for node %s - in maintenance window",
+                        node.node_id,
+                    )
+                    continue
+
                 await self._remediate_node(db, node)
 
     async def _remediate_node(self, db: AsyncSession, node: Node) -> bool:
@@ -640,6 +649,16 @@ class ReconcilerService:
             )
         except Exception as e:
             logger.debug("Failed to broadcast rollback event: %s", e)
+
+    async def _is_remediation_suppressed(
+        self, db: AsyncSession, node_id: str
+    ) -> bool:
+        """Check if remediation is suppressed for a node due to maintenance window."""
+        try:
+            from api.maintenance import should_suppress_remediation
+            return await should_suppress_remediation(db, node_id)
+        except ImportError:
+            return False
 
     async def _reconcile_roles(self) -> None:
         """Reconcile roles on nodes if auto-reconcile is enabled."""

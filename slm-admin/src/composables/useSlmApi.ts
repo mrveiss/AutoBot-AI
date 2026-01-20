@@ -33,6 +33,9 @@ import type {
   ServiceActionResponse,
   ServiceLogsResponse,
   FleetServicesResponse,
+  MaintenanceWindow,
+  MaintenanceWindowCreate,
+  MaintenanceWindowListResponse,
 } from '@/types/slm'
 
 // SLM Admin uses the local SLM backend API
@@ -431,6 +434,67 @@ export function useSlmApi() {
     return response.data
   }
 
+  // Maintenance Windows
+  async function getMaintenanceWindows(options?: {
+    node_id?: string
+    status?: string
+    include_completed?: boolean
+    page?: number
+    per_page?: number
+  }): Promise<MaintenanceWindowListResponse> {
+    const params = new URLSearchParams()
+    if (options?.node_id) params.append('node_id', options.node_id)
+    if (options?.status) params.append('status', options.status)
+    if (options?.include_completed) params.append('include_completed', 'true')
+    if (options?.page) params.append('page', options.page.toString())
+    if (options?.per_page) params.append('per_page', options.per_page.toString())
+
+    const response = await client.get<MaintenanceWindowListResponse>(
+      `/maintenance?${params.toString()}`
+    )
+    return response.data
+  }
+
+  async function getActiveMaintenanceWindows(nodeId?: string): Promise<MaintenanceWindowListResponse> {
+    const params = nodeId ? `?node_id=${nodeId}` : ''
+    const response = await client.get<MaintenanceWindowListResponse>(
+      `/maintenance/active${params}`
+    )
+    return response.data
+  }
+
+  async function getMaintenanceWindow(windowId: string): Promise<MaintenanceWindow> {
+    const response = await client.get<MaintenanceWindow>(`/maintenance/${windowId}`)
+    return response.data
+  }
+
+  async function createMaintenanceWindow(data: MaintenanceWindowCreate): Promise<MaintenanceWindow> {
+    const response = await client.post<MaintenanceWindow>('/maintenance', data)
+    return response.data
+  }
+
+  async function updateMaintenanceWindow(
+    windowId: string,
+    data: Partial<MaintenanceWindowCreate> & { status?: string }
+  ): Promise<MaintenanceWindow> {
+    const response = await client.put<MaintenanceWindow>(`/maintenance/${windowId}`, data)
+    return response.data
+  }
+
+  async function deleteMaintenanceWindow(windowId: string): Promise<void> {
+    await client.delete(`/maintenance/${windowId}`)
+  }
+
+  async function activateMaintenanceWindow(windowId: string): Promise<MaintenanceWindow> {
+    const response = await client.post<MaintenanceWindow>(`/maintenance/${windowId}/activate`)
+    return response.data
+  }
+
+  async function completeMaintenanceWindow(windowId: string): Promise<MaintenanceWindow> {
+    const response = await client.post<MaintenanceWindow>(`/maintenance/${windowId}/complete`)
+    return response.data
+  }
+
   return {
     // Nodes
     getNodes,
@@ -485,5 +549,14 @@ export function useSlmApi() {
     startFleetService,
     stopFleetService,
     restartFleetService,
+    // Maintenance Windows
+    getMaintenanceWindows,
+    getActiveMaintenanceWindows,
+    getMaintenanceWindow,
+    createMaintenanceWindow,
+    updateMaintenanceWindow,
+    deleteMaintenanceWindow,
+    activateMaintenanceWindow,
+    completeMaintenanceWindow,
   }
 }

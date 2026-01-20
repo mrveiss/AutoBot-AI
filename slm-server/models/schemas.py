@@ -581,3 +581,59 @@ class FleetServicesResponse(BaseModel):
 
     services: List[FleetServiceStatus]
     total_services: int
+
+
+# =============================================================================
+# Maintenance Window Schemas
+# =============================================================================
+
+
+class MaintenanceWindowCreate(BaseModel):
+    """Maintenance window creation request."""
+
+    node_id: Optional[str] = None  # null = all nodes
+    start_time: datetime
+    end_time: datetime
+    reason: Optional[str] = None
+    auto_drain: bool = False
+    suppress_alerts: bool = True
+    suppress_remediation: bool = True
+
+
+class MaintenanceWindowUpdate(BaseModel):
+    """Maintenance window update request."""
+
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    reason: Optional[str] = None
+    auto_drain: Optional[bool] = None
+    suppress_alerts: Optional[bool] = None
+    suppress_remediation: Optional[bool] = None
+    status: Optional[str] = None
+
+
+class MaintenanceWindowResponse(BaseModel):
+    """Maintenance window response."""
+
+    id: int
+    window_id: str
+    node_id: Optional[str] = None
+    start_time: datetime
+    end_time: datetime
+    reason: Optional[str] = None
+    auto_drain: bool
+    suppress_alerts: bool
+    suppress_remediation: bool
+    status: str
+    created_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class MaintenanceWindowListResponse(BaseModel):
+    """Paginated maintenance window list."""
+
+    windows: List[MaintenanceWindowResponse]
+    total: int
