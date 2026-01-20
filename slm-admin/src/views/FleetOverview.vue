@@ -48,7 +48,7 @@ const connectionTestResult = ref<{
 
 // Role management
 const selectedRoles = ref<NodeRole[]>([])
-const availableRoles: NodeRole[] = ['redis', 'llm', 'npu', 'browser', 'orchestrator']
+const availableRoles: NodeRole[] = ['slm-agent', 'redis', 'backend', 'frontend', 'npu-worker', 'browser-automation', 'monitoring']
 
 // Lifecycle
 onMounted(async () => {
@@ -185,6 +185,33 @@ function closeConnectionTestResult(): void {
 }
 
 // Role Management
+const roleDescriptions: Record<NodeRole, string> = {
+  'slm-agent': 'SLM monitoring agent for node health reporting',
+  'redis': 'Redis database server',
+  'backend': 'FastAPI backend server',
+  'frontend': 'Vue.js frontend server',
+  'npu-worker': 'NPU acceleration worker',
+  'browser-automation': 'Playwright browser automation',
+  'monitoring': 'Prometheus/Grafana monitoring stack',
+}
+
+function formatRoleName(role: NodeRole): string {
+  const names: Record<NodeRole, string> = {
+    'slm-agent': 'SLM Agent',
+    'redis': 'Redis',
+    'backend': 'Backend',
+    'frontend': 'Frontend',
+    'npu-worker': 'NPU Worker',
+    'browser-automation': 'Browser Automation',
+    'monitoring': 'Monitoring',
+  }
+  return names[role] || role
+}
+
+function getRoleDescription(role: NodeRole): string {
+  return roleDescriptions[role] || 'Unknown role'
+}
+
 function openRoleModal(node: SLMNode): void {
   selectedRoles.value = [...node.roles]
   showRoleModal.value = true
@@ -421,16 +448,8 @@ function handleRestart(nodeId: string): void {
                   class="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
                 />
                 <div>
-                  <div class="font-medium text-gray-900 capitalize">{{ role }}</div>
-                  <div class="text-xs text-gray-500">
-                    {{
-                      role === 'redis' ? 'Redis database server' :
-                      role === 'llm' ? 'LLM inference engine' :
-                      role === 'npu' ? 'NPU acceleration worker' :
-                      role === 'browser' ? 'Browser automation' :
-                      'Workflow orchestrator'
-                    }}
-                  </div>
+                  <div class="font-medium text-gray-900">{{ formatRoleName(role) }}</div>
+                  <div class="text-xs text-gray-500">{{ getRoleDescription(role) }}</div>
                 </div>
               </label>
             </div>
