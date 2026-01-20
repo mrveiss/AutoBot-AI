@@ -14,6 +14,7 @@ export type NodeRole =
   | 'backend'
   | 'frontend'
   | 'llm'
+  | 'ai-stack'
   | 'npu-worker'
   | 'browser-automation'
   | 'monitoring'
