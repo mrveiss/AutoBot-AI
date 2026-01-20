@@ -48,7 +48,7 @@ const connectionTestResult = ref<{
 
 // Role management
 const selectedRoles = ref<NodeRole[]>([])
-const availableRoles: NodeRole[] = ['slm-agent', 'redis', 'backend', 'frontend', 'npu-worker', 'browser-automation', 'monitoring']
+const availableRoles: NodeRole[] = ['slm-agent', 'redis', 'backend', 'frontend', 'llm', 'npu-worker', 'browser-automation', 'monitoring']
 
 // Lifecycle
 onMounted(async () => {
@@ -190,6 +190,7 @@ const roleDescriptions: Record<NodeRole, string> = {
   'redis': 'Redis database server',
   'backend': 'FastAPI backend server',
   'frontend': 'Vue.js frontend server',
+  'llm': 'LLM inference provider (Ollama/vLLM)',
   'npu-worker': 'NPU acceleration worker',
   'browser-automation': 'Playwright browser automation',
   'monitoring': 'Prometheus/Grafana monitoring stack',
@@ -201,6 +202,7 @@ function formatRoleName(role: NodeRole): string {
     'redis': 'Redis',
     'backend': 'Backend',
     'frontend': 'Frontend',
+    'llm': 'LLM Provider',
     'npu-worker': 'NPU Worker',
     'browser-automation': 'Browser Automation',
     'monitoring': 'Monitoring',

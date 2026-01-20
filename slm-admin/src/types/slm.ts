@@ -13,6 +13,7 @@ export type NodeRole =
   | 'redis'
   | 'backend'
   | 'frontend'
+  | 'llm'
   | 'npu-worker'
   | 'browser-automation'
   | 'monitoring'
