@@ -4,10 +4,10 @@
 // Author: mrveiss
 
 /**
- * ServicesView - Fleet-wide service management dashboard
+ * ServicesView - Services grouped by host with per-service control
  *
- * Provides a centralized view of all systemd services across the fleet
- * with the ability to start/stop services across multiple nodes.
+ * Displays all systemd services grouped by host, with the ability to
+ * start/stop/restart individual services on specific nodes.
  * Supports filtering by category (AutoBot vs System services).
  *
  * Related to Issue #728
@@ -18,7 +18,7 @@ import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
 import { createLogger } from '@/utils/debugUtils'
-import type { FleetServiceStatus, ServiceStatus, ServiceCategory } from '@/types/slm'
+import type { FleetServiceStatus, ServiceStatus, ServiceCategory, SLMNode } from '@/types/slm'
 
 const logger = createLogger('ServicesView')
 const api = useSlmApi()
@@ -35,12 +35,16 @@ const lastRefresh = ref<string | null>(null)
 // Filters
 const searchQuery = ref('')
 const statusFilter = ref<string>('all')
-const categoryFilter = ref<ServiceCategory | 'all'>('autobot') // Default to AutoBot
+const categoryFilter = ref<ServiceCategory | 'all'>('autobot')
 const autoRefresh = ref(true)
 const autoRefreshInterval = 15000
 
+// Expanded nodes
+const expandedNodes = ref<Set<string>>(new Set())
+
 // Action state
 const isActionInProgress = ref(false)
+const actionNodeId = ref<string | null>(null)
 const actionService = ref<string | null>(null)
 const actionType = ref<string | null>(null)
 
@@ -57,7 +61,6 @@ const statusOptions = [
   { value: 'running', label: 'Running' },
   { value: 'stopped', label: 'Stopped' },
   { value: 'failed', label: 'Failed' },
-  { value: 'mixed', label: 'Mixed Status' },
 ]
 
 // Category counts
@@ -67,71 +70,110 @@ const categoryCounts = computed(() => {
   return { autobot, system, all: services.value.length }
 })
 
-// Computed - services filtered by category first, then other filters
-const categoryFilteredServices = computed(() => {
-  if (categoryFilter.value === 'all') {
-    return services.value
+// Get unique nodes from fleet store
+const nodes = computed(() => fleetStore.nodes)
+
+// Group services by node
+interface NodeServiceGroup {
+  nodeId: string
+  hostname: string
+  ipAddress: string
+  status: string
+  services: Array<{
+    service_name: string
+    category: ServiceCategory
+    status: ServiceStatus
+  }>
+  runningCount: number
+  stoppedCount: number
+  failedCount: number
+}
+
+const servicesByNode = computed<NodeServiceGroup[]>(() => {
+  // Build a map of node services from the fleet services data
+  const nodeMap = new Map<string, NodeServiceGroup>()
+
+  // Initialize from nodes
+  for (const node of nodes.value) {
+    nodeMap.set(node.node_id, {
+      nodeId: node.node_id,
+      hostname: node.hostname,
+      ipAddress: node.ip_address,
+      status: node.status,
+      services: [],
+      runningCount: 0,
+      stoppedCount: 0,
+      failedCount: 0,
+    })
   }
-  return services.value.filter(s => s.category === categoryFilter.value)
-})
 
-const filteredServices = computed(() => {
-  let filtered = categoryFilteredServices.value
+  // Populate services from fleet data
+  for (const service of services.value) {
+    // Apply category filter
+    if (categoryFilter.value !== 'all' && service.category !== categoryFilter.value) {
+      continue
+    }
 
-  // Apply status filter
-  if (statusFilter.value !== 'all') {
-    if (statusFilter.value === 'mixed') {
-      filtered = filtered.filter(s =>
-        s.running_count > 0 && s.running_count < s.total_nodes
-      )
-    } else if (statusFilter.value === 'running') {
-      filtered = filtered.filter(s => s.running_count === s.total_nodes)
-    } else if (statusFilter.value === 'stopped') {
-      filtered = filtered.filter(s => s.stopped_count === s.total_nodes)
-    } else if (statusFilter.value === 'failed') {
-      filtered = filtered.filter(s => s.failed_count > 0)
+    // Apply search filter
+    if (searchQuery.value) {
+      const query = searchQuery.value.toLowerCase()
+      if (!service.service_name.toLowerCase().includes(query)) {
+        continue
+      }
+    }
+
+    // Add service to each node it exists on
+    for (const nodeInfo of service.nodes) {
+      const nodeGroup = nodeMap.get(nodeInfo.node_id)
+      if (nodeGroup) {
+        // Apply status filter
+        if (statusFilter.value !== 'all' && nodeInfo.status !== statusFilter.value) {
+          continue
+        }
+
+        nodeGroup.services.push({
+          service_name: service.service_name,
+          category: service.category,
+          status: nodeInfo.status,
+        })
+
+        if (nodeInfo.status === 'running') nodeGroup.runningCount++
+        else if (nodeInfo.status === 'stopped') nodeGroup.stoppedCount++
+        else if (nodeInfo.status === 'failed') nodeGroup.failedCount++
+      }
     }
   }
 
-  // Apply search filter
-  if (searchQuery.value) {
-    const query = searchQuery.value.toLowerCase()
-    filtered = filtered.filter(s =>
-      s.service_name.toLowerCase().includes(query)
-    )
+  // Sort services within each node
+  for (const nodeGroup of nodeMap.values()) {
+    nodeGroup.services.sort((a, b) => a.service_name.localeCompare(b.service_name))
   }
 
-  return filtered
+  // Return nodes that have services, sorted by hostname
+  return Array.from(nodeMap.values())
+    .filter(n => n.services.length > 0)
+    .sort((a, b) => a.hostname.localeCompare(b.hostname))
 })
 
-// Summary stats based on currently filtered category
+// Summary stats
 const summaryStats = computed(() => {
-  const categoryServices = categoryFilteredServices.value
-  const total = categoryServices.length
-  const allRunning = categoryServices.filter(s => s.running_count === s.total_nodes).length
-  const allStopped = categoryServices.filter(s => s.stopped_count === s.total_nodes).length
-  const hasFailed = categoryServices.filter(s => s.failed_count > 0).length
-  const mixed = total - allRunning - allStopped
+  let totalServices = 0
+  let running = 0
+  let stopped = 0
+  let failed = 0
 
-  return { total, allRunning, allStopped, hasFailed, mixed }
+  for (const node of servicesByNode.value) {
+    totalServices += node.services.length
+    running += node.runningCount
+    stopped += node.stoppedCount
+    failed += node.failedCount
+  }
+
+  return { totalServices, running, stopped, failed, nodes: servicesByNode.value.length }
 })
 
 // Methods
-function getServiceStatusClass(service: FleetServiceStatus): string {
-  if (service.failed_count > 0) return 'bg-red-100 text-red-700 border-red-200'
-  if (service.running_count === service.total_nodes) return 'bg-green-100 text-green-700 border-green-200'
-  if (service.stopped_count === service.total_nodes) return 'bg-gray-100 text-gray-600 border-gray-200'
-  return 'bg-yellow-100 text-yellow-700 border-yellow-200'
-}
-
-function getServiceStatusText(service: FleetServiceStatus): string {
-  if (service.failed_count > 0) return `${service.failed_count} failed`
-  if (service.running_count === service.total_nodes) return 'All running'
-  if (service.stopped_count === service.total_nodes) return 'All stopped'
-  return `${service.running_count}/${service.total_nodes} running`
-}
-
-function getNodeStatusDot(status: ServiceStatus): string {
+function getStatusDotClass(status: ServiceStatus): string {
   switch (status) {
     case 'running': return 'bg-green-500'
     case 'stopped': return 'bg-gray-400'
@@ -140,29 +182,37 @@ function getNodeStatusDot(status: ServiceStatus): string {
   }
 }
 
-function getCategoryBadgeClass(category: ServiceCategory): string {
-  return category === 'autobot'
-    ? 'bg-primary-100 text-primary-700 border-primary-200'
-    : 'bg-slate-100 text-slate-600 border-slate-200'
+function getStatusTextClass(status: ServiceStatus): string {
+  switch (status) {
+    case 'running': return 'text-green-600'
+    case 'stopped': return 'text-gray-500'
+    case 'failed': return 'text-red-600'
+    default: return 'text-yellow-600'
+  }
 }
 
-function formatRelativeTime(timestamp: string | null): string {
-  if (!timestamp) return 'Never'
-  const date = new Date(timestamp)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
+function getCategoryBadgeClass(category: ServiceCategory): string {
+  return category === 'autobot'
+    ? 'bg-primary-100 text-primary-700'
+    : 'bg-slate-100 text-slate-600'
+}
 
-  if (diffMs < 60000) return 'Just now'
-  if (diffMs < 3600000) {
-    const mins = Math.floor(diffMs / 60000)
-    return `${mins}m ago`
+function toggleNode(nodeId: string): void {
+  if (expandedNodes.value.has(nodeId)) {
+    expandedNodes.value.delete(nodeId)
+  } else {
+    expandedNodes.value.add(nodeId)
   }
-  if (diffMs < 86400000) {
-    const hours = Math.floor(diffMs / 3600000)
-    return `${hours}h ago`
-  }
-  const days = Math.floor(diffMs / 86400000)
-  return `${days}d ago`
+  // Trigger reactivity
+  expandedNodes.value = new Set(expandedNodes.value)
+}
+
+function expandAll(): void {
+  expandedNodes.value = new Set(servicesByNode.value.map(n => n.nodeId))
+}
+
+function collapseAll(): void {
+  expandedNodes.value = new Set()
 }
 
 async function fetchServices(): Promise<void> {
@@ -172,6 +222,12 @@ async function fetchServices(): Promise<void> {
     totalServices.value = response.total_services
     lastRefresh.value = new Date().toISOString()
     errorMessage.value = null
+
+    // Auto-expand first few nodes on initial load
+    if (expandedNodes.value.size === 0 && servicesByNode.value.length > 0) {
+      const nodesToExpand = servicesByNode.value.slice(0, 3)
+      expandedNodes.value = new Set(nodesToExpand.map(n => n.nodeId))
+    }
   } catch (error) {
     logger.error('Failed to fetch fleet services:', error)
     errorMessage.value = 'Failed to load services'
@@ -180,36 +236,47 @@ async function fetchServices(): Promise<void> {
   }
 }
 
-async function handleFleetAction(
+async function handleServiceAction(
+  nodeId: string,
   serviceName: string,
   action: 'start' | 'stop' | 'restart'
 ): Promise<void> {
   if (isActionInProgress.value) return
 
   isActionInProgress.value = true
+  actionNodeId.value = nodeId
   actionService.value = serviceName
   actionType.value = action
 
   try {
-    let result
-    if (action === 'start') {
-      result = await api.startFleetService(serviceName)
-    } else if (action === 'stop') {
-      result = await api.stopFleetService(serviceName)
-    } else {
-      result = await api.restartFleetService(serviceName)
-    }
+    const result = await api.serviceAction(nodeId, serviceName, action)
 
     if (result.success) {
-      await fetchServices()
+      // Update local state optimistically
+      const service = services.value.find(s => s.service_name === serviceName)
+      if (service) {
+        const nodeInfo = service.nodes.find(n => n.node_id === nodeId)
+        if (nodeInfo) {
+          if (action === 'start' || action === 'restart') {
+            nodeInfo.status = 'running'
+          } else if (action === 'stop') {
+            nodeInfo.status = 'stopped'
+          }
+          // Recalculate counts
+          service.running_count = service.nodes.filter(n => n.status === 'running').length
+          service.stopped_count = service.nodes.filter(n => n.status === 'stopped').length
+          service.failed_count = service.nodes.filter(n => n.status === 'failed').length
+        }
+      }
     } else {
       errorMessage.value = result.message
     }
   } catch (error) {
-    logger.error(`Failed to ${action} fleet service:`, error)
-    errorMessage.value = `Failed to ${action} ${serviceName} across fleet`
+    logger.error(`Failed to ${action} service:`, error)
+    errorMessage.value = `Failed to ${action} ${serviceName}`
   } finally {
     isActionInProgress.value = false
+    actionNodeId.value = null
     actionService.value = null
     actionType.value = null
   }
@@ -226,7 +293,6 @@ async function handleCategoryChange(
 
   try {
     await api.updateServiceCategory(serviceName, newCategory)
-    // Update local state
     const service = services.value.find(s => s.service_name === serviceName)
     if (service) {
       service.category = newCategory
@@ -248,7 +314,6 @@ function toggleCategoryMenu(serviceName: string): void {
   }
 }
 
-// Close menu when clicking outside
 function handleClickOutside(event: MouseEvent): void {
   const target = event.target as HTMLElement
   if (!target.closest('.category-menu-container')) {
@@ -266,23 +331,25 @@ function toggleAutoRefresh(): void {
   }
 }
 
+function isActionOnService(nodeId: string, serviceName: string): boolean {
+  return actionNodeId.value === nodeId && actionService.value === serviceName
+}
+
 // Handle real-time service status updates via WebSocket
 function handleServiceStatusUpdate(
   nodeId: string,
-  data: { service_name: string; status: string; action?: string; success: boolean; message?: string }
+  data: { service_name: string; status: string }
 ): void {
-  const serviceIndex = services.value.findIndex(s => s.service_name === data.service_name)
-  if (serviceIndex === -1) return
+  const service = services.value.find(s => s.service_name === data.service_name)
+  if (!service) return
 
-  const service = services.value[serviceIndex]
-  const nodeIndex = service.nodes.findIndex(n => n.node_id === nodeId)
-  if (nodeIndex === -1) return
+  const nodeInfo = service.nodes.find(n => n.node_id === nodeId)
+  if (!nodeInfo) return
 
-  service.nodes[nodeIndex].status = data.status as ServiceStatus
+  nodeInfo.status = data.status as ServiceStatus
   service.running_count = service.nodes.filter(n => n.status === 'running').length
   service.stopped_count = service.nodes.filter(n => n.status === 'stopped').length
   service.failed_count = service.nodes.filter(n => n.status === 'failed').length
-  services.value[serviceIndex] = { ...service }
 
   logger.debug('Service status updated via WebSocket:', data.service_name, nodeId, data.status)
 }
@@ -317,11 +384,10 @@ onUnmounted(() => {
       <div>
         <h1 class="text-2xl font-bold text-gray-900">Fleet Services</h1>
         <p class="text-sm text-gray-500 mt-1">
-          Manage systemd services across all fleet nodes
+          Manage systemd services across all fleet nodes - grouped by host
         </p>
       </div>
       <div class="flex items-center gap-3">
-        <!-- WebSocket Status Indicator -->
         <div class="flex items-center gap-1.5 text-sm">
           <span
             :class="[
@@ -368,24 +434,24 @@ onUnmounted(() => {
     <!-- Summary Cards -->
     <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
       <div class="card p-4">
+        <div class="text-sm text-gray-500">Nodes</div>
+        <div class="text-2xl font-bold text-gray-900">{{ summaryStats.nodes }}</div>
+      </div>
+      <div class="card p-4">
         <div class="text-sm text-gray-500">Total Services</div>
-        <div class="text-2xl font-bold text-gray-900">{{ summaryStats.total }}</div>
+        <div class="text-2xl font-bold text-gray-900">{{ summaryStats.totalServices }}</div>
       </div>
       <div class="card p-4 border-l-4 border-green-500">
-        <div class="text-sm text-gray-500">All Running</div>
-        <div class="text-2xl font-bold text-green-600">{{ summaryStats.allRunning }}</div>
+        <div class="text-sm text-gray-500">Running</div>
+        <div class="text-2xl font-bold text-green-600">{{ summaryStats.running }}</div>
       </div>
       <div class="card p-4 border-l-4 border-gray-400">
-        <div class="text-sm text-gray-500">All Stopped</div>
-        <div class="text-2xl font-bold text-gray-600">{{ summaryStats.allStopped }}</div>
-      </div>
-      <div class="card p-4 border-l-4 border-yellow-500">
-        <div class="text-sm text-gray-500">Mixed Status</div>
-        <div class="text-2xl font-bold text-yellow-600">{{ summaryStats.mixed }}</div>
+        <div class="text-sm text-gray-500">Stopped</div>
+        <div class="text-2xl font-bold text-gray-600">{{ summaryStats.stopped }}</div>
       </div>
       <div class="card p-4 border-l-4 border-red-500">
-        <div class="text-sm text-gray-500">Has Failures</div>
-        <div class="text-2xl font-bold text-red-600">{{ summaryStats.hasFailed }}</div>
+        <div class="text-sm text-gray-500">Failed</div>
+        <div class="text-2xl font-bold text-red-600">{{ summaryStats.failed }}</div>
       </div>
     </div>
 
@@ -467,6 +533,17 @@ onUnmounted(() => {
             </option>
           </select>
         </div>
+
+        <!-- Expand/Collapse -->
+        <div class="flex items-center gap-2">
+          <button @click="expandAll" class="text-sm text-primary-600 hover:text-primary-800">
+            Expand All
+          </button>
+          <span class="text-gray-300">|</span>
+          <button @click="collapseAll" class="text-sm text-primary-600 hover:text-primary-800">
+            Collapse All
+          </button>
+        </div>
       </div>
     </div>
 
@@ -480,182 +557,207 @@ onUnmounted(() => {
     </div>
 
     <!-- Empty State -->
-    <div v-else-if="services.length === 0" class="card p-12 text-center">
+    <div v-else-if="servicesByNode.length === 0" class="card p-12 text-center">
       <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
       </svg>
-      <h3 class="text-lg font-medium text-gray-900 mb-2">No services discovered</h3>
+      <h3 class="text-lg font-medium text-gray-900 mb-2">No services found</h3>
       <p class="text-gray-500">
-        Services will appear here once agents report their discovered systemd services.
+        No services match your current filters. Try adjusting the category or search criteria.
       </p>
     </div>
 
-    <!-- No Results -->
-    <div v-else-if="filteredServices.length === 0" class="card p-12 text-center">
-      <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-      </svg>
-      <h3 class="text-lg font-medium text-gray-900 mb-2">No matching services</h3>
-      <p class="text-gray-500">
-        Try adjusting your search or filter criteria.
-      </p>
-    </div>
-
-    <!-- Services Grid -->
-    <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <!-- Services Grouped by Node -->
+    <div v-else class="space-y-4">
       <div
-        v-for="service in filteredServices"
-        :key="service.service_name"
-        class="card p-4"
+        v-for="node in servicesByNode"
+        :key="node.nodeId"
+        class="card overflow-hidden"
       >
-        <!-- Service Header -->
-        <div class="flex items-start justify-between mb-3">
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2">
-              <h3 class="font-semibold text-gray-900 truncate">{{ service.service_name }}</h3>
-              <!-- Category Badge with dropdown -->
-              <div class="relative category-menu-container">
-                <button
-                  @click.stop="toggleCategoryMenu(service.service_name)"
-                  :class="[
-                    'inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded border cursor-pointer hover:opacity-80',
-                    getCategoryBadgeClass(service.category)
-                  ]"
-                  :title="`Category: ${service.category} (click to change)`"
-                >
-                  {{ service.category === 'autobot' ? 'AutoBot' : 'System' }}
-                  <svg class="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                <!-- Dropdown menu -->
-                <div
-                  v-if="categoryMenuOpen === service.service_name"
-                  class="absolute left-0 mt-1 w-32 bg-white rounded-lg shadow-lg border border-gray-200 z-10"
-                >
-                  <button
-                    @click="handleCategoryChange(service.service_name, 'autobot')"
-                    :disabled="isCategoryChanging"
-                    :class="[
-                      'w-full px-3 py-2 text-left text-sm hover:bg-gray-50 rounded-t-lg',
-                      service.category === 'autobot' ? 'bg-primary-50 text-primary-700' : 'text-gray-700'
-                    ]"
-                  >
-                    AutoBot
-                  </button>
-                  <button
-                    @click="handleCategoryChange(service.service_name, 'system')"
-                    :disabled="isCategoryChanging"
-                    :class="[
-                      'w-full px-3 py-2 text-left text-sm hover:bg-gray-50 rounded-b-lg border-t border-gray-100',
-                      service.category === 'system' ? 'bg-slate-50 text-slate-700' : 'text-gray-700'
-                    ]"
-                  >
-                    System
-                  </button>
-                </div>
+        <!-- Node Header (Clickable) -->
+        <button
+          @click="toggleNode(node.nodeId)"
+          class="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+        >
+          <div class="flex items-center gap-4">
+            <!-- Expand/Collapse Icon -->
+            <svg
+              :class="[
+                'w-5 h-5 text-gray-400 transition-transform',
+                expandedNodes.has(node.nodeId) ? 'rotate-90' : ''
+              ]"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+
+            <!-- Node Info -->
+            <div class="text-left">
+              <div class="flex items-center gap-2">
+                <span class="font-semibold text-gray-900">{{ node.hostname }}</span>
+                <span class="text-sm text-gray-500">({{ node.ipAddress }})</span>
+              </div>
+              <div class="text-sm text-gray-500">
+                {{ node.services.length }} services
               </div>
             </div>
-            <span
-              :class="[
-                'inline-flex items-center px-2 py-0.5 mt-1 text-xs font-medium rounded border',
-                getServiceStatusClass(service)
-              ]"
-            >
-              {{ getServiceStatusText(service) }}
-            </span>
           </div>
-          <div class="flex items-center gap-1 ml-2">
-            <!-- Start All -->
-            <button
-              v-if="service.stopped_count > 0"
-              @click="handleFleetAction(service.service_name, 'start')"
-              :disabled="isActionInProgress"
-              class="p-1.5 text-green-600 hover:bg-green-50 rounded disabled:opacity-50"
-              title="Start on all nodes"
-            >
-              <svg
-                v-if="actionService === service.service_name && actionType === 'start'"
-                class="w-5 h-5 animate-spin"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-              </svg>
-              <svg v-else class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-            </button>
 
-            <!-- Stop All -->
-            <button
-              v-if="service.running_count > 0"
-              @click="handleFleetAction(service.service_name, 'stop')"
-              :disabled="isActionInProgress"
-              class="p-1.5 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
-              title="Stop on all nodes"
-            >
-              <svg
-                v-if="actionService === service.service_name && actionType === 'stop'"
-                class="w-5 h-5 animate-spin"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-              </svg>
-              <svg v-else class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                <rect x="6" y="6" width="12" height="12" />
-              </svg>
-            </button>
-
-            <!-- Restart All -->
-            <button
-              @click="handleFleetAction(service.service_name, 'restart')"
-              :disabled="isActionInProgress"
-              class="p-1.5 text-blue-600 hover:bg-blue-50 rounded disabled:opacity-50"
-              title="Restart on all nodes"
-            >
-              <svg
-                v-if="actionService === service.service_name && actionType === 'restart'"
-                class="w-5 h-5 animate-spin"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-              </svg>
-              <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <!-- Node Status Grid -->
-        <div class="border-t border-gray-100 pt-3">
-          <div class="text-xs text-gray-500 mb-2">Status per node:</div>
-          <div class="flex flex-wrap gap-2">
-            <div
-              v-for="node in service.nodes"
-              :key="node.node_id"
-              class="flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded text-xs"
-              :title="`${node.hostname}: ${node.status}`"
-            >
-              <span :class="['w-2 h-2 rounded-full', getNodeStatusDot(node.status)]"></span>
-              <span class="text-gray-700 truncate max-w-[100px]">{{ node.hostname }}</span>
+          <!-- Status Summary -->
+          <div class="flex items-center gap-4">
+            <div class="flex items-center gap-1.5 text-sm">
+              <span class="w-2 h-2 rounded-full bg-green-500"></span>
+              <span class="text-green-600">{{ node.runningCount }}</span>
+            </div>
+            <div class="flex items-center gap-1.5 text-sm">
+              <span class="w-2 h-2 rounded-full bg-gray-400"></span>
+              <span class="text-gray-500">{{ node.stoppedCount }}</span>
+            </div>
+            <div v-if="node.failedCount > 0" class="flex items-center gap-1.5 text-sm">
+              <span class="w-2 h-2 rounded-full bg-red-500"></span>
+              <span class="text-red-600">{{ node.failedCount }}</span>
             </div>
           </div>
+        </button>
+
+        <!-- Services List (Expandable) -->
+        <div v-if="expandedNodes.has(node.nodeId)" class="border-t border-gray-100">
+          <table class="w-full">
+            <thead>
+              <tr class="bg-gray-50 text-xs text-gray-500 uppercase">
+                <th class="px-4 py-2 text-left">Service</th>
+                <th class="px-4 py-2 text-left w-24">Category</th>
+                <th class="px-4 py-2 text-left w-24">Status</th>
+                <th class="px-4 py-2 text-right w-32">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="service in node.services"
+                :key="service.service_name"
+                class="border-t border-gray-50 hover:bg-gray-50"
+              >
+                <td class="px-4 py-2">
+                  <span class="font-medium text-gray-900">{{ service.service_name }}</span>
+                </td>
+                <td class="px-4 py-2">
+                  <div class="relative category-menu-container">
+                    <button
+                      @click.stop="toggleCategoryMenu(`${node.nodeId}-${service.service_name}`)"
+                      :class="[
+                        'inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded cursor-pointer hover:opacity-80',
+                        getCategoryBadgeClass(service.category)
+                      ]"
+                    >
+                      {{ service.category === 'autobot' ? 'AutoBot' : 'System' }}
+                      <svg class="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    <div
+                      v-if="categoryMenuOpen === `${node.nodeId}-${service.service_name}`"
+                      class="absolute left-0 mt-1 w-28 bg-white rounded-lg shadow-lg border border-gray-200 z-10"
+                    >
+                      <button
+                        @click="handleCategoryChange(service.service_name, 'autobot')"
+                        :disabled="isCategoryChanging"
+                        class="w-full px-3 py-1.5 text-left text-xs hover:bg-gray-50 rounded-t-lg"
+                      >
+                        AutoBot
+                      </button>
+                      <button
+                        @click="handleCategoryChange(service.service_name, 'system')"
+                        :disabled="isCategoryChanging"
+                        class="w-full px-3 py-1.5 text-left text-xs hover:bg-gray-50 rounded-b-lg border-t border-gray-100"
+                      >
+                        System
+                      </button>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-4 py-2">
+                  <div class="flex items-center gap-1.5">
+                    <span :class="['w-2 h-2 rounded-full', getStatusDotClass(service.status)]"></span>
+                    <span :class="['text-sm capitalize', getStatusTextClass(service.status)]">
+                      {{ service.status }}
+                    </span>
+                  </div>
+                </td>
+                <td class="px-4 py-2">
+                  <div class="flex items-center justify-end gap-1">
+                    <!-- Start -->
+                    <button
+                      v-if="service.status !== 'running'"
+                      @click.stop="handleServiceAction(node.nodeId, service.service_name, 'start')"
+                      :disabled="isActionInProgress"
+                      class="p-1 text-green-600 hover:bg-green-50 rounded disabled:opacity-50"
+                      title="Start"
+                    >
+                      <svg
+                        v-if="isActionOnService(node.nodeId, service.service_name) && actionType === 'start'"
+                        class="w-4 h-4 animate-spin"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                      </svg>
+                      <svg v-else class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    </button>
+
+                    <!-- Stop -->
+                    <button
+                      v-if="service.status === 'running'"
+                      @click.stop="handleServiceAction(node.nodeId, service.service_name, 'stop')"
+                      :disabled="isActionInProgress"
+                      class="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
+                      title="Stop"
+                    >
+                      <svg
+                        v-if="isActionOnService(node.nodeId, service.service_name) && actionType === 'stop'"
+                        class="w-4 h-4 animate-spin"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                      </svg>
+                      <svg v-else class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <rect x="6" y="6" width="12" height="12" />
+                      </svg>
+                    </button>
+
+                    <!-- Restart -->
+                    <button
+                      @click.stop="handleServiceAction(node.nodeId, service.service_name, 'restart')"
+                      :disabled="isActionInProgress"
+                      class="p-1 text-blue-600 hover:bg-blue-50 rounded disabled:opacity-50"
+                      title="Restart"
+                    >
+                      <svg
+                        v-if="isActionOnService(node.nodeId, service.service_name) && actionType === 'restart'"
+                        class="w-4 h-4 animate-spin"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                      </svg>
+                      <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
-    </div>
-
-    <!-- Footer -->
-    <div class="mt-6 text-center text-sm text-gray-500">
-      <span class="font-medium text-gray-700">{{ filteredServices.length }}</span>
-      of {{ totalServices }} services
-      <span v-if="lastRefresh"> &bull; Last updated {{ formatRelativeTime(lastRefresh) }}</span>
     </div>
   </div>
 </template>
