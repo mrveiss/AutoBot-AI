@@ -24,7 +24,7 @@ from typing import Optional
 
 import aiohttp
 
-from src.slm.agent.health_collector import HealthCollector
+from .health_collector import HealthCollector
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # These are configured via CLI args or environment variables at deployment
 DEFAULT_ADMIN_URL = "http://172.16.168.19:8000"
 DEFAULT_HEARTBEAT_INTERVAL = 30  # seconds
-DEFAULT_BUFFER_DB = "/var/lib/slm-agent/events.db"
+DEFAULT_BUFFER_DB = os.path.expanduser("~/.slm-agent/events.db")
 
 
 class SLMAgent:

@@ -10,7 +10,7 @@ Lightweight agent deployed to each managed node for:
 - Command receiving
 """
 
-from src.slm.agent.health_collector import HealthCollector
-from src.slm.agent.agent import SLMAgent
+from .health_collector import HealthCollector
+from .agent import SLMAgent
 
 __all__ = ["HealthCollector", "SLMAgent"]
