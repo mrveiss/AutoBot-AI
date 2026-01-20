@@ -12,7 +12,7 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from typing_extensions import Annotated
 
@@ -53,7 +53,7 @@ async def _run_ansible_service_action(
     node: Node,
     service_name: str,
     action: str,
-) -> tuple[bool, str]:
+) -> Tuple[bool, str]:
     """
     Run Ansible playbook to control a service.
 
@@ -134,7 +134,7 @@ async def _run_ansible_get_logs(
     service_name: str,
     lines: int = 100,
     since: Optional[str] = None,
-) -> tuple[bool, str]:
+) -> Tuple[bool, str]:
     """
     Run Ansible to fetch service logs via journalctl.
 
