@@ -166,6 +166,26 @@ export function useSlmWebSocket() {
     })
   }
 
+  function onServiceStatus(
+    handler: (nodeId: string, data: {
+      service_name: string
+      status: string
+      action?: string
+      success: boolean
+      message?: string
+    }) => void
+  ): void {
+    messageHandlers.set('service_status', (message) => {
+      handler(message.node_id, message.data as {
+        service_name: string
+        status: string
+        action?: string
+        success: boolean
+        message?: string
+      })
+    })
+  }
+
   // Cleanup on component unmount
   onUnmounted(() => {
     disconnect()
@@ -187,5 +207,6 @@ export function useSlmWebSocket() {
     onDeploymentStatus,
     onBackupStatus,
     onRemediationEvent,
+    onServiceStatus,
   }
 }

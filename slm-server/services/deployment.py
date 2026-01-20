@@ -9,6 +9,7 @@ Manages Ansible-based role deployments to nodes.
 
 import asyncio
 import logging
+import os
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -397,6 +398,7 @@ class DeploymentService:
 
         # Build the ansible command
         # Always skip host key checking for automated enrollment
+        # Use ControlPath=none to avoid PTY issues when running from uvicorn
         cmd = [
             "ansible-playbook",
             str(playbook_path),
@@ -407,7 +409,8 @@ class DeploymentService:
             "-e", f"slm_node_id={node_id}",
             "-e", f"slm_admin_url={admin_url}",
             "-e", f"slm_heartbeat_interval={settings.heartbeat_interval}",
-            "-e", "ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'",
+            "-e", "ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ControlPath=none'",
+            "-e", "ansible_ssh_pipelining=false",
         ]
 
         # Add password authentication if provided
@@ -424,11 +427,21 @@ class DeploymentService:
 
         logger.debug("Running enrollment: %s", " ".join(cmd[:10]) + " ...")
 
+        # Set environment to avoid TTY issues when running from uvicorn
+        env = {
+            **os.environ,
+            "ANSIBLE_FORCE_COLOR": "0",
+            "ANSIBLE_NOCOLOR": "1",
+            "ANSIBLE_HOST_KEY_CHECKING": "False",
+            "ANSIBLE_SSH_RETRIES": "3",
+        }
+
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             cwd=str(self.ansible_dir),
+            env=env,
         )
 
         stdout, _ = await process.communicate()

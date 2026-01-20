@@ -18,6 +18,7 @@
 
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
+import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { createLogger } from '@/utils/debugUtils'
 import type { NodeService, ServiceStatus } from '@/types/slm'
 
@@ -42,6 +43,7 @@ const emit = defineEmits<{
 
 // API composable
 const api = useSlmApi()
+const { connect, subscribe, onServiceStatus, connected } = useSlmWebSocket()
 
 // State
 const services = ref<NodeService[]>([])
@@ -268,9 +270,36 @@ watch(autoRefresh, (enabled) => {
   }
 })
 
+// Handle real-time service status updates via WebSocket
+function handleServiceStatusUpdate(
+  nodeId: string,
+  data: { service_name: string; status: string; action?: string; success: boolean; message?: string }
+): void {
+  // Only handle updates for this node
+  if (nodeId !== props.nodeId) return
+
+  // Find the service in our list and update its status
+  const serviceIndex = services.value.findIndex(s => s.service_name === data.service_name)
+  if (serviceIndex === -1) return
+
+  // Update the service status
+  services.value[serviceIndex] = {
+    ...services.value[serviceIndex],
+    status: data.status as ServiceStatus,
+    last_checked: new Date().toISOString(),
+  }
+
+  logger.debug('Service status updated via WebSocket:', data.service_name, data.status)
+}
+
 // Lifecycle
 onMounted(() => {
   fetchServices()
+
+  // Setup WebSocket for real-time updates
+  connect()
+  subscribe(props.nodeId)
+  onServiceStatus(handleServiceStatusUpdate)
 
   if (autoRefresh.value) {
     refreshInterval = setInterval(fetchServices, props.autoRefreshInterval)
@@ -293,6 +322,17 @@ onUnmounted(() => {
     <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
       <div class="flex items-center gap-3">
         <h3 class="text-lg font-semibold text-gray-900">{{ nodeName }} - Services</h3>
+        <!-- WebSocket Status -->
+        <span
+          :class="[
+            'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs',
+            connected ? 'text-green-600' : 'text-gray-400'
+          ]"
+          :title="connected ? 'Live updates active' : 'Live updates offline'"
+        >
+          <span :class="['w-1.5 h-1.5 rounded-full', connected ? 'bg-green-500' : 'bg-gray-400']"></span>
+          {{ connected ? 'Live' : 'Offline' }}
+        </span>
         <div class="flex items-center gap-2 text-sm">
           <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-green-100 text-green-700">
             <span class="w-2 h-2 rounded-full bg-green-500"></span>

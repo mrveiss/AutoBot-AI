@@ -31,6 +31,7 @@ from models.schemas import (
 )
 from services.auth import get_current_user
 from services.database import get_db
+from api.websocket import ws_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["services"])
@@ -304,6 +305,26 @@ async def start_service(
             service.last_checked = datetime.utcnow()
             await db.commit()
 
+        # Broadcast status change via WebSocket
+        await ws_manager.send_service_status(
+            node_id=node_id,
+            service_name=service_name,
+            status="running",
+            action="start",
+            success=True,
+            message=message,
+        )
+    else:
+        # Broadcast failure
+        await ws_manager.send_service_status(
+            node_id=node_id,
+            service_name=service_name,
+            status="unknown",
+            action="start",
+            success=False,
+            message=message,
+        )
+
     return ServiceActionResponse(
         action="start",
         service_name=service_name,
@@ -345,6 +366,25 @@ async def stop_service(
             service.last_checked = datetime.utcnow()
             await db.commit()
 
+        # Broadcast status change via WebSocket
+        await ws_manager.send_service_status(
+            node_id=node_id,
+            service_name=service_name,
+            status="stopped",
+            action="stop",
+            success=True,
+            message=message,
+        )
+    else:
+        await ws_manager.send_service_status(
+            node_id=node_id,
+            service_name=service_name,
+            status="unknown",
+            action="stop",
+            success=False,
+            message=message,
+        )
+
     return ServiceActionResponse(
         action="stop",
         service_name=service_name,
@@ -385,6 +425,25 @@ async def restart_service(
             service.sub_state = "running"
             service.last_checked = datetime.utcnow()
             await db.commit()
+
+        # Broadcast status change via WebSocket
+        await ws_manager.send_service_status(
+            node_id=node_id,
+            service_name=service_name,
+            status="running",
+            action="restart",
+            success=True,
+            message=message,
+        )
+    else:
+        await ws_manager.send_service_status(
+            node_id=node_id,
+            service_name=service_name,
+            status="unknown",
+            action="restart",
+            success=False,
+            message=message,
+        )
 
     return ServiceActionResponse(
         action="restart",

@@ -14,6 +14,7 @@
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
+import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
 import { createLogger } from '@/utils/debugUtils'
 import type { FleetServiceStatus, ServiceStatus } from '@/types/slm'
@@ -21,6 +22,7 @@ import type { FleetServiceStatus, ServiceStatus } from '@/types/slm'
 const logger = createLogger('ServicesView')
 const api = useSlmApi()
 const fleetStore = useFleetStore()
+const { connect, subscribeAll, onServiceStatus, connected } = useSlmWebSocket()
 
 // State
 const services = ref<FleetServiceStatus[]>([])
@@ -195,10 +197,42 @@ function toggleAutoRefresh(): void {
   }
 }
 
+// Handle real-time service status updates via WebSocket
+function handleServiceStatusUpdate(
+  nodeId: string,
+  data: { service_name: string; status: string; action?: string; success: boolean; message?: string }
+): void {
+  // Find the service in our list and update its node status
+  const serviceIndex = services.value.findIndex(s => s.service_name === data.service_name)
+  if (serviceIndex === -1) return
+
+  const service = services.value[serviceIndex]
+  const nodeIndex = service.nodes.findIndex(n => n.node_id === nodeId)
+  if (nodeIndex === -1) return
+
+  // Update the node status
+  service.nodes[nodeIndex].status = data.status as ServiceStatus
+
+  // Recalculate counts
+  service.running_count = service.nodes.filter(n => n.status === 'running').length
+  service.stopped_count = service.nodes.filter(n => n.status === 'stopped').length
+  service.failed_count = service.nodes.filter(n => n.status === 'failed').length
+
+  // Update the service in the array to trigger reactivity
+  services.value[serviceIndex] = { ...service }
+
+  logger.debug('Service status updated via WebSocket:', data.service_name, nodeId, data.status)
+}
+
 // Lifecycle
 onMounted(() => {
   fetchServices()
   fleetStore.fetchNodes()
+
+  // Setup WebSocket for real-time updates
+  connect()
+  subscribeAll()
+  onServiceStatus(handleServiceStatusUpdate)
 
   if (autoRefresh.value) {
     refreshInterval = setInterval(fetchServices, autoRefreshInterval)
@@ -223,6 +257,18 @@ onUnmounted(() => {
         </p>
       </div>
       <div class="flex items-center gap-3">
+        <!-- WebSocket Status Indicator -->
+        <div class="flex items-center gap-1.5 text-sm">
+          <span
+            :class="[
+              'w-2 h-2 rounded-full',
+              connected ? 'bg-green-500' : 'bg-gray-400'
+            ]"
+          ></span>
+          <span :class="connected ? 'text-green-600' : 'text-gray-500'">
+            {{ connected ? 'Live' : 'Offline' }}
+          </span>
+        </div>
         <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
           <input
             type="checkbox"

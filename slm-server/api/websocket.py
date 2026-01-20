@@ -146,6 +146,32 @@ class ConnectionManager:
             },
         )
 
+    async def send_service_status(
+        self,
+        node_id: str,
+        service_name: str,
+        status: str,
+        action: str = None,
+        success: bool = True,
+        message: str = None,
+    ) -> None:
+        """Send service status change to global event channel."""
+        await self.broadcast(
+            "events:global",
+            {
+                "type": "service_status",
+                "node_id": node_id,
+                "data": {
+                    "service_name": service_name,
+                    "status": status,
+                    "action": action,
+                    "success": success,
+                    "message": message,
+                },
+                "timestamp": asyncio.get_event_loop().time(),
+            },
+        )
+
 
 # Global connection manager instance
 ws_manager = ConnectionManager()
