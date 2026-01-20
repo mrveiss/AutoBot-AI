@@ -242,6 +242,7 @@ class RoleInfo(BaseModel):
     category: str
     dependencies: List[str] = Field(default_factory=list)
     variables: Dict = Field(default_factory=dict)
+    tools: List[str] = Field(default_factory=list)
 
 
 class RoleListResponse(BaseModel):

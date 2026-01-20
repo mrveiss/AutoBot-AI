@@ -146,6 +146,7 @@ export interface RoleInfo {
   category: RoleCategory
   dependencies: NodeRole[]
   variables: Record<string, unknown>
+  tools: string[]
 }
 
 /**

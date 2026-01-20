@@ -34,6 +34,7 @@ AVAILABLE_ROLES = [
         category="core",
         dependencies=[],
         variables={"heartbeat_interval": 30},
+        tools=["systemd", "journalctl", "htop", "netstat"],
     ),
     RoleInfo(
         name="redis",
@@ -41,6 +42,7 @@ AVAILABLE_ROLES = [
         category="data",
         dependencies=["slm-agent"],
         variables={"port": 6379, "cluster_enabled": False},
+        tools=["redis-server", "redis-cli", "redis-sentinel"],
     ),
     RoleInfo(
         name="backend",
@@ -48,6 +50,7 @@ AVAILABLE_ROLES = [
         category="application",
         dependencies=["slm-agent", "redis"],
         variables={"port": 8001, "workers": 4},
+        tools=["uvicorn", "gunicorn", "python3", "pip"],
     ),
     RoleInfo(
         name="frontend",
@@ -55,6 +58,23 @@ AVAILABLE_ROLES = [
         category="application",
         dependencies=["slm-agent"],
         variables={"port": 5173},
+        tools=["nginx", "node", "npm", "vite"],
+    ),
+    RoleInfo(
+        name="llm",
+        description="LLM inference provider (Ollama/vLLM)",
+        category="ai",
+        dependencies=["slm-agent"],
+        variables={"port": 11434},
+        tools=["ollama", "vllm", "llama-cpp"],
+    ),
+    RoleInfo(
+        name="ai-stack",
+        description="AI tools and processing stack",
+        category="ai",
+        dependencies=["slm-agent"],
+        variables={"port": 8080},
+        tools=["chromadb", "langchain", "transformers", "torch", "onnxruntime"],
     ),
     RoleInfo(
         name="npu-worker",
@@ -62,6 +82,7 @@ AVAILABLE_ROLES = [
         category="ai",
         dependencies=["slm-agent"],
         variables={"device_id": 0},
+        tools=["openvino", "intel-npu-driver", "benchmark_app"],
     ),
     RoleInfo(
         name="browser-automation",
@@ -69,6 +90,7 @@ AVAILABLE_ROLES = [
         category="automation",
         dependencies=["slm-agent"],
         variables={"headless": True},
+        tools=["playwright", "chromium", "firefox", "webkit"],
     ),
     RoleInfo(
         name="monitoring",
@@ -76,6 +98,7 @@ AVAILABLE_ROLES = [
         category="observability",
         dependencies=["slm-agent"],
         variables={"prometheus_port": 9090, "grafana_port": 3000},
+        tools=["prometheus", "grafana", "node_exporter", "alertmanager"],
     ),
 ]
 

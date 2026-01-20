@@ -185,35 +185,64 @@ function closeConnectionTestResult(): void {
 }
 
 // Role Management
-const roleDescriptions: Record<NodeRole, string> = {
-  'slm-agent': 'SLM monitoring agent for node health reporting',
-  'redis': 'Redis database server',
-  'backend': 'FastAPI backend server',
-  'frontend': 'Vue.js frontend server',
-  'llm': 'LLM inference provider (Ollama/vLLM)',
-  'ai-stack': 'AI tools and processing stack',
-  'npu-worker': 'NPU acceleration worker',
-  'browser-automation': 'Playwright browser automation',
-  'monitoring': 'Prometheus/Grafana monitoring stack',
+const roleData: Record<NodeRole, { name: string; description: string; tools: string[] }> = {
+  'slm-agent': {
+    name: 'SLM Agent',
+    description: 'SLM monitoring agent for node health reporting',
+    tools: ['systemd', 'journalctl', 'htop', 'netstat'],
+  },
+  'redis': {
+    name: 'Redis',
+    description: 'Redis Stack server for data persistence',
+    tools: ['redis-server', 'redis-cli', 'redis-sentinel'],
+  },
+  'backend': {
+    name: 'Backend',
+    description: 'FastAPI backend server',
+    tools: ['uvicorn', 'gunicorn', 'python3', 'pip'],
+  },
+  'frontend': {
+    name: 'Frontend',
+    description: 'Vue.js frontend server',
+    tools: ['nginx', 'node', 'npm', 'vite'],
+  },
+  'llm': {
+    name: 'LLM Provider',
+    description: 'LLM inference provider (Ollama/vLLM)',
+    tools: ['ollama', 'vllm', 'llama-cpp'],
+  },
+  'ai-stack': {
+    name: 'AI Stack',
+    description: 'AI tools and processing stack',
+    tools: ['chromadb', 'langchain', 'transformers', 'torch', 'onnxruntime'],
+  },
+  'npu-worker': {
+    name: 'NPU Worker',
+    description: 'Intel NPU acceleration worker',
+    tools: ['openvino', 'intel-npu-driver', 'benchmark_app'],
+  },
+  'browser-automation': {
+    name: 'Browser Automation',
+    description: 'Playwright browser automation service',
+    tools: ['playwright', 'chromium', 'firefox', 'webkit'],
+  },
+  'monitoring': {
+    name: 'Monitoring',
+    description: 'Prometheus and Grafana monitoring stack',
+    tools: ['prometheus', 'grafana', 'node_exporter', 'alertmanager'],
+  },
 }
 
 function formatRoleName(role: NodeRole): string {
-  const names: Record<NodeRole, string> = {
-    'slm-agent': 'SLM Agent',
-    'redis': 'Redis',
-    'backend': 'Backend',
-    'frontend': 'Frontend',
-    'llm': 'LLM Provider',
-    'ai-stack': 'AI Stack',
-    'npu-worker': 'NPU Worker',
-    'browser-automation': 'Browser Automation',
-    'monitoring': 'Monitoring',
-  }
-  return names[role] || role
+  return roleData[role]?.name || role
 }
 
 function getRoleDescription(role: NodeRole): string {
-  return roleDescriptions[role] || 'Unknown role'
+  return roleData[role]?.description || 'Unknown role'
+}
+
+function getRoleTools(role: NodeRole): string[] {
+  return roleData[role]?.tools || []
 }
 
 function openRoleModal(node: SLMNode): void {
@@ -432,7 +461,7 @@ function handleRestart(nodeId: string): void {
           class="fixed inset-0 z-50 flex items-center justify-center p-4"
         >
           <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="closeRoleModal"></div>
-          <div class="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+          <div class="relative bg-white rounded-lg shadow-xl max-w-lg w-full p-6 max-h-[80vh] overflow-y-auto">
             <h3 class="text-lg font-semibold text-gray-900 mb-4">
               Manage Roles - {{ selectedNode?.hostname }}
             </h3>
@@ -440,7 +469,7 @@ function handleRestart(nodeId: string): void {
               <label
                 v-for="role in availableRoles"
                 :key="role"
-                class="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors"
+                class="flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors"
                 :class="selectedRoles.includes(role)
                   ? 'border-primary-500 bg-primary-50'
                   : 'border-gray-200 hover:border-gray-300'"
@@ -449,11 +478,20 @@ function handleRestart(nodeId: string): void {
                   type="checkbox"
                   :checked="selectedRoles.includes(role)"
                   @change="toggleRole(role)"
-                  class="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+                  class="w-4 h-4 mt-1 text-primary-600 rounded focus:ring-primary-500"
                 />
-                <div>
+                <div class="flex-1">
                   <div class="font-medium text-gray-900">{{ formatRoleName(role) }}</div>
-                  <div class="text-xs text-gray-500">{{ getRoleDescription(role) }}</div>
+                  <div class="text-xs text-gray-500 mb-1">{{ getRoleDescription(role) }}</div>
+                  <div class="flex flex-wrap gap-1">
+                    <span
+                      v-for="tool in getRoleTools(role)"
+                      :key="tool"
+                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600"
+                    >
+                      {{ tool }}
+                    </span>
+                  </div>
                 </div>
               </label>
             </div>
