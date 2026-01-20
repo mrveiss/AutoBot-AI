@@ -32,10 +32,13 @@ export default defineConfig({
         target: 'http://127.0.0.1:80',
         changeOrigin: true
       },
-      // Main AutoBot backend for additional monitoring
+      // Main AutoBot backend for admin functionality (Issue #729)
+      // Proxies to main backend at 172.16.168.20:8001
       '/autobot-api': {
-        target: 'http://127.0.0.1:80',
-        changeOrigin: true
+        target: 'http://172.16.168.20:8001',
+        changeOrigin: true,
+        ws: true,
+        rewrite: (path) => path.replace(/^\/autobot-api/, '/api')
       }
     }
   },
