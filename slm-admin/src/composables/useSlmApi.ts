@@ -507,6 +507,161 @@ export function useSlmApi() {
     return response.data
   }
 
+  // =============================================================================
+  // Monitoring API (Issue #729)
+  // =============================================================================
+
+  interface FleetMetrics {
+    total_nodes: number
+    online_nodes: number
+    degraded_nodes: number
+    offline_nodes: number
+    avg_cpu_percent: number
+    avg_memory_percent: number
+    avg_disk_percent: number
+    total_services: number
+    running_services: number
+    failed_services: number
+    nodes: Array<{
+      node_id: string
+      hostname: string
+      ip_address: string
+      status: string
+      cpu_percent: number
+      memory_percent: number
+      disk_percent: number
+      last_heartbeat: string | null
+      services_running: number
+      services_failed: number
+    }>
+    timestamp: string
+  }
+
+  interface AlertItem {
+    alert_id: string
+    severity: string
+    category: string
+    message: string
+    node_id: string | null
+    hostname: string | null
+    timestamp: string
+    acknowledged: boolean
+  }
+
+  interface AlertsResponse {
+    total_count: number
+    critical_count: number
+    warning_count: number
+    info_count: number
+    alerts: AlertItem[]
+  }
+
+  interface SystemHealth {
+    overall_status: string
+    health_score: number
+    components: Record<string, string>
+    issues: string[]
+    last_check: string
+  }
+
+  interface DashboardOverview {
+    fleet_metrics: FleetMetrics
+    recent_alerts: AlertItem[]
+    recent_deployments: number
+    active_maintenance: number
+    health_summary: SystemHealth
+  }
+
+  interface LogEntry {
+    event_id: string
+    node_id: string
+    hostname: string
+    event_type: string
+    severity: string
+    message: string
+    timestamp: string
+  }
+
+  interface LogsResponse {
+    logs: LogEntry[]
+    total: number
+    page: number
+    per_page: number
+  }
+
+  async function getFleetMetrics(): Promise<FleetMetrics> {
+    const response = await client.get<FleetMetrics>('/monitoring/metrics/fleet')
+    return response.data
+  }
+
+  async function getNodeMetrics(nodeId: string): Promise<FleetMetrics['nodes'][0]> {
+    const response = await client.get(`/monitoring/metrics/node/${nodeId}`)
+    return response.data
+  }
+
+  async function getAlerts(options?: {
+    severity?: string
+    hours?: number
+  }): Promise<AlertsResponse> {
+    const params = new URLSearchParams()
+    if (options?.severity) params.append('severity', options.severity)
+    if (options?.hours) params.append('hours', options.hours.toString())
+    const response = await client.get<AlertsResponse>(
+      `/monitoring/alerts?${params.toString()}`
+    )
+    return response.data
+  }
+
+  async function getSystemHealth(): Promise<SystemHealth> {
+    const response = await client.get<SystemHealth>('/monitoring/health')
+    return response.data
+  }
+
+  async function getMonitoringDashboard(): Promise<DashboardOverview> {
+    const response = await client.get<DashboardOverview>('/monitoring/dashboard')
+    return response.data
+  }
+
+  async function getMonitoringLogs(options?: {
+    node_id?: string
+    event_type?: string
+    severity?: string
+    hours?: number
+    page?: number
+    per_page?: number
+  }): Promise<LogsResponse> {
+    const params = new URLSearchParams()
+    if (options?.node_id) params.append('node_id', options.node_id)
+    if (options?.event_type) params.append('event_type', options.event_type)
+    if (options?.severity) params.append('severity', options.severity)
+    if (options?.hours) params.append('hours', options.hours.toString())
+    if (options?.page) params.append('page', options.page.toString())
+    if (options?.per_page) params.append('per_page', options.per_page.toString())
+    const response = await client.get<LogsResponse>(
+      `/monitoring/logs?${params.toString()}`
+    )
+    return response.data
+  }
+
+  async function getErrorSummary(hours?: number): Promise<{
+    total_errors: number
+    by_type: Record<string, number>
+    by_node: Record<string, number>
+    recent_errors: Array<{
+      event_id: string
+      node_id: string
+      hostname: string
+      event_type: string
+      message: string
+      timestamp: string
+    }>
+    time_window_hours: number
+  }> {
+    const params = hours ? `?hours=${hours}` : ''
+    const response = await client.get(`/monitoring/errors${params}`)
+    return response.data
+  }
+
   return {
     // Nodes
     getNodes,
@@ -571,5 +726,13 @@ export function useSlmApi() {
     deleteMaintenanceWindow,
     activateMaintenanceWindow,
     completeMaintenanceWindow,
+    // Monitoring (Issue #729)
+    getFleetMetrics,
+    getNodeMetrics,
+    getAlerts,
+    getSystemHealth,
+    getMonitoringDashboard,
+    getMonitoringLogs,
+    getErrorSummary,
   }
 }

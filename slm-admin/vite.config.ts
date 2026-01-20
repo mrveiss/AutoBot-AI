@@ -17,13 +17,24 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5174,
     proxy: {
-      '/v1/slm': {
-        target: 'http://172.16.168.20:8001',
+      // SLM Backend API - local backend at port 8000
+      '/api': {
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         ws: true
       },
-      '/api': {
-        target: 'http://172.16.168.20:8001',
+      // External proxies via nginx (Grafana, Prometheus, etc.)
+      '/grafana': {
+        target: 'http://127.0.0.1:80',
+        changeOrigin: true
+      },
+      '/prometheus': {
+        target: 'http://127.0.0.1:80',
+        changeOrigin: true
+      },
+      // Main AutoBot backend for additional monitoring
+      '/autobot-api': {
+        target: 'http://127.0.0.1:80',
         changeOrigin: true
       }
     }

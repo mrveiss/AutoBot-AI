@@ -5,16 +5,20 @@
 /**
  * Prometheus Metrics Composable for SLM Admin
  *
- * Provides access to monitoring metrics from the main AutoBot backend.
- * Used for GPU/NPU metrics, service health, and performance monitoring.
+ * Provides access to monitoring metrics from the SLM backend API.
+ * Uses local SLM monitoring endpoints for fleet metrics, alerts, and health.
+ * Issue #729 - Integrated monitoring into SLM.
  */
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
-import { getBackendUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { useAuthStore } from '@/stores/auth'
 
 const logger = createLogger('usePrometheusMetrics')
+
+// SLM Admin uses the local SLM backend API
+const API_BASE = '/api'
 
 // ===== Type Definitions =====
 
@@ -114,7 +118,18 @@ export interface UsePrometheusMetricsOptions {
 export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) {
   const { autoFetch = true, pollInterval = 30000 } = options
 
-  const backendUrl = getBackendUrl()
+  const authStore = useAuthStore()
+
+  // Helper to get auth headers
+  function getHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+    if (authStore.token) {
+      headers.Authorization = `Bearer ${authStore.token}`
+    }
+    return headers
+  }
 
   // State
   const dashboard = ref<DashboardOverview | null>(null)
@@ -150,9 +165,34 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
 
   async function fetchDashboard(): Promise<void> {
     try {
-      const response = await fetch(`${backendUrl}/monitoring/dashboard/overview`)
+      const response = await fetch(`${API_BASE}/monitoring/dashboard`, {
+        headers: getHeaders(),
+      })
       if (response.ok) {
-        dashboard.value = await response.json()
+        const data = await response.json()
+        // Map SLM dashboard response to expected format
+        dashboard.value = {
+          system_metrics: {
+            cpu_percent: data.fleet_metrics?.avg_cpu_percent ?? 0,
+            memory_percent: data.fleet_metrics?.avg_memory_percent ?? 0,
+            disk_percent: data.fleet_metrics?.avg_disk_percent ?? 0,
+            network_bytes_sent: 0,
+            network_bytes_recv: 0,
+            process_count: data.fleet_metrics?.total_services ?? 0,
+            timestamp: Date.now(),
+          },
+          analysis: {
+            overall_health: data.health_summary?.overall_status ?? 'unknown',
+            performance_score: data.health_summary?.health_score ?? 0,
+            bottlenecks: data.health_summary?.issues ?? [],
+            resource_utilization: {
+              cpu: data.fleet_metrics?.avg_cpu_percent ?? 0,
+              memory: data.fleet_metrics?.avg_memory_percent ?? 0,
+              disk: data.fleet_metrics?.avg_disk_percent ?? 0,
+            },
+          },
+          timestamp: Date.now(),
+        }
         lastUpdate.value = new Date()
         error.value = null
         isConnected.value = true
@@ -169,9 +209,22 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
 
   async function fetchServices(): Promise<void> {
     try {
-      const response = await fetch(`${backendUrl}/monitoring/services/health`)
+      const response = await fetch(`${API_BASE}/monitoring/health`, {
+        headers: getHeaders(),
+      })
       if (response.ok) {
-        services.value = await response.json()
+        const data = await response.json()
+        // Map SLM health response to services format
+        services.value = {
+          total_services: 0,
+          healthy_services: 0,
+          degraded_services: 0,
+          critical_services: 0,
+          overall_status: data.overall_status === 'healthy' ? 'healthy' :
+                          data.overall_status === 'degraded' ? 'degraded' : 'critical',
+          health_percentage: data.health_score,
+          services: [],
+        }
         error.value = null
       }
     } catch (err) {
@@ -181,9 +234,23 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
 
   async function fetchAlerts(): Promise<void> {
     try {
-      const response = await fetch(`${backendUrl}/monitoring/alerts/check`)
+      const response = await fetch(`${API_BASE}/monitoring/alerts`, {
+        headers: getHeaders(),
+      })
       if (response.ok) {
-        alerts.value = await response.json()
+        const data = await response.json()
+        alerts.value = {
+          total_count: data.total_count ?? 0,
+          critical_count: data.critical_count ?? 0,
+          warning_count: data.warning_count ?? 0,
+          alerts: (data.alerts ?? []).map((a: Record<string, unknown>) => ({
+            category: String(a.category ?? ''),
+            severity: String(a.severity ?? 'info'),
+            message: String(a.message ?? ''),
+            recommendation: '',
+            timestamp: new Date(String(a.timestamp ?? '')).getTime(),
+          })),
+        }
         error.value = null
       }
     } catch (err) {
@@ -192,38 +259,29 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
   }
 
   async function fetchRecommendations(): Promise<void> {
-    try {
-      const response = await fetch(`${backendUrl}/monitoring/optimization/recommendations`)
-      if (response.ok) {
-        recommendations.value = await response.json()
-        error.value = null
-      }
-    } catch (err) {
-      logger.error('Failed to fetch recommendations:', err)
-    }
+    // SLM doesn't have a recommendations endpoint yet
+    // Return empty recommendations for now
+    recommendations.value = []
   }
 
   async function fetchGPUDetails(): Promise<void> {
-    try {
-      const response = await fetch(`${backendUrl}/monitoring/hardware/gpu`)
-      if (response.ok) {
-        gpuDetails.value = await response.json()
-        error.value = null
-      }
-    } catch (err) {
-      logger.error('Failed to fetch GPU details:', err)
+    // GPU metrics not available in SLM - would need to aggregate from nodes
+    gpuDetails.value = {
+      available: false,
+      utilization_percent: 0,
+      memory_utilization_percent: 0,
+      temperature_celsius: 0,
+      power_watts: 0,
     }
   }
 
   async function fetchNPUDetails(): Promise<void> {
-    try {
-      const response = await fetch(`${backendUrl}/monitoring/hardware/npu`)
-      if (response.ok) {
-        npuDetails.value = await response.json()
-        error.value = null
-      }
-    } catch (err) {
-      logger.error('Failed to fetch NPU details:', err)
+    // NPU metrics not available in SLM - would need to aggregate from nodes
+    npuDetails.value = {
+      available: false,
+      utilization_percent: 0,
+      acceleration_ratio: 0,
+      inference_count: 0,
     }
   }
 

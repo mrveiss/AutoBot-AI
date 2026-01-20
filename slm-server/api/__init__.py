@@ -17,6 +17,7 @@ from .updates import router as updates_router
 from .websocket import router as websocket_router
 from .services import router as services_router, fleet_router as fleet_services_router
 from .maintenance import router as maintenance_router
+from .monitoring import router as monitoring_router
 
 __all__ = [
     "auth_router",
@@ -30,4 +31,5 @@ __all__ = [
     "services_router",
     "fleet_services_router",
     "maintenance_router",
+    "monitoring_router",
 ]
