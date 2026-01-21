@@ -103,6 +103,37 @@ const router = createRouter({
           component: () => import('@/views/settings/BackendSettings.vue'),
           meta: { title: 'Backend Settings', parent: 'settings' }
         },
+        // Admin settings (migrated from main AutoBot frontend - Issue #729)
+        {
+          path: 'admin/users',
+          name: 'settings-admin-users',
+          component: () => import('@/views/settings/admin/UserManagementSettings.vue'),
+          meta: { title: 'User Management', parent: 'settings', admin: true }
+        },
+        {
+          path: 'admin/cache',
+          name: 'settings-admin-cache',
+          component: () => import('@/views/settings/admin/CacheSettings.vue'),
+          meta: { title: 'Cache Settings', parent: 'settings', admin: true }
+        },
+        {
+          path: 'admin/prompts',
+          name: 'settings-admin-prompts',
+          component: () => import('@/views/settings/admin/PromptsSettings.vue'),
+          meta: { title: 'Prompts', parent: 'settings', admin: true }
+        },
+        {
+          path: 'admin/log-forwarding',
+          name: 'settings-admin-log-forwarding',
+          component: () => import('@/views/settings/admin/LogForwardingSettings.vue'),
+          meta: { title: 'Log Forwarding', parent: 'settings', admin: true }
+        },
+        {
+          path: 'admin/npu-workers',
+          name: 'settings-admin-npu-workers',
+          component: () => import('@/views/settings/admin/NPUWorkersSettings.vue'),
+          meta: { title: 'NPU Workers', parent: 'settings', admin: true }
+        },
       ]
     },
     {
@@ -152,6 +183,13 @@ const router = createRouter({
           component: () => import('@/views/monitoring/ErrorMonitor.vue'),
           meta: { title: 'Error Monitoring', parent: 'monitoring' }
         },
+        // Admin monitoring (migrated from main AutoBot frontend - Issue #729)
+        {
+          path: 'admin',
+          name: 'monitoring-admin',
+          component: () => import('@/views/monitoring/admin/AdminMonitoringView.vue'),
+          meta: { title: 'Admin Dashboard', parent: 'monitoring', admin: true }
+        },
       ]
     },
     {
@@ -163,8 +201,76 @@ const router = createRouter({
     {
       path: '/tools',
       name: 'tools',
-      component: () => import('@/views/ToolsView.vue'),
-      meta: { title: 'Infrastructure Tools' }
+      component: () => import('@/views/tools/ToolsLayout.vue'),
+      meta: { title: 'Tools' },
+      children: [
+        {
+          path: '',
+          name: 'tools-default',
+          redirect: '/tools/fleet'
+        },
+        {
+          path: 'fleet',
+          name: 'tools-fleet',
+          component: () => import('@/views/ToolsView.vue'),
+          meta: { title: 'Fleet Tools', parent: 'tools' }
+        },
+        // Migrated from main AutoBot frontend - Issue #729
+        {
+          path: 'terminal',
+          name: 'tools-terminal',
+          component: () => import('@/views/tools/admin/TerminalTool.vue'),
+          meta: { title: 'Terminal', parent: 'tools' }
+        },
+        {
+          path: 'files',
+          name: 'tools-files',
+          component: () => import('@/views/tools/admin/FileBrowserTool.vue'),
+          meta: { title: 'File Browser', parent: 'tools' }
+        },
+        {
+          path: 'browser',
+          name: 'tools-browser',
+          component: () => import('@/views/tools/admin/BrowserTool.vue'),
+          meta: { title: 'Browser', parent: 'tools' }
+        },
+        {
+          path: 'novnc',
+          name: 'tools-novnc',
+          component: () => import('@/views/tools/admin/NoVNCTool.vue'),
+          meta: { title: 'noVNC', parent: 'tools' }
+        },
+        {
+          path: 'voice',
+          name: 'tools-voice',
+          component: () => import('@/views/tools/admin/VoiceTool.vue'),
+          meta: { title: 'Voice', parent: 'tools' }
+        },
+        {
+          path: 'mcp',
+          name: 'tools-mcp',
+          component: () => import('@/views/tools/admin/MCPTool.vue'),
+          meta: { title: 'MCP Registry', parent: 'tools' }
+        },
+        {
+          path: 'agents',
+          name: 'tools-agents',
+          component: () => import('@/views/tools/admin/AgentsTool.vue'),
+          meta: { title: 'Agents', parent: 'tools' }
+        },
+        {
+          path: 'vision',
+          name: 'tools-vision',
+          component: () => import('@/views/tools/admin/VisionTool.vue'),
+          meta: { title: 'Vision', parent: 'tools' }
+        },
+        {
+          path: 'batch',
+          name: 'tools-batch',
+          component: () => import('@/views/tools/admin/BatchTool.vue'),
+          meta: { title: 'Batch Processing', parent: 'tools' }
+        },
+      ]
     },
   ]
 })

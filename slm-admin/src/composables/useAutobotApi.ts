@@ -562,6 +562,53 @@ export function useAutobotApi() {
     return response.data
   }
 
+  async function getSystemHealth(): Promise<{
+    status: 'healthy' | 'degraded' | 'critical'
+    cpu_percent?: number
+    memory_percent?: number
+    disk_percent?: number
+    uptime_seconds?: number
+    services?: { name: string; status: string }[]
+  }> {
+    const response = await client.get('/health/detailed')
+    return response.data
+  }
+
+  async function getErrorStatistics(): Promise<{
+    total_errors: number
+    last_24h: number
+    by_level: { level: string; count: number }[]
+    resolved_count: number
+  }> {
+    const response = await client.get('/errors/statistics')
+    return response.data
+  }
+
+  async function getRecentErrors(limit: number = 10): Promise<{
+    errors: Array<{
+      id: string
+      level: string
+      message: string
+      timestamp: string
+      resolved: boolean
+    }>
+  }> {
+    const response = await client.get(`/errors/recent?limit=${limit}`)
+    return response.data
+  }
+
+  async function getMetricsSummary(): Promise<{
+    metrics: Array<{
+      name: string
+      value: string | number
+      status: 'good' | 'warning' | 'critical'
+      trend?: 'up' | 'down' | 'stable'
+    }>
+  }> {
+    const response = await client.get('/metrics/summary')
+    return response.data
+  }
+
   return {
     // Settings
     getSettings,
@@ -632,5 +679,9 @@ export function useAutobotApi() {
     // System
     getSystemMetrics,
     getHardwareInfo,
+    getSystemHealth,
+    getErrorStatistics,
+    getRecentErrors,
+    getMetricsSummary,
   }
 }

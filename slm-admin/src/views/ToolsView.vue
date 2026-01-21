@@ -17,7 +17,11 @@ import { useAuthStore } from '@/stores/auth'
 const fleetStore = useFleetStore()
 const authStore = useAuthStore()
 
-// Tool definitions
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+
+// Tool definitions - all tools integrated into SLM (Issue #729)
 const tools = [
   {
     id: 'network-test',
@@ -325,27 +329,16 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="h-full flex flex-col overflow-hidden bg-gray-50">
-    <!-- Header -->
-    <div class="bg-white border-b border-gray-200 px-6 py-4">
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-bold text-gray-900">Infrastructure Tools</h1>
-          <p class="text-sm text-gray-500 mt-1">
-            Diagnostic and management tools for fleet operations
-          </p>
-        </div>
-        <div class="flex items-center gap-2 text-sm text-gray-600">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
-          </svg>
-          <span>{{ nodes.length }} nodes available</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Content -->
+  <div class="h-full flex flex-col overflow-hidden">
+    <!-- Content (no header - parent ToolsLayout provides it) -->
     <div class="flex-1 overflow-auto p-6">
+      <!-- Info Banner -->
+      <div class="mb-6 flex items-center gap-2 text-sm text-gray-600 bg-white rounded-lg p-3 border border-gray-200">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
+        </svg>
+        <span>{{ nodes.length }} nodes available for fleet operations</span>
+      </div>
       <!-- Tools Grid -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <button
