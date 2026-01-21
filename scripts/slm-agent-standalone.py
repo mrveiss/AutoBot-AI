@@ -1,119 +1,70 @@
+#!/usr/bin/env python3
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Health Collector for SLM Agent
+SLM Node Agent - Standalone with Service Discovery
 
-Collects system and service health metrics for reporting to admin.
+Lightweight daemon that runs on each managed node:
+- Sends heartbeats to admin machine
+- Collects and reports health data
+- Discovers and reports all systemd services
+
+Related to Issue #728
 """
 
 import logging
+import os
 import platform
-import socket
+import signal
 import subprocess
-from datetime import datetime
-from typing import Dict, List, Optional
+import sys
+import time
+from typing import Dict, List
 
 import psutil
+import requests
+import urllib3
+import yaml
 
-logger = logging.getLogger(__name__)
+# Suppress InsecureRequestWarning for self-signed certs
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger("slm-agent")
 
 
-class HealthCollector:
-    """
-    Collects health metrics from the local node.
+class SLMAgent:
+    """SLM Node Agent with service discovery."""
 
-    Gathers:
-    - System metrics (CPU, memory, disk)
-    - Service status (systemd)
-    - Port connectivity
-    - Service discovery (all systemd services)
-    """
-
-    def __init__(
-        self,
-        services: Optional[List[str]] = None,
-        ports: Optional[List[Dict]] = None,
-        discover_services: bool = True,
-    ):
-        """
-        Initialize health collector.
-
-        Args:
-            services: List of systemd service names to check
-            ports: List of port checks [{"host": "localhost", "port": 6379}]
-            discover_services: Whether to discover all systemd services
-        """
-        self.services = services or []
-        self.ports = ports or []
+    def __init__(self, config_path: str = "/opt/autobot/config.yaml"):
+        self.running = False
+        self.config = self._load_config(config_path)
         self.hostname = platform.node()
-        self.discover_services = discover_services
 
-    def collect(self) -> Dict:
-        """Collect all health metrics."""
-        health = {
-            "timestamp": datetime.utcnow().isoformat(),
-            "hostname": self.hostname,
+    def _load_config(self, path: str) -> dict:
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                return yaml.safe_load(f)
+        return {
+            "node_id": os.environ.get("SLM_NODE_ID", "unknown"),
+            "admin_url": os.environ.get("SLM_ADMIN_URL", "http://172.16.168.19:8000"),
+            "heartbeat_interval": int(os.environ.get("SLM_HEARTBEAT_INTERVAL", "30")),
+        }
+
+    def collect_health(self) -> dict:
+        """Collect system health metrics."""
+        return {
             "cpu_percent": psutil.cpu_percent(interval=0.1),
             "memory_percent": psutil.virtual_memory().percent,
             "disk_percent": psutil.disk_usage("/").percent,
             "load_avg": list(psutil.getloadavg()),
-            "uptime_seconds": int(
-                datetime.now().timestamp() - psutil.boot_time()
-            ),
+            "uptime_seconds": int(time.time() - psutil.boot_time()),
+            "hostname": self.hostname,
         }
-
-        # Collect service statuses
-        if self.services:
-            health["services"] = {}
-            for service in self.services:
-                health["services"][service] = self.check_service(service)
-
-        # Collect port checks
-        if self.ports:
-            health["ports"] = {}
-            for port_check in self.ports:
-                host = port_check.get("host", "localhost")
-                port = port_check["port"]
-                key = f"{host}:{port}"
-                health["ports"][key] = self.check_port(host, port)
-
-        # Discover all systemd services (for Issue #728)
-        if self.discover_services:
-            health["discovered_services"] = self.discover_all_services()
-
-        return health
-
-    def check_service(self, service_name: str) -> Dict:
-        """Check systemd service status."""
-        try:
-            result = subprocess.run(
-                ["systemctl", "is-active", service_name],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            is_active = result.returncode == 0
-            status = result.stdout.strip()
-
-            return {
-                "active": is_active,
-                "status": status,
-            }
-        except subprocess.TimeoutExpired:
-            return {"active": False, "status": "timeout"}
-        except Exception as e:
-            return {"active": False, "status": str(e)}
-
-    def check_port(self, host: str, port: int, timeout: float = 2.0) -> bool:
-        """Check if a port is open and accepting connections."""
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.settimeout(timeout)
-                result = sock.connect_ex((host, port))
-                return result == 0
-        except Exception:
-            return False
 
     def discover_all_services(self) -> List[Dict]:
         """
@@ -200,7 +151,6 @@ class HealthCollector:
         """Get detailed info for a specific service."""
         details = {}
         try:
-            # Get service properties
             result = subprocess.run(
                 [
                     "systemctl", "show", service_name,
@@ -229,27 +179,56 @@ class HealthCollector:
 
         return details
 
-    def is_healthy(self, thresholds: Optional[Dict] = None) -> bool:
-        """Quick health check against thresholds."""
-        defaults = {
-            "cpu_percent": 90,
-            "memory_percent": 90,
-            "disk_percent": 90,
-        }
-        thresholds = {**defaults, **(thresholds or {})}
+    def send_heartbeat(self) -> bool:
+        """Send heartbeat with health data and discovered services."""
+        try:
+            health = self.collect_health()
+            discovered_services = self.discover_all_services()
 
-        health = self.collect()
+            payload = {
+                "cpu_percent": health.get("cpu_percent", 0.0),
+                "memory_percent": health.get("memory_percent", 0.0),
+                "disk_percent": health.get("disk_percent", 0.0),
+                "agent_version": "1.1.0",
+                "os_info": f"{platform.system()} {platform.release()}",
+                "extra_data": {
+                    "discovered_services": discovered_services,
+                    "load_avg": health.get("load_avg", []),
+                    "uptime_seconds": health.get("uptime_seconds", 0),
+                    "hostname": health.get("hostname"),
+                },
+            }
 
-        if health["cpu_percent"] > thresholds["cpu_percent"]:
+            url = f"{self.config['admin_url']}/api/nodes/{self.config['node_id']}/heartbeat"
+            response = requests.post(url, json=payload, timeout=10, verify=False)
+            response.raise_for_status()
+
+            logger.debug(
+                "Heartbeat sent: %d services discovered",
+                len(discovered_services)
+            )
+            return True
+        except Exception as e:
+            logger.error("Heartbeat failed: %s", e)
             return False
-        if health["memory_percent"] > thresholds["memory_percent"]:
-            return False
-        if health["disk_percent"] > thresholds["disk_percent"]:
-            return False
 
-        # Check all services are active
-        for service_status in health.get("services", {}).values():
-            if not service_status.get("active"):
-                return False
+    def run(self):
+        """Main agent loop."""
+        self.running = True
+        signal.signal(signal.SIGTERM, lambda *_: setattr(self, "running", False))
+        signal.signal(signal.SIGINT, lambda *_: setattr(self, "running", False))
 
-        return True
+        logger.info("SLM Agent v1.1.0 starting - Node: %s", self.config["node_id"])
+        logger.info("Admin URL: %s", self.config["admin_url"])
+        logger.info("Heartbeat interval: %ds", self.config["heartbeat_interval"])
+
+        while self.running:
+            self.send_heartbeat()
+            time.sleep(self.config["heartbeat_interval"])
+
+        logger.info("SLM Agent stopped")
+
+
+if __name__ == "__main__":
+    agent = SLMAgent()
+    agent.run()

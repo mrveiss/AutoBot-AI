@@ -97,6 +97,7 @@ class SLMAgent:
             "os_info": os_info,
             "extra_data": {
                 "services": health.get("services", {}),
+                "discovered_services": health.get("discovered_services", []),
                 "load_avg": health.get("load_avg", []),
                 "uptime_seconds": health.get("uptime_seconds", 0),
                 "hostname": health.get("hostname"),
