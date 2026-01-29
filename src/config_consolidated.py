@@ -61,6 +61,13 @@ try:
 except ImportError:
     SERVICE_REGISTRY_AVAILABLE = False
 
+# Import SSOT config for infrastructure values
+try:
+    from src.config.ssot_config import get_config as get_ssot_config
+    _SSOT_AVAILABLE = True
+except ImportError:
+    _SSOT_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -130,31 +137,7 @@ class ConsolidatedConfigManager:
                 "server_host": "localhost",
                 "server_port": 5173
             },
-            "infrastructure": {
-                "hosts": {
-                    "backend": "172.16.168.20",
-                    "frontend": "172.16.168.21", 
-                    "redis": "172.16.168.23",
-                    "ollama": "172.16.168.20",
-                    "ai_stack": "172.16.168.24",
-                    "npu_worker": "172.16.168.22",
-                    "browser_service": "172.16.168.25"
-                },
-                "ports": {
-                    "backend": 8001,
-                    "frontend": 5173,
-                    "redis": 6379,
-                    "ollama": 11434,
-                    "ai_stack": 8080,
-                    "npu_worker": 8081,
-                    "browser_service": 3000,
-                    "vnc": 6080
-                },
-                "protocols": {
-                    "default": "http",
-                    "secure": "https"
-                }
-            },
+            "infrastructure": self._get_infrastructure_config(),
             "llm": {
                 "provider_type": "local",
                 "local": {
@@ -190,7 +173,71 @@ class ConsolidatedConfigManager:
                 "enhanced_errors": True
             }
         }
-    
+
+    def _get_infrastructure_config(self) -> Dict[str, Any]:
+        """
+        Get infrastructure config from SSOT or fallback defaults.
+
+        Issue #694: Config consolidation - single source of truth.
+        """
+        if _SSOT_AVAILABLE:
+            try:
+                ssot = get_ssot_config()
+                return {
+                    "hosts": {
+                        "backend": ssot.vm.main,
+                        "frontend": ssot.vm.frontend,
+                        "redis": ssot.vm.redis,
+                        "ollama": ssot.vm.ollama,
+                        "ai_stack": ssot.vm.aistack,
+                        "npu_worker": ssot.vm.npu,
+                        "browser_service": ssot.vm.browser,
+                    },
+                    "ports": {
+                        "backend": ssot.port.backend,
+                        "frontend": ssot.port.frontend,
+                        "redis": ssot.port.redis,
+                        "ollama": ssot.port.ollama,
+                        "ai_stack": ssot.port.aistack,
+                        "npu_worker": ssot.port.npu,
+                        "browser_service": ssot.port.browser,
+                        "vnc": ssot.port.vnc,
+                    },
+                    "protocols": {
+                        "default": "http",
+                        "secure": "https",
+                    },
+                }
+            except Exception as e:
+                logger.warning(f"SSOT config unavailable: {e}, using defaults")
+
+        # Fallback defaults
+        return {
+            "hosts": {
+                "backend": "172.16.168.20",
+                "frontend": "172.16.168.21",
+                "redis": "172.16.168.23",
+                "ollama": "127.0.0.1",
+                "ai_stack": "172.16.168.24",
+                "npu_worker": "172.16.168.22",
+                "browser_service": "172.16.168.25",
+            },
+            "ports": {
+                "backend": 8001,
+                "frontend": 5173,
+                "redis": 6379,
+                "ollama": 11434,
+                "ai_stack": 8080,
+                "npu_worker": 8081,
+                "browser_service": 3000,
+                "vnc": 6080,
+            },
+            "protocols": {
+                "default": "http",
+                "secure": "https",
+            },
+        }
+
     def _load_yaml_config(self):
         """Load YAML configuration with fallback to defaults"""
         self._config_cache = self._load_default_config()
