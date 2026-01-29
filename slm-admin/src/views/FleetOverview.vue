@@ -12,9 +12,13 @@ import FleetSummary from '@/components/fleet/FleetSummary.vue'
 import AddNodeModal from '@/components/AddNodeModal.vue'
 import NodeLifecyclePanel from '@/components/fleet/NodeLifecyclePanel.vue'
 import NodeServicesPanel from '@/components/fleet/NodeServicesPanel.vue'
+import FleetToolsTab from '@/components/fleet/FleetToolsTab.vue'
 
 const logger = createLogger('FleetOverview')
 const fleetStore = useFleetStore()
+
+// Tab management
+const activeTab = ref<'overview' | 'tools'>('overview')
 
 // Computed
 const nodes = computed(() => fleetStore.nodeList)
@@ -337,6 +341,7 @@ function handleRestart(nodeId: string): void {
           Refresh
         </button>
         <button
+          v-if="activeTab === 'overview'"
           @click="openAddNodeModal"
           class="btn btn-primary flex items-center gap-2"
         >
@@ -348,8 +353,49 @@ function handleRestart(nodeId: string): void {
       </div>
     </div>
 
-    <!-- Fleet Summary -->
-    <FleetSummary class="mb-6" />
+    <!-- Tabs -->
+    <div class="border-b border-gray-200 mb-6">
+      <nav class="-mb-px flex space-x-8">
+        <button
+          @click="activeTab = 'overview'"
+          :class="[
+            'whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors',
+            activeTab === 'overview'
+              ? 'border-primary-500 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+          ]"
+        >
+          <div class="flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
+            </svg>
+            Nodes
+          </div>
+        </button>
+        <button
+          @click="activeTab = 'tools'"
+          :class="[
+            'whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors',
+            activeTab === 'tools'
+              ? 'border-primary-500 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+          ]"
+        >
+          <div class="flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Fleet Tools
+          </div>
+        </button>
+      </nav>
+    </div>
+
+    <!-- Overview Tab Content -->
+    <div v-show="activeTab === 'overview'">
+      <!-- Fleet Summary -->
+      <FleetSummary class="mb-6" />
 
     <!-- Node Grid -->
     <div v-if="nodes.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -381,6 +427,12 @@ function handleRestart(nodeId: string): void {
     <!-- Loading State -->
     <div v-if="isLoading && nodes.length === 0" class="flex items-center justify-center py-12">
       <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
+    </div>
+    </div>
+
+    <!-- Tools Tab Content -->
+    <div v-show="activeTab === 'tools'">
+      <FleetToolsTab />
     </div>
 
     <!-- Add/Edit Node Modal -->
