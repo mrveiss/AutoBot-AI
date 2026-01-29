@@ -10,8 +10,15 @@
 
 set -e
 
+# =============================================================================
+# SSOT Configuration - Issue #694
+# =============================================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+source "$SCRIPT_DIR/../lib/ssot-config.sh" 2>/dev/null || source "$SCRIPT_DIR/lib/ssot-config.sh" 2>/dev/null || {
+    # Fallback if lib not found
+    PROJECT_ROOT="${PROJECT_ROOT:-/home/kali/Desktop/AutoBot}"
+    [ -f "$PROJECT_ROOT/.env" ] && { set -a; source "$PROJECT_ROOT/.env"; set +a; }
+}
 
 # Colors
 RED='\033[0;31m'
@@ -25,14 +32,7 @@ log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 log_header() { echo -e "${BLUE}========================================${NC}"; echo -e "${BLUE}$1${NC}"; echo -e "${BLUE}========================================${NC}"; }
 
-# Load SSOT config
-if [ -f "$PROJECT_ROOT/.env" ]; then
-    set -a
-    source "$PROJECT_ROOT/.env"
-    set +a
-fi
-
-# VM Configuration
+# VM Configuration - Using SSOT env vars
 declare -A VMS=(
     ["frontend"]="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
     ["npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
@@ -41,8 +41,8 @@ declare -A VMS=(
     ["browser"]="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
 )
 
-SSH_KEY="$HOME/.ssh/autobot_key"
-SSH_USER="autobot"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
+SSH_USER="${AUTOBOT_SSH_USER:-autobot}"
 DRY_RUN=false
 SPECIFIC_VM=""
 
@@ -102,10 +102,10 @@ test_vm() {
 
     if ssh -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no \
         "$SSH_USER@$vm_ip" "echo ok" > /dev/null 2>&1; then
-        echo -e "  ${GREEN}✓${NC} $vm_name ($vm_ip)"
+        echo -e "  ${GREEN}${NC} $vm_name ($vm_ip)"
         return 0
     else
-        echo -e "  ${RED}✗${NC} $vm_name ($vm_ip) - unreachable"
+        echo -e "  ${RED}${NC} $vm_name ($vm_ip) - unreachable"
         return 1
     fi
 }
