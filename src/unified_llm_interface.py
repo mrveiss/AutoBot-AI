@@ -27,6 +27,13 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+# SSOT config for Ollama defaults - Issue #694
+try:
+    from src.config.ssot_config import get_config as get_ssot_config
+    _OLLAMA_DEFAULT_URL = get_ssot_config().ollama_url
+except Exception:
+    _OLLAMA_DEFAULT_URL = "http://127.0.0.1:11434"
+
 
 # =============================================================================
 # Provider Base Class
@@ -233,7 +240,7 @@ class OllamaProvider(LLMProvider):
             config: Configuration dict with 'host' and 'models'
         """
         super().__init__(config)
-        self.host = config.get("host", "http://localhost:11434")
+        self.host = config.get("host", _OLLAMA_DEFAULT_URL)
         self.models = config.get("models", {})
         self.hardware_detector = HardwareDetector()
 
@@ -759,7 +766,7 @@ class UnifiedLLMInterface:
 
         # Load configuration
         self.ollama_host = self.config_manager.get_nested(
-            "llm_config.ollama.host", "http://localhost:11434"
+            "llm_config.ollama.host", _OLLAMA_DEFAULT_URL
         )
         self.ollama_models = self.config_manager.get_nested(
             "llm_config.ollama.models", {}
