@@ -53,6 +53,10 @@ MAX_REMEDIATION_ATTEMPTS = 3
 REMEDIATION_COOLDOWN = 300  # 5 minutes
 # Default rollback window (seconds) - deployments older than this won't be auto-rolled back
 DEFAULT_ROLLBACK_WINDOW = 600  # 10 minutes
+# Service remediation cooldown (shorter than node remediation)
+SERVICE_REMEDIATION_COOLDOWN = 120  # 2 minutes
+# Maximum service restart attempts before requiring human intervention
+MAX_SERVICE_RESTART_ATTEMPTS = 3
 
 
 class ReconcilerService:
@@ -70,6 +74,8 @@ class ReconcilerService:
         self._heartbeat_timeout = settings.heartbeat_interval * settings.unhealthy_threshold
         # Track remediation attempts per node: {node_id: {"count": int, "last_attempt": datetime}}
         self._remediation_tracker: Dict[str, Dict] = {}
+        # Track service restart attempts: {(node_id, service_name): {"count": int, "last_attempt": datetime}}
+        self._service_remediation_tracker: Dict[tuple, Dict] = {}
 
     async def start(self) -> None:
         """Start the reconciler background task."""
@@ -98,6 +104,7 @@ class ReconcilerService:
             try:
                 await self._check_node_health()
                 await self._attempt_remediation()
+                await self._remediate_failed_services()
                 await self._check_auto_rollback()
                 await self._reconcile_roles()
             except asyncio.CancelledError:
@@ -440,6 +447,215 @@ class ReconcilerService:
         if node_id in self._remediation_tracker:
             del self._remediation_tracker[node_id]
             logger.info("Reset remediation tracker for node %s", node_id)
+
+    def reset_service_remediation_tracker(
+        self, node_id: str, service_name: str = None
+    ) -> None:
+        """Reset service remediation tracker for a node/service."""
+        if service_name:
+            key = (node_id, service_name)
+            if key in self._service_remediation_tracker:
+                del self._service_remediation_tracker[key]
+                logger.info(
+                    "Reset service remediation tracker for %s on %s",
+                    service_name, node_id
+                )
+        else:
+            keys_to_remove = [
+                k for k in self._service_remediation_tracker if k[0] == node_id
+            ]
+            for key in keys_to_remove:
+                del self._service_remediation_tracker[key]
+            if keys_to_remove:
+                logger.info(
+                    "Reset all service remediation trackers for node %s", node_id
+                )
+
+    async def _remediate_failed_services(self) -> None:
+        """Auto-restart failed services that are enabled.
+
+        Conservative approach:
+        - Only restart services with status="failed" that are enabled (should be running)
+        - Only restart AutoBot-related services (category=autobot)
+        - Rate limited: Max 3 attempts per service, 2 min cooldown
+        - Respects maintenance windows
+        """
+        from services.database import db_service
+
+        async with db_service.session() as db:
+            # Check if auto-restart services is enabled
+            auto_restart = await db.execute(
+                select(Setting).where(Setting.key == "auto_restart_services")
+            )
+            setting = auto_restart.scalar_one_or_none()
+
+            if not setting or setting.value != "true":
+                return
+
+            # Get failed services that are enabled (should be running)
+            result = await db.execute(
+                select(Service).where(
+                    Service.status == ServiceStatus.FAILED.value,
+                    Service.enabled == True,
+                    Service.category == ServiceCategory.AUTOBOT.value,
+                )
+            )
+            failed_services = result.scalars().all()
+
+            for service in failed_services:
+                # Check if node is in maintenance window
+                if await self._is_remediation_suppressed(db, service.node_id):
+                    logger.debug(
+                        "Skipping service remediation for %s on %s - maintenance window",
+                        service.service_name, service.node_id
+                    )
+                    continue
+
+                # Get node for SSH details
+                node_result = await db.execute(
+                    select(Node).where(Node.node_id == service.node_id)
+                )
+                node = node_result.scalar_one_or_none()
+                if not node:
+                    continue
+
+                # Skip if node is offline (can't SSH to it)
+                if node.status == NodeStatus.OFFLINE.value:
+                    continue
+
+                await self._remediate_failed_service(db, node, service)
+
+    async def _remediate_failed_service(
+        self, db: AsyncSession, node: Node, service: Service
+    ) -> bool:
+        """Attempt to restart a single failed service.
+
+        Returns True if remediation was attempted, False if skipped.
+        """
+        key = (node.node_id, service.service_name)
+        now = datetime.utcnow()
+
+        tracker = self._service_remediation_tracker.get(
+            key, {"count": 0, "last_attempt": None}
+        )
+
+        # Check cooldown
+        if tracker["last_attempt"]:
+            elapsed = (now - tracker["last_attempt"]).total_seconds()
+            if elapsed < SERVICE_REMEDIATION_COOLDOWN:
+                logger.debug(
+                    "Service %s on %s in remediation cooldown (%d seconds remaining)",
+                    service.service_name, node.node_id,
+                    SERVICE_REMEDIATION_COOLDOWN - elapsed
+                )
+                return False
+
+        # Check attempt limit
+        if tracker["count"] >= MAX_SERVICE_RESTART_ATTEMPTS:
+            logger.warning(
+                "Service %s on %s exceeded max restart attempts (%d). "
+                "Human intervention required.",
+                service.service_name, node.node_id, MAX_SERVICE_RESTART_ATTEMPTS
+            )
+            # Create event for human attention
+            event = NodeEvent(
+                event_id=str(uuid.uuid4())[:16],
+                node_id=node.node_id,
+                event_type=EventType.REMEDIATION_COMPLETED.value,
+                severity=EventSeverity.WARNING.value,
+                message=(
+                    f"Service {service.service_name} on {node.hostname} requires "
+                    f"human intervention after {MAX_SERVICE_RESTART_ATTEMPTS} failed restart attempts"
+                ),
+                details={
+                    "service_name": service.service_name,
+                    "attempts": tracker["count"],
+                    "action_required": "manual_review",
+                },
+            )
+            db.add(event)
+            await db.commit()
+            return False
+
+        # Attempt restart
+        logger.info(
+            "Attempting to restart service %s on %s (attempt %d/%d)",
+            service.service_name, node.node_id,
+            tracker["count"] + 1, MAX_SERVICE_RESTART_ATTEMPTS
+        )
+
+        # Broadcast restart starting
+        await self._broadcast_service_remediation(
+            node.node_id, service.service_name, "started",
+            message=f"Attempting to restart {service.service_name} on {node.hostname}"
+        )
+
+        # Try to restart via SSH
+        success = await self._restart_service_via_ssh(
+            node.ip_address,
+            node.ssh_user or "autobot",
+            node.ssh_port or 22,
+            service.service_name,
+        )
+
+        # Update tracker
+        self._service_remediation_tracker[key] = {
+            "count": tracker["count"] + 1 if not success else 0,
+            "last_attempt": now,
+        }
+
+        if success:
+            # Update service status optimistically (will be confirmed on next heartbeat)
+            service.status = ServiceStatus.RUNNING.value
+            logger.info(
+                "Successfully restarted service %s on %s",
+                service.service_name, node.node_id
+            )
+            await self._broadcast_service_remediation(
+                node.node_id, service.service_name, "completed",
+                success=True,
+                message=f"Successfully restarted {service.service_name}"
+            )
+        else:
+            logger.warning(
+                "Failed to restart service %s on %s (attempt %d/%d)",
+                service.service_name, node.node_id,
+                tracker["count"] + 1, MAX_SERVICE_RESTART_ATTEMPTS
+            )
+            await self._broadcast_service_remediation(
+                node.node_id, service.service_name, "completed",
+                success=False,
+                message=(
+                    f"Failed to restart {service.service_name} "
+                    f"(attempt {tracker['count'] + 1}/{MAX_SERVICE_RESTART_ATTEMPTS})"
+                )
+            )
+
+        await db.commit()
+        return True
+
+    async def _broadcast_service_remediation(
+        self,
+        node_id: str,
+        service_name: str,
+        event_type: str,
+        success: bool = None,
+        message: str = None,
+    ) -> None:
+        """Broadcast service remediation event via WebSocket."""
+        try:
+            from api.websocket import ws_manager
+            await ws_manager.send_service_status(
+                node_id, service_name,
+                status="restarting" if event_type == "started" else (
+                    "running" if success else "failed"
+                ),
+                action="auto_restart",
+                success=success if event_type == "completed" else None,
+                message=message,
+            )
+        except Exception as e:
+            logger.debug("Failed to broadcast service remediation event: %s", e)
 
     async def _check_auto_rollback(self) -> None:
         """Check for health failures after recent deployments and trigger auto-rollback.

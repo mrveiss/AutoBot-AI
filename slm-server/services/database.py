@@ -60,60 +60,61 @@ class DatabaseService:
         logger.info("Database initialized successfully")
 
     async def _initialize_defaults(self) -> None:
-        """Initialize default settings and roles."""
+        """Initialize default settings and ensure all required settings exist."""
         async with self.session_factory() as session:
             from sqlalchemy import select
 
-            result = await session.execute(
-                select(Setting).where(Setting.key == "initialized")
-            )
-            if result.scalar_one_or_none():
-                return
+            # All required settings with defaults
+            required_settings = {
+                "initialized": ("true", "bool", "Database initialization flag"),
+                "monitoring_location": (
+                    "local", "string", "Monitoring services location (local/external)"
+                ),
+                "prometheus_url": (
+                    "http://localhost:9090", "string", "Prometheus server URL"
+                ),
+                "grafana_url": (
+                    "http://localhost:3000", "string", "Grafana server URL"
+                ),
+                "heartbeat_timeout": (
+                    "60", "int", "Node heartbeat timeout in seconds"
+                ),
+                "auto_reconcile": (
+                    "false", "bool", "Enable automatic role reconciliation"
+                ),
+                "auto_remediate": (
+                    "true", "bool", "Enable auto-restart of SLM agent on degraded nodes"
+                ),
+                "auto_restart_services": (
+                    "true", "bool", "Enable auto-restart of failed AutoBot services"
+                ),
+                "auto_rollback": (
+                    "false", "bool", "Enable automatic deployment rollback on failure"
+                ),
+                "rollback_window_seconds": (
+                    "600", "int", "Time window (seconds) for auto-rollback eligibility"
+                ),
+            }
 
-            default_settings = [
-                Setting(
-                    key="initialized",
-                    value="true",
-                    value_type="bool",
-                    description="Database initialization flag",
-                ),
-                Setting(
-                    key="monitoring_location",
-                    value="local",
-                    value_type="string",
-                    description="Monitoring services location (local/external)",
-                ),
-                Setting(
-                    key="prometheus_url",
-                    value="http://localhost:9090",
-                    value_type="string",
-                    description="Prometheus server URL",
-                ),
-                Setting(
-                    key="grafana_url",
-                    value="http://localhost:3000",
-                    value_type="string",
-                    description="Grafana server URL",
-                ),
-                Setting(
-                    key="heartbeat_timeout",
-                    value="60",
-                    value_type="int",
-                    description="Node heartbeat timeout in seconds",
-                ),
-                Setting(
-                    key="auto_reconcile",
-                    value="false",
-                    value_type="bool",
-                    description="Enable automatic role reconciliation",
-                ),
-            ]
+            # Check which settings exist
+            result = await session.execute(select(Setting))
+            existing_keys = {s.key for s in result.scalars().all()}
 
-            for setting in default_settings:
-                session.add(setting)
+            # Add missing settings
+            added = []
+            for key, (value, value_type, description) in required_settings.items():
+                if key not in existing_keys:
+                    session.add(Setting(
+                        key=key,
+                        value=value,
+                        value_type=value_type,
+                        description=description,
+                    ))
+                    added.append(key)
 
-            await session.commit()
-            logger.info("Default settings initialized")
+            if added:
+                await session.commit()
+                logger.info("Added missing settings: %s", ", ".join(added))
 
     async def close(self) -> None:
         """Close the database connection."""

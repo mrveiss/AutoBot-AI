@@ -116,7 +116,11 @@ async def delete_setting(
     _: Annotated[dict, Depends(require_admin)],
 ) -> None:
     """Delete a setting (admin only)."""
-    protected_keys = {"initialized", "monitoring_location", "prometheus_url", "grafana_url"}
+    protected_keys = {
+        "initialized", "monitoring_location", "prometheus_url", "grafana_url",
+        "auto_remediate", "auto_restart_services", "auto_rollback",
+        "heartbeat_timeout", "rollback_window_seconds",
+    }
 
     if key in protected_keys:
         raise HTTPException(
