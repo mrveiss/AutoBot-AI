@@ -10,6 +10,24 @@ from typing import Any, Dict, List, Optional, Union
 
 import yaml
 
+# Import SSOT for Ollama defaults
+try:
+    from src.config.ssot_config import get_config as get_ssot_config
+    _SSOT_AVAILABLE = True
+except ImportError:
+    _SSOT_AVAILABLE = False
+
+
+def _get_ollama_base_url() -> str:
+    """Get Ollama base URL from SSOT config. Issue #694."""
+    if _SSOT_AVAILABLE:
+        try:
+            return get_ssot_config().ollama_url
+        except Exception:
+            pass
+    return "http://127.0.0.1:11434"
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -65,7 +83,7 @@ class ConfigManager:
                 "task_llm": "ollama",
                 "ollama": {
                     "model": "llama3.2",
-                    "base_url": "http://localhost:11434",
+                    "base_url": _get_ollama_base_url(),
                     "timeout": 30,
                     "port": 11434
                 },
