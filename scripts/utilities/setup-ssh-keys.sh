@@ -1,9 +1,22 @@
 #!/bin/bash
-
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
 # Setup SSH certificate-based authentication for all AutoBot VMs
 # This script deploys SSH keys to all remote hosts in the distributed architecture
 
 set -e
+
+# =============================================================================
+# SSOT Configuration - Issue #694
+# =============================================================================
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../lib/ssot-config.sh" 2>/dev/null || source "$SCRIPT_DIR/lib/ssot-config.sh" 2>/dev/null || {
+    # Fallback if lib not found
+    PROJECT_ROOT="${PROJECT_ROOT:-/home/kali/Desktop/AutoBot}"
+    [ -f "$PROJECT_ROOT/.env" ] && { set -a; source "$PROJECT_ROOT/.env"; set +a; }
+}
 
 # Colors for output
 RED='\033[0;31m'
@@ -28,18 +41,18 @@ log_header() {
     echo -e "${BLUE}[SETUP]${NC} $1"
 }
 
-# AutoBot VM configuration
+# AutoBot VM configuration - Using SSOT env vars
 declare -A VMS=(
-    ["frontend"]="172.16.168.21"
-    ["npu-worker"]="172.16.168.22" 
-    ["redis"]="172.16.168.23"
-    ["ai-stack"]="172.16.168.24"
-    ["browser"]="172.16.168.25"
+    ["frontend"]="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+    ["npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
+    ["redis"]="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+    ["ai-stack"]="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
+    ["browser"]="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
 )
 
-SSH_KEY="$HOME/.ssh/autobot_key"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 SSH_PUB_KEY="$SSH_KEY.pub"
-REMOTE_USER="autobot"
+REMOTE_USER="${AUTOBOT_SSH_USER:-autobot}"
 # SECURITY: No default password - must use SSH keys or interactive auth
 # DEFAULT_PASSWORD removed for security compliance
 
@@ -50,9 +63,9 @@ echo "=========================================================="
 if [ ! -f "$SSH_KEY" ]; then
     log_warn "SSH key not found. Generating new key pair..."
     ssh-keygen -t rsa -b 4096 -f "$SSH_KEY" -N "" -C "autobot@distributed-architecture"
-    log_info "SSH key pair generated ✓"
+    log_info "SSH key pair generated"
 else
-    log_info "SSH key already exists ✓"
+    log_info "SSH key already exists"
 fi
 
 # Display key fingerprint for verification
@@ -64,43 +77,43 @@ echo
 deploy_key_to_host() {
     local host_name=$1
     local host_ip=$2
-    
+
     log_header "Setting up SSH key for $host_name ($host_ip)"
-    
+
     # SECURITY FIX: Use interactive SSH key deployment instead of hardcoded passwords
     log_info "Attempting SSH key deployment (may require interactive password entry)..."
-    
+
     # Check if key-based auth already works
     if ssh -i "$SSH_KEY" -o ConnectTimeout=10 \
         -o PasswordAuthentication=no "$REMOTE_USER@$host_ip" "echo 'Key auth test successful'" 2>/dev/null; then
         log_info "SSH key authentication already working for $host_name"
         return 0
     fi
-    
+
     log_info "Deploying SSH key to $host_name (password required interactively)..."
-    
+
     # Copy SSH key to remote host - will prompt for password if needed
     if ssh-copy-id -i "$SSH_PUB_KEY" "$REMOTE_USER@$host_ip"; then
-        
+
         # Test key-based authentication
         if ssh -i "$SSH_KEY" -o ConnectTimeout=5 \
             "$REMOTE_USER@$host_ip" "echo 'SSH key authentication successful'" 2>/dev/null; then
-            log_info "$host_name: SSH key deployment successful ✓"
+            log_info "$host_name: SSH key deployment successful"
             return 0
         else
-            log_error "$host_name: SSH key authentication failed ✗"
+            log_error "$host_name: SSH key authentication failed"
             return 1
         fi
     else
         log_warn "$host_name: Cannot connect with password authentication"
-        
+
         # Try key-based auth in case it's already set up
         if ssh -i "$SSH_KEY" -o ConnectTimeout=5 \
             "$REMOTE_USER@$host_ip" "echo 'SSH key authentication successful'" 2>/dev/null; then
-            log_info "$host_name: SSH key already configured ✓"
+            log_info "$host_name: SSH key already configured"
             return 0
         else
-            log_error "$host_name: Cannot establish any authentication ✗"
+            log_error "$host_name: Cannot establish any authentication"
             return 1
         fi
     fi
@@ -112,7 +125,7 @@ failed_hosts=()
 
 for host_name in "${!VMS[@]}"; do
     host_ip="${VMS[$host_name]}"
-    
+
     if deploy_key_to_host "$host_name" "$host_ip"; then
         successful_hosts+=("$host_name")
     else
@@ -128,14 +141,14 @@ log_header "SSH Key Deployment Summary"
 if [ ${#successful_hosts[@]} -gt 0 ]; then
     log_info "Successfully configured SSH keys for:"
     for host in "${successful_hosts[@]}"; do
-        echo -e "  ✓ $host (${VMS[$host]})"
+        echo -e "  $host (${VMS[$host]})"
     done
 fi
 
 if [ ${#failed_hosts[@]} -gt 0 ]; then
     log_warn "Failed to configure SSH keys for:"
     for host in "${failed_hosts[@]}"; do
-        echo -e "  ✗ $host (${VMS[$host]})"
+        echo -e "  $host (${VMS[$host]})"
     done
 fi
 
@@ -151,19 +164,19 @@ for host_name in "${successful_hosts[@]}"; do
     host_ip="${VMS[$host_name]}"
     if ssh -i "$SSH_KEY" -o ConnectTimeout=5 \
         "$REMOTE_USER@$host_ip" "hostname && uptime" 2>/dev/null; then
-        log_info "$host_name: Connection test successful ✓"
+        log_info "$host_name: Connection test successful"
     else
-        log_error "$host_name: Connection test failed ✗"
+        log_error "$host_name: Connection test failed"
     fi
 done
 
 echo
 if [ ${#failed_hosts[@]} -eq 0 ]; then
-    log_info "🎉 All SSH keys configured successfully! Password authentication can now be disabled."
+    log_info "All SSH keys configured successfully! Password authentication can now be disabled."
 else
-    log_warn "⚠️  Some hosts failed. Manual intervention may be required."
+    log_warn "Some hosts failed. Manual intervention may be required."
 fi
 
 echo
 log_info "SSH Key Location: $SSH_KEY"
-log_info "Usage Example: ssh -i $SSH_KEY autobot@172.16.168.21"
+log_info "Usage Example: ssh -i $SSH_KEY $REMOTE_USER@${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"

@@ -1,22 +1,34 @@
 #!/bin/bash
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
 # AutoBot Time Synchronization Check Utility
 # Checks time synchronization status across all VMs in the distributed infrastructure
 
 set -e
 
-# Configuration
+# =============================================================================
+# SSOT Configuration - Issue #694
+# =============================================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-ANSIBLE_DIR="$PROJECT_ROOT/ansible"
-SSH_KEY="$HOME/.ssh/autobot_key"
+source "$SCRIPT_DIR/../lib/ssot-config.sh" 2>/dev/null || source "$SCRIPT_DIR/lib/ssot-config.sh" 2>/dev/null || {
+    # Fallback if lib not found
+    PROJECT_ROOT="${PROJECT_ROOT:-/home/kali/Desktop/AutoBot}"
+    [ -f "$PROJECT_ROOT/.env" ] && { set -a; source "$PROJECT_ROOT/.env"; set +a; }
+}
 
-# VM Configuration (matching current distributed setup)
+# Configuration
+ANSIBLE_DIR="$PROJECT_ROOT/ansible"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
+
+# VM Configuration - Using SSOT env vars
 declare -A VMS=(
-    ["frontend"]="172.16.168.21"
-    ["npu-worker"]="172.16.168.22"
-    ["redis"]="172.16.168.23"
-    ["ai-stack"]="172.16.168.24"
-    ["browser"]="172.16.168.25"
+    ["frontend"]="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+    ["npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
+    ["redis"]="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+    ["ai-stack"]="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
+    ["browser"]="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
 )
 
 # Expected timezone
@@ -295,7 +307,7 @@ show_usage() {
     echo "  $0 deploy             # Deploy via Ansible"
     echo ""
     echo "Notes:"
-    echo "  - Requires SSH key authentication (~/.ssh/autobot_key)"
+    echo "  - Requires SSH key authentication ($SSH_KEY)"
     echo "  - Expected timezone: $EXPECTED_TIMEZONE"
     echo "  - Logs are available at /var/log/autobot/time-sync.log on each VM"
 }

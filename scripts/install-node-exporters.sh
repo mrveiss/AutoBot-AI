@@ -8,6 +8,16 @@
 
 set -e
 
+# =============================================================================
+# SSOT Configuration - Issue #694
+# =============================================================================
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/ssot-config.sh" 2>/dev/null || source "$SCRIPT_DIR/../lib/ssot-config.sh" 2>/dev/null || {
+    # Fallback if lib not found
+    PROJECT_ROOT="${PROJECT_ROOT:-/home/kali/Desktop/AutoBot}"
+    [ -f "$PROJECT_ROOT/.env" ] && { set -a; source "$PROJECT_ROOT/.env"; set +a; }
+}
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -17,16 +27,17 @@ NC='\033[0m'
 
 # Configuration
 NODE_EXPORTER_VERSION="1.7.0"
-SSH_KEY="$HOME/.ssh/autobot_key"
-SSH_USER="autobot"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
+SSH_USER="${AUTOBOT_SSH_USER:-autobot}"
 
+# VM configuration using SSOT variables
 declare -A VMS=(
-    ["main"]="172.16.168.20"
-    ["frontend"]="172.16.168.21"
-    ["npu-worker"]="172.16.168.22"
-    ["redis"]="172.16.168.23"
-    ["ai-stack"]="172.16.168.24"
-    ["browser"]="172.16.168.25"
+    ["main"]="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+    ["frontend"]="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+    ["npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
+    ["redis"]="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+    ["ai-stack"]="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
+    ["browser"]="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
 )
 
 # Logging functions
@@ -146,10 +157,10 @@ verify_installation() {
 
     echo -n "  Verifying $vm_name ($vm_ip)... "
     if timeout 3 curl -s "http://$vm_ip:9100/metrics" | grep -q "node_cpu_seconds_total"; then
-        echo -e "${GREEN}✅${NC}"
+        echo -e "${GREEN}OK${NC}"
         return 0
     else
-        echo -e "${RED}❌${NC}"
+        echo -e "${RED}Failed${NC}"
         return 1
     fi
 }
@@ -193,7 +204,7 @@ main() {
     echo -e "${GREEN}Installation Complete!${NC}"
     echo -e "${GREEN}========================================${NC}"
     echo ""
-    echo "✅ Node exporters running on all machines"
+    echo "Node exporters running on all machines"
     echo ""
     echo "Metrics available at:"
     for vm_name in "${!VMS[@]}"; do
