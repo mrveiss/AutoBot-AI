@@ -42,7 +42,7 @@ import os
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -792,6 +792,25 @@ class AutoBotConfig(BaseSettings):
             "ollama": self.vm.ollama,
         }
         return vm_map.get(vm_name.lower())
+
+    @property
+    def vm_definitions(self) -> Dict[str, str]:
+        """
+        Get VM definitions as a dictionary.
+
+        Returns dict compatible with PKI and other systems that need
+        VM name -> IP mappings.
+
+        Issue #694: Centralized VM definitions for config consolidation.
+        """
+        return {
+            "main-host": self.vm.main,
+            "frontend": self.vm.frontend,
+            "npu-worker": self.vm.npu,
+            "redis": self.vm.redis,
+            "ai-stack": self.vm.aistack,
+            "browser": self.vm.browser,
+        }
 
 
 @lru_cache(maxsize=1)
