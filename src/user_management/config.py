@@ -20,14 +20,19 @@ from src.config import UnifiedConfigManager
 
 
 def _get_default_postgres_host() -> str:
-    """Get default PostgreSQL host from SSOT config or fallback."""
+    """
+    Get default PostgreSQL host from SSOT config.
+
+    PostgreSQL runs on the Redis VM (172.16.168.23) in AutoBot architecture.
+    Issue #694: Config consolidation - uses SSOT with proper fallback.
+    """
     try:
         from src.config.ssot_config import get_config
-        config = get_config()
-        # PostgreSQL typically runs on Redis VM in AutoBot architecture
-        return config.vm.redis if config else "172.16.168.23"
+        return get_config().vm.redis
     except Exception:
-        return "172.16.168.23"
+        # Fallback only if SSOT config completely unavailable
+        import os
+        return os.getenv("AUTOBOT_REDIS_HOST", "172.16.168.23")
 
 
 class DeploymentMode(str, Enum):
