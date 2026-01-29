@@ -277,7 +277,8 @@ class MTLSMigration:
         elif all_passed:
             logger.info("Certificate checks PASSED")
             logger.info(f"WARNING: {plain_conns} connections still on plain port")
-            logger.info("Wait until all services use TLS, then re-run verification")
+            logger.info("Ensure AUTOBOT_REDIS_TLS_ENABLED=true is set and restart app")
+            logger.info("Then re-run verification with the app running")
         else:
             logger.error("Some checks FAILED - review errors above")
 
@@ -541,6 +542,13 @@ Migration Phases:
 Rollback Options:
   redis             Remove TLS config, keep dual-auth
   redis-full        Full rollback to pre-mTLS state
+
+On-Demand App Workflow:
+  1. Run: --phase redis-dual-auth (configure Redis TLS)
+  2. Set AUTOBOT_REDIS_TLS_ENABLED=true in .env
+  3. Start app and test functionality
+  4. Run: --phase verify (with app running)
+  5. If all tests pass, run: --phase disable-password
 
 Examples:
   python scripts/security/mtls-migrate.py --phase redis-dual-auth
