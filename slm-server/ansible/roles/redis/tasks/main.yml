@@ -1,0 +1,90 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Redis Stack Role - Redis server with modules for AutoBot
+---
+- name: Install Redis prerequisites
+  ansible.builtin.apt:
+    name:
+      - curl
+      - gnupg
+      - lsb-release
+    state: present
+    update_cache: true
+
+- name: Add Redis GPG key
+  ansible.builtin.apt_key:
+    url: https://packages.redis.io/gpg
+    state: present
+  when: redis_install_from_repo | default(true)
+
+- name: Add Redis repository
+  ansible.builtin.apt_repository:
+    repo: "deb https://packages.redis.io/deb {{ ansible_distribution_release }} main"
+    state: present
+  when: redis_install_from_repo | default(true)
+
+- name: Install Redis Stack Server
+  ansible.builtin.apt:
+    name: redis-stack-server
+    state: present
+    update_cache: true
+  when: redis_install_stack | default(true)
+
+- name: Install Redis (standard)
+  ansible.builtin.apt:
+    name: redis-server
+    state: present
+  when: not (redis_install_stack | default(true))
+
+- name: Create Redis configuration directory
+  ansible.builtin.file:
+    path: /etc/redis
+    state: directory
+    mode: "0755"
+
+- name: Deploy Redis configuration
+  ansible.builtin.template:
+    src: redis.conf.j2
+    dest: "{{ redis_config_file }}"
+    mode: "0644"
+    owner: redis
+    group: redis
+  notify: restart redis
+
+- name: Create Redis data directory
+  ansible.builtin.file:
+    path: "{{ redis_data_dir }}"
+    state: directory
+    mode: "0750"
+    owner: redis
+    group: redis
+
+- name: Deploy Redis systemd service override
+  ansible.builtin.template:
+    src: redis.service.j2
+    dest: /etc/systemd/system/redis-server.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart redis
+
+- name: Enable and start Redis service
+  ansible.builtin.systemd:
+    name: redis-server
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Wait for Redis to be ready
+  ansible.builtin.wait_for:
+    port: "{{ redis_port }}"
+    delay: 2
+    timeout: 30
+
+- name: Configure Redis password if set
+  ansible.builtin.command:
+    cmd: "redis-cli -p {{ redis_port }} CONFIG SET requirepass {{ redis_password }}"
+  when: redis_password | default('') | length > 0
+  changed_when: false

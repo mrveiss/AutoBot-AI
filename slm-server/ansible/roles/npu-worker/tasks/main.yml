@@ -1,0 +1,80 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# NPU Worker Role - Intel NPU acceleration worker for AutoBot
+---
+- name: Install NPU worker dependencies
+  ansible.builtin.apt:
+    name:
+      - python3
+      - python3-pip
+      - python3-venv
+    state: present
+    update_cache: true
+
+- name: Create NPU worker directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+    owner: "{{ npu_user }}"
+    group: "{{ npu_group }}"
+  loop:
+    - "{{ npu_install_dir }}"
+    - "{{ npu_log_dir }}"
+    - "{{ npu_models_dir }}"
+
+- name: Create Python virtual environment
+  ansible.builtin.command:
+    cmd: python3 -m venv {{ npu_install_dir }}/venv
+    creates: "{{ npu_install_dir }}/venv/bin/python"
+  become_user: "{{ npu_user }}"
+
+- name: Install OpenVINO and dependencies
+  ansible.builtin.pip:
+    name:
+      - openvino>=2024.0
+      - openvino-dev
+      - numpy
+      - pillow
+      - transformers
+      - optimum[openvino]
+    virtualenv: "{{ npu_install_dir }}/venv"
+    state: present
+  become_user: "{{ npu_user }}"
+  when: npu_install_openvino | default(true)
+
+- name: Deploy NPU worker script
+  ansible.builtin.template:
+    src: npu-worker.py.j2
+    dest: "{{ npu_install_dir }}/npu-worker.py"
+    mode: "0755"
+    owner: "{{ npu_user }}"
+    group: "{{ npu_group }}"
+  notify: restart npu-worker
+
+- name: Deploy NPU worker configuration
+  ansible.builtin.template:
+    src: npu-worker.env.j2
+    dest: "{{ npu_install_dir }}/.env"
+    mode: "0600"
+    owner: "{{ npu_user }}"
+    group: "{{ npu_group }}"
+  notify: restart npu-worker
+
+- name: Deploy NPU worker systemd service
+  ansible.builtin.template:
+    src: autobot-npu-worker.service.j2
+    dest: /etc/systemd/system/autobot-npu-worker.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart npu-worker
+
+- name: Enable and start NPU worker service
+  ansible.builtin.systemd:
+    name: autobot-npu-worker
+    state: started
+    enabled: true
+    daemon_reload: true

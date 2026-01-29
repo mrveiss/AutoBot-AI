@@ -1,0 +1,22 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+[Unit]
+Description=AutoBot AI Processing Stack
+After=network.target
+
+[Service]
+Type=simple
+User={{ ai_user }}
+Group={{ ai_group }}
+WorkingDirectory={{ ai_install_dir }}
+Environment="PATH={{ ai_install_dir }}/venv/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile={{ ai_install_dir }}/.env
+ExecStart={{ ai_install_dir }}/venv/bin/python -m chromadb.server --host {{ chromadb_host }} --port {{ chromadb_port }} --persist-path {{ chromadb_persist_dir }}
+Restart=always
+RestartSec=10
+StandardOutput=append:{{ ai_log_dir }}/ai-stack.log
+StandardError=append:{{ ai_log_dir }}/ai-stack-error.log
+
+[Install]
+WantedBy=multi-user.target

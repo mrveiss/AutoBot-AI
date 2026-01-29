@@ -406,66 +406,74 @@ async def verify_data(
 
 
 async def _run_backup(backup_id: str, host: str, service_type: str) -> None:
-    """Execute backup operation asynchronously."""
+    """Execute backup operation asynchronously using the backup service."""
     from services.database import db_service
+    from services.backup import backup_service
 
-    logger.info("Running backup %s for host %s", backup_id, host)
+    logger.info("Running backup %s for host %s (service: %s)", backup_id, host, service_type)
 
     async with db_service.session() as db:
+        # Get the backup record
         result = await db.execute(
             select(Backup).where(Backup.backup_id == backup_id)
         )
         backup = result.scalar_one_or_none()
         if not backup:
+            logger.error("Backup %s not found", backup_id)
             return
 
-        backup.status = BackupStatus.IN_PROGRESS.value
-        backup.started_at = datetime.utcnow()
-        await db.commit()
-
-        try:
-            if service_type == "redis":
-                # Execute Redis BGSAVE via SSH
-                cmd = [
-                    "ssh", "-o", "StrictHostKeyChecking=no",
-                    "-o", "ConnectTimeout=10",
-                    f"autobot@{host}",
-                    "redis-cli BGSAVE && sleep 5 && redis-cli LASTSAVE",
-                ]
-                process = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=120)
-
-                if process.returncode == 0:
-                    backup.status = BackupStatus.COMPLETED.value
-                    backup.backup_path = f"/var/lib/redis/dump.rdb"
-                    backup.size_bytes = 1024  # Would need actual size check
-                else:
-                    backup.status = BackupStatus.FAILED.value
-                    backup.error = stderr.decode()[:500]
-            else:
-                backup.status = BackupStatus.FAILED.value
-                backup.error = f"Unsupported service type: {service_type}"
-
-        except asyncio.TimeoutError:
+        # Get the node for full connection details
+        node_result = await db.execute(
+            select(Node).where(Node.node_id == backup.node_id)
+        )
+        node = node_result.scalar_one_or_none()
+        if not node:
+            logger.error("Node %s not found for backup %s", backup.node_id, backup_id)
             backup.status = BackupStatus.FAILED.value
-            backup.error = "Backup timed out"
-        except Exception as e:
-            backup.status = BackupStatus.FAILED.value
-            backup.error = str(e)[:500]
+            backup.error = "Node not found"
+            backup.completed_at = datetime.utcnow()
+            await db.commit()
+            return
 
-        backup.completed_at = datetime.utcnow()
-        await db.commit()
+        # Execute backup using the dedicated service
+        if service_type == "redis":
+            success, message = await backup_service.execute_redis_backup(
+                db, backup_id, node
+            )
+            if not success:
+                logger.error("Backup %s failed: %s", backup_id, message)
+        else:
+            # For unsupported service types, mark as failed
+            backup.status = BackupStatus.FAILED.value
+            backup.error = f"Unsupported service type: {service_type}"
+            backup.completed_at = datetime.utcnow()
+            await db.commit()
+            logger.warning("Backup %s failed: unsupported service type", backup_id)
 
 
 async def _run_restore(job_id: str, backup_id: str, node_id: str) -> None:
-    """Execute restore operation asynchronously."""
+    """Execute restore operation asynchronously using the backup service."""
+    from services.database import db_service
+    from services.backup import backup_service
+
     logger.info("Running restore %s from backup %s to node %s", job_id, backup_id, node_id)
-    # Implementation would restore the backup to the node
-    await asyncio.sleep(2)  # Simulate restore time
+
+    async with db_service.session() as db:
+        # Get the target node
+        node_result = await db.execute(
+            select(Node).where(Node.node_id == node_id)
+        )
+        node = node_result.scalar_one_or_none()
+        if not node:
+            logger.error("Target node %s not found for restore", node_id)
+            return
+
+        # Execute restore
+        success, message = await backup_service.execute_restore(db, backup_id, node)
+        if success:
+            logger.info("Restore %s completed: %s", job_id, message)
+        else:
+            logger.error("Restore %s failed: %s", job_id, message)
 
 
 async def _run_replication(

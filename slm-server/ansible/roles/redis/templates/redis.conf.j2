@@ -1,0 +1,43 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+# Redis Configuration for AutoBot
+
+# Network
+bind {{ redis_bind }}
+port {{ redis_port }}
+protected-mode no
+
+{% if redis_password | length > 0 %}
+# Authentication
+requirepass {{ redis_password }}
+{% endif %}
+
+# Memory
+maxmemory {{ redis_maxmemory }}
+maxmemory-policy {{ redis_maxmemory_policy }}
+
+# Persistence
+dir {{ redis_data_dir }}
+{% if redis_save_enabled %}
+save 900 1
+save 300 10
+save 60 10000
+{% else %}
+save ""
+{% endif %}
+
+{% if redis_appendonly %}
+appendonly yes
+appendfilename "appendonly.aof"
+appendfsync everysec
+{% endif %}
+
+# Logging
+loglevel notice
+logfile /var/log/redis/redis-server.log
+
+# General
+daemonize no
+supervised systemd
+pidfile /run/redis/redis-server.pid

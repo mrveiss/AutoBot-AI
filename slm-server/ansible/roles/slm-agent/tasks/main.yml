@@ -1,0 +1,54 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# SLM Agent Role - Health monitoring agent for SLM fleet management
+---
+- name: Install Python dependencies for SLM agent
+  ansible.builtin.pip:
+    name:
+      - psutil>=5.9.0
+      - requests>=2.28.0
+    state: present
+
+- name: Create SLM agent directory
+  ansible.builtin.file:
+    path: /opt/slm-agent
+    state: directory
+    mode: "0755"
+    owner: "{{ slm_agent_user }}"
+    group: "{{ slm_agent_group }}"
+
+- name: Deploy SLM agent script
+  ansible.builtin.template:
+    src: slm-agent.py.j2
+    dest: /opt/slm-agent/slm-agent.py
+    mode: "0755"
+    owner: "{{ slm_agent_user }}"
+    group: "{{ slm_agent_group }}"
+  notify: restart slm-agent
+
+- name: Deploy SLM agent configuration
+  ansible.builtin.template:
+    src: slm-agent.conf.j2
+    dest: /opt/slm-agent/config.conf
+    mode: "0644"
+    owner: "{{ slm_agent_user }}"
+    group: "{{ slm_agent_group }}"
+  notify: restart slm-agent
+
+- name: Deploy SLM agent systemd service
+  ansible.builtin.template:
+    src: slm-agent.service.j2
+    dest: /etc/systemd/system/slm-agent.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart slm-agent
+
+- name: Enable and start SLM agent service
+  ansible.builtin.systemd:
+    name: slm-agent
+    state: started
+    enabled: true
+    daemon_reload: true

@@ -3,6 +3,7 @@
 # Author: mrveiss
 #
 # Ansible Playbook - Main Deployment Entry Point
+# Supports blue-green deployments with role borrowing (Issue #726)
 ---
 
 - name: Deploy Roles to Target Host
@@ -18,15 +19,15 @@
       ansible.builtin.set_fact:
         role_list: "{{ target_roles.split(',') | map('trim') | list }}"
 
+    - name: Display roles to deploy
+      ansible.builtin.debug:
+        msg: "Deploying roles: {{ role_list | join(', ') }}"
+
+    # Core Infrastructure Roles
     - name: Deploy slm-agent role
       ansible.builtin.include_role:
         name: slm-agent
       when: "'slm-agent' in role_list"
-
-    - name: Deploy monitoring role
-      ansible.builtin.include_role:
-        name: monitoring
-      when: "'monitoring' in role_list"
 
     - name: Deploy redis role
       ansible.builtin.include_role:
@@ -42,3 +43,35 @@
       ansible.builtin.include_role:
         name: frontend
       when: "'frontend' in role_list"
+
+    # AI/ML Roles
+    - name: Deploy npu-worker role
+      ansible.builtin.include_role:
+        name: npu-worker
+      when: "'npu-worker' in role_list"
+
+    - name: Deploy ai-stack role
+      ansible.builtin.include_role:
+        name: ai-stack
+      when: "'ai-stack' in role_list"
+
+    - name: Deploy llm role
+      ansible.builtin.include_role:
+        name: llm
+      when: "'llm' in role_list"
+
+    # Automation Roles
+    - name: Deploy browser-automation role
+      ansible.builtin.include_role:
+        name: browser-automation
+      when: "'browser-automation' in role_list"
+
+    # Monitoring Roles
+    - name: Deploy monitoring role
+      ansible.builtin.include_role:
+        name: monitoring
+      when: "'monitoring' in role_list"
+
+    - name: Deployment complete
+      ansible.builtin.debug:
+        msg: "Successfully deployed roles: {{ role_list | join(', ') }}"

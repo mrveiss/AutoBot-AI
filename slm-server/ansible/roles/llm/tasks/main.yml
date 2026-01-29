@@ -1,0 +1,67 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# LLM Role - Ollama LLM inference server for AutoBot
+---
+- name: Install LLM dependencies
+  ansible.builtin.apt:
+    name:
+      - curl
+      - ca-certificates
+    state: present
+    update_cache: true
+
+- name: Download Ollama installer
+  ansible.builtin.get_url:
+    url: https://ollama.ai/install.sh
+    dest: /tmp/ollama-install.sh
+    mode: "0755"
+  when: llm_install_ollama | default(true)
+
+- name: Install Ollama
+  ansible.builtin.shell:
+    cmd: /tmp/ollama-install.sh
+    creates: /usr/local/bin/ollama
+  when: llm_install_ollama | default(true)
+
+- name: Create Ollama data directory
+  ansible.builtin.file:
+    path: "{{ llm_models_dir }}"
+    state: directory
+    mode: "0755"
+    owner: "{{ llm_user }}"
+    group: "{{ llm_group }}"
+
+- name: Deploy Ollama systemd override
+  ansible.builtin.template:
+    src: ollama.service.j2
+    dest: /etc/systemd/system/ollama.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart ollama
+
+- name: Enable and start Ollama service
+  ansible.builtin.systemd:
+    name: ollama
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Wait for Ollama to be ready
+  ansible.builtin.uri:
+    url: "http://localhost:{{ llm_port }}/api/tags"
+    method: GET
+    status_code: 200
+  register: result
+  until: result.status == 200
+  retries: 30
+  delay: 2
+
+- name: Pull default models
+  ansible.builtin.command:
+    cmd: ollama pull {{ item }}
+  loop: "{{ llm_default_models }}"
+  when: llm_pull_models | default(false)
+  changed_when: false

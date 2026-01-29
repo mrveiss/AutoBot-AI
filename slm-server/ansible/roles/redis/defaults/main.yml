@@ -1,0 +1,18 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Redis configuration defaults
+redis_port: 6379
+redis_bind: "0.0.0.0"
+redis_password: ""
+redis_maxmemory: "2gb"
+redis_maxmemory_policy: "allkeys-lru"
+redis_data_dir: "/var/lib/redis"
+redis_config_file: "/etc/redis/redis.conf"
+redis_install_stack: true
+redis_install_from_repo: true
+
+# Persistence
+redis_save_enabled: true
+redis_appendonly: true

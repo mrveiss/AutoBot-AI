@@ -1,0 +1,82 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Backend Role - FastAPI backend deployment for AutoBot
+---
+- name: Install Python and dependencies
+  ansible.builtin.apt:
+    name:
+      - python3
+      - python3-pip
+      - python3-venv
+      - git
+    state: present
+    update_cache: true
+
+- name: Create autobot user
+  ansible.builtin.user:
+    name: "{{ backend_user }}"
+    shell: /bin/bash
+    create_home: true
+    state: present
+
+- name: Create backend directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+  loop:
+    - "{{ backend_install_dir }}"
+    - "{{ backend_log_dir }}"
+    - "{{ backend_data_dir }}"
+
+- name: Clone/update AutoBot repository
+  ansible.builtin.git:
+    repo: "{{ backend_repo_url }}"
+    dest: "{{ backend_install_dir }}"
+    version: "{{ backend_version }}"
+    force: true
+  become_user: "{{ backend_user }}"
+  when: backend_deploy_from_git | default(true)
+
+- name: Create Python virtual environment
+  ansible.builtin.command:
+    cmd: python3 -m venv {{ backend_install_dir }}/venv
+    creates: "{{ backend_install_dir }}/venv/bin/python"
+  become_user: "{{ backend_user }}"
+
+- name: Install Python requirements
+  ansible.builtin.pip:
+    requirements: "{{ backend_install_dir }}/requirements.txt"
+    virtualenv: "{{ backend_install_dir }}/venv"
+    state: present
+  become_user: "{{ backend_user }}"
+  when: backend_deploy_from_git | default(true)
+
+- name: Deploy backend environment file
+  ansible.builtin.template:
+    src: backend.env.j2
+    dest: "{{ backend_install_dir }}/.env"
+    mode: "0600"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+  notify: restart backend
+
+- name: Deploy backend systemd service
+  ansible.builtin.template:
+    src: autobot-backend.service.j2
+    dest: /etc/systemd/system/autobot-backend.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart backend
+
+- name: Enable and start backend service
+  ansible.builtin.systemd:
+    name: autobot-backend
+    state: started
+    enabled: true
+    daemon_reload: true
