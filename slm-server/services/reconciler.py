@@ -775,7 +775,8 @@ class ReconcilerService:
         try:
             from api.websocket import ws_manager
             await ws_manager.send_health_update(
-                node.node_id, cpu_percent, memory_percent, disk_percent, new_status
+                node.node_id, cpu_percent, memory_percent, disk_percent, new_status,
+                last_heartbeat=node.last_heartbeat.isoformat() if node.last_heartbeat else None
             )
         except Exception as e:
             logger.debug("Failed to broadcast health update: %s", e)

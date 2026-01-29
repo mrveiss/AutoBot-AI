@@ -18,7 +18,7 @@ import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
 import { createLogger } from '@/utils/debugUtils'
-import type { FleetServiceStatus, ServiceStatus, ServiceCategory, SLMNode } from '@/types/slm'
+import type { FleetServiceStatus, ServiceStatus, ServiceCategory, ServiceActionResponse } from '@/types/slm'
 
 const logger = createLogger('ServicesView')
 const api = useSlmApi()
@@ -70,8 +70,8 @@ const categoryCounts = computed(() => {
   return { autobot, system, all: services.value.length }
 })
 
-// Get unique nodes from fleet store
-const nodes = computed(() => fleetStore.nodes)
+// Get unique nodes from fleet store (nodeList returns array, not Map)
+const nodes = computed(() => fleetStore.nodeList)
 
 // Group services by node
 interface NodeServiceGroup {
@@ -249,7 +249,14 @@ async function handleServiceAction(
   actionType.value = action
 
   try {
-    const result = await api.serviceAction(nodeId, serviceName, action)
+    let result: ServiceActionResponse
+    if (action === 'start') {
+      result = await api.startService(nodeId, serviceName)
+    } else if (action === 'stop') {
+      result = await api.stopService(nodeId, serviceName)
+    } else {
+      result = await api.restartService(nodeId, serviceName)
+    }
 
     if (result.success) {
       // Update local state optimistically

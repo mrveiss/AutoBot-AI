@@ -95,9 +95,11 @@ class ConnectionManager:
         )
 
     async def send_health_update(
-        self, node_id: str, cpu: float, memory: float, disk: float, status: str
+        self, node_id: str, cpu: float, memory: float, disk: float, status: str,
+        last_heartbeat: str = None
     ) -> None:
         """Send health update to global event channel."""
+        from datetime import datetime
         await self.broadcast(
             "events:global",
             {
@@ -108,6 +110,7 @@ class ConnectionManager:
                     "cpu_percent": cpu,
                     "memory_percent": memory,
                     "disk_percent": disk,
+                    "last_heartbeat": last_heartbeat or datetime.utcnow().isoformat(),
                 },
                 "timestamp": asyncio.get_event_loop().time(),
             },

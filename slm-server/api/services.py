@@ -56,72 +56,62 @@ async def _run_ansible_service_action(
     action: str,
 ) -> Tuple[bool, str]:
     """
-    Run Ansible playbook to control a service.
+    Run SSH command to control a service via systemctl.
 
     Returns (success, message).
     """
-    import tempfile
-    import os
+    # Map action to systemctl command
+    systemctl_action = action
+    if action == "start":
+        systemctl_action = "start"
+    elif action == "stop":
+        systemctl_action = "stop"
+    elif action == "restart":
+        systemctl_action = "restart"
 
-    # Build inventory
-    inventory_content = f"""[target]
-{node.ip_address} ansible_user={node.ssh_user} ansible_port={node.ssh_port}
-"""
+    # Build SSH command
+    ssh_user = node.ssh_user or "autobot"
+    ssh_port = node.ssh_port or 22
+    ssh_key = "/home/autobot/.ssh/id_rsa"
 
-    # Build playbook
-    playbook_content = f"""---
-- name: Service {action}
-  hosts: target
-  become: yes
-  gather_facts: no
-  tasks:
-    - name: {action.capitalize()} service {service_name}
-      ansible.builtin.systemd:
-        name: {service_name}
-        state: {"started" if action == "start" else "stopped" if action == "stop" else "restarted"}
-"""
+    # Use sudo -n (non-interactive) to run systemctl as root
+    remote_cmd = f"sudo -n systemctl {systemctl_action} {service_name}"
+
+    ssh_cmd = [
+        "/usr/bin/ssh",
+        "-o", "StrictHostKeyChecking=no",
+        "-o", "ConnectTimeout=10",
+        "-o", "BatchMode=yes",
+        "-i", ssh_key,
+        "-p", str(ssh_port),
+        f"{ssh_user}@{node.ip_address}",
+        remote_cmd,
+    ]
 
     try:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            inv_path = os.path.join(tmpdir, "inventory")
-            pb_path = os.path.join(tmpdir, "playbook.yml")
+        process = await asyncio.create_subprocess_exec(
+            *ssh_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
 
-            with open(inv_path, "w", encoding="utf-8") as f:
-                f.write(inventory_content)
-            with open(pb_path, "w", encoding="utf-8") as f:
-                f.write(playbook_content)
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(),
+            timeout=30.0,
+        )
 
-            # Run ansible-playbook
-            cmd = [
-                "ansible-playbook",
-                "-i", inv_path,
-                pb_path,
-                "--timeout", "30",
-            ]
-
-            # Add SSH key if key-based auth
-            if node.auth_method == "key":
-                cmd.extend(["--private-key", "/home/autobot/.ssh/id_rsa"])
-
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+        if process.returncode == 0:
+            logger.info(
+                "Service %s %s on %s completed",
+                service_name, action, node.hostname
             )
-
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=60.0,
+            return True, f"Service {service_name} {action} completed"
+        else:
+            error = stderr.decode("utf-8", errors="replace")
+            logger.error(
+                "Service action failed on %s: %s", node.hostname, error[:500]
             )
-
-            if process.returncode == 0:
-                return True, f"Service {service_name} {action} completed"
-            else:
-                error = stderr.decode("utf-8", errors="replace")
-                logger.error(
-                    "Ansible service action failed: %s", error[:500]
-                )
-                return False, f"Failed to {action} service: {error[:200]}"
+            return False, f"Failed to {action} service: {error[:200]}"
 
     except asyncio.TimeoutError:
         return False, f"Timeout waiting for {action} to complete"
@@ -137,90 +127,49 @@ async def _run_ansible_get_logs(
     since: Optional[str] = None,
 ) -> Tuple[bool, str]:
     """
-    Run Ansible to fetch service logs via journalctl.
+    Fetch service logs via SSH and journalctl.
 
     Returns (success, logs_or_error).
     """
-    import tempfile
-    import os
-
-    # Build journalctl command
-    journal_cmd = f"journalctl -u {service_name} -n {lines} --no-pager"
+    # Build journalctl command (sudo -n for non-interactive)
+    journal_cmd = f"sudo -n journalctl -u {service_name} -n {lines} --no-pager"
     if since:
         journal_cmd += f" --since='{since}'"
 
-    inventory_content = f"""[target]
-{node.ip_address} ansible_user={node.ssh_user} ansible_port={node.ssh_port}
-"""
+    # Build SSH command
+    ssh_user = node.ssh_user or "autobot"
+    ssh_port = node.ssh_port or 22
+    ssh_key = "/home/autobot/.ssh/id_rsa"
 
-    playbook_content = f"""---
-- name: Get service logs
-  hosts: target
-  become: yes
-  gather_facts: no
-  tasks:
-    - name: Fetch logs for {service_name}
-      ansible.builtin.shell: "{journal_cmd}"
-      register: logs_output
-      ignore_errors: yes
-
-    - name: Output logs
-      debug:
-        var: logs_output.stdout
-"""
+    ssh_cmd = [
+        "/usr/bin/ssh",
+        "-o", "StrictHostKeyChecking=no",
+        "-o", "ConnectTimeout=10",
+        "-o", "BatchMode=yes",
+        "-i", ssh_key,
+        "-p", str(ssh_port),
+        f"{ssh_user}@{node.ip_address}",
+        journal_cmd,
+    ]
 
     try:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            inv_path = os.path.join(tmpdir, "inventory")
-            pb_path = os.path.join(tmpdir, "playbook.yml")
+        process = await asyncio.create_subprocess_exec(
+            *ssh_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
 
-            with open(inv_path, "w", encoding="utf-8") as f:
-                f.write(inventory_content)
-            with open(pb_path, "w", encoding="utf-8") as f:
-                f.write(playbook_content)
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(),
+            timeout=30.0,
+        )
 
-            cmd = [
-                "ansible-playbook",
-                "-i", inv_path,
-                pb_path,
-                "--timeout", "30",
-            ]
-
-            if node.auth_method == "key":
-                cmd.extend(["--private-key", "/home/autobot/.ssh/id_rsa"])
-
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=60.0,
-            )
-
-            output = stdout.decode("utf-8", errors="replace")
-
-            # Extract logs from Ansible output
-            # Look for the debug output
-            if "logs_output.stdout" in output:
-                # Parse the JSON-like output
-                import re
-                match = re.search(
-                    r'"logs_output\.stdout":\s*"([^"]*)"',
-                    output,
-                    re.DOTALL
-                )
-                if match:
-                    logs = match.group(1).replace("\\n", "\n")
-                    return True, logs
-
-            # Fallback: return raw output
-            if process.returncode == 0:
-                return True, output
-            else:
-                return False, stderr.decode("utf-8", errors="replace")[:500]
+        if process.returncode == 0:
+            logs = stdout.decode("utf-8", errors="replace")
+            return True, logs
+        else:
+            error = stderr.decode("utf-8", errors="replace")
+            return False, f"Failed to fetch logs: {error[:200]}"
 
     except asyncio.TimeoutError:
         return False, "Timeout fetching logs"
