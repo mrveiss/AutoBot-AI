@@ -16,6 +16,26 @@ from typing import Any, Dict
 
 import yaml
 
+
+# SSOT config for Ollama defaults - Issue #694
+def _get_ssot_ollama_url() -> str:
+    """Get Ollama URL from SSOT config with fallback."""
+    try:
+        from src.config.ssot_config import get_config
+        return get_config().ollama_url
+    except Exception:
+        return os.getenv("AUTOBOT_OLLAMA_HOST", "http://127.0.0.1:11434")
+
+
+def _get_ssot_ollama_endpoint() -> str:
+    """Get Ollama API endpoint from SSOT config with fallback."""
+    return f"{_get_ssot_ollama_url()}/api/generate"
+
+
+def _get_ssot_ollama_embedding_endpoint() -> str:
+    """Get Ollama embedding endpoint from SSOT config with fallback."""
+    return f"{_get_ssot_ollama_url()}/api/embeddings"
+
 # GLOBAL PROTECTION: Monkey-patch yaml.dump to always filter prompts when
 # writing config files
 _original_yaml_dump = yaml.dump
@@ -363,11 +383,9 @@ class ConfigManager:
                             "ollama": {
                                 "endpoint": self.get_nested(
                                     "backend.ollama_endpoint",
-                                    "http://localhost:11434/api/generate",
+                                    _get_ssot_ollama_endpoint(),
                                 ),
-                                "host": os.getenv(
-                                    "AUTOBOT_OLLAMA_HOST", "http://localhost:11434"
-                                ),
+                                "host": _get_ssot_ollama_url(),
                                 "models": [],
                                 "selected_model": legacy_ollama_model,
                             }
@@ -386,11 +404,9 @@ class ConfigManager:
                     "ollama": {
                         "endpoint": os.getenv(
                             "AUTOBOT_OLLAMA_ENDPOINT",
-                            "http://localhost:11434/api/generate",
+                            _get_ssot_ollama_endpoint(),
                         ),
-                        "host": os.getenv(
-                            "AUTOBOT_OLLAMA_HOST", "http://localhost:11434"
-                        ),
+                        "host": _get_ssot_ollama_url(),
                         "models": [],
                         "selected_model": self._get_default_ollama_model(),
                     }
@@ -402,11 +418,9 @@ class ConfigManager:
                     "ollama": {
                         "endpoint": os.getenv(
                             "AUTOBOT_EMBEDDING_ENDPOINT",
-                            "http://localhost:11434/api/embeddings",
+                            _get_ssot_ollama_embedding_endpoint(),
                         ),
-                        "host": os.getenv(
-                            "AUTOBOT_EMBEDDING_HOST", "http://localhost:11434"
-                        ),
+                        "host": _get_ssot_ollama_url(),
                         "models": [],
                         "selected_model": os.getenv(
                             "AUTOBOT_EMBEDDING_MODEL", "nomic-embed-text"
