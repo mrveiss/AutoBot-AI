@@ -250,20 +250,22 @@ export interface BackupRequest {
 
 export interface Replication {
   replication_id: string
-  primary_node_id: string
-  replica_node_id: string
+  source_node_id: string
+  target_node_id: string
   service_type: string
-  state: 'pending' | 'syncing' | 'synced' | 'failed' | 'stopped'
-  sync_progress: number
+  status: 'pending' | 'syncing' | 'active' | 'failed' | 'stopped'
+  sync_position: string | null
+  lag_bytes: number
   started_at: string | null
   completed_at: string | null
   error: string | null
-  details: Record<string, unknown>
+  created_at: string
+  updated_at: string
 }
 
 export interface ReplicationRequest {
-  primary_node_id: string
-  replica_node_id: string
+  source_node_id: string
+  target_node_id: string
   service_type?: string
 }
 
@@ -380,4 +382,86 @@ export interface ServiceCategoryUpdateRequest {
 export interface FleetServicesResponse {
   services: FleetServiceStatus[]
   total_services: number
+}
+
+// =============================================================================
+// Blue-Green Deployment Types (Issue #726 Phase 3)
+// =============================================================================
+
+export type BlueGreenStatus =
+  | 'pending'
+  | 'borrowing'
+  | 'deploying'
+  | 'verifying'
+  | 'switching'
+  | 'active'
+  | 'rolling_back'
+  | 'rolled_back'
+  | 'completed'
+  | 'failed'
+
+export interface BlueGreenDeployment {
+  id: number
+  bg_deployment_id: string
+  blue_node_id: string
+  blue_roles: string[]
+  green_node_id: string
+  green_original_roles: string[]
+  borrowed_roles: string[]
+  purge_on_complete: boolean
+  deployment_type: 'upgrade' | 'migration' | 'failover'
+  health_check_url: string | null
+  health_check_interval: number
+  health_check_timeout: number
+  auto_rollback: boolean
+  status: BlueGreenStatus
+  progress_percent: number
+  current_step: string | null
+  error: string | null
+  started_at: string | null
+  switched_at: string | null
+  completed_at: string | null
+  rollback_at: string | null
+  triggered_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface BlueGreenDeploymentCreate {
+  blue_node_id: string
+  green_node_id: string
+  roles: string[]
+  deployment_type?: 'upgrade' | 'migration' | 'failover'
+  health_check_url?: string
+  health_check_interval?: number
+  health_check_timeout?: number
+  auto_rollback?: boolean
+  purge_on_complete?: boolean
+}
+
+export interface BlueGreenListResponse {
+  deployments: BlueGreenDeployment[]
+  total: number
+  page: number
+  per_page: number
+}
+
+export interface EligibleNode {
+  node_id: string
+  hostname: string
+  ip_address: string
+  current_roles: string[]
+  available_capacity: number
+  status: string
+}
+
+export interface EligibleNodesResponse {
+  nodes: EligibleNode[]
+  total: number
+}
+
+export interface RolePurgeRequest {
+  node_id: string
+  roles: string[]
+  force?: boolean
 }

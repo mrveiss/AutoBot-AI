@@ -662,6 +662,127 @@ export function useSlmApi() {
     return response.data
   }
 
+  // =============================================================================
+  // Blue-Green Deployments API (Issue #726 Phase 3)
+  // =============================================================================
+
+  interface BlueGreenDeployment {
+    id: number
+    bg_deployment_id: string
+    blue_node_id: string
+    blue_roles: string[]
+    green_node_id: string
+    green_original_roles: string[]
+    borrowed_roles: string[]
+    purge_on_complete: boolean
+    deployment_type: string
+    health_check_url: string | null
+    health_check_interval: number
+    health_check_timeout: number
+    auto_rollback: boolean
+    status: string
+    progress_percent: number
+    current_step: string | null
+    error: string | null
+    started_at: string | null
+    switched_at: string | null
+    completed_at: string | null
+    rollback_at: string | null
+    triggered_by: string | null
+    created_at: string
+    updated_at: string
+  }
+
+  interface BlueGreenCreate {
+    blue_node_id: string
+    green_node_id: string
+    roles: string[]
+    deployment_type?: string
+    health_check_url?: string
+    health_check_interval?: number
+    health_check_timeout?: number
+    auto_rollback?: boolean
+    purge_on_complete?: boolean
+  }
+
+  interface BlueGreenListResponse {
+    deployments: BlueGreenDeployment[]
+    total: number
+    page: number
+    per_page: number
+  }
+
+  interface EligibleNode {
+    node_id: string
+    hostname: string
+    ip_address: string
+    current_roles: string[]
+    available_capacity: number
+    status: string
+  }
+
+  async function getBlueGreenDeployments(options?: {
+    status?: string
+    page?: number
+    per_page?: number
+  }): Promise<BlueGreenListResponse> {
+    const params = new URLSearchParams()
+    if (options?.status) params.append('status', options.status)
+    if (options?.page) params.append('page', options.page.toString())
+    if (options?.per_page) params.append('per_page', options.per_page.toString())
+    const response = await client.get<BlueGreenListResponse>(
+      `/blue-green?${params.toString()}`
+    )
+    return response.data
+  }
+
+  async function getBlueGreenDeployment(deploymentId: string): Promise<BlueGreenDeployment> {
+    const response = await client.get<BlueGreenDeployment>(`/blue-green/${deploymentId}`)
+    return response.data
+  }
+
+  async function createBlueGreenDeployment(data: BlueGreenCreate): Promise<BlueGreenDeployment> {
+    const response = await client.post<BlueGreenDeployment>('/blue-green', data)
+    return response.data
+  }
+
+  async function switchBlueGreenTraffic(deploymentId: string): Promise<ActionResponse> {
+    const response = await client.post<ActionResponse>(`/blue-green/${deploymentId}/switch`)
+    return response.data
+  }
+
+  async function rollbackBlueGreen(deploymentId: string): Promise<ActionResponse> {
+    const response = await client.post<ActionResponse>(`/blue-green/${deploymentId}/rollback`)
+    return response.data
+  }
+
+  async function cancelBlueGreen(deploymentId: string): Promise<ActionResponse> {
+    const response = await client.post<ActionResponse>(`/blue-green/${deploymentId}/cancel`)
+    return response.data
+  }
+
+  async function getEligibleNodes(roles: string[]): Promise<{ nodes: EligibleNode[]; total: number }> {
+    const params = new URLSearchParams()
+    params.append('roles', roles.join(','))
+    const response = await client.get<{ nodes: EligibleNode[]; total: number }>(
+      `/blue-green/eligible-nodes?${params.toString()}`
+    )
+    return response.data
+  }
+
+  async function purgeRoles(
+    nodeId: string,
+    roles: string[],
+    force = false
+  ): Promise<ActionResponse> {
+    const response = await client.post<ActionResponse>('/blue-green/purge', {
+      node_id: nodeId,
+      roles,
+      force,
+    })
+    return response.data
+  }
+
   return {
     // Nodes
     getNodes,
@@ -734,5 +855,14 @@ export function useSlmApi() {
     getMonitoringDashboard,
     getMonitoringLogs,
     getErrorSummary,
+    // Blue-Green Deployments (Issue #726)
+    getBlueGreenDeployments,
+    getBlueGreenDeployment,
+    createBlueGreenDeployment,
+    switchBlueGreenTraffic,
+    rollbackBlueGreen,
+    cancelBlueGreen,
+    getEligibleNodes,
+    purgeRoles,
   }
 }

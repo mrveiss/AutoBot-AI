@@ -334,3 +334,70 @@ class MaintenanceWindow(Base):
     created_by = Column(String(64), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class BlueGreenStatus(str, enum.Enum):
+    """Blue-green deployment status enumeration."""
+    PENDING = "pending"
+    BORROWING = "borrowing"  # Borrowing roles to green node
+    DEPLOYING = "deploying"  # Deploying to green node
+    VERIFYING = "verifying"  # Health verification
+    SWITCHING = "switching"  # Traffic switch in progress
+    ACTIVE = "active"  # Green is live
+    ROLLING_BACK = "rolling_back"  # Rollback in progress
+    ROLLED_BACK = "rolled_back"  # Reverted to blue
+    COMPLETED = "completed"  # Successfully switched
+    FAILED = "failed"  # Deployment failed
+
+
+class BlueGreenDeployment(Base):
+    """Blue-green deployment with role borrowing.
+
+    Tracks zero-downtime deployments where:
+    - Blue = current production node running the role
+    - Green = standby node (e.g., NPU worker) temporarily running the role
+    - Role borrowing allows any node to temporarily assume another role
+    - Full purge on role release ensures clean slate
+    """
+
+    __tablename__ = "blue_green_deployments"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    bg_deployment_id = Column(String(64), unique=True, nullable=False, index=True)
+
+    # Blue (source/current) node
+    blue_node_id = Column(String(64), nullable=False, index=True)
+    blue_roles = Column(JSON, default=list)  # Roles being migrated
+
+    # Green (target/new) node
+    green_node_id = Column(String(64), nullable=False, index=True)
+    green_original_roles = Column(JSON, default=list)  # Original roles before borrowing
+
+    # Borrowed roles tracking
+    borrowed_roles = Column(JSON, default=list)  # Roles borrowed by green
+    purge_on_complete = Column(Boolean, default=True)  # Clean slate on completion
+
+    # Deployment configuration
+    deployment_type = Column(String(32), default="upgrade")  # upgrade, migration, failover
+    health_check_url = Column(String(512), nullable=True)  # Optional health endpoint
+    health_check_interval = Column(Integer, default=10)  # Seconds between checks
+    health_check_timeout = Column(Integer, default=300)  # Max time for health verification
+    auto_rollback = Column(Boolean, default=True)  # Rollback on health failure
+
+    # Status tracking
+    status = Column(String(32), default=BlueGreenStatus.PENDING.value)
+    progress_percent = Column(Integer, default=0)
+    current_step = Column(String(128), nullable=True)
+    error = Column(Text, nullable=True)
+
+    # Timestamps
+    started_at = Column(DateTime, nullable=True)
+    switched_at = Column(DateTime, nullable=True)  # When traffic switched to green
+    completed_at = Column(DateTime, nullable=True)
+    rollback_at = Column(DateTime, nullable=True)
+
+    # Metadata
+    triggered_by = Column(String(64), nullable=True)
+    extra_data = Column(JSON, default=dict)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

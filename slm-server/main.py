@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api import (
     auth_router,
+    blue_green_router,
     deployments_router,
     health_router,
     maintenance_router,
@@ -106,6 +107,7 @@ app.include_router(nodes_router, prefix="/api")
 app.include_router(services_router, prefix="/api")
 app.include_router(fleet_services_router, prefix="/api")
 app.include_router(deployments_router, prefix="/api")
+app.include_router(blue_green_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
 app.include_router(stateful_router, prefix="/api")
 app.include_router(updates_router, prefix="/api")

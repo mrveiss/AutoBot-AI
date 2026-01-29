@@ -3,9 +3,10 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useFleetStore } from '@/stores/fleet'
-import type { SLMNode, NodeRole } from '@/types/slm'
+import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
+import type { SLMNode, NodeRole, NodeHealth } from '@/types/slm'
 import { createLogger } from '@/utils/debugUtils'
 import NodeCard from '@/components/fleet/NodeCard.vue'
 import FleetSummary from '@/components/fleet/FleetSummary.vue'
@@ -16,6 +17,9 @@ import FleetToolsTab from '@/components/fleet/FleetToolsTab.vue'
 
 const logger = createLogger('FleetOverview')
 const fleetStore = useFleetStore()
+
+// WebSocket for real-time updates
+const ws = useSlmWebSocket()
 
 // Tab management
 const activeTab = ref<'overview' | 'tools'>('overview')
@@ -57,6 +61,40 @@ const availableRoles: NodeRole[] = ['slm-agent', 'redis', 'backend', 'frontend',
 // Lifecycle
 onMounted(async () => {
   await refreshFleet()
+
+  // Connect WebSocket for real-time updates
+  ws.connect()
+
+  // Register WebSocket event handlers
+  ws.onHealthUpdate((nodeId: string, health: NodeHealth) => {
+    logger.debug('WebSocket health update:', nodeId, health)
+    fleetStore.updateNodeHealth(nodeId, health)
+  })
+
+  ws.onNodeStatus((nodeId: string, status: string) => {
+    logger.debug('WebSocket node status:', nodeId, status)
+    fleetStore.updateNodeStatus(nodeId, status)
+  })
+
+  ws.onRemediationEvent((nodeId: string, event) => {
+    logger.info('Remediation event:', nodeId, event)
+    // Refresh the node to get latest state after remediation
+    if (event.event_type === 'completed') {
+      fleetStore.refreshNode(nodeId).catch(err => {
+        logger.error('Failed to refresh node after remediation:', err)
+      })
+    }
+  })
+
+  ws.onServiceStatus((nodeId: string, data) => {
+    logger.debug('Service status update:', nodeId, data)
+    // Could update service-specific state here if needed
+  })
+})
+
+onUnmounted(() => {
+  // Disconnect WebSocket when leaving the page
+  ws.disconnect()
 })
 
 // Actions
@@ -315,8 +353,27 @@ function handleRestart(nodeId: string): void {
     <div class="flex items-center justify-between mb-6">
       <div>
         <h1 class="text-2xl font-bold text-gray-900">Fleet Overview</h1>
-        <p class="text-sm text-gray-500 mt-1">
+        <p class="text-sm text-gray-500 mt-1 flex items-center gap-2">
           Real-time health status of all managed nodes
+          <!-- WebSocket Connection Indicator -->
+          <span
+            class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
+            :class="ws.connected.value
+              ? 'bg-green-100 text-green-800'
+              : ws.reconnecting.value
+                ? 'bg-yellow-100 text-yellow-800'
+                : 'bg-red-100 text-red-800'"
+          >
+            <span
+              class="w-1.5 h-1.5 rounded-full"
+              :class="ws.connected.value
+                ? 'bg-green-500'
+                : ws.reconnecting.value
+                  ? 'bg-yellow-500 animate-pulse'
+                  : 'bg-red-500'"
+            ></span>
+            {{ ws.connected.value ? 'Live' : ws.reconnecting.value ? 'Reconnecting' : 'Disconnected' }}
+          </span>
         </p>
       </div>
       <div class="flex items-center gap-3">

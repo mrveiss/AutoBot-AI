@@ -646,3 +646,128 @@ class MaintenanceWindowListResponse(BaseModel):
 
     windows: List[MaintenanceWindowResponse]
     total: int
+
+
+# =============================================================================
+# Blue-Green Deployment Schemas (Issue #726 Phase 3)
+# =============================================================================
+
+
+class BlueGreenCreate(BaseModel):
+    """Blue-green deployment creation request."""
+
+    blue_node_id: str = Field(..., description="Source node (current production)")
+    green_node_id: str = Field(..., description="Target node (will receive roles)")
+    roles: List[str] = Field(..., description="Roles to migrate from blue to green")
+    deployment_type: str = Field(default="upgrade", description="upgrade, migration, or failover")
+    health_check_url: Optional[str] = None
+    health_check_interval: int = Field(default=10, ge=5, le=60)
+    health_check_timeout: int = Field(default=300, ge=60, le=1800)
+    auto_rollback: bool = True
+    purge_on_complete: bool = True
+
+
+class BlueGreenResponse(BaseModel):
+    """Blue-green deployment response."""
+
+    id: int
+    bg_deployment_id: str
+    blue_node_id: str
+    blue_roles: List[str]
+    green_node_id: str
+    green_original_roles: List[str]
+    borrowed_roles: List[str]
+    purge_on_complete: bool
+    deployment_type: str
+    health_check_url: Optional[str] = None
+    health_check_interval: int
+    health_check_timeout: int
+    auto_rollback: bool
+    status: str
+    progress_percent: int
+    current_step: Optional[str] = None
+    error: Optional[str] = None
+    started_at: Optional[datetime] = None
+    switched_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    rollback_at: Optional[datetime] = None
+    triggered_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class BlueGreenListResponse(BaseModel):
+    """Paginated blue-green deployment list."""
+
+    deployments: List[BlueGreenResponse]
+    total: int
+    page: int
+    per_page: int
+
+
+class BlueGreenActionResponse(BaseModel):
+    """Blue-green action response."""
+
+    action: str
+    bg_deployment_id: str
+    success: bool
+    message: str
+    status: Optional[str] = None
+
+
+class RoleBorrowRequest(BaseModel):
+    """Request to borrow roles temporarily."""
+
+    source_node_id: str
+    target_node_id: str
+    roles: List[str]
+    duration_minutes: int = Field(default=60, ge=5, le=1440)
+
+
+class RoleBorrowResponse(BaseModel):
+    """Role borrowing response."""
+
+    success: bool
+    message: str
+    borrowed_roles: List[str]
+    source_node_id: str
+    target_node_id: str
+    expires_at: Optional[datetime] = None
+
+
+class RolePurgeRequest(BaseModel):
+    """Request to purge roles from a node."""
+
+    node_id: str
+    roles: List[str]
+    force: bool = False  # Force purge even if services are running
+
+
+class RolePurgeResponse(BaseModel):
+    """Role purge response."""
+
+    success: bool
+    message: str
+    purged_roles: List[str]
+    node_id: str
+    services_stopped: List[str] = Field(default_factory=list)
+
+
+class EligibleNodeResponse(BaseModel):
+    """Node eligible for role borrowing."""
+
+    node_id: str
+    hostname: str
+    ip_address: str
+    current_roles: List[str]
+    available_capacity: float  # 0-100, based on CPU/memory headroom
+    status: str
+
+
+class EligibleNodesResponse(BaseModel):
+    """List of nodes eligible for role borrowing."""
+
+    nodes: List[EligibleNodeResponse]
+    total: int
