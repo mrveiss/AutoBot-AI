@@ -39,12 +39,6 @@ const router = createRouter({
       meta: { title: 'Deployments' }
     },
     {
-      path: '/blue-green',
-      name: 'blue-green',
-      component: () => import('@/views/BlueGreenView.vue'),
-      meta: { title: 'Blue-Green Deployments' }
-    },
-    {
       path: '/backups',
       name: 'backups',
       component: () => import('@/views/BackupsView.vue'),

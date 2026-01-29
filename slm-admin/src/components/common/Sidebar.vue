@@ -17,7 +17,6 @@ const navItems = [
   { name: 'Fleet Overview', path: '/', icon: 'grid' },
   { name: 'Services', path: '/services', icon: 'server' },
   { name: 'Deployments', path: '/deployments', icon: 'rocket' },
-  { name: 'Blue-Green', path: '/blue-green', icon: 'switch' },
   { name: 'Backups', path: '/backups', icon: 'database' },
   { name: 'Maintenance', path: '/maintenance', icon: 'wrench' },
   { name: 'Settings', path: '/settings', icon: 'cog' },
@@ -110,9 +109,6 @@ function handleLogout(): void {
               </svg>
               <svg v-else-if="item.icon === 'rocket'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              <svg v-else-if="item.icon === 'switch'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
               </svg>
               <svg v-else-if="item.icon === 'database'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
