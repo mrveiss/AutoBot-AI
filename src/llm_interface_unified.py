@@ -42,6 +42,14 @@ from src.utils.logging_manager import get_llm_logger
 from src.prompt_manager import prompt_manager
 
 load_dotenv()
+
+# SSOT config for Ollama defaults - Issue #694
+try:
+    from src.config.ssot_config import get_config as get_ssot_config
+    _OLLAMA_DEFAULT_URL = get_ssot_config().ollama_url
+except Exception:
+    _OLLAMA_DEFAULT_URL = "http://127.0.0.1:11434"
+
 logger = get_llm_logger("unified_llm")
 
 
@@ -165,7 +173,7 @@ class OllamaProvider(LLMProvider):
     
     def __init__(self, config: ProviderConfig):
         super().__init__(config)
-        self.base_url = config.base_url or "http://localhost:11434"
+        self.base_url = config.base_url or _OLLAMA_DEFAULT_URL
         
     async def chat_completion(self, request: LLMRequest) -> LLMResponse:
         """Execute chat completion with Ollama."""
