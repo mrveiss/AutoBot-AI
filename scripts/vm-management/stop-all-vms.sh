@@ -12,16 +12,15 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-# VM Configuration
-SSH_KEY="$HOME/.ssh/autobot_key"
-SSH_USER="autobot"
-declare -A VMS=(
-    ["frontend"]="172.16.168.21"
-    ["npu-worker"]="172.16.168.22"
-    ["redis"]="172.16.168.23"
-    ["ai-stack"]="172.16.168.24"
-    ["browser"]="172.16.168.25"
-)
+# =============================================================================
+# SSOT Configuration - Issue #694
+# =============================================================================
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../lib/ssot-config.sh"
+
+SSH_KEY="$AUTOBOT_SSH_KEY"
+SSH_USER="$AUTOBOT_SSH_USER"
+# VMS array is provided by ssot-config.sh
 
 log() {
     echo -e "${BLUE}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} $1"
@@ -40,9 +39,9 @@ warning() {
 }
 
 stop_frontend_vm() {
-    log "Stopping Frontend service on VM (172.16.168.21)..."
+    log "Stopping Frontend service on VM (${VMS["frontend"]})..."
 
-    ssh -T -i "$SSH_KEY" "$SSH_USER@172.16.168.21" << 'EOF' || true
+    ssh -T -i "$SSH_KEY" "$SSH_USER@${VMS["frontend"]}" << 'EOF' || true
         # Stop frontend processes - only kill processes owned by current user
         pkill -u "$(whoami)" -f "npm.*dev" 2>/dev/null || echo "No npm dev processes to stop"
         pkill -u "$(whoami)" -f "npm run dev" 2>/dev/null || echo "No npm run dev processes to stop"
@@ -68,9 +67,9 @@ EOF
 }
 
 stop_npu_worker_vm() {
-    log "Stopping NPU Worker service on VM (172.16.168.22)..."
+    log "Stopping NPU Worker service on VM (${VMS["npu-worker"]})..."
 
-    ssh -T -i "$SSH_KEY" "$SSH_USER@172.16.168.22" << 'EOF' || true
+    ssh -T -i "$SSH_KEY" "$SSH_USER@${VMS["npu-worker"]}" << 'EOF' || true
         # Stop NPU Worker systemd service
         if systemctl is-active autobot-npu-worker >/dev/null 2>&1; then
             echo "Stopping NPU Worker systemd service..."
@@ -97,9 +96,9 @@ EOF
 }
 
 stop_redis_vm() {
-    log "Stopping Redis service on VM (172.16.168.23)..."
+    log "Stopping Redis service on VM (${VMS["redis"]})..."
 
-    ssh -T -i "$SSH_KEY" "$SSH_USER@172.16.168.23" << 'EOF' || true
+    ssh -T -i "$SSH_KEY" "$SSH_USER@${VMS["redis"]}" << 'EOF' || true
         # Stop Redis Stack systemd service
         if systemctl is-active redis-stack-server >/dev/null 2>&1; then
             echo "Stopping Redis Stack systemd service..."
@@ -130,9 +129,9 @@ EOF
 }
 
 stop_ai_stack_vm() {
-    log "Stopping AI Stack service on VM (172.16.168.24)..."
+    log "Stopping AI Stack service on VM (${VMS["ai-stack"]})..."
 
-    ssh -T -i "$SSH_KEY" "$SSH_USER@172.16.168.24" << 'EOF' || true
+    ssh -T -i "$SSH_KEY" "$SSH_USER@${VMS["ai-stack"]}" << 'EOF' || true
         # Stop AI stack processes - only kill processes owned by current user
         pkill -u "$(whoami)" -f "ai.*stack" 2>/dev/null || echo "No AI stack processes to stop"
         pkill -u "$(whoami)" -f "python.*8080" 2>/dev/null || echo "No Python processes on port 8080 to stop"
@@ -145,9 +144,9 @@ EOF
 }
 
 stop_browser_vm() {
-    log "Stopping Browser service on VM (172.16.168.25)..."
+    log "Stopping Browser service on VM (${VMS["browser"]})..."
 
-    ssh -T -i "$SSH_KEY" "$SSH_USER@172.16.168.25" << 'EOF' || true
+    ssh -T -i "$SSH_KEY" "$SSH_USER@${VMS["browser"]}" << 'EOF' || true
         # Stop Browser systemd services
         if systemctl is-active autobot-browser.service >/dev/null 2>&1; then
             echo "Stopping Browser systemd service..."
@@ -191,34 +190,34 @@ EOF
 
 check_ssh_connectivity() {
     log "Checking SSH connectivity to VMs..."
-    
+
     if [ ! -f "$SSH_KEY" ]; then
         warning "SSH key not found: $SSH_KEY"
         echo "Some VMs may not be accessible"
         return 0
     fi
-    
+
     local accessible_vms=()
     local failed_vms=()
-    
+
     for vm_name in "${!VMS[@]}"; do
         vm_ip=${VMS[$vm_name]}
         echo -n "  Testing $vm_name ($vm_ip)... "
-        
+
         if timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "echo 'ok'" >/dev/null 2>&1; then
-            echo -e "${GREEN}✅ Connected${NC}"
+            echo -e "${GREEN}Connected${NC}"
             accessible_vms+=("$vm_name")
         else
-            echo -e "${RED}❌ Failed${NC}"
+            echo -e "${RED}Failed${NC}"
             failed_vms+=("$vm_name")
         fi
     done
-    
+
     if [ ${#failed_vms[@]} -gt 0 ]; then
         warning "Cannot connect to VMs: ${failed_vms[*]}"
         echo "These VMs will be skipped"
     fi
-    
+
     if [ ${#accessible_vms[@]} -gt 0 ]; then
         success "Accessible VMs: ${accessible_vms[*]}"
         return 0
@@ -229,84 +228,84 @@ check_ssh_connectivity() {
 }
 
 main() {
-    echo -e "${GREEN}🛑 AutoBot - Stopping All VM Services${NC}"
+    echo -e "${GREEN}AutoBot - Stopping All VM Services${NC}"
     echo -e "${BLUE}=====================================${NC}"
     echo ""
-    
+
     # Check which VMs we can access
     if ! check_ssh_connectivity; then
         error "Cannot access any VMs. Exiting."
         exit 1
     fi
     echo ""
-    
+
     log "Stopping VM services in reverse dependency order..."
     echo ""
-    
+
     # Stop services in reverse order (frontend first, Redis last)
-    
+
     # 1. Frontend (depends on backend and other services)
     stop_frontend_vm
     echo ""
-    
+
     # 2. Browser service, AI Stack, and NPU Worker (can stop in parallel)
     stop_browser_vm &
     stop_ai_stack_vm &
     stop_npu_worker_vm &
     wait
     echo ""
-    
+
     # 3. Redis (should be stopped last as other services may depend on it)
     stop_redis_vm
     echo ""
-    
+
     # Wait a moment for processes to fully terminate
     log "Waiting for processes to terminate..."
     sleep 5
-    
+
     # Verify services are stopped by checking ports
     log "Verifying services are stopped..."
-    
-    echo -n "  Frontend (172.16.168.21:5173)... "
-    if timeout 3 curl -s http://172.16.168.21:5173 >/dev/null 2>&1; then
-        echo -e "${YELLOW}⚠️  Still running${NC}"
+
+    echo -n "  Frontend (${VMS["frontend"]}:$AUTOBOT_FRONTEND_PORT)... "
+    if timeout 3 curl -s "http://${VMS["frontend"]}:$AUTOBOT_FRONTEND_PORT" >/dev/null 2>&1; then
+        echo -e "${YELLOW}Still running${NC}"
     else
-        echo -e "${GREEN}✅ Stopped${NC}"
+        echo -e "${GREEN}Stopped${NC}"
     fi
-    
-    echo -n "  Redis (172.16.168.23:6379)... "
-    if echo "PING" | nc -w 1 172.16.168.23 6379 2>/dev/null | grep -q "PONG" 2>/dev/null; then
-        echo -e "${YELLOW}⚠️  Still running${NC}"
+
+    echo -n "  Redis (${VMS["redis"]}:$AUTOBOT_REDIS_PORT)... "
+    if echo "PING" | nc -w 1 "${VMS["redis"]}" "$AUTOBOT_REDIS_PORT" 2>/dev/null | grep -q "PONG" 2>/dev/null; then
+        echo -e "${YELLOW}Still running${NC}"
     else
-        echo -e "${GREEN}✅ Stopped${NC}"
+        echo -e "${GREEN}Stopped${NC}"
     fi
-    
-    echo -n "  NPU Worker (172.16.168.22:8081)... "
-    if timeout 3 curl -s http://172.16.168.22:8081/health >/dev/null 2>&1; then
-        echo -e "${YELLOW}⚠️  Still running${NC}"
+
+    echo -n "  NPU Worker (${VMS["npu-worker"]}:$AUTOBOT_NPU_WORKER_PORT)... "
+    if timeout 3 curl -s "http://${VMS["npu-worker"]}:$AUTOBOT_NPU_WORKER_PORT/health" >/dev/null 2>&1; then
+        echo -e "${YELLOW}Still running${NC}"
     else
-        echo -e "${GREEN}✅ Stopped${NC}"
+        echo -e "${GREEN}Stopped${NC}"
     fi
-    
-    echo -n "  AI Stack (172.16.168.24:8080)... "
-    if timeout 3 curl -s http://172.16.168.24:8080/health >/dev/null 2>&1; then
-        echo -e "${YELLOW}⚠️  Still running${NC}"
+
+    echo -n "  AI Stack (${VMS["ai-stack"]}:$AUTOBOT_AI_STACK_PORT)... "
+    if timeout 3 curl -s "http://${VMS["ai-stack"]}:$AUTOBOT_AI_STACK_PORT/health" >/dev/null 2>&1; then
+        echo -e "${YELLOW}Still running${NC}"
     else
-        echo -e "${GREEN}✅ Stopped${NC}"
+        echo -e "${GREEN}Stopped${NC}"
     fi
-    
-    echo -n "  Browser (172.16.168.25:3000)... "
-    if timeout 3 curl -s http://172.16.168.25:3000/health >/dev/null 2>&1; then
-        echo -e "${YELLOW}⚠️  Still running${NC}"
+
+    echo -n "  Browser (${VMS["browser"]}:$AUTOBOT_BROWSER_SERVICE_PORT)... "
+    if timeout 3 curl -s "http://${VMS["browser"]}:$AUTOBOT_BROWSER_SERVICE_PORT/health" >/dev/null 2>&1; then
+        echo -e "${YELLOW}Still running${NC}"
     else
-        echo -e "${GREEN}✅ Stopped${NC}"
+        echo -e "${GREEN}Stopped${NC}"
     fi
-    
+
     echo ""
     success "VM services shutdown completed!"
     echo ""
-    echo -e "${CYAN}ℹ️  Note: VMs themselves are still running, only AutoBot services were stopped${NC}"
-    echo -e "${BLUE}📋 To restart services:${NC}"
+    echo -e "${CYAN}Note: VMs themselves are still running, only AutoBot services were stopped${NC}"
+    echo -e "${BLUE}To restart services:${NC}"
     echo -e "${CYAN}  bash scripts/vm-management/start-all-vms.sh${NC}"
     echo ""
 }
