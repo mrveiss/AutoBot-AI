@@ -234,12 +234,22 @@ class TLSConfig(BaseSettings):
         )
 
 
-# VM definitions for certificate generation
-VM_DEFINITIONS: Dict[str, str] = {
-    "main-host": "172.16.168.20",
-    "frontend": "172.16.168.21",
-    "npu-worker": "172.16.168.22",
-    "redis": "172.16.168.23",
-    "ai-stack": "172.16.168.24",
-    "browser": "172.16.168.25",
-}
+# VM definitions for certificate generation - imported from SSOT
+# Issue #694: Centralized config consolidation
+def _get_vm_definitions() -> Dict[str, str]:
+    """Get VM definitions from SSOT config with fallback."""
+    try:
+        from src.config.ssot_config import get_config
+        return get_config().vm_definitions
+    except Exception:
+        # Fallback for standalone PKI tool usage
+        return {
+            "main-host": "172.16.168.20",
+            "frontend": "172.16.168.21",
+            "npu-worker": "172.16.168.22",
+            "redis": "172.16.168.23",
+            "ai-stack": "172.16.168.24",
+            "browser": "172.16.168.25",
+        }
+
+VM_DEFINITIONS: Dict[str, str] = _get_vm_definitions()
