@@ -8,6 +8,55 @@ This document tracks all system fixes, improvements, and status updates for the 
 
 ## ✅ RECENT UPDATES (2026-01-29)
 
+### Issue #725: mTLS Service Authentication Migration
+
+**Status:** ✅ Implementation Complete (2026-01-29)
+**GitHub Issue:** #725 - Migrate services to mTLS authentication (PKI-based)
+
+**Summary:**
+Migrated AutoBot from password-based service authentication to mutual TLS (mTLS) using the existing PKI infrastructure. Implements a safe dual-auth transition strategy.
+
+**Implementation Phases:**
+
+| Phase   | Description                           | Status                |
+| ------- | ------------------------------------- | --------------------- |
+| Phase 0 | Port cleanup, deprecations            | ✅ Complete           |
+| Phase 1 | Certificate generation & distribution | ✅ Ready (PKI exists) |
+| Phase 2 | Redis TLS configuration (dual-auth)   | ✅ Implemented        |
+| Phase 3 | Backend TLS configuration             | ✅ Implemented        |
+| Phase 4 | Service-to-service mTLS               | ✅ Implemented        |
+| Phase 5 | Validation & password auth removal    | ✅ Implemented        |
+
+**Key Files:**
+
+- `scripts/security/mtls-migrate.py` - Migration orchestration tool
+- `backend/main.py` - TLS configuration for uvicorn
+- `backend/celery_app.py` - Redis TLS for Celery
+- `resources/windows-npu-worker/app/utils/redis_client.py` - TLS for NPU worker
+- `docs/plans/2026-01-29-mtls-service-authentication-design.md` - Design document
+
+**Migration Command:**
+
+```bash
+# Enable Redis TLS (dual-auth)
+python scripts/security/mtls-migrate.py --phase redis-dual-auth
+
+# Verify after enabling AUTOBOT_REDIS_TLS_ENABLED=true
+python scripts/security/mtls-migrate.py --phase verify
+
+# Final cutover (after 24h validation)
+python scripts/security/mtls-migrate.py --phase disable-password
+```
+
+**Commits:**
+
+- `4728a935` - Phase 0: Port cleanup and deprecations
+- `4d2e2654` - Phase 2-3: Migration script, backend TLS
+- `04b92647` - Phase 4: Celery mTLS, NPU worker TLS
+- `2e3b5ea8` - Phase 5-6: Verification and cutover
+
+---
+
 ### Issue #729: Admin Functionality Migration to SLM
 
 **Status:** ✅ Complete (2026-01-29)
