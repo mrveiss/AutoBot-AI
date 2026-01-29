@@ -6,10 +6,14 @@ Celery Application Configuration for AutoBot IaC Platform
 
 This module configures Celery for asynchronous Ansible playbook execution
 with real-time event streaming and task routing.
+
+Issue #725: Added mTLS support for Redis connections.
 """
 
 import os
+import ssl
 import urllib.parse
+from pathlib import Path
 
 from celery import Celery
 
@@ -22,20 +26,43 @@ config = UnifiedConfigManager()
 # Build Redis URLs from SSOT configuration (loads directly from .env)
 # Environment variables take precedence, then SSOT config-based construction
 _redis_host = ssot_config.vm.redis
-_redis_port = ssot_config.port.redis
 _redis_password = ssot_config.redis.password
 _celery_broker_db = config.get("redis.databases.celery_broker", 1)
 _celery_results_db = config.get("redis.databases.celery_results", 2)
+
+# Issue #725: Check if TLS is enabled for Redis connections
+_redis_tls_enabled = ssot_config.tls.redis_tls_enabled
+_redis_port = ssot_config.tls.redis_tls_port if _redis_tls_enabled else ssot_config.port.redis
+_redis_scheme = "rediss" if _redis_tls_enabled else "redis"
+
+# Build SSL context for TLS connections - Issue #725
+_broker_ssl_options = None
+_backend_ssl_options = None
+
+if _redis_tls_enabled:
+    _project_root = Path(__file__).parent.parent
+    _cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "certs")
+    _ca_cert = str(_project_root / _cert_dir / "ca" / "ca-cert.pem")
+    _client_cert = str(_project_root / _cert_dir / "main-host" / "server-cert.pem")
+    _client_key = str(_project_root / _cert_dir / "main-host" / "server-key.pem")
+
+    # Create SSL context for mTLS
+    _ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+    _ssl_context.load_verify_locations(_ca_cert)
+    _ssl_context.load_cert_chain(_client_cert, _client_key)
+
+    _broker_ssl_options = {"ssl": _ssl_context}
+    _backend_ssl_options = {"ssl": _ssl_context}
 
 # Construct URLs with password authentication if available
 if _redis_password:
     # URL-encode the password to handle special characters (+, /, =, etc.)
     _encoded_password = urllib.parse.quote(_redis_password, safe="")
-    _default_broker_url = f"redis://:{_encoded_password}@{_redis_host}:{_redis_port}/{_celery_broker_db}"
-    _default_backend_url = f"redis://:{_encoded_password}@{_redis_host}:{_redis_port}/{_celery_results_db}"
+    _default_broker_url = f"{_redis_scheme}://:{_encoded_password}@{_redis_host}:{_redis_port}/{_celery_broker_db}"
+    _default_backend_url = f"{_redis_scheme}://:{_encoded_password}@{_redis_host}:{_redis_port}/{_celery_results_db}"
 else:
-    _default_broker_url = f"redis://{_redis_host}:{_redis_port}/{_celery_broker_db}"
-    _default_backend_url = f"redis://{_redis_host}:{_redis_port}/{_celery_results_db}"
+    _default_broker_url = f"{_redis_scheme}://{_redis_host}:{_redis_port}/{_celery_broker_db}"
+    _default_backend_url = f"{_redis_scheme}://{_redis_host}:{_redis_port}/{_celery_results_db}"
 
 # Get Celery-specific configuration
 _celery_config = config.get("celery", {})
@@ -78,8 +105,15 @@ celery_app.conf.update(
     worker_prefetch_multiplier=_worker_prefetch,
     worker_max_tasks_per_child=_worker_max_tasks,
     # Redis visibility timeout for long-running deployments
-    broker_transport_options={"visibility_timeout": _visibility_timeout},
-    result_backend_transport_options={"visibility_timeout": _visibility_timeout},
+    # Issue #725: Include SSL options when TLS is enabled
+    broker_transport_options={
+        "visibility_timeout": _visibility_timeout,
+        **(_broker_ssl_options or {}),
+    },
+    result_backend_transport_options={
+        "visibility_timeout": _visibility_timeout,
+        **(_backend_ssl_options or {}),
+    },
     # Task result expiration
     result_expires=_result_expires,
     # Enable task events for monitoring

@@ -11,6 +11,8 @@ retry logic, and health monitoring for the Windows NPU worker.
 STANDALONE DESIGN: This is a self-contained utility for the Windows NPU worker
 deployment. It does NOT import from src.utils and has its own implementation.
 
+Issue #725: Added mTLS support for secure Redis connections.
+
 USAGE PATTERN:
 ==============
 from utils.redis_client import get_redis_client
@@ -28,6 +30,7 @@ FEATURES:
 ✅ Database selection from config
 ✅ TCP keepalive configuration
 ✅ Graceful degradation (returns None on failure, allows optional Redis)
+✅ TLS/mTLS support (Issue #725)
 
 CONFIG PARAMETERS (from npu_worker.yaml):
 =========================================
@@ -40,14 +43,20 @@ redis:
   socket_timeout: 5
   socket_connect_timeout: 2
   retry_on_timeout: true
+  tls_enabled: false
+  tls_port: 6380
+  tls_ca_cert: null
+  tls_cert_file: null
+  tls_key_file: null
 """
 
 import asyncio
 import logging
+import ssl
 from typing import Optional
 
 import redis.asyncio as async_redis
-from redis.asyncio.connection import ConnectionPool
+from redis.asyncio.connection import ConnectionPool, SSLConnection
 from redis.backoff import ExponentialBackoff
 from redis.retry import Retry
 
@@ -107,12 +116,13 @@ class RedisConnectionManager:
         """
         Create Redis connection pool with all config parameters
 
+        Issue #725: Added TLS/mTLS support for secure connections.
+
         Returns:
             ConnectionPool instance
         """
         # Extract configuration values
         host = self.redis_config.get('host', 'localhost')
-        port = self.redis_config.get('port', 6379)
         password = self.redis_config.get('password')
         db = self.redis_config.get('db', 0)
         max_connections = self.redis_config.get('max_connections', 20)
@@ -120,35 +130,65 @@ class RedisConnectionManager:
         socket_connect_timeout = self.redis_config.get('socket_connect_timeout', 2)
         retry_on_timeout = self.redis_config.get('retry_on_timeout', True)
 
+        # Issue #725: TLS configuration
+        tls_enabled = self.redis_config.get('tls_enabled', False)
+        port = self.redis_config.get('tls_port', 6380) if tls_enabled else self.redis_config.get('port', 6379)
+
         # Configure retry logic
         retry = Retry(
             ExponentialBackoff(base=0.05, cap=1.0),
             retries=3
         ) if retry_on_timeout else None
 
-        # Create connection pool
-        pool = ConnectionPool(
-            host=host,
-            port=port,
-            password=password,
-            db=db,
-            max_connections=max_connections,
-            socket_timeout=socket_timeout,
-            socket_connect_timeout=socket_connect_timeout,
-            socket_keepalive=True,
-            socket_keepalive_options={},
-            decode_responses=True,
-            retry=retry,
-            retry_on_timeout=retry_on_timeout,
-            health_check_interval=30,
-        )
+        # Base connection pool parameters
+        pool_kwargs = {
+            "host": host,
+            "port": port,
+            "password": password,
+            "db": db,
+            "max_connections": max_connections,
+            "socket_timeout": socket_timeout,
+            "socket_connect_timeout": socket_connect_timeout,
+            "socket_keepalive": True,
+            "socket_keepalive_options": {},
+            "decode_responses": True,
+            "retry": retry,
+            "retry_on_timeout": retry_on_timeout,
+            "health_check_interval": 30,
+        }
 
-        logger.info(
-            f"Redis connection pool created: "
-            f"host={host}, port={port}, db={db}, "
-            f"max_connections={max_connections}, "
-            f"socket_timeout={socket_timeout}s"
-        )
+        # Issue #725: Add TLS/SSL configuration if enabled
+        if tls_enabled:
+            tls_ca_cert = self.redis_config.get('tls_ca_cert')
+            tls_cert_file = self.redis_config.get('tls_cert_file')
+            tls_key_file = self.redis_config.get('tls_key_file')
+
+            # Create SSL context for mTLS
+            ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+            if tls_ca_cert:
+                ssl_context.load_verify_locations(tls_ca_cert)
+            if tls_cert_file and tls_key_file:
+                ssl_context.load_cert_chain(tls_cert_file, tls_key_file)
+
+            pool_kwargs["connection_class"] = SSLConnection
+            pool_kwargs["ssl"] = ssl_context
+
+            logger.info(
+                f"Redis TLS connection pool created: "
+                f"host={host}, port={port}, db={db}, "
+                f"max_connections={max_connections}, "
+                f"socket_timeout={socket_timeout}s, TLS=enabled"
+            )
+        else:
+            logger.info(
+                f"Redis connection pool created: "
+                f"host={host}, port={port}, db={db}, "
+                f"max_connections={max_connections}, "
+                f"socket_timeout={socket_timeout}s"
+            )
+
+        # Create connection pool
+        pool = ConnectionPool(**pool_kwargs)
 
         return pool
 
