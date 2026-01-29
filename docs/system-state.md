@@ -2,11 +2,73 @@
 
 This document tracks all system fixes, improvements, and status updates for the AutoBot platform.
 
-**Last Updated:** 2025-12-20
+**Last Updated:** 2026-01-29
 
 ---
 
-## ✅ RECENT UPDATES (2025-12-20)
+## ✅ RECENT UPDATES (2026-01-29)
+
+### Issue #729: Admin Functionality Migration to SLM
+
+**Status:** ✅ Complete (2026-01-29)
+**GitHub Issue:** #729 - Migrate admin functionality from main frontend/backend to SLM
+
+**Architecture Decision:**
+
+After analysis, it was determined that the main frontend and SLM should **coexist** with complementary purposes:
+
+- **Main Frontend (172.16.168.21)** - User-oriented application features (Chat, UI, Workflows, User Tools)
+- **SLM Admin (172.16.168.19)** - Infrastructure administration (Fleet, Nodes, Services, System Settings)
+
+**SLM Admin Implementation:**
+
+| Category        | Components                                                                   | Status       |
+| --------------- | ---------------------------------------------------------------------------- | ------------ |
+| **Settings**    | Users, Cache, Prompts, Log Forwarding, NPU Workers                           | ✅ Complete  |
+| **Monitoring**  | System, Infrastructure, Logs, Dashboards, Alerts, Errors, Backend Health     | ✅ Complete  |
+| **Tools**       | Terminal, Files, Browser, noVNC, Voice, MCP, Agents, Vision, Batch           | ✅ Complete  |
+| **Fleet Tools** | Network Test, Redis CLI, Service Manager, Logs, Health Check, Command Runner | ✅ Complete  |
+
+**Backend API (slm-server/api/):**
+
+- `monitoring.py` - Fleet metrics, alerts, health, logs, errors
+- `nodes.py` - Node CRUD, health checks, service management
+- `services.py` - Service discovery and management
+- `settings.py` - Configuration management
+
+**Frontend Composables:**
+
+- `useSlmApi.ts` - SLM REST API integration
+- `useAutobotApi.ts` - Main AutoBot backend integration (Issue #729)
+- `usePrometheusMetrics.ts` - Prometheus metrics integration
+- `useSlmWebSocket.ts` - Real-time fleet updates
+
+**Access:**
+
+```
+SLM Admin: http://172.16.168.19:5174
+API Base:  http://172.16.168.19:8000/api
+```
+
+**Code Quality Fixes (Code Review):**
+
+- ✅ Refactored `monitoring.py` functions to ≤50 lines (per CLAUDE.md)
+- ✅ Replaced hardcoded IPs with SSOT config (`ssot-config.ts`)
+- ✅ Added admin route guard enforcement
+- ✅ Fixed API response handling inconsistencies
+- ✅ Added missing API methods to `useAutobotApi.ts`
+
+**Commits:**
+
+- `e7cbff4c` - Integrate monitoring and tools into SLM admin
+- `0c2a3836` - Add infrastructure for admin migration
+- `d7e4e087` - Migrate admin functionality to SLM
+- `3606541c` - Add Fleet Tools tab to FleetOverview
+- `4c352af8` - Code review fixes for admin migration
+
+---
+
+## ✅ PREVIOUS UPDATES (2025-12-20)
 
 ### Issue #469: Prometheus/Grafana Monitoring Consolidation
 
