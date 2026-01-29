@@ -4,6 +4,7 @@ AutoBot/
 venvs/
 bin/
 lib/
+!scripts/lib/
 lib64/
 include/
 share/
