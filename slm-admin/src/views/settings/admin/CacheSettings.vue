@@ -65,11 +65,11 @@ const hitRate = computed(() => {
   return (cacheStats.value.hits / total) * 100
 })
 
-// Methods
+// Methods - API returns data directly, not wrapped in response (Issue #729)
 async function checkCacheApiAvailability(): Promise<void> {
   try {
-    const response = await api.getCacheStats()
-    cacheApiAvailable.value = response.status === 200
+    await api.getCacheStats()
+    cacheApiAvailable.value = true
   } catch {
     cacheApiAvailable.value = false
   }
@@ -80,9 +80,9 @@ async function fetchCacheConfig(): Promise<void> {
   error.value = null
 
   try {
-    const response = await api.getCacheConfig()
-    if (response.data) {
-      Object.assign(cacheConfig, response.data)
+    const config = await api.getCacheConfig()
+    if (config) {
+      Object.assign(cacheConfig, config)
     }
   } catch (e) {
     // Cache API may not be available
@@ -94,12 +94,12 @@ async function fetchCacheConfig(): Promise<void> {
 
 async function fetchCacheStats(): Promise<void> {
   try {
-    const response = await api.getCacheStats()
-    cacheStats.value = response.data
+    const stats = await api.getCacheStats()
+    cacheStats.value = stats
 
     // Extract Redis stats if available
-    if (response.data?.redis_databases) {
-      redisStats.value = response.data.redis_databases
+    if (stats?.redis_databases) {
+      redisStats.value = stats.redis_databases
     }
   } catch (e) {
     // Silently fail - stats may not be available

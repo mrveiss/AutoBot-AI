@@ -13,6 +13,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useAutobotApi, type LogForwardingDestination } from '@/composables/useAutobotApi'
+import { getKnownHosts } from '@/config/ssot-config'
 
 const authStore = useAuthStore()
 const api = useAutobotApi()
@@ -72,22 +73,16 @@ const destinationTypes = [
   { value: 'elasticsearch', label: 'Elasticsearch' },
 ]
 
-// Known hosts for per-host targeting
-const knownHosts = [
-  { hostname: 'autobot-main', ip: '172.16.168.20' },
-  { hostname: 'autobot-frontend', ip: '172.16.168.21' },
-  { hostname: 'autobot-npu-worker', ip: '172.16.168.22' },
-  { hostname: 'autobot-redis', ip: '172.16.168.23' },
-  { hostname: 'autobot-ai-stack', ip: '172.16.168.24' },
-  { hostname: 'autobot-browser', ip: '172.16.168.25' },
-]
+// Known hosts for per-host targeting - Use SSOT config (Issue #729)
+const knownHosts = getKnownHosts()
 
 // Methods
+// API returns data directly, not wrapped in response (Issue #729)
 async function fetchStatus(): Promise<void> {
   try {
-    const response = await api.getLogForwardingStatus()
-    if (response.data) {
-      Object.assign(status, response.data)
+    const statusData = await api.getLogForwardingStatus()
+    if (statusData) {
+      Object.assign(status, statusData)
     }
   } catch (e) {
     // Status endpoint may not be available
@@ -99,8 +94,7 @@ async function fetchDestinations(): Promise<void> {
   error.value = null
 
   try {
-    const response = await api.getLogForwardingDestinations()
-    destinations.value = response.data || []
+    destinations.value = await api.getLogForwardingDestinations()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load destinations'
   } finally {

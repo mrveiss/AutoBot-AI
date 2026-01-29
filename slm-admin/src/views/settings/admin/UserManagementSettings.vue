@@ -89,8 +89,8 @@ async function loadUsers(): Promise<void> {
   error.value = null
 
   try {
-    const response = await api.getUsers()
-    users.value = response.data
+    // API returns data directly, not wrapped in response (Issue #729)
+    users.value = await api.getUsers()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load users'
   } finally {

@@ -11,6 +11,7 @@
  */
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { getVNCHosts } from '@/config/ssot-config'
 
 // State
 const loading = ref(false)
@@ -26,9 +27,8 @@ interface VNCHost {
   description: string
 }
 
-const hosts = ref<VNCHost[]>([
-  { id: 'main', name: 'Main WSL', host: '172.16.168.20', port: 6080, description: 'Main backend server VNC' },
-])
+// Use SSOT config for VNC hosts - Issue #729
+const hosts = ref<VNCHost[]>(getVNCHosts())
 
 const selectedHost = ref<string>('main')
 const currentHost = computed(() => hosts.value.find(h => h.id === selectedHost.value))

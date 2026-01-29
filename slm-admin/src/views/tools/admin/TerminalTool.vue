@@ -13,6 +13,7 @@
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useAutobotApi } from '@/composables/useAutobotApi'
+import { getHosts } from '@/config/ssot-config'
 
 const api = useAutobotApi()
 
@@ -32,13 +33,8 @@ interface Host {
   description: string
 }
 
-const hosts = ref<Host[]>([
-  { id: 'main', name: 'Main Server', ip: '172.16.168.20', description: 'WSL Backend Server' },
-  { id: 'frontend', name: 'Frontend VM', ip: '172.16.168.21', description: 'Vue.js Frontend' },
-  { id: 'npu', name: 'NPU Worker', ip: '172.16.168.22', description: 'Neural Processing Unit' },
-  { id: 'redis', name: 'Redis Server', ip: '172.16.168.23', description: 'Data Layer' },
-  { id: 'ai', name: 'AI Stack', ip: '172.16.168.24', description: 'AI Processing' },
-])
+// Use SSOT config for hosts - Issue #729
+const hosts = ref<Host[]>(getHosts())
 
 const currentHost = computed(() => hosts.value.find(h => h.id === selectedHost.value))
 
@@ -139,11 +135,8 @@ async function executeCommand(): Promise<void> {
 
   loading.value = true
   try {
-    // Execute via backend terminal API
-    const result = await api.post('/terminal/execute', {
-      command: cmd,
-      host: currentHost.value?.ip
-    })
+    // Execute via backend terminal API (Issue #729 - use proper API method)
+    const result = await api.executeTerminalCommand(cmd, currentHost.value?.ip || '')
 
     if (result.stdout) {
       output.value.push({ type: 'output', text: result.stdout })

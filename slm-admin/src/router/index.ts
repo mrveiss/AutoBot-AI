@@ -275,7 +275,7 @@ const router = createRouter({
   ]
 })
 
-// Authentication guard
+// Authentication guard with admin role enforcement (Issue #729)
 router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
 
@@ -300,6 +300,13 @@ router.beforeEach(async (to, _from, next) => {
   const isValid = await authStore.checkAuth()
   if (!isValid) {
     next({ name: 'login', query: { redirect: to.fullPath } })
+    return
+  }
+
+  // Check admin routes require admin role (Issue #729)
+  if (to.meta.admin && !authStore.isAdmin) {
+    // Redirect non-admin users to fleet overview
+    next({ name: 'fleet' })
     return
   }
 

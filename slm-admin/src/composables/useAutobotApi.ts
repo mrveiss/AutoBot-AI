@@ -307,6 +307,31 @@ export function useAutobotApi() {
     return response.data
   }
 
+  // Missing NPU Worker methods (Issue #729)
+  async function getNPULoadBalancingConfig(): Promise<Record<string, unknown>> {
+    const response = await client.get('/npu-workers/load-balancing/config')
+    return response.data
+  }
+
+  async function updateNPULoadBalancingConfig(config: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await client.put('/npu-workers/load-balancing/config', config)
+    return response.data
+  }
+
+  async function pairNPUWorker(workerId: string, data: { hostname: string; ip_address: string }): Promise<NPUWorker> {
+    const response = await client.post<NPUWorker>(`/npu-workers/${workerId}/pair`, data)
+    return response.data
+  }
+
+  async function testNPUWorker(workerId: string): Promise<{ success: boolean; latency_ms: number; message: string }> {
+    const response = await client.post<{ success: boolean; latency_ms: number; message: string }>(`/npu-workers/${workerId}/test`)
+    return response.data
+  }
+
+  async function removeNPUWorker(workerId: string): Promise<void> {
+    await client.delete(`/npu-workers/${workerId}`)
+  }
+
   // =============================================================================
   // Permission API
   // =============================================================================
@@ -609,6 +634,58 @@ export function useAutobotApi() {
     return response.data
   }
 
+  // =============================================================================
+  // Terminal API (Issue #729 - for TerminalTool)
+  // =============================================================================
+
+  async function executeTerminalCommand(
+    command: string,
+    host: string
+  ): Promise<{ stdout: string; stderr: string; exit_code: number }> {
+    const response = await client.post<{ stdout: string; stderr: string; exit_code: number }>(
+      '/terminal/execute',
+      { command, host }
+    )
+    return response.data
+  }
+
+  // =============================================================================
+  // Log Forwarding Status/Control (Issue #729)
+  // =============================================================================
+
+  async function getLogForwardingStatus(): Promise<{
+    running: boolean
+    total_destinations: number
+    enabled_destinations: number
+    healthy_destinations: number
+    total_sent: number
+    total_failed: number
+    auto_start: boolean
+  }> {
+    const response = await client.get('/log-forwarding/status')
+    return response.data
+  }
+
+  async function startLogForwarding(): Promise<{ status: string }> {
+    const response = await client.post<{ status: string }>('/log-forwarding/start')
+    return response.data
+  }
+
+  async function stopLogForwarding(): Promise<{ status: string }> {
+    const response = await client.post<{ status: string }>('/log-forwarding/stop')
+    return response.data
+  }
+
+  async function setLogForwardingAutoStart(enabled: boolean): Promise<{ status: string }> {
+    const response = await client.post<{ status: string }>('/log-forwarding/auto-start', { enabled })
+    return response.data
+  }
+
+  async function testAllLogForwardingDestinations(): Promise<{ results: Array<{ id: string; success: boolean; message: string }> }> {
+    const response = await client.post<{ results: Array<{ id: string; success: boolean; message: string }> }>('/log-forwarding/test-all')
+    return response.data
+  }
+
   return {
     // Settings
     getSettings,
@@ -637,6 +714,11 @@ export function useAutobotApi() {
     getNPUWorker,
     updateNPUWorker,
     restartNPUWorker,
+    getNPULoadBalancingConfig,
+    updateNPULoadBalancingConfig,
+    pairNPUWorker,
+    testNPUWorker,
+    removeNPUWorker,
     // Permissions
     getPermissionRules,
     createPermissionRule,
@@ -683,5 +765,13 @@ export function useAutobotApi() {
     getErrorStatistics,
     getRecentErrors,
     getMetricsSummary,
+    // Terminal (Issue #729)
+    executeTerminalCommand,
+    // Log Forwarding Control (Issue #729)
+    getLogForwardingStatus,
+    startLogForwarding,
+    stopLogForwarding,
+    setLogForwardingAutoStart,
+    testAllLogForwardingDestinations,
   }
 }
