@@ -13,44 +13,25 @@ Remove stale port references (8000, 8090) from main-host and clean up unused con
 
 ## Files Requiring Changes
 
-### 1. `ansible/inventory/group_vars/all.yml` (Line 118)
+### 1. Firewall Port Ranges (via SLM/SSOT Config)
 
-**Current:**
-```yaml
-    # Health check endpoints
-    - rule: allow
-      port: "8000:8099"
-      src: "192.168.100.0/24"
-```
+**Note:** Ansible inventory files contain template values (192.168.100.0/24). The actual production network (172.16.168.0/24) is configured via SLM and SSOT config.
 
-**Action:** Remove entire block or replace with specific ports needed:
-```yaml
-    # Health check endpoints
-    - rule: allow
-      port: 8001
-      src: "192.168.100.0/24"
-      comment: "Backend API"
-```
+**Port ranges to clean up via SLM firewall management:**
 
-**Reason:** Port range 8000-8099 is overly broad. Only specific ports should be allowed.
+| Port Range | Location | Action | Reason |
+|------------|----------|--------|--------|
+| `8000:8099` | all.yml:118 | Replace with specific ports | Only 8001, 8080, 8081 needed |
+| `8090:8099` | aiml.yml:363 | Remove | No services use these ports |
 
----
+**Specific ports needed:**
+- 8001 - Backend API (Main Host)
+- 8080 - AI Stack API (VM4)
+- 8081 - NPU Worker API (VM2)
 
-### 2. `ansible/inventory/group_vars/aiml.yml` (Lines 361-366)
+**TODO markers added to ansible files for tracking.**
 
-**Current:**
-```yaml
-  # Model serving endpoints
-  - rule: allow
-    port: "8090:8099"
-    protocol: tcp
-    src: "192.168.100.0/24"
-    comment: "Model serving endpoints"
-```
-
-**Action:** Remove entire block.
-
-**Reason:** No services use ports 8090-8099. AI Stack uses 8080, NPU Worker uses 8081.
+**Action:** Update firewall rules through SLM service management UI or API, not direct file edits.
 
 ---
 
@@ -96,18 +77,18 @@ Remove stale port references (8000, 8090) from main-host and clean up unused con
 ### 5. SLM Agent References
 
 **Files with correct 8000 references (NO CHANGE NEEDED):**
-- `ansible/roles/slm_agent/files/slm/agent/agent.py:34` - `DEFAULT_ADMIN_URL = "http://172.16.168.19:8000"`
-- `ansible/roles/slm_agent/defaults/main.yml:9` - `slm_admin_url: "http://172.16.168.19:8000"`
+- `ansible/roles/slm_agent/files/slm/agent/agent.py:34` - `DEFAULT_ADMIN_URL = "http://${AUTOBOT_SLM_HOST}:8000"`
+- `ansible/roles/slm_agent/defaults/main.yml:9` - `slm_admin_url: "http://${AUTOBOT_SLM_HOST}:8000"`
 - `slm-server/config.py:32` - `port: int = 8000`
 - `scripts/slm-agent-standalone.py:54` - SLM URL
 
-**Note:** These are correct - SLM Server runs on VM0 (172.16.168.19), not main-host.
+**Note:** These are correct - SLM Server runs on VM0 (${AUTOBOT_SLM_HOST}), not main-host.
 
 ---
 
 ## Verification Commands
 
-After cleanup, run these on main-host (172.16.168.20):
+After cleanup, run these on main-host (${AUTOBOT_BACKEND_HOST}):
 
 ```bash
 # Should return NO results
@@ -126,11 +107,8 @@ netstat -tlnp | grep python
 
 ## Implementation Order
 
-1. **Backup current configs**
-2. **Update `ansible/inventory/group_vars/all.yml`** - Remove port range
-3. **Update `ansible/inventory/group_vars/aiml.yml`** - Remove 8090-8099 range
-4. **Deprecate root `main.py`** - Rename and add notice
-5. **Update test/script references** - Point to `backend/main.py`
-6. **Add deprecation notice to `docker/`** - Create DEPRECATED.md
-7. **Run ansible to apply firewall changes**
-8. **Verify with commands above**
+1. **Deprecate root `main.py`** - Rename and add notice ✅
+2. **Update test/script references** - Point to `backend/main.py`
+3. **Add deprecation notice to `docker/`** - Create DEPRECATED.md ✅
+4. **Update firewall rules via SLM** - Remove unused port ranges (separate task)
+5. **Verify with commands above**

@@ -357,8 +357,9 @@ ufw_rules:
     protocol: tcp
     src: "192.168.100.0/24"
     comment: "NPU Worker API"
-    
+
   # Model serving endpoints
+  # TODO Issue #725: Remove unused port range via SLM config
   - rule: allow
     port: "8090:8099"
     protocol: tcp

@@ -42,7 +42,7 @@ certs/
 
 ## Per-VM Service Inventory
 
-### VM0: SLM Server (172.16.168.19) - Separate Machine
+### VM0: SLM Server (${AUTOBOT_SLM_HOST}) - Separate Machine
 
 | Service | Port | Protocol | Certificate |
 |---------|------|----------|-------------|
@@ -51,7 +51,7 @@ certs/
 - **Redis Connection:** None (uses local SQLite)
 - **Note:** TLS already handled by nginx reverse proxy
 
-### Main Host (172.16.168.20) - WSL
+### Main Host (${AUTOBOT_BACKEND_HOST}) - WSL
 
 | Service | Port | TLS Port | Certificate |
 |---------|------|----------|-------------|
@@ -62,7 +62,7 @@ certs/
 - **Redis Connection:** Client cert required
 - **Ports to REMOVE:** 8000, 8090 (not used on main-host)
 
-### VM1: Frontend (172.16.168.21)
+### VM1: Frontend (${AUTOBOT_FRONTEND_HOST})
 
 | Service | Port | Certificate |
 |---------|------|-------------|
@@ -70,7 +70,7 @@ certs/
 
 - **Redis Connection:** None
 
-### VM2: NPU Worker (172.16.168.22)
+### VM2: NPU Worker (${AUTOBOT_NPU_WORKER_HOST})
 
 | Service | Port | Certificate |
 |---------|------|-------------|
@@ -78,7 +78,7 @@ certs/
 
 - **Redis Connection:** None
 
-### VM3: Redis Stack (172.16.168.23)
+### VM3: Redis Stack (${AUTOBOT_REDIS_HOST})
 
 | Service | Port | TLS Port | Certificate |
 |---------|------|----------|-------------|
@@ -86,7 +86,7 @@ certs/
 
 - **Transition:** 6379 (password) → 6380 (mTLS) → disable 6379
 
-### VM4: AI Stack (172.16.168.24)
+### VM4: AI Stack (${AUTOBOT_AI_STACK_HOST})
 
 | Service | Port | Certificate |
 |---------|------|-------------|
@@ -94,7 +94,7 @@ certs/
 
 - **Redis Connection:** Client cert required
 
-### VM5: Browser Service (172.16.168.25)
+### VM5: Browser Service (${AUTOBOT_BROWSER_HOST})
 
 | Service | Port | Certificate |
 |---------|------|-------------|
@@ -276,8 +276,8 @@ set -e
 echo "=== AutoBot TLS Emergency Rollback ==="
 
 # 1. Restore Redis config
-ssh autobot@172.16.168.23 "sudo cp /etc/redis-stack.conf.backup /etc/redis-stack.conf"
-ssh autobot@172.16.168.23 "sudo systemctl restart redis-stack-server"
+ssh autobot@${AUTOBOT_REDIS_HOST} "sudo cp /etc/redis-stack.conf.backup /etc/redis-stack.conf"
+ssh autobot@${AUTOBOT_REDIS_HOST} "sudo systemctl restart redis-stack-server"
 
 # 2. Disable TLS in backend
 sed -i 's/AUTOBOT_REDIS_TLS_ENABLED=true/AUTOBOT_REDIS_TLS_ENABLED=false/' /home/kali/Desktop/AutoBot/.env

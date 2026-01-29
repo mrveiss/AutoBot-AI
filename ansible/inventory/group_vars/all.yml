@@ -114,6 +114,7 @@ security:
     - rule: allow
       src: "192.168.100.0/24"
     # Health check endpoints
+    # TODO Issue #725: Replace broad range with specific ports via SLM config
     - rule: allow
       port: "8000:8099"
       src: "192.168.100.0/24"
