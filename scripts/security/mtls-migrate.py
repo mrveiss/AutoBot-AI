@@ -233,23 +233,261 @@ class MTLSMigration:
         return True
 
     async def phase_verify(self) -> bool:
-        """Verify all mTLS configurations."""
+        """Verify all mTLS configurations comprehensively."""
         logger.info("=" * 60)
-        logger.info("Verification Phase")
+        logger.info("Phase 5: Comprehensive mTLS Verification")
         logger.info("=" * 60)
 
-        # Check certificates
+        all_passed = True
+
+        # Step 1: Check certificates
+        logger.info("\n[1/5] Checking certificate status...")
         if not self.check_certificates():
-            return False
+            all_passed = False
 
-        # Verify distribution
-        logger.info("\nVerifying certificate distribution...")
+        # Step 2: Verify distribution
+        logger.info("\n[2/5] Verifying certificate distribution...")
         results = await self.distributor.verify_distribution()
         for vm, verified in results.items():
             status = "OK" if verified else "FAILED"
             logger.info(f"  {vm}: {status}")
+            if not verified:
+                all_passed = False
 
-        return all(results.values())
+        # Step 3: Test Redis TLS connection
+        logger.info("\n[3/5] Testing Redis TLS connections...")
+        await self._test_redis_dual_auth()
+
+        # Step 4: Check active connections on plain port
+        logger.info("\n[4/5] Checking for active plain port connections...")
+        plain_conns = await self._check_plain_port_connections()
+        if plain_conns > 0:
+            logger.warning(f"  {plain_conns} active connections on port 6379")
+            logger.warning("  Cannot proceed to disable password auth until 0 connections")
+        else:
+            logger.info("  No connections on plain port 6379 - ready for cutover")
+
+        # Step 5: Summary
+        logger.info("\n[5/5] Verification Summary")
+        logger.info("=" * 60)
+        if all_passed and plain_conns == 0:
+            logger.info("All checks PASSED - Ready for Phase 6 (disable password auth)")
+            logger.info("\nTo complete mTLS migration, run:")
+            logger.info("  python scripts/security/mtls-migrate.py --phase disable-password")
+        elif all_passed:
+            logger.info("Certificate checks PASSED")
+            logger.info(f"WARNING: {plain_conns} connections still on plain port")
+            logger.info("Wait until all services use TLS, then re-run verification")
+        else:
+            logger.error("Some checks FAILED - review errors above")
+
+        return all_passed
+
+    async def _check_plain_port_connections(self) -> int:
+        """Check number of active connections on plain Redis port 6379."""
+        import asyncssh
+
+        redis_ip = VM_DEFINITIONS.get("redis", "172.16.168.23")
+
+        try:
+            async with asyncssh.connect(
+                redis_ip,
+                username=self.config.ssh_user,
+                client_keys=[str(self.config.ssh_key_path)],
+                known_hosts=None,
+                connect_timeout=10,
+            ) as conn:
+                # Count connections on plain port using ss
+                result = await conn.run(
+                    "ss -tn state established '( sport = :6379 )' | wc -l"
+                )
+                # Subtract 1 for header line
+                count = max(0, int(result.stdout.strip()) - 1)
+                return count
+        except Exception as e:
+            logger.error(f"Failed to check plain port connections: {e}")
+            return -1
+
+    async def phase_disable_password(self) -> bool:
+        """
+        Phase 6: Disable password authentication (FINAL CUTOVER).
+
+        DANGER: This is irreversible without rollback script.
+        Only run after verification confirms 0 connections on port 6379.
+        """
+        logger.info("=" * 60)
+        logger.info("Phase 6: Disable Password Authentication (FINAL)")
+        logger.info("=" * 60)
+
+        # Safety checks
+        logger.info("\n[1/4] Running safety checks...")
+
+        # Check for plain port connections
+        plain_conns = await self._check_plain_port_connections()
+        if plain_conns > 0:
+            logger.error(f"ABORT: {plain_conns} active connections on port 6379")
+            logger.error("All clients must use TLS before disabling password auth")
+            return False
+        logger.info("  No plain port connections - OK")
+
+        # Confirm TLS is working
+        logger.info("\n[2/4] Confirming TLS connectivity...")
+        try:
+            await self._test_tls_only()
+            logger.info("  TLS connection test passed")
+        except Exception as e:
+            logger.error(f"ABORT: TLS connection failed: {e}")
+            return False
+
+        # Get confirmation
+        logger.info("\n[3/4] MANUAL CONFIRMATION REQUIRED")
+        logger.info("=" * 60)
+        logger.info("This will:")
+        logger.info("  1. Disable plain port 6379")
+        logger.info("  2. Enforce client certificate verification")
+        logger.info("  3. Remove password requirement")
+        logger.info("")
+        logger.info("Type 'CONFIRM' to proceed (or anything else to abort):")
+
+        import sys
+        confirmation = input().strip()
+        if confirmation != "CONFIRM":
+            logger.info("Aborted by user")
+            return False
+
+        # Execute cutover
+        logger.info("\n[4/4] Executing final cutover...")
+        import asyncssh
+
+        redis_ip = VM_DEFINITIONS.get("redis", "172.16.168.23")
+
+        try:
+            async with asyncssh.connect(
+                redis_ip,
+                username=self.config.ssh_user,
+                client_keys=[str(self.config.ssh_key_path)],
+                known_hosts=None,
+                connect_timeout=10,
+            ) as conn:
+                # Backup current config
+                await conn.run(
+                    "sudo cp /etc/redis-stack.conf /etc/redis-stack.conf.pre-mtls-final",
+                    check=True,
+                )
+                logger.info("  Config backed up")
+
+                # Update config: disable plain port, enforce mTLS
+                await conn.run(
+                    "sudo sed -i 's/^port 6379$/port 0/' /etc/redis-stack.conf",
+                    check=True,
+                )
+                await conn.run(
+                    "sudo sed -i 's/^tls-auth-clients optional$/tls-auth-clients yes/' "
+                    "/etc/redis-stack.conf",
+                    check=True,
+                )
+                await conn.run(
+                    "sudo sed -i '/^requirepass/d' /etc/redis-stack.conf",
+                    check=True,
+                )
+                logger.info("  Config updated")
+
+                # Restart Redis
+                await conn.run("sudo systemctl restart redis-stack-server", check=True)
+                logger.info("  Redis restarted")
+
+                # Verify TLS-only
+                await asyncio.sleep(2)
+                await self._test_tls_only()
+                logger.info("  TLS-only verification passed")
+
+                logger.info("\n" + "=" * 60)
+                logger.info("mTLS MIGRATION COMPLETE")
+                logger.info("=" * 60)
+                logger.info("Redis now requires mTLS on port 6380")
+                logger.info("Plain port 6379 is disabled")
+                logger.info("Password authentication is removed")
+                logger.info("\nTo rollback: python scripts/security/mtls-migrate.py --rollback redis-full")
+
+                return True
+
+        except Exception as e:
+            logger.error(f"Cutover failed: {e}")
+            logger.error("Attempting automatic rollback...")
+            await self.rollback_redis_full()
+            return False
+
+    async def _test_tls_only(self):
+        """Test TLS connection only (no fallback)."""
+        import redis
+        import ssl
+
+        redis_ip = VM_DEFINITIONS.get("redis", "172.16.168.23")
+
+        ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+        ssl_context.load_verify_locations(str(self.config.ca_cert_path))
+
+        cert_dir = self.config.cert_dir_path / "main-host"
+        ssl_context.load_cert_chain(
+            str(cert_dir / "server-cert.pem"),
+            str(cert_dir / "server-key.pem"),
+        )
+
+        r = redis.Redis(
+            host=redis_ip,
+            port=6380,
+            ssl=ssl_context,
+            socket_timeout=5,
+        )
+        r.ping()
+        r.close()
+
+    async def rollback_redis_full(self) -> bool:
+        """Full rollback to pre-mTLS state (restores password auth)."""
+        logger.info("=" * 60)
+        logger.info("Full Rollback: Restoring pre-mTLS configuration")
+        logger.info("=" * 60)
+
+        import asyncssh
+
+        redis_ip = VM_DEFINITIONS.get("redis", "172.16.168.23")
+
+        try:
+            async with asyncssh.connect(
+                redis_ip,
+                username=self.config.ssh_user,
+                client_keys=[str(self.config.ssh_key_path)],
+                known_hosts=None,
+                connect_timeout=10,
+            ) as conn:
+                # Check if backup exists
+                check = await conn.run(
+                    "test -f /etc/redis-stack.conf.pre-mtls-final && echo 'exists'"
+                )
+                if "exists" in check.stdout:
+                    await conn.run(
+                        "sudo cp /etc/redis-stack.conf.pre-mtls-final /etc/redis-stack.conf",
+                        check=True,
+                    )
+                    logger.info("Restored from pre-mTLS-final backup")
+                else:
+                    # Fallback: re-enable plain port
+                    await conn.run(
+                        "sudo sed -i 's/^port 0$/port 6379/' /etc/redis-stack.conf"
+                    )
+                    await conn.run(
+                        "sudo sed -i 's/^tls-auth-clients yes$/tls-auth-clients optional/' "
+                        "/etc/redis-stack.conf"
+                    )
+                    logger.info("Re-enabled plain port 6379")
+
+                await conn.run("sudo systemctl restart redis-stack-server", check=True)
+                logger.info("Redis restarted")
+                return True
+
+        except Exception as e:
+            logger.error(f"Full rollback failed: {e}")
+            return False
 
     async def rollback_redis(self) -> bool:
         """Rollback Redis to plain connections only."""
@@ -289,15 +527,35 @@ class MTLSMigration:
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="mTLS Migration Tool")
+    parser = argparse.ArgumentParser(
+        description="mTLS Migration Tool for AutoBot (Issue #725)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Migration Phases:
+  redis-dual-auth   Phase 2: Enable Redis TLS while keeping password auth
+  backend-tls       Phase 3: Configure backend for HTTPS
+  verify            Phase 5: Comprehensive verification of mTLS setup
+  disable-password  Phase 6: FINAL - Disable password auth (requires confirmation)
+  all               Run phases 2-5 sequentially
+
+Rollback Options:
+  redis             Remove TLS config, keep dual-auth
+  redis-full        Full rollback to pre-mTLS state
+
+Examples:
+  python scripts/security/mtls-migrate.py --phase redis-dual-auth
+  python scripts/security/mtls-migrate.py --phase verify
+  python scripts/security/mtls-migrate.py --rollback redis
+"""
+    )
     parser.add_argument(
         "--phase",
-        choices=["redis-dual-auth", "backend-tls", "verify", "all"],
+        choices=["redis-dual-auth", "backend-tls", "verify", "disable-password", "all"],
         help="Migration phase to execute",
     )
     parser.add_argument(
         "--rollback",
-        choices=["redis"],
+        choices=["redis", "redis-full"],
         help="Rollback a specific phase",
     )
     parser.add_argument(
@@ -316,6 +574,8 @@ async def main():
     if args.rollback:
         if args.rollback == "redis":
             success = await migration.rollback_redis()
+        elif args.rollback == "redis-full":
+            success = await migration.rollback_redis_full()
         sys.exit(0 if success else 1)
 
     if args.phase:
@@ -325,12 +585,15 @@ async def main():
             success = await migration.phase_backend_tls()
         elif args.phase == "verify":
             success = await migration.phase_verify()
+        elif args.phase == "disable-password":
+            success = await migration.phase_disable_password()
         elif args.phase == "all":
             success = await migration.phase_redis_dual_auth()
             if success:
                 success = await migration.phase_backend_tls()
             if success:
                 success = await migration.phase_verify()
+            # Note: disable-password not included in 'all' - requires manual execution
         sys.exit(0 if success else 1)
 
     parser.print_help()
