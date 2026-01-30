@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     data_dir: Path = Path(__file__).parent / "data"
     config_dir: Path = Path(__file__).parent / "config"
     ansible_dir: Path = Path(__file__).parent / "ansible"
+    backup_dir: Path = Path(os.getenv("SLM_BACKUP_DIR", str(Path.home() / "slm-backups")))
 
     # Database
     database_url: str = "sqlite+aiosqlite:///./data/slm.db"

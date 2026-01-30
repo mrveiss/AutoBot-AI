@@ -63,11 +63,45 @@ class BackupService:
         await db.commit()
 
         try:
+            # Step 0: Discover Redis configuration (data dir, auth)
+            # Use REDISCLI_AUTH env var to avoid shell escaping issues with special chars
+            redis_auth_prefix = ""
+            auth_cmd = self._build_ssh_command(
+                host, ssh_user, ssh_port,
+                "grep -E '^requirepass' /etc/redis/redis.conf 2>/dev/null | awk '{print $2}'"
+            )
+            success, auth_output = await self._run_command(auth_cmd, timeout=10)
+            redis_password = auth_output.strip() if success else ""
+            if redis_password:
+                # Use env var to pass password safely (avoids shell escaping issues)
+                redis_auth_prefix = f"REDISCLI_AUTH=$(grep -E '^requirepass' /etc/redis/redis.conf | awk '{{print $2}}')"
+
+            # Get Redis data directory and filename using env var for auth
+            config_cmd = self._build_ssh_command(
+                host, ssh_user, ssh_port,
+                f"{redis_auth_prefix} redis-cli CONFIG GET dir && {redis_auth_prefix} redis-cli CONFIG GET dbfilename"
+            )
+            success, config_output = await self._run_command(config_cmd, timeout=15)
+
+            # Parse Redis config output (format: "dir\n/path\ndbfilename\nfilename")
+            redis_dir = "/var/lib/redis"  # default fallback
+            redis_dbfilename = "dump.rdb"  # default fallback
+            if success:
+                lines = [l.strip() for l in config_output.strip().split('\n') if l.strip()]
+                for i, line in enumerate(lines):
+                    if line == "dir" and i + 1 < len(lines):
+                        redis_dir = lines[i + 1]
+                    elif line == "dbfilename" and i + 1 < len(lines):
+                        redis_dbfilename = lines[i + 1]
+
+            rdb_path = f"{redis_dir}/{redis_dbfilename}"
+            logger.info("Redis RDB path discovered: %s", rdb_path)
+
             # Step 1: Trigger BGSAVE
             logger.info("Starting Redis BGSAVE on %s", host)
             bgsave_cmd = self._build_ssh_command(
                 host, ssh_user, ssh_port,
-                "redis-cli BGSAVE"
+                f"{redis_auth_prefix} redis-cli BGSAVE"
             )
             success, output = await self._run_command(bgsave_cmd, timeout=30)
             if not success:
@@ -75,32 +109,26 @@ class BackupService:
 
             # Step 2: Wait for BGSAVE to complete
             logger.info("Waiting for BGSAVE to complete...")
-            await self._wait_for_bgsave(host, ssh_user, ssh_port)
+            await self._wait_for_bgsave(host, ssh_user, ssh_port, redis_auth_prefix)
 
-            # Step 3: Get RDB file info
-            info_cmd = self._build_ssh_command(
+            # Step 3: Get RDB file size
+            size_cmd = self._build_ssh_command(
                 host, ssh_user, ssh_port,
-                "redis-cli CONFIG GET dir && redis-cli CONFIG GET dbfilename && "
-                "stat -c '%s' /var/lib/redis/dump.rdb 2>/dev/null || echo '0'"
+                f"stat -c '%s' {rdb_path} 2>/dev/null || echo '0'"
             )
-            success, info_output = await self._run_command(info_cmd, timeout=15)
-            if not success:
-                logger.warning("Could not get RDB info: %s", info_output)
-
-            # Parse file size from output
+            success, size_output = await self._run_command(size_cmd, timeout=15)
             size_bytes = 0
-            lines = info_output.strip().split('\n')
-            for line in lines:
-                if line.isdigit():
-                    size_bytes = int(line)
-                    break
+            if success:
+                size_str = size_output.strip().split('\n')[-1]
+                if size_str.isdigit():
+                    size_bytes = int(size_str)
 
             # Step 4: Calculate checksum
             checksum_cmd = self._build_ssh_command(
                 host, ssh_user, ssh_port,
-                "sha256sum /var/lib/redis/dump.rdb 2>/dev/null | cut -d' ' -f1"
+                f"sha256sum {rdb_path} 2>/dev/null | cut -d' ' -f1"
             )
-            success, checksum = await self._run_command(checksum_cmd, timeout=30)
+            success, checksum = await self._run_command(checksum_cmd, timeout=60)
             checksum = checksum.strip() if success else None
 
             # Step 5: Copy backup to SLM storage
@@ -109,10 +137,10 @@ class BackupService:
             backup_path = BACKUP_STORAGE_DIR / backup_filename
 
             scp_cmd = [
-                "scp", "-o", "StrictHostKeyChecking=no",
+                "/usr/bin/scp", "-o", "StrictHostKeyChecking=no",
                 "-o", "ConnectTimeout=30",
                 "-P", str(ssh_port),
-                f"{ssh_user}@{host}:/var/lib/redis/dump.rdb",
+                f"{ssh_user}@{host}:{rdb_path}",
                 str(backup_path),
             ]
             success, scp_output = await self._run_command(scp_cmd, timeout=300)
@@ -201,7 +229,7 @@ class BackupService:
             if backup.extra_data and backup.extra_data.get("location") == "local":
                 # Copy from SLM storage
                 scp_cmd = [
-                    "scp", "-o", "StrictHostKeyChecking=no",
+                    "/usr/bin/scp", "-o", "StrictHostKeyChecking=no",
                     "-P", str(ssh_port),
                     backup_path,
                     f"{ssh_user}@{host}:/tmp/restore.rdb",
@@ -311,6 +339,7 @@ class BackupService:
         host: str,
         ssh_user: str,
         ssh_port: int,
+        redis_auth_prefix: str = "",
         max_wait: int = 120,
     ) -> bool:
         """Wait for BGSAVE to complete by monitoring LASTSAVE."""
@@ -320,7 +349,7 @@ class BackupService:
         while (datetime.utcnow() - start_time).seconds < max_wait:
             cmd = self._build_ssh_command(
                 host, ssh_user, ssh_port,
-                "redis-cli LASTSAVE"
+                f"{redis_auth_prefix} redis-cli LASTSAVE"
             )
             success, output = await self._run_command(cmd, timeout=10)
 
@@ -355,7 +384,7 @@ class BackupService:
     ) -> list:
         """Build SSH command list."""
         return [
-            "ssh",
+            "/usr/bin/ssh",
             "-o", "StrictHostKeyChecking=no",
             "-o", "UserKnownHostsFile=/dev/null",
             "-o", "ConnectTimeout=15",
