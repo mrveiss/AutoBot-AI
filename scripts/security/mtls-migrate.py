@@ -146,12 +146,12 @@ class MTLSMigration:
                     logger.error(f"Failed to create admin user: {result.stderr}")
                     return False
 
-                # Save ACL to disk so it persists across restarts
+                # Persist config using CONFIG REWRITE (ACL file not configured)
                 save_result = await conn.run(
-                    f"redis-cli --no-auth-warning -a {escaped_pass} ACL SAVE"
+                    f"redis-cli --no-auth-warning -a {escaped_pass} CONFIG REWRITE"
                 )
                 if save_result.returncode != 0:
-                    logger.warning("ACL SAVE failed - user may not persist after restart")
+                    logger.warning("CONFIG REWRITE failed - user may not persist after restart")
 
                 logger.info(f"Admin user '{admin_user}' created successfully")
 
@@ -435,7 +435,7 @@ class MTLSMigration:
             logger.error(f"Failed to check plain port connections: {e}")
             return -1
 
-    async def phase_disable_password(self) -> bool:
+    async def phase_disable_password(self, force: bool = False) -> bool:
         """
         Phase 6: Disable password authentication (FINAL CUTOVER).
 
@@ -457,30 +457,33 @@ class MTLSMigration:
             return False
         logger.info("  No plain port connections - OK")
 
-        # Confirm TLS is working
+        # Confirm TLS is working (with current password - still enabled)
         logger.info("\n[2/4] Confirming TLS connectivity...")
         try:
-            await self._test_tls_only()
+            await self._test_tls_with_password()
             logger.info("  TLS connection test passed")
         except Exception as e:
             logger.error(f"ABORT: TLS connection failed: {e}")
             return False
 
         # Get confirmation
-        logger.info("\n[3/4] MANUAL CONFIRMATION REQUIRED")
+        logger.info("\n[3/4] CONFIRMATION")
         logger.info("=" * 60)
         logger.info("This will:")
         logger.info("  1. Disable plain port 6379")
         logger.info("  2. Enforce client certificate verification")
-        logger.info("  3. Remove password requirement")
+        logger.info("  3. Remove password requirement for default user")
+        logger.info("  (Admin user 'autobot_admin' will still work with password)")
         logger.info("")
-        logger.info("Type 'CONFIRM' to proceed (or anything else to abort):")
 
-        import sys
-        confirmation = input().strip()
-        if confirmation != "CONFIRM":
-            logger.info("Aborted by user")
-            return False
+        if force:
+            logger.info("--force flag set, proceeding without confirmation")
+        else:
+            logger.info("Type 'CONFIRM' to proceed (or anything else to abort):")
+            confirmation = input().strip()
+            if confirmation != "CONFIRM":
+                logger.info("Aborted by user")
+                return False
 
         # Execute cutover
         logger.info("\n[4/4] Executing final cutover...")
@@ -496,25 +499,29 @@ class MTLSMigration:
                 known_hosts=None,
                 connect_timeout=10,
             ) as conn:
+                # Issue #725: Use correct config path
+                config_path = "/etc/redis-stack/redis-stack.conf"
+
                 # Backup current config
                 await conn.run(
-                    "sudo cp /etc/redis-stack.conf /etc/redis-stack.conf.pre-mtls-final",
+                    f"sudo cp {config_path} {config_path}.pre-mtls-final",
                     check=True,
                 )
                 logger.info("  Config backed up")
 
                 # Update config: disable plain port, enforce mTLS
                 await conn.run(
-                    "sudo sed -i 's/^port 6379$/port 0/' /etc/redis-stack.conf",
+                    f"sudo sed -i 's/^port 6379$/port 0/' {config_path}",
                     check=True,
                 )
                 await conn.run(
-                    "sudo sed -i 's/^tls-auth-clients optional$/tls-auth-clients yes/' "
-                    "/etc/redis-stack.conf",
+                    f"sudo sed -i 's/^tls-auth-clients optional$/tls-auth-clients yes/' "
+                    f"{config_path}",
                     check=True,
                 )
+                # Remove password for default user (admin user ACL still works)
                 await conn.run(
-                    "sudo sed -i '/^requirepass/d' /etc/redis-stack.conf",
+                    f"sudo sed -i '/^requirepass/d' {config_path}",
                     check=True,
                 )
                 logger.info("  Config updated")
@@ -533,8 +540,13 @@ class MTLSMigration:
                 logger.info("=" * 60)
                 logger.info("Redis now requires mTLS on port 6380")
                 logger.info("Plain port 6379 is disabled")
-                logger.info("Password authentication is removed")
-                logger.info("\nTo rollback: python scripts/security/mtls-migrate.py --rollback redis-full")
+                logger.info("Password auth removed for default user")
+                logger.info("")
+                logger.info("RECOVERY: Admin user 'autobot_admin' still works with password:")
+                logger.info(f"  redis-cli -h {redis_ip} -p 6380 --tls --user autobot_admin --pass <password>")
+                logger.info("  Credentials: certs/.redis-admin-credentials")
+                logger.info("")
+                logger.info("To rollback: python scripts/security/mtls-migrate.py --rollback redis-full")
 
                 return True
 
@@ -544,26 +556,44 @@ class MTLSMigration:
             await self.rollback_redis_full()
             return False
 
-    async def _test_tls_only(self):
-        """Test TLS connection only (no fallback)."""
+    async def _test_tls_with_password(self):
+        """Test TLS connection with current password (pre-cutover check)."""
         import redis
-        import ssl
 
         redis_ip = VM_DEFINITIONS.get("redis", "172.16.168.23")
-
-        ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-        ssl_context.load_verify_locations(str(self.config.ca_cert_path))
-
         cert_dir = self.config.cert_dir_path / "main-host"
-        ssl_context.load_cert_chain(
-            str(cert_dir / "server-cert.pem"),
-            str(cert_dir / "server-key.pem"),
-        )
+        password = self._get_redis_password()
 
         r = redis.Redis(
             host=redis_ip,
             port=6380,
-            ssl=ssl_context,
+            password=password,
+            ssl=True,
+            ssl_ca_certs=str(self.config.ca_cert_path),
+            ssl_certfile=str(cert_dir / "server-cert.pem"),
+            ssl_keyfile=str(cert_dir / "server-key.pem"),
+            ssl_check_hostname=False,
+            socket_timeout=5,
+        )
+        r.ping()
+        r.close()
+
+    async def _test_tls_only(self):
+        """Test TLS connection without password (post-cutover check)."""
+        import redis
+
+        redis_ip = VM_DEFINITIONS.get("redis", "172.16.168.23")
+        cert_dir = self.config.cert_dir_path / "main-host"
+
+        # Use explicit SSL params for redis-py (Issue #725)
+        r = redis.Redis(
+            host=redis_ip,
+            port=6380,
+            ssl=True,
+            ssl_ca_certs=str(self.config.ca_cert_path),
+            ssl_certfile=str(cert_dir / "server-cert.pem"),
+            ssl_keyfile=str(cert_dir / "server-key.pem"),
+            ssl_check_hostname=False,
             socket_timeout=5,
         )
         r.ping()
@@ -702,6 +732,11 @@ Examples:
         action="store_true",
         help="Create Redis admin user (run BEFORE disable-password)",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Skip confirmation prompt (use with caution)",
+    )
     args = parser.parse_args()
 
     migration = MTLSMigration()
@@ -729,7 +764,7 @@ Examples:
         elif args.phase == "verify":
             success = await migration.phase_verify()
         elif args.phase == "disable-password":
-            success = await migration.phase_disable_password()
+            success = await migration.phase_disable_password(force=args.force)
         elif args.phase == "all":
             success = await migration.phase_redis_dual_auth()
             if success:
