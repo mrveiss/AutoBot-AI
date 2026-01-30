@@ -33,14 +33,7 @@ MONITORING_ROUTER_CONFIGS = [
         "error_monitoring",
     ),
     ("backend.api.rum", "router", "/rum", ["rum"], "rum"),
-    # Issue #432: VM services monitoring router
-    (
-        "backend.api.vm_services",
-        "router",
-        "",  # Router already has /api/vm-services prefix
-        ["vm-services"],
-        "vm_services",
-    ),
+    # Issue #729: vm_services removed - VM service monitoring now in slm-server
     # AlertManager webhook integration (Issue #346)
     (
         "backend.api.alertmanager_webhook",
