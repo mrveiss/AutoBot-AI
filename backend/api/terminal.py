@@ -735,6 +735,8 @@ async def secure_terminal_websocket_compat(websocket: WebSocket, session_id: str
 
 
 # SSH Terminal WebSocket (Issue #715 - Infrastructure host connections)
+# Issue #729: DEPRECATED - SSH connections to infrastructure hosts moved to slm-server
+# This endpoint now returns a deprecation message and redirects to SLM
 
 
 @router.websocket("/ws/ssh/{host_id}")
@@ -749,25 +751,17 @@ async def ssh_terminal_websocket(
     conversation_id: str = None,
 ):
     """
-    WebSocket endpoint for SSH terminal connections to infrastructure hosts.
+    DEPRECATED: SSH terminal connections to infrastructure hosts.
 
-    Issue #715: Connects to user-defined infrastructure hosts stored in secrets.
+    Issue #729: This endpoint has been deprecated as part of layer separation.
+    SSH connections to infrastructure hosts are now handled by slm-server.
 
-    Args:
-        host_id: Infrastructure host ID from secrets system
-        conversation_id: Optional chat conversation ID for output logging
+    Use slm-admin → Tools → Terminal or the SLM API directly:
+        - SLM Terminal API: /api/terminal/ssh/{host_id}
+        - SLM Admin UI: slm-admin → Tools → Terminal
 
-    Message Protocol:
-        Client → Server:
-            {"type": "input", "text": "ls -la\\n"}
-            {"type": "resize", "rows": 24, "cols": 80}
-            {"type": "ping"}
-
-        Server → Client:
-            {"type": "output", "content": "..."}
-            {"type": "connected", "content": "...", "host": {...}}
-            {"type": "error", "content": "..."}
-            {"type": "terminal_closed", "content": "..."}
+    This endpoint remains for backward compatibility but returns a deprecation
+    message directing clients to use SLM for infrastructure connections.
     """
     await websocket.accept()
 
@@ -853,14 +847,14 @@ async def terminal_info():
             "Workflow automation control integration",
             "Multi-level security controls",
             "Backward compatibility with existing endpoints",
-            "SSH connections to user-defined infrastructure hosts",
         ],
         "endpoints": {
             "sessions": "/api/terminal/sessions",
             "websocket_primary": "/api/terminal/ws/{session_id}",
             "websocket_simple": "/api/terminal/ws/simple/{session_id}",
             "websocket_secure": "/api/terminal/ws/secure/{session_id}",
-            "websocket_ssh": "/api/terminal/ws/ssh/{host_id}",
+            # Issue #729: SSH to infrastructure hosts moved to slm-server
+            "websocket_ssh": "/api/terminal/ws/ssh/{host_id} (deprecated - use SLM)",
         },
         "security_levels": [level.value for level in SecurityLevel],
         "consolidated_from": [
@@ -869,6 +863,9 @@ async def terminal_info():
             "secure_terminal_websocket.py",
             "base_terminal.py",
         ],
+        # Issue #729: Layer separation notice
+        "notice": "SSH connections to infrastructure hosts have been moved to slm-server. "
+                  "Use slm-admin or the SLM API for infrastructure terminal access.",
     }
 
 
