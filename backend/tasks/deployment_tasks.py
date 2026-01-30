@@ -5,6 +5,9 @@
 Deployment Tasks for AutoBot IaC Platform
 
 Celery tasks for asynchronous Ansible playbook execution with real-time progress.
+
+NOTE: Ansible execution moved to SLM server (#729)
+All deployment tasks are deprecated and should use SLM API instead.
 """
 
 import asyncio
@@ -15,7 +18,8 @@ import subprocess
 from backend.type_defs.common import Metadata
 
 from backend.celery_app import celery_app
-from backend.services.ansible_executor import AnsibleExecutor
+# Ansible execution moved to SLM server (#729)
+# from backend.services.ansible_executor import AnsibleExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -168,7 +172,11 @@ async def _deploy_host_async(task, host_config: Metadata, force_redeploy: bool, 
     Returns:
         Dict with deployment results
     """
-    executor = AnsibleExecutor()
+    # Ansible execution moved to SLM server (#729)
+    raise NotImplementedError(
+        "Ansible deployment moved to SLM server. Use SLM API for deployments."
+    )
+    # executor = AnsibleExecutor()
 
     ip_address = host_config.get("ip_address")
     role = host_config.get("role")
@@ -251,7 +259,11 @@ async def _provision_ssh_key_async(host_ip: str, password: str, ssh_user: str):
     Returns:
         Dict with provisioning results
     """
-    executor = AnsibleExecutor()
+    # Ansible execution moved to SLM server (#729)
+    raise NotImplementedError(
+        "SSH key provisioning moved to SLM server. Use SLM API for provisioning."
+    )
+    # executor = AnsibleExecutor()
 
     logger.info("Starting SSH key provisioning for %s@%s", ssh_user, host_ip)
 
@@ -389,7 +401,11 @@ async def _initialize_rbac_async(task, create_admin: bool, admin_username: str, 
     Returns:
         Dict with initialization results
     """
-    executor = AnsibleExecutor()
+    # Ansible execution moved to SLM server (#729)
+    raise NotImplementedError(
+        "RBAC initialization moved to SLM server. Use SLM API for RBAC setup."
+    )
+    # executor = AnsibleExecutor()
 
     logger.info("Starting RBAC initialization (create_admin=%s)", create_admin)
 
@@ -671,7 +687,11 @@ async def _run_system_update_async(
     Returns:
         Dict with update results
     """
-    executor = AnsibleExecutor()
+    # Ansible execution moved to SLM server (#729)
+    raise NotImplementedError(
+        "System updates moved to SLM server. Use SLM API for system maintenance."
+    )
+    # executor = AnsibleExecutor()
 
     logger.info(
         "Starting system update (type=%s, dry_run=%s, force=%s, targets=%s)",
