@@ -76,6 +76,18 @@ repos:
         args: [-c, .bandit, -r, backend/, src/]
         additional_dependencies: ["bandit[toml]"]
 
+# Hardcoded value detection (Issue #694)
+  - repo: local
+    hooks:
+      - id: detect-hardcoded-values
+        name: Detect Hardcoded Values (Strict)
+        entry: scripts/hooks/pre-commit-hardcoded-values
+        language: script
+        types: [python, ts, vue]
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Blocks commits with hardcoded IPs, ports, magic numbers, and role strings"
+
 # Configuration for specific file types
 default_language_version:
   python: python3
