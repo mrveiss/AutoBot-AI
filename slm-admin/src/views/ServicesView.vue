@@ -313,6 +313,74 @@ async function handleCategoryChange(
   }
 }
 
+// Restart All Services state (Issue #725)
+const isRestartingAll = ref(false)
+const restartAllNodeId = ref<string | null>(null)
+const restartAllProgress = ref<{ total: number; completed: number } | null>(null)
+const showRestartAllConfirm = ref(false)
+const restartAllTargetNode = ref<{ nodeId: string; hostname: string } | null>(null)
+
+async function handleRestartAllServices(nodeId: string, hostname: string): Promise<void> {
+  // Show confirmation dialog
+  restartAllTargetNode.value = { nodeId, hostname }
+  showRestartAllConfirm.value = true
+}
+
+async function confirmRestartAll(): Promise<void> {
+  if (!restartAllTargetNode.value || isRestartingAll.value) return
+
+  const { nodeId, hostname } = restartAllTargetNode.value
+  showRestartAllConfirm.value = false
+
+  isRestartingAll.value = true
+  restartAllNodeId.value = nodeId
+  restartAllProgress.value = { total: 0, completed: 0 }
+
+  try {
+    // Get service count for progress display
+    const nodeGroup = servicesByNode.value.find(n => n.nodeId === nodeId)
+    if (nodeGroup) {
+      restartAllProgress.value.total = nodeGroup.services.length
+    }
+
+    const result = await api.restartAllNodeServices(nodeId, {
+      category: categoryFilter.value === 'all' ? undefined : categoryFilter.value,
+    })
+
+    restartAllProgress.value = {
+      total: result.total_services,
+      completed: result.successful_restarts,
+    }
+
+    if (result.success) {
+      logger.info(`Successfully restarted all services on ${hostname}`)
+      // Refresh services to get updated status
+      await fetchServices()
+    } else {
+      errorMessage.value = result.message
+      logger.error(`Restart all services partially failed on ${hostname}: ${result.message}`)
+    }
+
+    // Show result notification
+    if (result.slm_agent_restarted) {
+      logger.info(`SLM agent on ${hostname} was restarted last as expected`)
+    }
+  } catch (error) {
+    logger.error(`Failed to restart all services on ${hostname}:`, error)
+    errorMessage.value = `Failed to restart all services on ${hostname}`
+  } finally {
+    isRestartingAll.value = false
+    restartAllNodeId.value = null
+    restartAllProgress.value = null
+    restartAllTargetNode.value = null
+  }
+}
+
+function cancelRestartAll(): void {
+  showRestartAllConfirm.value = false
+  restartAllTargetNode.value = null
+}
+
 function toggleCategoryMenu(serviceName: string): void {
   if (categoryMenuOpen.value === serviceName) {
     categoryMenuOpen.value = null
@@ -612,7 +680,7 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Status Summary -->
+          <!-- Status Summary and Restart All Button -->
           <div class="flex items-center gap-4">
             <div class="flex items-center gap-1.5 text-sm">
               <span class="w-2 h-2 rounded-full bg-green-500"></span>
@@ -626,6 +694,30 @@ onUnmounted(() => {
               <span class="w-2 h-2 rounded-full bg-red-500"></span>
               <span class="text-red-600">{{ node.failedCount }}</span>
             </div>
+            <!-- Restart All Button (Issue #725) -->
+            <button
+              @click.stop="handleRestartAllServices(node.nodeId, node.hostname)"
+              :disabled="isRestartingAll && restartAllNodeId === node.nodeId"
+              class="px-2.5 py-1 text-xs font-medium text-orange-600 bg-orange-50 border border-orange-200 rounded hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+              title="Restart all services on this node (SLM agent restarts last)"
+            >
+              <svg
+                v-if="isRestartingAll && restartAllNodeId === node.nodeId"
+                class="w-3.5 h-3.5 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+              </svg>
+              <svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span v-if="isRestartingAll && restartAllNodeId === node.nodeId && restartAllProgress">
+                {{ restartAllProgress.completed }}/{{ restartAllProgress.total }}
+              </span>
+              <span v-else>Restart All</span>
+            </button>
           </div>
         </button>
 
@@ -766,5 +858,66 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- Restart All Confirmation Modal (Issue #725) -->
+    <Teleport to="body">
+      <div
+        v-if="showRestartAllConfirm"
+        class="fixed inset-0 z-50 overflow-y-auto"
+        aria-labelledby="restart-all-modal"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div class="flex items-center justify-center min-h-screen px-4">
+          <!-- Backdrop -->
+          <div
+            class="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+            @click="cancelRestartAll"
+          ></div>
+
+          <!-- Modal Content -->
+          <div class="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div class="flex items-start gap-4">
+              <!-- Warning Icon -->
+              <div class="flex-shrink-0 w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
+                <svg class="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+
+              <div class="flex-1">
+                <h3 class="text-lg font-semibold text-gray-900">
+                  Restart All Services
+                </h3>
+                <p class="mt-2 text-sm text-gray-600">
+                  Are you sure you want to restart all services on
+                  <strong>{{ restartAllTargetNode?.hostname }}</strong>?
+                </p>
+                <p class="mt-2 text-sm text-gray-500">
+                  Services will be restarted sequentially. The SLM agent will be restarted
+                  <strong>last</strong> to ensure the node remains manageable during the process.
+                </p>
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="mt-6 flex justify-end gap-3">
+              <button
+                @click="cancelRestartAll"
+                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                @click="confirmRestartAll"
+                class="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700"
+              >
+                Restart All Services
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>

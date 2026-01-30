@@ -567,6 +567,39 @@ class ServiceLogsResponse(BaseModel):
     lines_returned: int
 
 
+class RestartAllServicesRequest(BaseModel):
+    """Request to restart all services on a node (Issue #725)."""
+
+    category: Optional[str] = Field(
+        None,
+        pattern="^(autobot|system|all)$",
+        description="Category of services to restart. 'all' or null restarts all services.",
+    )
+    exclude_services: List[str] = Field(
+        default_factory=list,
+        description="List of service names to exclude from restart",
+    )
+
+
+class RestartAllServicesResponse(BaseModel):
+    """Response from restart all services operation (Issue #725)."""
+
+    node_id: str
+    success: bool
+    message: str
+    total_services: int
+    successful_restarts: int
+    failed_restarts: int
+    results: List[Dict] = Field(
+        default_factory=list,
+        description="Per-service restart results: [{service_name, success, message}]",
+    )
+    slm_agent_restarted: bool = Field(
+        False,
+        description="Whether SLM agent was restarted (done last)",
+    )
+
+
 class ServiceCategoryUpdate(BaseModel):
     """Request to update service category."""
 

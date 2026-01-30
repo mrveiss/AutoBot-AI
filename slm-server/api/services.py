@@ -29,6 +29,8 @@ from models.schemas import (
     ServiceCategoryUpdate,
     FleetServiceStatus,
     FleetServicesResponse,
+    RestartAllServicesRequest,
+    RestartAllServicesResponse,
 )
 from services.auth import get_current_user
 from services.database import get_db
@@ -434,6 +436,162 @@ async def get_service_logs(
         node_id=node_id,
         logs=logs,
         lines_returned=len(logs.split("\n")),
+    )
+
+
+# =============================================================================
+# Restart All Services endpoint (Issue #725)
+# =============================================================================
+
+
+@router.post(
+    "/{node_id}/services/restart-all",
+    response_model=RestartAllServicesResponse,
+)
+async def restart_all_node_services(
+    node_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+    request: Optional[RestartAllServicesRequest] = None,
+) -> RestartAllServicesResponse:
+    """
+    Restart all services on a node in ordered sequence.
+
+    The SLM agent is always restarted last to ensure the node remains
+    manageable during the restart process. Other services are restarted
+    in alphabetical order.
+
+    Related to Issue #725.
+    """
+    node = await _get_node_or_404(db, node_id)
+
+    # Get all services on this node
+    query = select(Service).where(Service.node_id == node_id)
+
+    # Filter by category if specified
+    if request and request.category and request.category != "all":
+        query = query.where(Service.category == request.category)
+
+    result = await db.execute(query)
+    all_services = result.scalars().all()
+
+    if not all_services:
+        return RestartAllServicesResponse(
+            node_id=node_id,
+            success=True,
+            message="No services to restart",
+            total_services=0,
+            successful_restarts=0,
+            failed_restarts=0,
+            results=[],
+            slm_agent_restarted=False,
+        )
+
+    # Separate SLM agent from other services
+    slm_agent_service = None
+    other_services = []
+    excluded_services = request.exclude_services if request else []
+
+    for svc in all_services:
+        if svc.service_name in excluded_services:
+            continue
+        if svc.service_name == "slm-agent":
+            slm_agent_service = svc
+        else:
+            other_services.append(svc)
+
+    # Sort other services alphabetically
+    other_services.sort(key=lambda s: s.service_name)
+
+    # Build ordered restart list: other services first, SLM agent last
+    ordered_services = other_services.copy()
+    if slm_agent_service:
+        ordered_services.append(slm_agent_service)
+
+    # Execute restarts sequentially
+    results = []
+    successful = 0
+    failed = 0
+    slm_agent_restarted = False
+
+    for svc in ordered_services:
+        is_slm_agent = svc.service_name == "slm-agent"
+
+        logger.info(
+            "Restarting service %s on %s%s",
+            svc.service_name,
+            node.hostname,
+            " (SLM agent - last)" if is_slm_agent else "",
+        )
+
+        success, message = await _run_ansible_service_action(
+            node, svc.service_name, "restart"
+        )
+
+        results.append({
+            "service_name": svc.service_name,
+            "success": success,
+            "message": message,
+            "is_slm_agent": is_slm_agent,
+        })
+
+        if success:
+            successful += 1
+            svc.status = ServiceStatus.RUNNING.value
+            svc.active_state = "active"
+            svc.sub_state = "running"
+            svc.last_checked = datetime.utcnow()
+
+            if is_slm_agent:
+                slm_agent_restarted = True
+
+            # Broadcast status change via WebSocket
+            await ws_manager.send_service_status(
+                node_id=node_id,
+                service_name=svc.service_name,
+                status="running",
+                action="restart",
+                success=True,
+                message=message,
+            )
+        else:
+            failed += 1
+            await ws_manager.send_service_status(
+                node_id=node_id,
+                service_name=svc.service_name,
+                status="unknown",
+                action="restart",
+                success=False,
+                message=message,
+            )
+
+            # If a non-slm-agent service fails, continue with others
+            # If slm-agent fails, that's still logged but we continue
+            logger.error(
+                "Failed to restart %s on %s: %s",
+                svc.service_name,
+                node.hostname,
+                message,
+            )
+
+    await db.commit()
+
+    total = len(ordered_services)
+    overall_success = failed == 0
+
+    return RestartAllServicesResponse(
+        node_id=node_id,
+        success=overall_success,
+        message=(
+            f"Successfully restarted {successful}/{total} services"
+            if overall_success
+            else f"Restarted {successful}/{total} services, {failed} failed"
+        ),
+        total_services=total,
+        successful_restarts=successful,
+        failed_restarts=failed,
+        results=results,
+        slm_agent_restarted=slm_agent_restarted,
     )
 
 
