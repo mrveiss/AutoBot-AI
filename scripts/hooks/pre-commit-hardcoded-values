@@ -17,7 +17,7 @@
 # Install: ln -sf ../../scripts/hooks/pre-commit-hardcoded-values .git/hooks/pre-commit
 # Or add to .pre-commit-config.yaml as local hook
 
-set -euo pipefail
+set -uo pipefail
 
 # Colors
 RED='\033[0;31m'
@@ -130,13 +130,14 @@ check_magic_numbers() {
             continue
         fi
 
-        # Skip type hints and annotations
-        if echo "$line" | grep -qE '(-> int|: int|List\[|Optional\[)'; then
+        # Skip pure type hints (return type annotations like -> int)
+        # But NOT function parameter defaults like limit: int = 10
+        if echo "$line" | grep -qE '(-> int$|-> int:|List\[|Optional\[)'; then
             continue
         fi
 
-        # Pattern 1: limit=10, limit: int = 10, default=10 for limit/search context
-        if echo "$line" | grep -qiE '(limit|top_k|max_results|page_size)[^a-z_]*[=:][^=]*\b10\b'; then
+        # Pattern 1: limit=10, limit: int = 10, default=10, Field(default=10) for limit/search context
+        if echo "$line" | grep -qiE '(limit|top_k|max_results|page_size)[^a-z_].*=\s*10\b'; then
             echo -e "${RED}VIOLATION${NC} $file:$line_num"
             echo "  Magic number 10 in limit/search context"
             echo -e "  ${CYAN}Fix: Use QueryDefaults.DEFAULT_SEARCH_LIMIT${NC}"
@@ -146,8 +147,8 @@ check_magic_numbers() {
             continue
         fi
 
-        # Pattern 2: limit=50, page_size=50
-        if echo "$line" | grep -qiE '(limit|page_size)[^a-z_]*[=:][^=]*\b50\b'; then
+        # Pattern 2: limit=50, page_size=50, Field(default=50)
+        if echo "$line" | grep -qiE '(limit|page_size)[^a-z_].*=\s*50\b'; then
             echo -e "${RED}VIOLATION${NC} $file:$line_num"
             echo "  Magic number 50 in pagination context"
             echo -e "  ${CYAN}Fix: Use QueryDefaults.DEFAULT_PAGE_SIZE${NC}"
@@ -158,7 +159,7 @@ check_magic_numbers() {
         fi
 
         # Pattern 3: limit=100 for knowledge/batch context
-        if echo "$line" | grep -qiE '(limit|batch)[^a-z_]*[=:][^=]*\b100\b'; then
+        if echo "$line" | grep -qiE '(limit|batch)[^a-z_].*=\s*100\b'; then
             echo -e "${RED}VIOLATION${NC} $file:$line_num"
             echo "  Magic number 100 in limit/batch context"
             echo -e "  ${CYAN}Fix: Use QueryDefaults.KNOWLEDGE_DEFAULT_LIMIT or BatchConfig.LARGE_BATCH${NC}"

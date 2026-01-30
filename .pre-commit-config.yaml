@@ -76,7 +76,7 @@ repos:
         args: [-c, .bandit, -r, backend/, src/]
         additional_dependencies: ["bandit[toml]"]
 
-# Hardcoded value detection (Issue #694)
+  # Hardcoded value detection (Issue #694)
   - repo: local
     hooks:
       - id: detect-hardcoded-values
