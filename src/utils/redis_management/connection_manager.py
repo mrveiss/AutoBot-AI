@@ -30,7 +30,8 @@ from typing import Any, Dict, List, Optional, Union
 import redis
 import redis.asyncio as async_redis
 from redis.backoff import ExponentialBackoff
-from redis.connection import ConnectionPool
+from redis.connection import ConnectionPool, SSLConnection
+from redis.asyncio.connection import SSLConnection as AsyncSSLConnection
 from redis.exceptions import ConnectionError, ResponseError
 from redis.retry import Retry
 
@@ -299,15 +300,17 @@ class RedisConnectionManager:
         }
 
         # Add TLS parameters if enabled
+        # Use connection_class=AsyncSSLConnection for proper TLS handling
         if config.ssl:
-            import ssl
-            ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+            pool_params["connection_class"] = AsyncSSLConnection
             if config.ssl_ca_certs:
-                ssl_context.load_verify_locations(config.ssl_ca_certs)
-            if config.ssl_certfile and config.ssl_keyfile:
-                ssl_context.load_cert_chain(config.ssl_certfile, config.ssl_keyfile)
-            pool_params["ssl"] = ssl_context
-            logger.info(f"TLS enabled for Redis connection '{database_name}'")
+                pool_params["ssl_ca_certs"] = config.ssl_ca_certs
+            if config.ssl_certfile:
+                pool_params["ssl_certfile"] = config.ssl_certfile
+            if config.ssl_keyfile:
+                pool_params["ssl_keyfile"] = config.ssl_keyfile
+            pool_params["ssl_cert_reqs"] = config.ssl_cert_reqs or "required"
+            logger.info(f"TLS enabled for async Redis connection '{database_name}'")
 
         return pool_params
 
@@ -396,14 +399,16 @@ class RedisConnectionManager:
         }
 
         # Add TLS parameters if enabled
+        # Use connection_class=SSLConnection for proper TLS handling
         if config.ssl:
-            import ssl
-            ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+            pool_params["connection_class"] = SSLConnection
             if config.ssl_ca_certs:
-                ssl_context.load_verify_locations(config.ssl_ca_certs)
-            if config.ssl_certfile and config.ssl_keyfile:
-                ssl_context.load_cert_chain(config.ssl_certfile, config.ssl_keyfile)
-            pool_params["ssl"] = ssl_context
+                pool_params["ssl_ca_certs"] = config.ssl_ca_certs
+            if config.ssl_certfile:
+                pool_params["ssl_certfile"] = config.ssl_certfile
+            if config.ssl_keyfile:
+                pool_params["ssl_keyfile"] = config.ssl_keyfile
+            pool_params["ssl_cert_reqs"] = config.ssl_cert_reqs or "required"
             logger.info(f"TLS enabled for sync Redis connection '{database_name}'")
 
         # Remove None values
