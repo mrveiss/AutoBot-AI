@@ -491,6 +491,17 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/tls-certificates',
+    name: 'tls-certificates',
+    component: () => import('@/views/TLSCertificatesView.vue'),
+    meta: {
+      title: 'TLS Certificates',
+      icon: 'fas fa-shield-halved',
+      description: 'Manage mTLS certificates for secure communication (Issue #725)',
+      requiresAuth: true
+    }
+  },
+  {
     path: '/secrets',
     name: 'secrets',
     component: SecretsView,
