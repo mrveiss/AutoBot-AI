@@ -71,50 +71,18 @@
                 </router-link>
 
                 <router-link
-                  to="/secrets"
+                  to="/automation"
                   :class="{
-                    'bg-white text-indigo-700': $route.path.startsWith('/secrets'),
-                    'text-white hover:bg-indigo-500': !$route.path.startsWith('/secrets')
+                    'bg-white text-indigo-700': $route.path.startsWith('/automation'),
+                    'text-white hover:bg-indigo-500': !$route.path.startsWith('/automation')
                   }"
                   class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
                 >
                   <div class="flex items-center space-x-1">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                      <path fill-rule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z" clip-rule="evenodd"></path>
+                      <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"></path>
                     </svg>
-                    <span>Secrets</span>
-                  </div>
-                </router-link>
-
-                <router-link
-                  to="/tools"
-                  :class="{
-                    'bg-white text-indigo-700': $route.path.startsWith('/tools'),
-                    'text-white hover:bg-indigo-500': !$route.path.startsWith('/tools')
-                  }"
-                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-                >
-                  <div class="flex items-center space-x-1">
-                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                      <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path>
-                    </svg>
-                    <span>Tools</span>
-                  </div>
-                </router-link>
-
-                <router-link
-                  to="/monitoring"
-                  :class="{
-                    'bg-white text-indigo-700': $route.path.startsWith('/monitoring'),
-                    'text-white hover:bg-indigo-500': !$route.path.startsWith('/monitoring')
-                  }"
-                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-                >
-                  <div class="flex items-center space-x-1">
-                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    <span>Monitor</span>
+                    <span>Automation</span>
                   </div>
                 </router-link>
 
@@ -136,20 +104,39 @@
                 </router-link>
 
                 <router-link
-                  to="/settings"
+                  to="/secrets"
                   :class="{
-                    'bg-white text-indigo-700': $route.path.startsWith('/settings'),
-                    'text-white hover:bg-indigo-500': !$route.path.startsWith('/settings')
+                    'bg-white text-indigo-700': $route.path.startsWith('/secrets'),
+                    'text-white hover:bg-indigo-500': !$route.path.startsWith('/secrets')
                   }"
                   class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
                 >
                   <div class="flex items-center space-x-1">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                      <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path>
+                      <path fill-rule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z" clip-rule="evenodd"></path>
                     </svg>
-                    <span>Settings</span>
+                    <span>Secrets</span>
                   </div>
                 </router-link>
+
+                <!-- Issue #729: Link to SLM Admin for infrastructure operations -->
+                <a
+                  href="/slm-admin/"
+                  target="_blank"
+                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 text-white hover:bg-indigo-500"
+                  title="Open SLM Admin for infrastructure management"
+                >
+                  <div class="flex items-center space-x-1">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                      <path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"></path>
+                    </svg>
+                    <span>SLM Admin</span>
+                    <svg class="w-3 h-3 opacity-50" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"></path>
+                      <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"></path>
+                    </svg>
+                  </div>
+                </a>
               </div>
             </div>
           </nav>
@@ -222,53 +209,19 @@
             </router-link>
 
             <router-link
-              to="/secrets"
+              to="/automation"
               @click="closeMobileNav"
               :class="{
-                'bg-white text-indigo-700': $route.path.startsWith('/secrets'),
-                'text-white hover:bg-indigo-600': !$route.path.startsWith('/secrets')
+                'bg-white text-indigo-700': $route.path.startsWith('/automation'),
+                'text-white hover:bg-indigo-600': !$route.path.startsWith('/automation')
               }"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
               <div class="flex items-center space-x-2">
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                  <path fill-rule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z" clip-rule="evenodd"></path>
+                  <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"></path>
                 </svg>
-                <span>Secrets</span>
-              </div>
-            </router-link>
-
-            <router-link
-              to="/tools"
-              @click="closeMobileNav"
-              :class="{
-                'bg-white text-indigo-700': $route.path.startsWith('/tools'),
-                'text-white hover:bg-indigo-600': !$route.path.startsWith('/tools')
-              }"
-              class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
-            >
-              <div class="flex items-center space-x-2">
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                  <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path>
-                </svg>
-                <span>Tools</span>
-              </div>
-            </router-link>
-
-            <router-link
-              to="/monitoring"
-              @click="closeMobileNav"
-              :class="{
-                'bg-white text-indigo-700': $route.path.startsWith('/monitoring'),
-                'text-white hover:bg-indigo-600': !$route.path.startsWith('/monitoring')
-              }"
-              class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
-            >
-              <div class="flex items-center space-x-2">
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                <span>Monitor</span>
+                <span>Automation</span>
               </div>
             </router-link>
 
@@ -291,21 +244,39 @@
             </router-link>
 
             <router-link
-              to="/settings"
+              to="/secrets"
               @click="closeMobileNav"
               :class="{
-                'bg-white text-indigo-700': $route.path.startsWith('/settings'),
-                'text-white hover:bg-indigo-600': !$route.path.startsWith('/settings')
+                'bg-white text-indigo-700': $route.path.startsWith('/secrets'),
+                'text-white hover:bg-indigo-600': !$route.path.startsWith('/secrets')
               }"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
               <div class="flex items-center space-x-2">
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                  <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path>
+                  <path fill-rule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z" clip-rule="evenodd"></path>
                 </svg>
-                <span>Settings</span>
+                <span>Secrets</span>
               </div>
             </router-link>
+
+            <!-- Issue #729: Link to SLM Admin for infrastructure operations -->
+            <a
+              href="/slm-admin/"
+              @click="closeMobileNav"
+              class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block text-white hover:bg-indigo-600"
+            >
+              <div class="flex items-center space-x-2">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                  <path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"></path>
+                </svg>
+                <span>SLM Admin</span>
+                <svg class="w-3 h-3 opacity-50" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"></path>
+                  <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"></path>
+                </svg>
+              </div>
+            </a>
           </div>
         </div>
       </Transition>
@@ -501,8 +472,7 @@
     @close="onElevationClose"
   />
 
-  <!-- RUM Dashboard for Development -->
-  <RumDashboard />
+  <!-- Issue #729: RUM Dashboard moved to slm-admin -->
 </template>
 
 <script lang="ts">
