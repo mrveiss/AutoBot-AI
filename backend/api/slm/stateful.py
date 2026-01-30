@@ -4,11 +4,19 @@
 """
 SLM Stateful Services API
 
+DEPRECATED: This file should be deleted as part of layer separation (Issue #729).
+All SLM functionality has been moved to slm-server.
+See: slm-server/api/stateful.py for the active implementation.
+
 REST endpoints for stateful service operations:
 - Replication management
 - Backup/restore operations
 - Data verification
 """
+
+# TODO: DELETE THIS FILE - Part of Issue #729 layer separation
+# This file is non-functional after removal of backend/services/slm/
+# SLM server at 172.16.168.19 provides these endpoints
 
 import logging
 from datetime import datetime
@@ -17,13 +25,13 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from pydantic import BaseModel, Field
 
-from backend.services.slm.stateful_manager import (
-    BackupContext,
-    BackupState,
-    ReplicationContext,
-    ReplicationState,
-    get_stateful_manager,
-)
+# REMOVED: from backend.services.slm.stateful_manager import (
+#     BackupContext,
+#     BackupState,
+#     ReplicationContext,
+#     ReplicationState,
+#     get_stateful_manager,
+# )
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/slm/stateful", tags=["SLM Stateful Services"])

@@ -4,8 +4,16 @@
 """
 SLM Nodes API
 
+DEPRECATED: This file should be deleted as part of layer separation (Issue #729).
+All SLM functionality has been moved to slm-server.
+See: slm-server/api/nodes.py for the active implementation.
+
 REST endpoints for node management.
 """
+
+# TODO: DELETE THIS FILE - Part of Issue #729 layer separation
+# This file is non-functional after removal of backend/services/slm/
+# SLM server at 172.16.168.19 provides these endpoints
 
 import logging
 from typing import List, Optional
@@ -14,8 +22,8 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from backend.models.infrastructure import NodeState
-from backend.services.slm.db_service import SLMDatabaseService
-from backend.services.slm.state_machine import InvalidStateTransition
+# REMOVED: from backend.services.slm.db_service import SLMDatabaseService
+# REMOVED: from backend.services.slm.state_machine import InvalidStateTransition
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/slm/nodes", tags=["SLM Nodes"])

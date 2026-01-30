@@ -4,12 +4,20 @@
 """
 SLM Deployments API
 
+DEPRECATED: This file should be deleted as part of layer separation (Issue #729).
+All SLM functionality has been moved to slm-server.
+See: slm-server/api/deployments.py for the active implementation.
+
 REST endpoints for deployment management:
 - Create deployments
 - Execute deployments
 - Monitor deployment progress
 - Cancel/rollback deployments
 """
+
+# TODO: DELETE THIS FILE - Part of Issue #729 layer separation
+# This file is non-functional after removal of backend/services/slm/
+# SLM server at 172.16.168.19 provides these endpoints
 
 import logging
 from datetime import datetime
@@ -19,14 +27,14 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from pydantic import BaseModel, Field
 
 from backend.models.infrastructure import DeploymentStrategy as DeploymentStrategyType
-from backend.services.slm.deployment_orchestrator import (
-    DeploymentContext,
-    DeploymentOrchestrator,
-    DeploymentStatus,
-    DeploymentStep,
-    DeploymentStepType,
-    get_orchestrator,
-)
+# REMOVED: from backend.services.slm.deployment_orchestrator import (
+#     DeploymentContext,
+#     DeploymentOrchestrator,
+#     DeploymentStatus,
+#     DeploymentStep,
+#     DeploymentStepType,
+#     get_orchestrator,
+# )
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/slm/deployments", tags=["SLM Deployments"])

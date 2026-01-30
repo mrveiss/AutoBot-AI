@@ -4,8 +4,16 @@
 """
 SLM Heartbeats API
 
+DEPRECATED: This file should be deleted as part of layer separation (Issue #729).
+All SLM functionality has been moved to slm-server.
+See: slm-server/api/nodes.py (heartbeat endpoints) for the active implementation.
+
 REST endpoints for agent heartbeat handling.
 """
+
+# TODO: DELETE THIS FILE - Part of Issue #729 layer separation
+# This file is non-functional after removal of backend/services/slm/
+# SLM server at 172.16.168.19 provides these endpoints
 
 import logging
 from datetime import datetime
@@ -14,7 +22,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
-from backend.services.slm.db_service import SLMDatabaseService
+# REMOVED: from backend.services.slm.db_service import SLMDatabaseService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/slm", tags=["SLM Heartbeats"])
