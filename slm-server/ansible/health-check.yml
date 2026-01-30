@@ -1,0 +1,151 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Health Check Playbook - Verify services and TLS connectivity (Issue #725)
+---
+- name: Health Check - AutoBot Services
+  hosts: "{{ target_host | default('all') }}"
+  become: true
+  gather_facts: true
+
+  vars:
+    # TLS settings from environment
+    redis_tls_enabled: "{{ lookup('env', 'AUTOBOT_REDIS_TLS_ENABLED') | default('false', true) | lower == 'true' }}"
+    redis_tls_port: "{{ lookup('env', 'AUTOBOT_REDIS_TLS_PORT') | default(6380, true) }}"
+    redis_port: "{{ lookup('env', 'AUTOBOT_REDIS_PORT') | default(6379, true) }}"
+    redis_host: "{{ lookup('env', 'AUTOBOT_REDIS_HOST') | default('172.16.168.23', true) }}"
+    tls_cert_dir: "{{ lookup('env', 'AUTOBOT_TLS_REMOTE_CERT_DIR') | default('/etc/autobot/certs', true) }}"
+
+    # Services to check
+    check_redis: true
+    check_slm_agent: true
+    check_tls_certs: true
+
+  tasks:
+    # ===== System Info =====
+    - name: Gather system information
+      ansible.builtin.debug:
+        msg: |
+          Host: {{ inventory_hostname }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Kernel: {{ ansible_kernel }}
+          Memory: {{ (ansible_memtotal_mb / 1024) | round(1) }} GB
+          CPU: {{ ansible_processor_count }} cores
+
+    # ===== SLM Agent Check =====
+    - name: Check SLM agent service status
+      ansible.builtin.systemd:
+        name: slm-agent
+      register: slm_agent_status
+      failed_when: false
+      when: check_slm_agent | bool
+
+    - name: Report SLM agent status
+      ansible.builtin.debug:
+        msg: "SLM Agent: {{ 'RUNNING' if slm_agent_status.status.ActiveState | default('unknown') == 'active' else 'NOT RUNNING' }}"
+      when: check_slm_agent | bool
+
+    # ===== TLS Certificate Check =====
+    - name: Check TLS certificate directory exists
+      ansible.builtin.stat:
+        path: "{{ tls_cert_dir }}"
+      register: cert_dir_stat
+      when: check_tls_certs | bool
+
+    - name: Check CA certificate exists
+      ansible.builtin.stat:
+        path: "{{ tls_cert_dir }}/ca-cert.pem"
+      register: ca_cert_stat
+      when: check_tls_certs | bool and cert_dir_stat.stat.exists | default(false)
+
+    - name: Check server certificate exists
+      ansible.builtin.stat:
+        path: "{{ tls_cert_dir }}/server-cert.pem"
+      register: server_cert_stat
+      when: check_tls_certs | bool and cert_dir_stat.stat.exists | default(false)
+
+    - name: Check server key exists
+      ansible.builtin.stat:
+        path: "{{ tls_cert_dir }}/server-key.pem"
+      register: server_key_stat
+      when: check_tls_certs | bool and cert_dir_stat.stat.exists | default(false)
+
+    - name: Get certificate expiration date
+      ansible.builtin.shell:
+        cmd: |
+          openssl x509 -in {{ tls_cert_dir }}/server-cert.pem -noout -enddate 2>/dev/null | cut -d= -f2
+      register: cert_expiry
+      changed_when: false
+      failed_when: false
+      when: check_tls_certs | bool and server_cert_stat.stat.exists | default(false)
+
+    - name: Report TLS certificate status
+      ansible.builtin.debug:
+        msg: |
+          TLS Certificate Directory: {{ tls_cert_dir }}
+          Directory exists: {{ cert_dir_stat.stat.exists | default(false) }}
+          CA certificate: {{ 'PRESENT' if ca_cert_stat.stat.exists | default(false) else 'MISSING' }}
+          Server certificate: {{ 'PRESENT' if server_cert_stat.stat.exists | default(false) else 'MISSING' }}
+          Server key: {{ 'PRESENT' if server_key_stat.stat.exists | default(false) else 'MISSING' }}
+          Certificate expires: {{ cert_expiry.stdout | default('N/A') }}
+      when: check_tls_certs | bool
+
+    # ===== Redis Connectivity Check =====
+    - name: Check Redis connectivity (plain port)
+      ansible.builtin.command:
+        cmd: "redis-cli -h {{ redis_host }} -p {{ redis_port }} ping"
+      register: redis_plain_ping
+      changed_when: false
+      failed_when: false
+      when: check_redis | bool and not (redis_tls_enabled | bool)
+
+    - name: Check Redis connectivity (TLS port)
+      ansible.builtin.command:
+        cmd: >-
+          redis-cli --tls -h {{ redis_host }} -p {{ redis_tls_port }}
+          --cert {{ tls_cert_dir }}/server-cert.pem
+          --key {{ tls_cert_dir }}/server-key.pem
+          --cacert {{ tls_cert_dir }}/ca-cert.pem
+          ping
+      register: redis_tls_ping
+      changed_when: false
+      failed_when: false
+      when: check_redis | bool and redis_tls_enabled | bool
+
+    - name: Verify TLS connection with openssl
+      ansible.builtin.shell:
+        cmd: |
+          echo | openssl s_client -connect {{ redis_host }}:{{ redis_tls_port }} \
+            -cert {{ tls_cert_dir }}/server-cert.pem \
+            -key {{ tls_cert_dir }}/server-key.pem \
+            -CAfile {{ tls_cert_dir }}/ca-cert.pem 2>&1 | grep -E "(Verify return code|subject|issuer)"
+      register: tls_verify
+      changed_when: false
+      failed_when: false
+      when: check_redis | bool and redis_tls_enabled | bool
+
+    - name: Report Redis status (plain)
+      ansible.builtin.debug:
+        msg: "Redis (port {{ redis_port }}): {{ 'PONG - OK' if redis_plain_ping.stdout | default('') == 'PONG' else 'FAILED - ' + redis_plain_ping.stderr | default('unknown error') }}"
+      when: check_redis | bool and not (redis_tls_enabled | bool)
+
+    - name: Report Redis TLS status
+      ansible.builtin.debug:
+        msg: |
+          Redis TLS (port {{ redis_tls_port }}): {{ 'PONG - OK' if redis_tls_ping.stdout | default('') == 'PONG' else 'FAILED' }}
+          TLS Verification:
+          {{ tls_verify.stdout | default('Could not verify TLS') }}
+      when: check_redis | bool and redis_tls_enabled | bool
+
+    # ===== Summary =====
+    - name: Health check summary
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          HEALTH CHECK SUMMARY - {{ inventory_hostname }}
+          ============================================
+          SLM Agent: {{ 'OK' if slm_agent_status.status.ActiveState | default('unknown') == 'active' else 'WARN' }}
+          TLS Certs: {{ 'OK' if (ca_cert_stat.stat.exists | default(false) and server_cert_stat.stat.exists | default(false)) else 'MISSING' }}
+          Redis: {{ 'OK' if (redis_tls_ping.stdout | default('') == 'PONG' or redis_plain_ping.stdout | default('') == 'PONG') else 'FAILED' }}
+          ============================================

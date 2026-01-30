@@ -66,6 +66,12 @@
         name: browser-automation
       when: "'browser-automation' in role_list"
 
+    # Remote Access Roles
+    - name: Deploy vnc role
+      ansible.builtin.include_role:
+        name: vnc
+      when: "'vnc' in role_list"
+
     # Monitoring Roles
     - name: Deploy monitoring role
       ansible.builtin.include_role:
