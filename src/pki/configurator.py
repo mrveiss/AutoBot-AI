@@ -65,9 +65,9 @@ async def _write_tls_config_to_redis(conn, tls_config: str) -> None:
         async with sftp.open(temp_config, "w") as f:
             await f.write(tls_config)
 
-    # Append to main config
+    # Append to main config (Issue #725: Use correct Redis Stack config path)
     await conn.run(
-        f"sudo cat {temp_config} | sudo tee -a /etc/redis-stack.conf > /dev/null",
+        f"sudo cat {temp_config} | sudo tee -a /etc/redis-stack/redis-stack.conf > /dev/null",
         check=True,
     )
     await conn.run(f"rm {temp_config}")
@@ -139,9 +139,9 @@ class ServiceConfigurator:
                         message="Redis Stack is not running",
                     )
 
-                # Check if TLS config already exists
+                # Check if TLS config already exists (Issue #725: Use correct config path)
                 check_result = await conn.run(
-                    "grep -q 'tls-port' /etc/redis-stack.conf 2>/dev/null || echo 'not_found'"
+                    "grep -q 'tls-port' /etc/redis-stack/redis-stack.conf 2>/dev/null || echo 'not_found'"
                 )
 
                 if "not_found" in check_result.stdout:

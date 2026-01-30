@@ -30,6 +30,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -56,6 +57,20 @@ class MTLSMigration:
         self.distributor = CertificateDistributor(self.config)
         self.configurator = ServiceConfigurator(self.config)
         self.env_file = PROJECT_ROOT / ".env"
+
+    def _get_redis_password(self) -> Optional[str]:
+        """Get Redis password from environment or config."""
+        # Try environment variable first
+        password = os.environ.get("AUTOBOT_REDIS_PASSWORD")
+        if password:
+            return password
+        # Try .env file
+        if self.env_file.exists():
+            with open(self.env_file, encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("AUTOBOT_REDIS_PASSWORD="):
+                        return line.split("=", 1)[1].strip()
+        return None
 
     def check_certificates(self) -> bool:
         """Verify all certificates exist and are valid."""
@@ -182,26 +197,22 @@ class MTLSMigration:
         except Exception as e:
             logger.error(f"  Plain connection (6379): FAILED - {e}")
 
-        # Test TLS connection
+        # Test TLS connection (Issue #725: Use explicit SSL params for redis-py)
         try:
-            import ssl
-            ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-            ssl_context.load_verify_locations(str(self.config.ca_cert_path))
-
             cert_dir = self.config.cert_dir_path / "main-host"
-            ssl_context.load_cert_chain(
-                str(cert_dir / "server-cert.pem"),
-                str(cert_dir / "server-key.pem"),
-            )
-
             r = redis.Redis(
                 host=redis_ip,
                 port=6380,
-                ssl=ssl_context,
+                password=self._get_redis_password(),
+                ssl=True,
+                ssl_ca_certs=str(self.config.ca_cert_path),
+                ssl_certfile=str(cert_dir / "server-cert.pem"),
+                ssl_keyfile=str(cert_dir / "server-key.pem"),
+                ssl_check_hostname=False,
                 socket_timeout=5,
             )
             r.ping()
-            logger.info(f"  TLS connection (6380): OK")
+            logger.info("  TLS connection (6380): OK")
             r.close()
         except Exception as e:
             logger.error(f"  TLS connection (6380): FAILED - {e}")
