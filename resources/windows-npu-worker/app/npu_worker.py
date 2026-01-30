@@ -2106,14 +2106,33 @@ def main():
 
     worker = WindowsNPUWorker()
 
-    uvicorn.run(
-        worker.app,
-        host=host,
-        port=port,
-        workers=workers,
-        log_level=config.get('logging', {}).get('level', DEFAULT_LOG_LEVEL).lower(),
-        access_log=True
-    )
+    # TLS Configuration - Issue #725 Phase 5
+    tls_config = config.get('tls', {})
+    tls_enabled = tls_config.get('enabled', False) or os.environ.get("NPU_WORKER_TLS_ENABLED", "false").lower() == "true"
+    ssl_keyfile = None
+    ssl_certfile = None
+
+    if tls_enabled:
+        cert_dir = tls_config.get('cert_dir', os.environ.get("AUTOBOT_TLS_CERT_DIR", "certs"))
+        ssl_keyfile = os.path.join(cert_dir, "server-key.pem")
+        ssl_certfile = os.path.join(cert_dir, "server-cert.pem")
+        port = tls_config.get('port', int(os.environ.get("NPU_WORKER_TLS_PORT", "8444")))
+        logger.info(f"TLS enabled - using HTTPS on port {port}")
+
+    uvicorn_config = {
+        "app": worker.app,
+        "host": host,
+        "port": port,
+        "workers": workers,
+        "log_level": config.get('logging', {}).get('level', DEFAULT_LOG_LEVEL).lower(),
+        "access_log": True,
+    }
+
+    if tls_enabled and ssl_keyfile and ssl_certfile:
+        uvicorn_config["ssl_keyfile"] = ssl_keyfile
+        uvicorn_config["ssl_certfile"] = ssl_certfile
+
+    uvicorn.run(**uvicorn_config)
 
 
 if __name__ == "__main__":

@@ -138,12 +138,32 @@ async def root():
 
 
 if __name__ == "__main__":
+    import os
     import uvicorn
 
-    uvicorn.run(
-        "main:app",
-        host=settings.host,
-        port=settings.port,
-        reload=settings.debug,
-        log_level="debug" if settings.debug else "info",
-    )
+    # TLS Configuration - Issue #725 Phase 5
+    tls_enabled = os.getenv("SLM_TLS_ENABLED", "false").lower() == "true"
+    ssl_keyfile = None
+    ssl_certfile = None
+    port = settings.port
+
+    if tls_enabled:
+        cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "/etc/autobot/certs")
+        ssl_keyfile = os.path.join(cert_dir, "server-key.pem")
+        ssl_certfile = os.path.join(cert_dir, "server-cert.pem")
+        port = int(os.getenv("SLM_TLS_PORT", "8443"))
+        logger.info("TLS enabled - using HTTPS on port %s", port)
+
+    uvicorn_config = {
+        "app": "main:app",
+        "host": settings.host,
+        "port": port,
+        "reload": settings.debug,
+        "log_level": "debug" if settings.debug else "info",
+    }
+
+    if tls_enabled and ssl_keyfile and ssl_certfile:
+        uvicorn_config["ssl_keyfile"] = ssl_keyfile
+        uvicorn_config["ssl_certfile"] = ssl_certfile
+
+    uvicorn.run(**uvicorn_config)
