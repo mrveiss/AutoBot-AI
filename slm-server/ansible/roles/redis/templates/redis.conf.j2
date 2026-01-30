@@ -5,8 +5,21 @@
 
 # Network
 bind {{ redis_bind }}
+{% if redis_tls_enabled | default(false) | bool and redis_tls_disable_plain_port | default(false) | bool %}
+port 0
+{% else %}
 port {{ redis_port }}
+{% endif %}
 protected-mode no
+
+# TLS Configuration (Issue #725: mTLS support)
+{% if redis_tls_enabled | default(false) | bool %}
+tls-port {{ redis_tls_port }}
+tls-cert-file {{ redis_tls_cert_dir }}/server-cert.pem
+tls-key-file {{ redis_tls_cert_dir }}/server-key.pem
+tls-ca-cert-file {{ redis_tls_cert_dir }}/ca-cert.pem
+tls-auth-clients {{ redis_tls_auth_clients | default('optional') }}
+{% endif %}
 
 {% if redis_password | length > 0 %}
 # Authentication

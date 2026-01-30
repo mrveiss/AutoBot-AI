@@ -27,26 +27,37 @@ from src.pki.config import TLSConfig, VM_DEFINITIONS
 logger = logging.getLogger(__name__)
 
 
-def _build_redis_tls_config(remote_cert_dir: str) -> str:
+def _build_redis_tls_config(
+    remote_cert_dir: str,
+    auth_clients: str = "optional",
+    disable_plain_port: bool = False,
+) -> str:
     """
     Build Redis TLS configuration snippet.
 
     Issue #665: Extracted from configure_redis_tls to reduce function length.
+    Issue #725: Added auth_clients and disable_plain_port parameters for mTLS migration.
 
     Args:
         remote_cert_dir: Remote directory path for certificates
+        auth_clients: Client authentication mode:
+            - "optional": Clients may use certificates (dual-auth mode for migration)
+            - "yes": Clients MUST use certificates (full mTLS enforcement)
+            - "no": Client certificates not required
+        disable_plain_port: If True, sets port 0 to disable non-TLS connections
 
     Returns:
         Redis TLS configuration string
     """
+    plain_port = "0" if disable_plain_port else "6379"
     return f"""
 # TLS Configuration (AutoBot PKI)
 tls-port 6380
-port 6379
+port {plain_port}
 tls-cert-file {remote_cert_dir}/server-cert.pem
 tls-key-file {remote_cert_dir}/server-key.pem
 tls-ca-cert-file {remote_cert_dir}/ca-cert.pem
-tls-auth-clients optional
+tls-auth-clients {auth_clients}
 """
 
 
@@ -108,12 +119,21 @@ class ServiceConfigurator:
 
         return results
 
-    async def configure_redis_tls(self) -> ConfigurationResult:
+    async def configure_redis_tls(
+        self,
+        auth_clients: str = "optional",
+        disable_plain_port: bool = False,
+    ) -> ConfigurationResult:
         """
         Configure Redis Stack for TLS connections.
 
         Issue #665: Refactored to use extracted helpers for config building
         and SFTP operations.
+        Issue #725: Added auth_clients and disable_plain_port parameters.
+
+        Args:
+            auth_clients: Client authentication mode ("optional", "yes", "no")
+            disable_plain_port: If True, disables non-TLS port (port 0)
         """
         vm_ip = VM_DEFINITIONS.get("redis", "172.16.168.23")
 
@@ -146,7 +166,12 @@ class ServiceConfigurator:
 
                 if "not_found" in check_result.stdout:
                     # Issue #665: Uses extracted helpers
-                    tls_config = _build_redis_tls_config(self.config.remote_cert_dir)
+                    # Issue #725: Pass auth_clients and disable_plain_port
+                    tls_config = _build_redis_tls_config(
+                        self.config.remote_cert_dir,
+                        auth_clients=auth_clients,
+                        disable_plain_port=disable_plain_port,
+                    )
                     await _write_tls_config_to_redis(conn, tls_config)
 
                     logger.info("Redis TLS configuration added")
@@ -256,3 +281,31 @@ class ServiceConfigurator:
             "certfile": str(cert_dir / "server-cert.pem"),
             "keyfile": str(cert_dir / "server-key.pem"),
         }
+
+    async def enable_dual_auth(self) -> ConfigurationResult:
+        """
+        Enable TLS with optional client authentication (migration phase).
+
+        Issue #725: This is phase 1 of mTLS migration - allows both
+        password and certificate authentication.
+        """
+        logger.info("Enabling Redis TLS with dual authentication (optional)")
+        return await self.configure_redis_tls(
+            auth_clients="optional",
+            disable_plain_port=False,
+        )
+
+    async def enforce_mtls(self) -> ConfigurationResult:
+        """
+        Enforce full mTLS - require client certificates and disable plain port.
+
+        Issue #725: This is the final phase of mTLS migration - enforces
+        certificate-based authentication and disables non-TLS connections.
+
+        WARNING: Ensure all clients have valid certificates before calling this.
+        """
+        logger.info("Enforcing mTLS: requiring client certificates, disabling plain port")
+        return await self.configure_redis_tls(
+            auth_clients="yes",
+            disable_plain_port=True,
+        )

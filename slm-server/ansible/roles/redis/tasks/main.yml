@@ -61,6 +61,54 @@
     owner: redis
     group: redis
 
+# TLS Certificate Distribution (Issue #725: mTLS support)
+- name: Create TLS certificate directory
+  ansible.builtin.file:
+    path: "{{ redis_tls_cert_dir }}"
+    state: directory
+    mode: "0755"
+    owner: redis
+    group: redis
+  when: redis_tls_enabled | bool
+
+- name: Check if TLS certificates exist on controller
+  ansible.builtin.stat:
+    path: "{{ redis_tls_ca_cert }}"
+  delegate_to: localhost
+  become: false
+  register: tls_certs_exist
+  when: redis_tls_enabled | bool
+
+- name: Copy CA certificate
+  ansible.builtin.copy:
+    src: "{{ redis_tls_ca_cert }}"
+    dest: "{{ redis_tls_cert_dir }}/ca-cert.pem"
+    mode: "0644"
+    owner: redis
+    group: redis
+  when: redis_tls_enabled | bool and tls_certs_exist.stat.exists | default(false)
+  notify: restart redis
+
+- name: Copy server certificate
+  ansible.builtin.copy:
+    src: "{{ redis_tls_server_cert }}"
+    dest: "{{ redis_tls_cert_dir }}/server-cert.pem"
+    mode: "0644"
+    owner: redis
+    group: redis
+  when: redis_tls_enabled | bool and tls_certs_exist.stat.exists | default(false)
+  notify: restart redis
+
+- name: Copy server private key
+  ansible.builtin.copy:
+    src: "{{ redis_tls_server_key }}"
+    dest: "{{ redis_tls_cert_dir }}/server-key.pem"
+    mode: "0600"
+    owner: redis
+    group: redis
+  when: redis_tls_enabled | bool and tls_certs_exist.stat.exists | default(false)
+  notify: restart redis
+
 - name: Deploy Redis systemd service override
   ansible.builtin.template:
     src: redis.service.j2
@@ -77,14 +125,33 @@
     enabled: true
     daemon_reload: true
 
-- name: Wait for Redis to be ready
+- name: Wait for Redis to be ready (plain port)
   ansible.builtin.wait_for:
     port: "{{ redis_port }}"
     delay: 2
     timeout: 30
+  when: not (redis_tls_enabled | bool and redis_tls_disable_plain_port | bool)
 
-- name: Configure Redis password if set
+- name: Wait for Redis TLS port to be ready
+  ansible.builtin.wait_for:
+    port: "{{ redis_tls_port }}"
+    delay: 2
+    timeout: 30
+  when: redis_tls_enabled | bool
+
+- name: Configure Redis password if set (non-TLS)
   ansible.builtin.command:
     cmd: "redis-cli -p {{ redis_port }} CONFIG SET requirepass {{ redis_password }}"
-  when: redis_password | default('') | length > 0
+  when: redis_password | default('') | length > 0 and not (redis_tls_enabled | bool and redis_tls_disable_plain_port | bool)
+  changed_when: false
+
+- name: Configure Redis password if set (TLS)
+  ansible.builtin.command:
+    cmd: >-
+      redis-cli --tls -p {{ redis_tls_port }}
+      --cert {{ redis_tls_cert_dir }}/server-cert.pem
+      --key {{ redis_tls_cert_dir }}/server-key.pem
+      --cacert {{ redis_tls_cert_dir }}/ca-cert.pem
+      CONFIG SET requirepass {{ redis_password }}
+  when: redis_password | default('') | length > 0 and redis_tls_enabled | bool
   changed_when: false
