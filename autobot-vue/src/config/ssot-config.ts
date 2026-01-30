@@ -434,7 +434,9 @@ function buildConfig(): AutoBotConfig {
     },
 
     get slmAdminUrl(): string {
-      return `${httpProtocol}://${vm.slm}:${port.slmAdmin}`;
+      // Issue #729: SLM Admin is behind nginx on port 443
+      // Nginx proxies / -> slm-admin:5174, /api/ -> slm-server:8000
+      return `https://${vm.slm}`;
     },
   };
 
