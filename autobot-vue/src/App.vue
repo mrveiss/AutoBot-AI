@@ -121,7 +121,7 @@
 
                 <!-- Issue #729: Link to SLM Admin for infrastructure operations -->
                 <a
-                  href="/slm-admin/"
+                  :href="slmAdminUrl"
                   target="_blank"
                   class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 text-white hover:bg-indigo-500"
                   title="Open SLM Admin for infrastructure management"
@@ -262,7 +262,7 @@
 
             <!-- Issue #729: Link to SLM Admin for infrastructure operations -->
             <a
-              href="/slm-admin/"
+              :href="slmAdminUrl"
               @click="closeMobileNav"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block text-white hover:bg-indigo-600"
             >
@@ -496,6 +496,7 @@ import { initializeNotificationBridge } from '@/utils/notificationBridge';
 import { smartMonitoringController, getAdaptiveInterval } from '@/config/OptimizedPerformance.js';
 import { clearAllSystemNotifications, resetHealthMonitor } from '@/utils/ClearNotifications.js';
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue';
+import { getSLMAdminUrl } from '@/config/ssot-config';
 
 export default {
   name: 'App',
@@ -801,6 +802,9 @@ export default {
       }
     });
 
+    // SLM Admin URL from SSOT config (Issue #729)
+    const slmAdminUrl = computed(() => getSLMAdminUrl());
+
     return {
       // Store references
       appStore,
@@ -818,6 +822,7 @@ export default {
       // Computed
       isLoading,
       hasErrors,
+      slmAdminUrl,
 
       // Methods
       toggleMobileNav,

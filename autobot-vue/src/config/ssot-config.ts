@@ -76,6 +76,8 @@ export interface PortConfig {
   grafana: number;
   /** SLM Backend port - Issue #725 */
   slm: number;
+  /** SLM Admin frontend port - Issue #729 */
+  slmAdmin: number;
 }
 
 /**
@@ -247,6 +249,8 @@ export interface AutoBotConfig {
   readonly vncUrl: string;
   /** SLM Backend URL - Issue #725 */
   readonly slmUrl: string;
+  /** SLM Admin frontend URL - Issue #729 */
+  readonly slmAdminUrl: string;
 }
 
 // =============================================================================
@@ -322,6 +326,7 @@ function buildConfig(): AutoBotConfig {
     prometheus: getEnvNumber('VITE_PROMETHEUS_PORT', 9090),
     grafana: getEnvNumber('VITE_GRAFANA_PORT', 3000),
     slm: getEnvNumber('VITE_SLM_PORT', 8000),
+    slmAdmin: getEnvNumber('VITE_SLM_ADMIN_PORT', 5174),
   };
 
   // LLM configuration
@@ -427,6 +432,10 @@ function buildConfig(): AutoBotConfig {
     get slmUrl(): string {
       return `${httpProtocol}://${vm.slm}:${port.slm}`;
     },
+
+    get slmAdminUrl(): string {
+      return `${httpProtocol}://${vm.slm}:${port.slmAdmin}`;
+    },
   };
 
   return configObj;
@@ -488,6 +497,8 @@ export function getServiceUrl(serviceName: string): string | undefined {
     browser: cfg.browserServiceUrl,
     vnc: cfg.vncUrl,
     slm: cfg.slmUrl,
+    slm_admin: cfg.slmAdminUrl,
+    slmadmin: cfg.slmAdminUrl,
   };
   return urlMap[serviceName.toLowerCase()];
 }
@@ -573,4 +584,11 @@ export function getApiTimeout(): number {
  */
 export function getSLMUrl(): string {
   return getConfig().slmUrl;
+}
+
+/**
+ * Get SLM Admin frontend URL (Issue #729).
+ */
+export function getSLMAdminUrl(): string {
+  return getConfig().slmAdminUrl;
 }

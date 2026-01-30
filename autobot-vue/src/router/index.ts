@@ -27,6 +27,7 @@ import { useAppStore } from '@/stores/useAppStore'
 import { useUserStore } from '@/stores/useUserStore'
 import { setupAsyncComponentErrorHandler } from '@/utils/asyncComponentHelpers'
 import { createLogger } from '@/utils/debugUtils'
+import { getSLMAdminUrl } from '@/config/ssot-config'
 
 const logger = createLogger('Router');
 
@@ -279,56 +280,56 @@ const routes: RouteRecordRaw[] = [
     path: '/tools',
     redirect: () => {
       // Redirect to SLM Admin Tools
-      window.location.href = '/slm-admin/#/tools'
+      window.location.href = `${getSLMAdminUrl()}/#/tools`
       return '/chat' // Fallback
     }
   },
   {
     path: '/tools/:pathMatch(.*)*',
     redirect: () => {
-      window.location.href = '/slm-admin/#/tools'
+      window.location.href = `${getSLMAdminUrl()}/#/tools`
       return '/chat'
     }
   },
   {
     path: '/monitoring',
     redirect: () => {
-      window.location.href = '/slm-admin/#/monitoring'
+      window.location.href = `${getSLMAdminUrl()}/#/monitoring`
       return '/chat'
     }
   },
   {
     path: '/monitoring/:pathMatch(.*)*',
     redirect: () => {
-      window.location.href = '/slm-admin/#/monitoring'
+      window.location.href = `${getSLMAdminUrl()}/#/monitoring`
       return '/chat'
     }
   },
   {
     path: '/settings',
     redirect: () => {
-      window.location.href = '/slm-admin/#/settings'
+      window.location.href = `${getSLMAdminUrl()}/#/settings`
       return '/chat'
     }
   },
   {
     path: '/settings/:pathMatch(.*)*',
     redirect: () => {
-      window.location.href = '/slm-admin/#/settings'
+      window.location.href = `${getSLMAdminUrl()}/#/settings`
       return '/chat'
     }
   },
   {
     path: '/infrastructure',
     redirect: () => {
-      window.location.href = '/slm-admin/#/'
+      window.location.href = `${getSLMAdminUrl()}/#/`
       return '/chat'
     }
   },
   {
     path: '/tls-certificates',
     redirect: () => {
-      window.location.href = '/slm-admin/#/security'
+      window.location.href = `${getSLMAdminUrl()}/#/security`
       return '/chat'
     }
   },
