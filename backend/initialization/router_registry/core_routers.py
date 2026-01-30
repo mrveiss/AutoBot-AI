@@ -48,7 +48,7 @@ from backend.api.vnc_mcp import router as vnc_mcp_router
 from backend.api.vnc_proxy import router as vnc_proxy_router
 from backend.api.voice import router as voice_router
 from backend.api.wake_word import router as wake_word_router
-from backend.api.infrastructure_hosts import router as infrastructure_hosts_router
+# Issue #729: infrastructure_hosts removed - now served by slm-server
 
 
 def _get_system_routers() -> list:
@@ -78,7 +78,7 @@ def _get_knowledge_routers() -> list:
 
 
 def _get_service_routers() -> list:
-    """Get LLM, Redis, voice, VNC, and infrastructure routers (Issue #560: extracted)."""
+    """Get LLM, Redis, voice, and VNC routers (Issue #560: extracted, Issue #729: infrastructure removed)."""
     routers = [
         (llm_router, "/llm", ["llm"], "llm"),
         (redis_router, "/redis", ["redis"], "redis"),
@@ -86,7 +86,7 @@ def _get_service_routers() -> list:
         (wake_word_router, "/wake_word", ["wake_word", "voice"], "wake_word"),
         (vnc_router, "/vnc", ["vnc"], "vnc"),
         (vnc_proxy_router, "/vnc-proxy", ["vnc-proxy"], "vnc_proxy"),
-        (infrastructure_hosts_router, "", ["infrastructure"], "infrastructure_hosts"),
+        # Issue #729: infrastructure_hosts removed - now served by slm-server
     ]
     return routers
 

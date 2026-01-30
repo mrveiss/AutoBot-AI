@@ -4,10 +4,11 @@
 """
 Monitoring Router Loader
 
-This module handles loading of monitoring and infrastructure API routers.
-These routers provide system monitoring, metrics, service health, and infrastructure management.
+This module handles loading of monitoring API routers.
+These routers provide system monitoring, metrics, service health, and error tracking.
 
 Issue #281: Refactored from 112 lines to use data-driven router loading.
+Issue #729: Infrastructure routers removed - now served by slm-server.
 """
 
 import importlib
@@ -18,15 +19,9 @@ logger = logging.getLogger(__name__)
 
 # Router configurations: (module_path, router_name, prefix, tags, display_name)
 # Issue #281: Centralized router configuration for maintainability
+# Issue #729: Removed infrastructure routers - now served by slm-server
 MONITORING_ROUTER_CONFIGS = [
     ("backend.api.monitoring", "router", "/monitoring", ["monitoring"], "monitoring"),
-    (
-        "backend.api.infrastructure_monitor",
-        "router",
-        "/infrastructure",
-        ["infrastructure"],
-        "infrastructure_monitor",
-    ),
     (
         "backend.api.service_monitor",
         "router",
@@ -45,13 +40,6 @@ MONITORING_ROUTER_CONFIGS = [
         "error_monitoring",
     ),
     ("backend.api.rum", "router", "/rum", ["rum"], "rum"),
-    (
-        "backend.api.infrastructure",
-        "router",
-        "/iac",
-        ["Infrastructure as Code"],
-        "infrastructure",
-    ),
     # Issue #432: VM services monitoring router
     (
         "backend.api.vm_services",
@@ -104,10 +92,10 @@ def _try_load_router(
 
 def load_monitoring_routers() -> List[Tuple]:
     """
-    Dynamically load monitoring and infrastructure API routers with graceful fallback.
+    Dynamically load monitoring API routers with graceful fallback.
 
     Issue #281: Refactored to use data-driven configuration and helper function.
-    Reduced from 112 lines to ~30 lines.
+    Issue #729: Infrastructure routers removed - now served by slm-server.
 
     Returns:
         list: List of tuples in format (router, prefix, tags, name)
