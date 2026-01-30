@@ -343,6 +343,36 @@ export function useSlmApi() {
     return response.data
   }
 
+  async function stopReplication(replicationId: string): Promise<ActionResponse> {
+    const response = await client.post<ActionResponse>(
+      `/stateful/replications/${replicationId}/stop`
+    )
+    return response.data
+  }
+
+  interface SyncVerifyResponse {
+    is_healthy: boolean
+    service_type: string
+    details: {
+      source?: Record<string, unknown>
+      target?: Record<string, unknown>
+      comparison?: Record<string, unknown>
+      lag?: Record<string, unknown>
+    }
+    checks: Array<{
+      name: string
+      status: string
+      message: string
+    }>
+  }
+
+  async function verifyReplicationSync(replicationId: string): Promise<SyncVerifyResponse> {
+    const response = await client.post<SyncVerifyResponse>(
+      `/stateful/replications/${replicationId}/verify-sync`
+    )
+    return response.data
+  }
+
   // Data Verification
   async function verifyData(
     nodeId: string,
@@ -443,6 +473,39 @@ export function useSlmApi() {
       category: string
       nodes_updated: number
     }>(`/fleet/services/${serviceName}/category`, { category })
+    return response.data
+  }
+
+  // Restart All Services on a Node (Issue #725)
+  interface RestartAllServicesRequest {
+    category?: 'autobot' | 'system' | 'all'
+    exclude_services?: string[]
+  }
+
+  interface RestartAllServicesResponse {
+    node_id: string
+    success: boolean
+    message: string
+    total_services: number
+    successful_restarts: number
+    failed_restarts: number
+    results: Array<{
+      service_name: string
+      success: boolean
+      message: string
+      is_slm_agent: boolean
+    }>
+    slm_agent_restarted: boolean
+  }
+
+  async function restartAllNodeServices(
+    nodeId: string,
+    options?: RestartAllServicesRequest
+  ): Promise<RestartAllServicesResponse> {
+    const response = await client.post<RestartAllServicesResponse>(
+      `/nodes/${nodeId}/services/restart-all`,
+      options || {}
+    )
     return response.data
   }
 
@@ -825,6 +888,8 @@ export function useSlmApi() {
     getReplication,
     startReplication,
     promoteReplica,
+    stopReplication,
+    verifyReplicationSync,
     // Verification
     verifyData,
     // Services (Issue #728)
@@ -838,6 +903,7 @@ export function useSlmApi() {
     stopFleetService,
     restartFleetService,
     updateServiceCategory,
+    restartAllNodeServices,  // Issue #725
     // Maintenance Windows
     getMaintenanceWindows,
     getActiveMaintenanceWindows,
