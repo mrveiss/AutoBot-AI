@@ -1,28 +1,18 @@
 # Bandit security configuration for AutoBot
 # https://bandit.readthedocs.io/en/latest/config.html
 
-[bandit]
-exclude_dirs = [
-    "/node_modules/",
-    "/.venv/",
-    "/venv/",
-    "/__pycache__/",
-    "/temp/",
-    "/logs/",
-    "/reports/",
-    "/archive/",
-    "/tests/"
-]
+exclude_dirs:
+  - node_modules
+  - .venv
+  - venv
+  - __pycache__
+  - temp
+  - logs
+  - reports
+  - archive
+  - tests
 
-# Test IDs to skip
-skips = [
-    "B101",  # assert_used - common in tests
-    "B601",  # paramiko_calls - intentional usage
-    "B603",  # subprocess_without_shell_equals_true - we use shell=False
-]
-
-# Severity levels: LOW, MEDIUM, HIGH
-severity = "MEDIUM"
-
-# Confidence levels: LOW, MEDIUM, HIGH
-confidence = "MEDIUM"
+skips:
+  - B101  # assert_used - common in tests
+  - B601  # paramiko_calls - intentional usage
+  - B603  # subprocess_without_shell_equals_true - we use shell=False

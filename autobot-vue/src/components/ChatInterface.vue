@@ -288,6 +288,7 @@
 <script>
 import { ref, onMounted, nextTick, computed, watch } from 'vue';
 import { createLogger } from '@/utils/debugUtils';
+import { getConfig, getWebsocketUrl } from '@/config/ssot-config';
 
 const logger = createLogger('ChatInterface');
 
@@ -323,8 +324,8 @@ export default {
       },
       backend: {
         use_phi2: false,
-        api_endpoint: 'http://localhost:8001',
-        ollama_endpoint: 'http://localhost:11434',
+        api_endpoint: getConfig().backendUrl,
+        ollama_endpoint: getConfig().ollamaUrl,
         ollama_model: 'tinyllama:latest',
         streaming: false
       },
@@ -398,7 +399,7 @@ export default {
     const checkLLMConnection = async () => {
       try {
         // Check if we can reach the LLM endpoint
-        const llmEndpoint = settings.value.backend.ollama_endpoint || 'http://localhost:11434';
+        const llmEndpoint = settings.value.backend.ollama_endpoint || getConfig().ollamaUrl;
         const response = await fetch(`${llmEndpoint}/api/tags`, {
           method: 'GET',
           timeout: 5000
@@ -417,7 +418,7 @@ export default {
       } catch (error) {
         llmStatus.value = {
           connected: false,
-          class: 'disconnected', 
+          class: 'disconnected',
           text: 'Disconnected',
           message: `LLM connection failed: ${error.message}`
         };
@@ -440,25 +441,25 @@ export default {
         // No default welcome message
         messages.value = [];
       }
-      
+
       // Load settings from local storage if available
       const savedSettings = localStorage.getItem('chat_settings');
       if (savedSettings) {
         settings.value = JSON.parse(savedSettings);
       }
-      
+
       // Check connections first
       await checkConnections();
-      
+
       // Fetch backend settings to override with latest configuration
       await fetchBackendSettings();
       // Load system prompts on initialization
       await loadPrompts();
-      
+
       // Set up periodic connection checking
       setInterval(checkConnections, 10000); // Check every 10 seconds
     });
-    
+
     // Function to save settings to local storage and backend
     const saveSettings = async () => {
       localStorage.setItem('chat_settings', JSON.stringify(settings.value));
@@ -757,7 +758,7 @@ export default {
           let apiEndpoint = settings.value.backend.api_endpoint;
           let goalEndpoint = '/api/chat';
           logger.info('Using API endpoint for goal request:', apiEndpoint, 'with endpoint:', goalEndpoint);
-          
+
           const response = await fetch(`${apiEndpoint}${goalEndpoint}`, {
             method: 'POST',
             headers: {
@@ -799,7 +800,7 @@ export default {
               logger.info('Raw bot response:', botResponse);
               let responseText = botResponse.text || JSON.stringify(botResponse);
               let responseType = botResponse.type || 'response';
-              
+
               // Handle OpenAI-compatible response format for non-streaming
               if (botResponse.object === 'chat.completion' && botResponse.choices && botResponse.choices.length > 0) {
                 const choice = botResponse.choices[0];
@@ -808,7 +809,7 @@ export default {
                   responseType = 'response';
                 }
               }
-              
+
               if (settings.value.message_display.show_json) {
                 messages.value.push({
                   sender: 'bot',
@@ -1153,7 +1154,7 @@ export default {
             const formData = new FormData();
             formData.append('file', file);
 
-            const uploadResponse = await fetch('http://localhost:8001/api/files/upload', {
+            const uploadResponse = await fetch(`${getConfig().backendUrl}/api/files/upload`, {
               method: 'POST',
               body: formData
             });
@@ -1178,7 +1179,7 @@ export default {
         }
 
         // Check if this should use workflow orchestration
-        const workflowResponse = await fetch('http://localhost:8001/api/workflow/execute', {
+        const workflowResponse = await fetch(`${getConfig().backendUrl}/api/workflow/execute`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1631,7 +1632,7 @@ export default {
 
     // WebSocket methods
     const connectWebSocket = () => {
-      const wsUrl = `ws://localhost:8001/ws`;
+      const wsUrl = getWebsocketUrl();
       websocket.value = new WebSocket(wsUrl);
 
       websocket.value.onopen = () => {
@@ -1724,10 +1725,10 @@ export default {
       let fullUtilityText = '';
       let fullPlanningText = '';
       let currentToolCall = null;
-      
+
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
-      
+
       function readStream() {
         reader.read().then(({ done, value }) => {
           if (done) {
@@ -1762,7 +1763,7 @@ export default {
             saveMessagesToStorage();
             return;
           }
-          
+
           const chunk = decoder.decode(value, { stream: true });
           if (settings.value.message_display.show_debug) {
             messages.value.push({
@@ -1772,14 +1773,14 @@ export default {
               type: 'debug'
             });
           }
-          
+
           try { // Outer try block for chunk parsing
             const dataMatches = chunk.split('\n').filter(line => line.startsWith('data: '));
             if (dataMatches.length > 0) {
               for (const dataLine of dataMatches) {
                 const dataStr = dataLine.replace('data: ', '').trim();
                 if (!dataStr) continue;
-                
+
                 try { // Inner try block for JSON parsing
                   const data = JSON.parse(dataStr);
 
@@ -1792,7 +1793,7 @@ export default {
                       final: false
                     });
                   }
-                  
+
                   if (data.object === 'chat.completion.chunk' && data.choices && data.choices.length > 0) {
                     const choice = data.choices[0];
                     if (choice.delta) {
@@ -1847,7 +1848,7 @@ export default {
                           });
                         }
                         reader.cancel();
-                        
+
                         const toolCall = currentToolCall;
                         if (toolCall && (toolCall.name === 'fetch_wikipedia_content' || toolCall.name === 'get_wikipedia_content')) {
                           try {

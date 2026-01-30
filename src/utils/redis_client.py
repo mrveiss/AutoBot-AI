@@ -8,7 +8,7 @@ Redis Client - CANONICAL REDIS PATTERN (CONSOLIDATED)
 This module provides the ONLY approved method for Redis client initialization
 across the AutoBot codebase. Direct redis.Redis() instantiation is FORBIDDEN.
 
-FEATURES (Consolidated from 6 implementations):
+FEATURES (Consolidated from 8 implementations):
 ================================================
 - Circuit breaker pattern
 - Health monitoring
@@ -26,6 +26,9 @@ FEATURES (Consolidated from 6 implementations):
 - YAML configuration loading
 - Service registry integration
 - Centralized timeout configuration
+- Thread-safe connection utilities (from distributed_redis_client.py)
+- Async convenience operations (from redis_pool.py)
+- Connection testing and info reporting (from distributed_redis_client.py)
 
 MANDATORY USAGE PATTERN:
 ========================
@@ -51,6 +54,9 @@ DATABASE SEPARATION:
 - 'workflows': Workflow state tracking
 - 'vectors': Vector embeddings
 - 'models': Model metadata
+- 'cache': General application cache (consolidated from redis_pool.py)
+- 'facts': Knowledge facts and rules (consolidated from redis_pool.py)
+- 'logs': Application logs and events
 
 Note: This module has been refactored as part of Issue #381 god class refactoring.
 All classes are now in the redis_management/ package. This module provides
@@ -58,31 +64,28 @@ backward compatibility by re-exporting all classes.
 """
 
 import logging
+
+# Thread safety support for concurrent access patterns
 from contextlib import asynccontextmanager
 from typing import Any, AsyncGenerator, Dict, Optional, Union
 
 import redis
 import redis.asyncio as async_redis
 
-# Import all types, data models, and classes from the package (Issue #381 refactoring)
-from src.utils.redis_management.types import (
-    ConnectionState,
-    DATABASE_MAPPING,
-    RedisDatabase,
-)
-from src.utils.redis_management.config import (
-    PoolConfig,
-    RedisConfig,
-    RedisConfigLoader,
-)
+from src.utils.redis_management.config import PoolConfig, RedisConfig, RedisConfigLoader
+from src.utils.redis_management.connection_manager import RedisConnectionManager
 from src.utils.redis_management.statistics import (
     ConnectionMetrics,
     ManagerStats,
     PoolStatistics,
     RedisStats,
 )
-from src.utils.redis_management.connection_manager import (
-    RedisConnectionManager,
+
+# Import all types, data models, and classes from the package (Issue #381 refactoring)
+from src.utils.redis_management.types import (
+    DATABASE_MAPPING,
+    ConnectionState,
+    RedisDatabase,
 )
 
 logger = logging.getLogger(__name__)
@@ -114,8 +117,14 @@ __all__ = [
     "get_main_redis",
     "get_redis_health",
     "get_redis_metrics",
+    "get_connection_info",
+    "test_redis_connection",
     "close_all_redis_connections",
     "redis_context",
+    # Async convenience operations (consolidated from redis_pool.py)
+    "redis_get",
+    "redis_set",
+    "redis_delete",
     # Backward compatibility
     "RedisDatabaseManager",
     "redis_db_manager",
@@ -253,6 +262,89 @@ def get_redis_metrics(database: Optional[str] = None) -> Dict[str, Any]:
     return _connection_manager.get_metrics(database)
 
 
+def get_connection_info(database: str = "main") -> Dict[str, Any]:
+    """
+    Get detailed connection status and info for a specific database.
+
+    Consolidated from distributed_redis_client.py - provides detailed
+    connection information including health status and metrics.
+
+    Args:
+        database: Database name to get info for (default: "main")
+
+    Returns:
+        Dictionary with connection information including:
+        - database: Database name
+        - connected: Boolean connection status
+        - health: Current health status
+        - metrics: Connection metrics
+
+    Example:
+        >>> info = get_connection_info("main")
+        >>> print(f"Connected: {info['connected']}")
+    """
+    try:
+        client = get_redis_client(async_client=False, database=database)
+        connected = False
+        if client:
+            try:
+                client.ping()
+                connected = True
+            except Exception:
+                connected = False
+
+        health = get_redis_health()
+        metrics = get_redis_metrics(database)
+
+        return {
+            "database": database,
+            "connected": connected,
+            "health": health,
+            "metrics": metrics,
+            "client_exists": client is not None,
+        }
+    except Exception as e:
+        logger.error(f"Failed to get connection info for database '{database}': {e}")
+        return {
+            "database": database,
+            "connected": False,
+            "error": str(e),
+        }
+
+
+def test_redis_connection(database: str = "main") -> bool:
+    """
+    Test connection to Redis for a specific database.
+
+    Consolidated from distributed_redis_client.py - provides simple
+    connection testing utility.
+
+    Args:
+        database: Database name to test (default: "main")
+
+    Returns:
+        True if connection test successful, False otherwise
+
+    Example:
+        >>> if test_redis_connection("main"):
+        ...     print("Redis is accessible")
+    """
+    try:
+        client = get_redis_client(async_client=False, database=database)
+        if client:
+            response = client.ping()
+            logger.info(
+                f"Redis connection test successful for '{database}': {response}"
+            )
+            return True
+        else:
+            logger.warning(f"No Redis client available for database '{database}'")
+            return False
+    except Exception as e:
+        logger.error(f"Redis connection test failed for '{database}': {e}")
+        return False
+
+
 # =============================================================================
 # Cleanup Function
 # =============================================================================
@@ -261,6 +353,89 @@ def get_redis_metrics(database: Optional[str] = None) -> Dict[str, Any]:
 async def close_all_redis_connections():
     """Close all Redis connections."""
     await _connection_manager.close_all()
+
+
+# =============================================================================
+# Convenience Async Operations (consolidated from redis_pool.py)
+# =============================================================================
+
+
+async def redis_get(key: str, database: str = "main") -> Optional[Any]:
+    """
+    Async Redis GET operation with consolidated backend.
+
+    Consolidated from redis_pool.py - provides simple async get operation.
+
+    Args:
+        key: Redis key to retrieve
+        database: Database name (default: "main")
+
+    Returns:
+        Value from Redis or None if key doesn't exist
+
+    Example:
+        >>> value = await redis_get("my_key", database="cache")
+    """
+    client = await get_redis_client(async_client=True, database=database)
+    if client:
+        return await client.get(key)
+    return None
+
+
+async def redis_set(
+    key: str, value: Any, expire: Optional[int] = None, database: str = "main"
+) -> bool:
+    """
+    Async Redis SET operation with optional expiration.
+
+    Consolidated from redis_pool.py - provides simple async set operation.
+
+    Args:
+        key: Redis key to set
+        value: Value to store
+        expire: Optional expiration time in seconds
+        database: Database name (default: "main")
+
+    Returns:
+        True if successful, False otherwise
+
+    Example:
+        >>> success = await redis_set("my_key", "value", expire=3600, database="cache")
+    """
+    try:
+        client = await get_redis_client(async_client=True, database=database)
+        if not client:
+            return False
+
+        result = await client.set(key, value)
+        if expire:
+            await client.expire(key, expire)
+        return bool(result)
+    except Exception as e:
+        logger.error(f"Redis SET failed for key '{key}': {e}")
+        return False
+
+
+async def redis_delete(key: str, database: str = "main") -> int:
+    """
+    Async Redis DELETE operation.
+
+    Consolidated from redis_pool.py - provides simple async delete operation.
+
+    Args:
+        key: Redis key to delete
+        database: Database name (default: "main")
+
+    Returns:
+        Number of keys deleted (0 or 1)
+
+    Example:
+        >>> deleted_count = await redis_delete("my_key", database="cache")
+    """
+    client = await get_redis_client(async_client=True, database=database)
+    if client:
+        return await client.delete(key)
+    return 0
 
 
 # =============================================================================

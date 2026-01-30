@@ -80,9 +80,10 @@ const router = createRouter({
           meta: { title: 'Infrastructure', parent: 'settings' }
         },
         {
+          // Issue #737: Consolidated to Fleet Overview - redirect for backwards compatibility
           path: 'nodes',
           name: 'settings-nodes',
-          component: () => import('@/views/settings/NodesSettings.vue'),
+          redirect: '/',
           meta: { title: 'Nodes Management', parent: 'settings' }
         },
         {

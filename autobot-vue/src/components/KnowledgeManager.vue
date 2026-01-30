@@ -623,6 +623,7 @@
 import { ref, onMounted, watch } from 'vue';
 import apiClient from '../utils/ApiClient.js';
 import { createLogger } from '@/utils/debugUtils';
+import { getConfig } from '@/config/ssot-config';
 
 const logger = createLogger('KnowledgeManager');
 
@@ -754,7 +755,7 @@ export default {
     // Settings
     const settings = ref({
       backend: {
-        api_endpoint: 'http://localhost:8001'
+        api_endpoint: getConfig().backendUrl
       }
     });
 
@@ -919,7 +920,7 @@ export default {
     // File integration functions
     const loadAvailableFiles = async () => {
       try {
-        const response = await fetch('http://localhost:8001/api/files/list');
+        const response = await fetch(`${getConfig().backendUrl}/api/files/list`);
         if (response.ok) {
           const data = await response.json();
           availableFiles.value = data.files || [];
@@ -939,7 +940,7 @@ export default {
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch('http://localhost:8001/api/files/upload', {
+        const response = await fetch(`${getConfig().backendUrl}/api/files/upload`, {
           method: 'POST',
           body: formData
         });
@@ -989,7 +990,7 @@ export default {
 
     const extractFileContent = async (filePath) => {
       try {
-        const response = await fetch(`http://localhost:8001/api/files/view/${encodeURIComponent(filePath)}`);
+        const response = await fetch(`${getConfig().backendUrl}/api/files/view/${encodeURIComponent(filePath)}`);
         if (response.ok) {
           const contentType = response.headers.get('content-type');
 
@@ -1009,7 +1010,7 @@ export default {
           } else if (contentType && contentType.includes('pdf')) {
             // For PDF files, try to extract text via backend
             try {
-              const pdfResponse = await fetch(`http://localhost:8001/api/files/extract-text/${encodeURIComponent(filePath)}`);
+              const pdfResponse = await fetch(`${getConfig().backendUrl}/api/files/extract-text/${encodeURIComponent(filePath)}`);
               if (pdfResponse.ok) {
                 const pdfData = await pdfResponse.json();
                 currentEntry.value.content = pdfData.text || '';
@@ -1138,7 +1139,7 @@ export default {
         }
 
         // Call backend to crawl URL and extract content
-        const response = await fetch('http://localhost:8001/api/knowledge/crawl_url', {
+        const response = await fetch(`${getConfig().backendUrl}/api/knowledge/crawl_url`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1240,7 +1241,7 @@ export default {
 
       crawlingInModal.value = true;
       try {
-        const response = await fetch('http://localhost:8001/api/knowledge/crawl_url', {
+        const response = await fetch(`${getConfig().backendUrl}/api/knowledge/crawl_url`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1328,13 +1329,13 @@ export default {
 
         let response;
         if (showEditModal.value) {
-          response = await fetch(`http://localhost:8001/api/knowledge_base/entries/${currentEntry.value.id}`, {
+          response = await fetch(`${getConfig().backendUrl}/api/knowledge_base/entries/${currentEntry.value.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(entryData)
           });
         } else {
-          response = await fetch('http://localhost:8001/api/knowledge_base/entries', {
+          response = await fetch(`${getConfig().backendUrl}/api/knowledge_base/entries`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(entryData)
@@ -1352,7 +1353,7 @@ export default {
           const result = await response.json();
           if (result.id) {
             try {
-              const crawlResponse = await fetch('http://localhost:8001/api/knowledge/crawl_url', {
+              const crawlResponse = await fetch(`${getConfig().backendUrl}/api/knowledge/crawl_url`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1602,7 +1603,7 @@ export default {
     const importSystemDocs = async () => {
       try {
         importingDocs.value = true;
-        const response = await fetch('http://localhost:8001/api/knowledge_base/system_knowledge/import_documentation', {
+        const response = await fetch(`${getConfig().backendUrl}/api/knowledge_base/system_knowledge/import_documentation`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' }
         });
@@ -1687,7 +1688,7 @@ export default {
     const importSystemPrompts = async () => {
       try {
         importingPrompts.value = true;
-        const response = await fetch('http://localhost:8001/api/knowledge_base/system_knowledge/import_prompts', {
+        const response = await fetch(`${getConfig().backendUrl}/api/knowledge_base/system_knowledge/import_prompts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' }
         });
@@ -1761,7 +1762,7 @@ export default {
     onMounted(async () => {
       // Load settings first (synchronous)
       loadSettings();
-      
+
       // Only load data for the currently active tab to improve performance
       await loadDataForActiveTab();
     });
