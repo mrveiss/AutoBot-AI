@@ -29,6 +29,7 @@ const deployments = ref<Deployment[]>([])
 const isLoading = ref(false)
 const showWizard = ref(false)
 const isRetrying = ref<string | null>(null)
+const isRetryingBg = ref<string | null>(null)
 const isCancelling = ref<string | null>(null)
 const isRollingBack = ref<string | null>(null)
 const selectedDeployment = ref<Deployment | null>(null)
@@ -398,6 +399,23 @@ async function handleBgCancel(deploymentId: string): Promise<void> {
   } catch (err) {
     logger.error('Failed to cancel deployment:', err)
     alert('Failed to cancel')
+  }
+}
+
+async function handleBgRetry(deploymentId: string): Promise<void> {
+  if (!confirm('Are you sure you want to retry this deployment?')) {
+    return
+  }
+
+  isRetryingBg.value = deploymentId
+  try {
+    await api.retryBlueGreen(deploymentId)
+    await fetchBgDeployments()
+  } catch (err) {
+    logger.error('Failed to retry deployment:', err)
+    alert('Failed to retry deployment')
+  } finally {
+    isRetryingBg.value = null
   }
 }
 
@@ -1062,6 +1080,18 @@ function getNodeHostname(nodeId: string): string {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
+
+                    <button
+                      v-if="deployment.status === 'failed'"
+                      @click="handleBgRetry(deployment.bg_deployment_id)"
+                      :disabled="isRetryingBg === deployment.bg_deployment_id"
+                      class="text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                      title="Retry deployment"
+                    >
+                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -1626,6 +1656,14 @@ function getNodeHostname(nodeId: string): string {
                 class="btn bg-orange-600 text-white hover:bg-orange-700"
               >
                 Rollback
+              </button>
+              <button
+                v-if="selectedBgDeployment.status === 'failed'"
+                @click="handleBgRetry(selectedBgDeployment.bg_deployment_id); closeBgDetails()"
+                :disabled="isRetryingBg === selectedBgDeployment.bg_deployment_id"
+                class="btn bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {{ isRetryingBg === selectedBgDeployment.bg_deployment_id ? 'Retrying...' : 'Retry Deployment' }}
               </button>
               <button @click="closeBgDetails" class="btn btn-secondary">
                 Close

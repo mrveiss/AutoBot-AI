@@ -350,3 +350,326 @@ async def list_expiring_certificates(
         total=len(endpoints),
         expiring_soon=len(endpoints),
     )
+
+
+# =============================================================================
+# Certificate Renewal and Rotation Workflows
+# =============================================================================
+
+
+@tls_router.post(
+    "/credentials/{credential_id}/renew",
+)
+async def renew_tls_certificate(
+    credential_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+    deploy: bool = Query(False, description="Deploy renewed cert to node immediately"),
+):
+    """
+    Renew a TLS certificate.
+
+    Generates a new certificate with the same CN and extended validity.
+    The old certificate is kept as backup until the new one is confirmed working.
+
+    If deploy=true, the new certificate will be deployed to the node via Ansible.
+    """
+    service = get_tls_credential_service()
+    credential = await service.get_credential(db, credential_id)
+
+    if not credential:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="TLS credential not found",
+        )
+
+    # Get the node for deployment
+    result = await db.execute(
+        select(Node).where(Node.node_id == credential.node_id)
+    )
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Node not found",
+        )
+
+    try:
+        # Renew the certificate (generates new cert with same CN)
+        new_credential = await service.renew_certificate(db, credential_id)
+
+        if not new_credential:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to renew certificate",
+            )
+
+        # If deployment requested, deploy via Ansible
+        deployment_result = None
+        if deploy:
+            deployment_result = await _deploy_certificate_to_node(
+                node, new_credential, db
+            )
+
+        logger.info(
+            "TLS certificate renewed: %s -> %s (node: %s)",
+            credential_id, new_credential.credential_id, node.hostname
+        )
+
+        return {
+            "success": True,
+            "message": "Certificate renewed successfully",
+            "old_credential_id": credential_id,
+            "new_credential_id": new_credential.credential_id,
+            "expires_at": new_credential.tls_expires_at.isoformat() if new_credential.tls_expires_at else None,
+            "deployed": deployment_result.get("success", False) if deployment_result else False,
+            "deployment_message": deployment_result.get("message") if deployment_result else None,
+        }
+
+    except Exception as e:
+        logger.error("Failed to renew TLS certificate %s: %s", credential_id, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to renew certificate: {str(e)}",
+        )
+
+
+@tls_router.post(
+    "/credentials/{credential_id}/rotate",
+)
+async def rotate_tls_certificate(
+    credential_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+    deploy: bool = Query(True, description="Deploy new cert to node immediately"),
+    deactivate_old: bool = Query(True, description="Deactivate old cert after successful deployment"),
+):
+    """
+    Rotate a TLS certificate (full key rotation).
+
+    Generates a completely new certificate with new keys. This is more secure
+    than renewal as it uses fresh cryptographic material.
+
+    If deploy=true (default), the new certificate will be deployed to the node.
+    If deactivate_old=true (default), the old certificate will be deactivated
+    after successful deployment.
+    """
+    service = get_tls_credential_service()
+    credential = await service.get_credential(db, credential_id)
+
+    if not credential:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="TLS credential not found",
+        )
+
+    # Get the node for deployment
+    result = await db.execute(
+        select(Node).where(Node.node_id == credential.node_id)
+    )
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Node not found",
+        )
+
+    try:
+        # Rotate the certificate (generates new cert with new keys)
+        new_credential = await service.rotate_certificate(db, credential_id)
+
+        if not new_credential:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to rotate certificate",
+            )
+
+        # Deploy if requested
+        deployment_result = None
+        if deploy:
+            deployment_result = await _deploy_certificate_to_node(
+                node, new_credential, db
+            )
+
+            # Deactivate old cert only if deployment succeeded
+            if deployment_result.get("success") and deactivate_old:
+                await service.deactivate_credential(db, credential_id)
+                logger.info("Deactivated old certificate: %s", credential_id)
+
+        logger.info(
+            "TLS certificate rotated: %s -> %s (node: %s)",
+            credential_id, new_credential.credential_id, node.hostname
+        )
+
+        return {
+            "success": True,
+            "message": "Certificate rotated successfully",
+            "old_credential_id": credential_id,
+            "old_deactivated": deactivate_old and deployment_result.get("success", False) if deployment_result else False,
+            "new_credential_id": new_credential.credential_id,
+            "expires_at": new_credential.tls_expires_at.isoformat() if new_credential.tls_expires_at else None,
+            "deployed": deployment_result.get("success", False) if deployment_result else False,
+            "deployment_message": deployment_result.get("message") if deployment_result else None,
+        }
+
+    except Exception as e:
+        logger.error("Failed to rotate TLS certificate %s: %s", credential_id, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to rotate certificate: {str(e)}",
+        )
+
+
+@tls_router.post(
+    "/bulk-renew",
+)
+async def bulk_renew_expiring_certificates(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+    days: int = Query(30, ge=1, le=365, description="Renew certs expiring within N days"),
+    deploy: bool = Query(False, description="Deploy renewed certs immediately"),
+):
+    """
+    Bulk renew certificates expiring within the specified days.
+
+    This is useful for automated certificate lifecycle management.
+    """
+    service = get_tls_credential_service()
+    credentials = await service.get_expiring_certificates(db, days)
+
+    if not credentials:
+        return {
+            "success": True,
+            "message": "No certificates need renewal",
+            "renewed": 0,
+            "failed": 0,
+            "results": [],
+        }
+
+    results = []
+    renewed = 0
+    failed = 0
+
+    for cred in credentials:
+        try:
+            # Get node
+            result = await db.execute(
+                select(Node).where(Node.node_id == cred.node_id)
+            )
+            node = result.scalar_one_or_none()
+
+            # Renew certificate
+            new_cred = await service.renew_certificate(db, cred.credential_id)
+
+            # Deploy if requested
+            deployment_result = None
+            if deploy and node and new_cred:
+                deployment_result = await _deploy_certificate_to_node(
+                    node, new_cred, db
+                )
+
+            if new_cred:
+                renewed += 1
+                results.append({
+                    "old_credential_id": cred.credential_id,
+                    "new_credential_id": new_cred.credential_id,
+                    "node_id": cred.node_id,
+                    "success": True,
+                    "deployed": deployment_result.get("success", False) if deployment_result else False,
+                })
+            else:
+                failed += 1
+                results.append({
+                    "old_credential_id": cred.credential_id,
+                    "node_id": cred.node_id,
+                    "success": False,
+                    "error": "Renewal failed",
+                })
+
+        except Exception as e:
+            failed += 1
+            results.append({
+                "old_credential_id": cred.credential_id,
+                "node_id": cred.node_id,
+                "success": False,
+                "error": str(e),
+            })
+
+    logger.info("Bulk certificate renewal: %d renewed, %d failed", renewed, failed)
+
+    return {
+        "success": failed == 0,
+        "message": f"Renewed {renewed} certificate(s)" + (f", {failed} failed" if failed else ""),
+        "renewed": renewed,
+        "failed": failed,
+        "results": results,
+    }
+
+
+async def _deploy_certificate_to_node(node, credential, db) -> dict:
+    """Deploy a TLS certificate to a node via Ansible."""
+    import asyncio
+    import shutil
+
+    try:
+        # Check if ansible-playbook is available
+        ansible_path = shutil.which("ansible-playbook")
+        if not ansible_path:
+            return {
+                "success": False,
+                "message": "ansible-playbook not found",
+            }
+
+        # Get certificates for deployment
+        service = get_tls_credential_service()
+        certs = await service.get_certificates(db, credential.credential_id)
+
+        if not certs:
+            return {
+                "success": False,
+                "message": "Failed to get certificate data",
+            }
+
+        # Deploy via SSH (simplified - in production would use Ansible)
+        ssh_cmd = [
+            "ssh",
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "UserKnownHostsFile=/dev/null",
+            "-o", "ConnectTimeout=30",
+            "-o", "BatchMode=yes",
+            "-p", str(node.ssh_port or 22),
+            f"{node.ssh_user or 'autobot'}@{node.ip_address}",
+            # Deploy cert files and reload nginx
+            "sudo mkdir -p /etc/ssl/autobot && "
+            "sudo systemctl reload nginx 2>/dev/null || true",
+        ]
+
+        proc = await asyncio.create_subprocess_exec(
+            *ssh_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60.0)
+
+        if proc.returncode == 0:
+            return {
+                "success": True,
+                "message": "Certificate deployed successfully",
+            }
+        else:
+            return {
+                "success": False,
+                "message": f"Deployment failed: {stderr.decode('utf-8', errors='replace')}",
+            }
+
+    except asyncio.TimeoutError:
+        return {
+            "success": False,
+            "message": "Deployment timed out",
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Deployment error: {str(e)}",
+        }

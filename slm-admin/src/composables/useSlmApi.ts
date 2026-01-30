@@ -609,6 +609,172 @@ export function useSlmApi() {
     return response.data
   }
 
+  // TLS Credentials (Issue #725: mTLS support)
+  interface TLSCredentialCreate {
+    name?: string
+    ca_cert: string
+    server_cert: string
+    server_key: string
+    common_name?: string
+    expires_at?: string
+  }
+
+  interface TLSCredentialResponse {
+    id: number
+    credential_id: string
+    node_id: string
+    name: string | null
+    common_name: string | null
+    expires_at: string | null
+    fingerprint: string | null
+    is_active: boolean
+    created_at: string
+    updated_at: string
+  }
+
+  interface TLSEndpointResponse {
+    credential_id: string
+    node_id: string
+    hostname: string
+    ip_address: string
+    name: string | null
+    common_name: string | null
+    expires_at: string | null
+    is_active: boolean
+    days_until_expiry: number | null
+  }
+
+  interface TLSEndpointsResponse {
+    endpoints: TLSEndpointResponse[]
+    total: number
+    expiring_soon: number
+  }
+
+  async function getTlsEndpoints(includeInactive = false): Promise<TLSEndpointsResponse> {
+    const params = includeInactive ? '?include_inactive=true' : ''
+    const response = await client.get<TLSEndpointsResponse>(`/tls/endpoints${params}`)
+    return response.data
+  }
+
+  async function getTlsExpiringCertificates(days = 30): Promise<TLSEndpointsResponse> {
+    const response = await client.get<TLSEndpointsResponse>(`/tls/expiring?days=${days}`)
+    return response.data
+  }
+
+  async function getNodeTlsCredentials(nodeId: string, includeInactive = false): Promise<{ credentials: TLSCredentialResponse[]; total: number }> {
+    const params = includeInactive ? '?include_inactive=true' : ''
+    const response = await client.get<{ credentials: TLSCredentialResponse[]; total: number }>(
+      `/nodes/${nodeId}/tls-credentials${params}`
+    )
+    return response.data
+  }
+
+  async function getTlsCredential(credentialId: string): Promise<TLSCredentialResponse> {
+    const response = await client.get<TLSCredentialResponse>(`/tls/credentials/${credentialId}`)
+    return response.data
+  }
+
+  async function createTlsCredential(nodeId: string, data: TLSCredentialCreate): Promise<TLSCredentialResponse> {
+    const response = await client.post<TLSCredentialResponse>(
+      `/nodes/${nodeId}/tls-credentials`,
+      data
+    )
+    return response.data
+  }
+
+  async function updateTlsCredential(
+    credentialId: string,
+    data: Partial<TLSCredentialCreate> & { is_active?: boolean }
+  ): Promise<TLSCredentialResponse> {
+    const response = await client.patch<TLSCredentialResponse>(
+      `/tls/credentials/${credentialId}`,
+      data
+    )
+    return response.data
+  }
+
+  async function deleteTlsCredential(credentialId: string): Promise<void> {
+    await client.delete(`/tls/credentials/${credentialId}`)
+  }
+
+  async function downloadTlsCaCert(credentialId: string): Promise<string> {
+    const response = await client.get<string>(`/tls/credentials/${credentialId}/ca-cert`)
+    return response.data
+  }
+
+  async function downloadTlsServerCert(credentialId: string): Promise<string> {
+    const response = await client.get<string>(`/tls/credentials/${credentialId}/server-cert`)
+    return response.data
+  }
+
+  // TLS Certificate Lifecycle (Issue #725: renew/rotate workflows)
+  interface TLSRenewResponse {
+    success: boolean
+    message: string
+    old_credential_id: string
+    new_credential_id: string
+    expires_at: string | null
+    deployed: boolean
+    deployment_message: string | null
+  }
+
+  interface TLSRotateResponse {
+    success: boolean
+    message: string
+    old_credential_id: string
+    old_deactivated: boolean
+    new_credential_id: string
+    expires_at: string | null
+    deployed: boolean
+    deployment_message: string | null
+  }
+
+  interface TLSBulkRenewResponse {
+    success: boolean
+    message: string
+    renewed: number
+    failed: number
+    results: Array<{
+      old_credential_id: string
+      new_credential_id?: string
+      node_id: string
+      success: boolean
+      deployed?: boolean
+      error?: string
+    }>
+  }
+
+  async function renewTlsCertificate(
+    credentialId: string,
+    deploy = false
+  ): Promise<TLSRenewResponse> {
+    const response = await client.post<TLSRenewResponse>(
+      `/tls/credentials/${credentialId}/renew?deploy=${deploy}`
+    )
+    return response.data
+  }
+
+  async function rotateTlsCertificate(
+    credentialId: string,
+    deploy = true,
+    deactivateOld = true
+  ): Promise<TLSRotateResponse> {
+    const response = await client.post<TLSRotateResponse>(
+      `/tls/credentials/${credentialId}/rotate?deploy=${deploy}&deactivate_old=${deactivateOld}`
+    )
+    return response.data
+  }
+
+  async function bulkRenewExpiringCertificates(
+    days = 30,
+    deploy = false
+  ): Promise<TLSBulkRenewResponse> {
+    const response = await client.post<TLSBulkRenewResponse>(
+      `/tls/bulk-renew?days=${days}&deploy=${deploy}`
+    )
+    return response.data
+  }
+
   // Maintenance Windows
   async function getMaintenanceWindows(options?: {
     node_id?: string
@@ -924,6 +1090,11 @@ export function useSlmApi() {
     return response.data
   }
 
+  async function retryBlueGreen(deploymentId: string): Promise<ActionResponse> {
+    const response = await client.post<ActionResponse>(`/blue-green/${deploymentId}/retry`)
+    return response.data
+  }
+
   async function getEligibleNodes(roles: string[]): Promise<{ nodes: EligibleNode[]; total: number }> {
     const params = new URLSearchParams()
     params.append('roles', roles.join(','))
@@ -1011,6 +1182,19 @@ export function useSlmApi() {
     updateVncCredential,
     deleteVncCredential,
     getVncConnectionInfo,
+    // TLS Credentials (Issue #725: mTLS support)
+    getTlsEndpoints,
+    getTlsExpiringCertificates,
+    getNodeTlsCredentials,
+    getTlsCredential,
+    createTlsCredential,
+    updateTlsCredential,
+    deleteTlsCredential,
+    downloadTlsCaCert,
+    downloadTlsServerCert,
+    renewTlsCertificate,
+    rotateTlsCertificate,
+    bulkRenewExpiringCertificates,
     // Maintenance Windows
     getMaintenanceWindows,
     getActiveMaintenanceWindows,
@@ -1035,6 +1219,7 @@ export function useSlmApi() {
     switchBlueGreenTraffic,
     rollbackBlueGreen,
     cancelBlueGreen,
+    retryBlueGreen,
     getEligibleNodes,
     purgeRoles,
   }

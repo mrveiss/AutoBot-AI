@@ -198,6 +198,36 @@ async def cancel_deployment(
     )
 
 
+@router.post("/{bg_deployment_id}/retry", response_model=BlueGreenActionResponse)
+async def retry_deployment(
+    bg_deployment_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(require_admin)],
+) -> BlueGreenActionResponse:
+    """Retry a failed blue-green deployment (admin only).
+
+    Resets the deployment status and restarts the deployment workflow.
+    Only available for deployments in 'failed' status.
+    """
+    success, message = await blue_green_service.retry(
+        db, bg_deployment_id, triggered_by=current_user.get("sub", "unknown")
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=message,
+        )
+
+    logger.info("Blue-green deployment retry initiated: %s", bg_deployment_id)
+    return BlueGreenActionResponse(
+        action="retry",
+        bg_deployment_id=bg_deployment_id,
+        success=True,
+        message=message,
+    )
+
+
 @router.post("/{bg_deployment_id}/stop-monitoring", response_model=BlueGreenActionResponse)
 async def stop_monitoring(
     bg_deployment_id: str,

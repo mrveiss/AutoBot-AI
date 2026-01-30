@@ -289,6 +289,38 @@ class UpdateInfo(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class UpdateJobStatus(str, enum.Enum):
+    """Update job execution status."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class UpdateJob(Base):
+    """Update job tracking for async update operations."""
+
+    __tablename__ = "update_jobs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    job_id = Column(String(64), unique=True, nullable=False, index=True)
+    node_id = Column(String(64), nullable=False, index=True)
+    status = Column(String(20), default=UpdateJobStatus.PENDING.value)
+    update_ids = Column(JSON, default=list)  # List of update_ids being applied
+    progress = Column(Integer, default=0)  # 0-100
+    current_step = Column(String(256), nullable=True)  # Current step description
+    total_steps = Column(Integer, default=0)
+    completed_steps = Column(Integer, default=0)
+    error = Column(Text, nullable=True)
+    output = Column(Text, nullable=True)  # Command output/logs
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class Service(Base):
     """Service tracking for systemd services on nodes."""
 
@@ -465,3 +497,181 @@ class NodeCredential(Base):
             "node_id", "credential_type", "name", name="uq_node_cred_type_name"
         ),
     )
+
+
+# =============================================================================
+# Security Models (Issue #728: Security Analytics)
+# =============================================================================
+
+
+class AuditLogCategory(str, enum.Enum):
+    """Audit log category enumeration."""
+    AUTHENTICATION = "authentication"
+    AUTHORIZATION = "authorization"
+    CONFIGURATION = "configuration"
+    DEPLOYMENT = "deployment"
+    NODE_MANAGEMENT = "node_management"
+    SERVICE_CONTROL = "service_control"
+    SECURITY = "security"
+    SYSTEM = "system"
+
+
+class SecurityEventType(str, enum.Enum):
+    """Security event type enumeration."""
+    LOGIN_SUCCESS = "login_success"
+    LOGIN_FAILURE = "login_failure"
+    LOGOUT = "logout"
+    SESSION_EXPIRED = "session_expired"
+    BRUTE_FORCE_DETECTED = "brute_force_detected"
+    UNAUTHORIZED_ACCESS = "unauthorized_access"
+    PRIVILEGE_ESCALATION = "privilege_escalation"
+    POLICY_VIOLATION = "policy_violation"
+    CERTIFICATE_EXPIRING = "certificate_expiring"
+    CERTIFICATE_EXPIRED = "certificate_expired"
+    SSH_KEY_ADDED = "ssh_key_added"
+    SSH_KEY_REMOVED = "ssh_key_removed"
+    FIREWALL_RULE_CHANGED = "firewall_rule_changed"
+    SUSPICIOUS_ACTIVITY = "suspicious_activity"
+    MALWARE_DETECTED = "malware_detected"
+
+
+class SecurityEventSeverity(str, enum.Enum):
+    """Security event severity enumeration."""
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class PolicyStatus(str, enum.Enum):
+    """Security policy status enumeration."""
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    DRAFT = "draft"
+
+
+class AuditLog(Base):
+    """Audit log for tracking all user actions and system events."""
+
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    log_id = Column(String(64), unique=True, nullable=False, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # Actor information
+    user_id = Column(String(64), nullable=True, index=True)
+    username = Column(String(64), nullable=True)
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(String(512), nullable=True)
+
+    # Action details
+    category = Column(String(32), nullable=False, index=True)
+    action = Column(String(128), nullable=False)
+    resource_type = Column(String(64), nullable=True)  # node, service, deployment, etc.
+    resource_id = Column(String(64), nullable=True)
+    description = Column(Text, nullable=True)
+
+    # Request/Response details
+    request_method = Column(String(10), nullable=True)  # GET, POST, etc.
+    request_path = Column(String(512), nullable=True)
+    request_body = Column(JSON, nullable=True)  # Sanitized request body
+    response_status = Column(Integer, nullable=True)
+    response_time_ms = Column(Float, nullable=True)
+
+    # Outcome
+    success = Column(Boolean, default=True)
+    error_message = Column(Text, nullable=True)
+
+    # Metadata
+    extra_data = Column(JSON, default=dict)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class SecurityEvent(Base):
+    """Security event tracking for threat detection and monitoring."""
+
+    __tablename__ = "security_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    event_id = Column(String(64), unique=True, nullable=False, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # Event classification
+    event_type = Column(String(64), nullable=False, index=True)
+    severity = Column(String(16), default=SecurityEventSeverity.LOW.value, index=True)
+    category = Column(String(32), nullable=True)
+
+    # Source information
+    source_ip = Column(String(45), nullable=True, index=True)
+    source_user = Column(String(64), nullable=True)
+    source_node_id = Column(String(64), nullable=True, index=True)
+
+    # Target information
+    target_resource = Column(String(128), nullable=True)
+    target_node_id = Column(String(64), nullable=True)
+
+    # Event details
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    raw_data = Column(JSON, default=dict)
+
+    # Threat intelligence
+    threat_indicator = Column(String(255), nullable=True)  # IOC, hash, IP, etc.
+    threat_score = Column(Float, nullable=True)  # 0.0 - 1.0
+    mitre_technique = Column(String(32), nullable=True)  # MITRE ATT&CK ID
+
+    # Status
+    is_acknowledged = Column(Boolean, default=False)
+    acknowledged_by = Column(String(64), nullable=True)
+    acknowledged_at = Column(DateTime, nullable=True)
+    is_resolved = Column(Boolean, default=False)
+    resolved_by = Column(String(64), nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+    resolution_notes = Column(Text, nullable=True)
+
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SecurityPolicy(Base):
+    """Security policy definitions for enforcement across the fleet."""
+
+    __tablename__ = "security_policies"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    policy_id = Column(String(64), unique=True, nullable=False, index=True)
+
+    # Policy identification
+    name = Column(String(128), nullable=False)
+    description = Column(Text, nullable=True)
+    category = Column(String(64), nullable=False)  # authentication, access_control, network, etc.
+
+    # Policy configuration
+    policy_type = Column(String(32), default="custom")  # builtin, custom
+    rules = Column(JSON, default=list)  # List of rule definitions
+    parameters = Column(JSON, default=dict)  # Policy parameters
+
+    # Scope
+    applies_to_nodes = Column(JSON, default=list)  # Empty = all nodes
+    applies_to_roles = Column(JSON, default=list)  # Empty = all roles
+
+    # Status
+    status = Column(String(16), default=PolicyStatus.DRAFT.value)
+    is_enforced = Column(Boolean, default=False)
+
+    # Compliance tracking
+    last_evaluated = Column(DateTime, nullable=True)
+    compliance_score = Column(Float, nullable=True)  # 0.0 - 100.0
+    violations_count = Column(Integer, default=0)
+
+    # Versioning
+    version = Column(Integer, default=1)
+    previous_version_id = Column(String(64), nullable=True)
+
+    # Metadata
+    created_by = Column(String(64), nullable=True)
+    updated_by = Column(String(64), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

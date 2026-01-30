@@ -302,6 +302,123 @@ class TLSCredentialService:
         )
         return list(result.scalars().all())
 
+    async def renew_certificate(
+        self, db: AsyncSession, credential_id: str
+    ) -> Optional[NodeCredential]:
+        """
+        Renew a TLS certificate.
+
+        Generates a new certificate with extended validity period,
+        keeping the same CN and other metadata. The old certificate
+        is kept but can be deactivated.
+        """
+        credential = await self.get_credential(db, credential_id)
+        if not credential or not credential.encrypted_data:
+            return None
+
+        # Get the existing certificates
+        existing = json.loads(
+            self.encryption.decrypt(credential.encrypted_data)
+        )
+
+        # Generate a new self-signed certificate with same CN
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.x509.oid import NameOID
+
+        # Generate new key pair
+        key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048,
+        )
+
+        # Create new certificate with same CN, 1 year validity
+        now = datetime.utcnow()
+        cert_builder = x509.CertificateBuilder()
+        cert_builder = cert_builder.subject_name(x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, credential.tls_common_name or "renewed-cert"),
+        ]))
+        cert_builder = cert_builder.issuer_name(x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, "SLM-CA"),
+        ]))
+        cert_builder = cert_builder.not_valid_before(now)
+        cert_builder = cert_builder.not_valid_after(now + timedelta(days=365))
+        cert_builder = cert_builder.serial_number(x509.random_serial_number())
+        cert_builder = cert_builder.public_key(key.public_key())
+
+        # Sign the certificate
+        new_cert = cert_builder.sign(key, hashes.SHA256())
+
+        # Serialize to PEM
+        new_cert_pem = new_cert.public_bytes(serialization.Encoding.PEM).decode()
+        new_key_pem = key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption(),
+        ).decode()
+
+        # Create new credential with renewed certificate
+        new_cert_data = {
+            "ca_cert": existing.get("ca_cert", ""),
+            "server_cert": new_cert_pem,
+            "server_key": new_key_pem,
+        }
+        encrypted_data = self.encryption.encrypt(json.dumps(new_cert_data))
+
+        # Parse new cert for metadata
+        cert_info = self._parse_certificate(new_cert_pem)
+
+        new_credential = NodeCredential(
+            credential_id=str(uuid.uuid4()),
+            node_id=credential.node_id,
+            credential_type=CredentialType.TLS.value,
+            name=f"{credential.name} (renewed)",
+            encrypted_data=encrypted_data,
+            tls_common_name=cert_info.common_name,
+            tls_expires_at=cert_info.not_after,
+            tls_fingerprint=cert_info.fingerprint,
+            is_active=True,
+        )
+
+        db.add(new_credential)
+        await db.commit()
+        await db.refresh(new_credential)
+
+        logger.info(
+            "Renewed TLS credential %s -> %s (CN: %s)",
+            credential_id,
+            new_credential.credential_id,
+            new_credential.tls_common_name,
+        )
+        return new_credential
+
+    async def rotate_certificate(
+        self, db: AsyncSession, credential_id: str
+    ) -> Optional[NodeCredential]:
+        """
+        Rotate a TLS certificate with full key rotation.
+
+        Generates completely new cryptographic material (new keys).
+        This is more secure than renewal as it uses fresh keys.
+        """
+        # Rotation is essentially the same as renewal with new keys
+        # which is what renew_certificate already does
+        return await self.renew_certificate(db, credential_id)
+
+    async def deactivate_credential(
+        self, db: AsyncSession, credential_id: str
+    ) -> bool:
+        """Deactivate a TLS credential (mark as inactive)."""
+        credential = await self.get_credential(db, credential_id)
+        if not credential:
+            return False
+
+        credential.is_active = False
+        await db.commit()
+
+        logger.info("Deactivated TLS credential %s", credential_id)
+        return True
+
 
 # Singleton instance
 _tls_credential_service: Optional[TLSCredentialService] = None

@@ -51,12 +51,6 @@ const router = createRouter({
       meta: { title: 'Replication' }
     },
     {
-      path: '/blue-green',
-      name: 'blue-green',
-      component: () => import('@/views/BlueGreenView.vue'),
-      meta: { title: 'Blue-Green Deployments' }
-    },
-    {
       path: '/maintenance',
       name: 'maintenance',
       component: () => import('@/views/MaintenanceView.vue'),

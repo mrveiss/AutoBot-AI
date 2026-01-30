@@ -406,6 +406,33 @@ class UpdateApplyResponse(BaseModel):
     failed_updates: List[str] = Field(default_factory=list)
 
 
+class UpdateJobResponse(BaseModel):
+    """Update job status response for polling."""
+
+    job_id: str
+    node_id: str
+    status: str
+    update_ids: List[str] = Field(default_factory=list)
+    progress: int = 0
+    current_step: Optional[str] = None
+    total_steps: int = 0
+    completed_steps: int = 0
+    error: Optional[str] = None
+    output: Optional[str] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class UpdateJobListResponse(BaseModel):
+    """List of update jobs."""
+
+    jobs: List[UpdateJobResponse]
+    total: int
+
+
 # =============================================================================
 # Replication Schemas
 # =============================================================================
@@ -1008,3 +1035,207 @@ class TLSEndpointsResponse(BaseModel):
     endpoints: List[TLSEndpointResponse]
     total: int
     expiring_soon: int = Field(default=0, description="Certificates expiring within 30 days")
+
+
+# =============================================================================
+# Security Analytics Schemas (Issue #728: Security View)
+# =============================================================================
+
+
+class AuditLogResponse(BaseModel):
+    """Audit log entry response."""
+
+    id: int
+    log_id: str
+    timestamp: datetime
+    user_id: Optional[str] = None
+    username: Optional[str] = None
+    ip_address: Optional[str] = None
+    category: str
+    action: str
+    resource_type: Optional[str] = None
+    resource_id: Optional[str] = None
+    description: Optional[str] = None
+    request_method: Optional[str] = None
+    request_path: Optional[str] = None
+    response_status: Optional[int] = None
+    success: bool = True
+    error_message: Optional[str] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AuditLogListResponse(BaseModel):
+    """Paginated audit log listing."""
+
+    logs: List[AuditLogResponse]
+    total: int
+    page: int = 1
+    per_page: int = 50
+
+
+class SecurityEventResponse(BaseModel):
+    """Security event response."""
+
+    id: int
+    event_id: str
+    timestamp: datetime
+    event_type: str
+    severity: str
+    category: Optional[str] = None
+    source_ip: Optional[str] = None
+    source_user: Optional[str] = None
+    source_node_id: Optional[str] = None
+    target_resource: Optional[str] = None
+    target_node_id: Optional[str] = None
+    title: str
+    description: Optional[str] = None
+    threat_indicator: Optional[str] = None
+    threat_score: Optional[float] = None
+    mitre_technique: Optional[str] = None
+    is_acknowledged: bool = False
+    acknowledged_by: Optional[str] = None
+    acknowledged_at: Optional[datetime] = None
+    is_resolved: bool = False
+    resolved_by: Optional[str] = None
+    resolved_at: Optional[datetime] = None
+    resolution_notes: Optional[str] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SecurityEventCreate(BaseModel):
+    """Create security event."""
+
+    event_type: str
+    severity: str = "low"
+    category: Optional[str] = None
+    source_ip: Optional[str] = None
+    source_user: Optional[str] = None
+    source_node_id: Optional[str] = None
+    target_resource: Optional[str] = None
+    target_node_id: Optional[str] = None
+    title: str
+    description: Optional[str] = None
+    threat_indicator: Optional[str] = None
+    threat_score: Optional[float] = None
+    mitre_technique: Optional[str] = None
+    raw_data: Dict = Field(default_factory=dict)
+
+
+class SecurityEventAcknowledge(BaseModel):
+    """Acknowledge security event."""
+
+    notes: Optional[str] = None
+
+
+class SecurityEventResolve(BaseModel):
+    """Resolve security event."""
+
+    resolution_notes: str
+
+
+class SecurityEventListResponse(BaseModel):
+    """Paginated security event listing."""
+
+    events: List[SecurityEventResponse]
+    total: int
+    page: int = 1
+    per_page: int = 50
+    unacknowledged_count: int = 0
+    critical_count: int = 0
+
+
+class SecurityPolicyResponse(BaseModel):
+    """Security policy response."""
+
+    id: int
+    policy_id: str
+    name: str
+    description: Optional[str] = None
+    category: str
+    policy_type: str = "custom"
+    rules: List = Field(default_factory=list)
+    parameters: Dict = Field(default_factory=dict)
+    applies_to_nodes: List = Field(default_factory=list)
+    applies_to_roles: List = Field(default_factory=list)
+    status: str = "draft"
+    is_enforced: bool = False
+    last_evaluated: Optional[datetime] = None
+    compliance_score: Optional[float] = None
+    violations_count: int = 0
+    version: int = 1
+    created_by: Optional[str] = None
+    updated_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SecurityPolicyCreate(BaseModel):
+    """Create security policy."""
+
+    name: str = Field(..., min_length=1, max_length=128)
+    description: Optional[str] = None
+    category: str = Field(..., min_length=1, max_length=64)
+    policy_type: str = "custom"
+    rules: List = Field(default_factory=list)
+    parameters: Dict = Field(default_factory=dict)
+    applies_to_nodes: List = Field(default_factory=list)
+    applies_to_roles: List = Field(default_factory=list)
+    status: str = "draft"
+    is_enforced: bool = False
+
+
+class SecurityPolicyUpdate(BaseModel):
+    """Update security policy."""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=128)
+    description: Optional[str] = None
+    category: Optional[str] = None
+    rules: Optional[List] = None
+    parameters: Optional[Dict] = None
+    applies_to_nodes: Optional[List] = None
+    applies_to_roles: Optional[List] = None
+    status: Optional[str] = None
+    is_enforced: Optional[bool] = None
+
+
+class SecurityPolicyListResponse(BaseModel):
+    """Paginated security policy listing."""
+
+    policies: List[SecurityPolicyResponse]
+    total: int
+    page: int = 1
+    per_page: int = 50
+
+
+class SecurityOverviewResponse(BaseModel):
+    """Security dashboard overview metrics."""
+
+    security_score: float = Field(..., description="Overall security score (0-100)")
+    active_threats: int = Field(default=0, description="Number of unresolved security events")
+    failed_logins_24h: int = Field(default=0, description="Failed login attempts in last 24 hours")
+    policy_violations: int = Field(default=0, description="Policy violations count")
+    total_events_24h: int = Field(default=0, description="Total security events in 24h")
+    critical_events: int = Field(default=0, description="Critical severity events")
+    certificates_expiring: int = Field(default=0, description="Certificates expiring within 30 days")
+    recent_events: List[SecurityEventResponse] = Field(default_factory=list)
+
+
+class ThreatSummary(BaseModel):
+    """Threat detection summary."""
+
+    total_threats: int = 0
+    critical: int = 0
+    high: int = 0
+    medium: int = 0
+    low: int = 0
+    acknowledged: int = 0
+    resolved: int = 0
+    by_type: Dict[str, int] = Field(default_factory=dict)
+    by_source_ip: Dict[str, int] = Field(default_factory=dict)
+    trend_24h: List[Dict] = Field(default_factory=list, description="Hourly threat count")

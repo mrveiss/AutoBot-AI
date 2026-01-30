@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import settings
 from models.database import Deployment, DeploymentStatus, Node, NodeStatus
 from models.schemas import DeploymentCreate, DeploymentResponse
+from services.encryption import decrypt_data
 
 logger = logging.getLogger(__name__)
 
@@ -250,10 +251,21 @@ class DeploymentService:
                 ssh_port = node.ssh_port or 22
 
                 # Get stored password for SSH and sudo authentication
-                # Password is stored during node registration in extra_data
+                # Password is encrypted during node registration and stored in extra_data
                 ssh_password = None
                 if node.extra_data:
-                    ssh_password = node.extra_data.get("ssh_password")
+                    encrypted_password = node.extra_data.get("ssh_password")
+                    if encrypted_password:
+                        # Check if password is encrypted (new format) or plaintext (legacy)
+                        if node.extra_data.get("ssh_password_encrypted"):
+                            try:
+                                ssh_password = decrypt_data(encrypted_password)
+                            except Exception as e:
+                                logger.error("Failed to decrypt SSH password for node %s: %s", node_id, e)
+                                raise RuntimeError("Failed to decrypt stored credentials")
+                        else:
+                            # Legacy plaintext password (migration path)
+                            ssh_password = encrypted_password
 
                 output = await self._execute_ansible_playbook(
                     node.ip_address,
@@ -432,7 +444,18 @@ class DeploymentService:
         # Use provided password, or fall back to stored password from node registration
         effective_password = ssh_password
         if not effective_password and node.extra_data:
-            effective_password = node.extra_data.get("ssh_password")
+            encrypted_password = node.extra_data.get("ssh_password")
+            if encrypted_password:
+                # Check if password is encrypted (new format) or plaintext (legacy)
+                if node.extra_data.get("ssh_password_encrypted"):
+                    try:
+                        effective_password = decrypt_data(encrypted_password)
+                    except Exception as e:
+                        logger.error("Failed to decrypt SSH password for node %s: %s", node_id, e)
+                        return False, "Failed to decrypt stored credentials"
+                else:
+                    # Legacy plaintext password (migration path)
+                    effective_password = encrypted_password
 
         try:
             # Deploy the slm-agent role

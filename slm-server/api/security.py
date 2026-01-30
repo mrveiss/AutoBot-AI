@@ -1,0 +1,773 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+SLM Security API Routes
+
+API endpoints for security analytics, audit logs, threat detection,
+and security policy management. Related to Issue #728.
+"""
+
+import logging
+import uuid
+from datetime import datetime, timedelta
+from typing import List, Optional
+
+from typing_extensions import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import select, func, and_, or_
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.database import (
+    AuditLog,
+    AuditLogCategory,
+    Certificate,
+    SecurityEvent,
+    SecurityEventSeverity,
+    SecurityEventType,
+    SecurityPolicy,
+    PolicyStatus,
+    User,
+)
+from models.schemas import (
+    AuditLogResponse,
+    AuditLogListResponse,
+    SecurityEventResponse,
+    SecurityEventCreate,
+    SecurityEventAcknowledge,
+    SecurityEventResolve,
+    SecurityEventListResponse,
+    SecurityPolicyResponse,
+    SecurityPolicyCreate,
+    SecurityPolicyUpdate,
+    SecurityPolicyListResponse,
+    SecurityOverviewResponse,
+    ThreatSummary,
+)
+from services.auth import get_current_user
+from services.database import get_db
+
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/security", tags=["security"])
+
+
+# =============================================================================
+# Audit Log Middleware Helper
+# =============================================================================
+
+
+async def create_audit_log(
+    db: AsyncSession,
+    category: str,
+    action: str,
+    user_id: Optional[str] = None,
+    username: Optional[str] = None,
+    ip_address: Optional[str] = None,
+    resource_type: Optional[str] = None,
+    resource_id: Optional[str] = None,
+    description: Optional[str] = None,
+    request_method: Optional[str] = None,
+    request_path: Optional[str] = None,
+    response_status: Optional[int] = None,
+    success: bool = True,
+    error_message: Optional[str] = None,
+    extra_data: Optional[dict] = None,
+) -> AuditLog:
+    """Create an audit log entry."""
+    log = AuditLog(
+        log_id=str(uuid.uuid4())[:16],
+        user_id=user_id,
+        username=username,
+        ip_address=ip_address,
+        category=category,
+        action=action,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        description=description,
+        request_method=request_method,
+        request_path=request_path,
+        response_status=response_status,
+        success=success,
+        error_message=error_message,
+        extra_data=extra_data or {},
+    )
+    db.add(log)
+    await db.flush()
+    return log
+
+
+# =============================================================================
+# Security Overview
+# =============================================================================
+
+
+@router.get("/overview", response_model=SecurityOverviewResponse)
+async def get_security_overview(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> SecurityOverviewResponse:
+    """Get security dashboard overview metrics."""
+    now = datetime.utcnow()
+    last_24h = now - timedelta(hours=24)
+    last_30d = now - timedelta(days=30)
+
+    # Failed logins in last 24h
+    failed_logins = await db.execute(
+        select(func.count(SecurityEvent.id))
+        .where(SecurityEvent.event_type == SecurityEventType.LOGIN_FAILURE.value)
+        .where(SecurityEvent.timestamp >= last_24h)
+    )
+    failed_logins_count = failed_logins.scalar() or 0
+
+    # Active threats (unresolved security events with severity >= medium)
+    active_threats = await db.execute(
+        select(func.count(SecurityEvent.id))
+        .where(SecurityEvent.is_resolved == False)
+        .where(
+            SecurityEvent.severity.in_([
+                SecurityEventSeverity.MEDIUM.value,
+                SecurityEventSeverity.HIGH.value,
+                SecurityEventSeverity.CRITICAL.value,
+            ])
+        )
+    )
+    active_threats_count = active_threats.scalar() or 0
+
+    # Critical events
+    critical_events = await db.execute(
+        select(func.count(SecurityEvent.id))
+        .where(SecurityEvent.is_resolved == False)
+        .where(SecurityEvent.severity == SecurityEventSeverity.CRITICAL.value)
+    )
+    critical_count = critical_events.scalar() or 0
+
+    # Policy violations
+    policy_violations = await db.execute(
+        select(func.count(SecurityEvent.id))
+        .where(SecurityEvent.event_type == SecurityEventType.POLICY_VIOLATION.value)
+        .where(SecurityEvent.is_resolved == False)
+    )
+    violations_count = policy_violations.scalar() or 0
+
+    # Total events in 24h
+    total_events = await db.execute(
+        select(func.count(SecurityEvent.id))
+        .where(SecurityEvent.timestamp >= last_24h)
+    )
+    total_events_count = total_events.scalar() or 0
+
+    # Certificates expiring in 30 days
+    cert_expiring = await db.execute(
+        select(func.count(Certificate.id))
+        .where(Certificate.status == "active")
+        .where(Certificate.not_after <= last_30d)
+        .where(Certificate.not_after > now)
+    )
+    certs_expiring_count = cert_expiring.scalar() or 0
+
+    # Calculate security score (simplified algorithm)
+    # Start at 100, deduct for issues
+    score = 100.0
+    score -= min(active_threats_count * 5, 30)  # Max 30 points for threats
+    score -= min(critical_count * 10, 20)  # Max 20 points for critical
+    score -= min(failed_logins_count * 0.5, 10)  # Max 10 points for failed logins
+    score -= min(violations_count * 2, 20)  # Max 20 points for violations
+    score -= min(certs_expiring_count * 2, 10)  # Max 10 points for expiring certs
+    score = max(score, 0)  # Minimum 0
+
+    # Recent events
+    recent = await db.execute(
+        select(SecurityEvent)
+        .order_by(SecurityEvent.timestamp.desc())
+        .limit(10)
+    )
+    recent_events = recent.scalars().all()
+
+    return SecurityOverviewResponse(
+        security_score=round(score, 1),
+        active_threats=active_threats_count,
+        failed_logins_24h=failed_logins_count,
+        policy_violations=violations_count,
+        total_events_24h=total_events_count,
+        critical_events=critical_count,
+        certificates_expiring=certs_expiring_count,
+        recent_events=[SecurityEventResponse.model_validate(e) for e in recent_events],
+    )
+
+
+# =============================================================================
+# Audit Logs
+# =============================================================================
+
+
+@router.get("/audit-logs", response_model=AuditLogListResponse)
+async def list_audit_logs(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+    category: Optional[str] = Query(None, description="Filter by category"),
+    username: Optional[str] = Query(None, description="Filter by username"),
+    action: Optional[str] = Query(None, description="Filter by action"),
+    success: Optional[bool] = Query(None, description="Filter by success status"),
+    since: Optional[datetime] = Query(None, description="Filter events after this time"),
+    until: Optional[datetime] = Query(None, description="Filter events before this time"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+) -> AuditLogListResponse:
+    """List audit logs with optional filtering."""
+    query = select(AuditLog)
+
+    if category:
+        query = query.where(AuditLog.category == category)
+    if username:
+        query = query.where(AuditLog.username.ilike(f"%{username}%"))
+    if action:
+        query = query.where(AuditLog.action.ilike(f"%{action}%"))
+    if success is not None:
+        query = query.where(AuditLog.success == success)
+    if since:
+        query = query.where(AuditLog.timestamp >= since)
+    if until:
+        query = query.where(AuditLog.timestamp <= until)
+
+    # Count total
+    count_query = select(func.count(AuditLog.id))
+    if category:
+        count_query = count_query.where(AuditLog.category == category)
+    if username:
+        count_query = count_query.where(AuditLog.username.ilike(f"%{username}%"))
+    if action:
+        count_query = count_query.where(AuditLog.action.ilike(f"%{action}%"))
+    if success is not None:
+        count_query = count_query.where(AuditLog.success == success)
+    if since:
+        count_query = count_query.where(AuditLog.timestamp >= since)
+    if until:
+        count_query = count_query.where(AuditLog.timestamp <= until)
+
+    count_result = await db.execute(count_query)
+    total = count_result.scalar() or 0
+
+    # Paginate
+    query = query.order_by(AuditLog.timestamp.desc())
+    query = query.offset((page - 1) * per_page).limit(per_page)
+    result = await db.execute(query)
+    logs = result.scalars().all()
+
+    return AuditLogListResponse(
+        logs=[AuditLogResponse.model_validate(log) for log in logs],
+        total=total,
+        page=page,
+        per_page=per_page,
+    )
+
+
+@router.get("/audit-logs/{log_id}", response_model=AuditLogResponse)
+async def get_audit_log(
+    log_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> AuditLogResponse:
+    """Get a specific audit log entry."""
+    result = await db.execute(
+        select(AuditLog).where(AuditLog.log_id == log_id)
+    )
+    log = result.scalar_one_or_none()
+
+    if not log:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Audit log not found",
+        )
+
+    return AuditLogResponse.model_validate(log)
+
+
+# =============================================================================
+# Security Events (Threat Detection)
+# =============================================================================
+
+
+@router.get("/events", response_model=SecurityEventListResponse)
+async def list_security_events(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+    event_type: Optional[str] = Query(None, description="Filter by event type"),
+    severity: Optional[str] = Query(None, description="Filter by severity"),
+    acknowledged: Optional[bool] = Query(None, description="Filter by acknowledged status"),
+    resolved: Optional[bool] = Query(None, description="Filter by resolved status"),
+    source_ip: Optional[str] = Query(None, description="Filter by source IP"),
+    node_id: Optional[str] = Query(None, description="Filter by node ID"),
+    since: Optional[datetime] = Query(None),
+    until: Optional[datetime] = Query(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+) -> SecurityEventListResponse:
+    """List security events with filtering."""
+    query = select(SecurityEvent)
+
+    if event_type:
+        query = query.where(SecurityEvent.event_type == event_type)
+    if severity:
+        query = query.where(SecurityEvent.severity == severity)
+    if acknowledged is not None:
+        query = query.where(SecurityEvent.is_acknowledged == acknowledged)
+    if resolved is not None:
+        query = query.where(SecurityEvent.is_resolved == resolved)
+    if source_ip:
+        query = query.where(SecurityEvent.source_ip == source_ip)
+    if node_id:
+        query = query.where(
+            or_(
+                SecurityEvent.source_node_id == node_id,
+                SecurityEvent.target_node_id == node_id,
+            )
+        )
+    if since:
+        query = query.where(SecurityEvent.timestamp >= since)
+    if until:
+        query = query.where(SecurityEvent.timestamp <= until)
+
+    # Count total and aggregates
+    count_result = await db.execute(
+        select(func.count(SecurityEvent.id))
+    )
+    total = count_result.scalar() or 0
+
+    unack_result = await db.execute(
+        select(func.count(SecurityEvent.id))
+        .where(SecurityEvent.is_acknowledged == False)
+    )
+    unacknowledged_count = unack_result.scalar() or 0
+
+    critical_result = await db.execute(
+        select(func.count(SecurityEvent.id))
+        .where(SecurityEvent.severity == SecurityEventSeverity.CRITICAL.value)
+        .where(SecurityEvent.is_resolved == False)
+    )
+    critical_count = critical_result.scalar() or 0
+
+    # Paginate
+    query = query.order_by(SecurityEvent.timestamp.desc())
+    query = query.offset((page - 1) * per_page).limit(per_page)
+    result = await db.execute(query)
+    events = result.scalars().all()
+
+    return SecurityEventListResponse(
+        events=[SecurityEventResponse.model_validate(e) for e in events],
+        total=total,
+        page=page,
+        per_page=per_page,
+        unacknowledged_count=unacknowledged_count,
+        critical_count=critical_count,
+    )
+
+
+@router.get("/events/summary", response_model=ThreatSummary)
+async def get_threat_summary(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+    hours: int = Query(24, ge=1, le=720, description="Hours to look back"),
+) -> ThreatSummary:
+    """Get threat detection summary statistics."""
+    since = datetime.utcnow() - timedelta(hours=hours)
+
+    # Count by severity
+    severity_counts = {}
+    for sev in SecurityEventSeverity:
+        result = await db.execute(
+            select(func.count(SecurityEvent.id))
+            .where(SecurityEvent.severity == sev.value)
+            .where(SecurityEvent.timestamp >= since)
+        )
+        severity_counts[sev.value] = result.scalar() or 0
+
+    # Count by type
+    type_result = await db.execute(
+        select(SecurityEvent.event_type, func.count(SecurityEvent.id))
+        .where(SecurityEvent.timestamp >= since)
+        .group_by(SecurityEvent.event_type)
+    )
+    by_type = {row[0]: row[1] for row in type_result.all()}
+
+    # Count by source IP (top 10)
+    ip_result = await db.execute(
+        select(SecurityEvent.source_ip, func.count(SecurityEvent.id))
+        .where(SecurityEvent.source_ip.isnot(None))
+        .where(SecurityEvent.timestamp >= since)
+        .group_by(SecurityEvent.source_ip)
+        .order_by(func.count(SecurityEvent.id).desc())
+        .limit(10)
+    )
+    by_source_ip = {row[0]: row[1] for row in ip_result.all() if row[0]}
+
+    # Acknowledged/resolved counts
+    ack_result = await db.execute(
+        select(func.count(SecurityEvent.id))
+        .where(SecurityEvent.is_acknowledged == True)
+        .where(SecurityEvent.timestamp >= since)
+    )
+    acknowledged = ack_result.scalar() or 0
+
+    resolved_result = await db.execute(
+        select(func.count(SecurityEvent.id))
+        .where(SecurityEvent.is_resolved == True)
+        .where(SecurityEvent.timestamp >= since)
+    )
+    resolved = resolved_result.scalar() or 0
+
+    # Total
+    total_result = await db.execute(
+        select(func.count(SecurityEvent.id))
+        .where(SecurityEvent.timestamp >= since)
+    )
+    total = total_result.scalar() or 0
+
+    return ThreatSummary(
+        total_threats=total,
+        critical=severity_counts.get("critical", 0),
+        high=severity_counts.get("high", 0),
+        medium=severity_counts.get("medium", 0),
+        low=severity_counts.get("low", 0),
+        acknowledged=acknowledged,
+        resolved=resolved,
+        by_type=by_type,
+        by_source_ip=by_source_ip,
+    )
+
+
+@router.post("/events", response_model=SecurityEventResponse, status_code=status.HTTP_201_CREATED)
+async def create_security_event(
+    event_data: SecurityEventCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+) -> SecurityEventResponse:
+    """Create a new security event."""
+    event = SecurityEvent(
+        event_id=str(uuid.uuid4())[:16],
+        event_type=event_data.event_type,
+        severity=event_data.severity,
+        category=event_data.category,
+        source_ip=event_data.source_ip,
+        source_user=event_data.source_user,
+        source_node_id=event_data.source_node_id,
+        target_resource=event_data.target_resource,
+        target_node_id=event_data.target_node_id,
+        title=event_data.title,
+        description=event_data.description,
+        threat_indicator=event_data.threat_indicator,
+        threat_score=event_data.threat_score,
+        mitre_technique=event_data.mitre_technique,
+        raw_data=event_data.raw_data,
+    )
+    db.add(event)
+    await db.commit()
+    await db.refresh(event)
+
+    logger.info("Security event created: %s (%s)", event.event_id, event.title)
+    return SecurityEventResponse.model_validate(event)
+
+
+@router.get("/events/{event_id}", response_model=SecurityEventResponse)
+async def get_security_event(
+    event_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> SecurityEventResponse:
+    """Get a specific security event."""
+    result = await db.execute(
+        select(SecurityEvent).where(SecurityEvent.event_id == event_id)
+    )
+    event = result.scalar_one_or_none()
+
+    if not event:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Security event not found",
+        )
+
+    return SecurityEventResponse.model_validate(event)
+
+
+@router.post("/events/{event_id}/acknowledge", response_model=SecurityEventResponse)
+async def acknowledge_security_event(
+    event_id: str,
+    ack_data: SecurityEventAcknowledge,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+) -> SecurityEventResponse:
+    """Acknowledge a security event."""
+    result = await db.execute(
+        select(SecurityEvent).where(SecurityEvent.event_id == event_id)
+    )
+    event = result.scalar_one_or_none()
+
+    if not event:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Security event not found",
+        )
+
+    event.is_acknowledged = True
+    event.acknowledged_by = current_user.get("sub", "unknown")
+    event.acknowledged_at = datetime.utcnow()
+
+    await db.commit()
+    await db.refresh(event)
+
+    logger.info("Security event acknowledged: %s by %s", event_id, event.acknowledged_by)
+    return SecurityEventResponse.model_validate(event)
+
+
+@router.post("/events/{event_id}/resolve", response_model=SecurityEventResponse)
+async def resolve_security_event(
+    event_id: str,
+    resolve_data: SecurityEventResolve,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+) -> SecurityEventResponse:
+    """Resolve a security event."""
+    result = await db.execute(
+        select(SecurityEvent).where(SecurityEvent.event_id == event_id)
+    )
+    event = result.scalar_one_or_none()
+
+    if not event:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Security event not found",
+        )
+
+    event.is_resolved = True
+    event.resolved_by = current_user.get("sub", "unknown")
+    event.resolved_at = datetime.utcnow()
+    event.resolution_notes = resolve_data.resolution_notes
+
+    # Also mark as acknowledged if not already
+    if not event.is_acknowledged:
+        event.is_acknowledged = True
+        event.acknowledged_by = event.resolved_by
+        event.acknowledged_at = event.resolved_at
+
+    await db.commit()
+    await db.refresh(event)
+
+    logger.info("Security event resolved: %s by %s", event_id, event.resolved_by)
+    return SecurityEventResponse.model_validate(event)
+
+
+# =============================================================================
+# Security Policies
+# =============================================================================
+
+
+@router.get("/policies", response_model=SecurityPolicyListResponse)
+async def list_security_policies(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+    category: Optional[str] = Query(None),
+    status_filter: Optional[str] = Query(None, alias="status"),
+    is_enforced: Optional[bool] = Query(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+) -> SecurityPolicyListResponse:
+    """List security policies."""
+    query = select(SecurityPolicy)
+
+    if category:
+        query = query.where(SecurityPolicy.category == category)
+    if status_filter:
+        query = query.where(SecurityPolicy.status == status_filter)
+    if is_enforced is not None:
+        query = query.where(SecurityPolicy.is_enforced == is_enforced)
+
+    # Count total
+    count_query = select(func.count(SecurityPolicy.id))
+    if category:
+        count_query = count_query.where(SecurityPolicy.category == category)
+    if status_filter:
+        count_query = count_query.where(SecurityPolicy.status == status_filter)
+    if is_enforced is not None:
+        count_query = count_query.where(SecurityPolicy.is_enforced == is_enforced)
+
+    count_result = await db.execute(count_query)
+    total = count_result.scalar() or 0
+
+    # Paginate
+    query = query.order_by(SecurityPolicy.name)
+    query = query.offset((page - 1) * per_page).limit(per_page)
+    result = await db.execute(query)
+    policies = result.scalars().all()
+
+    return SecurityPolicyListResponse(
+        policies=[SecurityPolicyResponse.model_validate(p) for p in policies],
+        total=total,
+        page=page,
+        per_page=per_page,
+    )
+
+
+@router.post("/policies", response_model=SecurityPolicyResponse, status_code=status.HTTP_201_CREATED)
+async def create_security_policy(
+    policy_data: SecurityPolicyCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+) -> SecurityPolicyResponse:
+    """Create a new security policy."""
+    policy = SecurityPolicy(
+        policy_id=str(uuid.uuid4())[:16],
+        name=policy_data.name,
+        description=policy_data.description,
+        category=policy_data.category,
+        policy_type=policy_data.policy_type,
+        rules=policy_data.rules,
+        parameters=policy_data.parameters,
+        applies_to_nodes=policy_data.applies_to_nodes,
+        applies_to_roles=policy_data.applies_to_roles,
+        status=policy_data.status,
+        is_enforced=policy_data.is_enforced,
+        created_by=current_user.get("sub", "unknown"),
+    )
+    db.add(policy)
+    await db.commit()
+    await db.refresh(policy)
+
+    logger.info("Security policy created: %s (%s)", policy.policy_id, policy.name)
+    return SecurityPolicyResponse.model_validate(policy)
+
+
+@router.get("/policies/{policy_id}", response_model=SecurityPolicyResponse)
+async def get_security_policy(
+    policy_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> SecurityPolicyResponse:
+    """Get a specific security policy."""
+    result = await db.execute(
+        select(SecurityPolicy).where(SecurityPolicy.policy_id == policy_id)
+    )
+    policy = result.scalar_one_or_none()
+
+    if not policy:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Security policy not found",
+        )
+
+    return SecurityPolicyResponse.model_validate(policy)
+
+
+@router.patch("/policies/{policy_id}", response_model=SecurityPolicyResponse)
+async def update_security_policy(
+    policy_id: str,
+    policy_data: SecurityPolicyUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+) -> SecurityPolicyResponse:
+    """Update a security policy."""
+    result = await db.execute(
+        select(SecurityPolicy).where(SecurityPolicy.policy_id == policy_id)
+    )
+    policy = result.scalar_one_or_none()
+
+    if not policy:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Security policy not found",
+        )
+
+    update_data = policy_data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        if value is not None:
+            setattr(policy, field, value)
+
+    policy.updated_by = current_user.get("sub", "unknown")
+    policy.version += 1
+
+    await db.commit()
+    await db.refresh(policy)
+
+    logger.info("Security policy updated: %s", policy_id)
+    return SecurityPolicyResponse.model_validate(policy)
+
+
+@router.delete("/policies/{policy_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_security_policy(
+    policy_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> None:
+    """Delete a security policy."""
+    result = await db.execute(
+        select(SecurityPolicy).where(SecurityPolicy.policy_id == policy_id)
+    )
+    policy = result.scalar_one_or_none()
+
+    if not policy:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Security policy not found",
+        )
+
+    await db.delete(policy)
+    await db.commit()
+
+    logger.info("Security policy deleted: %s", policy_id)
+
+
+@router.post("/policies/{policy_id}/activate", response_model=SecurityPolicyResponse)
+async def activate_security_policy(
+    policy_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+) -> SecurityPolicyResponse:
+    """Activate a security policy and enable enforcement."""
+    result = await db.execute(
+        select(SecurityPolicy).where(SecurityPolicy.policy_id == policy_id)
+    )
+    policy = result.scalar_one_or_none()
+
+    if not policy:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Security policy not found",
+        )
+
+    policy.status = PolicyStatus.ACTIVE.value
+    policy.is_enforced = True
+    policy.updated_by = current_user.get("sub", "unknown")
+
+    await db.commit()
+    await db.refresh(policy)
+
+    logger.info("Security policy activated: %s", policy_id)
+    return SecurityPolicyResponse.model_validate(policy)
+
+
+@router.post("/policies/{policy_id}/deactivate", response_model=SecurityPolicyResponse)
+async def deactivate_security_policy(
+    policy_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+) -> SecurityPolicyResponse:
+    """Deactivate a security policy and disable enforcement."""
+    result = await db.execute(
+        select(SecurityPolicy).where(SecurityPolicy.policy_id == policy_id)
+    )
+    policy = result.scalar_one_or_none()
+
+    if not policy:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Security policy not found",
+        )
+
+    policy.status = PolicyStatus.INACTIVE.value
+    policy.is_enforced = False
+    policy.updated_by = current_user.get("sub", "unknown")
+
+    await db.commit()
+    await db.refresh(policy)
+
+    logger.info("Security policy deactivated: %s", policy_id)
+    return SecurityPolicyResponse.model_validate(policy)

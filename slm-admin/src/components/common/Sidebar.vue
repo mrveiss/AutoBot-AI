@@ -17,7 +17,6 @@ const navItems = [
   { name: 'Fleet Overview', path: '/', icon: 'grid' },
   { name: 'Services', path: '/services', icon: 'server' },
   { name: 'Deployments', path: '/deployments', icon: 'rocket' },
-  { name: 'Blue-Green', path: '/blue-green', icon: 'switch' },
   { name: 'Backups', path: '/backups', icon: 'database' },
   { name: 'Replication', path: '/replications', icon: 'replicate' },
   { name: 'Maintenance', path: '/maintenance', icon: 'wrench' },

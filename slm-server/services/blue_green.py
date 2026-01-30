@@ -247,6 +247,54 @@ class BlueGreenService:
 
         return True, "Deployment cancelled"
 
+    async def retry(
+        self, db: AsyncSession, bg_deployment_id: str, triggered_by: str
+    ) -> Tuple[bool, str]:
+        """Retry a failed blue-green deployment.
+
+        Resets the deployment status and restarts the deployment workflow.
+        """
+        deployment = await self._get_deployment(db, bg_deployment_id)
+        if not deployment:
+            return False, "Deployment not found"
+
+        if deployment.status != BlueGreenStatus.FAILED.value:
+            return False, f"Cannot retry in status: {deployment.status}. Only failed deployments can be retried."
+
+        # Validate nodes are still available
+        blue_node = await self._get_node(db, deployment.blue_node_id)
+        green_node = await self._get_node(db, deployment.green_node_id)
+
+        if not blue_node or blue_node.status not in [NodeStatus.ONLINE.value, NodeStatus.DEGRADED.value]:
+            return False, "Blue node is no longer available for retry"
+
+        if not green_node or green_node.status != NodeStatus.ONLINE.value:
+            return False, "Green node is no longer available for retry"
+
+        # Reset deployment state for retry
+        deployment.status = BlueGreenStatus.PENDING.value
+        deployment.error = None
+        deployment.progress_percent = 0
+        deployment.current_step = "Retrying deployment..."
+        deployment.started_at = None
+        deployment.completed_at = None
+        deployment.triggered_by = triggered_by
+        await db.commit()
+
+        # Start deployment in background
+        task = asyncio.create_task(
+            self._execute_deployment(bg_deployment_id)
+        )
+        self._running_deployments[bg_deployment_id] = task
+
+        logger.info(
+            "Blue-green deployment retry initiated: %s by %s",
+            bg_deployment_id,
+            triggered_by,
+        )
+
+        return True, "Deployment retry initiated"
+
     async def find_eligible_nodes(
         self, db: AsyncSession, roles: List[str]
     ) -> List[EligibleNodeResponse]:
