@@ -665,6 +665,13 @@ class BlueGreenCreate(BaseModel):
     health_check_timeout: int = Field(default=300, ge=60, le=1800)
     auto_rollback: bool = True
     purge_on_complete: bool = True
+    # Post-deployment health monitoring (Issue #726 Phase 3)
+    post_deploy_monitor_duration: int = Field(
+        default=1800, ge=0, le=7200, description="Seconds to monitor after deployment (0=disabled)"
+    )
+    health_failure_threshold: int = Field(
+        default=3, ge=1, le=10, description="Consecutive health failures before rollback"
+    )
 
 
 class BlueGreenResponse(BaseModel):
@@ -683,6 +690,12 @@ class BlueGreenResponse(BaseModel):
     health_check_interval: int
     health_check_timeout: int
     auto_rollback: bool
+    # Post-deployment health monitoring (Issue #726 Phase 3)
+    post_deploy_monitor_duration: int
+    health_failure_threshold: int
+    health_failures: int = 0
+    monitoring_started_at: Optional[datetime] = None
+    # Status tracking
     status: str
     progress_percent: int
     current_step: Optional[str] = None

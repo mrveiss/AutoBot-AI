@@ -343,7 +343,8 @@ class BlueGreenStatus(str, enum.Enum):
     DEPLOYING = "deploying"  # Deploying to green node
     VERIFYING = "verifying"  # Health verification
     SWITCHING = "switching"  # Traffic switch in progress
-    ACTIVE = "active"  # Green is live
+    ACTIVE = "active"  # Green is live, traffic switched
+    MONITORING = "monitoring"  # Post-deployment health monitoring (Issue #726 Phase 3)
     ROLLING_BACK = "rolling_back"  # Rollback in progress
     ROLLED_BACK = "rolled_back"  # Reverted to blue
     COMPLETED = "completed"  # Successfully switched
@@ -383,6 +384,12 @@ class BlueGreenDeployment(Base):
     health_check_interval = Column(Integer, default=10)  # Seconds between checks
     health_check_timeout = Column(Integer, default=300)  # Max time for health verification
     auto_rollback = Column(Boolean, default=True)  # Rollback on health failure
+
+    # Post-deployment health monitoring (Issue #726 Phase 3)
+    post_deploy_monitor_duration = Column(Integer, default=1800)  # 30 min monitoring after switch
+    health_failure_threshold = Column(Integer, default=3)  # Consecutive failures before rollback
+    health_failures = Column(Integer, default=0)  # Current consecutive failure count
+    monitoring_started_at = Column(DateTime, nullable=True)  # When monitoring started
 
     # Status tracking
     status = Column(String(32), default=BlueGreenStatus.PENDING.value)

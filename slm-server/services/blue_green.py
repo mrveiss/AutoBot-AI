@@ -56,6 +56,7 @@ class BlueGreenService:
     def __init__(self):
         self.ansible_dir = Path(settings.ansible_dir)
         self._running_deployments: Dict[str, asyncio.Task] = {}
+        self._monitoring_tasks: Dict[str, asyncio.Task] = {}  # Post-deployment monitoring
 
     async def create_deployment(
         self,
@@ -99,6 +100,9 @@ class BlueGreenService:
             health_check_interval=data.health_check_interval,
             health_check_timeout=data.health_check_timeout,
             auto_rollback=data.auto_rollback,
+            # Post-deployment monitoring (Issue #726 Phase 3)
+            post_deploy_monitor_duration=data.post_deploy_monitor_duration,
+            health_failure_threshold=data.health_failure_threshold,
             status=BlueGreenStatus.PENDING.value,
             triggered_by=triggered_by,
         )
@@ -198,6 +202,7 @@ class BlueGreenService:
             BlueGreenStatus.VERIFYING.value,
             BlueGreenStatus.SWITCHING.value,
             BlueGreenStatus.ACTIVE.value,
+            BlueGreenStatus.MONITORING.value,  # Can rollback during monitoring (Issue #726 Phase 3)
         ]
 
         if deployment.status not in rollbackable_statuses:
@@ -207,9 +212,17 @@ class BlueGreenService:
         deployment.current_step = "Manual rollback initiated"
         await db.commit()
 
-        # Cancel running task if exists
+        # Cancel running deployment task if exists
         if bg_deployment_id in self._running_deployments:
             self._running_deployments[bg_deployment_id].cancel()
+
+        # Cancel running monitoring task if exists (Issue #726 Phase 3)
+        if bg_deployment_id in self._monitoring_tasks:
+            self._monitoring_tasks[bg_deployment_id].cancel()
+            try:
+                await self._monitoring_tasks[bg_deployment_id]
+            except asyncio.CancelledError:
+                pass
 
         # Start rollback task
         asyncio.create_task(self._execute_rollback(bg_deployment_id))
@@ -446,12 +459,47 @@ class BlueGreenService:
                 deployment.switched_at = datetime.utcnow()
                 await db.commit()
 
-                # Phase 5: Complete
+                # Phase 5: Active - Green is now live
                 deployment.status = BlueGreenStatus.ACTIVE.value
                 deployment.progress_percent = 90
                 deployment.current_step = "Green node is now live"
                 await db.commit()
 
+                await self._broadcast_deployment_event(
+                    bg_deployment_id, "active",
+                    "Traffic switched to green node - now live"
+                )
+
+                # Phase 6: Post-deployment health monitoring (Issue #726 Phase 3)
+                if deployment.post_deploy_monitor_duration > 0 and deployment.auto_rollback:
+                    deployment.status = BlueGreenStatus.MONITORING.value
+                    deployment.monitoring_started_at = datetime.utcnow()
+                    deployment.current_step = (
+                        f"Post-deployment monitoring ({deployment.post_deploy_monitor_duration}s, "
+                        f"threshold: {deployment.health_failure_threshold} failures)"
+                    )
+                    await db.commit()
+
+                    await self._broadcast_deployment_event(
+                        bg_deployment_id, "monitoring_started",
+                        f"Post-deployment health monitoring started for {deployment.post_deploy_monitor_duration}s"
+                    )
+
+                    # Start monitoring task (non-blocking)
+                    monitoring_task = asyncio.create_task(
+                        self._monitor_deployment_health(bg_deployment_id)
+                    )
+                    self._monitoring_tasks[bg_deployment_id] = monitoring_task
+
+                    logger.info(
+                        "Started post-deployment monitoring: %s (duration=%ds, threshold=%d)",
+                        bg_deployment_id,
+                        deployment.post_deploy_monitor_duration,
+                        deployment.health_failure_threshold,
+                    )
+                    return  # Exit - monitoring task will handle completion
+
+                # No monitoring configured - proceed to completion
                 # Optional: Purge roles from blue node
                 if deployment.purge_on_complete:
                     deployment.current_step = "Purging roles from blue node"
@@ -548,6 +596,201 @@ class BlueGreenService:
                 deployment.error = f"Rollback failed: {e}"
                 deployment.completed_at = datetime.utcnow()
                 await db.commit()
+
+    async def _monitor_deployment_health(self, bg_deployment_id: str) -> None:
+        """Post-deployment health monitoring with automatic rollback (Issue #726 Phase 3).
+
+        Monitors green node health after deployment for the configured duration.
+        Triggers automatic rollback if health failures exceed threshold.
+        """
+        from services.database import db_service
+
+        logger.info("Starting health monitoring for deployment: %s", bg_deployment_id)
+
+        try:
+            async with db_service.session() as db:
+                deployment = await self._get_deployment(db, bg_deployment_id)
+                if not deployment:
+                    logger.error("Deployment not found for monitoring: %s", bg_deployment_id)
+                    return
+
+                # Calculate monitoring deadline
+                monitoring_start = deployment.monitoring_started_at or datetime.utcnow()
+                monitoring_deadline = monitoring_start + timedelta(
+                    seconds=deployment.post_deploy_monitor_duration
+                )
+                check_interval = deployment.health_check_interval
+                failure_threshold = deployment.health_failure_threshold
+
+                consecutive_failures = 0
+                total_checks = 0
+                successful_checks = 0
+
+                while datetime.utcnow() < monitoring_deadline:
+                    # Check if deployment was cancelled or rolled back externally
+                    async with db_service.session() as check_db:
+                        current_deployment = await self._get_deployment(check_db, bg_deployment_id)
+                        if not current_deployment:
+                            return
+                        if current_deployment.status not in [
+                            BlueGreenStatus.MONITORING.value,
+                            BlueGreenStatus.ACTIVE.value,
+                        ]:
+                            logger.info(
+                                "Monitoring stopped - deployment status changed: %s -> %s",
+                                bg_deployment_id,
+                                current_deployment.status,
+                            )
+                            return
+
+                    # Perform health check
+                    healthy = await self._verify_health(
+                        deployment.green_node_id,
+                        deployment.health_check_url,
+                        check_interval,
+                        check_interval * 2,  # Short timeout for monitoring checks
+                    )
+
+                    total_checks += 1
+
+                    if healthy:
+                        consecutive_failures = 0
+                        successful_checks += 1
+                        logger.debug(
+                            "Health check passed for %s (check #%d)",
+                            bg_deployment_id,
+                            total_checks,
+                        )
+                    else:
+                        consecutive_failures += 1
+                        logger.warning(
+                            "Health check failed for %s (failures: %d/%d)",
+                            bg_deployment_id,
+                            consecutive_failures,
+                            failure_threshold,
+                        )
+
+                        # Update failure count in database
+                        async with db_service.session() as update_db:
+                            dep = await self._get_deployment(update_db, bg_deployment_id)
+                            if dep:
+                                dep.health_failures = consecutive_failures
+                                dep.current_step = (
+                                    f"Health monitoring: {consecutive_failures}/{failure_threshold} "
+                                    f"failures, {successful_checks}/{total_checks} checks passed"
+                                )
+                                await update_db.commit()
+
+                        # Broadcast health failure event
+                        await self._broadcast_deployment_event(
+                            bg_deployment_id,
+                            "health_check_failed",
+                            f"Health check failed ({consecutive_failures}/{failure_threshold} failures)",
+                        )
+
+                        # Check if threshold exceeded
+                        if consecutive_failures >= failure_threshold:
+                            logger.error(
+                                "Health failure threshold exceeded for %s - triggering rollback",
+                                bg_deployment_id,
+                            )
+
+                            async with db_service.session() as rollback_db:
+                                dep = await self._get_deployment(rollback_db, bg_deployment_id)
+                                if dep:
+                                    dep.error = (
+                                        f"Automatic rollback triggered: {consecutive_failures} "
+                                        f"consecutive health failures exceeded threshold of {failure_threshold}"
+                                    )
+                                    dep.status = BlueGreenStatus.ROLLING_BACK.value
+                                    await rollback_db.commit()
+
+                            await self._broadcast_deployment_event(
+                                bg_deployment_id,
+                                "auto_rollback_triggered",
+                                f"Automatic rollback triggered after {consecutive_failures} consecutive failures",
+                            )
+
+                            # Execute rollback
+                            await self._execute_rollback(bg_deployment_id)
+                            return
+
+                    # Wait before next check
+                    await asyncio.sleep(check_interval)
+
+                # Monitoring period completed successfully
+                logger.info(
+                    "Health monitoring completed for %s (%d/%d checks passed)",
+                    bg_deployment_id,
+                    successful_checks,
+                    total_checks,
+                )
+
+                async with db_service.session() as complete_db:
+                    deployment = await self._get_deployment(complete_db, bg_deployment_id)
+                    if not deployment:
+                        return
+
+                    # Check status - only complete if still monitoring
+                    if deployment.status != BlueGreenStatus.MONITORING.value:
+                        return
+
+                    # Optional: Purge roles from blue node
+                    if deployment.purge_on_complete:
+                        deployment.current_step = "Purging roles from blue node"
+                        await complete_db.commit()
+                        await self.purge_roles(
+                            complete_db, deployment.blue_node_id, deployment.blue_roles
+                        )
+
+                    deployment.status = BlueGreenStatus.COMPLETED.value
+                    deployment.progress_percent = 100
+                    deployment.current_step = (
+                        f"Deployment completed - monitoring passed "
+                        f"({successful_checks}/{total_checks} health checks)"
+                    )
+                    deployment.completed_at = datetime.utcnow()
+                    await complete_db.commit()
+
+                await self._broadcast_deployment_event(
+                    bg_deployment_id,
+                    "completed",
+                    f"Blue-green deployment completed after successful monitoring ({successful_checks}/{total_checks} checks)",
+                )
+
+        except asyncio.CancelledError:
+            logger.info("Health monitoring cancelled for %s", bg_deployment_id)
+            raise
+
+        except Exception as e:
+            logger.error(
+                "Health monitoring error for %s: %s", bg_deployment_id, e
+            )
+
+            # Mark as failed
+            async with db_service.session() as error_db:
+                deployment = await self._get_deployment(error_db, bg_deployment_id)
+                if deployment and deployment.status == BlueGreenStatus.MONITORING.value:
+                    deployment.status = BlueGreenStatus.FAILED.value
+                    deployment.error = f"Health monitoring error: {e}"
+                    deployment.completed_at = datetime.utcnow()
+                    await error_db.commit()
+
+        finally:
+            # Cleanup monitoring task reference
+            if bg_deployment_id in self._monitoring_tasks:
+                del self._monitoring_tasks[bg_deployment_id]
+
+    async def stop_monitoring(self, bg_deployment_id: str) -> bool:
+        """Stop post-deployment health monitoring for a deployment."""
+        if bg_deployment_id in self._monitoring_tasks:
+            self._monitoring_tasks[bg_deployment_id].cancel()
+            try:
+                await self._monitoring_tasks[bg_deployment_id]
+            except asyncio.CancelledError:
+                pass
+            return True
+        return False
 
     async def _deploy_roles_to_node(
         self, node: Node, roles: List[str]

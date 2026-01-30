@@ -198,6 +198,68 @@ async def cancel_deployment(
     )
 
 
+@router.post("/{bg_deployment_id}/stop-monitoring", response_model=BlueGreenActionResponse)
+async def stop_monitoring(
+    bg_deployment_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(require_admin)],
+) -> BlueGreenActionResponse:
+    """Stop post-deployment health monitoring and complete the deployment (admin only).
+
+    Issue #726 Phase 3: Allows manual completion of deployment during monitoring phase.
+    Use this to skip remaining monitoring time when confident the deployment is healthy.
+    """
+    from models.database import BlueGreenStatus, BlueGreenDeployment
+    from sqlalchemy import select
+    from datetime import datetime
+
+    # Get deployment
+    result = await db.execute(
+        select(BlueGreenDeployment).where(
+            BlueGreenDeployment.bg_deployment_id == bg_deployment_id
+        )
+    )
+    deployment = result.scalar_one_or_none()
+
+    if not deployment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Deployment not found",
+        )
+
+    if deployment.status != BlueGreenStatus.MONITORING.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot stop monitoring in status: {deployment.status}. Only applicable for 'monitoring' status.",
+        )
+
+    # Stop monitoring task
+    stopped = await blue_green_service.stop_monitoring(bg_deployment_id)
+
+    # Complete the deployment
+    if deployment.purge_on_complete:
+        deployment.current_step = "Purging roles from blue node"
+        await db.commit()
+        await blue_green_service.purge_roles(
+            db, deployment.blue_node_id, deployment.blue_roles
+        )
+
+    deployment.status = BlueGreenStatus.COMPLETED.value
+    deployment.progress_percent = 100
+    deployment.current_step = "Deployment completed (monitoring stopped manually)"
+    deployment.completed_at = datetime.utcnow()
+    await db.commit()
+
+    logger.info("Monitoring stopped for deployment: %s", bg_deployment_id)
+    return BlueGreenActionResponse(
+        action="stop_monitoring",
+        bg_deployment_id=bg_deployment_id,
+        success=True,
+        message="Monitoring stopped - deployment completed successfully",
+        status=BlueGreenStatus.COMPLETED.value,
+    )
+
+
 @router.post("/purge", response_model=RolePurgeResponse)
 async def purge_roles(
     data: RolePurgeRequest,
