@@ -1,0 +1,26 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# VNC Role - Default variables (override via env vars or playbook)
+---
+# VNC server settings - all from environment or playbook variables
+vnc_user: "{{ lookup('env', 'VNC_USER') | default('autobot', true) }}"
+vnc_group: "{{ lookup('env', 'VNC_GROUP') | default('autobot', true) }}"
+vnc_display: "{{ lookup('env', 'VNC_DISPLAY') | default('1', true) }}"
+vnc_geometry: "{{ lookup('env', 'VNC_GEOMETRY') | default('1920x1080', true) }}"
+vnc_depth: "{{ lookup('env', 'VNC_DEPTH') | default('24', true) }}"
+
+# Websockify settings
+websockify_port: "{{ lookup('env', 'WEBSOCKIFY_PORT') | default('6080', true) }}"
+websockify_enabled: "{{ lookup('env', 'WEBSOCKIFY_ENABLED') | default('true', true) }}"
+
+# noVNC installation
+novnc_path: /usr/share/novnc
+
+# Security - password set via SLM credential API, not in playbook
+vnc_security_type: "{{ lookup('env', 'VNC_SECURITY_TYPE') | default('VeNCrypt', true) }}"
+
+# Service management
+vnc_service_name: vnc-server
+websockify_service_name: vnc-websockify

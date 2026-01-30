@@ -817,3 +817,102 @@ class EligibleNodesResponse(BaseModel):
 
     nodes: List[EligibleNodeResponse]
     total: int
+
+
+# =============================================================================
+# VNC Credential Schemas (Issue #725)
+# =============================================================================
+
+
+class VNCCredentialCreate(BaseModel):
+    """Create VNC credential for a node."""
+
+    vnc_type: str = Field(default="desktop", pattern="^(desktop|browser|custom)$")
+    name: Optional[str] = Field(
+        None, description="Optional friendly name for the credential"
+    )
+    password: str = Field(..., min_length=1, description="VNC password (will be encrypted)")
+    port: Optional[int] = Field(None, ge=1, le=65535, description="websockify port")
+    display_number: Optional[int] = Field(None, ge=0, le=99, description="X display number")
+    vnc_port: Optional[int] = Field(
+        None, ge=1, le=65535, description="Raw VNC port (auto-calculated if not provided)"
+    )
+    websockify_enabled: bool = Field(default=True, description="Enable websockify for noVNC")
+    extra_data: Dict = Field(default_factory=dict, description="Additional configuration")
+
+
+class VNCCredentialUpdate(BaseModel):
+    """Update VNC credential."""
+
+    password: Optional[str] = Field(None, min_length=1)
+    port: Optional[int] = Field(None, ge=1, le=65535)
+    display_number: Optional[int] = Field(None, ge=0, le=99)
+    vnc_port: Optional[int] = Field(None, ge=1, le=65535)
+    websockify_enabled: Optional[bool] = None
+    is_active: Optional[bool] = None
+    extra_data: Optional[Dict] = None
+
+
+class VNCCredentialResponse(BaseModel):
+    """VNC credential response (excludes password for security)."""
+
+    id: int
+    credential_id: str
+    node_id: str
+    vnc_type: Optional[str] = None
+    name: Optional[str] = None
+    port: Optional[int] = None
+    display_number: Optional[int] = None
+    vnc_port: Optional[int] = None
+    websockify_enabled: bool = True
+    is_active: bool = True
+    last_used: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+    # Computed connection URL (no password)
+    websocket_url: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class VNCCredentialListResponse(BaseModel):
+    """List of VNC credentials."""
+
+    credentials: List[VNCCredentialResponse]
+    total: int
+
+
+class VNCConnectionInfo(BaseModel):
+    """VNC connection info with secure token for password retrieval."""
+
+    credential_id: str
+    node_id: str
+    vnc_type: str
+    host: str  # Node IP address
+    port: int
+    display_number: int
+    websocket_url: str
+    # Short-lived token for password retrieval (one-time use)
+    connection_token: Optional[str] = None
+    token_expires_at: Optional[datetime] = None
+
+
+class VNCEndpointResponse(BaseModel):
+    """VNC endpoint in fleet-wide listing."""
+
+    credential_id: str
+    node_id: str
+    hostname: str
+    ip_address: str
+    vnc_type: str
+    name: Optional[str] = None
+    port: int
+    websocket_url: str
+    is_active: bool
+
+
+class VNCEndpointsResponse(BaseModel):
+    """List of all VNC endpoints across the fleet."""
+
+    endpoints: List[VNCEndpointResponse]
+    total: int

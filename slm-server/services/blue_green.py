@@ -367,6 +367,7 @@ class BlueGreenService:
             "monitoring": ["prometheus", "grafana-server", "node_exporter"],
             "ai-stack": ["autobot-ai-stack"],
             "llm": ["ollama"],
+            "vnc": ["vnc-server", "vnc-websockify"],
         }
         return role_service_map.get(role, [role])
 

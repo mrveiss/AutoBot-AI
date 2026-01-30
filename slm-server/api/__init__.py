@@ -19,6 +19,7 @@ from .services import router as services_router, fleet_router as fleet_services_
 from .maintenance import router as maintenance_router
 from .monitoring import router as monitoring_router
 from .blue_green import router as blue_green_router
+from .vnc import node_vnc_router, vnc_router
 
 __all__ = [
     "auth_router",
@@ -34,4 +35,6 @@ __all__ = [
     "maintenance_router",
     "monitoring_router",
     "blue_green_router",
+    "node_vnc_router",
+    "vnc_router",
 ]

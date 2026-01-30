@@ -7,14 +7,21 @@
  * NoVNCTool - noVNC Remote Desktop Viewer
  *
  * Remote desktop access via noVNC WebSocket connection.
- * Migrated from main AutoBot frontend - Issue #729.
+ * Supports both static SSOT hosts and dynamic SLM-managed VNC endpoints.
+ * Related to Issue #725, #729.
  */
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { getVNCHosts } from '@/config/ssot-config'
+import { useSlmApi } from '@/composables/useSlmApi'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('NoVNCTool')
+const api = useSlmApi()
 
 // State
 const loading = ref(false)
+const loadingEndpoints = ref(false)
 const error = ref<string | null>(null)
 const isConnected = ref(false)
 const isFullscreen = ref(false)
@@ -25,12 +32,17 @@ interface VNCHost {
   host: string
   port: number
   description: string
+  source: 'static' | 'dynamic'
 }
 
-// Use SSOT config for VNC hosts - Issue #729
-const hosts = ref<VNCHost[]>(getVNCHosts())
+// Start with static SSOT hosts
+const staticHosts = getVNCHosts().map(h => ({ ...h, source: 'static' as const }))
+const dynamicHosts = ref<VNCHost[]>([])
 
-const selectedHost = ref<string>('main')
+// Combined hosts (static + dynamic from SLM API)
+const hosts = computed(() => [...staticHosts, ...dynamicHosts.value])
+
+const selectedHost = ref<string>(staticHosts[0]?.id || '')
 const currentHost = computed(() => hosts.value.find(h => h.id === selectedHost.value))
 
 // VNC URL
@@ -38,6 +50,26 @@ const vncUrl = computed(() => {
   if (!currentHost.value) return ''
   return `http://${currentHost.value.host}:${currentHost.value.port}/vnc.html?autoconnect=true&resize=scale`
 })
+
+async function fetchDynamicEndpoints(): Promise<void> {
+  loadingEndpoints.value = true
+  try {
+    const response = await api.getVncEndpoints()
+    dynamicHosts.value = response.endpoints.map(ep => ({
+      id: `slm-${ep.credential_id}`,
+      name: ep.name || `${ep.hostname} (${ep.vnc_type})`,
+      host: ep.ip_address,
+      port: ep.port,
+      description: `SLM-managed VNC on ${ep.hostname}`,
+      source: 'dynamic' as const,
+    }))
+  } catch (e) {
+    // API not available - continue with static hosts only
+    logger.warn('VNC endpoints API not available:', e)
+  } finally {
+    loadingEndpoints.value = false
+  }
+}
 
 function connect(): void {
   if (!currentHost.value) {
@@ -78,6 +110,7 @@ function handleFullscreenChange(): void {
 
 onMounted(() => {
   document.addEventListener('fullscreenchange', handleFullscreenChange)
+  fetchDynamicEndpoints()
 })
 
 onUnmounted(() => {
@@ -102,13 +135,38 @@ onUnmounted(() => {
           <!-- Host Selector -->
           <select
             v-model="selectedHost"
-            :disabled="isConnected"
+            :disabled="isConnected || loadingEndpoints"
             class="text-sm px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
           >
-            <option v-for="host in hosts" :key="host.id" :value="host.id">
-              {{ host.name }} ({{ host.host }}:{{ host.port }})
-            </option>
+            <optgroup v-if="staticHosts.length > 0" label="Static Hosts">
+              <option v-for="host in staticHosts" :key="host.id" :value="host.id">
+                {{ host.name }} ({{ host.host }}:{{ host.port }})
+              </option>
+            </optgroup>
+            <optgroup v-if="dynamicHosts.length > 0" label="SLM-Managed">
+              <option v-for="host in dynamicHosts" :key="host.id" :value="host.id">
+                {{ host.name }} ({{ host.host }}:{{ host.port }})
+              </option>
+            </optgroup>
           </select>
+
+          <!-- Refresh Button -->
+          <button
+            @click="fetchDynamicEndpoints"
+            :disabled="loadingEndpoints || isConnected"
+            class="p-1.5 text-gray-500 hover:bg-gray-200 rounded transition-colors disabled:opacity-50"
+            title="Refresh VNC endpoints"
+          >
+            <svg
+              class="w-4 h-4"
+              :class="{ 'animate-spin': loadingEndpoints }"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
 
           <!-- Connection Status -->
           <div class="flex items-center gap-2">
@@ -118,13 +176,21 @@ onUnmounted(() => {
             ></div>
             <span class="text-xs text-gray-600">{{ isConnected ? 'Connected' : 'Disconnected' }}</span>
           </div>
+
+          <!-- Dynamic Badge -->
+          <span
+            v-if="currentHost?.source === 'dynamic'"
+            class="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded"
+          >
+            SLM
+          </span>
         </div>
 
         <div class="flex items-center gap-2">
           <!-- Connect/Disconnect -->
           <button
             @click="isConnected ? disconnect() : connect()"
-            :disabled="loading"
+            :disabled="loading || !selectedHost"
             :class="[
               'px-4 py-1.5 text-sm font-medium rounded-lg transition-colors',
               isConnected
@@ -181,6 +247,9 @@ onUnmounted(() => {
               <p class="text-sm text-gray-400">{{ currentHost.description }}</p>
               <p class="text-xs text-gray-500 mt-2 font-mono">{{ currentHost.host }}:{{ currentHost.port }}</p>
             </div>
+            <div v-if="dynamicHosts.length > 0" class="mt-4 text-xs text-gray-500">
+              {{ dynamicHosts.length }} SLM-managed VNC endpoint(s) available
+            </div>
           </div>
         </div>
 
@@ -213,8 +282,10 @@ onUnmounted(() => {
           </span>
         </div>
         <div>
-          <span class="text-gray-500">Protocol:</span>
-          <span class="ml-2 text-gray-900">WebSocket VNC</span>
+          <span class="text-gray-500">Source:</span>
+          <span class="ml-2 text-gray-900">
+            {{ currentHost?.source === 'dynamic' ? 'SLM-Managed' : 'Static Config' }}
+          </span>
         </div>
       </div>
     </div>

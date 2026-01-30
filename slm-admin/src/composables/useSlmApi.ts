@@ -509,6 +509,106 @@ export function useSlmApi() {
     return response.data
   }
 
+  // VNC Credentials (Issue #725)
+  interface VNCCredentialCreate {
+    vnc_type?: 'desktop' | 'browser' | 'custom'
+    name?: string
+    password: string
+    port?: number
+    display_number?: number
+    vnc_port?: number
+    websockify_enabled?: boolean
+  }
+
+  interface VNCCredentialResponse {
+    id: number
+    credential_id: string
+    node_id: string
+    vnc_type: string | null
+    name: string | null
+    port: number | null
+    display_number: number | null
+    vnc_port: number | null
+    websockify_enabled: boolean
+    is_active: boolean
+    last_used: string | null
+    created_at: string
+    updated_at: string
+    websocket_url: string | null
+  }
+
+  interface VNCEndpointResponse {
+    credential_id: string
+    node_id: string
+    hostname: string
+    ip_address: string
+    vnc_type: string
+    name: string | null
+    port: number
+    websocket_url: string
+    is_active: boolean
+  }
+
+  interface VNCEndpointsResponse {
+    endpoints: VNCEndpointResponse[]
+    total: number
+  }
+
+  interface VNCConnectionInfo {
+    credential_id: string
+    node_id: string
+    vnc_type: string
+    host: string
+    port: number
+    display_number: number
+    websocket_url: string
+    connection_token: string | null
+    token_expires_at: string | null
+  }
+
+  async function getVncEndpoints(includeInactive = false): Promise<VNCEndpointsResponse> {
+    const params = includeInactive ? '?include_inactive=true' : ''
+    const response = await client.get<VNCEndpointsResponse>(`/vnc/endpoints${params}`)
+    return response.data
+  }
+
+  async function getNodeVncCredentials(nodeId: string): Promise<{ credentials: VNCCredentialResponse[]; total: number }> {
+    const response = await client.get<{ credentials: VNCCredentialResponse[]; total: number }>(
+      `/nodes/${nodeId}/vnc-credentials`
+    )
+    return response.data
+  }
+
+  async function createVncCredential(nodeId: string, data: VNCCredentialCreate): Promise<VNCCredentialResponse> {
+    const response = await client.post<VNCCredentialResponse>(
+      `/nodes/${nodeId}/vnc-credentials`,
+      data
+    )
+    return response.data
+  }
+
+  async function updateVncCredential(
+    credentialId: string,
+    data: Partial<VNCCredentialCreate> & { is_active?: boolean }
+  ): Promise<VNCCredentialResponse> {
+    const response = await client.patch<VNCCredentialResponse>(
+      `/vnc/credentials/${credentialId}`,
+      data
+    )
+    return response.data
+  }
+
+  async function deleteVncCredential(credentialId: string): Promise<void> {
+    await client.delete(`/vnc/credentials/${credentialId}`)
+  }
+
+  async function getVncConnectionInfo(credentialId: string): Promise<VNCConnectionInfo> {
+    const response = await client.post<VNCConnectionInfo>(
+      `/vnc/credentials/${credentialId}/connect`
+    )
+    return response.data
+  }
+
   // Maintenance Windows
   async function getMaintenanceWindows(options?: {
     node_id?: string
@@ -904,6 +1004,13 @@ export function useSlmApi() {
     restartFleetService,
     updateServiceCategory,
     restartAllNodeServices,  // Issue #725
+    // VNC Credentials (Issue #725)
+    getVncEndpoints,
+    getNodeVncCredentials,
+    createVncCredential,
+    updateVncCredential,
+    deleteVncCredential,
+    getVncConnectionInfo,
     // Maintenance Windows
     getMaintenanceWindows,
     getActiveMaintenanceWindows,

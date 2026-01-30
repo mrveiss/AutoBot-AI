@@ -408,3 +408,53 @@ class BlueGreenDeployment(Base):
     extra_data = Column(JSON, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class CredentialType(str, enum.Enum):
+    """Credential type enumeration."""
+    VNC = "vnc"
+    SSH = "ssh"
+    API_KEY = "api_key"
+    DATABASE = "database"
+
+
+class NodeCredential(Base):
+    """Encrypted credential storage for node services.
+
+    Supports VNC, SSH, and other credential types with
+    Fernet-encrypted sensitive fields.
+    """
+
+    __tablename__ = "node_credentials"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    credential_id = Column(String(64), unique=True, nullable=False, index=True)
+    node_id = Column(String(64), nullable=False, index=True)
+    credential_type = Column(String(32), nullable=False)  # vnc, ssh, api_key, etc.
+    name = Column(String(128), nullable=True)  # Optional friendly name
+
+    # Encrypted fields (Fernet)
+    encrypted_password = Column(String(512), nullable=True)
+    encrypted_data = Column(Text, nullable=True)  # Encrypted JSON blob
+
+    # VNC-specific fields (non-sensitive, stored unencrypted)
+    port = Column(Integer, nullable=True)  # websockify port
+    vnc_type = Column(String(32), nullable=True)  # desktop, browser, custom
+    display_number = Column(Integer, nullable=True)  # X display
+    vnc_port = Column(Integer, nullable=True)  # Raw VNC port
+    websockify_enabled = Column(Boolean, default=True)
+
+    # State
+    is_active = Column(Boolean, default=True)
+    last_used = Column(DateTime, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Composite unique constraint - one credential per node/type/name combo
+    __table_args__ = (
+        UniqueConstraint(
+            "node_id", "credential_type", "name", name="uq_node_cred_type_name"
+        ),
+    )

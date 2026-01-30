@@ -323,19 +323,37 @@ async function fetchEligibleNodes(roles: string[]): Promise<void> {
 }
 
 async function handleCreateBgDeployment(): Promise<void> {
-  if (!newBgDeployment.value.blue_node_id || !newBgDeployment.value.green_node_id || newBgDeployment.value.roles.length === 0) {
+  if (!newBgDeployment.value.blue_node_id) {
+    alert('Please select a blue (source) node')
+    return
+  }
+  if (!newBgDeployment.value.green_node_id) {
+    alert('Please select a green (target) node')
+    return
+  }
+  if (newBgDeployment.value.roles.length === 0) {
+    alert('Please select at least one role to migrate')
     return
   }
 
   isCreatingBg.value = true
   try {
+    logger.info('Creating blue-green deployment:', newBgDeployment.value)
     await api.createBlueGreenDeployment(newBgDeployment.value)
     showBgCreateDialog.value = false
     resetBgForm()
     await fetchBgDeployments()
-  } catch (err) {
+  } catch (err: unknown) {
     logger.error('Failed to create blue-green deployment:', err)
-    alert('Failed to create deployment')
+    const errorMessage = err instanceof Error ? err.message : String(err)
+    const axiosError = err as { response?: { data?: { detail?: string }; status?: number } }
+    const detail = axiosError?.response?.data?.detail || errorMessage
+    const status = axiosError?.response?.status
+    if (status === 403) {
+      alert('Access denied: Blue-green deployments require admin privileges')
+    } else {
+      alert(`Failed to create blue-green deployment: ${detail}`)
+    }
   } finally {
     isCreatingBg.value = false
   }
@@ -418,12 +436,22 @@ function toggleRole(role: NodeRole): void {
 
 // ===== STANDARD DEPLOYMENT CREATE METHODS =====
 async function handleCreateDeployment(): Promise<void> {
-  if (!newDeployment.value.node_id || newDeployment.value.roles.length === 0) {
+  if (!newDeployment.value.node_id) {
+    alert('Please select a target node')
+    return
+  }
+  if (newDeployment.value.roles.length === 0) {
+    alert('Please select at least one role to deploy')
     return
   }
 
   isCreatingDeployment.value = true
   try {
+    logger.info('Creating deployment:', {
+      node_id: newDeployment.value.node_id,
+      roles: newDeployment.value.roles,
+      force: newDeployment.value.force,
+    })
     await api.createDeployment({
       node_id: newDeployment.value.node_id,
       roles: newDeployment.value.roles as NodeRole[],
@@ -432,9 +460,12 @@ async function handleCreateDeployment(): Promise<void> {
     showWizard.value = false
     resetDeploymentForm()
     await fetchDeployments()
-  } catch (err) {
+  } catch (err: unknown) {
     logger.error('Failed to create deployment:', err)
-    alert('Failed to create deployment')
+    const errorMessage = err instanceof Error ? err.message : String(err)
+    const axiosError = err as { response?: { data?: { detail?: string } } }
+    const detail = axiosError?.response?.data?.detail || errorMessage
+    alert(`Failed to create deployment: ${detail}`)
   } finally {
     isCreatingDeployment.value = false
   }
