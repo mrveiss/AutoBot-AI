@@ -130,12 +130,14 @@ class ServiceConfigurator:
         Issue #665: Refactored to use extracted helpers for config building
         and SFTP operations.
         Issue #725: Added auth_clients and disable_plain_port parameters.
+        Issue #694: Use SSOT config for Redis IP.
 
         Args:
             auth_clients: Client authentication mode ("optional", "yes", "no")
             disable_plain_port: If True, disables non-TLS port (port 0)
         """
-        vm_ip = VM_DEFINITIONS.get("redis", "172.16.168.23")
+        from src.config.ssot_config import config
+        vm_ip = VM_DEFINITIONS.get("redis", config.vm.redis)
 
         logger.info("Configuring Redis Stack for TLS")
 
@@ -269,8 +271,9 @@ class ServiceConfigurator:
 """
 
     def get_redis_tls_url(self) -> str:
-        """Get Redis URL with TLS."""
-        redis_ip = VM_DEFINITIONS.get("redis", "172.16.168.23")
+        """Get Redis URL with TLS. Issue #694: Use SSOT config."""
+        from src.config.ssot_config import config
+        redis_ip = VM_DEFINITIONS.get("redis", config.vm.redis)
         return f"rediss://{redis_ip}:6380"
 
     def get_tls_context_params(self) -> dict:

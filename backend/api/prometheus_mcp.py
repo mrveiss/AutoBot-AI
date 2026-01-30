@@ -55,7 +55,7 @@ class QueryRangeRequest(BaseModel):
 class GetVMMetricsRequest(BaseModel):
     """Request model for VM metrics"""
 
-    vm_ip: str = Field(..., description="VM IP address (e.g., '172.16.168.21')")
+    vm_ip: str = Field(..., description="VM IP address")
 
 
 class ListMetricsRequest(BaseModel):
@@ -114,7 +114,7 @@ PROMETHEUS_MCP_TOOL_DEFINITIONS = (
         "Use this when you need comprehensive information about one machine.",
         {
             "type": "object",
-            "properties": {"vm_ip": {"type": "string", "description": "VM IP address (e.g., '172.16.168.21')"}},
+            "properties": {"vm_ip": {"type": "string", "description": "VM IP address"}},
             "required": ["vm_ip"],
         },
     ),

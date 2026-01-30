@@ -65,11 +65,13 @@ async def get_embedding_settings():
 
         if not embedding_config:
             # Return default configuration if none exists
+            from src.config.ssot_config import config
+
             embedding_config = {
                 "provider": "ollama",
                 "providers": {
                     "ollama": {
-                        "endpoint": "ServiceURLs.OLLAMA_LOCAL/api/embeddings",
+                        "endpoint": f"{config.ollama_url}/api/embeddings",
                         "selected_model": "nomic-embed-text:latest",
                         "models": ["nomic-embed-text:latest"],
                     }

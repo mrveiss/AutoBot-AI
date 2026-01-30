@@ -271,7 +271,7 @@ DEFAULT_AGENT_CONFIGS = {
     },
     "advanced_web_research": {
         "name": "Advanced Web Research Agent",
-        "description": "Tier 2 web research with Playwright browser automation, anti-detection measures, and CAPTCHA handling via human-in-loop. Runs on Browser VM (172.16.168.25) for isolated execution.",
+        "description": "Tier 2 web research with Playwright browser automation, anti-detection measures, and CAPTCHA handling via human-in-loop. Runs on Browser VM for isolated execution.",
         "default_model": TIER_3_MODEL,
         "provider": "ollama",
         "enabled": True,
@@ -320,7 +320,7 @@ DEFAULT_AGENT_CONFIGS = {
     # Tier 4: Advanced Agents (multi-modal, priority 4) - Larger model for complex reasoning
     "npu_code_search": {
         "name": "NPU Code Search Agent",
-        "description": "High-performance semantic code search using NPU acceleration (OpenVINO) with Redis indexing. Extends StandardizedAgent with hardware-optimized embeddings. Handles large codebase analysis efficiently on NPU Worker VM (172.16.168.22).",
+        "description": "High-performance semantic code search using NPU acceleration (OpenVINO) with Redis indexing. Extends StandardizedAgent with hardware-optimized embeddings. Handles large codebase analysis efficiently on NPU Worker VM.",
         "default_model": TIER_4_MODEL,
         "provider": "ollama",
         "enabled": True,
