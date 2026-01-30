@@ -4,6 +4,17 @@
 #
 # SLM Agent Role - Health monitoring agent for SLM fleet management
 ---
+- name: Configure passwordless sudo for SLM agent user
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/slm-agent
+    content: |
+      # SLM Agent passwordless sudo for service management
+      {{ slm_agent_user }} ALL=(ALL) NOPASSWD: /usr/bin/systemctl, /bin/journalctl
+    mode: "0440"
+    owner: root
+    group: root
+    validate: "visudo -cf %s"
+
 - name: Install Python dependencies for SLM agent
   ansible.builtin.pip:
     name:

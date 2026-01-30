@@ -944,9 +944,11 @@ class ReconcilerService:
             node.extra_data = {**(node.extra_data or {}), **extra_data}
 
             # Sync discovered services to database (Issue #728)
-            if "discovered_services" in extra_data:
+            # Support both "discovered_services" (v1.1.0+) and "services" (v1.0.0) keys
+            services_data = extra_data.get("discovered_services") or extra_data.get("services")
+            if services_data:
                 await self._sync_discovered_services(
-                    db, node.node_id, extra_data["discovered_services"]
+                    db, node.node_id, services_data
                 )
 
         old_status = node.status

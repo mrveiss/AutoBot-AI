@@ -10,6 +10,7 @@ Manages Ansible-based role deployments to nodes.
 import asyncio
 import logging
 import os
+import shutil
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -270,6 +271,27 @@ class DeploymentService:
                 await db.commit()
                 logger.error("Deployment failed: %s - %s", deployment_id, e)
 
+    def _find_ansible_playbook(self) -> str:
+        """Find the ansible-playbook executable with system PATH."""
+        # First try with current PATH
+        ansible_path = shutil.which("ansible-playbook")
+        if ansible_path:
+            return ansible_path
+
+        # Try common system paths if not in current PATH
+        common_paths = [
+            "/usr/bin/ansible-playbook",
+            "/usr/local/bin/ansible-playbook",
+            "/opt/ansible/bin/ansible-playbook",
+        ]
+        for path in common_paths:
+            if os.path.isfile(path) and os.access(path, os.X_OK):
+                return path
+
+        raise FileNotFoundError(
+            "ansible-playbook not found. Install Ansible: apt install ansible"
+        )
+
     async def _execute_ansible_playbook(
         self, host: str, roles: List[str]
     ) -> str:
@@ -279,9 +301,10 @@ class DeploymentService:
         if not playbook_path.exists():
             raise FileNotFoundError(f"Playbook not found: {playbook_path}")
 
+        ansible_cmd = self._find_ansible_playbook()
         roles_str = ",".join(roles)
         cmd = [
-            "ansible-playbook",
+            ansible_cmd,
             str(playbook_path),
             "-i", f"{host},",
             "-e", f"target_roles={roles_str}",
@@ -385,8 +408,6 @@ class DeploymentService:
         ssh_password: Optional[str] = None
     ) -> str:
         """Execute the SLM agent enrollment playbook."""
-        import shutil
-
         playbook_path = self.ansible_dir / "enroll.yml"
 
         # Create enrollment playbook if it doesn't exist
@@ -396,11 +417,14 @@ class DeploymentService:
         # Use external_url from config for the admin URL that nodes will use
         admin_url = settings.external_url
 
+        # Find ansible-playbook executable
+        ansible_cmd = self._find_ansible_playbook()
+
         # Build the ansible command
         # Always skip host key checking for automated enrollment
         # Use ControlPath=none to avoid PTY issues when running from uvicorn
         cmd = [
-            "ansible-playbook",
+            ansible_cmd,
             str(playbook_path),
             "-i", f"{host},",
             "-e", f"ansible_host={host}",
