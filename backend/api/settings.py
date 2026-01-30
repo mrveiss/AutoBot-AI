@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from backend.celery_app import celery_app
 from backend.services.config_service import ConfigService
-from backend.tasks.deployment_tasks import (
+from backend.tasks.system_tasks import (
     initialize_rbac,
     run_system_update,
     check_available_updates,

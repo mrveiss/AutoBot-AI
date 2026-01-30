@@ -41,7 +41,7 @@ from backend.api.terminal_models import (
 #     SSHSession,
 #     get_ssh_connection_service,
 # )
-from backend.services.infrastructure_host_service import get_infrastructure_host_service
+# Infrastructure services removed - now managed by SLM server (#729)
 from src.chat_history import ChatHistoryManager
 from src.constants.threshold_constants import TimingConstants
 
@@ -82,10 +82,9 @@ class SSHTerminalWebSocket:
 
         # SSH connection
         # TODO (#729): SSH proxied through SLM API - Update in Task 5.2
-        # self.ssh_service = get_ssh_connection_service()
+        # Infrastructure services removed - now managed by SLM server (#729)
         self.ssh_service = None  # Temporarily disabled - will proxy through SLM
-        self.host_service = get_infrastructure_host_service()
-        # self.ssh_session: Optional[SSHSession] = None
+        self.host_service = None  # Infrastructure services removed (#729)
         self.ssh_session = None
 
         # Terminal state
@@ -118,11 +117,10 @@ class SSHTerminalWebSocket:
         """
         self.active = True
 
-        # Get host info for display
-        host = self.host_service.get_host(self.host_id)
-        if not host:
-            await self._send_error("Host not found")
-            return False
+        # Infrastructure services removed - now managed by SLM server (#729)
+        # TODO (#729): Get host info from SLM API
+        await self._send_error("SSH terminal temporarily disabled - infrastructure services removed (#729)")
+        return False
 
         try:
             # Establish SSH connection with interactive PTY

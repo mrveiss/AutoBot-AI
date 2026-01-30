@@ -5,8 +5,19 @@
 Celery Tasks Package
 
 Contains all Celery task definitions for AutoBot IaC platform.
+
+Note: Deployment tasks removed - now managed by SLM server (#729)
+System tasks (RBAC, updates) maintained as stubs for backward compatibility.
 """
 
-from .deployment_tasks import deploy_host, provision_ssh_key
+from .system_tasks import (
+    initialize_rbac,
+    run_system_update,
+    check_available_updates,
+)
 
-__all__ = ["deploy_host", "provision_ssh_key"]
+__all__ = [
+    "initialize_rbac",
+    "run_system_update",
+    "check_available_updates",
+]
