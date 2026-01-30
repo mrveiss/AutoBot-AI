@@ -12,7 +12,7 @@ from typing import Optional
 
 from typing_extensions import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.schemas import (
@@ -30,6 +30,18 @@ from services.database import get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/blue-green", tags=["blue-green"])
+
+# Deployment ID validation pattern (8 hex characters from UUID)
+DEPLOYMENT_ID_PATTERN = r"^[a-f0-9]{8}$"
+DeploymentIdPath = Annotated[
+    str,
+    Path(
+        ...,
+        pattern=DEPLOYMENT_ID_PATTERN,
+        description="Blue-green deployment ID (8 hex characters)",
+        examples=["a1b2c3d4"],
+    ),
+]
 
 
 @router.get("", response_model=BlueGreenListResponse)
@@ -104,7 +116,7 @@ async def find_eligible_nodes(
 
 @router.get("/{bg_deployment_id}", response_model=BlueGreenResponse)
 async def get_deployment(
-    bg_deployment_id: str,
+    bg_deployment_id: DeploymentIdPath,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
 ) -> BlueGreenResponse:
@@ -122,7 +134,7 @@ async def get_deployment(
 
 @router.post("/{bg_deployment_id}/switch", response_model=BlueGreenActionResponse)
 async def switch_traffic(
-    bg_deployment_id: str,
+    bg_deployment_id: DeploymentIdPath,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(require_admin)],
 ) -> BlueGreenActionResponse:
@@ -149,7 +161,7 @@ async def switch_traffic(
 
 @router.post("/{bg_deployment_id}/rollback", response_model=BlueGreenActionResponse)
 async def rollback_deployment(
-    bg_deployment_id: str,
+    bg_deployment_id: DeploymentIdPath,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(require_admin)],
 ) -> BlueGreenActionResponse:
@@ -176,7 +188,7 @@ async def rollback_deployment(
 
 @router.post("/{bg_deployment_id}/cancel", response_model=BlueGreenActionResponse)
 async def cancel_deployment(
-    bg_deployment_id: str,
+    bg_deployment_id: DeploymentIdPath,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(require_admin)],
 ) -> BlueGreenActionResponse:
@@ -200,7 +212,7 @@ async def cancel_deployment(
 
 @router.post("/{bg_deployment_id}/retry", response_model=BlueGreenActionResponse)
 async def retry_deployment(
-    bg_deployment_id: str,
+    bg_deployment_id: DeploymentIdPath,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[dict, Depends(require_admin)],
 ) -> BlueGreenActionResponse:
@@ -230,7 +242,7 @@ async def retry_deployment(
 
 @router.post("/{bg_deployment_id}/stop-monitoring", response_model=BlueGreenActionResponse)
 async def stop_monitoring(
-    bg_deployment_id: str,
+    bg_deployment_id: DeploymentIdPath,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(require_admin)],
 ) -> BlueGreenActionResponse:
@@ -239,54 +251,20 @@ async def stop_monitoring(
     Issue #726 Phase 3: Allows manual completion of deployment during monitoring phase.
     Use this to skip remaining monitoring time when confident the deployment is healthy.
     """
-    from models.database import BlueGreenStatus, BlueGreenDeployment
-    from sqlalchemy import select
-    from datetime import datetime
+    success, message = await blue_green_service.complete_monitoring(db, bg_deployment_id)
 
-    # Get deployment
-    result = await db.execute(
-        select(BlueGreenDeployment).where(
-            BlueGreenDeployment.bg_deployment_id == bg_deployment_id
-        )
-    )
-    deployment = result.scalar_one_or_none()
-
-    if not deployment:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Deployment not found",
-        )
-
-    if deployment.status != BlueGreenStatus.MONITORING.value:
+    if not success:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot stop monitoring in status: {deployment.status}. Only applicable for 'monitoring' status.",
+            detail=message,
         )
-
-    # Stop monitoring task
-    stopped = await blue_green_service.stop_monitoring(bg_deployment_id)
-
-    # Complete the deployment
-    if deployment.purge_on_complete:
-        deployment.current_step = "Purging roles from blue node"
-        await db.commit()
-        await blue_green_service.purge_roles(
-            db, deployment.blue_node_id, deployment.blue_roles
-        )
-
-    deployment.status = BlueGreenStatus.COMPLETED.value
-    deployment.progress_percent = 100
-    deployment.current_step = "Deployment completed (monitoring stopped manually)"
-    deployment.completed_at = datetime.utcnow()
-    await db.commit()
 
     logger.info("Monitoring stopped for deployment: %s", bg_deployment_id)
     return BlueGreenActionResponse(
         action="stop_monitoring",
         bg_deployment_id=bg_deployment_id,
         success=True,
-        message="Monitoring stopped - deployment completed successfully",
-        status=BlueGreenStatus.COMPLETED.value,
+        message=message,
     )
 
 
@@ -305,21 +283,27 @@ async def purge_roles(
 
     Use with caution - this is destructive!
     """
-    success, message, stopped_services = await blue_green_service.purge_roles(
-        db, data.node_id, data.roles, data.force
-    )
-
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=message,
+    try:
+        success, message, stopped_services = await blue_green_service.purge_roles(
+            db, data.node_id, data.roles, data.force
         )
 
-    logger.info("Roles purged from node %s: %s", data.node_id, data.roles)
-    return RolePurgeResponse(
-        success=True,
-        message=message,
-        purged_roles=data.roles,
-        node_id=data.node_id,
-        services_stopped=stopped_services,
-    )
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=message,
+            )
+
+        logger.info("Roles purged from node %s: %s", data.node_id, data.roles)
+        return RolePurgeResponse(
+            success=True,
+            message=message,
+            purged_roles=data.roles,
+            node_id=data.node_id,
+            services_stopped=stopped_services,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
