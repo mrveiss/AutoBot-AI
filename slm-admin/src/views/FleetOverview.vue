@@ -65,6 +65,15 @@ onMounted(async () => {
   // Connect WebSocket for real-time updates
   ws.connect()
 
+  // Subscribe to all nodes once connected
+  // Use a watcher to subscribe when connection is established
+  const unwatch = watch(() => ws.connected.value, (connected) => {
+    if (connected) {
+      ws.subscribeAll()
+      logger.info('WebSocket connected, subscribed to all nodes')
+    }
+  }, { immediate: true })
+
   // Register WebSocket event handlers
   ws.onHealthUpdate((nodeId: string, health: NodeHealth) => {
     logger.debug('WebSocket health update:', nodeId, health)
@@ -89,6 +98,35 @@ onMounted(async () => {
   ws.onServiceStatus((nodeId: string, data) => {
     logger.debug('Service status update:', nodeId, data)
     // Could update service-specific state here if needed
+  })
+
+  ws.onBackupStatus((nodeId: string, backup) => {
+    logger.info('Backup status update:', nodeId, backup)
+    // Notify user of backup progress/completion
+    if (backup.status === 'completed') {
+      logger.info(`Backup completed for node ${nodeId}`)
+    } else if (backup.status === 'failed') {
+      logger.error(`Backup failed for node ${nodeId}:`, backup.error)
+    }
+  })
+
+  ws.onDeploymentStatus((nodeId: string, deployment) => {
+    logger.info('Deployment status update:', nodeId, deployment)
+    // Refresh node to reflect deployment changes
+    if (deployment.status === 'completed' || deployment.status === 'failed') {
+      fleetStore.refreshNode(nodeId).catch(err => {
+        logger.error('Failed to refresh node after deployment:', err)
+      })
+    }
+  })
+
+  ws.onRollbackEvent((nodeId: string, data) => {
+    logger.info('Rollback event:', nodeId, data)
+    if (data.event_type === 'completed') {
+      fleetStore.refreshNode(nodeId).catch(err => {
+        logger.error('Failed to refresh node after rollback:', err)
+      })
+    }
   })
 })
 

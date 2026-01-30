@@ -10,10 +10,11 @@
 
 import { ref, onUnmounted } from 'vue'
 import type { SLMWebSocketMessage, NodeHealth } from '@/types/slm'
+import { getConfig } from '@/config/ssot-config'
 
-// Use secure WebSocket (wss) when page is loaded over HTTPS
-const WS_PROTOCOL = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-const WS_URL = `${WS_PROTOCOL}//${window.location.host}/api/ws/events`
+// Use WebSocket URL from SSOT config
+const config = getConfig()
+const WS_URL = `${config.wsBaseUrl}/api/ws/events`
 
 export function useSlmWebSocket() {
   const socket = ref<WebSocket | null>(null)
@@ -23,6 +24,9 @@ export function useSlmWebSocket() {
 
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let pingInterval: ReturnType<typeof setInterval> | null = null
+  let reconnectAttempts = 0
+  const MAX_RECONNECT_DELAY = 30000 // 30 seconds max
+  const BASE_RECONNECT_DELAY = 1000 // 1 second base
 
   const messageHandlers = new Map<string, (data: SLMWebSocketMessage) => void>()
 
@@ -36,6 +40,7 @@ export function useSlmWebSocket() {
     socket.value.onopen = () => {
       connected.value = true
       reconnecting.value = false
+      reconnectAttempts = 0 // Reset on successful connection
 
       // Start ping interval to keep connection alive
       pingInterval = setInterval(() => {
@@ -101,10 +106,18 @@ export function useSlmWebSocket() {
     if (reconnectTimer) return
 
     reconnecting.value = true
+
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, up to 30s max
+    const delay = Math.min(
+      BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts),
+      MAX_RECONNECT_DELAY
+    )
+    reconnectAttempts++
+
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null
       connect()
-    }, 3000)
+    }, delay)
   }
 
   function subscribe(nodeId: string): void {
