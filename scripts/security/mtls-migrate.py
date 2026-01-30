@@ -26,8 +26,12 @@ Usage:
 
 import argparse
 import asyncio
+import datetime
 import logging
 import os
+import secrets
+import shlex
+import string
 import sys
 from pathlib import Path
 from typing import Optional
@@ -51,12 +55,123 @@ logger = logging.getLogger(__name__)
 class MTLSMigration:
     """Orchestrates mTLS migration phases."""
 
+    # Admin credentials file - stored separately from app config
+    ADMIN_CREDS_FILE = PROJECT_ROOT / "certs" / ".redis-admin-credentials"
+
     def __init__(self):
         self.config = TLSConfig()
         self.generator = CertificateGenerator(self.config)
         self.distributor = CertificateDistributor(self.config)
         self.configurator = ServiceConfigurator(self.config)
         self.env_file = PROJECT_ROOT / ".env"
+
+    def _generate_admin_password(self) -> str:
+        """Generate a secure admin password (shell-safe characters only)."""
+        # Avoid special chars that cause shell escaping issues
+        alphabet = string.ascii_letters + string.digits
+        return ''.join(secrets.choice(alphabet) for _ in range(48))
+
+    def _save_admin_credentials(self, username: str, password: str) -> None:
+        """Save admin credentials to secure file (not in app config)."""
+        self.ADMIN_CREDS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.ADMIN_CREDS_FILE, "w", encoding="utf-8") as f:
+            f.write("# Redis Admin Credentials - Issue #725\n")
+            f.write("# DO NOT use in application - emergency recovery only\n")
+            f.write(f"# Created: {datetime.datetime.now().isoformat()}\n")
+            f.write(f"REDIS_ADMIN_USER={username}\n")
+            f.write(f"REDIS_ADMIN_PASSWORD={password}\n")
+        # Secure file permissions (owner read/write only)
+        os.chmod(self.ADMIN_CREDS_FILE, 0o600)
+        logger.info(f"Admin credentials saved to: {self.ADMIN_CREDS_FILE}")
+
+    def _get_admin_credentials(self) -> Optional[tuple]:
+        """Get admin credentials from secure file."""
+        if not self.ADMIN_CREDS_FILE.exists():
+            return None
+        username = None
+        password = None
+        with open(self.ADMIN_CREDS_FILE, encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("REDIS_ADMIN_USER="):
+                    username = line.split("=", 1)[1].strip()
+                elif line.startswith("REDIS_ADMIN_PASSWORD="):
+                    password = line.split("=", 1)[1].strip()
+        if username and password:
+            return (username, password)
+        return None
+
+    async def setup_admin_user(self) -> bool:
+        """
+        Create a separate Redis admin user for emergency access.
+
+        This user:
+        - Has full permissions (+@all)
+        - Uses password authentication (works even when mTLS is required)
+        - Is NOT used by the application
+        - Can re-enable password auth if needed
+        """
+        logger.info("=" * 60)
+        logger.info("Setting up Redis Admin User")
+        logger.info("=" * 60)
+
+        import asyncssh
+
+        redis_ip = VM_DEFINITIONS.get("redis", "172.16.168.23")
+        admin_user = "autobot_admin"
+        admin_password = self._generate_admin_password()
+
+        try:
+            # Get current Redis password for authentication
+            current_password = self._get_redis_password()
+            if not current_password:
+                logger.error("Cannot get current Redis password from .env")
+                return False
+
+            async with asyncssh.connect(
+                redis_ip,
+                username=self.config.ssh_user,
+                client_keys=[str(self.config.ssh_key_path)],
+                known_hosts=None,
+                connect_timeout=10,
+            ) as conn:
+                # Create admin user with ACL - escape password for shell safety
+                # +@all = all commands, ~* = all keys, &* = all channels
+                escaped_pass = shlex.quote(current_password)
+                acl_cmd = (
+                    f"redis-cli --no-auth-warning -a {escaped_pass} "
+                    f"ACL SETUSER {admin_user} on \\>{admin_password} ~* \\&* +@all"
+                )
+                result = await conn.run(acl_cmd)
+                if result.returncode != 0:
+                    logger.error(f"Failed to create admin user: {result.stderr}")
+                    return False
+
+                # Save ACL to disk so it persists across restarts
+                save_result = await conn.run(
+                    f"redis-cli --no-auth-warning -a {escaped_pass} ACL SAVE"
+                )
+                if save_result.returncode != 0:
+                    logger.warning("ACL SAVE failed - user may not persist after restart")
+
+                logger.info(f"Admin user '{admin_user}' created successfully")
+
+            # Save credentials to secure file
+            self._save_admin_credentials(admin_user, admin_password)
+
+            logger.info("\n" + "=" * 60)
+            logger.info("Admin User Setup Complete")
+            logger.info("=" * 60)
+            logger.info(f"\nCredentials saved to: {self.ADMIN_CREDS_FILE}")
+            logger.info("This file is NOT in app config - keep it secure!")
+            logger.info("\nTo use admin user for recovery:")
+            logger.info(f"  redis-cli -h {redis_ip} -p 6379 --user {admin_user} --pass <password>")
+            logger.info(f"  redis-cli -h {redis_ip} -p 6380 --tls --user {admin_user} --pass <password>")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Admin user setup failed: {e}")
+            return False
 
     def _get_redis_password(self) -> Optional[str]:
         """Get Redis password from environment or config."""
@@ -582,12 +697,21 @@ Examples:
         action="store_true",
         help="Check certificate status only",
     )
+    parser.add_argument(
+        "--setup-admin",
+        action="store_true",
+        help="Create Redis admin user (run BEFORE disable-password)",
+    )
     args = parser.parse_args()
 
     migration = MTLSMigration()
 
     if args.check_certs:
         success = migration.check_certificates()
+        sys.exit(0 if success else 1)
+
+    if args.setup_admin:
+        success = await migration.setup_admin_user()
         sys.exit(0 if success else 1)
 
     if args.rollback:

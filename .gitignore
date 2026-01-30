@@ -428,3 +428,6 @@ ansible/inventory/group_vars/vault.yml
 
 # Git worktrees for isolated development
 .worktrees/
+
+# Redis admin credentials (Issue #725)
+certs/.redis-admin-credentials
