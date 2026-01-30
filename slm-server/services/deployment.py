@@ -245,8 +245,22 @@ class DeploymentService:
             await db.commit()
 
             try:
+                # Get SSH credentials from node for authentication
+                ssh_user = node.ssh_user or "autobot"
+                ssh_port = node.ssh_port or 22
+
+                # Get stored password for SSH and sudo authentication
+                # Password is stored during node registration in extra_data
+                ssh_password = None
+                if node.extra_data:
+                    ssh_password = node.extra_data.get("ssh_password")
+
                 output = await self._execute_ansible_playbook(
-                    node.ip_address, deployment.roles
+                    node.ip_address,
+                    deployment.roles,
+                    ssh_user=ssh_user,
+                    ssh_port=ssh_port,
+                    ssh_password=ssh_password,
                 )
 
                 deployment.status = DeploymentStatus.COMPLETED.value
@@ -293,9 +307,26 @@ class DeploymentService:
         )
 
     async def _execute_ansible_playbook(
-        self, host: str, roles: List[str]
+        self,
+        host: str,
+        roles: List[str],
+        ssh_user: Optional[str] = None,
+        ssh_port: Optional[int] = None,
+        ssh_password: Optional[str] = None,
     ) -> str:
-        """Execute an Ansible playbook for the given roles."""
+        """
+        Execute an Ansible playbook for the given roles.
+
+        Args:
+            host: Target host IP address
+            roles: List of roles to deploy
+            ssh_user: SSH username (optional, uses ansible default if not provided)
+            ssh_port: SSH port (optional, uses 22 if not provided)
+            ssh_password: SSH password for authentication and sudo (optional)
+
+        Returns:
+            Ansible playbook output
+        """
         playbook_path = self.ansible_dir / "deploy.yml"
 
         if not playbook_path.exists():
@@ -309,13 +340,46 @@ class DeploymentService:
             "-i", f"{host},",
             "-e", f"target_roles={roles_str}",
             "-e", f"target_host={host}",
+            "-e", "ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ControlPath=none'",
+            "-e", "ansible_ssh_pipelining=false",
         ]
+
+        # Add SSH user if provided
+        if ssh_user:
+            cmd.extend(["-e", f"ansible_user={ssh_user}"])
+
+        # Add SSH port if provided
+        if ssh_port:
+            cmd.extend(["-e", f"ansible_port={ssh_port}"])
+
+        # Add password authentication if provided (for both SSH and sudo)
+        if ssh_password:
+            if not shutil.which("sshpass"):
+                raise RuntimeError(
+                    "Password auth requires 'sshpass'. Install: sudo apt install sshpass"
+                )
+            cmd.extend([
+                "-e", "ansible_ssh_pass=" + ssh_password,
+                "-e", "ansible_become_pass=" + ssh_password,
+            ])
+
+        logger.debug("Running deployment: %s", " ".join(cmd[:10]) + " ...")
+
+        # Set environment to avoid TTY issues when running from uvicorn
+        env = {
+            **os.environ,
+            "ANSIBLE_FORCE_COLOR": "0",
+            "ANSIBLE_NOCOLOR": "1",
+            "ANSIBLE_HOST_KEY_CHECKING": "False",
+            "ANSIBLE_SSH_RETRIES": "3",
+        }
 
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             cwd=str(self.ansible_dir),
+            env=env,
         )
 
         stdout, _ = await process.communicate()
