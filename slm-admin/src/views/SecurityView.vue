@@ -664,7 +664,23 @@ const scoreColor = computed(() => {
                 </span>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm">
-                <div class="flex gap-2">
+                <div class="flex gap-2 flex-wrap">
+                  <button
+                    @click="renewTlsCertificate(endpoint.credential_id)"
+                    :disabled="renewingCredentialId === endpoint.credential_id"
+                    class="px-2 py-1 rounded text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 disabled:opacity-50"
+                    title="Renew certificate (same keys)"
+                  >
+                    {{ renewingCredentialId === endpoint.credential_id ? '...' : 'Renew' }}
+                  </button>
+                  <button
+                    @click="rotateTlsCertificate(endpoint.credential_id)"
+                    :disabled="rotatingCredentialId === endpoint.credential_id"
+                    class="px-2 py-1 rounded text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 disabled:opacity-50"
+                    title="Rotate certificate (new keys)"
+                  >
+                    {{ rotatingCredentialId === endpoint.credential_id ? '...' : 'Rotate' }}
+                  </button>
                   <button
                     @click="toggleTlsCertificateActive(endpoint.credential_id, endpoint.is_active)"
                     :class="[

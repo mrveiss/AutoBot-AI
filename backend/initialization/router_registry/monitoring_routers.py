@@ -22,13 +22,6 @@ logger = logging.getLogger(__name__)
 # Issue #729: Removed infrastructure routers - now served by slm-server
 MONITORING_ROUTER_CONFIGS = [
     ("backend.api.monitoring", "router", "/monitoring", ["monitoring"], "monitoring"),
-    (
-        "backend.api.service_monitor",
-        "router",
-        "/service-monitor",
-        ["service-monitor"],
-        "service_monitor",
-    ),
     ("backend.api.metrics", "router", "/metrics", ["metrics"], "metrics"),
     # Issue #69: monitoring_alerts removed - replaced by Prometheus AlertManager
     # Alerts now handled via alertmanager_webhook router (Issue #346)
