@@ -102,6 +102,65 @@ const newBgDeployment = ref<BlueGreenDeploymentCreate>({
 // Available roles
 const availableRoles = computed(() => fleetStore.availableRoles.map(r => r.name))
 
+// Role categories with descriptions and compatibility info
+const roleCategories = computed(() => {
+  const roles = fleetStore.availableRoles
+  const categories: Record<string, {
+    label: string
+    description: string
+    roles: Array<{ name: string; description: string; dependencies: string[] }>
+  }> = {
+    core: {
+      label: 'Core Infrastructure',
+      description: 'Required base components for all nodes',
+      roles: [],
+    },
+    data: {
+      label: 'Data Layer',
+      description: 'Database and caching services',
+      roles: [],
+    },
+    application: {
+      label: 'Application Layer',
+      description: 'Backend API and frontend web servers',
+      roles: [],
+    },
+    ai: {
+      label: 'AI/ML Services',
+      description: 'LLM inference and AI processing',
+      roles: [],
+    },
+    automation: {
+      label: 'Automation',
+      description: 'Browser automation and scripting',
+      roles: [],
+    },
+    observability: {
+      label: 'Observability',
+      description: 'Monitoring and logging stack',
+      roles: [],
+    },
+    'remote-access': {
+      label: 'Remote Access',
+      description: 'VNC and remote desktop services',
+      roles: [],
+    },
+  }
+
+  for (const role of roles) {
+    const cat = role.category || 'core'
+    if (categories[cat]) {
+      categories[cat].roles.push({
+        name: role.name,
+        description: role.description,
+        dependencies: role.dependencies || [],
+      })
+    }
+  }
+
+  return categories
+})
+
 // Blue-green stats
 const bgStats = computed(() => ({
   total: bgDeployments.value.length,
@@ -1038,27 +1097,91 @@ function getNodeHostname(nodeId: string): string {
             </div>
           </div>
 
-          <!-- Roles Selection -->
+          <!-- Roles Selection by Category -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">Roles to Deploy</label>
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="role in availableRoles"
-                :key="role"
-                @click="toggleDeploymentRole(role)"
-                :class="[
-                  'px-3 py-1 text-sm font-medium rounded-full border transition-colors',
-                  newDeployment.roles.includes(role)
-                    ? 'bg-primary-100 text-primary-700 border-primary-300'
-                    : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
-                ]"
-              >
-                {{ role }}
-              </button>
-            </div>
-            <p v-if="availableRoles.length === 0" class="text-sm text-gray-500 mt-2">
+            <p v-if="availableRoles.length === 0" class="text-sm text-gray-500">
               Loading available roles...
             </p>
+            <div v-else class="space-y-3">
+              <template v-for="(category, catKey) in roleCategories" :key="catKey">
+                <div v-if="category.roles.length > 0" class="border border-gray-200 rounded-lg overflow-hidden">
+                  <!-- Category Header -->
+                  <div class="bg-gray-50 px-3 py-2 border-b border-gray-200">
+                    <div class="flex items-center justify-between">
+                      <span class="text-sm font-medium text-gray-800">{{ category.label }}</span>
+                      <span class="text-xs text-gray-500">{{ category.description }}</span>
+                    </div>
+                  </div>
+                  <!-- Category Roles -->
+                  <div class="p-3 space-y-2">
+                    <div
+                      v-for="role in category.roles"
+                      :key="role.name"
+                      @click="toggleDeploymentRole(role.name)"
+                      :class="[
+                        'flex items-start gap-3 p-2 rounded-md cursor-pointer transition-colors',
+                        newDeployment.roles.includes(role.name)
+                          ? 'bg-primary-50 border border-primary-200'
+                          : 'hover:bg-gray-50 border border-transparent'
+                      ]"
+                    >
+                      <!-- Checkbox -->
+                      <div :class="[
+                        'w-5 h-5 rounded flex-shrink-0 flex items-center justify-center mt-0.5',
+                        newDeployment.roles.includes(role.name)
+                          ? 'bg-primary-600'
+                          : 'border-2 border-gray-300'
+                      ]">
+                        <svg
+                          v-if="newDeployment.roles.includes(role.name)"
+                          class="w-3 h-3 text-white"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                      <!-- Role Info -->
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span :class="[
+                            'text-sm font-medium',
+                            newDeployment.roles.includes(role.name) ? 'text-primary-700' : 'text-gray-900'
+                          ]">
+                            {{ role.name }}
+                          </span>
+                          <!-- Dependencies Badge -->
+                          <span
+                            v-if="role.dependencies.length > 0"
+                            class="px-1.5 py-0.5 text-xs bg-amber-100 text-amber-700 rounded"
+                            :title="'Requires: ' + role.dependencies.join(', ')"
+                          >
+                            needs: {{ role.dependencies.join(', ') }}
+                          </span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-0.5">{{ role.description }}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Selected Roles Summary -->
+          <div v-if="newDeployment.roles.length > 0" class="bg-green-50 border border-green-200 rounded-md p-3">
+            <p class="text-sm font-medium text-green-800 mb-1">Selected Roles ({{ newDeployment.roles.length }})</p>
+            <div class="flex flex-wrap gap-1">
+              <span
+                v-for="role in newDeployment.roles"
+                :key="role"
+                class="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded"
+              >
+                {{ role }}
+              </span>
+            </div>
           </div>
 
           <!-- Force Option -->
