@@ -22,10 +22,12 @@ from api import (
     health_router,
     maintenance_router,
     monitoring_router,
+    node_tls_router,
     node_vnc_router,
     nodes_router,
     settings_router,
     stateful_router,
+    tls_router,
     updates_router,
     vnc_router,
     websocket_router,
@@ -118,6 +120,8 @@ app.include_router(monitoring_router, prefix="/api")
 app.include_router(websocket_router, prefix="/api")
 app.include_router(node_vnc_router, prefix="/api")
 app.include_router(vnc_router, prefix="/api")
+app.include_router(node_tls_router, prefix="/api")
+app.include_router(tls_router, prefix="/api")
 
 
 @app.get("/")

@@ -71,42 +71,112 @@
     group: redis
   when: redis_tls_enabled | bool
 
-- name: Check if TLS certificates exist on controller
+# ===== Local certificate source =====
+- name: Check if TLS certificates exist on controller (local source)
   ansible.builtin.stat:
     path: "{{ redis_tls_ca_cert }}"
   delegate_to: localhost
   become: false
   register: tls_certs_exist
-  when: redis_tls_enabled | bool
+  when: redis_tls_enabled | bool and redis_tls_source == 'local'
 
-- name: Copy CA certificate
+- name: Copy CA certificate (local source)
   ansible.builtin.copy:
     src: "{{ redis_tls_ca_cert }}"
     dest: "{{ redis_tls_cert_dir }}/ca-cert.pem"
     mode: "0644"
     owner: redis
     group: redis
-  when: redis_tls_enabled | bool and tls_certs_exist.stat.exists | default(false)
+  when: redis_tls_enabled | bool and redis_tls_source == 'local' and tls_certs_exist.stat.exists | default(false)
   notify: restart redis
 
-- name: Copy server certificate
+- name: Copy server certificate (local source)
   ansible.builtin.copy:
     src: "{{ redis_tls_server_cert }}"
     dest: "{{ redis_tls_cert_dir }}/server-cert.pem"
     mode: "0644"
     owner: redis
     group: redis
-  when: redis_tls_enabled | bool and tls_certs_exist.stat.exists | default(false)
+  when: redis_tls_enabled | bool and redis_tls_source == 'local' and tls_certs_exist.stat.exists | default(false)
   notify: restart redis
 
-- name: Copy server private key
+- name: Copy server private key (local source)
   ansible.builtin.copy:
     src: "{{ redis_tls_server_key }}"
     dest: "{{ redis_tls_cert_dir }}/server-key.pem"
     mode: "0600"
     owner: redis
     group: redis
-  when: redis_tls_enabled | bool and tls_certs_exist.stat.exists | default(false)
+  when: redis_tls_enabled | bool and redis_tls_source == 'local' and tls_certs_exist.stat.exists | default(false)
+  notify: restart redis
+
+# ===== SLM API certificate source =====
+- name: Fetch CA certificate from SLM API
+  ansible.builtin.uri:
+    url: "{{ slm_api_url }}/api/tls/credentials/{{ redis_tls_credential_id }}/ca-cert"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ slm_api_token }}"
+    return_content: true
+  register: slm_ca_cert
+  delegate_to: localhost
+  become: false
+  when: redis_tls_enabled | bool and redis_tls_source == 'slm-api' and redis_tls_credential_id | length > 0
+
+- name: Fetch server certificate from SLM API
+  ansible.builtin.uri:
+    url: "{{ slm_api_url }}/api/tls/credentials/{{ redis_tls_credential_id }}/server-cert"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ slm_api_token }}"
+    return_content: true
+  register: slm_server_cert
+  delegate_to: localhost
+  become: false
+  when: redis_tls_enabled | bool and redis_tls_source == 'slm-api' and redis_tls_credential_id | length > 0
+
+- name: Fetch server private key from SLM API
+  ansible.builtin.uri:
+    url: "{{ slm_api_url }}/api/tls/credentials/{{ redis_tls_credential_id }}/server-key"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ slm_api_token }}"
+    return_content: true
+  register: slm_server_key
+  delegate_to: localhost
+  become: false
+  no_log: true  # Hide sensitive key from logs
+  when: redis_tls_enabled | bool and redis_tls_source == 'slm-api' and redis_tls_credential_id | length > 0
+
+- name: Deploy CA certificate from SLM API
+  ansible.builtin.copy:
+    content: "{{ slm_ca_cert.content }}"
+    dest: "{{ redis_tls_cert_dir }}/ca-cert.pem"
+    mode: "0644"
+    owner: redis
+    group: redis
+  when: redis_tls_enabled | bool and redis_tls_source == 'slm-api' and slm_ca_cert.content is defined
+  notify: restart redis
+
+- name: Deploy server certificate from SLM API
+  ansible.builtin.copy:
+    content: "{{ slm_server_cert.content }}"
+    dest: "{{ redis_tls_cert_dir }}/server-cert.pem"
+    mode: "0644"
+    owner: redis
+    group: redis
+  when: redis_tls_enabled | bool and redis_tls_source == 'slm-api' and slm_server_cert.content is defined
+  notify: restart redis
+
+- name: Deploy server private key from SLM API
+  ansible.builtin.copy:
+    content: "{{ slm_server_key.content }}"
+    dest: "{{ redis_tls_cert_dir }}/server-key.pem"
+    mode: "0600"
+    owner: redis
+    group: redis
+  no_log: true  # Hide sensitive key from logs
+  when: redis_tls_enabled | bool and redis_tls_source == 'slm-api' and slm_server_key.content is defined
   notify: restart redis
 
 - name: Deploy Redis systemd service override

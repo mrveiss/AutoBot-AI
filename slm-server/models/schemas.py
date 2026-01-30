@@ -916,3 +916,95 @@ class VNCEndpointsResponse(BaseModel):
 
     endpoints: List[VNCEndpointResponse]
     total: int
+
+
+# =============================================================================
+# TLS Certificate Schemas (Issue #725: mTLS support)
+# =============================================================================
+
+
+class TLSCredentialCreate(BaseModel):
+    """Create TLS certificate credential for a node."""
+
+    name: Optional[str] = Field(
+        None, description="Optional friendly name (e.g., 'redis-server', 'api-client')"
+    )
+    ca_cert: str = Field(..., description="CA certificate (PEM format)")
+    server_cert: str = Field(..., description="Server/client certificate (PEM format)")
+    server_key: str = Field(..., description="Private key (PEM format, will be encrypted)")
+    common_name: Optional[str] = Field(None, description="CN from certificate (auto-extracted if not provided)")
+    expires_at: Optional[datetime] = Field(None, description="Expiration date (auto-extracted if not provided)")
+    extra_data: Dict = Field(default_factory=dict, description="Additional configuration")
+
+
+class TLSCredentialUpdate(BaseModel):
+    """Update TLS certificate credential."""
+
+    ca_cert: Optional[str] = Field(None, description="Updated CA certificate")
+    server_cert: Optional[str] = Field(None, description="Updated server certificate")
+    server_key: Optional[str] = Field(None, description="Updated private key")
+    is_active: Optional[bool] = None
+    extra_data: Optional[Dict] = None
+
+
+class TLSCredentialResponse(BaseModel):
+    """TLS credential response (excludes private key for security)."""
+
+    id: int
+    credential_id: str
+    node_id: str
+    name: Optional[str] = None
+    common_name: Optional[str] = None
+    expires_at: Optional[datetime] = None
+    fingerprint: Optional[str] = None
+    is_active: bool = True
+    created_at: datetime
+    updated_at: datetime
+    # Certificates (public data only)
+    ca_cert: Optional[str] = None
+    server_cert: Optional[str] = None
+    # Private key NEVER returned
+
+    model_config = {"from_attributes": True}
+
+
+class TLSCredentialListResponse(BaseModel):
+    """List of TLS credentials."""
+
+    credentials: List[TLSCredentialResponse]
+    total: int
+
+
+class TLSCertificateInfo(BaseModel):
+    """Parsed certificate information."""
+
+    common_name: str
+    subject: str
+    issuer: str
+    serial_number: str
+    not_before: datetime
+    not_after: datetime
+    fingerprint: str
+    san: List[str] = Field(default_factory=list, description="Subject Alternative Names")
+
+
+class TLSEndpointResponse(BaseModel):
+    """TLS endpoint in fleet-wide listing."""
+
+    credential_id: str
+    node_id: str
+    hostname: str
+    ip_address: str
+    name: Optional[str] = None
+    common_name: Optional[str] = None
+    expires_at: Optional[datetime] = None
+    is_active: bool
+    days_until_expiry: Optional[int] = None
+
+
+class TLSEndpointsResponse(BaseModel):
+    """List of all TLS endpoints across the fleet."""
+
+    endpoints: List[TLSEndpointResponse]
+    total: int
+    expiring_soon: int = Field(default=0, description="Certificates expiring within 30 days")

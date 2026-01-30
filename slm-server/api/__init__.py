@@ -20,6 +20,7 @@ from .maintenance import router as maintenance_router
 from .monitoring import router as monitoring_router
 from .blue_green import router as blue_green_router
 from .vnc import node_vnc_router, vnc_router
+from .tls import node_tls_router, tls_router
 
 __all__ = [
     "auth_router",
@@ -37,4 +38,6 @@ __all__ = [
     "blue_green_router",
     "node_vnc_router",
     "vnc_router",
+    "node_tls_router",
+    "tls_router",
 ]

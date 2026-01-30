@@ -416,6 +416,7 @@ class CredentialType(str, enum.Enum):
     SSH = "ssh"
     API_KEY = "api_key"
     DATABASE = "database"
+    TLS = "tls"  # Issue #725: TLS certificates for mTLS
 
 
 class NodeCredential(Base):
@@ -443,6 +444,12 @@ class NodeCredential(Base):
     display_number = Column(Integer, nullable=True)  # X display
     vnc_port = Column(Integer, nullable=True)  # Raw VNC port
     websockify_enabled = Column(Boolean, default=True)
+
+    # TLS-specific fields (Issue #725: mTLS certificate storage)
+    # Actual certs stored in encrypted_data as JSON: {"ca_cert": "...", "server_cert": "...", "server_key": "..."}
+    tls_common_name = Column(String(255), nullable=True)  # CN from certificate
+    tls_expires_at = Column(DateTime, nullable=True)  # Certificate expiration
+    tls_fingerprint = Column(String(64), nullable=True)  # SHA256 fingerprint
 
     # State
     is_active = Column(Boolean, default=True)
