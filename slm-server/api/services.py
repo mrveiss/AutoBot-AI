@@ -487,26 +487,32 @@ async def restart_all_node_services(
             slm_agent_restarted=False,
         )
 
-    # Separate SLM agent from other services
-    slm_agent_service = None
+    # Separate SLM services from other services (SLM services restart last)
+    # SLM services include: slm-agent, slm-backend, slm-admin-ui, and any slm-* service
+    SLM_SERVICE_NAMES = {"slm-agent", "slm-backend", "slm-admin-ui"}
+
+    def is_slm_service(service_name: str) -> bool:
+        """Check if a service is an SLM service that should restart last."""
+        return service_name in SLM_SERVICE_NAMES or service_name.startswith("slm-")
+
+    slm_services = []
     other_services = []
     excluded_services = request.exclude_services if request else []
 
     for svc in all_services:
         if svc.service_name in excluded_services:
             continue
-        if svc.service_name == "slm-agent":
-            slm_agent_service = svc
+        if is_slm_service(svc.service_name):
+            slm_services.append(svc)
         else:
             other_services.append(svc)
 
-    # Sort other services alphabetically
+    # Sort services alphabetically (SLM services included, they'll be appended at end)
     other_services.sort(key=lambda s: s.service_name)
+    slm_services.sort(key=lambda s: s.service_name)
 
-    # Build ordered restart list: other services first, SLM agent last
-    ordered_services = other_services.copy()
-    if slm_agent_service:
-        ordered_services.append(slm_agent_service)
+    # Build ordered restart list: other services first, then SLM services (restart last)
+    ordered_services = other_services + slm_services
 
     # Execute restarts sequentially
     results = []
@@ -515,13 +521,13 @@ async def restart_all_node_services(
     slm_agent_restarted = False
 
     for svc in ordered_services:
-        is_slm_agent = svc.service_name == "slm-agent"
+        is_slm = is_slm_service(svc.service_name)
 
         logger.info(
             "Restarting service %s on %s%s",
             svc.service_name,
             node.hostname,
-            " (SLM agent - last)" if is_slm_agent else "",
+            " (SLM service - last)" if is_slm else "",
         )
 
         success, message = await _run_ansible_service_action(
@@ -532,7 +538,7 @@ async def restart_all_node_services(
             "service_name": svc.service_name,
             "success": success,
             "message": message,
-            "is_slm_agent": is_slm_agent,
+            "is_slm_agent": is_slm,  # Renamed for backwards compat but indicates any SLM service
         })
 
         if success:
@@ -542,7 +548,7 @@ async def restart_all_node_services(
             svc.sub_state = "running"
             svc.last_checked = datetime.utcnow()
 
-            if is_slm_agent:
+            if is_slm:
                 slm_agent_restarted = True
 
             # Broadcast status change via WebSocket
@@ -565,8 +571,8 @@ async def restart_all_node_services(
                 message=message,
             )
 
-            # If a non-slm-agent service fails, continue with others
-            # If slm-agent fails, that's still logged but we continue
+            # If a service fails, continue with others
+            # SLM services failing is logged but we continue
             logger.error(
                 "Failed to restart %s on %s: %s",
                 svc.service_name,
