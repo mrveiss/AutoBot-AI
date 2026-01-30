@@ -1,3 +1,27 @@
+// AutoBot - AI-Powered Automation Platform
+// Copyright (c) 2025 mrveiss
+// Author: mrveiss
+/**
+ * Vue Router Configuration
+ *
+ * Issue #729: Layer separation - autobot-vue is now business-only.
+ * Infrastructure routes moved to slm-admin.
+ *
+ * Routes available:
+ * - /chat - AI Assistant
+ * - /knowledge - Knowledge Base
+ * - /automation - Workflow Builder
+ * - /analytics - Codebase & Business Analytics
+ *
+ * For infrastructure operations use slm-admin:
+ * - /tools - Developer Tools
+ * - /monitoring - System Monitoring
+ * - /settings - Settings (infrastructure/admin settings)
+ * - /infrastructure - Infrastructure Manager
+ * - /tls-certificates - TLS Certificates
+ * - /secrets - Secrets Manager
+ */
+
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAppStore } from '@/stores/useAppStore'
 import { useUserStore } from '@/stores/useUserStore'
@@ -12,17 +36,11 @@ setupAsyncComponentErrorHandler()
 // Views (Page-level components) - Use direct imports for simple containers to avoid circular dependencies
 import ChatView from '@/views/ChatView.vue'
 import KnowledgeView from '@/views/KnowledgeView.vue'
-import ToolsView from '@/views/ToolsView.vue'
 import WorkflowBuilderView from '@/views/WorkflowBuilderView.vue'
-import MonitoringView from '@/views/MonitoringView.vue'
-import SecretsView from '@/views/SecretsView.vue'
-import SettingsView from '@/views/SettingsView.vue'
-import InfrastructureManager from '@/views/InfrastructureManager.vue'
 import AnalyticsView from '@/views/AnalyticsView.vue'
-import FeatureFlagsView from '@/views/FeatureFlagsView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
 
-// Route configuration
+// Route configuration - Issue #729: Business-only routes, infrastructure moved to slm-admin
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
@@ -40,7 +58,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/dashboard',
-    redirect: '/monitoring'
+    redirect: '/chat'
   },
   {
     path: '/chat',
@@ -179,131 +197,6 @@ const routes: RouteRecordRaw[] = [
     ]
   },
   {
-    path: '/tools',
-    name: 'tools',
-    component: ToolsView,
-    meta: {
-      title: 'Developer Tools',
-      icon: 'fas fa-tools',
-      description: 'Terminal, file browser, and dev tools',
-      requiresAuth: false
-    },
-    children: [
-      {
-        path: '',
-        name: 'tools-default',
-        redirect: '/tools/terminal'
-      },
-      {
-        // Advanced multi-tab terminal with host switching
-        // Note: Terminal.vue still exists for chat integration (see ChatTabContent.vue)
-        path: 'terminal',
-        name: 'tools-terminal',
-        component: () => import('@/components/ToolsTerminal.vue'),
-        meta: {
-          title: 'Terminal',
-          parent: 'tools'
-        }
-      },
-      {
-        path: 'terminal/:sessionId',
-        name: 'tools-terminal-session',
-        component: () => import('@/components/ToolsTerminal.vue'),
-        props: true,
-        meta: {
-          title: 'Terminal Session',
-          parent: 'tools'
-        }
-      },
-      {
-        path: 'files',
-        name: 'tools-files',
-        component: () => import('@/components/FileBrowser.vue'),
-        meta: {
-          title: 'File Browser',
-          parent: 'tools'
-        }
-      },
-      {
-        path: 'browser',
-        name: 'tools-browser',
-        component: () => import('@/components/ToolsBrowser.vue'),
-        meta: {
-          title: 'Browser',
-          parent: 'tools'
-        }
-      },
-      {
-        path: 'novnc',
-        name: 'tools-novnc',
-        component: () => import('@/components/NoVNCViewer.vue'),
-        meta: {
-          title: 'noVNC Remote Desktop',
-          parent: 'tools'
-        }
-      },
-      {
-        path: 'voice',
-        name: 'tools-voice',
-        component: () => import('@/components/VoiceInterface.vue'),
-        meta: {
-          title: 'Voice Interface',
-          parent: 'tools'
-        }
-      },
-      {
-        path: 'chat-debug',
-        name: 'tools-chat-debug',
-        component: () => import('@/views/ChatDebugView.vue'),
-        meta: {
-          title: 'Chat Debug',
-          parent: 'tools'
-        }
-      },
-      {
-        path: 'mcp',
-        name: 'tools-mcp',
-        component: () => import('@/components/developer/MCPManager.vue'),
-        meta: {
-          title: 'MCP Registry',
-          parent: 'tools'
-        }
-      },
-      {
-        path: 'agents',
-        name: 'tools-agents',
-        // @ts-ignore - Component may not have type declarations
-        component: () => import('@/components/developer/AgentRegistry.vue'),
-        meta: {
-          title: 'Agent Registry',
-          parent: 'tools'
-        }
-      },
-      {
-        path: 'vision',
-        name: 'tools-vision',
-        component: () => import('@/views/VisionMultimodalView.vue'),
-        meta: {
-          title: 'Vision & Multimodal',
-          parent: 'tools',
-          icon: 'fas fa-eye',
-          description: 'AI-powered vision and multimodal processing (Issue #582)'
-        }
-      },
-      {
-        path: 'batch-processing',
-        name: 'tools-batch-processing',
-        component: () => import('@/views/BatchProcessingView.vue'),
-        meta: {
-          title: 'Batch Processing',
-          parent: 'tools',
-          icon: 'fas fa-layer-group',
-          description: 'Batch job processing manager (Issue #584)'
-        }
-      }
-    ]
-  },
-  {
     path: '/automation',
     name: 'automation',
     component: WorkflowBuilderView,
@@ -313,105 +206,6 @@ const routes: RouteRecordRaw[] = [
       description: 'Visual workflow builder and automation (Issue #585)',
       requiresAuth: false
     }
-  },
-  {
-    path: '/monitoring',
-    name: 'monitoring',
-    component: MonitoringView,
-    meta: {
-      title: 'Monitoring',
-      icon: 'fas fa-chart-line',
-      description: 'Prometheus, Grafana, logs and alerts',
-      requiresAuth: false
-    },
-    children: [
-      {
-        path: '',
-        name: 'monitoring-default',
-        component: () => import('@/components/SystemMonitor.vue'),
-        meta: {
-          title: 'System Monitor',
-          parent: 'monitoring'
-        }
-      },
-      {
-        path: 'system',
-        name: 'monitoring-system',
-        component: () => import('@/components/GrafanaSystemMonitor.vue'),
-        meta: {
-          title: 'System Monitor',
-          parent: 'monitoring'
-        }
-      },
-      {
-        path: 'rum',
-        name: 'monitoring-rum',
-        component: () => import('@/components/RumDashboard.vue'),
-        meta: {
-          title: 'RUM Dashboard',
-          parent: 'monitoring'
-        }
-      },
-      {
-        path: 'logs',
-        name: 'monitoring-logs',
-        component: () => import('@/components/LogViewer.vue'),
-        meta: {
-          title: 'Log Viewer',
-          parent: 'monitoring'
-        }
-      },
-      {
-        path: 'dashboards',
-        name: 'monitoring-dashboards',
-        component: () => import('@/views/GrafanaDashboardsView.vue'),
-        meta: {
-          title: 'Grafana Dashboards',
-          parent: 'monitoring'
-        }
-      },
-      {
-        path: 'operations',
-        name: 'monitoring-operations',
-        component: () => import('@/views/OperationsView.vue'),
-        meta: {
-          title: 'Operations',
-          parent: 'monitoring'
-        }
-      },
-      {
-        path: 'errors',
-        name: 'monitoring-errors',
-        component: () => import('@/components/monitoring/errors/ErrorMonitoringDashboard.vue'),
-        meta: {
-          title: 'Error Monitoring',
-          parent: 'monitoring',
-          description: 'Real-time error tracking and system health monitoring (Issue #579)'
-        }
-      },
-      {
-        path: 'validation',
-        name: 'monitoring-validation',
-        component: () => import('@/components/monitoring/validation/SystemValidationDashboard.vue'),
-        meta: {
-          title: 'System Validation',
-          parent: 'monitoring',
-          icon: 'fas fa-check-circle',
-          description: 'System validation dashboard with VM health monitoring (Issue #581)'
-        }
-      },
-      {
-        path: 'control',
-        name: 'monitoring-control',
-        component: () => import('@/views/AdvancedControlView.vue'),
-        meta: {
-          title: 'Session Control',
-          parent: 'monitoring',
-          icon: 'fas fa-gamepad',
-          description: 'Advanced control and session takeover management (Issue #583)'
-        }
-      }
-    ]
   },
   {
     path: '/analytics',
@@ -479,202 +273,71 @@ const routes: RouteRecordRaw[] = [
       }
     ]
   },
+  // Issue #729: Infrastructure routes redirected to slm-admin
+  // These routes are kept as redirects for backwards compatibility
+  {
+    path: '/tools',
+    redirect: () => {
+      // Redirect to SLM Admin Tools
+      window.location.href = '/slm-admin/#/tools'
+      return '/chat' // Fallback
+    }
+  },
+  {
+    path: '/tools/:pathMatch(.*)*',
+    redirect: () => {
+      window.location.href = '/slm-admin/#/tools'
+      return '/chat'
+    }
+  },
+  {
+    path: '/monitoring',
+    redirect: () => {
+      window.location.href = '/slm-admin/#/monitoring'
+      return '/chat'
+    }
+  },
+  {
+    path: '/monitoring/:pathMatch(.*)*',
+    redirect: () => {
+      window.location.href = '/slm-admin/#/monitoring'
+      return '/chat'
+    }
+  },
+  {
+    path: '/settings',
+    redirect: () => {
+      window.location.href = '/slm-admin/#/settings'
+      return '/chat'
+    }
+  },
+  {
+    path: '/settings/:pathMatch(.*)*',
+    redirect: () => {
+      window.location.href = '/slm-admin/#/settings'
+      return '/chat'
+    }
+  },
   {
     path: '/infrastructure',
-    name: 'infrastructure',
-    component: InfrastructureManager,
-    meta: {
-      title: 'Infrastructure',
-      icon: 'fas fa-server',
-      description: 'Manage hosts and deploy configurations',
-      requiresAuth: false
+    redirect: () => {
+      window.location.href = '/slm-admin/#/'
+      return '/chat'
     }
   },
   {
     path: '/tls-certificates',
-    name: 'tls-certificates',
-    component: () => import('@/views/TLSCertificatesView.vue'),
-    meta: {
-      title: 'TLS Certificates',
-      icon: 'fas fa-shield-halved',
-      description: 'Manage mTLS certificates for secure communication (Issue #725)',
-      requiresAuth: true
+    redirect: () => {
+      window.location.href = '/slm-admin/#/security'
+      return '/chat'
     }
   },
   {
     path: '/secrets',
-    name: 'secrets',
-    component: SecretsView,
-    meta: {
-      title: 'Secrets Manager',
-      icon: 'fas fa-key',
-      description: 'Manage API keys and secrets',
-      requiresAuth: true
-    },
-    children: [
-      {
-        path: '',
-        name: 'secrets-manager',
-        component: () => import('@/components/SecretsManager.vue'),
-        meta: {
-          title: 'Secrets Manager',
-          hideInNav: true
-        }
-      }
-    ]
-  },
-  {
-    path: '/settings',
-    name: 'settings',
-    component: SettingsView,
-    meta: {
-      title: 'Settings',
-      icon: 'fas fa-cog',
-      description: 'Application settings and preferences',
-      requiresAuth: false
-    },
-    children: [
-      {
-        path: '',
-        name: 'settings-default',
-        redirect: '/settings/backend'
-      },
-      {
-        path: 'user',
-        name: 'settings-user',
-        component: () => import('@/components/settings/UserManagementSettings.vue'),
-        meta: {
-          title: 'User Management',
-          parent: 'settings'
-        }
-      },
-      {
-        path: 'chat',
-        name: 'settings-chat',
-        component: () => import('@/components/settings/ChatSettings.vue'),
-        meta: {
-          title: 'Chat Settings',
-          parent: 'settings'
-        }
-      },
-      {
-        path: 'backend',
-        name: 'settings-backend',
-        component: () => import('@/components/settings/BackendSettings.vue'),
-        meta: {
-          title: 'Backend Settings',
-          parent: 'settings'
-        }
-      },
-      {
-        path: 'ui',
-        name: 'settings-ui',
-        component: () => import('@/components/settings/UISettings.vue'),
-        meta: {
-          title: 'UI Settings',
-          parent: 'settings'
-        }
-      },
-      {
-        path: 'logging',
-        name: 'settings-logging',
-        component: () => import('@/components/settings/LoggingSettings.vue'),
-        meta: {
-          title: 'Logging',
-          parent: 'settings'
-        }
-      },
-      {
-        path: 'log-forwarding',
-        name: 'settings-log-forwarding',
-        component: () => import('@/components/settings/LogForwardingSettings.vue'),
-        meta: {
-          title: 'Log Forwarding',
-          parent: 'settings'
-        }
-      },
-      {
-        path: 'cache',
-        name: 'settings-cache',
-        component: () => import('@/components/settings/CacheSettings.vue'),
-        meta: {
-          title: 'Cache',
-          parent: 'settings'
-        }
-      },
-      {
-        // Redirect data-storage to infrastructure (data-storage is now a subtab)
-        path: 'data-storage',
-        name: 'settings-data-storage',
-        redirect: '/settings/infrastructure'
-      },
-      {
-        path: 'prompts',
-        name: 'settings-prompts',
-        component: () => import('@/components/settings/PromptsSettings.vue'),
-        meta: {
-          title: 'Prompts',
-          parent: 'settings'
-        }
-      },
-      {
-        // Redirect services to infrastructure (services is now a subtab)
-        path: 'services',
-        name: 'settings-services',
-        redirect: '/settings/infrastructure'
-      },
-      {
-        path: 'infrastructure',
-        name: 'settings-infrastructure',
-        component: () => import('@/components/settings/InfrastructureSettings.vue'),
-        meta: {
-          title: 'Infrastructure & Updates',
-          parent: 'settings'
-        }
-      },
-      {
-        path: 'optimization',
-        name: 'settings-optimization',
-        component: () => import('@/components/settings/InferenceOptimizationSettings.vue'),
-        meta: {
-          title: 'LLM Optimization',
-          parent: 'settings',
-          icon: 'fas fa-bolt',
-          description: 'LLM inference optimization: compression, caching, rate limiting (Issue #717)'
-        }
-      },
-      {
-        path: 'developer',
-        name: 'settings-developer',
-        component: () => import('@/components/settings/DeveloperSettings.vue'),
-        meta: {
-          title: 'Developer',
-          parent: 'settings'
-        }
-      },
-      {
-        path: 'permissions',
-        name: 'settings-permissions',
-        component: () => import('@/components/settings/PermissionSettings.vue'),
-        meta: {
-          title: 'Permissions',
-          parent: 'settings',
-          icon: 'fas fa-shield-halved',
-          description: 'Claude Code-style permission system'
-        }
-      },
-      {
-        path: 'feature-flags',
-        name: 'settings-feature-flags',
-        component: FeatureFlagsView,
-        meta: {
-          title: 'Feature Flags',
-          parent: 'settings',
-          icon: 'fas fa-flag',
-          description: 'Manage access control feature flags and enforcement modes (Issue #580)'
-        }
-      }
-    ]
+    redirect: () => {
+      window.location.href = '/slm-admin/#/settings/secrets'
+      return '/chat'
+    }
   },
   {
     path: '/:pathMatch(.*)*',
@@ -835,10 +498,10 @@ router.beforeEach(async (to, from, next) => {
       return
     }
 
-    // If user is authenticated and trying to access login page, redirect to dashboard
+    // If user is authenticated and trying to access login page, redirect to chat
     if (to.name === 'login' && userStore.isAuthenticated) {
-      logger.debug('User already authenticated, redirecting to dashboard')
-      next({ path: '/dashboard' })
+      logger.debug('User already authenticated, redirecting to chat')
+      next({ path: '/chat' })
       return
     }
 
@@ -863,9 +526,10 @@ router.beforeEach(async (to, from, next) => {
     }
 
     // Update active tab in store (with null safety)
+    // Issue #729: Updated valid tabs for business-only routes
     if (to.name && typeof to.name === 'string' && appStore && typeof appStore.updateRoute === 'function') {
       const tabName = to.name.split('-')[0] // Extract main section
-      const validTabs = ['chat', 'knowledge', 'tools', 'automation', 'monitoring', 'operations', 'analytics', 'infrastructure', 'secrets', 'settings'] as const
+      const validTabs = ['chat', 'knowledge', 'automation', 'analytics'] as const
       type ValidTab = typeof validTabs[number]
 
       if ((validTabs as readonly string[]).includes(tabName)) {
@@ -928,7 +592,8 @@ export const getMainRoutes = () => {
   return routes.filter(route =>
     !route.meta?.hideInNav &&
     route.path !== '/' &&
-    !route.path.includes('*')
+    !route.path.includes('*') &&
+    !route.redirect // Issue #729: Exclude redirect routes
   )
 }
 
