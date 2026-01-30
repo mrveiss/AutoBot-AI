@@ -8,18 +8,18 @@
  * Infrastructure routes moved to slm-admin.
  *
  * Routes available:
- * - /chat - AI Assistant
+ * - /chat - AI Assistant (includes chat terminal with agent access)
  * - /knowledge - Knowledge Base
  * - /automation - Workflow Builder
  * - /analytics - Codebase & Business Analytics
+ * - /secrets - Secrets Manager (user credentials for chat/agent)
  *
  * For infrastructure operations use slm-admin:
- * - /tools - Developer Tools
+ * - /tools - Developer Tools (standalone terminal, file browser)
  * - /monitoring - System Monitoring
  * - /settings - Settings (infrastructure/admin settings)
  * - /infrastructure - Infrastructure Manager
  * - /tls-certificates - TLS Certificates
- * - /secrets - Secrets Manager
  */
 
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
@@ -332,12 +332,28 @@ const routes: RouteRecordRaw[] = [
       return '/chat'
     }
   },
+  // Issue #729: Secrets stays in autobot-vue - user functionality for chat/agent credentials
   {
     path: '/secrets',
-    redirect: () => {
-      window.location.href = '/slm-admin/#/settings/secrets'
-      return '/chat'
-    }
+    name: 'secrets',
+    component: () => import('@/views/SecretsView.vue'),
+    meta: {
+      title: 'Secrets Manager',
+      icon: 'fas fa-key',
+      description: 'Manage API keys and secrets for chat and agent access',
+      requiresAuth: true
+    },
+    children: [
+      {
+        path: '',
+        name: 'secrets-manager',
+        component: () => import('@/components/SecretsManager.vue'),
+        meta: {
+          title: 'Secrets Manager',
+          hideInNav: true
+        }
+      }
+    ]
   },
   {
     path: '/:pathMatch(.*)*',
