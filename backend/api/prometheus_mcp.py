@@ -61,7 +61,9 @@ class GetVMMetricsRequest(BaseModel):
 class ListMetricsRequest(BaseModel):
     """Request model for listing metrics"""
 
-    filter: str = Field("", description="Optional filter pattern (e.g., 'autobot_', 'node_')")
+    filter: str = Field(
+        "", description="Optional filter pattern (e.g., 'autobot_', 'node_')"
+    )
 
 
 # Issue #281: MCP tool definitions extracted from get_prometheus_mcp_tools
@@ -90,8 +92,16 @@ PROMETHEUS_MCP_TOOL_DEFINITIONS = (
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "PromQL query expression"},
-                "duration": {"type": "string", "description": "Time duration (e.g., '1h', '6h', '1d')", "default": "1h"},
-                "step": {"type": "string", "description": "Query resolution step (e.g., '15s', '1m')", "default": "15s"},
+                "duration": {
+                    "type": "string",
+                    "description": "Time duration (e.g., '1h', '6h', '1d')",
+                    "default": "1h",
+                },
+                "step": {
+                    "type": "string",
+                    "description": "Query resolution step (e.g., '15s', '1m')",
+                    "default": "15s",
+                },
             },
             "required": ["query"],
         },
@@ -124,7 +134,13 @@ PROMETHEUS_MCP_TOOL_DEFINITIONS = (
         "Use this to discover what metrics are available to query.",
         {
             "type": "object",
-            "properties": {"filter": {"type": "string", "description": "Optional filter pattern (e.g., 'autobot_', 'node_')", "default": ""}},
+            "properties": {
+                "filter": {
+                    "type": "string",
+                    "description": "Optional filter pattern (e.g., 'autobot_', 'node_')",
+                    "default": "",
+                }
+            },
         },
     ),
 )
@@ -196,10 +212,15 @@ async def _handle_query_metric(request: Metadata) -> Metadata:
         metric_name = metric.get("__name__", query)
         results.append(f"{metric_name}{{{labels}}}: {value}")
 
-    return {"status": "success", "result": f"Query: {query}\n\nResults:\n" + "\n".join(results)}
+    return {
+        "status": "success",
+        "result": f"Query: {query}\n\nResults:\n" + "\n".join(results),
+    }
 
 
-def _build_vm_metrics(load_data: Metadata, cpu_data: Metadata, memory_data: Metadata) -> dict:
+def _build_vm_metrics(
+    load_data: Metadata, cpu_data: Metadata, memory_data: Metadata
+) -> dict:
     """Build VM metrics dictionary from query results (Issue #315 - extracted)."""
     vms = {}
     for result in load_data.get("result", []):
@@ -233,24 +254,29 @@ async def _handle_get_system_metrics(_request: Metadata) -> Metadata:
     )
 
     if not load_data or not load_data.get("result"):
-        return {"status": "error", "error": "No system metrics available. Node exporters may not be running."}
+        return {
+            "status": "error",
+            "error": "No system metrics available. Node exporters may not be running.",
+        }
 
     vms = _build_vm_metrics(load_data, cpu_data, memory_data)
 
     # Issue #383: Use list.join() instead of string concatenation in loop
     lines = ["System Metrics (All Machines)", "=" * 50, ""]
     for instance, metrics in sorted(vms.items()):
-        cpu_val = metrics.get('cpu', 'N/A')
-        mem_val = metrics.get('memory', 'N/A')
+        cpu_val = metrics.get("cpu", "N/A")
+        mem_val = metrics.get("memory", "N/A")
         cpu_str = f"{cpu_val:.1f}%" if isinstance(cpu_val, float) else str(cpu_val)
         mem_str = f"{mem_val:.1f}%" if isinstance(mem_val, float) else str(mem_val)
-        lines.extend([
-            f"VM: {instance}",
-            f"  Load (1m): {metrics.get('load', 'N/A')}",
-            f"  CPU: {cpu_str}",
-            f"  Memory: {mem_str}",
-            "",
-        ])
+        lines.extend(
+            [
+                f"VM: {instance}",
+                f"  Load (1m): {metrics.get('load', 'N/A')}",
+                f"  CPU: {cpu_str}",
+                f"  Memory: {mem_str}",
+                "",
+            ]
+        )
 
     return {"status": "success", "result": "\n".join(lines)}
 
@@ -403,5 +429,7 @@ async def execute_prometheus_tool(tool_name: str, request: Metadata) -> Metadata
     try:
         return await handler(request)
     except Exception as e:
-        logger.error("Error executing Prometheus tool %s: %s", tool_name, e, exc_info=True)
+        logger.error(
+            "Error executing Prometheus tool %s: %s", tool_name, e, exc_info=True
+        )
         return {"status": "error", "error": str(e)}
