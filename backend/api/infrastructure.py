@@ -7,8 +7,10 @@ Infrastructure Management API
 Complete REST API for Infrastructure as Code (IaC) platform including:
 - Host inventory management
 - Deployment orchestration via Celery
-- SSH credential provisioning
+- SSH credential provisioning (TODO #729: Will be deleted - SLM handles this)
 - Infrastructure statistics and monitoring
+
+Related Issue: #729 - Infrastructure API will be removed/refactored
 """
 
 import asyncio
@@ -36,7 +38,8 @@ from backend.schemas.infrastructure import (
     StatisticsResponse,
 )
 from backend.services.infrastructure_db import InfrastructureDB
-from backend.services.ssh_provisioner import SSHKeyProvisioner
+# TODO (#729): SSH provisioner removed - SLM handles all SSH operations
+# from backend.services.ssh_provisioner import SSHKeyProvisioner
 from backend.tasks.deployment_tasks import deploy_host
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
@@ -45,7 +48,9 @@ router = APIRouter(tags=["Infrastructure as Code"])
 
 # Initialize services
 db = InfrastructureDB()
-ssh_provisioner = SSHKeyProvisioner()
+# TODO (#729): SSH provisioner removed - SLM handles all SSH operations
+# ssh_provisioner = SSHKeyProvisioner()
+ssh_provisioner = None  # Temporarily disabled
 
 
 # ==================== Host Management Endpoints ====================
@@ -817,19 +822,26 @@ async def provision_ssh_key(host_id: int, provision_request: ProvisionKeyRequest
         db.update_host_status(host_id, "provisioning")
 
         try:
-            # Provision SSH key (returns content, not file path)
-            private_key_content, public_key_content = ssh_provisioner.provision_key(
-                host_ip=host.ip_address,
-                port=host.ssh_port,
-                username=host.ssh_user,
-                password=provision_request.password,
+            # TODO (#729): SSH provisioner removed - SLM handles all SSH operations
+            # This endpoint will be removed when infrastructure.py is deleted
+            raise HTTPException(
+                status_code=501,
+                detail="SSH key provisioning moved to SLM server - use SLM API instead (#729)"
             )
 
-            # Issue #665: Use extracted helper for storage and status update
-            return _store_ssh_key_and_update_host(
-                host_id, host, private_key_content, public_key_content
-            )
+            # OLD CODE - will be deleted:
+            # private_key_content, public_key_content = ssh_provisioner.provision_key(
+            #     host_ip=host.ip_address,
+            #     port=host.ssh_port,
+            #     username=host.ssh_user,
+            #     password=provision_request.password,
+            # )
+            # return _store_ssh_key_and_update_host(
+            #     host_id, host, private_key_content, public_key_content
+            # )
 
+        except HTTPException:
+            raise
         except Exception as e:
             db.update_host_status(host_id, "failed")
             logger.error("SSH key provisioning failed for host %s: %s", host_id, e)

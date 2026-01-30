@@ -9,12 +9,15 @@ accessed via SSH. Used in the chat interface for connecting to external hosts
 stored in the secrets system.
 
 Related Issue: #715 - Dynamic SSH/VNC host management via secrets
+Related Issue: #729 - SSH operations now proxied through SLM API
 
 Key Differences from ConsolidatedTerminalWebSocket:
 - Uses SSH connection instead of local PTY
 - Connects to user-defined infrastructure hosts
 - Supports command extraction on first connect
 - Integrates with infrastructure knowledge base
+
+TODO (#729): SSH proxied through SLM API - This file needs refactoring in Task 5.2
 """
 
 import asyncio
@@ -32,11 +35,12 @@ from backend.api.terminal_models import (
     RISKY_COMMAND_PATTERNS,
     SecurityLevel,
 )
-from backend.services.ssh_connection_service import (
-    SSHConnectionService,
-    SSHSession,
-    get_ssh_connection_service,
-)
+# TODO (#729): SSH proxied through SLM API - Remove these imports and proxy through SLM
+# from backend.services.ssh_connection_service import (
+#     SSHConnectionService,
+#     SSHSession,
+#     get_ssh_connection_service,
+# )
 from backend.services.infrastructure_host_service import get_infrastructure_host_service
 from src.chat_history import ChatHistoryManager
 from src.constants.threshold_constants import TimingConstants
@@ -77,9 +81,12 @@ class SSHTerminalWebSocket:
         self.active = False
 
         # SSH connection
-        self.ssh_service = get_ssh_connection_service()
+        # TODO (#729): SSH proxied through SLM API - Update in Task 5.2
+        # self.ssh_service = get_ssh_connection_service()
+        self.ssh_service = None  # Temporarily disabled - will proxy through SLM
         self.host_service = get_infrastructure_host_service()
-        self.ssh_session: Optional[SSHSession] = None
+        # self.ssh_session: Optional[SSHSession] = None
+        self.ssh_session = None
 
         # Terminal state
         self.command_history = []

@@ -9,6 +9,9 @@ on first SSH connection. Uses deduplication to store commands once in
 the knowledge base with relations indicating which hosts have them.
 
 Related Issue: #715 - Dynamic SSH/VNC host management via secrets
+Related Issue: #729 - SSH operations now proxied through SLM API
+
+TODO (#729): This service needs refactoring to proxy SSH through SLM API
 
 Key Features:
 - Extracts all available commands via compgen -c
@@ -25,7 +28,8 @@ from datetime import datetime
 from typing import Dict, List, Optional, Set
 
 from backend.services.infrastructure_host_service import get_infrastructure_host_service
-from backend.services.ssh_connection_service import get_ssh_connection_service
+# TODO (#729): SSH proxied through SLM API
+# from backend.services.ssh_connection_service import get_ssh_connection_service
 
 logger = logging.getLogger(__name__)
 
@@ -193,14 +197,16 @@ async def extract_host_commands(host_id: str) -> Dict[str, ExtractedCommand]:
     Returns:
         Dict mapping command names to ExtractedCommand objects
     """
-    ssh_service = get_ssh_connection_service()
-    host_service = get_infrastructure_host_service()
+    # TODO (#729): SSH proxied through SLM API - Update in Task 5.2
+    raise NotImplementedError("Command extraction temporarily disabled - SSH proxied through SLM API (#729)")
 
-    host = host_service.get_host(host_id)
-    if not host:
-        raise ValueError(f"Host not found: {host_id}")
-
-    logger.info("Starting command extraction for host: %s (%s)", host.name, host.host)
+    # OLD CODE - will be updated to use SLM proxy:
+    # ssh_service = get_ssh_connection_service()
+    # host_service = get_infrastructure_host_service()
+    # host = host_service.get_host(host_id)
+    # if not host:
+    #     raise ValueError(f"Host not found: {host_id}")
+    # logger.info("Starting command extraction for host: %s (%s)", host.name, host.host)
 
     # Extract command list
     commands = await _extract_command_list(ssh_service, host_id)
