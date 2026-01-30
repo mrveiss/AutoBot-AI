@@ -9,7 +9,7 @@
  * Unified view for standard and blue-green deployments (Issue #726).
  */
 
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
@@ -48,6 +48,18 @@ const rollbackNotification = ref<{
   success: false,
   message: '',
 })
+
+// New standard deployment form
+const newDeployment = ref<{
+  node_id: string
+  roles: string[]
+  force: boolean
+}>({
+  node_id: '',
+  roles: [],
+  force: false,
+})
+const isCreatingDeployment = ref(false)
 
 // Standard stats
 const standardStats = computed(() => ({
@@ -343,6 +355,47 @@ function toggleRole(role: NodeRole): void {
     roles.push(role)
   }
   fetchEligibleNodes(roles)
+}
+
+// ===== STANDARD DEPLOYMENT CREATE METHODS =====
+async function handleCreateDeployment(): Promise<void> {
+  if (!newDeployment.value.node_id || newDeployment.value.roles.length === 0) {
+    return
+  }
+
+  isCreatingDeployment.value = true
+  try {
+    await api.createDeployment({
+      node_id: newDeployment.value.node_id,
+      roles: newDeployment.value.roles as NodeRole[],
+      force: newDeployment.value.force,
+    })
+    showWizard.value = false
+    resetDeploymentForm()
+    await fetchDeployments()
+  } catch (err) {
+    logger.error('Failed to create deployment:', err)
+    alert('Failed to create deployment')
+  } finally {
+    isCreatingDeployment.value = false
+  }
+}
+
+function resetDeploymentForm(): void {
+  newDeployment.value = {
+    node_id: '',
+    roles: [],
+    force: false,
+  }
+}
+
+function toggleDeploymentRole(role: string): void {
+  const index = newDeployment.value.roles.indexOf(role)
+  if (index >= 0) {
+    newDeployment.value.roles.splice(index, 1)
+  } else {
+    newDeployment.value.roles.push(role)
+  }
 }
 
 // ===== SHARED HELPERS =====
@@ -937,6 +990,114 @@ function getNodeHostname(nodeId: string): string {
 
       <div v-if="isLoadingBg" class="flex items-center justify-center py-12">
         <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
+      </div>
+    </div>
+
+    <!-- Standard Deployment Wizard Dialog -->
+    <div
+      v-if="showWizard"
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      @click.self="showWizard = false"
+    >
+      <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h3 class="text-lg font-semibold text-gray-900">New Deployment</h3>
+          <p class="text-sm text-gray-500 mt-1">
+            Deploy roles to a node in your fleet
+          </p>
+        </div>
+        <div class="px-6 py-4 space-y-4">
+          <!-- Node Selection -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Target Node</label>
+            <select
+              v-model="newDeployment.node_id"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+            >
+              <option value="">Select a node...</option>
+              <option v-for="opt in nodeOptions" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Node Info (if selected) -->
+          <div v-if="newDeployment.node_id" class="bg-gray-50 rounded-lg p-3">
+            <p class="text-sm font-medium text-gray-700 mb-1">Current Roles</p>
+            <div class="flex flex-wrap gap-1">
+              <span
+                v-for="role in (nodeOptions.find(n => n.value === newDeployment.node_id)?.roles || [])"
+                :key="role"
+                class="px-2 py-0.5 text-xs font-medium bg-gray-200 text-gray-700 rounded"
+              >
+                {{ role }}
+              </span>
+              <span v-if="(nodeOptions.find(n => n.value === newDeployment.node_id)?.roles || []).length === 0" class="text-xs text-gray-500">
+                No roles assigned
+              </span>
+            </div>
+          </div>
+
+          <!-- Roles Selection -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Roles to Deploy</label>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="role in availableRoles"
+                :key="role"
+                @click="toggleDeploymentRole(role)"
+                :class="[
+                  'px-3 py-1 text-sm font-medium rounded-full border transition-colors',
+                  newDeployment.roles.includes(role)
+                    ? 'bg-primary-100 text-primary-700 border-primary-300'
+                    : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                ]"
+              >
+                {{ role }}
+              </button>
+            </div>
+            <p v-if="availableRoles.length === 0" class="text-sm text-gray-500 mt-2">
+              Loading available roles...
+            </p>
+          </div>
+
+          <!-- Force Option -->
+          <div class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="force-deploy"
+              v-model="newDeployment.force"
+              class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+            />
+            <label for="force-deploy" class="text-sm text-gray-700">
+              Force deployment (skip checks and redeploy even if roles already exist)
+            </label>
+          </div>
+
+          <!-- Info Box -->
+          <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
+            <p class="text-sm text-blue-700">
+              This will deploy the selected roles to the target node using Ansible.
+              The deployment progress can be tracked in real-time.
+            </p>
+          </div>
+        </div>
+        <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+          <button
+            @click="showWizard = false; resetDeploymentForm()"
+            class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+          >
+            Cancel
+          </button>
+          <button
+            @click="handleCreateDeployment"
+            :disabled="!newDeployment.node_id || newDeployment.roles.length === 0 || isCreatingDeployment"
+            class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            <div v-if="isCreatingDeployment" class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+            Start Deployment
+          </button>
+        </div>
       </div>
     </div>
 
