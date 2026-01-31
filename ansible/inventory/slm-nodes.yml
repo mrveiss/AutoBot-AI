@@ -18,15 +18,21 @@ all:
         00-SLM-Manager:
           ansible_host: 172.16.168.19
           slm_node_id: "00-SLM-Manager"
+          slm_node_role: "slm-manager"
           slm_services_to_monitor:
             - slm-server
 
-        # Backend server
-        01-Backend:
+        # Code Source / Development Machine
+        # Primary source of truth for all AutoBot code
+        01-Code-Source:
           ansible_host: 172.16.168.20
-          slm_node_id: "01-Backend"
+          ansible_user: kali  # Dev machine uses kali user
+          slm_node_id: "01-Code-Source"
+          slm_node_role: "code-source"
+          slm_code_repository: "/home/kali/Desktop/AutoBot"
+          slm_is_code_source: true
           slm_services_to_monitor:
-            - autobot-backend
+            - slm-agent
 
         # Frontend server
         02-Frontend:

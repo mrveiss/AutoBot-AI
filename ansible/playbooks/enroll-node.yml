@@ -66,6 +66,10 @@
         services: ['slm-agent']
         packages: ['python3', 'python3-pip', 'python3-venv']
         ports: [8000]
+      code-source:
+        services: ['slm-agent']
+        packages: ['python3', 'python3-pip', 'python3-venv', 'git', 'rsync']
+        ports: [8000, 873]  # 873 = rsync daemon
 
   pre_tasks:
     - name: "Display enrollment information"
