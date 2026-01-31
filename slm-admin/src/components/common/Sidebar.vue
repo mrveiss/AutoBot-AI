@@ -3,15 +3,29 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
-import { computed } from 'vue'
+/**
+ * Sidebar Navigation Component
+ *
+ * Main navigation sidebar for SLM Admin.
+ * Includes fleet health summary, navigation items, and user controls.
+ * Issue #741: Added Code Sync navigation with update badge.
+ */
+
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
+import { useCodeSync } from '@/composables/useCodeSync'
 
 const route = useRoute()
 const router = useRouter()
 const fleetStore = useFleetStore()
 const authStore = useAuthStore()
+const codeSync = useCodeSync()
+
+// Polling interval for code sync status (1 minute)
+const CODE_SYNC_POLL_INTERVAL = 60000
+let codeSyncPollTimer: ReturnType<typeof setInterval> | null = null
 
 const navItems = [
   { name: 'Fleet Overview', path: '/', icon: 'grid' },
@@ -19,6 +33,7 @@ const navItems = [
   { name: 'Deployments', path: '/deployments', icon: 'rocket' },
   { name: 'Backups', path: '/backups', icon: 'database' },
   { name: 'Replication', path: '/replications', icon: 'replicate' },
+  { name: 'Code Sync', path: '/code-sync', icon: 'download', showBadge: true },
   { name: 'Maintenance', path: '/maintenance', icon: 'wrench' },
   { name: 'Settings', path: '/settings', icon: 'cog' },
   { name: 'Monitoring', path: '/monitoring', icon: 'chart' },
@@ -37,13 +52,40 @@ const healthClass = computed(() => {
   }
 })
 
+/**
+ * Navigate to a path.
+ */
 function navigate(path: string): void {
   router.push(path)
 }
 
+/**
+ * Handle user logout.
+ */
 function handleLogout(): void {
   authStore.logout()
 }
+
+/**
+ * Refresh code sync status from backend.
+ */
+async function refreshCodeSyncStatus(): Promise<void> {
+  await codeSync.fetchStatus()
+}
+
+onMounted(async () => {
+  // Fetch initial code sync status
+  await refreshCodeSyncStatus()
+  // Set up polling for code sync status
+  codeSyncPollTimer = setInterval(refreshCodeSyncStatus, CODE_SYNC_POLL_INTERVAL)
+})
+
+onUnmounted(() => {
+  if (codeSyncPollTimer) {
+    clearInterval(codeSyncPollTimer)
+    codeSyncPollTimer = null
+  }
+})
 </script>
 
 <template>
@@ -120,6 +162,10 @@ function handleLogout(): void {
               <svg v-else-if="item.icon === 'replicate'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
+              <!-- Issue #741: Download icon for Code Sync -->
+              <svg v-else-if="item.icon === 'download'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
               <svg v-else-if="item.icon === 'wrench'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -138,7 +184,15 @@ function handleLogout(): void {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" />
               </svg>
             </span>
-            <span>{{ item.name }}</span>
+            <span class="flex-1 text-left">{{ item.name }}</span>
+            <!-- Issue #741: Badge for Code Sync updates -->
+            <span
+              v-if="item.showBadge && codeSync.hasOutdatedNodes.value"
+              class="nav-badge"
+              :title="`${codeSync.outdatedCount.value} nodes need updates`"
+            >
+              {{ codeSync.outdatedCount.value }}
+            </span>
           </button>
         </li>
       </ul>
@@ -170,3 +224,21 @@ function handleLogout(): void {
     </div>
   </aside>
 </template>
+
+<style scoped>
+/* Issue #741: Navigation badge for Code Sync updates */
+.nav-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: #f59e0b; /* amber-500 / warning */
+  color: white;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+</style>
