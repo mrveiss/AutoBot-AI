@@ -5,6 +5,23 @@
 Tests for Code Sync API endpoints (Issue #741).
 """
 
+from pathlib import Path
+
+import pytest
+
+# Import code_distributor module directly
+code_distributor_path = (
+    Path(__file__).parent.parent.parent.parent
+    / "slm-server"
+    / "services"
+    / "code_distributor.py"
+)
+spec = __import__("importlib.util").util.spec_from_file_location(
+    "code_distributor", code_distributor_path
+)
+code_distributor_module = __import__("importlib.util").util.module_from_spec(spec)
+spec.loader.exec_module(code_distributor_module)
+
 
 class TestCodeSyncStatus:
     """Tests for GET /api/code-sync/status endpoint."""
@@ -169,3 +186,79 @@ class TestCodeSyncSchemas:
 
         assert node.current_version is None
         assert node.code_status == "unknown"
+
+
+class TestNodeSync:
+    """Tests for POST /api/code-sync/nodes/{node_id}/sync endpoint."""
+
+    def test_node_sync_request_model(self):
+        """Test NodeSyncRequest model."""
+        from models.schemas import NodeSyncRequest
+
+        request = NodeSyncRequest(restart=True, strategy="graceful")
+        assert request.restart is True
+        assert request.strategy == "graceful"
+
+    def test_node_sync_response_model(self):
+        """Test NodeSyncResponse model."""
+        from models.schemas import NodeSyncResponse
+
+        response = NodeSyncResponse(
+            success=True,
+            message="Sync initiated",
+            node_id="node-001",
+            job_id="job-123",
+        )
+        assert response.success is True
+        assert response.node_id == "node-001"
+
+
+class TestFleetSync:
+    """Tests for POST /api/code-sync/fleet/sync endpoint."""
+
+    def test_fleet_sync_request_model(self):
+        """Test FleetSyncRequest model."""
+        from models.schemas import FleetSyncRequest
+
+        request = FleetSyncRequest(
+            node_ids=["node-001", "node-002"],
+            strategy="rolling",
+            batch_size=2,
+        )
+        assert request.strategy == "rolling"
+        assert request.batch_size == 2
+
+    def test_fleet_sync_response_model(self):
+        """Test FleetSyncResponse model."""
+        from models.schemas import FleetSyncResponse
+
+        response = FleetSyncResponse(
+            success=True,
+            message="Queued",
+            job_id="job-456",
+            nodes_queued=5,
+        )
+        assert response.nodes_queued == 5
+
+
+class TestCodeDistributor:
+    """Tests for CodeDistributor service."""
+
+    def test_distributor_initialization(self):
+        """Test CodeDistributor can be initialized."""
+        CodeDistributor = code_distributor_module.CodeDistributor
+
+        distributor = CodeDistributor(repo_path="/tmp/test-repo")
+        assert distributor.repo_path.as_posix() == "/tmp/test-repo"
+
+    @pytest.mark.asyncio
+    async def test_get_current_commit(self):
+        """Test getting current commit from real repo."""
+        CodeDistributor = code_distributor_module.CodeDistributor
+
+        distributor = CodeDistributor(repo_path="/home/kali/Desktop/AutoBot")
+        commit = await distributor.get_current_commit()
+
+        # Should return a 40-char hex string
+        assert commit is not None
+        assert len(commit) == 40

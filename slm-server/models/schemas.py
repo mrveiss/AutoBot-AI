@@ -8,6 +8,7 @@ Request and response models for the SLM API.
 """
 
 from datetime import datetime
+from enum import Enum
 from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -1331,3 +1332,47 @@ class PendingNodesResponse(BaseModel):
     nodes: List[PendingNodeResponse]
     total: int
     latest_version: Optional[str] = None
+
+
+class SyncStrategy(str, Enum):
+    """Code sync restart strategy."""
+
+    IMMEDIATE = "immediate"
+    GRACEFUL = "graceful"
+    MANUAL = "manual"
+
+
+class NodeSyncRequest(BaseModel):
+    """Request to sync code to a node."""
+
+    restart: bool = True
+    strategy: str = Field(default="graceful", pattern="^(immediate|graceful|manual)$")
+
+
+class NodeSyncResponse(BaseModel):
+    """Response from node sync operation."""
+
+    success: bool
+    message: str
+    node_id: str
+    job_id: Optional[str] = None
+
+
+class FleetSyncRequest(BaseModel):
+    """Request to sync code to multiple nodes."""
+
+    node_ids: Optional[List[str]] = None
+    strategy: str = Field(
+        default="rolling", pattern="^(immediate|graceful|manual|rolling)$"
+    )
+    batch_size: int = Field(default=1, ge=1, le=10)
+    restart: bool = True
+
+
+class FleetSyncResponse(BaseModel):
+    """Response from fleet sync operation."""
+
+    success: bool
+    message: str
+    job_id: str
+    nodes_queued: int

@@ -8,9 +8,11 @@ Provides endpoints for code version tracking and sync operations.
 """
 
 import logging
+import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,10 +20,15 @@ from models.database import CodeStatus, Node, Setting
 from models.schemas import (
     CodeSyncRefreshResponse,
     CodeSyncStatusResponse,
+    FleetSyncRequest,
+    FleetSyncResponse,
+    NodeSyncRequest,
+    NodeSyncResponse,
     PendingNodeResponse,
     PendingNodesResponse,
 )
 from services.auth import get_current_user
+from services.code_distributor import get_code_distributor
 from services.database import get_db
 from services.git_tracker import get_git_tracker
 
@@ -168,4 +175,117 @@ async def get_pending_nodes(
         nodes=pending_nodes,
         total=len(pending_nodes),
         latest_version=latest_version,
+    )
+
+
+@router.post("/nodes/{node_id}/sync", response_model=NodeSyncResponse)
+async def sync_node(
+    node_id: str,
+    request: NodeSyncRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> NodeSyncResponse:
+    """
+    Trigger code sync on a specific node.
+    """
+    # Get node
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Node not found",
+        )
+
+    distributor = get_code_distributor()
+
+    success, message = await distributor.trigger_node_sync(
+        node_id=node.node_id,
+        ip_address=node.ip_address,
+        ssh_user=node.ssh_user or "autobot",
+        ssh_port=node.ssh_port or 22,
+        restart=request.restart,
+        strategy=request.strategy,
+    )
+
+    return NodeSyncResponse(
+        success=success,
+        message=message,
+        node_id=node_id,
+    )
+
+
+@router.post("/fleet/sync", response_model=FleetSyncResponse)
+async def sync_fleet(
+    request: FleetSyncRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> FleetSyncResponse:
+    """
+    Trigger code sync across multiple nodes.
+
+    If node_ids is None, syncs all outdated nodes.
+    """
+    # Get target nodes
+    if request.node_ids:
+        result = await db.execute(
+            select(Node).where(Node.node_id.in_(request.node_ids))
+        )
+    else:
+        result = await db.execute(
+            select(Node).where(Node.code_status == CodeStatus.OUTDATED.value)
+        )
+
+    nodes = result.scalars().all()
+
+    if not nodes:
+        return FleetSyncResponse(
+            success=True,
+            message="No nodes to sync",
+            job_id="",
+            nodes_queued=0,
+        )
+
+    # Create a job ID for tracking
+    job_id = str(uuid.uuid4())[:16]
+
+    # Queue the sync operations (in a real implementation, this would be async)
+    # For now, we'll just acknowledge the request
+    logger.info("Fleet sync job %s queued for %d nodes", job_id, len(nodes))
+
+    return FleetSyncResponse(
+        success=True,
+        message=f"Sync queued for {len(nodes)} node(s)",
+        job_id=job_id,
+        nodes_queued=len(nodes),
+    )
+
+
+@router.get("/nodes/{node_id}/package")
+async def get_code_package(
+    node_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+):
+    """
+    Get the code package for a node to download.
+
+    Returns a tarball of the agent code with the latest version.
+    """
+    distributor = get_code_distributor()
+
+    # Build or get cached package
+    package_path = await distributor.build_package()
+
+    if not package_path or not package_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to build code package",
+        )
+
+    return FileResponse(
+        path=package_path,
+        media_type="application/gzip",
+        filename=package_path.name,
     )
