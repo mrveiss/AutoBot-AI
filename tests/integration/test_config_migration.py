@@ -160,7 +160,7 @@ class TestConfigurationMigration:
 
     def test_unified_multimodal_processor_config_usage(self):
         """Test that unified multimodal processor uses centralized config"""
-        from src.unified_multimodal_processor import VisionProcessor
+        from src.multimodal_processor import VisionProcessor
         
         # Create test config with vision settings
         test_config = ConfigManager()

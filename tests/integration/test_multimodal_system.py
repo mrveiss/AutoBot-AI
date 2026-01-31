@@ -9,10 +9,10 @@ import time
 from unittest.mock import Mock, patch, AsyncMock
 from typing import Dict, Any
 
-from src.unified_multimodal_processor import (
-    UnifiedMultiModalProcessor, 
-    MultiModalInput, 
-    ModalityType, 
+from src.multimodal_processor import (
+    UnifiedMultiModalProcessor,
+    MultiModalInput,
+    ModalityType,
     ProcessingIntent,
     VisionProcessor,
     VoiceProcessor,
@@ -364,7 +364,7 @@ class TestUnifiedMultiModalSystem:
     
     def test_processor_confidence_calculation(self):
         """Test confidence calculation in base processor"""
-        from src.unified_multimodal_processor import BaseModalProcessor
+        from src.multimodal_processor import BaseModalProcessor
         
         base_proc = BaseModalProcessor("test")
         

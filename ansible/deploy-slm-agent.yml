@@ -24,8 +24,8 @@
         name: autobot
         state: present
         system: yes
-        create_home: no
-        shell: /usr/sbin/nologin
+        create_home: yes
+        shell: /bin/bash
       tags: ['setup']
 
   roles:

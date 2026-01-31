@@ -10,7 +10,7 @@ import pytest
 from typing import Dict, List, Any
 from unittest.mock import Mock, patch, AsyncMock
 
-from src.unified_multimodal_processor import UnifiedMultiModalProcessor, MultiModalInput, ModalityType, ProcessingIntent
+from src.multimodal_processor import UnifiedMultiModalProcessor, MultiModalInput, ModalityType, ProcessingIntent
 from src.utils.config_manager import ConfigManager
 from src.enhanced_memory_manager import EnhancedMemoryManager
 from backend.services.config_service import ConfigService
