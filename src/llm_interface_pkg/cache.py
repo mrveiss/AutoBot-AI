@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional
 
 import xxhash
 
+from src.config.ssot_config import config
 from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -53,29 +54,41 @@ class LLMResponseCache:
     - Cache miss: 100-10000ms (LLM API call)
 
     This provides 3-5x faster cache lookups compared to single-tier caching.
+
+    Issue: #743 - Memory Optimization (Phase 3.3)
+    Reads default L1 size from config.cache.l1.llm_response
+    Reads default L2 TTL from config.cache.l2.llm_response
     """
 
     def __init__(
         self,
-        memory_cache_max_size: int = 100,
-        redis_ttl: int = 300,  # 5 minutes default
+        memory_cache_max_size: int = None,
+        redis_ttl: int = None,
         redis_database: str = "main",
     ):
         """
         Initialize the dual-tier cache.
 
         Args:
-            memory_cache_max_size: Maximum items in L1 memory cache
-            redis_ttl: Time-to-live for L2 Redis cache entries (seconds)
+            memory_cache_max_size: Max L1 items (default from SSOT config.cache.l1.llm_response)
+            redis_ttl: L2 TTL seconds (default from SSOT config.cache.l2.llm_response)
             redis_database: Redis database name for L2 cache
         """
         # L1 In-memory cache
         self._memory_cache: Dict[str, CachedResponse] = {}
         self._memory_cache_access: List[str] = []  # LRU tracking
-        self._memory_cache_max_size = memory_cache_max_size
+        # Issue #743: Read from SSOT config, allow explicit override
+        self._memory_cache_max_size = (
+            memory_cache_max_size
+            if memory_cache_max_size is not None
+            else config.cache.l1.llm_response
+        )
 
         # L2 Redis cache configuration
-        self._redis_ttl = redis_ttl
+        # Issue #743: Read from SSOT config, allow explicit override
+        self._redis_ttl = (
+            redis_ttl if redis_ttl is not None else config.cache.l2.llm_response
+        )
         self._redis_database = redis_database
 
         # Cache metrics

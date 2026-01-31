@@ -10,6 +10,8 @@ import threading
 from collections import OrderedDict
 from typing import Any, Dict, Optional
 
+from src.config.ssot_config import config
+
 logger = logging.getLogger(__name__)
 
 
@@ -18,11 +20,22 @@ class LRUCacheManager:
     LRU cache implementation (ICacheManager)
 
     Responsibility: Provide in-memory LRU caching with statistics
+
+    Issue: #743 - Memory Optimization (Phase 3.3)
+    Reads default max_size from SSOT config.cache.l1.lru_memory
     """
 
-    def __init__(self, max_size: int = 1000):
-        """Initialize LRU cache with specified maximum size and statistics."""
-        self._max_size = max_size
+    def __init__(self, max_size: int = None):
+        """
+        Initialize LRU cache with specified maximum size and statistics.
+
+        Args:
+            max_size: Maximum items (default from SSOT config.cache.l1.lru_memory)
+        """
+        # Issue #743: Read from SSOT config, allow explicit override
+        self._max_size = (
+            max_size if max_size is not None else config.cache.l1.lru_memory
+        )
         self._cache: OrderedDict = OrderedDict()
         self._hits = 0
         self._misses = 0

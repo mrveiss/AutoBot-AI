@@ -7,6 +7,8 @@ import asyncio
 import logging
 from typing import Any, Dict, Optional
 
+from src.config.ssot_config import config
+
 from .protocols import CacheProtocol
 
 logger = logging.getLogger(__name__)
@@ -24,6 +26,9 @@ class CacheCoordinator:
     - Coordinate eviction across all caches when pressure detected
     - Provide unified statistics
 
+    Issue: #743 - Memory Optimization (Phase 3.3)
+    Reads default thresholds from SSOT config.cache.coordinator
+
     Usage:
         coordinator = CacheCoordinator.get_instance()
         coordinator.register(my_cache)
@@ -35,8 +40,9 @@ class CacheCoordinator:
 
     def __init__(self):
         self._caches: Dict[str, CacheProtocol] = {}
-        self._pressure_threshold = 0.80  # 80% system memory
-        self._eviction_ratio = 0.20  # Evict 20% per cache
+        # Issue #743: Read from SSOT config
+        self._pressure_threshold = config.cache.coordinator.pressure_threshold
+        self._eviction_ratio = config.cache.coordinator.eviction_ratio
         self._pressure_triggered_count = 0
         self._lock = asyncio.Lock()
         self._initialized = False

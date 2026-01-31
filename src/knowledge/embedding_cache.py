@@ -15,6 +15,8 @@ import time
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional
 
+from src.config.ssot_config import config
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,19 +27,23 @@ class EmbeddingCache:
     Performance Impact:
     - 60-80% reduction in embedding computation for repeated queries
     - Reduces ChromaDB search latency significantly
+
+    Issue: #743 - Memory Optimization (Phase 3.3)
+    Reads default maxsize from SSOT config.cache.l1.embedding
     """
 
-    def __init__(self, maxsize: int = 1000, ttl_seconds: int = 3600):
+    def __init__(self, maxsize: int = None, ttl_seconds: int = 3600):
         """
         Initialize embedding cache.
 
         Args:
-            maxsize: Maximum number of embeddings to cache (default: 1000)
+            maxsize: Maximum items (default from SSOT config.cache.l1.embedding)
             ttl_seconds: Time-to-live for cached embeddings (default: 1 hour)
         """
         self._cache: OrderedDict = OrderedDict()
         self._timestamps: Dict[str, float] = {}
-        self._maxsize = maxsize
+        # Issue #743: Read from SSOT config, allow explicit override
+        self._maxsize = maxsize if maxsize is not None else config.cache.l1.embedding
         self._ttl_seconds = ttl_seconds
         self._hits = 0
         self._misses = 0
@@ -166,7 +172,8 @@ class EmbeddingCache:
 
 
 # Global embedding cache instance
-_embedding_cache = EmbeddingCache(maxsize=1000, ttl_seconds=3600)
+# Issue #743: Uses SSOT config defaults (no explicit size needed)
+_embedding_cache = EmbeddingCache(ttl_seconds=3600)
 
 
 def get_embedding_cache() -> EmbeddingCache:
