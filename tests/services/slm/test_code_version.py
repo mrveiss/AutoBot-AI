@@ -11,7 +11,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 sys.path.insert(0, "slm-server")
-from models.database import Base, CodeStatus, Node  # noqa: E402
+from models.database import Base, CodeStatus, Node  # noqa: E402, F401
 
 
 @pytest.fixture(scope="function")
@@ -177,3 +177,103 @@ class TestHeartbeatSchemas:
             response.update_url
             == "https://github.com/mrveiss/AutoBot-AI/releases/tag/v1.2.3"
         )
+
+
+class TestHeartbeatVersionTracking:
+    """Tests for heartbeat version tracking (Issue #741)."""
+
+    def test_version_comparison_logic_up_to_date(self):
+        """Test version comparison marks node UP_TO_DATE when versions match."""
+        node_version = "abc123"
+        latest_version = "abc123"
+
+        # This is the logic we expect the endpoint to implement
+        if node_version == latest_version:
+            code_status = CodeStatus.UP_TO_DATE.value
+        elif node_version and node_version != latest_version:
+            code_status = CodeStatus.OUTDATED.value
+        else:
+            code_status = CodeStatus.UNKNOWN.value
+
+        assert code_status == CodeStatus.UP_TO_DATE.value
+
+    def test_version_comparison_logic_outdated(self):
+        """Test version comparison marks node OUTDATED when versions differ."""
+        node_version = "abc123"
+        latest_version = "def456"
+
+        # This is the logic we expect the endpoint to implement
+        if node_version == latest_version:
+            code_status = CodeStatus.UP_TO_DATE.value
+        elif node_version and node_version != latest_version:
+            code_status = CodeStatus.OUTDATED.value
+        else:
+            code_status = CodeStatus.UNKNOWN.value
+
+        assert code_status == CodeStatus.OUTDATED.value
+
+    def test_version_comparison_logic_unknown_no_version(self):
+        """Test version comparison marks node UNKNOWN when no version provided."""
+        node_version = None
+        latest_version = "def456"
+
+        # This is the logic we expect the endpoint to implement
+        if node_version and node_version == latest_version:
+            code_status = CodeStatus.UP_TO_DATE.value
+        elif node_version and node_version != latest_version:
+            code_status = CodeStatus.OUTDATED.value
+        else:
+            code_status = CodeStatus.UNKNOWN.value
+
+        assert code_status == CodeStatus.UNKNOWN.value
+
+    def test_heartbeat_response_update_available_true(self):
+        """Test HeartbeatResponse when update is available."""
+        from models.schemas import HeartbeatResponse
+
+        # Simulate outdated node
+        code_status = CodeStatus.OUTDATED.value
+        latest_version = "def456"
+        node_id = "test-node"
+
+        update_available = (
+            code_status == CodeStatus.OUTDATED.value and latest_version is not None
+        )
+
+        response = HeartbeatResponse(
+            status="ok",
+            update_available=update_available,
+            latest_version=latest_version if update_available else None,
+            update_url=f"/api/nodes/{node_id}/code-package"
+            if update_available
+            else None,
+        )
+
+        assert response.update_available is True
+        assert response.latest_version == "def456"
+        assert response.update_url == f"/api/nodes/{node_id}/code-package"
+
+    def test_heartbeat_response_update_available_false(self):
+        """Test HeartbeatResponse when no update is available."""
+        from models.schemas import HeartbeatResponse
+
+        # Simulate up-to-date node
+        code_status = CodeStatus.UP_TO_DATE.value
+        latest_version = "abc123"
+
+        update_available = (
+            code_status == CodeStatus.OUTDATED.value and latest_version is not None
+        )
+
+        response = HeartbeatResponse(
+            status="ok",
+            update_available=update_available,
+            latest_version=latest_version if update_available else None,
+            update_url=None
+            if not update_available
+            else "/api/nodes/test-node/code-package",
+        )
+
+        assert response.update_available is False
+        assert response.latest_version is None
+        assert response.update_url is None

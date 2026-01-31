@@ -4,17 +4,29 @@
 
 """Pytest fixtures for SLM testing."""
 
-import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from backend.models.infrastructure import Base
+import sys
+
+# Add slm-server to path for imports
+sys.path.insert(0, "slm-server")
+
+import pytest  # noqa: E402
+from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
+
+try:
+    from backend.models.infrastructure import Base as BackendBase  # noqa: E402
+except ImportError:
+    BackendBase = None
+
+from models.database import Base as SLMBase  # noqa: E402
 
 
 @pytest.fixture(scope="function")
 def in_memory_db():
     """Create an in-memory SQLite database for testing."""
     engine = create_engine("sqlite:///:memory:", echo=False)
-    Base.metadata.create_all(engine)
+    # Use SLM Base for SLM tests
+    SLMBase.metadata.create_all(engine)
     return engine
 
 

@@ -12,14 +12,22 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 
-from typing_extensions import Annotated
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
-from models.database import Certificate, EventSeverity, EventType, Node, NodeEvent, NodeStatus
+from models.database import (
+    Certificate,
+    CodeStatus,
+    EventSeverity,
+    EventType,
+    Node,
+    NodeEvent,
+    NodeStatus,
+    Setting,
+)
 from models.schemas import (
     CertificateActionResponse,
     CertificateResponse,
@@ -27,6 +35,7 @@ from models.schemas import (
     ConnectionTestResponse,
     EnrollRequest,
     HeartbeatRequest,
+    HeartbeatResponse,
     NodeCreate,
     NodeEventListResponse,
     NodeEventResponse,
@@ -49,6 +58,7 @@ async def _broadcast_lifecycle_event(
     """Broadcast a node lifecycle event via WebSocket."""
     try:
         from api.websocket import ws_manager
+
         await ws_manager.send_node_lifecycle_event(node_id, event_type, details)
     except Exception as e:
         logger.debug("Failed to broadcast lifecycle event: %s", e)
@@ -171,7 +181,11 @@ async def create_node(
         EventType.STATE_CHANGE,
         EventSeverity.INFO,
         event_msg,
-        {"status": initial_status, "roles": node_data.roles, "import_existing": node_data.import_existing},
+        {
+            "status": initial_status,
+            "roles": node_data.roles,
+            "import_existing": node_data.import_existing,
+        },
     )
 
     await db.commit()
@@ -247,6 +261,7 @@ async def update_node(
 
 class RolesUpdateRequest(BaseModel):
     """Request to update node roles."""
+
     roles: List[str]
 
 
@@ -392,12 +407,12 @@ async def replace_node(
     return NodeResponse.model_validate(new_node)
 
 
-@router.post("/{node_id}/heartbeat", response_model=NodeResponse)
+@router.post("/{node_id}/heartbeat", response_model=HeartbeatResponse)
 async def node_heartbeat(
     node_id: str,
     heartbeat: HeartbeatRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> NodeResponse:
+) -> HeartbeatResponse:
     """Receive heartbeat from node agent."""
     node = await reconciler_service.update_node_heartbeat(
         db,
@@ -416,7 +431,42 @@ async def node_heartbeat(
             detail="Node not found",
         )
 
-    return NodeResponse.model_validate(node)
+    # Store code_version if provided (Issue #741)
+    if heartbeat.code_version:
+        node.code_version = heartbeat.code_version
+
+    # Get latest agent code version from settings (Issue #741)
+    latest_result = await db.execute(
+        select(Setting).where(Setting.key == "slm_agent_latest_commit")
+    )
+    latest_setting = latest_result.scalar_one_or_none()
+    latest_version = latest_setting.value if latest_setting else None
+
+    # Compare and update code_status (Issue #741)
+    if heartbeat.code_version and latest_version:
+        if heartbeat.code_version == latest_version:
+            node.code_status = CodeStatus.UP_TO_DATE.value
+        else:
+            node.code_status = CodeStatus.OUTDATED.value
+    elif heartbeat.code_version:
+        # No latest version configured yet
+        node.code_status = CodeStatus.UNKNOWN.value
+
+    # Commit changes to database
+    await db.commit()
+    await db.refresh(node)
+
+    # Build and return HeartbeatResponse (Issue #741)
+    update_available = (
+        node.code_status == CodeStatus.OUTDATED.value and latest_version is not None
+    )
+
+    return HeartbeatResponse(
+        status="ok",
+        update_available=update_available,
+        latest_version=latest_version if update_available else None,
+        update_url=f"/api/nodes/{node_id}/code-package" if update_available else None,
+    )
 
 
 @router.post("/{node_id}/enroll")
@@ -499,7 +549,10 @@ async def enroll_node(
         EventType.DEPLOYMENT_COMPLETED,
         EventSeverity.INFO,
         f"Enrollment completed for node {node_id}",
-        {"hostname": node.hostname if node else None, "status": node.status if node else None},
+        {
+            "hostname": node.hostname if node else None,
+            "status": node.status if node else None,
+        },
     )
     await db.commit()
 
@@ -662,11 +715,16 @@ async def _reboot_via_ssh(ip_address: str, ssh_user: str, ssh_port: int) -> tupl
     try:
         ssh_cmd = [
             "ssh",
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "ConnectTimeout=10",
-            "-o", "BatchMode=yes",
-            "-p", str(ssh_port),
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "ConnectTimeout=10",
+            "-o",
+            "BatchMode=yes",
+            "-p",
+            str(ssh_port),
             f"{ssh_user}@{ip_address}",
             "sudo reboot",
         ]
@@ -744,7 +802,10 @@ async def test_connection(
     start_time = time.time()
 
     try:
-        remote_cmd = "uname -a && cat /etc/os-release 2>/dev/null | head -5 || echo 'OS info unavailable'"
+        remote_cmd = (
+            "uname -a && cat /etc/os-release 2>/dev/null | "
+            "head -5 || echo 'OS info unavailable'"
+        )
 
         # Build SSH command based on auth method
         if request.auth_method == "password" and request.password:
@@ -758,13 +819,20 @@ async def test_connection(
 
             # Use sshpass for password authentication
             ssh_cmd = [
-                "sshpass", "-p", request.password,
+                "sshpass",
+                "-p",
+                request.password,
                 "ssh",
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "ConnectTimeout=10",
-                "-o", "PubkeyAuthentication=no",
-                "-p", str(request.ssh_port),
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
+                "-o",
+                "ConnectTimeout=10",
+                "-o",
+                "PubkeyAuthentication=no",
+                "-p",
+                str(request.ssh_port),
                 f"{request.ssh_user}@{request.ip_address}",
                 remote_cmd,
             ]
@@ -772,11 +840,16 @@ async def test_connection(
             # Use key-based authentication (BatchMode)
             ssh_cmd = [
                 "ssh",
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "ConnectTimeout=10",
-                "-o", "BatchMode=yes",
-                "-p", str(request.ssh_port),
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
+                "-o",
+                "ConnectTimeout=10",
+                "-o",
+                "BatchMode=yes",
+                "-p",
+                str(request.ssh_port),
                 f"{request.ssh_user}@{request.ip_address}",
                 remote_cmd,
             ]
@@ -1058,9 +1131,10 @@ async def get_node_updates(
     _: Annotated[dict, Depends(get_current_user)],
 ):
     """Get available updates for a node."""
+    from sqlalchemy import or_
+
     from models.database import UpdateInfo
     from models.schemas import UpdateCheckResponse, UpdateInfoResponse
-    from sqlalchemy import or_
 
     # Verify node exists
     node_result = await db.execute(select(Node).where(Node.node_id == node_id))
@@ -1073,7 +1147,7 @@ async def get_node_updates(
     # Get updates for this node (or global updates)
     query = (
         select(UpdateInfo)
-        .where(UpdateInfo.is_applied == False)
+        .where(UpdateInfo.is_applied.is_(False))
         .where(or_(UpdateInfo.node_id == node_id, UpdateInfo.node_id.is_(None)))
         .order_by(UpdateInfo.severity.desc(), UpdateInfo.created_at.desc())
     )
@@ -1135,7 +1209,9 @@ async def apply_node_updates(
     logger.info("Applied %d updates to node %s", len(applied), node_id)
     return UpdateApplyResponse(
         success=len(failed) == 0,
-        message=f"Applied {len(applied)} update(s)" if applied else "No updates applied",
+        message=f"Applied {len(applied)} update(s)"
+        if applied
+        else "No updates applied",
         applied_updates=applied,
         failed_updates=failed,
     )
