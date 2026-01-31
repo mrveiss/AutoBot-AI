@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from api import (
     auth_router,
     blue_green_router,
+    code_sync_router,
     deployments_router,
     fleet_services_router,
     health_router,
@@ -133,6 +134,7 @@ app.include_router(vnc_router, prefix="/api")
 app.include_router(node_tls_router, prefix="/api")
 app.include_router(tls_router, prefix="/api")
 app.include_router(security_router, prefix="/api")
+app.include_router(code_sync_router, prefix="/api")
 
 
 @app.get("/")

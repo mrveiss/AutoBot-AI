@@ -1288,3 +1288,46 @@ class ThreatSummary(BaseModel):
     trend_24h: List[Dict] = Field(
         default_factory=list, description="Hourly threat count"
     )
+
+
+# =============================================================================
+# Code Sync Schemas (Issue #741)
+# =============================================================================
+
+
+class CodeSyncStatusResponse(BaseModel):
+    """Code sync status response."""
+
+    latest_version: Optional[str] = None
+    local_version: Optional[str] = None
+    last_fetch: Optional[datetime] = None
+    has_update: bool = False
+    outdated_nodes: int = 0
+    total_nodes: int = 0
+
+
+class CodeSyncRefreshResponse(BaseModel):
+    """Response after manual refresh."""
+
+    success: bool
+    message: str
+    latest_version: Optional[str] = None
+    has_update: bool = False
+
+
+class PendingNodeResponse(BaseModel):
+    """Node that needs code update."""
+
+    node_id: str
+    hostname: str
+    ip_address: str
+    current_version: Optional[str] = None
+    code_status: str
+
+
+class PendingNodesResponse(BaseModel):
+    """List of nodes needing updates."""
+
+    nodes: List[PendingNodeResponse]
+    total: int
+    latest_version: Optional[str] = None
