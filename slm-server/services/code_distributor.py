@@ -15,7 +15,7 @@ import os
 import tarfile
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +132,7 @@ class CodeDistributor:
         ssh_port: int = 22,
         restart: bool = True,
         strategy: str = "graceful",
-    ) -> tuple[bool, str]:
+    ) -> Tuple[bool, str]:
         """
         Trigger sync on a specific node via SSH.
 

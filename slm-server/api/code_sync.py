@@ -9,12 +9,12 @@ Provides endpoints for code version tracking and sync operations.
 
 import logging
 import uuid
-from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
 from models.database import CodeStatus, Node, Setting
 from models.schemas import (

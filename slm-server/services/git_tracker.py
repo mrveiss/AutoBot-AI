@@ -11,7 +11,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,7 +60,7 @@ class GitTracker:
         self.latest_commit: Optional[str] = None
         self.last_fetch: Optional[datetime] = None
 
-    async def _run_git_command(self, *args: str) -> tuple[str, int]:
+    async def _run_git_command(self, *args: str) -> Tuple[str, int]:
         """
         Run a git command and return output.
 
