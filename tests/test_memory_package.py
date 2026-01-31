@@ -1,22 +1,21 @@
 """
-Comprehensive Test Suite for Unified Memory Manager - Phase 5 Consolidation
+Test Suite for Memory Package (src/memory/).
 
-Tests all features from 3 consolidated managers:
-- enhanced_memory_manager.py (task execution history)
-- memory_manager.py (general purpose storage)
-- optimized_memory_manager.py (LRU caching & monitoring)
-
-Total: 10+ tests covering all functionality
+Tests features including:
+- UnifiedMemoryManager (task execution history, general storage)
+- LRU caching and monitoring
+- Backward compatibility wrappers
 """
 
 import asyncio
 import os
+
+# Test imports
+import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
 
-# Test imports
-import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.memory import (
@@ -185,9 +184,7 @@ async def test_5_strategy_pattern():
         assert entry_id > 0
 
         # Cache strategy
-        cache_key = await manager.store(
-            {"data": "test"}, StorageStrategy.CACHED
-        )
+        cache_key = await manager.store({"data": "test"}, StorageStrategy.CACHED)
         assert cache_key is not None
         assert manager.cache_get(cache_key) == {"data": "test"}
 
@@ -304,9 +301,7 @@ async def test_9_statistics():
         )
         await manager.log_task(task)
 
-        await manager.store_memory(
-            MemoryCategory.FACT, "Test fact", metadata={}
-        )
+        await manager.store_memory(MemoryCategory.FACT, "Test fact", metadata={})
 
         manager.cache_put("test", "value")
 
@@ -416,6 +411,7 @@ def run_all_tests():
     except Exception as e:
         print(f"\n❌ ERROR: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

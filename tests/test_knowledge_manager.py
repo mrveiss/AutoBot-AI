@@ -1,36 +1,26 @@
 #!/usr/bin/env python3
 """
-Comprehensive Test Suite for Unified Knowledge Manager - Phase 6 Consolidation
+Comprehensive Test Suite for Knowledge Manager.
 
-Tests all features from 3 consolidated knowledge managers:
+Tests features including:
 - temporal_knowledge_manager.py (time-based knowledge expiry)
-- system_knowledge_manager.py (template management)
-- machine_aware_system_knowledge_manager.py (machine adaptation)
-
-Total: 15+ tests covering all functionality
+- UnifiedKnowledgeManager (template management, machine adaptation)
 """
 
 import asyncio
 import hashlib
 import os
+
+# Test imports
+import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from unittest.mock import MagicMock
 
-# Test imports
-import sys
-
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.temporal_knowledge_manager import (
-    FreshnessStatus,
-    InvalidationJob,
-    KnowledgePriority,
-    TemporalKnowledgeManager,
-    TemporalMetadata,
-)
 from src.agents.knowledge_manager import (
     IMachineAwareManager,
     ISystemKnowledgeManager,
@@ -38,7 +28,13 @@ from src.agents.knowledge_manager import (
     UnifiedKnowledgeManager,
     get_unified_knowledge_manager,
 )
-
+from src.temporal_knowledge_manager import (
+    FreshnessStatus,
+    InvalidationJob,
+    KnowledgePriority,
+    TemporalKnowledgeManager,
+    TemporalMetadata,
+)
 
 # ============================================================================
 # MOCK OBJECTS - Minimal mocking for isolation
@@ -127,9 +123,7 @@ class MockMachineAwareSystemKnowledgeManager(MockSystemKnowledgeManager):
             "architecture": "x86_64",
             "capabilities": ["forensics", "networking"],
         }
-        self.machine_profiles_dir = (
-            Path(tempfile.gettempdir()) / "machine_profiles"
-        )
+        self.machine_profiles_dir = Path(tempfile.gettempdir()) / "machine_profiles"
         self.machine_profiles_dir.mkdir(parents=True, exist_ok=True)
 
     async def initialize_machine_aware_knowledge(self, force_reinstall: bool = False):
@@ -338,9 +332,7 @@ async def test_5_unified_operations():
     assert "temporal_analytics" in status
 
     # Search knowledge
-    search_results = await manager.search_knowledge(
-        "test", include_man_pages=False
-    )
+    search_results = await manager.search_knowledge("test", include_man_pages=False)
     assert search_results["query"] == "test"
 
     print("✅ PASSED: Unified operations work correctly")
@@ -357,9 +349,7 @@ async def test_6_optional_components():
         knowledge_base=kb, enable_temporal=False, enable_machine_aware=False
     )
 
-    metadata = manager_no_temporal.register_content(
-        "test", {"cat": "test"}, "a" * 32
-    )
+    metadata = manager_no_temporal.register_content("test", {"cat": "test"}, "a" * 32)
     assert metadata is None, "Should return None when temporal disabled"
 
     analytics = await manager_no_temporal.get_temporal_analytics()
@@ -567,9 +557,7 @@ async def test_12_analytics():
     # Register multiple content items
     for i in range(5):
         content_hash = hashlib.md5(f"content-{i}".encode()).hexdigest()
-        manager.register_content(
-            f"item-{i}", {"category": "test"}, content_hash
-        )
+        manager.register_content(f"item-{i}", {"category": "test"}, content_hash)
 
     # Get temporal analytics
     analytics = await manager.get_temporal_analytics()
@@ -614,9 +602,7 @@ async def test_13_background_processing():
 
     # Test invalid interval
     try:
-        await manager.start_temporal_background_processing(
-            check_interval_minutes=0
-        )
+        await manager.start_temporal_background_processing(check_interval_minutes=0)
         assert False, "Should raise ValueError"
     except ValueError as e:
         assert "must be positive" in str(e)
