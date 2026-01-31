@@ -3,14 +3,15 @@
 # Author: mrveiss
 """Tests for code version tracking (Issue #741)."""
 
+# Import from slm-server models
+import sys
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-# Import from slm-server models
-import sys
 sys.path.insert(0, "slm-server")
-from models.database import Base, Node, CodeStatus
+from models.database import Base, CodeStatus, Node  # noqa: E402
 
 
 @pytest.fixture(scope="function")
@@ -40,9 +41,7 @@ class TestNodeCodeVersion:
         slm_db_session.add(node)
         slm_db_session.commit()
 
-        saved = slm_db_session.query(Node).filter(
-            Node.node_id == "test-node-1"
-        ).first()
+        saved = slm_db_session.query(Node).filter(Node.node_id == "test-node-1").first()
         assert saved is not None
         assert saved.code_version == "abc123def"
 
@@ -57,9 +56,7 @@ class TestNodeCodeVersion:
         slm_db_session.add(node)
         slm_db_session.commit()
 
-        saved = slm_db_session.query(Node).filter(
-            Node.node_id == "test-node-2"
-        ).first()
+        saved = slm_db_session.query(Node).filter(Node.node_id == "test-node-2").first()
         assert saved is not None
         assert saved.code_status == "unknown"
 
@@ -73,9 +70,7 @@ class TestNodeCodeVersion:
         slm_db_session.add(node)
         slm_db_session.commit()
 
-        saved = slm_db_session.query(Node).filter(
-            Node.node_id == "test-node-3"
-        ).first()
+        saved = slm_db_session.query(Node).filter(Node.node_id == "test-node-3").first()
         assert saved is not None
         assert saved.code_version is None
 
@@ -89,9 +84,7 @@ class TestNodeCodeVersion:
         slm_db_session.add(node)
         slm_db_session.commit()
 
-        saved = slm_db_session.query(Node).filter(
-            Node.node_id == "test-node-4"
-        ).first()
+        saved = slm_db_session.query(Node).filter(Node.node_id == "test-node-4").first()
         assert saved is not None
         assert saved.code_status == CodeStatus.UNKNOWN.value
 
@@ -117,8 +110,70 @@ class TestNodeCodeVersion:
         node.code_version = "abc123"
         slm_db_session.commit()
 
-        saved = slm_db_session.query(Node).filter(
-            Node.node_id == "test-node-5"
-        ).first()
+        saved = slm_db_session.query(Node).filter(Node.node_id == "test-node-5").first()
         assert saved.code_status == "up_to_date"
         assert saved.code_version == "abc123"
+
+
+class TestHeartbeatSchemas:
+    """Test heartbeat schema extensions (Issue #741)."""
+
+    def test_heartbeat_request_accepts_code_version(self):
+        """HeartbeatRequest should accept code_version field."""
+        from models.schemas import HeartbeatRequest
+
+        request = HeartbeatRequest(
+            cpu_percent=25.0,
+            memory_percent=50.0,
+            disk_percent=30.0,
+            code_version="abc123def456",
+        )
+        assert request.code_version == "abc123def456"
+
+    def test_heartbeat_request_code_version_optional(self):
+        """HeartbeatRequest code_version should be optional."""
+        from models.schemas import HeartbeatRequest
+
+        request = HeartbeatRequest(
+            cpu_percent=10.0,
+            memory_percent=20.0,
+            disk_percent=15.0,
+        )
+        assert request.code_version is None
+
+    def test_heartbeat_response_includes_update_info(self):
+        """HeartbeatResponse should include update availability info."""
+        from models.schemas import HeartbeatResponse
+
+        response = HeartbeatResponse(
+            status="ok",
+            update_available=True,
+            latest_version="def789abc",
+        )
+        assert response.update_available is True
+        assert response.latest_version == "def789abc"
+
+    def test_heartbeat_response_defaults(self):
+        """HeartbeatResponse should have sensible defaults."""
+        from models.schemas import HeartbeatResponse
+
+        response = HeartbeatResponse()
+        assert response.status == "ok"
+        assert response.update_available is False
+        assert response.latest_version is None
+        assert response.update_url is None
+
+    def test_heartbeat_response_with_update_url(self):
+        """HeartbeatResponse should support update_url field."""
+        from models.schemas import HeartbeatResponse
+
+        response = HeartbeatResponse(
+            status="ok",
+            update_available=True,
+            latest_version="v1.2.3",
+            update_url="https://github.com/mrveiss/AutoBot-AI/releases/tag/v1.2.3",
+        )
+        assert (
+            response.update_url
+            == "https://github.com/mrveiss/AutoBot-AI/releases/tag/v1.2.3"
+        )

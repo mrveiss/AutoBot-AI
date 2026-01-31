@@ -9,10 +9,10 @@ Request and response models for the SLM API.
 
 from datetime import datetime
 from typing import Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
-from .database import NodeStatus, DeploymentStatus, BackupStatus, ServiceStatus
-
+from .database import NodeStatus
 
 # =============================================================================
 # Authentication Schemas
@@ -124,7 +124,17 @@ class HeartbeatRequest(BaseModel):
     disk_percent: float = 0.0
     agent_version: Optional[str] = None
     os_info: Optional[str] = None
+    code_version: Optional[str] = None  # Issue #741: Git commit hash
     extra_data: Dict = Field(default_factory=dict)
+
+
+class HeartbeatResponse(BaseModel):
+    """Agent heartbeat response (Issue #741)."""
+
+    status: str = "ok"
+    update_available: bool = False
+    latest_version: Optional[str] = None
+    update_url: Optional[str] = None
 
 
 class EnrollRequest(BaseModel):
@@ -719,7 +729,9 @@ class BlueGreenCreate(BaseModel):
     blue_node_id: str = Field(..., description="Source node (current production)")
     green_node_id: str = Field(..., description="Target node (will receive roles)")
     roles: List[str] = Field(..., description="Roles to migrate from blue to green")
-    deployment_type: str = Field(default="upgrade", description="upgrade, migration, or failover")
+    deployment_type: str = Field(
+        default="upgrade", description="upgrade, migration, or failover"
+    )
     health_check_url: Optional[str] = None
     health_check_interval: int = Field(default=10, ge=5, le=60)
     health_check_timeout: int = Field(default=300, ge=60, le=1800)
@@ -727,10 +739,16 @@ class BlueGreenCreate(BaseModel):
     purge_on_complete: bool = True
     # Post-deployment health monitoring (Issue #726 Phase 3)
     post_deploy_monitor_duration: int = Field(
-        default=1800, ge=0, le=7200, description="Seconds to monitor after deployment (0=disabled)"
+        default=1800,
+        ge=0,
+        le=7200,
+        description="Seconds to monitor after deployment (0=disabled)",
     )
     health_failure_threshold: int = Field(
-        default=3, ge=1, le=10, description="Consecutive health failures before rollback"
+        default=3,
+        ge=1,
+        le=10,
+        description="Consecutive health failures before rollback",
     )
 
 
@@ -858,14 +876,25 @@ class VNCCredentialCreate(BaseModel):
     name: Optional[str] = Field(
         None, description="Optional friendly name for the credential"
     )
-    password: str = Field(..., min_length=1, description="VNC password (will be encrypted)")
-    port: Optional[int] = Field(None, ge=1, le=65535, description="websockify port")
-    display_number: Optional[int] = Field(None, ge=0, le=99, description="X display number")
-    vnc_port: Optional[int] = Field(
-        None, ge=1, le=65535, description="Raw VNC port (auto-calculated if not provided)"
+    password: str = Field(
+        ..., min_length=1, description="VNC password (will be encrypted)"
     )
-    websockify_enabled: bool = Field(default=True, description="Enable websockify for noVNC")
-    extra_data: Dict = Field(default_factory=dict, description="Additional configuration")
+    port: Optional[int] = Field(None, ge=1, le=65535, description="websockify port")
+    display_number: Optional[int] = Field(
+        None, ge=0, le=99, description="X display number"
+    )
+    vnc_port: Optional[int] = Field(
+        None,
+        ge=1,
+        le=65535,
+        description="Raw VNC port (auto-calculated if not provided)",
+    )
+    websockify_enabled: bool = Field(
+        default=True, description="Enable websockify for noVNC"
+    )
+    extra_data: Dict = Field(
+        default_factory=dict, description="Additional configuration"
+    )
 
 
 class VNCCredentialUpdate(BaseModel):
@@ -958,10 +987,18 @@ class TLSCredentialCreate(BaseModel):
     )
     ca_cert: str = Field(..., description="CA certificate (PEM format)")
     server_cert: str = Field(..., description="Server/client certificate (PEM format)")
-    server_key: str = Field(..., description="Private key (PEM format, will be encrypted)")
-    common_name: Optional[str] = Field(None, description="CN from certificate (auto-extracted if not provided)")
-    expires_at: Optional[datetime] = Field(None, description="Expiration date (auto-extracted if not provided)")
-    extra_data: Dict = Field(default_factory=dict, description="Additional configuration")
+    server_key: str = Field(
+        ..., description="Private key (PEM format, will be encrypted)"
+    )
+    common_name: Optional[str] = Field(
+        None, description="CN from certificate (auto-extracted if not provided)"
+    )
+    expires_at: Optional[datetime] = Field(
+        None, description="Expiration date (auto-extracted if not provided)"
+    )
+    extra_data: Dict = Field(
+        default_factory=dict, description="Additional configuration"
+    )
 
 
 class TLSCredentialUpdate(BaseModel):
@@ -1012,7 +1049,9 @@ class TLSCertificateInfo(BaseModel):
     not_before: datetime
     not_after: datetime
     fingerprint: str
-    san: List[str] = Field(default_factory=list, description="Subject Alternative Names")
+    san: List[str] = Field(
+        default_factory=list, description="Subject Alternative Names"
+    )
 
 
 class TLSEndpointResponse(BaseModel):
@@ -1034,7 +1073,9 @@ class TLSEndpointsResponse(BaseModel):
 
     endpoints: List[TLSEndpointResponse]
     total: int
-    expiring_soon: int = Field(default=0, description="Certificates expiring within 30 days")
+    expiring_soon: int = Field(
+        default=0, description="Certificates expiring within 30 days"
+    )
 
 
 # =============================================================================
@@ -1217,12 +1258,18 @@ class SecurityOverviewResponse(BaseModel):
     """Security dashboard overview metrics."""
 
     security_score: float = Field(..., description="Overall security score (0-100)")
-    active_threats: int = Field(default=0, description="Number of unresolved security events")
-    failed_logins_24h: int = Field(default=0, description="Failed login attempts in last 24 hours")
+    active_threats: int = Field(
+        default=0, description="Number of unresolved security events"
+    )
+    failed_logins_24h: int = Field(
+        default=0, description="Failed login attempts in last 24 hours"
+    )
     policy_violations: int = Field(default=0, description="Policy violations count")
     total_events_24h: int = Field(default=0, description="Total security events in 24h")
     critical_events: int = Field(default=0, description="Critical severity events")
-    certificates_expiring: int = Field(default=0, description="Certificates expiring within 30 days")
+    certificates_expiring: int = Field(
+        default=0, description="Certificates expiring within 30 days"
+    )
     recent_events: List[SecurityEventResponse] = Field(default_factory=list)
 
 
@@ -1238,4 +1285,6 @@ class ThreatSummary(BaseModel):
     resolved: int = 0
     by_type: Dict[str, int] = Field(default_factory=dict)
     by_source_ip: Dict[str, int] = Field(default_factory=dict)
-    trend_24h: List[Dict] = Field(default_factory=list, description="Hourly threat count")
+    trend_24h: List[Dict] = Field(
+        default_factory=list, description="Hourly threat count"
+    )
