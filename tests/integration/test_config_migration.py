@@ -169,7 +169,7 @@ class TestConfigurationMigration:
         test_config.set("multimodal.vision.enabled", False)
 
         with patch(
-            "src.unified_multimodal_processor.get_config_section",
+            "src.multimodal_processor_impl.get_config_section",
             lambda section: test_config.get_section(section),
         ):
             vision_proc = VisionProcessor()

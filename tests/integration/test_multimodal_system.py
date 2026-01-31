@@ -40,7 +40,7 @@ class TestUnifiedMultiModalSystem:
     def unified_processor(self, mock_config):
         """Create unified processor with mocked config"""
         with patch(
-            "src.unified_multimodal_processor.get_config_section",
+            "src.multimodal_processor_impl.get_config_section",
             lambda section: mock_config.get_section(section),
         ):
             return UnifiedMultiModalProcessor()
@@ -303,7 +303,7 @@ class TestUnifiedMultiModalSystem:
     def test_vision_processor_configuration(self, mock_config):
         """Test vision processor uses configuration correctly"""
         with patch(
-            "src.unified_multimodal_processor.get_config_section",
+            "src.multimodal_processor_impl.get_config_section",
             lambda section: mock_config.get_section(section),
         ):
             vision_proc = VisionProcessor()
@@ -317,7 +317,7 @@ class TestUnifiedMultiModalSystem:
     async def test_vision_processor_image_processing(self, mock_config):
         """Test vision processor image processing"""
         with patch(
-            "src.unified_multimodal_processor.get_config_section",
+            "src.multimodal_processor_impl.get_config_section",
             lambda section: mock_config.get_section(section),
         ):
             vision_proc = VisionProcessor()
