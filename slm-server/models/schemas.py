@@ -1376,3 +1376,24 @@ class FleetSyncResponse(BaseModel):
     message: str
     job_id: str
     nodes_queued: int
+
+
+class CodeVersionNotification(BaseModel):
+    """Code version notification from code-source agent (Issue #741)."""
+
+    node_id: str
+    commit: str
+    is_code_source: bool = True
+    branch: Optional[str] = None
+    message: Optional[str] = None
+    timestamp: Optional[datetime] = None
+
+
+class CodeVersionNotificationResponse(BaseModel):
+    """Response to code version notification."""
+
+    success: bool
+    message: str
+    new_version: str
+    nodes_notified: int = 0
+    outdated_nodes: int = 0

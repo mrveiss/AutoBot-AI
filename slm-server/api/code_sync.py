@@ -20,6 +20,8 @@ from models.database import CodeStatus, Node, Setting
 from models.schemas import (
     CodeSyncRefreshResponse,
     CodeSyncStatusResponse,
+    CodeVersionNotification,
+    CodeVersionNotificationResponse,
     FleetSyncRequest,
     FleetSyncResponse,
     NodeSyncRequest,
@@ -289,4 +291,105 @@ async def get_code_package(
         path=package_path,
         media_type="application/gzip",
         filename=package_path.name,
+    )
+
+
+@router.post("/notify", response_model=CodeVersionNotificationResponse)
+async def notify_code_version(
+    notification: CodeVersionNotification,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> CodeVersionNotificationResponse:
+    """
+    Receive code version notification from code-source agent (Issue #741).
+
+    This endpoint is called by the SLM agent on the code-source node
+    when a new commit is made. It updates the latest version setting
+    and marks all other nodes as outdated.
+
+    No authentication required - agent uses node_id for identification.
+    """
+    commit = notification.commit
+    node_id = notification.node_id
+
+    logger.info(
+        "Code version notification from %s: %s",
+        node_id,
+        commit[:12],
+    )
+
+    # Verify this is from a known code-source node
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    source_node = result.scalar_one_or_none()
+
+    if not source_node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Source node not found",
+        )
+
+    # Update or create the latest version setting
+    setting_result = await db.execute(
+        select(Setting).where(Setting.key == "slm_agent_latest_commit")
+    )
+    setting = setting_result.scalar_one_or_none()
+
+    if setting:
+        setting.value = commit
+    else:
+        setting = Setting(
+            key="slm_agent_latest_commit",
+            value=commit,
+        )
+        db.add(setting)
+
+    # Update the source node's code version
+    source_node.code_version = commit
+    source_node.code_status = CodeStatus.CURRENT.value
+
+    # Mark all other nodes as outdated (if they have different version)
+    nodes_result = await db.execute(
+        select(Node).where(
+            Node.node_id != node_id,
+            Node.code_version != commit,
+        )
+    )
+    outdated_nodes = nodes_result.scalars().all()
+
+    for node in outdated_nodes:
+        node.code_status = CodeStatus.OUTDATED.value
+
+    await db.commit()
+
+    logger.info(
+        "Updated latest version to %s, %d nodes marked outdated",
+        commit[:12],
+        len(outdated_nodes),
+    )
+
+    # Broadcast update notification via WebSocket
+    try:
+        from api.websocket import ws_manager
+
+        await ws_manager.broadcast(
+            {
+                "type": "code_version_update",
+                "data": {
+                    "new_version": commit,
+                    "source_node": node_id,
+                    "outdated_nodes": len(outdated_nodes),
+                    "timestamp": notification.timestamp.isoformat()
+                    if notification.timestamp
+                    else None,
+                },
+            }
+        )
+    except Exception as e:
+        logger.debug("Failed to broadcast code version update: %s", e)
+
+    return CodeVersionNotificationResponse(
+        success=True,
+        message=f"Version updated to {commit[:12]}",
+        new_version=commit,
+        nodes_notified=1,  # WebSocket broadcast
+        outdated_nodes=len(outdated_nodes),
     )

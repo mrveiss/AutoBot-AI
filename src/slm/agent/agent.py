@@ -23,11 +23,15 @@ from pathlib import Path
 from typing import Optional
 
 import aiohttp
+from aiohttp import web
 
 from .health_collector import HealthCollector
 from .version import get_agent_version
 
 logger = logging.getLogger(__name__)
+
+# Local notification server port (for git hooks)
+DEFAULT_NOTIFY_PORT = int(os.getenv("SLM_NOTIFY_PORT", "8000"))
 
 # Standalone agent defaults - agent runs on remote VMs, not AutoBot main host
 # These are configured via CLI args or environment variables at deployment
@@ -208,12 +212,18 @@ class SLMAgent:
         finally:
             conn.close()
 
-    async def run(self):
+    async def run(
+        self, enable_notify_server: bool = False, notify_port: int = DEFAULT_NOTIFY_PORT
+    ):
         """Main agent loop."""
         self.running = True
         logger.info(
             "SLM Agent started (node_id=%s, admin=%s)", self.node_id, self.admin_url
         )
+
+        # Issue #741: Start notification server if enabled (code-source nodes)
+        if enable_notify_server:
+            await self.start_notify_server(notify_port)
 
         while self.running:
             # Send heartbeat
@@ -240,6 +250,126 @@ class SLMAgent:
         Issue #741: Property to check update status.
         """
         return self._pending_update
+
+    async def handle_code_change(self, request: web.Request) -> web.Response:
+        """
+        Handle code change notification from git hook (Issue #741).
+
+        This endpoint receives notifications when code is committed
+        on the code-source node and immediately reports the new
+        version to the SLM server.
+        """
+        try:
+            data = await request.json()
+            commit = data.get("commit")
+            branch = data.get("branch", "unknown")
+            message = data.get("message", "")
+
+            if not commit:
+                return web.json_response({"error": "commit hash required"}, status=400)
+
+            logger.info(
+                "Code change notification: %s on %s",
+                commit[:12],
+                branch,
+            )
+
+            # Update local version info
+            self.version_manager.save_version(
+                commit=commit,
+                extra_data={
+                    "branch": branch,
+                    "message": message[:200],
+                    "source": "git-hook",
+                },
+            )
+            self.version_manager.clear_cache()
+
+            # Buffer the code change event
+            self.buffer_event(
+                "code_change",
+                {
+                    "commit": commit,
+                    "branch": branch,
+                    "message": message[:200],
+                    "node_id": self.node_id,
+                },
+            )
+
+            # Trigger immediate heartbeat to notify SLM server
+            asyncio.create_task(self._notify_code_change(commit))
+
+            return web.json_response(
+                {
+                    "status": "ok",
+                    "commit": commit[:12],
+                    "message": "Version updated, notifying SLM server",
+                }
+            )
+
+        except json.JSONDecodeError:
+            return web.json_response({"error": "invalid JSON"}, status=400)
+        except Exception as e:
+            logger.error("Error handling code change: %s", e)
+            return web.json_response({"error": str(e)}, status=500)
+
+    async def _notify_code_change(self, commit: str) -> None:
+        """Send immediate notification to SLM server about code change."""
+        try:
+            async with aiohttp.ClientSession() as session:
+                url = f"{self.admin_url}/api/code-sync/notify"
+                payload = {
+                    "node_id": self.node_id,
+                    "commit": commit,
+                    "is_code_source": True,
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+                async with session.post(
+                    url,
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=10),
+                    ssl=False,
+                ) as response:
+                    if response.status == 200:
+                        logger.info(
+                            "SLM server notified of new code version: %s",
+                            commit[:12],
+                        )
+                    else:
+                        logger.warning(
+                            "Failed to notify SLM server: %s",
+                            response.status,
+                        )
+        except Exception as e:
+            logger.warning("Failed to notify SLM server: %s", e)
+            # Event is already buffered, will sync on next heartbeat
+
+    async def start_notify_server(self, port: int = DEFAULT_NOTIFY_PORT) -> None:
+        """
+        Start local HTTP server to receive notifications (Issue #741).
+
+        This server listens for code change notifications from git hooks.
+        """
+        app = web.Application()
+        app.router.add_post("/api/code-change", self.handle_code_change)
+        app.router.add_get("/api/health", self._health_check)
+
+        runner = web.AppRunner(app)
+        await runner.setup()
+
+        site = web.TCPSite(runner, "127.0.0.1", port)
+        await site.start()
+        logger.info("Notification server started on http://127.0.0.1:%d", port)
+
+    async def _health_check(self, request: web.Request) -> web.Response:
+        """Simple health check endpoint."""
+        return web.json_response(
+            {
+                "status": "ok",
+                "node_id": self.node_id,
+                "version": self.version_manager.get_version(),
+            }
+        )
 
 
 def _parse_cli_args():
@@ -275,6 +405,18 @@ def _parse_cli_args():
         "--debug",
         action="store_true",
         help="Enable debug logging",
+    )
+    parser.add_argument(
+        "--code-source",
+        action="store_true",
+        default=os.environ.get("SLM_CODE_SOURCE", "").lower() == "true",
+        help="Enable code-source mode (starts notify server for git hooks)",
+    )
+    parser.add_argument(
+        "--notify-port",
+        type=int,
+        default=int(os.environ.get("SLM_NOTIFY_PORT", str(DEFAULT_NOTIFY_PORT))),
+        help="Port for notification server (code-source mode)",
     )
     return parser.parse_args()
 
@@ -326,7 +468,14 @@ def main():
 
     # Setup signal handlers and run
     _setup_signal_handlers(agent)
-    asyncio.run(agent.run())
+
+    # Issue #741: Pass code-source options
+    asyncio.run(
+        agent.run(
+            enable_notify_server=args.code_source,
+            notify_port=args.notify_port,
+        )
+    )
 
 
 if __name__ == "__main__":

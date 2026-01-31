@@ -286,6 +286,32 @@
                   - libasound2
                 state: present
 
+        # Code-source setup (Issue #741)
+        - name: "Setup Code Source Node"
+          when: node_role == 'code-source'
+          block:
+            - name: "Create git hooks directory"
+              file:
+                path: "{{ slm_code_repository | default('/home/kali/Desktop/AutoBot') }}/.git/hooks"
+                state: directory
+                mode: '0755'
+
+            - name: "Deploy SLM post-commit hook"
+              copy:
+                src: "{{ playbook_dir }}/../../scripts/hooks/slm-post-commit"
+                dest: "{{ slm_code_repository | default('/home/kali/Desktop/AutoBot') }}/.git/hooks/post-commit"
+                mode: '0755'
+
+            - name: "Create SLM agent environment file for code-source"
+              copy:
+                content: |
+                  SLM_CODE_SOURCE=true
+                  SLM_NOTIFY_PORT=8000
+                  SLM_ADMIN_URL={{ slm_admin_url | default('http://172.16.168.19:8000') }}
+                dest: /etc/slm-agent/environment
+                mode: '0644'
+              notify: restart slm-agent
+
       tags: ['role-setup']
 
     # ===========================================
