@@ -57,6 +57,13 @@ const router = createRouter({
       meta: { title: 'Maintenance' }
     },
     {
+      // Issue #741: Code sync management for fleet-wide updates
+      path: '/code-sync',
+      name: 'code-sync',
+      component: () => import('@/views/CodeSyncView.vue'),
+      meta: { title: 'Code Sync' }
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('@/views/SettingsView.vue'),
