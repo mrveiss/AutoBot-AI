@@ -35,6 +35,11 @@
     autobot_log_dir: "/var/log/autobot"
     autobot_cert_dir: "/etc/autobot/certs"
 
+    # Emergency admin user for fallback access when SSH keys fail
+    emergency_admin_user: "autobot_admin"
+    # Password hash generated with: python3 -c "from passlib.hash import sha512_crypt; print(sha512_crypt.hash('password'))"
+    emergency_admin_password_hash: "$6$rounds=656000$VqQZbIggJvVNjHfl$hunhLQdMKj/TCyE.ftDknskbz4SCnGz5e6Yo4YJzHeIIhdRAp/oIDKdwd54oktyBwmb2nP09MWRyXNu0mLg1L1"
+
     # Role-specific defaults
     role_configs:
       frontend:
@@ -57,6 +62,10 @@
         services: ['playwright-service', 'vnc-server']
         packages: ['python3', 'xvfb', 'tigervnc-standalone-server']
         ports: [3000, 5900]
+      slm-agent:
+        services: ['slm-agent']
+        packages: ['python3', 'python3-pip', 'python3-venv']
+        ports: [8000]
 
   pre_tasks:
     - name: "Display enrollment information"
@@ -144,6 +153,35 @@
             state: present
             key: "{{ lookup('file', '~/.ssh/autobot_key.pub') }}"
           ignore_errors: yes  # Key may not exist during initial enrollment
+
+        - name: "Create emergency admin user"
+          user:
+            name: "{{ emergency_admin_user }}"
+            comment: "Emergency Admin User (fallback access)"
+            shell: /bin/bash
+            create_home: yes
+            groups: sudo
+            append: yes
+            password: "{{ emergency_admin_password_hash }}"
+            state: present
+
+        - name: "Configure passwordless sudo for emergency admin"
+          copy:
+            content: "{{ emergency_admin_user }} ALL=(ALL) NOPASSWD: ALL\n"
+            dest: "/etc/sudoers.d/90-{{ emergency_admin_user }}"
+            owner: root
+            group: root
+            mode: '0440'
+            validate: 'visudo -cf %s'
+
+        - name: "Configure passwordless sudo for autobot user"
+          copy:
+            content: "{{ autobot_user }} ALL=(ALL) NOPASSWD: ALL\n"
+            dest: "/etc/sudoers.d/90-{{ autobot_user }}"
+            owner: root
+            group: root
+            mode: '0440'
+            validate: 'visudo -cf %s'
 
       tags: ['base', 'common']
 

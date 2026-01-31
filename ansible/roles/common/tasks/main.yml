@@ -41,6 +41,30 @@
   become: yes
   tags: ['common', 'users']
 
+- name: "Common | Create emergency admin user"
+  user:
+    name: "{{ emergency_admin_user }}"
+    comment: "Emergency Admin User (fallback access)"
+    shell: /bin/bash
+    create_home: yes
+    groups: sudo
+    append: yes
+    password: "{{ emergency_admin_password_hash }}"
+    state: present
+  become: yes
+  tags: ['common', 'users', 'emergency']
+
+- name: "Common | Configure passwordless sudo for emergency admin"
+  copy:
+    content: "{{ emergency_admin_user }} ALL=(ALL) NOPASSWD: ALL\n"
+    dest: "/etc/sudoers.d/90-{{ emergency_admin_user }}"
+    owner: root
+    group: root
+    mode: '0440'
+    validate: 'visudo -cf %s'
+  become: yes
+  tags: ['common', 'users', 'emergency']
+
 - name: "Common | Create AutoBot directory structure"
   file:
     path: "{{ item }}"
