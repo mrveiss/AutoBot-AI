@@ -7,6 +7,7 @@ Cache management package.
 Provides unified cache coordination with memory-pressure-aware eviction.
 """
 
+from .coordinator import CacheCoordinator, get_cache_coordinator
 from .protocols import CacheProtocol
 
-__all__ = ["CacheProtocol"]
+__all__ = ["CacheProtocol", "CacheCoordinator", "get_cache_coordinator"]
