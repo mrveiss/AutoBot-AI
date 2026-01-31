@@ -470,7 +470,11 @@ async def clear_cache(cache_name: str):
 **Step 2: Test endpoints**
 
 ```bash
-curl http://localhost:8001/api/cache/stats
+# Use SSOT backend URL (172.16.168.20:8001 from config.backend_url)
+curl http://$(python -c "from src.config.ssot_config import config; print(f'{config.vm.main}:{config.port.backend}')")/api/cache/stats
+
+# Or directly if you know the IP:
+curl http://172.16.168.20:8001/api/cache/stats
 ```
 
 **Step 3: Commit**
@@ -546,7 +550,11 @@ print(c.get_unified_stats())
 
 ```bash
 # Test API endpoint
-curl http://localhost:8001/api/cache/stats | jq
+# Use SSOT backend URL (172.16.168.20:8001 from config.backend_url)
+curl http://$(python -c "from src.config.ssot_config import config; print(f'{config.vm.main}:{config.port.backend}')")/api/cache/stats
+
+# Or directly if you know the IP:
+curl http://172.16.168.20:8001/api/cache/stats | jq
 
 # Test SSOT config loading
 python -c "
