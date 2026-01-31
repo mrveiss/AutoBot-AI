@@ -43,6 +43,21 @@ class EmbeddingCache:
         self._misses = 0
         self._lock = asyncio.Lock()
 
+    @property
+    def name(self) -> str:
+        """Unique cache identifier."""
+        return "embedding"
+
+    @property
+    def size(self) -> int:
+        """Current number of items."""
+        return len(self._cache)
+
+    @property
+    def max_size(self) -> int:
+        """Maximum capacity."""
+        return self._maxsize
+
     def _make_key(self, query: str) -> str:
         """Create cache key from query text using hash."""
         return hashlib.sha256(query.encode("utf-8")).hexdigest()
@@ -59,6 +74,25 @@ class EmbeddingCache:
             oldest_key = next(iter(self._cache))
             del self._cache[oldest_key]
             self._timestamps.pop(oldest_key, None)
+
+    def evict(self, count: int) -> int:
+        """
+        Evict oldest items from cache.
+
+        Args:
+            count: Number of items to evict
+
+        Returns:
+            Actual number of items evicted
+        """
+        evicted = 0
+        for _ in range(min(count, len(self._cache))):
+            if self._cache:
+                oldest_key = next(iter(self._cache))
+                del self._cache[oldest_key]
+                self._timestamps.pop(oldest_key, None)
+                evicted += 1
+        return evicted
 
     async def get(self, query: str) -> Optional[List[float]]:
         """
@@ -109,16 +143,16 @@ class EmbeddingCache:
             self._cache.move_to_end(key)
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get cache statistics."""
+        """Return cache statistics."""
         total = self._hits + self._misses
-        hit_rate = (self._hits / total * 100) if total > 0 else 0.0
+        hit_rate = (self._hits / total) if total > 0 else 0.0
         return {
+            "name": self.name,
+            "size": len(self._cache),
+            "max_size": self._maxsize,
             "hits": self._hits,
             "misses": self._misses,
-            "total_requests": total,
-            "hit_rate_percent": round(hit_rate, 2),
-            "cache_size": len(self._cache),
-            "max_size": self._maxsize,
+            "hit_rate": hit_rate,
             "ttl_seconds": self._ttl_seconds,
         }
 
