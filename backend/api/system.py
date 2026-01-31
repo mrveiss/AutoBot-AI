@@ -9,8 +9,8 @@ from datetime import datetime
 
 from fastapi import APIRouter, Form, HTTPException, Request
 
-from src.constants.model_constants import ModelConstants as ModelConsts
 from src.config import UnifiedConfigManager
+from src.constants.model_constants import ModelConstants as ModelConsts
 
 # Add caching support from unified cache manager (P4 Cache Consolidation)
 from src.utils.advanced_cache_manager import cache_manager, cache_response
@@ -53,7 +53,9 @@ async def _check_conversation_files_db(request: Request, health_status: dict) ->
         health_status["status"] = "degraded"
 
 
-async def _check_detailed_conversation_db(request: Request, detailed_components: dict) -> None:
+async def _check_detailed_conversation_db(
+    request: Request, detailed_components: dict
+) -> None:
     """Check conversation files database for detailed health (Issue #315 - extracted)."""
     if not hasattr(request.app.state, "conversation_file_manager"):
         detailed_components["conversation_files_db"] = "not_configured"
@@ -682,3 +684,95 @@ async def get_system_metrics():
                 "executable": sys.executable,
             },
         }
+
+
+# Issue #743: Cache coordinator endpoints for memory optimization (Phase 3.2)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cache_coordinator_stats",
+    error_code_prefix="SYSTEM",
+)
+@router.get("/api/cache/stats")
+async def get_cache_coordinator_stats():
+    """
+    Get unified cache statistics from the cache coordinator.
+
+    Returns stats for all registered caches including:
+    - Individual cache metrics (size, hits, misses, hit_rate)
+    - Total items across all caches
+    - System memory percentage
+    - Pressure trigger count
+    """
+    try:
+        from src.cache import get_cache_coordinator
+
+        coordinator = get_cache_coordinator()
+        return coordinator.get_unified_stats()
+    except Exception as e:
+        logger.error("Error getting cache coordinator stats: %s", str(e))
+        raise HTTPException(
+            status_code=500, detail=f"Error getting cache coordinator stats: {str(e)}"
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="trigger_cache_eviction",
+    error_code_prefix="SYSTEM",
+)
+@router.post("/api/cache/evict")
+async def trigger_cache_eviction():
+    """
+    Manually trigger coordinated cache eviction.
+
+    Evicts items from all registered caches according to eviction_ratio.
+    """
+    try:
+        from src.cache import get_cache_coordinator
+
+        coordinator = get_cache_coordinator()
+        evicted = await coordinator._coordinated_evict()
+
+        return {
+            "status": "eviction_complete",
+            "evicted": evicted,
+            "timestamp": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        logger.error("Error triggering cache eviction: %s", str(e))
+        raise HTTPException(
+            status_code=500, detail=f"Error triggering cache eviction: {str(e)}"
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_cache",
+    error_code_prefix="SYSTEM",
+)
+@router.post("/api/cache/clear/{cache_name}")
+async def clear_cache(cache_name: str):
+    """
+    Clear a specific cache by name.
+
+    Args:
+        cache_name: Name of the cache to clear (e.g., 'lru_memory', 'embedding')
+    """
+    try:
+        from src.cache import get_cache_coordinator
+
+        coordinator = get_cache_coordinator()
+        if cache_name in coordinator._caches:
+            coordinator._caches[cache_name].clear()
+            return {
+                "status": "cleared",
+                "cache": cache_name,
+                "timestamp": datetime.now().isoformat(),
+            }
+
+        raise HTTPException(status_code=404, detail=f"Cache '{cache_name}' not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error clearing cache %s: %s", cache_name, str(e))
+        raise HTTPException(status_code=500, detail=f"Error clearing cache: {str(e)}")
