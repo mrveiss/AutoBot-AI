@@ -18,8 +18,6 @@ all:
         00-SLM-Manager:
           ansible_host: 172.16.168.19
           slm_node_id: "00-SLM-Manager"
-          # Use localhost since agent runs on same machine as backend
-          slm_admin_url: "http://127.0.0.1:8000"
           slm_services_to_monitor:
             - slm-server
 

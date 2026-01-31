@@ -6,6 +6,14 @@
 # Managed by Ansible - do not edit manually
 # Node: {{ slm_node_id }}
 # Generated: {{ ansible_date_time.iso8601 }}
+#
+# Auto-detect if agent runs on same host as SLM backend - use localhost if so
+{% set admin_host = slm_admin_url | regex_replace('^https?://([^:/]+).*$', '\\1') %}
+{% if admin_host == ansible_host or admin_host == inventory_hostname %}
+{% set effective_admin_url = slm_admin_url | regex_replace(admin_host, '127.0.0.1') %}
+{% else %}
+{% set effective_admin_url = slm_admin_url %}
+{% endif %}
 
 [Unit]
 Description=SLM Agent - Service Lifecycle Manager
@@ -21,13 +29,13 @@ WorkingDirectory={{ slm_agent_dir }}
 
 # Environment variables
 Environment=SLM_NODE_ID={{ slm_node_id }}
-Environment=SLM_ADMIN_URL={{ slm_admin_url }}
+Environment=SLM_ADMIN_URL={{ effective_admin_url }}
 Environment=PYTHONPATH={{ slm_agent_dir }}
 Environment=PYTHONUNBUFFERED=1
 
 # Agent execution
 ExecStart=/usr/bin/python3 -m slm.agent.agent \
-    --admin-url {{ slm_admin_url }} \
+    --admin-url {{ effective_admin_url }} \
     --node-id {{ slm_node_id }} \
     --interval {{ slm_heartbeat_interval }}{% if slm_services_to_monitor | length > 0 %} \
     --services {{ slm_services_to_monitor | join(' ') }}{% endif %}{% if slm_agent_debug %} \

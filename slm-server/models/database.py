@@ -60,6 +60,13 @@ class BackupStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+class CodeStatus(str, enum.Enum):
+    """Code version status (Issue #741)."""
+    UP_TO_DATE = "up_to_date"
+    OUTDATED = "outdated"
+    UNKNOWN = "unknown"
+
+
 class Node(Base):
     """Node model representing a managed machine."""
 
@@ -87,6 +94,10 @@ class Node(Base):
     agent_version = Column(String(20), nullable=True)
     os_info = Column(String(255), nullable=True)
     extra_data = Column(JSON, default=dict)
+
+    # Code version tracking (Issue #741)
+    code_version = Column(String(64), nullable=True)
+    code_status = Column(String(20), default=CodeStatus.UNKNOWN.value)
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
