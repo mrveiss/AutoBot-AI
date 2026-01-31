@@ -261,9 +261,7 @@ class UnifiedMultiModalProcessor:
         except Exception as e:
             self.logger.error("Failed to initialize fusion components: %s", e)
 
-    def _extract_embedding_from_result(
-        self, result: ProcessingResult
-    ) -> Optional[Any]:
+    def _extract_embedding_from_result(self, result: ProcessingResult) -> Optional[Any]:
         """Extract embedding from a processing result (Issue #315 - extracted method)"""
         if not result.result_data:
             return None
@@ -330,9 +328,7 @@ class UnifiedMultiModalProcessor:
 
         return normalized_embeddings
 
-    def _apply_attention_fusion(
-        self, stacked_embeddings: torch.Tensor
-    ) -> tuple:
+    def _apply_attention_fusion(self, stacked_embeddings: torch.Tensor) -> tuple:
         """Apply multi-head attention (Issue #315 - extracted method)"""
         use_cuda = torch.cuda.is_available()
         with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=use_cuda):
@@ -364,9 +360,12 @@ class UnifiedMultiModalProcessor:
             return self._simple_combination(results)
 
         # Extract embeddings and metadata (Issue #315 - extracted method)
-        embeddings, modalities, confidences, result_data = (
-            self._collect_embeddings_from_results(results)
-        )
+        (
+            embeddings,
+            modalities,
+            confidences,
+            result_data,
+        ) = self._collect_embeddings_from_results(results)
 
         # Guard clause: Not enough embeddings for fusion (Issue #315 - early return)
         if len(embeddings) < 2:
@@ -591,7 +590,9 @@ class UnifiedMultiModalProcessor:
             # Process each modality group (Issue #315 - extracted method)
             results = []
             for modality, group_inputs in modality_groups.items():
-                group_results = await self._process_modality_group(modality, group_inputs)
+                group_results = await self._process_modality_group(
+                    modality, group_inputs
+                )
                 results.extend(group_results)
 
             # Record batch processing performance

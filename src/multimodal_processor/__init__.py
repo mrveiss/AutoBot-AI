@@ -31,6 +31,24 @@ Usage:
     result = await processor.process(input_data)
 """
 
+# Base class
+from .base import BaseModalProcessor
+
+# Data models
+from .models import MultiModalInput, ProcessingResult
+
+# Main processor
+from .processor import UnifiedMultiModalProcessor
+
+# Processors
+from .processors import (
+    AUDIO_MODELS_AVAILABLE,
+    VISION_MODELS_AVAILABLE,
+    ContextProcessor,
+    VisionProcessor,
+    VoiceProcessor,
+)
+
 # Types and constants
 from .types import (
     CLOSE_COMMAND_WORDS,
@@ -47,24 +65,6 @@ from .types import (
     ModalityType,
     ProcessingIntent,
 )
-
-# Data models
-from .models import MultiModalInput, ProcessingResult
-
-# Base class
-from .base import BaseModalProcessor
-
-# Processors
-from .processors import (
-    AUDIO_MODELS_AVAILABLE,
-    VISION_MODELS_AVAILABLE,
-    ContextProcessor,
-    VisionProcessor,
-    VoiceProcessor,
-)
-
-# Main unified processor
-from .unified import UnifiedMultiModalProcessor
 
 # Backward compatibility: module-level constant alias (Issue #380)
 _EMBEDDING_FIELDS = EMBEDDING_FIELDS
