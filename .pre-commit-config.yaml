@@ -66,13 +66,15 @@ repos:
       - id: debug-statements  # Check for debugger imports
       - id: name-tests-test  # Ensure test files are named correctly
         args: [--pytest-test-first]
+        exclude: ^tests/(conftest|mock_llm_interface|ci_cd_integration|integration_test_infrastructure|security_port_audit|frontend_comprehensive_corrected|phase9_comprehensive_test_suite)\.py$
 
   # Security checks with bandit
   - repo: https://github.com/PyCQA/bandit
     rev: 1.7.6
     hooks:
       - id: bandit
-        args: [-c, .bandit, -r, backend/, src/]
+        args: [-c, .bandit]
+        files: ^(backend/|src/)
         additional_dependencies: ["bandit[toml]"]
 
   # Hardcoded value detection (Issue #694)

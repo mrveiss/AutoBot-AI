@@ -30,7 +30,8 @@ logger = logging.getLogger(__name__)
 
 # Standalone agent defaults - agent runs on remote VMs, not AutoBot main host
 # These are configured via CLI args or environment variables at deployment
-DEFAULT_ADMIN_URL = "http://172.16.168.19:8000"
+# Issue #694: Use environment variable with fallback
+DEFAULT_ADMIN_URL = os.getenv("SLM_ADMIN_URL", "http://172.16.168.19:8000")
 DEFAULT_HEARTBEAT_INTERVAL = 30  # seconds
 DEFAULT_BUFFER_DB = os.path.expanduser("~/.slm-agent/events.db")
 
@@ -60,7 +61,8 @@ class SLMAgent:
         """Initialize SQLite buffer database."""
         Path(self.buffer_db).parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(self.buffer_db)
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS event_buffer (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp TEXT NOT NULL,
@@ -68,7 +70,8 @@ class SLMAgent:
                 data TEXT NOT NULL,
                 synced INTEGER DEFAULT 0
             )
-        """)
+        """
+        )
         conn.commit()
         conn.close()
         logger.info("Event buffer initialized at %s", self.buffer_db)
@@ -86,6 +89,7 @@ class SLMAgent:
     async def send_heartbeat(self) -> bool:
         """Send heartbeat with health data to admin."""
         import platform
+
         health = self.collector.collect()
         # Payload matches HeartbeatRequest schema
         os_info = f"{platform.system()} {platform.release()}"
@@ -119,7 +123,8 @@ class SLMAgent:
                     else:
                         logger.warning(
                             "Heartbeat rejected: %s %s",
-                            response.status, await response.text()
+                            response.status,
+                            await response.text(),
                         )
                         return False
         except aiohttp.ClientError as e:
@@ -144,8 +149,7 @@ class SLMAgent:
             async with aiohttp.ClientSession() as session:
                 url = f"{self.admin_url}/api/v1/slm/events/sync"
                 payload = [
-                    {"id": e[0], "type": e[1], "data": json.loads(e[2])}
-                    for e in events
+                    {"id": e[0], "type": e[1], "data": json.loads(e[2])} for e in events
                 ]
                 async with session.post(
                     url,
@@ -172,8 +176,7 @@ class SLMAgent:
         """Main agent loop."""
         self.running = True
         logger.info(
-            "SLM Agent started (node_id=%s, admin=%s)",
-            self.node_id, self.admin_url
+            "SLM Agent started (node_id=%s, admin=%s)", self.node_id, self.admin_url
         )
 
         while self.running:
@@ -250,6 +253,7 @@ def _setup_signal_handlers(agent: SLMAgent):
 
     Related to Issue #726.
     """
+
     def shutdown_handler(signum, frame):
         logger.info("Received signal %s, shutting down", signum)
         agent.stop()
