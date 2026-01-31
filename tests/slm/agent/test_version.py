@@ -148,3 +148,82 @@ class TestGetAgentVersion:
         assert v1 is v2
 
         reset_version_instance()
+
+
+class TestHeartbeatIntegration:
+    """Tests for heartbeat version integration (Issue #741)."""
+
+    @pytest.fixture
+    def temp_version_file(self, tmp_path):
+        """Create a temporary version file."""
+        version_file = tmp_path / "version.json"
+        version_data = {
+            "commit": "abc123def456",
+            "built_at": "2026-01-31T12:00:00",
+        }
+        version_file.write_text(json.dumps(version_data))
+        return version_file
+
+    def test_heartbeat_payload_includes_version(self, temp_version_file):
+        """Test that heartbeat payload includes code_version."""
+        from src.slm.agent.version import AgentVersion
+
+        version_manager = AgentVersion(version_file=temp_version_file)
+
+        # Simulate building heartbeat payload
+        payload = {
+            "cpu_percent": 25.0,
+            "memory_percent": 50.0,
+            "code_version": version_manager.get_version(),
+        }
+
+        assert payload["code_version"] == "abc123def456"
+
+    def test_heartbeat_payload_handles_none_version(self, tmp_path):
+        """Test that heartbeat payload handles None version gracefully."""
+        from src.slm.agent.version import AgentVersion
+
+        # Non-existent file
+        version_manager = AgentVersion(version_file=tmp_path / "missing.json")
+
+        # Simulate building heartbeat payload
+        payload = {
+            "cpu_percent": 25.0,
+            "memory_percent": 50.0,
+            "code_version": version_manager.get_version(),  # Will be None
+        }
+
+        assert payload["code_version"] is None
+
+    def test_update_available_detection(self, temp_version_file):
+        """Test detecting update from heartbeat response."""
+        from src.slm.agent.version import AgentVersion
+
+        version_manager = AgentVersion(version_file=temp_version_file)
+
+        # Simulate heartbeat response
+        response = {
+            "status": "ok",
+            "update_available": True,
+            "latest_version": "new789version",
+        }
+
+        if response.get("update_available"):
+            is_outdated = version_manager.is_outdated(response["latest_version"])
+            assert is_outdated is True
+
+    def test_update_available_false_when_same_version(self, temp_version_file):
+        """Test no update when versions match."""
+        from src.slm.agent.version import AgentVersion
+
+        version_manager = AgentVersion(version_file=temp_version_file)
+
+        # Simulate heartbeat response with same version
+        response = {
+            "status": "ok",
+            "update_available": False,
+            "latest_version": "abc123def456",
+        }
+
+        is_outdated = version_manager.is_outdated(response["latest_version"])
+        assert is_outdated is False

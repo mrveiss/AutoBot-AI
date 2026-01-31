@@ -25,6 +25,7 @@ from typing import Optional
 import aiohttp
 
 from .health_collector import HealthCollector
+from .version import get_agent_version
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,11 @@ class SLMAgent:
         self.buffer_db = buffer_db
         self.node_id = node_id or os.environ.get("SLM_NODE_ID")
         self.running = False
+
+        # Issue #741: Initialize version manager
+        self.version_manager = get_agent_version()
+        self._pending_update = False
+        self._latest_version: Optional[str] = None
 
         self.collector = HealthCollector(services=services or [])
         self._init_buffer_db()
@@ -86,6 +92,26 @@ class SLMAgent:
         conn.commit()
         conn.close()
 
+    def _process_heartbeat_response(self, response: dict) -> None:
+        """
+        Process heartbeat response from admin server.
+
+        Issue #741: Handle update_available notification.
+        """
+        if response.get("update_available"):
+            latest = response.get("latest_version", "unknown")
+            current = self.version_manager.get_version() or "unknown"
+            # Truncate long hashes for logging
+            current_short = current[:12] if len(current) > 12 else current
+            latest_short = latest[:12] if len(latest) > 12 else latest
+            logger.info(
+                "Update available: current=%s, latest=%s",
+                current_short,
+                latest_short,
+            )
+            self._pending_update = True
+            self._latest_version = latest
+
     async def send_heartbeat(self) -> bool:
         """Send heartbeat with health data to admin."""
         import platform
@@ -93,12 +119,15 @@ class SLMAgent:
         health = self.collector.collect()
         # Payload matches HeartbeatRequest schema
         os_info = f"{platform.system()} {platform.release()}"
+        # Issue #741: Get code version for heartbeat
+        code_version = self.version_manager.get_version()
         payload = {
             "cpu_percent": health.get("cpu_percent", 0.0),
             "memory_percent": health.get("memory_percent", 0.0),
             "disk_percent": health.get("disk_percent", 0.0),
             "agent_version": "1.0.0",
             "os_info": os_info,
+            "code_version": code_version,  # Issue #741: Add code version
             "extra_data": {
                 "services": health.get("services", {}),
                 "discovered_services": health.get("discovered_services", []),
@@ -118,6 +147,9 @@ class SLMAgent:
                     ssl=False,  # mTLS pending PKI setup (Issue #725)
                 ) as response:
                     if response.status == 200:
+                        # Issue #741: Process heartbeat response
+                        response_data = await response.json()
+                        self._process_heartbeat_response(response_data)
                         logger.debug("Heartbeat sent successfully")
                         return True
                     else:
@@ -161,10 +193,12 @@ class SLMAgent:
                         # Mark as synced
                         ids = [e[0] for e in events]
                         placeholders = ",".join("?" * len(ids))
-                        conn.execute(
-                            f"UPDATE event_buffer SET synced = 1 WHERE id IN ({placeholders})",
-                            ids,
+                        # Safe: placeholders constructed from "?" chars
+                        query = (
+                            f"UPDATE event_buffer SET synced = 1 "  # nosec B608
+                            f"WHERE id IN ({placeholders})"
                         )
+                        conn.execute(query, ids)
                         conn.commit()
                         logger.info("Synced %d events", len(events))
         except aiohttp.ClientError as e:
@@ -195,6 +229,15 @@ class SLMAgent:
     def stop(self):
         """Stop the agent."""
         self.running = False
+
+    @property
+    def has_pending_update(self) -> bool:
+        """
+        Check if there's a pending update.
+
+        Issue #741: Property to check update status.
+        """
+        return self._pending_update
 
 
 def _parse_cli_args():
