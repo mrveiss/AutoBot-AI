@@ -8,9 +8,10 @@ Collects system and service health metrics for reporting to admin.
 """
 
 import logging
+import os
 import platform
 import socket
-import subprocess
+import subprocess  # nosec B404 - required for systemctl interaction
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -57,10 +58,10 @@ class HealthCollector:
             "cpu_percent": psutil.cpu_percent(interval=0.1),
             "memory_percent": psutil.virtual_memory().percent,
             "disk_percent": psutil.disk_usage("/").percent,
-            "load_avg": list(psutil.getloadavg()),
-            "uptime_seconds": int(
-                datetime.now().timestamp() - psutil.boot_time()
-            ),
+            "load_avg": list(os.getloadavg())
+            if hasattr(os, "getloadavg")
+            else [0.0, 0.0, 0.0],
+            "uptime_seconds": int(datetime.now().timestamp() - psutil.boot_time()),
         }
 
         # Collect service statuses
@@ -87,11 +88,13 @@ class HealthCollector:
     def check_service(self, service_name: str) -> Dict:
         """Check systemd service status."""
         try:
-            result = subprocess.run(
-                ["systemctl", "is-active", service_name],
-                capture_output=True,
-                text=True,
-                timeout=5,
+            result = (
+                subprocess.run(  # nosec B607 - systemctl is a trusted system binary
+                    ["systemctl", "is-active", service_name],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
             )
             is_active = result.returncode == 0
             status = result.stdout.strip()
@@ -125,18 +128,21 @@ class HealthCollector:
         services = []
         try:
             # List all loaded service units with their states
-            result = subprocess.run(
-                [
-                    "systemctl", "list-units",
-                    "--type=service",
-                    "--all",
-                    "--no-pager",
-                    "--no-legend",
-                    "--plain",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=30,
+            result = (
+                subprocess.run(  # nosec B607 - systemctl is a trusted system binary
+                    [
+                        "systemctl",
+                        "list-units",
+                        "--type=service",
+                        "--all",
+                        "--no-pager",
+                        "--no-legend",
+                        "--plain",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
             )
 
             if result.returncode != 0:
@@ -201,14 +207,18 @@ class HealthCollector:
         details = {}
         try:
             # Get service properties
-            result = subprocess.run(
-                [
-                    "systemctl", "show", service_name,
-                    "--property=MainPID,MemoryCurrent,Description,UnitFileState",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=5,
+            result = (
+                subprocess.run(  # nosec B607 - systemctl is a trusted system binary
+                    [
+                        "systemctl",
+                        "show",
+                        service_name,
+                        "--property=MainPID,MemoryCurrent,Description,UnitFileState",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
             )
 
             if result.returncode == 0:

@@ -34,7 +34,9 @@ logger = logging.getLogger(__name__)
 # Issue #694: Use environment variable with fallback
 DEFAULT_ADMIN_URL = os.getenv("SLM_ADMIN_URL", "http://172.16.168.19:8000")
 DEFAULT_HEARTBEAT_INTERVAL = 30  # seconds
-DEFAULT_BUFFER_DB = os.path.expanduser("~/.slm-agent/events.db")
+# Buffer database path - use /var/lib/slm-agent for systemd compatibility
+# (systemd service has ProtectHome=read-only and ReadWritePaths=/var/lib/slm-agent)
+DEFAULT_BUFFER_DB = os.getenv("SLM_BUFFER_DB", "/var/lib/slm-agent/events.db")
 
 
 class SLMAgent:

@@ -24,6 +24,7 @@ from api import (
     node_tls_router,
     node_vnc_router,
     nodes_router,
+    orchestration_router,
     security_router,
     services_router,
     settings_router,
@@ -136,6 +137,7 @@ app.include_router(node_tls_router, prefix="/api")
 app.include_router(tls_router, prefix="/api")
 app.include_router(security_router, prefix="/api")
 app.include_router(code_sync_router, prefix="/api")
+app.include_router(orchestration_router, prefix="/api")
 
 
 @app.get("/")
