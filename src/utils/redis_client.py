@@ -8,6 +8,20 @@ Redis Client - CANONICAL REDIS PATTERN (CONSOLIDATED)
 This module provides the ONLY approved method for Redis client initialization
 across the AutoBot codebase. Direct redis.Redis() instantiation is FORBIDDEN.
 
+CONNECTION POOLING ARCHITECTURE (Issue #743):
+==============================================
+All Redis connections use SINGLETON CONNECTION POOLS managed by RedisConnectionManager.
+When you call get_redis_client(), you get a client backed by a reused connection pool.
+
+- ONE pool per database (lazy-initialized)
+- Pools persist for application lifetime
+- Connections are reused across all calls
+- Max 20 connections per pool (optimized for memory - Issue #743)
+- Automatic connection cleanup for idle connections
+- Thread-safe pool access with locks
+
+Example: 100 calls to get_redis_client("main") use THE SAME pool of max 20 connections.
+
 FEATURES (Consolidated from 8 implementations):
 ================================================
 - Circuit breaker pattern

@@ -60,9 +60,9 @@ class RedisConnectionConfig:
     SOCKET_TIMEOUT: int = 5
     SOCKET_CONNECT_TIMEOUT: int = 3
 
-    # Connection pool settings
+    # Connection pool settings (Issue #743: Optimized for memory efficiency)
     MAX_CONNECTIONS: int = 10  # Default for simple connections
-    MAX_CONNECTIONS_POOL: int = 100  # For high-concurrency connection pools
+    MAX_CONNECTIONS_POOL: int = 20  # Optimized for memory - pools reuse connections
     MIN_CONNECTIONS_POOL: int = 2  # Minimum connections in pool
     HEALTH_CHECK_INTERVAL: int = 30
 
