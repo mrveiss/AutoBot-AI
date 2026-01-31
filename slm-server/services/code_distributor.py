@@ -11,6 +11,7 @@ import asyncio
 import hashlib
 import io
 import logging
+import os
 import tarfile
 from datetime import datetime
 from pathlib import Path
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 CODE_PACKAGE_DIR = Path("/tmp/slm-code-packages")
 AGENT_CODE_PATH = "src/slm/agent"  # Relative to repo root
+DEFAULT_REPO_PATH = os.environ.get("SLM_REPO_PATH", "/opt/autobot")
 
 
 class CodeDistributor:
@@ -28,7 +30,7 @@ class CodeDistributor:
     Builds and distributes code packages to SLM agents.
     """
 
-    def __init__(self, repo_path: str = "/home/kali/Desktop/AutoBot"):
+    def __init__(self, repo_path: str = DEFAULT_REPO_PATH):
         """
         Initialize CodeDistributor.
 
@@ -194,7 +196,7 @@ _distributor_instance: Optional[CodeDistributor] = None
 
 
 def get_code_distributor(
-    repo_path: str = "/home/kali/Desktop/AutoBot",
+    repo_path: str = DEFAULT_REPO_PATH,
 ) -> CodeDistributor:
     """Get or create the CodeDistributor singleton."""
     global _distributor_instance

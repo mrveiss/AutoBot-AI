@@ -9,6 +9,7 @@ Tracks git repository version and checks for updates from remote.
 
 import asyncio
 import logging
+import os
 from datetime import datetime
 from typing import Optional
 
@@ -28,6 +29,7 @@ except ImportError:
 
 # Configuration
 VERSION_CHECK_INTERVAL = 300  # 5 minutes
+DEFAULT_REPO_PATH = os.environ.get("SLM_REPO_PATH", "/opt/autobot")
 
 
 class GitTracker:
@@ -184,7 +186,7 @@ class GitTracker:
 _tracker_instance: Optional[GitTracker] = None
 
 
-def get_git_tracker(repo_path: str = "/home/kali/Desktop/AutoBot") -> GitTracker:
+def get_git_tracker(repo_path: str = DEFAULT_REPO_PATH) -> GitTracker:
     """
     Get or create the GitTracker singleton instance.
 
@@ -232,7 +234,7 @@ async def update_latest_version_setting(
 
 
 async def version_check_task(
-    repo_path: str = "/home/kali/Desktop/AutoBot",
+    repo_path: str = DEFAULT_REPO_PATH,
     interval: int = VERSION_CHECK_INTERVAL,
 ) -> None:
     """
@@ -271,7 +273,7 @@ async def version_check_task(
 
 
 def start_version_checker(
-    repo_path: str = "/home/kali/Desktop/AutoBot",
+    repo_path: str = DEFAULT_REPO_PATH,
     interval: int = VERSION_CHECK_INTERVAL,
 ) -> asyncio.Task:
     """

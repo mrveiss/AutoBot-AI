@@ -250,8 +250,9 @@ async def sync_fleet(
     # Create a job ID for tracking
     job_id = str(uuid.uuid4())[:16]
 
+    # TODO(Issue #741 Phase 8): Implement actual background job queue
+    # For now, this is a stub that acknowledges the request
     # Queue the sync operations (in a real implementation, this would be async)
-    # For now, we'll just acknowledge the request
     logger.info("Fleet sync job %s queued for %d nodes", job_id, len(nodes))
 
     return FleetSyncResponse(

@@ -7,6 +7,7 @@ SLM Backend - Service Lifecycle Manager
 Main FastAPI application entry point.
 """
 
+import asyncio
 import logging
 import sys
 from contextlib import asynccontextmanager
@@ -70,8 +71,8 @@ async def lifespan(app: FastAPI):
     version_checker_task.cancel()
     try:
         await version_checker_task
-    except Exception:
-        pass  # Ignore cancellation errors
+    except asyncio.CancelledError:
+        logger.info("Version checker stopped")
     await reconciler_service.stop()
     await db_service.close()
 
