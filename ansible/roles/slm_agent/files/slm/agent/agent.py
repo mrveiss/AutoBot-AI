@@ -15,7 +15,6 @@ import asyncio
 import json
 import logging
 import os
-import platform
 import signal
 import sqlite3
 import sys
@@ -25,15 +24,17 @@ from typing import Optional
 
 import aiohttp
 
-from slm.agent.health_collector import HealthCollector
+from .health_collector import HealthCollector
+from .version import get_agent_version
 
 logger = logging.getLogger(__name__)
 
 # Standalone agent defaults - agent runs on remote VMs, not AutoBot main host
 # These are configured via CLI args or environment variables at deployment
-DEFAULT_ADMIN_URL = "http://172.16.168.19:8000"
+# Issue #694: Use environment variable with fallback
+DEFAULT_ADMIN_URL = os.getenv("SLM_ADMIN_URL", "http://172.16.168.19:8000")
 DEFAULT_HEARTBEAT_INTERVAL = 30  # seconds
-DEFAULT_BUFFER_DB = "/var/lib/slm-agent/events.db"
+DEFAULT_BUFFER_DB = os.path.expanduser("~/.slm-agent/events.db")
 
 
 class SLMAgent:
@@ -54,6 +55,11 @@ class SLMAgent:
         self.node_id = node_id or os.environ.get("SLM_NODE_ID")
         self.running = False
 
+        # Issue #741: Initialize version manager
+        self.version_manager = get_agent_version()
+        self._pending_update = False
+        self._latest_version: Optional[str] = None
+
         self.collector = HealthCollector(services=services or [])
         self._init_buffer_db()
 
@@ -61,7 +67,8 @@ class SLMAgent:
         """Initialize SQLite buffer database."""
         Path(self.buffer_db).parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(self.buffer_db)
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS event_buffer (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp TEXT NOT NULL,
@@ -69,7 +76,8 @@ class SLMAgent:
                 data TEXT NOT NULL,
                 synced INTEGER DEFAULT 0
             )
-        """)
+        """
+        )
         conn.commit()
         conn.close()
         logger.info("Event buffer initialized at %s", self.buffer_db)
@@ -84,17 +92,42 @@ class SLMAgent:
         conn.commit()
         conn.close()
 
+    def _process_heartbeat_response(self, response: dict) -> None:
+        """
+        Process heartbeat response from admin server.
+
+        Issue #741: Handle update_available notification.
+        """
+        if response.get("update_available"):
+            latest = response.get("latest_version", "unknown")
+            current = self.version_manager.get_version() or "unknown"
+            # Truncate long hashes for logging
+            current_short = current[:12] if len(current) > 12 else current
+            latest_short = latest[:12] if len(latest) > 12 else latest
+            logger.info(
+                "Update available: current=%s, latest=%s",
+                current_short,
+                latest_short,
+            )
+            self._pending_update = True
+            self._latest_version = latest
+
     async def send_heartbeat(self) -> bool:
         """Send heartbeat with health data to admin."""
+        import platform
+
         health = self.collector.collect()
         # Payload matches HeartbeatRequest schema
         os_info = f"{platform.system()} {platform.release()}"
+        # Issue #741: Get code version for heartbeat
+        code_version = self.version_manager.get_version()
         payload = {
             "cpu_percent": health.get("cpu_percent", 0.0),
             "memory_percent": health.get("memory_percent", 0.0),
             "disk_percent": health.get("disk_percent", 0.0),
             "agent_version": "1.0.0",
             "os_info": os_info,
+            "code_version": code_version,  # Issue #741: Add code version
             "extra_data": {
                 "services": health.get("services", {}),
                 "discovered_services": health.get("discovered_services", []),
@@ -114,12 +147,16 @@ class SLMAgent:
                     ssl=False,  # mTLS pending PKI setup (Issue #725)
                 ) as response:
                     if response.status == 200:
+                        # Issue #741: Process heartbeat response
+                        response_data = await response.json()
+                        self._process_heartbeat_response(response_data)
                         logger.debug("Heartbeat sent successfully")
                         return True
                     else:
                         logger.warning(
                             "Heartbeat rejected: %s %s",
-                            response.status, await response.text()
+                            response.status,
+                            await response.text(),
                         )
                         return False
         except aiohttp.ClientError as e:
@@ -131,8 +168,7 @@ class SLMAgent:
         """Sync buffered events to admin."""
         conn = sqlite3.connect(self.buffer_db)
         cursor = conn.execute(
-            "SELECT id, event_type, data FROM event_buffer "
-            "WHERE synced = 0 ORDER BY id LIMIT 100"
+            "SELECT id, event_type, data FROM event_buffer WHERE synced = 0 ORDER BY id LIMIT 100"
         )
         events = cursor.fetchall()
 
@@ -143,10 +179,9 @@ class SLMAgent:
 
         try:
             async with aiohttp.ClientSession() as session:
-                url = f"{self.admin_url}/api/events/sync"
+                url = f"{self.admin_url}/api/v1/slm/events/sync"
                 payload = [
-                    {"id": e[0], "type": e[1], "data": json.loads(e[2])}
-                    for e in events
+                    {"id": e[0], "type": e[1], "data": json.loads(e[2])} for e in events
                 ]
                 async with session.post(
                     url,
@@ -158,11 +193,12 @@ class SLMAgent:
                         # Mark as synced
                         ids = [e[0] for e in events]
                         placeholders = ",".join("?" * len(ids))
-                        conn.execute(
-                            f"UPDATE event_buffer SET synced = 1 "
-                            f"WHERE id IN ({placeholders})",
-                            ids,
+                        # Safe: placeholders constructed from "?" chars
+                        query = (
+                            f"UPDATE event_buffer SET synced = 1 "  # nosec B608
+                            f"WHERE id IN ({placeholders})"
                         )
+                        conn.execute(query, ids)
                         conn.commit()
                         logger.info("Synced %d events", len(events))
         except aiohttp.ClientError as e:
@@ -174,8 +210,7 @@ class SLMAgent:
         """Main agent loop."""
         self.running = True
         logger.info(
-            "SLM Agent started (node_id=%s, admin=%s)",
-            self.node_id, self.admin_url
+            "SLM Agent started (node_id=%s, admin=%s)", self.node_id, self.admin_url
         )
 
         while self.running:
@@ -195,9 +230,22 @@ class SLMAgent:
         """Stop the agent."""
         self.running = False
 
+    @property
+    def has_pending_update(self) -> bool:
+        """
+        Check if there's a pending update.
+
+        Issue #741: Property to check update status.
+        """
+        return self._pending_update
+
 
 def _parse_cli_args():
-    """Parse command-line arguments."""
+    """
+    Parse command-line arguments.
+
+    Related to Issue #726.
+    """
     parser = argparse.ArgumentParser(description="SLM Node Agent")
     parser.add_argument(
         "--admin-url",
@@ -222,11 +270,6 @@ def _parse_cli_args():
         help="Systemd services to monitor",
     )
     parser.add_argument(
-        "--buffer-db",
-        default=os.environ.get("SLM_BUFFER_DB", DEFAULT_BUFFER_DB),
-        help="Path to buffer database",
-    )
-    parser.add_argument(
         "--debug",
         action="store_true",
         help="Enable debug logging",
@@ -235,7 +278,11 @@ def _parse_cli_args():
 
 
 def _configure_logging(debug: bool):
-    """Configure logging based on debug flag."""
+    """
+    Configure logging based on debug flag.
+
+    Related to Issue #726.
+    """
     level = logging.DEBUG if debug else logging.INFO
     logging.basicConfig(
         level=level,
@@ -244,7 +291,12 @@ def _configure_logging(debug: bool):
 
 
 def _setup_signal_handlers(agent: SLMAgent):
-    """Set up signal handlers for graceful shutdown."""
+    """
+    Set up signal handlers for graceful shutdown.
+
+    Related to Issue #726.
+    """
+
     def shutdown_handler(signum, frame):
         logger.info("Received signal %s, shutting down", signum)
         agent.stop()
@@ -266,7 +318,6 @@ def main():
     agent = SLMAgent(
         admin_url=args.admin_url,
         heartbeat_interval=args.interval,
-        buffer_db=args.buffer_db,
         services=args.services,
         node_id=args.node_id,
     )

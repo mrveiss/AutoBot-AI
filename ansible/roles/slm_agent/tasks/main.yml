@@ -35,7 +35,7 @@
   become: false
   ansible.builtin.command:
     cmd: git rev-parse HEAD
-    chdir: "{{ playbook_dir }}/.."
+    chdir: "{{ playbook_dir }}/../.."
   register: git_commit_result
   changed_when: false
   failed_when: false
@@ -105,6 +105,18 @@
   copy:
     src: slm/agent/health_collector.py
     dest: "{{ slm_agent_dir }}/slm/agent/health_collector.py"
+    owner: "{{ slm_agent_user }}"
+    group: "{{ slm_agent_group }}"
+    mode: '0644'
+  become: yes
+  notify: Restart SLM agent
+  tags: ['slm_agent', 'deploy']
+
+# Issue #741: Deploy version tracking module
+- name: "SLM Agent | Copy agent source - version.py"
+  copy:
+    src: slm/agent/version.py
+    dest: "{{ slm_agent_dir }}/slm/agent/version.py"
     owner: "{{ slm_agent_user }}"
     group: "{{ slm_agent_group }}"
     mode: '0644'
