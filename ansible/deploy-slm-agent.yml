@@ -35,7 +35,7 @@
   post_tasks:
     - name: "Post-check | Verify agent is running"
       systemd:
-        name: autobot-agent
+        name: slm-agent
       register: agent_status
       tags: ['verify']
 
