@@ -5,9 +5,11 @@
 """Pytest fixtures for SLM testing."""
 
 import sys
+from pathlib import Path
 
-# Add slm-server to path for imports
-sys.path.insert(0, "slm-server")
+# Add slm-server to path for imports (absolute path)
+project_root = Path(__file__).parent.parent.parent.parent
+sys.path.insert(0, str(project_root / "slm-server"))
 
 import pytest  # noqa: E402
 from sqlalchemy import create_engine  # noqa: E402
