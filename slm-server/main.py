@@ -10,15 +10,12 @@ Main FastAPI application entry point.
 import logging
 import sys
 from contextlib import asynccontextmanager
-from pathlib import Path
-
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 from api import (
     auth_router,
     blue_green_router,
     deployments_router,
+    fleet_services_router,
     health_router,
     maintenance_router,
     monitoring_router,
@@ -26,17 +23,20 @@ from api import (
     node_vnc_router,
     nodes_router,
     security_router,
+    services_router,
     settings_router,
     stateful_router,
     tls_router,
     updates_router,
     vnc_router,
     websocket_router,
-    services_router,
-    fleet_services_router,
 )
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from config import settings
 from services.database import db_service
+from services.git_tracker import start_version_checker
 from services.reconciler import reconciler_service
 
 logging.basicConfig(
@@ -57,11 +57,20 @@ async def lifespan(app: FastAPI):
     await _ensure_admin_user()
     await reconciler_service.start()
 
+    # Start version checker background task (Issue #741)
+    version_checker_task = start_version_checker()
+    logger.info("Version checker started")
+
     logger.info("SLM Backend ready")
 
     yield
 
     logger.info("Shutting down SLM Backend")
+    version_checker_task.cancel()
+    try:
+        await version_checker_task
+    except Exception:
+        pass  # Ignore cancellation errors
     await reconciler_service.stop()
     await db_service.close()
 
@@ -74,7 +83,7 @@ async def _ensure_admin_user():
     from services.auth import auth_service
 
     async with db_service.session() as db:
-        result = await db.execute(select(User).where(User.is_admin == True))
+        result = await db.execute(select(User).where(User.is_admin.is_(True)))
         if result.scalar_one_or_none():
             return
 
@@ -139,6 +148,7 @@ async def root():
 
 if __name__ == "__main__":
     import os
+
     import uvicorn
 
     # TLS Configuration - Issue #725 Phase 5

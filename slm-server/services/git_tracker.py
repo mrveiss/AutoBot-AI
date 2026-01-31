@@ -12,7 +12,22 @@ import logging
 from datetime import datetime
 from typing import Optional
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.database import Setting
+
 logger = logging.getLogger(__name__)
+
+# Import db_service at module level for testing
+try:
+    from services.database import db_service
+except ImportError:
+    # Allow testing without full service initialization
+    db_service = None  # type: ignore
+
+# Configuration
+VERSION_CHECK_INTERVAL = 300  # 5 minutes
 
 
 class GitTracker:
@@ -185,3 +200,88 @@ def get_git_tracker(repo_path: str = "/home/kali/Desktop/AutoBot") -> GitTracker
         _tracker_instance = GitTracker(repo_path=repo_path)
 
     return _tracker_instance
+
+
+async def update_latest_version_setting(
+    db: AsyncSession,
+    commit_hash: str,
+) -> None:
+    """
+    Update the slm_agent_latest_commit setting in database.
+
+    Args:
+        db: Database session
+        commit_hash: The latest commit hash to store
+    """
+    result = await db.execute(
+        select(Setting).where(Setting.key == "slm_agent_latest_commit")
+    )
+    setting = result.scalar_one_or_none()
+
+    if setting:
+        setting.value = commit_hash
+    else:
+        setting = Setting(
+            key="slm_agent_latest_commit",
+            value=commit_hash,
+        )
+        db.add(setting)
+
+    await db.commit()
+    logger.info("Updated slm_agent_latest_commit to: %s", commit_hash[:12])
+
+
+async def version_check_task(
+    repo_path: str = "/home/kali/Desktop/AutoBot",
+    interval: int = VERSION_CHECK_INTERVAL,
+) -> None:
+    """
+    Background task that periodically checks for code updates.
+
+    Args:
+        repo_path: Path to the git repository
+        interval: Check interval in seconds (default: 300 = 5 min)
+    """
+    tracker = get_git_tracker(repo_path)
+    logger.info("Starting version check task (interval: %ds)", interval)
+
+    while True:
+        try:
+            result = await tracker.check_for_updates()
+
+            if result["remote_commit"]:
+                async with db_service.session() as db:
+                    await update_latest_version_setting(db, result["remote_commit"])
+
+                if result["has_update"]:
+                    logger.info(
+                        "Update available: local=%s, remote=%s",
+                        result["local_commit"][:12]
+                        if result["local_commit"]
+                        else "unknown",
+                        result["remote_commit"][:12],
+                    )
+            else:
+                logger.warning("Failed to get remote commit hash")
+
+        except Exception as e:
+            logger.error("Version check failed: %s", e)
+
+        await asyncio.sleep(interval)
+
+
+def start_version_checker(
+    repo_path: str = "/home/kali/Desktop/AutoBot",
+    interval: int = VERSION_CHECK_INTERVAL,
+) -> asyncio.Task:
+    """
+    Start the version checker background task.
+
+    Args:
+        repo_path: Path to the git repository
+        interval: Check interval in seconds
+
+    Returns:
+        The asyncio Task object
+    """
+    return asyncio.create_task(version_check_task(repo_path, interval))
