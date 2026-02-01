@@ -22,7 +22,11 @@ logger = logging.getLogger(__name__)
 # Configuration
 CODE_PACKAGE_DIR = Path("/tmp/slm-code-packages")
 AGENT_CODE_PATH = "src/slm/agent"  # Relative to repo root
-DEFAULT_REPO_PATH = os.environ.get("SLM_REPO_PATH", "/opt/autobot")
+DEFAULT_REPO_PATH = os.environ.get("SLM_REPO_PATH", "/home/autobot/AutoBot")
+# Remote agent installation path on managed nodes
+REMOTE_AGENT_PATH = "/opt/slm-agent"
+# SSH key for connecting to managed nodes
+SSH_KEY_PATH = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")
 
 
 class CodeDistributor:
@@ -134,7 +138,9 @@ class CodeDistributor:
         strategy: str = "graceful",
     ) -> Tuple[bool, str]:
         """
-        Trigger sync on a specific node via SSH.
+        Sync code to a specific node via rsync and optionally restart service.
+
+        Issue #741: Actual code sync implementation using rsync.
 
         Args:
             node_id: Node identifier
@@ -147,11 +153,29 @@ class CodeDistributor:
         Returns:
             Tuple of (success, message)
         """
-        # Build the sync command for the agent
-        restart_flag = "--restart" if restart else "--no-restart"
-        strategy_flag = f"--strategy={strategy}"
+        agent_source = self.repo_path / AGENT_CODE_PATH
+        if not agent_source.exists():
+            return False, f"Agent source not found: {agent_source}"
 
-        ssh_cmd = [
+        # Get current commit for version tracking
+        commit_hash = await self.get_current_commit()
+        if not commit_hash:
+            return False, "Could not determine current commit"
+
+        # SSH options for rsync
+        ssh_opts = (
+            f"ssh -o StrictHostKeyChecking=no "
+            f"-o UserKnownHostsFile=/dev/null "
+            f"-o ConnectTimeout=30 "
+            f"-p {ssh_port}"
+        )
+
+        # Add SSH key if it exists
+        if Path(SSH_KEY_PATH).exists():
+            ssh_opts += f" -i {SSH_KEY_PATH}"
+
+        # Step 1: Ensure remote directory exists
+        mkdir_cmd = [
             "ssh",
             "-o",
             "StrictHostKeyChecking=no",
@@ -159,36 +183,144 @@ class CodeDistributor:
             "UserKnownHostsFile=/dev/null",
             "-o",
             "ConnectTimeout=30",
-            "-o",
-            "BatchMode=yes",
             "-p",
             str(ssh_port),
-            f"{ssh_user}@{ip_address}",
-            f"slm-agent sync {restart_flag} {strategy_flag}",
         ]
+        if Path(SSH_KEY_PATH).exists():
+            mkdir_cmd.extend(["-i", SSH_KEY_PATH])
+        mkdir_script = (
+            f"sudo mkdir -p {REMOTE_AGENT_PATH} && "
+            f"sudo chown -R {ssh_user}:{ssh_user} {REMOTE_AGENT_PATH}"
+        )
+        mkdir_cmd.extend([f"{ssh_user}@{ip_address}", mkdir_script])
 
         try:
             proc = await asyncio.create_subprocess_exec(
-                *ssh_cmd,
+                *mkdir_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            await asyncio.wait_for(proc.communicate(), timeout=30.0)
+        except Exception as e:
+            logger.warning("Could not create remote dir on %s: %s", node_id, e)
+
+        # Step 2: Rsync agent code to remote node
+        rsync_cmd = [
+            "rsync",
+            "-avz",
+            "--delete",
+            "--exclude",
+            "__pycache__",
+            "--exclude",
+            "*.pyc",
+            "--exclude",
+            ".git",
+            "-e",
+            ssh_opts,
+            f"{agent_source}/",
+            f"{ssh_user}@{ip_address}:{REMOTE_AGENT_PATH}/",
+        ]
+
+        try:
+            logger.info("Syncing code to node %s (%s)", node_id, ip_address)
+            proc = await asyncio.create_subprocess_exec(
+                *rsync_cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120.0)
-            output = stdout.decode("utf-8", errors="replace")
+            rsync_output = stdout.decode("utf-8", errors="replace")
 
-            if proc.returncode == 0:
-                logger.info("Sync triggered on node %s", node_id)
-                return True, f"Sync initiated: {output.strip()}"
-            else:
-                logger.warning("Sync failed on node %s: %s", node_id, output)
-                return False, f"Sync failed: {output.strip()}"
+            if proc.returncode != 0:
+                logger.error("Rsync failed on node %s: %s", node_id, rsync_output)
+                return False, f"Rsync failed: {rsync_output.strip()}"
+
+            logger.info("Code synced to node %s", node_id)
 
         except asyncio.TimeoutError:
-            logger.error("Sync timeout on node %s", node_id)
-            return False, "Sync command timed out"
+            logger.error("Rsync timeout on node %s", node_id)
+            return False, "Rsync timed out"
         except Exception as e:
-            logger.error("Sync error on node %s: %s", node_id, e)
-            return False, f"Sync error: {e}"
+            logger.error("Rsync error on node %s: %s", node_id, e)
+            return False, f"Rsync error: {e}"
+
+        # Step 3: Update version.json on remote node
+        version_json = (
+            f'{{"commit": "{commit_hash}", '
+            f'"synced_at": "{datetime.utcnow().isoformat()}", '
+            f'"source": "fleet-sync"}}'
+        )
+        version_cmd = [
+            "ssh",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-p",
+            str(ssh_port),
+        ]
+        if Path(SSH_KEY_PATH).exists():
+            version_cmd.extend(["-i", SSH_KEY_PATH])
+        version_cmd.extend(
+            [
+                f"{ssh_user}@{ip_address}",
+                f"echo '{version_json}' | sudo tee /var/lib/slm-agent/version.json > /dev/null",
+            ]
+        )
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *version_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            await asyncio.wait_for(proc.communicate(), timeout=30.0)
+        except Exception as e:
+            logger.warning("Could not update version.json on %s: %s", node_id, e)
+
+        # Step 4: Restart slm-agent service if requested
+        if restart and strategy != "manual":
+            restart_cmd = [
+                "ssh",
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
+                "-p",
+                str(ssh_port),
+            ]
+            if Path(SSH_KEY_PATH).exists():
+                restart_cmd.extend(["-i", SSH_KEY_PATH])
+            restart_cmd.extend(
+                [
+                    f"{ssh_user}@{ip_address}",
+                    "sudo systemctl restart slm-agent || true",
+                ]
+            )
+
+            try:
+                logger.info("Restarting slm-agent on node %s", node_id)
+                proc = await asyncio.create_subprocess_exec(
+                    *restart_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
+                )
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=60.0)
+                restart_output = stdout.decode("utf-8", errors="replace")
+
+                if proc.returncode == 0:
+                    logger.info("slm-agent restarted on node %s", node_id)
+                else:
+                    logger.warning(
+                        "slm-agent restart may have failed on %s: %s",
+                        node_id,
+                        restart_output,
+                    )
+
+            except Exception as e:
+                logger.warning("Could not restart slm-agent on %s: %s", node_id, e)
+
+        return True, f"Code synced successfully (commit: {commit_hash[:12]})"
 
 
 # Singleton instance
