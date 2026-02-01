@@ -344,7 +344,7 @@ async def notify_code_version(
 
     # Update the source node's code version
     source_node.code_version = commit
-    source_node.code_status = CodeStatus.CURRENT.value
+    source_node.code_status = CodeStatus.UP_TO_DATE.value
 
     # Mark all other nodes as outdated (if they have different version)
     nodes_result = await db.execute(
