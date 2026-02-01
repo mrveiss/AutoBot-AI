@@ -7,8 +7,12 @@ Code Sync API Routes (Issue #741).
 Provides endpoints for code version tracking and sync operations.
 """
 
+import asyncio
 import logging
 import uuid
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
@@ -22,6 +26,8 @@ from models.schemas import (
     CodeSyncStatusResponse,
     CodeVersionNotification,
     CodeVersionNotificationResponse,
+    FleetSyncJobStatus,
+    FleetSyncNodeStatus,
     FleetSyncRequest,
     FleetSyncResponse,
     NodeSyncRequest,
@@ -36,6 +42,41 @@ from services.git_tracker import get_git_tracker
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-sync", tags=["code-sync"])
+
+
+# Fleet sync job tracking (Issue #741 Phase 8)
+@dataclass
+class NodeSyncState:
+    """State tracking for individual node sync."""
+
+    node_id: str
+    hostname: str
+    ip_address: str
+    ssh_user: str
+    ssh_port: int
+    status: str = "pending"  # pending, syncing, success, failed
+    message: Optional[str] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+
+@dataclass
+class FleetSyncJob:
+    """Fleet sync job state (Issue #741 Phase 8)."""
+
+    job_id: str
+    strategy: str
+    batch_size: int
+    restart: bool
+    nodes: Dict[str, NodeSyncState] = field(default_factory=dict)
+    status: str = "pending"  # pending, running, completed, failed
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    completed_at: Optional[datetime] = None
+
+
+# Module-level job tracking
+_fleet_sync_jobs: Dict[str, FleetSyncJob] = {}
+_running_tasks: Dict[str, asyncio.Task] = {}
 
 
 @router.get("/status", response_model=CodeSyncStatusResponse)
@@ -218,6 +259,88 @@ async def sync_node(
     )
 
 
+async def _run_fleet_sync_job(job: FleetSyncJob) -> None:
+    """
+    Background task to execute fleet sync job (Issue #741 Phase 8).
+
+    Processes nodes according to the specified strategy and batch size.
+    """
+    distributor = get_code_distributor()
+    job.status = "running"
+
+    node_list = list(job.nodes.values())
+    batch_size = job.batch_size
+
+    try:
+        # Process nodes in batches
+        for i in range(0, len(node_list), batch_size):
+            batch = node_list[i : i + batch_size]
+
+            # Start sync for all nodes in batch concurrently
+            tasks = []
+            for node_state in batch:
+                node_state.status = "syncing"
+                node_state.started_at = datetime.utcnow()
+
+                task = asyncio.create_task(
+                    _sync_single_node(distributor, node_state, job.restart)
+                )
+                tasks.append(task)
+
+            # Wait for batch to complete
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+            # If rolling strategy, wait between batches
+            if job.strategy == "rolling" and i + batch_size < len(node_list):
+                await asyncio.sleep(5)  # Brief pause between batches
+
+        # Calculate final status
+        failed_count = sum(1 for n in job.nodes.values() if n.status == "failed")
+        if failed_count == len(job.nodes):
+            job.status = "failed"
+        elif failed_count > 0:
+            job.status = "completed"  # Partial success
+        else:
+            job.status = "completed"
+
+    except Exception as e:
+        logger.error("Fleet sync job %s failed: %s", job.job_id, e)
+        job.status = "failed"
+
+    job.completed_at = datetime.utcnow()
+    logger.info(
+        "Fleet sync job %s completed: %d/%d successful",
+        job.job_id,
+        sum(1 for n in job.nodes.values() if n.status == "success"),
+        len(job.nodes),
+    )
+
+
+async def _sync_single_node(
+    distributor, node_state: NodeSyncState, restart: bool
+) -> None:
+    """Sync a single node and update its state."""
+    try:
+        success, message = await distributor.trigger_node_sync(
+            node_id=node_state.node_id,
+            ip_address=node_state.ip_address,
+            ssh_user=node_state.ssh_user,
+            ssh_port=node_state.ssh_port,
+            restart=restart,
+            strategy="graceful",
+        )
+
+        node_state.status = "success" if success else "failed"
+        node_state.message = message
+        node_state.completed_at = datetime.utcnow()
+
+    except Exception as e:
+        node_state.status = "failed"
+        node_state.message = str(e)
+        node_state.completed_at = datetime.utcnow()
+        logger.error("Node sync failed for %s: %s", node_state.node_id, e)
+
+
 @router.post("/fleet/sync", response_model=FleetSyncResponse)
 async def sync_fleet(
     request: FleetSyncRequest,
@@ -225,9 +348,10 @@ async def sync_fleet(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> FleetSyncResponse:
     """
-    Trigger code sync across multiple nodes.
+    Trigger code sync across multiple nodes (Issue #741 Phase 8).
 
     If node_ids is None, syncs all outdated nodes.
+    Supports rolling, immediate, graceful, and manual strategies.
     """
     # Get target nodes
     if request.node_ids:
@@ -252,9 +376,30 @@ async def sync_fleet(
     # Create a job ID for tracking
     job_id = str(uuid.uuid4())[:16]
 
-    # TODO(Issue #741 Phase 8): Implement actual background job queue
-    # For now, this is a stub that acknowledges the request
-    # Queue the sync operations (in a real implementation, this would be async)
+    # Create job with node states
+    job = FleetSyncJob(
+        job_id=job_id,
+        strategy=request.strategy,
+        batch_size=request.batch_size,
+        restart=request.restart,
+    )
+
+    for node in nodes:
+        job.nodes[node.node_id] = NodeSyncState(
+            node_id=node.node_id,
+            hostname=node.hostname,
+            ip_address=node.ip_address,
+            ssh_user=node.ssh_user or "autobot",
+            ssh_port=node.ssh_port or 22,
+        )
+
+    # Store job and start background task
+    _fleet_sync_jobs[job_id] = job
+
+    if request.strategy != "manual":
+        task = asyncio.create_task(_run_fleet_sync_job(job))
+        _running_tasks[job_id] = task
+
     logger.info("Fleet sync job %s queued for %d nodes", job_id, len(nodes))
 
     return FleetSyncResponse(
@@ -263,6 +408,102 @@ async def sync_fleet(
         job_id=job_id,
         nodes_queued=len(nodes),
     )
+
+
+@router.get("/fleet/jobs/{job_id}", response_model=FleetSyncJobStatus)
+async def get_fleet_sync_job_status(
+    job_id: str,
+    _: Annotated[dict, Depends(get_current_user)],
+) -> FleetSyncJobStatus:
+    """
+    Get status of a fleet sync job (Issue #741 Phase 8).
+
+    Returns detailed status including per-node sync progress.
+    """
+    job = _fleet_sync_jobs.get(job_id)
+
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found",
+        )
+
+    # Build node status list
+    node_statuses = [
+        FleetSyncNodeStatus(
+            node_id=ns.node_id,
+            hostname=ns.hostname,
+            status=ns.status,
+            message=ns.message,
+            started_at=ns.started_at,
+            completed_at=ns.completed_at,
+        )
+        for ns in job.nodes.values()
+    ]
+
+    # Calculate counts
+    completed_count = sum(1 for n in job.nodes.values() if n.status == "success")
+    failed_count = sum(1 for n in job.nodes.values() if n.status == "failed")
+
+    return FleetSyncJobStatus(
+        job_id=job.job_id,
+        status=job.status,
+        strategy=job.strategy,
+        total_nodes=len(job.nodes),
+        completed_nodes=completed_count,
+        failed_nodes=failed_count,
+        nodes=node_statuses,
+        created_at=job.created_at,
+        completed_at=job.completed_at,
+    )
+
+
+@router.get("/fleet/jobs", response_model=List[FleetSyncJobStatus])
+async def list_fleet_sync_jobs(
+    _: Annotated[dict, Depends(get_current_user)],
+    limit: int = 10,
+) -> List[FleetSyncJobStatus]:
+    """
+    List recent fleet sync jobs (Issue #741 Phase 8).
+    """
+    jobs = sorted(
+        _fleet_sync_jobs.values(),
+        key=lambda j: j.created_at,
+        reverse=True,
+    )[:limit]
+
+    result = []
+    for job in jobs:
+        node_statuses = [
+            FleetSyncNodeStatus(
+                node_id=ns.node_id,
+                hostname=ns.hostname,
+                status=ns.status,
+                message=ns.message,
+                started_at=ns.started_at,
+                completed_at=ns.completed_at,
+            )
+            for ns in job.nodes.values()
+        ]
+
+        completed_count = sum(1 for n in job.nodes.values() if n.status == "success")
+        failed_count = sum(1 for n in job.nodes.values() if n.status == "failed")
+
+        result.append(
+            FleetSyncJobStatus(
+                job_id=job.job_id,
+                status=job.status,
+                strategy=job.strategy,
+                total_nodes=len(job.nodes),
+                completed_nodes=completed_count,
+                failed_nodes=failed_count,
+                nodes=node_statuses,
+                created_at=job.created_at,
+                completed_at=job.completed_at,
+            )
+        )
+
+    return result
 
 
 @router.get("/nodes/{node_id}/package")

@@ -1378,6 +1378,31 @@ class FleetSyncResponse(BaseModel):
     nodes_queued: int
 
 
+class FleetSyncNodeStatus(BaseModel):
+    """Status of sync operation for a single node."""
+
+    node_id: str
+    hostname: str
+    status: str  # pending, syncing, success, failed
+    message: Optional[str] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+
+class FleetSyncJobStatus(BaseModel):
+    """Status of a fleet sync job (Issue #741 Phase 8)."""
+
+    job_id: str
+    status: str  # pending, running, completed, failed
+    strategy: str
+    total_nodes: int
+    completed_nodes: int
+    failed_nodes: int
+    nodes: List[FleetSyncNodeStatus]
+    created_at: datetime
+    completed_at: Optional[datetime] = None
+
+
 class CodeVersionNotification(BaseModel):
     """Code version notification from code-source agent (Issue #741)."""
 
