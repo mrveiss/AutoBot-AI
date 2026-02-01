@@ -26,6 +26,9 @@ AUTHOR=$(git log -1 --pretty=%an)
 # SLM agent socket/API endpoint (local)
 SLM_AGENT_URL="${SLM_AGENT_URL:-http://localhost:8000}"
 SLM_CODE_SOURCE="${SLM_CODE_SOURCE:-true}"
+# SLM server URL for direct notification (fallback when agent not running)
+SLM_SERVER_URL="${SLM_SERVER_URL:-http://172.16.168.19:8000}"
+SLM_NODE_ID="${SLM_NODE_ID:-33792bf5}"
 
 # Only notify if this is marked as a code source node
 if [ "$SLM_CODE_SOURCE" != "true" ]; then
@@ -50,19 +53,45 @@ EOF
 # Notify local SLM agent (non-blocking, fail silently)
 echo "[SLM] Notifying agent of commit: $COMMIT_SHORT"
 
-# Try to notify via Unix socket or HTTP API
+# Try to notify via Unix socket or local agent HTTP API
+AGENT_NOTIFIED=false
 if [ -S "/var/run/slm-agent/notify.sock" ]; then
     # Use Unix socket if available
-    echo "$PAYLOAD" | nc -U /var/run/slm-agent/notify.sock 2>/dev/null || true
-else
-    # Fall back to HTTP API
-    curl -s -X POST \
+    echo "$PAYLOAD" | nc -U /var/run/slm-agent/notify.sock 2>/dev/null && AGENT_NOTIFIED=true
+elif curl -s -X POST \
         -H "Content-Type: application/json" \
         -d "$PAYLOAD" \
         "${SLM_AGENT_URL}/api/code-change" \
         --connect-timeout 2 \
         --max-time 5 \
-        2>/dev/null || true
+        2>/dev/null | grep -q "status.*ok"; then
+    AGENT_NOTIFIED=true
+fi
+
+# If local agent not available, notify SLM server directly
+if [ "$AGENT_NOTIFIED" != "true" ]; then
+    # Create server notification payload (different schema)
+    SERVER_PAYLOAD=$(cat <<EOFSERVER
+{
+    "node_id": "$SLM_NODE_ID",
+    "commit": "$COMMIT_HASH",
+    "is_code_source": true,
+    "branch": "$BRANCH",
+    "message": "$COMMIT_MESSAGE"
+}
+EOFSERVER
+)
+    if curl -s -X POST \
+        -H "Content-Type: application/json" \
+        -d "$SERVER_PAYLOAD" \
+        "${SLM_SERVER_URL}/api/code-sync/notify" \
+        --connect-timeout 5 \
+        --max-time 10 \
+        2>/dev/null | grep -q "success.*true"; then
+        echo "[SLM] Server notified directly: $COMMIT_SHORT"
+    else
+        echo "[SLM] Warning: Could not notify SLM (agent or server)"
+    fi
 fi
 
 # Also update the local version.json for immediate tracking
