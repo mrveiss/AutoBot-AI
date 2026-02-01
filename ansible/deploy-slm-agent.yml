@@ -7,7 +7,7 @@
 #
 # Usage:
 #   ansible-playbook -i inventory/slm-nodes.yml deploy-slm-agent.yml
-#   ansible-playbook -i inventory/slm-nodes.yml deploy-slm-agent.yml --limit 01-Backend
+#   ansible-playbook -i inventory/slm-nodes.yml deploy-slm-agent.yml --limit 01-Code-Source
 ---
 - name: Deploy SLM Agent to Managed Nodes
   hosts: slm_nodes
