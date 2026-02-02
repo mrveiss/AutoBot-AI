@@ -558,6 +558,11 @@ class ServiceResponse(BaseModel):
     sub_state: Optional[str] = None
     main_pid: Optional[int] = None
     memory_bytes: Optional[int] = None
+    # Discovery fields (Issue #760)
+    port: Optional[int] = None
+    protocol: str = "http"
+    endpoint_path: Optional[str] = None
+    is_discoverable: bool = True
     last_checked: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
@@ -1493,3 +1498,95 @@ class ScheduleRunResponse(BaseModel):
     message: str
     schedule_id: int
     job_id: Optional[str] = None
+
+
+# =============================================================================
+# Service Discovery Schemas (Issue #760)
+# =============================================================================
+
+
+class ServiceDiscoveryResponse(BaseModel):
+    """Single service discovery response."""
+
+    service_name: str
+    host: str
+    port: Optional[int] = None
+    protocol: str = "http"
+    endpoint_path: Optional[str] = None
+    url: str  # Fully constructed URL
+    healthy: bool
+    node_id: str
+
+
+class ServiceDiscoveryListResponse(BaseModel):
+    """All discoverable services grouped by name."""
+
+    services: Dict[str, List[ServiceDiscoveryResponse]]
+
+
+# =============================================================================
+# Node Configuration Schemas (Issue #760)
+# =============================================================================
+
+
+class NodeConfigResponse(BaseModel):
+    """Node configuration response."""
+
+    id: int
+    node_id: Optional[str] = None  # None = global default
+    config_key: str
+    config_value: Optional[str] = None
+    value_type: str = "string"
+    is_global: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class NodeConfigSetRequest(BaseModel):
+    """Request to set a configuration value."""
+
+    value: str
+    value_type: str = Field(default="string", pattern="^(string|int|bool|json)$")
+
+
+class NodeConfigBulkResponse(BaseModel):
+    """Bulk config response with casted values."""
+
+    node_id: str
+    configs: Dict[str, Optional[str]]  # key -> value
+
+
+# =============================================================================
+# Service Conflict Schemas (Issue #760)
+# =============================================================================
+
+
+class ServiceConflictResponse(BaseModel):
+    """Service conflict response."""
+
+    id: int
+    service_name_a: str
+    service_name_b: str
+    reason: Optional[str] = None
+    conflict_type: str = "port"
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ServiceConflictCreateRequest(BaseModel):
+    """Request to create a service conflict."""
+
+    service_a: str = Field(..., min_length=1, max_length=128)
+    service_b: str = Field(..., min_length=1, max_length=128)
+    reason: Optional[str] = None
+    conflict_type: str = Field(default="port", pattern="^(port|dependency|resource)$")
+
+
+class ServiceConflictListResponse(BaseModel):
+    """List of service conflicts."""
+
+    conflicts: List[ServiceConflictResponse]
+    total: int
