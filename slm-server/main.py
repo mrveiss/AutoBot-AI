@@ -41,6 +41,7 @@ from config import settings
 from services.database import db_service
 from services.git_tracker import start_version_checker
 from services.reconciler import reconciler_service
+from services.schedule_executor import start_schedule_executor, stop_schedule_executor
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -64,6 +65,10 @@ async def lifespan(app: FastAPI):
     version_checker_task = start_version_checker()
     logger.info("Version checker started")
 
+    # Start schedule executor background task (Issue #741 - Phase 7)
+    start_schedule_executor()
+    logger.info("Schedule executor started")
+
     logger.info("SLM Backend ready")
 
     yield
@@ -74,6 +79,8 @@ async def lifespan(app: FastAPI):
         await version_checker_task
     except asyncio.CancelledError:
         logger.info("Version checker stopped")
+    stop_schedule_executor()
+    logger.info("Schedule executor stopped")
     await reconciler_service.stop()
     await db_service.close()
 

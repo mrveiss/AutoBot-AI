@@ -20,7 +20,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
-from models.database import CodeStatus, Node, Setting
+from models.database import CodeStatus, Node, Setting, UpdateSchedule
 from models.schemas import (
     CodeSyncRefreshResponse,
     CodeSyncStatusResponse,
@@ -34,6 +34,10 @@ from models.schemas import (
     NodeSyncResponse,
     PendingNodeResponse,
     PendingNodesResponse,
+    ScheduleCreate,
+    ScheduleResponse,
+    ScheduleRunResponse,
+    ScheduleUpdate,
 )
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
@@ -633,4 +637,291 @@ async def notify_code_version(
         new_version=commit,
         nodes_notified=1,  # WebSocket broadcast
         outdated_nodes=len(outdated_nodes),
+    )
+
+
+# =============================================================================
+# Schedule API Endpoints (Issue #741 - Phase 7)
+# =============================================================================
+
+
+def _validate_cron_expression(expression: str) -> bool:
+    """Validate a cron expression using croniter."""
+    try:
+        from croniter import croniter
+
+        croniter(expression)
+        return True
+    except (ValueError, KeyError):
+        return False
+
+
+def _calculate_next_run(expression: str, base: datetime = None) -> datetime:
+    """Calculate next run time from cron expression."""
+    from croniter import croniter
+
+    base = base or datetime.utcnow()
+    cron = croniter(expression, base)
+    return cron.get_next(datetime)
+
+
+@router.get("/schedules", response_model=List[ScheduleResponse])
+async def list_schedules(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> List[ScheduleResponse]:
+    """
+    List all update schedules (Issue #741 - Phase 7).
+    """
+    result = await db.execute(
+        select(UpdateSchedule).order_by(UpdateSchedule.created_at.desc())
+    )
+    schedules = result.scalars().all()
+
+    return [ScheduleResponse.model_validate(s) for s in schedules]
+
+
+@router.post("/schedules", response_model=ScheduleResponse)
+async def create_schedule(
+    schedule: ScheduleCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+) -> ScheduleResponse:
+    """
+    Create a new update schedule (Issue #741 - Phase 7).
+
+    Requires admin role.
+    """
+    # Validate cron expression
+    if not _validate_cron_expression(schedule.cron_expression):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid cron expression",
+        )
+
+    # Calculate initial next_run
+    next_run = _calculate_next_run(schedule.cron_expression)
+
+    new_schedule = UpdateSchedule(
+        name=schedule.name,
+        cron_expression=schedule.cron_expression,
+        enabled=schedule.enabled,
+        target_type=schedule.target_type,
+        target_nodes=schedule.target_nodes,
+        restart_strategy=schedule.restart_strategy,
+        restart_after_sync=schedule.restart_after_sync,
+        next_run=next_run,
+        created_by=current_user.get("username"),
+    )
+
+    db.add(new_schedule)
+    await db.commit()
+    await db.refresh(new_schedule)
+
+    logger.info(
+        "Created schedule '%s' (id=%d) by %s",
+        new_schedule.name,
+        new_schedule.id,
+        current_user.get("username"),
+    )
+
+    return ScheduleResponse.model_validate(new_schedule)
+
+
+@router.get("/schedules/{schedule_id}", response_model=ScheduleResponse)
+async def get_schedule(
+    schedule_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> ScheduleResponse:
+    """
+    Get details of a specific schedule (Issue #741 - Phase 7).
+    """
+    result = await db.execute(
+        select(UpdateSchedule).where(UpdateSchedule.id == schedule_id)
+    )
+    schedule = result.scalar_one_or_none()
+
+    if not schedule:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Schedule not found",
+        )
+
+    return ScheduleResponse.model_validate(schedule)
+
+
+@router.put("/schedules/{schedule_id}", response_model=ScheduleResponse)
+async def update_schedule(
+    schedule_id: int,
+    update: ScheduleUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> ScheduleResponse:
+    """
+    Update an existing schedule (Issue #741 - Phase 7).
+
+    Requires admin role.
+    """
+    result = await db.execute(
+        select(UpdateSchedule).where(UpdateSchedule.id == schedule_id)
+    )
+    schedule = result.scalar_one_or_none()
+
+    if not schedule:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Schedule not found",
+        )
+
+    # Validate cron expression if provided
+    if update.cron_expression is not None:
+        if not _validate_cron_expression(update.cron_expression):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid cron expression",
+            )
+        schedule.cron_expression = update.cron_expression
+        schedule.next_run = _calculate_next_run(update.cron_expression)
+
+    # Update other fields if provided
+    if update.name is not None:
+        schedule.name = update.name
+    if update.enabled is not None:
+        schedule.enabled = update.enabled
+    if update.target_type is not None:
+        schedule.target_type = update.target_type
+    if update.target_nodes is not None:
+        schedule.target_nodes = update.target_nodes
+    if update.restart_strategy is not None:
+        schedule.restart_strategy = update.restart_strategy
+    if update.restart_after_sync is not None:
+        schedule.restart_after_sync = update.restart_after_sync
+
+    await db.commit()
+    await db.refresh(schedule)
+
+    logger.info("Updated schedule '%s' (id=%d)", schedule.name, schedule.id)
+
+    return ScheduleResponse.model_validate(schedule)
+
+
+@router.delete("/schedules/{schedule_id}")
+async def delete_schedule(
+    schedule_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> dict:
+    """
+    Delete a schedule (Issue #741 - Phase 7).
+
+    Requires admin role.
+    """
+    result = await db.execute(
+        select(UpdateSchedule).where(UpdateSchedule.id == schedule_id)
+    )
+    schedule = result.scalar_one_or_none()
+
+    if not schedule:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Schedule not found",
+        )
+
+    schedule_name = schedule.name
+    await db.delete(schedule)
+    await db.commit()
+
+    logger.info("Deleted schedule '%s' (id=%d)", schedule_name, schedule_id)
+
+    return {"success": True, "message": f"Schedule '{schedule_name}' deleted"}
+
+
+@router.post("/schedules/{schedule_id}/run", response_model=ScheduleRunResponse)
+async def run_schedule(
+    schedule_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> ScheduleRunResponse:
+    """
+    Manually trigger a schedule to run now (Issue #741 - Phase 7).
+
+    Requires admin role.
+    """
+    result = await db.execute(
+        select(UpdateSchedule).where(UpdateSchedule.id == schedule_id)
+    )
+    schedule = result.scalar_one_or_none()
+
+    if not schedule:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Schedule not found",
+        )
+
+    # Get target nodes based on schedule configuration
+    if schedule.target_type == "all":
+        nodes_result = await db.execute(
+            select(Node).where(Node.code_status == CodeStatus.OUTDATED.value)
+        )
+    elif schedule.target_type == "specific" and schedule.target_nodes:
+        nodes_result = await db.execute(
+            select(Node).where(Node.node_id.in_(schedule.target_nodes))
+        )
+    else:
+        nodes_result = await db.execute(
+            select(Node).where(Node.code_status == CodeStatus.OUTDATED.value)
+        )
+
+    nodes = nodes_result.scalars().all()
+
+    if not nodes:
+        return ScheduleRunResponse(
+            success=True,
+            message="No nodes to sync",
+            schedule_id=schedule_id,
+            job_id=None,
+        )
+
+    # Create a fleet sync job
+    job_id = str(uuid.uuid4())[:16]
+
+    job = FleetSyncJob(
+        job_id=job_id,
+        strategy="rolling",
+        batch_size=1,
+        restart=schedule.restart_after_sync,
+    )
+
+    for node in nodes:
+        job.nodes[node.node_id] = NodeSyncState(
+            node_id=node.node_id,
+            hostname=node.hostname,
+            ip_address=node.ip_address,
+            ssh_user=node.ssh_user or "autobot",
+            ssh_port=node.ssh_port or 22,
+        )
+
+    # Store job and start background task
+    _fleet_sync_jobs[job_id] = job
+    task = asyncio.create_task(_run_fleet_sync_job(job))
+    _running_tasks[job_id] = task
+
+    # Update schedule last_run
+    schedule.last_run = datetime.utcnow()
+    schedule.next_run = _calculate_next_run(schedule.cron_expression)
+    await db.commit()
+
+    logger.info(
+        "Manually triggered schedule '%s' - job %s for %d nodes",
+        schedule.name,
+        job_id,
+        len(nodes),
+    )
+
+    return ScheduleRunResponse(
+        success=True,
+        message=f"Triggered sync for {len(nodes)} node(s)",
+        schedule_id=schedule_id,
+        job_id=job_id,
     )

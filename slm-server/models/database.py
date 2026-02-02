@@ -7,10 +7,11 @@ SLM Database Models
 SQLAlchemy models for SLM state persistence.
 """
 
+import enum
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Column,
     DateTime,
@@ -18,21 +19,18 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
-    JSON,
-    Enum,
     UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase
-import enum
 
 
 class Base(DeclarativeBase):
     """Base class for all models."""
-    pass
 
 
 class NodeStatus(str, enum.Enum):
     """Node status enumeration."""
+
     PENDING = "pending"
     ENROLLING = "enrolling"
     ONLINE = "online"
@@ -44,6 +42,7 @@ class NodeStatus(str, enum.Enum):
 
 class DeploymentStatus(str, enum.Enum):
     """Deployment status enumeration."""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -54,6 +53,7 @@ class DeploymentStatus(str, enum.Enum):
 
 class BackupStatus(str, enum.Enum):
     """Backup status enumeration."""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -62,6 +62,7 @@ class BackupStatus(str, enum.Enum):
 
 class CodeStatus(str, enum.Enum):
     """Code version status (Issue #741)."""
+
     UP_TO_DATE = "up_to_date"
     OUTDATED = "outdated"
     UNKNOWN = "unknown"
@@ -182,6 +183,7 @@ class User(Base):
 
 class EventType(str, enum.Enum):
     """Node event type enumeration."""
+
     STATE_CHANGE = "state_change"
     HEALTH_CHECK = "health_check"
     DEPLOYMENT_STARTED = "deployment_started"
@@ -199,6 +201,7 @@ class EventType(str, enum.Enum):
 
 class EventSeverity(str, enum.Enum):
     """Event severity enumeration."""
+
     INFO = "info"
     WARNING = "warning"
     ERROR = "error"
@@ -207,6 +210,7 @@ class EventSeverity(str, enum.Enum):
 
 class ReplicationStatus(str, enum.Enum):
     """Replication status enumeration."""
+
     PENDING = "pending"
     SYNCING = "syncing"
     ACTIVE = "active"
@@ -216,6 +220,7 @@ class ReplicationStatus(str, enum.Enum):
 
 class ServiceStatus(str, enum.Enum):
     """Systemd service status enumeration."""
+
     RUNNING = "running"
     STOPPED = "stopped"
     FAILED = "failed"
@@ -224,6 +229,7 @@ class ServiceStatus(str, enum.Enum):
 
 class ServiceCategory(str, enum.Enum):
     """Service category enumeration for filtering."""
+
     AUTOBOT = "autobot"
     SYSTEM = "system"
 
@@ -373,7 +379,9 @@ class MaintenanceWindow(Base):
     auto_drain = Column(Boolean, default=False)  # drain services before maintenance
     suppress_alerts = Column(Boolean, default=True)  # suppress alerts during window
     suppress_remediation = Column(Boolean, default=True)  # suppress auto-remediation
-    status = Column(String(20), default="scheduled")  # scheduled, active, completed, cancelled
+    status = Column(
+        String(20), default="scheduled"
+    )  # scheduled, active, completed, cancelled
     created_by = Column(String(64), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -381,6 +389,7 @@ class MaintenanceWindow(Base):
 
 class BlueGreenStatus(str, enum.Enum):
     """Blue-green deployment status enumeration."""
+
     PENDING = "pending"
     BORROWING = "borrowing"  # Borrowing roles to green node
     DEPLOYING = "deploying"  # Deploying to green node
@@ -422,15 +431,23 @@ class BlueGreenDeployment(Base):
     purge_on_complete = Column(Boolean, default=True)  # Clean slate on completion
 
     # Deployment configuration
-    deployment_type = Column(String(32), default="upgrade")  # upgrade, migration, failover
+    deployment_type = Column(
+        String(32), default="upgrade"
+    )  # upgrade, migration, failover
     health_check_url = Column(String(512), nullable=True)  # Optional health endpoint
     health_check_interval = Column(Integer, default=10)  # Seconds between checks
-    health_check_timeout = Column(Integer, default=300)  # Max time for health verification
+    health_check_timeout = Column(
+        Integer, default=300
+    )  # Max time for health verification
     auto_rollback = Column(Boolean, default=True)  # Rollback on health failure
 
     # Post-deployment health monitoring (Issue #726 Phase 3)
-    post_deploy_monitor_duration = Column(Integer, default=1800)  # 30 min monitoring after switch
-    health_failure_threshold = Column(Integer, default=3)  # Consecutive failures before rollback
+    post_deploy_monitor_duration = Column(
+        Integer, default=1800
+    )  # 30 min monitoring after switch
+    health_failure_threshold = Column(
+        Integer, default=3
+    )  # Consecutive failures before rollback
     health_failures = Column(Integer, default=0)  # Current consecutive failure count
     monitoring_started_at = Column(DateTime, nullable=True)  # When monitoring started
 
@@ -455,6 +472,7 @@ class BlueGreenDeployment(Base):
 
 class CredentialType(str, enum.Enum):
     """Credential type enumeration."""
+
     VNC = "vnc"
     SSH = "ssh"
     API_KEY = "api_key"
@@ -489,7 +507,7 @@ class NodeCredential(Base):
     websockify_enabled = Column(Boolean, default=True)
 
     # TLS-specific fields (Issue #725: mTLS certificate storage)
-    # Actual certs stored in encrypted_data as JSON: {"ca_cert": "...", "server_cert": "...", "server_key": "..."}
+    # Certs stored in encrypted_data as JSON: {"ca_cert", "server_cert", "server_key"}
     tls_common_name = Column(String(255), nullable=True)  # CN from certificate
     tls_expires_at = Column(DateTime, nullable=True)  # Certificate expiration
     tls_fingerprint = Column(String(64), nullable=True)  # SHA256 fingerprint
@@ -517,6 +535,7 @@ class NodeCredential(Base):
 
 class AuditLogCategory(str, enum.Enum):
     """Audit log category enumeration."""
+
     AUTHENTICATION = "authentication"
     AUTHORIZATION = "authorization"
     CONFIGURATION = "configuration"
@@ -529,6 +548,7 @@ class AuditLogCategory(str, enum.Enum):
 
 class SecurityEventType(str, enum.Enum):
     """Security event type enumeration."""
+
     LOGIN_SUCCESS = "login_success"
     LOGIN_FAILURE = "login_failure"
     LOGOUT = "logout"
@@ -548,6 +568,7 @@ class SecurityEventType(str, enum.Enum):
 
 class SecurityEventSeverity(str, enum.Enum):
     """Security event severity enumeration."""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -556,6 +577,7 @@ class SecurityEventSeverity(str, enum.Enum):
 
 class PolicyStatus(str, enum.Enum):
     """Security policy status enumeration."""
+
     ACTIVE = "active"
     INACTIVE = "inactive"
     DRAFT = "draft"
@@ -657,7 +679,9 @@ class SecurityPolicy(Base):
     # Policy identification
     name = Column(String(128), nullable=False)
     description = Column(Text, nullable=True)
-    category = Column(String(64), nullable=False)  # authentication, access_control, network, etc.
+    category = Column(
+        String(64), nullable=False
+    )  # authentication, access_control, network, etc.
 
     # Policy configuration
     policy_type = Column(String(32), default="custom")  # builtin, custom
@@ -685,4 +709,53 @@ class SecurityPolicy(Base):
     created_by = Column(String(64), nullable=True)
     updated_by = Column(String(64), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# =============================================================================
+# Code Sync Models (Issue #741: Phase 7 - Scheduled Updates)
+# =============================================================================
+
+
+class ScheduleTargetType(str, enum.Enum):
+    """Schedule target type enumeration."""
+
+    ALL = "all"
+    SPECIFIC = "specific"
+    TAG = "tag"
+
+
+class UpdateSchedule(Base):
+    """Scheduled code sync configuration.
+
+    Allows administrators to configure automatic code updates at specific
+    times using cron expressions for maintenance windows and automated rollouts.
+    """
+
+    __tablename__ = "update_schedules"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False)
+    cron_expression = Column(String(100), nullable=False)  # e.g., "0 2 * * *"
+    enabled = Column(Boolean, default=True, nullable=False)
+
+    # Target configuration
+    target_type = Column(String(20), default=ScheduleTargetType.ALL.value)
+    target_nodes = Column(JSON, nullable=True)  # List of node_ids or tag names
+
+    # Sync options
+    restart_strategy = Column(
+        String(20), default="graceful"
+    )  # graceful, immediate, manual
+    restart_after_sync = Column(Boolean, default=True)
+
+    # Execution tracking
+    last_run = Column(DateTime, nullable=True)
+    next_run = Column(DateTime, nullable=True)
+    last_run_status = Column(String(20), nullable=True)  # success, failed, partial
+    last_run_message = Column(Text, nullable=True)
+
+    # Metadata
+    created_by = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

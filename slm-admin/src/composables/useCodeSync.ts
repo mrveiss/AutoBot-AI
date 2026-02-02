@@ -96,6 +96,51 @@ export interface FleetSyncOptions {
   restart?: boolean
 }
 
+// Issue #741 Phase 7: Schedule types
+export interface UpdateSchedule {
+  id: number
+  name: string
+  cron_expression: string
+  enabled: boolean
+  target_type: 'all' | 'specific' | 'tag'
+  target_nodes: string[] | null
+  restart_strategy: string
+  restart_after_sync: boolean
+  last_run: string | null
+  next_run: string | null
+  last_run_status: string | null
+  last_run_message: string | null
+  created_at: string
+  created_by: string | null
+}
+
+export interface ScheduleCreateRequest {
+  name: string
+  cron_expression: string
+  enabled?: boolean
+  target_type?: 'all' | 'specific' | 'tag'
+  target_nodes?: string[]
+  restart_strategy?: string
+  restart_after_sync?: boolean
+}
+
+export interface ScheduleUpdateRequest {
+  name?: string
+  cron_expression?: string
+  enabled?: boolean
+  target_type?: 'all' | 'specific' | 'tag'
+  target_nodes?: string[]
+  restart_strategy?: string
+  restart_after_sync?: boolean
+}
+
+export interface ScheduleRunResponse {
+  success: boolean
+  message: string
+  schedule_id: number
+  job_id: string | null
+}
+
 // =============================================================================
 // Composable
 // =============================================================================
@@ -124,6 +169,7 @@ export function useCodeSync() {
 
   const status = ref<CodeSyncStatus | null>(null)
   const pendingNodes = ref<PendingNode[]>([])
+  const schedules = ref<UpdateSchedule[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
   const lastRefresh = ref<Date | null>(null)
@@ -377,9 +423,140 @@ export function useCodeSync() {
   function reset(): void {
     status.value = null
     pendingNodes.value = []
+    schedules.value = []
     loading.value = false
     error.value = null
     lastRefresh.value = null
+  }
+
+  // ===========================================================================
+  // Schedule Methods (Issue #741 - Phase 7)
+  // ===========================================================================
+
+  /**
+   * Fetch all update schedules.
+   */
+  async function fetchSchedules(): Promise<UpdateSchedule[]> {
+    try {
+      const response = await client.get<UpdateSchedule[]>('/code-sync/schedules')
+      schedules.value = response.data
+      return response.data
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to fetch schedules'
+      if (axios.isAxiosError(e) && e.response?.data?.detail) {
+        error.value = e.response.data.detail
+      }
+      return []
+    }
+  }
+
+  /**
+   * Create a new update schedule.
+   */
+  async function createSchedule(
+    schedule: ScheduleCreateRequest
+  ): Promise<UpdateSchedule | null> {
+    loading.value = true
+    error.value = null
+
+    try {
+      const response = await client.post<UpdateSchedule>(
+        '/code-sync/schedules',
+        schedule
+      )
+      await fetchSchedules()
+      return response.data
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to create schedule'
+      if (axios.isAxiosError(e) && e.response?.data?.detail) {
+        error.value = e.response.data.detail
+      }
+      return null
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
+   * Update an existing schedule.
+   */
+  async function updateSchedule(
+    id: number,
+    update: ScheduleUpdateRequest
+  ): Promise<UpdateSchedule | null> {
+    loading.value = true
+    error.value = null
+
+    try {
+      const response = await client.put<UpdateSchedule>(
+        `/code-sync/schedules/${id}`,
+        update
+      )
+      await fetchSchedules()
+      return response.data
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to update schedule'
+      if (axios.isAxiosError(e) && e.response?.data?.detail) {
+        error.value = e.response.data.detail
+      }
+      return null
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
+   * Delete a schedule.
+   */
+  async function deleteSchedule(id: number): Promise<boolean> {
+    loading.value = true
+    error.value = null
+
+    try {
+      await client.delete(`/code-sync/schedules/${id}`)
+      await fetchSchedules()
+      return true
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to delete schedule'
+      if (axios.isAxiosError(e) && e.response?.data?.detail) {
+        error.value = e.response.data.detail
+      }
+      return false
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
+   * Toggle a schedule's enabled state.
+   */
+  async function toggleSchedule(id: number, enabled: boolean): Promise<boolean> {
+    const result = await updateSchedule(id, { enabled })
+    return result !== null
+  }
+
+  /**
+   * Manually trigger a schedule to run now.
+   */
+  async function runSchedule(id: number): Promise<ScheduleRunResponse | null> {
+    loading.value = true
+    error.value = null
+
+    try {
+      const response = await client.post<ScheduleRunResponse>(
+        `/code-sync/schedules/${id}/run`
+      )
+      await fetchSchedules()
+      return response.data
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to run schedule'
+      if (axios.isAxiosError(e) && e.response?.data?.detail) {
+        error.value = e.response.data.detail
+      }
+      return null
+    } finally {
+      loading.value = false
+    }
   }
 
   // =============================================================================
@@ -390,6 +567,7 @@ export function useCodeSync() {
     // State (readonly to prevent external mutation)
     status: readonly(status),
     pendingNodes: readonly(pendingNodes),
+    schedules: readonly(schedules),
     loading: readonly(loading),
     error: readonly(error),
     lastRefresh: readonly(lastRefresh),
@@ -412,5 +590,13 @@ export function useCodeSync() {
     getRecentJobs,
     clearError,
     reset,
+
+    // Schedule methods (Issue #741 - Phase 7)
+    fetchSchedules,
+    createSchedule,
+    updateSchedule,
+    deleteSchedule,
+    toggleSchedule,
+    runSchedule,
   }
 }

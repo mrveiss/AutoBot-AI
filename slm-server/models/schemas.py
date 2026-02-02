@@ -1422,3 +1422,74 @@ class CodeVersionNotificationResponse(BaseModel):
     new_version: str
     nodes_notified: int = 0
     outdated_nodes: int = 0
+
+
+# =============================================================================
+# Schedule Schemas (Issue #741 - Phase 7)
+# =============================================================================
+
+
+class ScheduleTargetType(str, Enum):
+    """Schedule target type enumeration."""
+
+    ALL = "all"
+    SPECIFIC = "specific"
+    TAG = "tag"
+
+
+class ScheduleCreate(BaseModel):
+    """Request to create a new update schedule."""
+
+    name: str = Field(..., min_length=1, max_length=100)
+    cron_expression: str = Field(..., min_length=9, max_length=100)
+    enabled: bool = True
+    target_type: str = Field(default="all", pattern="^(all|specific|tag)$")
+    target_nodes: Optional[List[str]] = None
+    restart_strategy: str = Field(
+        default="graceful", pattern="^(immediate|graceful|manual)$"
+    )
+    restart_after_sync: bool = True
+
+
+class ScheduleUpdate(BaseModel):
+    """Request to update an existing schedule."""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    cron_expression: Optional[str] = Field(None, min_length=9, max_length=100)
+    enabled: Optional[bool] = None
+    target_type: Optional[str] = Field(None, pattern="^(all|specific|tag)$")
+    target_nodes: Optional[List[str]] = None
+    restart_strategy: Optional[str] = Field(
+        None, pattern="^(immediate|graceful|manual)$"
+    )
+    restart_after_sync: Optional[bool] = None
+
+
+class ScheduleResponse(BaseModel):
+    """Schedule details response."""
+
+    id: int
+    name: str
+    cron_expression: str
+    enabled: bool
+    target_type: str
+    target_nodes: Optional[List[str]] = None
+    restart_strategy: str
+    restart_after_sync: bool
+    last_run: Optional[datetime] = None
+    next_run: Optional[datetime] = None
+    last_run_status: Optional[str] = None
+    last_run_message: Optional[str] = None
+    created_at: datetime
+    created_by: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class ScheduleRunResponse(BaseModel):
+    """Response from manual schedule trigger."""
+
+    success: bool
+    message: str
+    schedule_id: int
+    job_id: Optional[str] = None

@@ -11,8 +11,15 @@
  */
 
 import { ref, onMounted, computed } from 'vue'
-import { useCodeSync, type PendingNode, type SyncOptions } from '@/composables/useCodeSync'
+import {
+  useCodeSync,
+  type PendingNode,
+  type SyncOptions,
+  type UpdateSchedule,
+  type ScheduleCreateRequest,
+} from '@/composables/useCodeSync'
 import { createLogger } from '@/utils/debugUtils'
+import ScheduleModal from '@/components/ScheduleModal.vue'
 
 const logger = createLogger('CodeSyncView')
 const codeSync = useCodeSync()
@@ -25,6 +32,11 @@ const selectedNodes = ref<Set<string>>(new Set())
 const syncStrategy = ref<'immediate' | 'graceful' | 'manual'>('graceful')
 const restartAfterSync = ref(true)
 const syncingNodeId = ref<string | null>(null)
+
+// Schedule state (Issue #741 - Phase 7)
+const showScheduleModal = ref(false)
+const editingSchedule = ref<UpdateSchedule | null>(null)
+const runningScheduleId = ref<number | null>(null)
 
 // =============================================================================
 // Computed Properties
@@ -127,6 +139,83 @@ async function handleSyncAll(): Promise<void> {
 }
 
 // =============================================================================
+// Schedule Methods (Issue #741 - Phase 7)
+// =============================================================================
+
+function openCreateScheduleModal(): void {
+  editingSchedule.value = null
+  showScheduleModal.value = true
+}
+
+function openEditScheduleModal(schedule: UpdateSchedule): void {
+  editingSchedule.value = schedule
+  showScheduleModal.value = true
+}
+
+function closeScheduleModal(): void {
+  showScheduleModal.value = false
+  editingSchedule.value = null
+}
+
+async function handleSaveSchedule(scheduleData: ScheduleCreateRequest): Promise<void> {
+  if (editingSchedule.value) {
+    // Update existing
+    await codeSync.updateSchedule(editingSchedule.value.id, scheduleData)
+    logger.info('Schedule updated:', editingSchedule.value.id)
+  } else {
+    // Create new
+    await codeSync.createSchedule(scheduleData)
+    logger.info('Schedule created:', scheduleData.name)
+  }
+  closeScheduleModal()
+}
+
+async function handleDeleteSchedule(schedule: UpdateSchedule): Promise<void> {
+  if (!confirm(`Delete schedule "${schedule.name}"?`)) return
+
+  const success = await codeSync.deleteSchedule(schedule.id)
+  if (success) {
+    logger.info('Schedule deleted:', schedule.id)
+  }
+}
+
+async function handleToggleSchedule(schedule: UpdateSchedule): Promise<void> {
+  await codeSync.toggleSchedule(schedule.id, !schedule.enabled)
+  logger.info('Schedule toggled:', schedule.id, !schedule.enabled)
+}
+
+async function handleRunSchedule(schedule: UpdateSchedule): Promise<void> {
+  runningScheduleId.value = schedule.id
+  const result = await codeSync.runSchedule(schedule.id)
+  runningScheduleId.value = null
+
+  if (result?.success) {
+    logger.info('Schedule run started:', schedule.id, result.job_id)
+  }
+}
+
+function formatNextRun(dateStr: string | null): string {
+  if (!dateStr) return 'Not scheduled'
+  const date = new Date(dateStr)
+  return date.toLocaleString()
+}
+
+function describeCron(expression: string): string {
+  // Common cron patterns
+  const patterns: Record<string, string> = {
+    '0 * * * *': 'Every hour',
+    '0 0 * * *': 'Daily at midnight',
+    '0 2 * * *': 'Daily at 2:00 AM',
+    '0 0 * * 0': 'Every Sunday',
+    '0 2 * * 0': 'Every Sunday at 2 AM',
+    '0 0 1 * *': 'First day of month',
+    '0 2 1 * *': 'First day at 2 AM',
+    '0 */6 * * *': 'Every 6 hours',
+  }
+  return patterns[expression] || expression
+}
+
+// =============================================================================
 // Lifecycle
 // =============================================================================
 
@@ -134,6 +223,7 @@ onMounted(async () => {
   logger.info('CodeSyncView mounted')
   await codeSync.fetchStatus()
   await codeSync.fetchPendingNodes()
+  await codeSync.fetchSchedules()
 })
 </script>
 
@@ -369,5 +459,126 @@ onMounted(async () => {
         </tbody>
       </table>
     </div>
+
+    <!-- Schedules Section (Issue #741 - Phase 7) -->
+    <div class="card overflow-hidden mt-6">
+      <!-- Section Header -->
+      <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-gray-800">Scheduled Updates</h2>
+          <p class="text-sm text-gray-500 mt-0.5">Configure automatic code sync schedules</p>
+        </div>
+        <button
+          @click="openCreateScheduleModal"
+          class="btn btn-primary flex items-center gap-2"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          Add Schedule
+        </button>
+      </div>
+
+      <!-- Empty State -->
+      <div
+        v-if="codeSync.schedules.value.length === 0"
+        class="px-6 py-12 text-center"
+      >
+        <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">No schedules configured</h3>
+        <p class="text-gray-500 mb-4">
+          Create a schedule to automatically sync code at specific times.
+        </p>
+        <button
+          @click="openCreateScheduleModal"
+          class="btn btn-primary"
+        >
+          Create First Schedule
+        </button>
+      </div>
+
+      <!-- Schedules Table -->
+      <table v-if="codeSync.schedules.value.length > 0" class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Schedule</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Next Run</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          <tr v-for="schedule in codeSync.schedules.value" :key="schedule.id">
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="text-sm font-medium text-gray-900">{{ schedule.name }}</div>
+              <div class="text-xs text-gray-500">
+                {{ schedule.target_type === 'all' ? 'All outdated nodes' : `${schedule.target_nodes?.length || 0} specific nodes` }}
+              </div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="text-sm text-gray-900">{{ describeCron(schedule.cron_expression) }}</div>
+              <div class="text-xs text-gray-500 font-mono">{{ schedule.cron_expression }}</div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {{ formatNextRun(schedule.next_run) }}
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <button
+                @click="handleToggleSchedule(schedule)"
+                :class="[
+                  'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                  schedule.enabled ? 'bg-primary-600' : 'bg-gray-200',
+                ]"
+              >
+                <span
+                  :class="[
+                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                    schedule.enabled ? 'translate-x-5' : 'translate-x-0',
+                  ]"
+                />
+              </button>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">
+              <div class="flex items-center gap-2">
+                <button
+                  @click="handleRunSchedule(schedule)"
+                  :disabled="runningScheduleId === schedule.id"
+                  class="text-primary-600 hover:text-primary-800 font-medium disabled:opacity-50"
+                  title="Run Now"
+                >
+                  {{ runningScheduleId === schedule.id ? 'Running...' : 'Run' }}
+                </button>
+                <span class="text-gray-300">|</span>
+                <button
+                  @click="openEditScheduleModal(schedule)"
+                  class="text-gray-600 hover:text-gray-800 font-medium"
+                >
+                  Edit
+                </button>
+                <span class="text-gray-300">|</span>
+                <button
+                  @click="handleDeleteSchedule(schedule)"
+                  class="text-red-600 hover:text-red-800 font-medium"
+                >
+                  Delete
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Schedule Modal -->
+    <ScheduleModal
+      :show="showScheduleModal"
+      :schedule="editingSchedule"
+      :nodes="codeSync.pendingNodes.value"
+      @close="closeScheduleModal"
+      @save="handleSaveSchedule"
+    />
   </div>
 </template>
