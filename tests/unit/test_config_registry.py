@@ -320,3 +320,106 @@ class TestConfigRegistrySections:
         # After refresh with no Redis value and no env, key should not be in cache
         # (since we don't cache defaults)
         assert "clear.key" not in ConfigRegistry._cache
+
+
+class TestConfigRegistryDefaults:
+    """ConfigRegistry defaults integration tests."""
+
+    def test_get_uses_registry_defaults(self):
+        """Test that get() uses registry defaults when no value found."""
+        from src.config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+
+        with patch.object(ConfigRegistry, "_fetch_from_redis", return_value=None):
+            with patch.dict(os.environ, {}, clear=True):
+                # Should get default from registry_defaults
+                result = ConfigRegistry.get("redis.host")
+                assert result == "172.16.168.23"
+
+    def test_get_uses_registry_defaults_for_port(self):
+        """Test that get() uses registry defaults for port values."""
+        from src.config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+
+        with patch.object(ConfigRegistry, "_fetch_from_redis", return_value=None):
+            with patch.dict(os.environ, {}, clear=True):
+                result = ConfigRegistry.get("redis.port")
+                assert result == "6379"
+
+    def test_registry_default_overridden_by_redis(self):
+        """Test that Redis value takes precedence over registry default."""
+        from src.config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+
+        with patch.object(
+            ConfigRegistry, "_fetch_from_redis", return_value="10.0.0.99"
+        ):
+            result = ConfigRegistry.get("redis.host")
+            assert result == "10.0.0.99"
+
+    def test_registry_default_overridden_by_env(self):
+        """Test that environment variable takes precedence over registry default."""
+        from src.config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+
+        with patch.object(ConfigRegistry, "_fetch_from_redis", return_value=None):
+            with patch.dict(os.environ, {"AUTOBOT_REDIS_HOST": "env.host.com"}):
+                result = ConfigRegistry.get("redis.host")
+                assert result == "env.host.com"
+
+    def test_caller_default_used_when_no_registry_default(self):
+        """Test that caller's default is used when key not in registry defaults."""
+        from src.config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+
+        with patch.object(ConfigRegistry, "_fetch_from_redis", return_value=None):
+            with patch.dict(os.environ, {}, clear=True):
+                # Key not in registry_defaults, should use caller's default
+                result = ConfigRegistry.get("custom.unknown.key", "caller_default")
+                assert result == "caller_default"
+
+    def test_vm_ip_defaults_available(self):
+        """Test that VM IP defaults are available."""
+        from src.config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+
+        with patch.object(ConfigRegistry, "_fetch_from_redis", return_value=None):
+            with patch.dict(os.environ, {}, clear=True):
+                assert ConfigRegistry.get("vm.main") == "172.16.168.20"
+                assert ConfigRegistry.get("vm.frontend") == "172.16.168.21"
+                assert ConfigRegistry.get("vm.npu") == "172.16.168.22"
+                assert ConfigRegistry.get("vm.redis") == "172.16.168.23"
+                assert ConfigRegistry.get("vm.aistack") == "172.16.168.24"
+                assert ConfigRegistry.get("vm.browser") == "172.16.168.25"
+
+    def test_llm_defaults_available(self):
+        """Test that LLM defaults are available."""
+        from src.config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+
+        with patch.object(ConfigRegistry, "_fetch_from_redis", return_value=None):
+            with patch.dict(os.environ, {}, clear=True):
+                assert ConfigRegistry.get("llm.default_model") == "mistral:7b-instruct"
+                assert (
+                    ConfigRegistry.get("llm.embedding_model")
+                    == "nomic-embed-text:latest"
+                )
+
+    def test_timeout_defaults_available(self):
+        """Test that timeout defaults are available."""
+        from src.config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+
+        with patch.object(ConfigRegistry, "_fetch_from_redis", return_value=None):
+            with patch.dict(os.environ, {}, clear=True):
+                assert ConfigRegistry.get("timeout.http") == "30"
+                assert ConfigRegistry.get("timeout.redis") == "5"
+                assert ConfigRegistry.get("timeout.llm") == "120"

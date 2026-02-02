@@ -12,7 +12,7 @@ Eliminates duplicate _get_ssot_config() functions across the codebase.
 ARCHITECTURE:
 - Lazy Redis connection (only when first accessed)
 - Local cache with TTL (default 60s)
-- Four-tier fallback: Cache -> Redis -> Environment -> Default
+- Five-tier fallback: Cache -> Redis -> Environment -> Registry Defaults -> Caller Default
 
 USAGE:
     from src.config.registry import ConfigRegistry
@@ -45,7 +45,7 @@ class ConfigRegistry:
     Thread-safe singleton that provides:
     - Lazy Redis connection (deferred until first access)
     - Local caching with configurable TTL
-    - Graceful fallback chain: Cache -> Redis -> Env -> Default
+    - Graceful fallback chain: Cache -> Redis -> Env -> Registry Defaults -> Caller Default
     """
 
     _redis_client = None
@@ -86,7 +86,14 @@ class ConfigRegistry:
                 cls._update_cache(key, env_value)
                 return env_value
 
-            # Return default (don't cache defaults)
+            # Try registry defaults
+            from src.config.registry_defaults import get_default
+
+            registry_default = get_default(key)
+            if registry_default is not None:
+                return registry_default
+
+            # Return caller's default (don't cache defaults)
             return default
 
         except Exception as e:
