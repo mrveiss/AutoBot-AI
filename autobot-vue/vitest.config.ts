@@ -6,8 +6,13 @@ import viteConfig from './vite.config'
 const reporters = process.env.CI ? ['junit', 'default'] : ['default']
 
 // Issue #156 Fix: Type assertion to resolve mergeConfig/defineConfig type conflict
+// Vite 7 fix: resolve viteConfig if it is a function
+const resolvedViteConfig = typeof viteConfig === 'function'
+  ? viteConfig({ command: 'serve', mode: 'test' })
+  : viteConfig
+
 export default mergeConfig(
-  viteConfig as UserConfig,
+  resolvedViteConfig as UserConfig,
   defineConfig({
     test: {
       // Test environment setup
