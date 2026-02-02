@@ -6,7 +6,6 @@ to be applied across the codebase.
 """
 
 import logging
-import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Request
@@ -22,6 +21,7 @@ from src.exceptions import (
     ValidationError,
     get_error_code,
 )
+from src.utils.request_utils import generate_request_id
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -30,11 +30,6 @@ logger = logging.getLogger(__name__)
 class ChatRequest(BaseModel):
     message: str
     chat_id: Optional[str] = None
-
-
-def generate_request_id() -> str:
-    """Generate a unique request ID for tracking."""
-    return str(uuid.uuid4())
 
 
 @router.get("/chats")
