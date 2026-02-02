@@ -15,22 +15,22 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
+from fastapi import FastAPI
+
+from backend.knowledge_factory import get_or_create_knowledge_base
+from backend.services.slm_client import init_slm_client, shutdown_slm_client
 from backend.type_defs.common import Metadata
+from src.chat_history import ChatHistoryManager
+from src.chat_workflow import ChatWorkflowManager
+from src.config import UnifiedConfigManager
+from src.security_layer import SecurityLayer
+from src.utils.background_llm_sync import BackgroundLLMSync
 
 # Bounded thread pool to prevent unbounded thread creation
 # Default asyncio executor creates min(32, cpu_count + 4) threads per invocation
 # This shared executor limits total threads across all run_in_executor calls
 MAX_WORKER_THREADS = 16
 _executor: ThreadPoolExecutor | None = None
-
-from fastapi import FastAPI
-
-from backend.knowledge_factory import get_or_create_knowledge_base
-from src.chat_history import ChatHistoryManager
-from src.chat_workflow import ChatWorkflowManager
-from src.security_layer import SecurityLayer
-from src.config import UnifiedConfigManager
-from src.utils.background_llm_sync import BackgroundLLMSync
 
 logger = logging.getLogger(__name__)
 
@@ -118,9 +118,7 @@ async def _init_conversation_file_manager(app: FastAPI) -> None:
         await conversation_file_manager.initialize()
         app.state.conversation_file_manager = conversation_file_manager
         await update_app_state("conversation_file_manager", conversation_file_manager)
-        logger.info(
-            "✅ [ 40%] Conversation Files DB: Database initialized and verified"
-        )
+        logger.info("✅ [ 40%] Conversation Files DB: Database initialized and verified")
     except Exception as conv_file_error:
         logger.error(
             f"❌ CRITICAL: Conversation files database initialization failed: {conv_file_error}"
@@ -149,9 +147,7 @@ async def _init_chat_workflow_manager(app: FastAPI) -> None:
         logger.error(
             f"❌ CRITICAL: Chat workflow manager initialization failed: {chat_error}"
         )
-        raise RuntimeError(
-            f"Chat workflow manager initialization failed: {chat_error}"
-        )
+        raise RuntimeError(f"Chat workflow manager initialization failed: {chat_error}")
 
 
 async def initialize_critical_services(app: FastAPI):
@@ -171,7 +167,7 @@ async def initialize_critical_services(app: FastAPI):
     """
     await update_app_state_multi(
         initialization_status="phase1",
-        initialization_message="Initializing critical services..."
+        initialization_message="Initializing critical services...",
     )
     logger.info("=== PHASE 1: Critical Services Initialization ===")
 
@@ -262,12 +258,16 @@ async def _warmup_npu_connection():
             logger.info(
                 "✅ [ 82%] NPU Warmup: Connection ready (%.1fms, %d dimensions)",
                 result.get("warmup_time_ms", 0),
-                result.get("embedding_dimensions", 0)
+                result.get("embedding_dimensions", 0),
             )
         elif result["status"] == "npu_unavailable":
-            logger.info("🔄 [ 82%] NPU Warmup: NPU unavailable, using fallback embeddings")
+            logger.info(
+                "🔄 [ 82%] NPU Warmup: NPU unavailable, using fallback embeddings"
+            )
         else:
-            logger.warning("⚠️ [ 82%] NPU Warmup: %s", result.get("message", "Unknown status"))
+            logger.warning(
+                "⚠️ [ 82%] NPU Warmup: %s", result.get("message", "Unknown status")
+            )
 
     except Exception as warmup_error:
         logger.warning("NPU warmup failed: %s", warmup_error)
@@ -311,17 +311,23 @@ async def _init_log_forwarding():
         forwarder = await get_forwarder()
 
         if forwarder.auto_start and forwarder.destinations:
-            logger.info("✅ [ 86%] Log Forwarding: Auto-start enabled, starting service...")
+            logger.info(
+                "✅ [ 86%] Log Forwarding: Auto-start enabled, starting service..."
+            )
             success = forwarder.start()
             if success:
                 logger.info(
                     "✅ [ 86%] Log Forwarding: Started with %d destination(s)",
-                    len(forwarder.destinations)
+                    len(forwarder.destinations),
                 )
             else:
-                logger.warning("⚠️ [ 86%] Log Forwarding: Failed to start (non-critical)")
+                logger.warning(
+                    "⚠️ [ 86%] Log Forwarding: Failed to start (non-critical)"
+                )
         elif forwarder.auto_start:
-            logger.info("✅ [ 86%] Log Forwarding: Auto-start enabled but no destinations configured")
+            logger.info(
+                "✅ [ 86%] Log Forwarding: Auto-start enabled but no destinations configured"
+            )
         else:
             logger.info("✅ [ 86%] Log Forwarding: Auto-start disabled, skipping")
 
@@ -343,7 +349,9 @@ async def _init_slm_reconciler(app: FastAPI):
     node health and triggers remediation actions. Wires up WebSocket callbacks
     for real-time event broadcasting.
     """
-    logger.info("✅ [ 92%] SLM Reconciler: Skipped (moved to SLM server at 172.16.168.19)")
+    logger.info(
+        "✅ [ 92%] SLM Reconciler: Skipped (moved to SLM server at 172.16.168.19)"
+    )
     # REMOVED as part of Issue #729 layer separation
     # SLM server now runs its own reconciler - no longer initialized from backend
     return
@@ -454,6 +462,26 @@ async def _init_memory_graph(app: FastAPI):
         app.state.entity_extractor = None
 
 
+async def _init_slm_client():
+    """
+    Initialize SLM client for agent configuration (NON-CRITICAL).
+
+    Issue #760: Connects to SLM server for agent LLM config caching.
+    Falls back gracefully if SLM is unavailable.
+    """
+    logger.info("✅ [ 89%] SLM Client: Initializing SLM client for agent configs...")
+    try:
+        slm_url = os.getenv("SLM_URL", "http://172.16.168.19:8000")
+        slm_token = os.getenv("SLM_AUTH_TOKEN")
+
+        await init_slm_client(slm_url, slm_token)
+        logger.info("✅ [ 89%] SLM Client: Connected to SLM server at %s", slm_url)
+    except Exception as slm_error:
+        logger.warning(
+            "SLM client initialization failed (continuing without): %s", slm_error
+        )
+
+
 async def _init_background_llm_sync(app: FastAPI):
     """
     Initialize background LLM sync and AI Stack client (NON-CRITICAL).
@@ -504,7 +532,7 @@ async def initialize_background_services(app: FastAPI):
     try:
         await update_app_state_multi(
             initialization_status="phase2",
-            initialization_message="Loading knowledge base and AI models..."
+            initialization_message="Loading knowledge base and AI models...",
         )
         logger.info("=== PHASE 2: Background Services Initialization ===")
 
@@ -513,14 +541,14 @@ async def initialize_background_services(app: FastAPI):
         await _init_npu_worker_websocket()
         await _warmup_npu_connection()  # Issue #165: Warm up NPU for fast embeddings
         await _init_memory_graph(app)
+        await _init_slm_client()  # Issue #760: SLM client for agent configs
         await _init_background_llm_sync(app)
         await _init_documentation_watcher()  # Issue #165: Real-time doc sync
         await _init_log_forwarding()  # Issue #553: Auto-start log forwarding if configured
         await _init_slm_reconciler(app)  # Issue #726: SLM health reconciler
 
         await update_app_state_multi(
-            initialization_status="ready",
-            initialization_message="All services ready"
+            initialization_status="ready", initialization_message="All services ready"
         )
         logger.info("✅ [100%] PHASE 2 COMPLETE: All background services initialized")
 
@@ -545,10 +573,20 @@ async def cleanup_services(app: FastAPI):
 
         # Issue #165: Stop documentation watcher
         try:
-            from backend.services.documentation_watcher import stop_documentation_watcher
+            from backend.services.documentation_watcher import (
+                stop_documentation_watcher,
+            )
+
             await stop_documentation_watcher()
         except ImportError:
             pass  # Watcher not available
+
+        # Issue #760: Shutdown SLM client
+        try:
+            await shutdown_slm_client()
+            logger.info("✅ SLM client shutdown")
+        except Exception as slm_error:
+            logger.warning("SLM client shutdown failed: %s", slm_error)
 
         # Issue #726: Stop SLM reconciler
         # REMOVED as part of Issue #729 - SLM moved to slm-server
@@ -585,10 +623,14 @@ def create_lifespan_manager():
 
         # Create bounded thread pool executor to prevent thread explosion
         # This replaces the default unbounded asyncio executor
-        _executor = ThreadPoolExecutor(max_workers=MAX_WORKER_THREADS, thread_name_prefix="autobot_worker")
+        _executor = ThreadPoolExecutor(
+            max_workers=MAX_WORKER_THREADS, thread_name_prefix="autobot_worker"
+        )
         loop = asyncio.get_event_loop()
         loop.set_default_executor(_executor)
-        logger.info("🧵 Bounded thread pool configured (max %d workers)", MAX_WORKER_THREADS)
+        logger.info(
+            "🧵 Bounded thread pool configured (max %d workers)", MAX_WORKER_THREADS
+        )
 
         # Phase 1: Critical initialization (BLOCKING)
         await initialize_critical_services(app)
