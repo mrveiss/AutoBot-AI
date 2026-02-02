@@ -6,26 +6,24 @@
 Model Constants for AutoBot - SINGLE SOURCE OF TRUTH
 =====================================================
 
-All LLM model configuration is centralized here. This module now reads
-from the SSOT (Single Source of Truth) configuration system.
+All LLM model configuration is centralized here.
 
-MIGRATION (Issue #602):
-    All values are now sourced from src/config/ssot_config.py which reads
-    from the .env file. Hardcoded fallbacks are only used if SSOT fails.
+MIGRATION (Issue #763):
+    All values now use ConfigRegistry with five-tier fallback:
+    Cache → Redis → Environment → Registry Defaults → Caller Default
 
 Usage:
     from src.constants.model_constants import ModelConstants
 
-    # Use default model (reads from SSOT/.env)
+    # Use default model
     model_name = ModelConstants.DEFAULT_OLLAMA_MODEL
 
-    # Use model endpoints (reads from SSOT/.env)
+    # Use model endpoints
     ollama_url = ModelConstants.get_ollama_url()
 
-    # Preferred: Use SSOT directly
-    from src.config.ssot_config import config
-    model_name = config.llm.default_model
-    ollama_url = config.ollama_url
+    # Preferred: Use ConfigRegistry directly
+    from src.config.registry import ConfigRegistry
+    model_name = ConfigRegistry.get("llm.default_model", "mistral:7b-instruct")
 """
 
 import os
@@ -33,27 +31,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Optional
 
-
-def _get_ssot_config():
-    """
-    Get SSOT config with graceful fallback.
-
-    Returns the SSOT config instance. If SSOT fails to load (e.g., during
-    early imports or missing dependencies), returns None and callers should
-    use hardcoded fallbacks.
-    """
-    try:
-        from src.config.ssot_config import get_config
-
-        return get_config()
-    except Exception:
-        # During early initialization or if .env is missing, SSOT may fail
-        return None
-
-
-# Get config once at module load time for efficiency
-_ssot = _get_ssot_config()
-
+from src.config.registry import ConfigRegistry
 
 # =============================================================================
 # FALLBACK DEFAULTS - DEFINED ONCE, USED EVERYWHERE
@@ -71,9 +49,8 @@ class ModelConstants:
     """
     LLM Model configuration constants for AutoBot.
 
-    SSOT Migration (Issue #602):
-        All models now read from SSOT config (.env file) with hardcoded
-        fallbacks only used if .env is missing or malformed.
+    SSOT Migration (Issue #763):
+        All models now use ConfigRegistry with five-tier fallback.
 
     Usage remains unchanged for backward compatibility:
         from src.constants.model_constants import ModelConstants
@@ -81,50 +58,32 @@ class ModelConstants:
     """
 
     # =========================================================================
-    # DEFAULT MODELS - Read from SSOT/.env, fallback to constants above
+    # DEFAULT MODELS - Read from ConfigRegistry with fallbacks
     # =========================================================================
 
-    DEFAULT_OLLAMA_MODEL: str = (
-        _ssot.llm.default_model
-        if _ssot
-        else os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", FALLBACK_MODEL)
+    DEFAULT_OLLAMA_MODEL: str = ConfigRegistry.get("llm.default_model", FALLBACK_MODEL)
+    DEFAULT_OPENAI_MODEL: str = ConfigRegistry.get(
+        "llm.openai_model", FALLBACK_OPENAI_MODEL
     )
-    DEFAULT_OPENAI_MODEL: str = os.getenv("AUTOBOT_OPENAI_MODEL", FALLBACK_OPENAI_MODEL)
-    DEFAULT_ANTHROPIC_MODEL: str = os.getenv(
-        "AUTOBOT_ANTHROPIC_MODEL", FALLBACK_ANTHROPIC_MODEL
+    DEFAULT_ANTHROPIC_MODEL: str = ConfigRegistry.get(
+        "llm.anthropic_model", FALLBACK_ANTHROPIC_MODEL
     )
-    DEFAULT_GOOGLE_MODEL: str = os.getenv("AUTOBOT_GOOGLE_MODEL", FALLBACK_GOOGLE_MODEL)
+    DEFAULT_GOOGLE_MODEL: str = ConfigRegistry.get(
+        "llm.google_model", FALLBACK_GOOGLE_MODEL
+    )
 
-    # Additional model types from SSOT
-    EMBEDDING_MODEL: str = (
-        _ssot.llm.embedding_model
-        if _ssot
-        else os.getenv("AUTOBOT_EMBEDDING_MODEL", "nomic-embed-text:latest")
+    # Additional model types
+    EMBEDDING_MODEL: str = ConfigRegistry.get(
+        "llm.embedding_model", "nomic-embed-text:latest"
     )
-    CLASSIFICATION_MODEL: str = (
-        _ssot.llm.classification_model
-        if _ssot
-        else os.getenv("AUTOBOT_CLASSIFICATION_MODEL", FALLBACK_MODEL)
+    CLASSIFICATION_MODEL: str = ConfigRegistry.get(
+        "llm.classification_model", FALLBACK_MODEL
     )
-    REASONING_MODEL: str = (
-        _ssot.llm.reasoning_model
-        if _ssot
-        else os.getenv("AUTOBOT_REASONING_MODEL", FALLBACK_MODEL)
-    )
-    RAG_MODEL: str = (
-        _ssot.llm.rag_model
-        if _ssot
-        else os.getenv("AUTOBOT_RAG_MODEL", FALLBACK_MODEL)
-    )
-    CODING_MODEL: str = (
-        _ssot.llm.coding_model
-        if _ssot
-        else os.getenv("AUTOBOT_CODING_MODEL", FALLBACK_MODEL)
-    )
-    ORCHESTRATOR_MODEL: str = (
-        _ssot.llm.orchestrator_model
-        if _ssot
-        else os.getenv("AUTOBOT_ORCHESTRATOR_MODEL", FALLBACK_MODEL)
+    REASONING_MODEL: str = ConfigRegistry.get("llm.reasoning_model", FALLBACK_MODEL)
+    RAG_MODEL: str = ConfigRegistry.get("llm.rag_model", FALLBACK_MODEL)
+    CODING_MODEL: str = ConfigRegistry.get("llm.coding_model", FALLBACK_MODEL)
+    ORCHESTRATOR_MODEL: str = ConfigRegistry.get(
+        "llm.orchestrator_model", FALLBACK_MODEL
     )
 
     # =========================================================================
@@ -137,10 +96,8 @@ class ModelConstants:
     PROVIDER_GOOGLE: str = "google"
     PROVIDER_LM_STUDIO: str = "lm_studio"
 
-    # Current provider from SSOT
-    CURRENT_PROVIDER: str = (
-        _ssot.llm.provider if _ssot else os.getenv("AUTOBOT_LLM_PROVIDER", "ollama")
-    )
+    # Current provider from ConfigRegistry
+    CURRENT_PROVIDER: str = ConfigRegistry.get("llm.provider", "ollama")
 
     # =========================================================================
     # MODEL ENDPOINTS
@@ -151,18 +108,12 @@ class ModelConstants:
         """
         Get Ollama service URL.
 
-        SSOT Migration (Issue #602):
-            Prefer using SSOT directly:
-                from src.config.ssot_config import config
-                url = config.ollama_url
+        Issue #763: Now uses ConfigRegistry with NetworkConstants fallback.
         """
-        if _ssot:
-            return _ssot.ollama_url
-        # Fallback to environment/network constants
         from src.constants.network_constants import NetworkConstants
 
-        host = os.getenv("AUTOBOT_OLLAMA_HOST", NetworkConstants.AI_STACK_VM_IP)
-        port = os.getenv("AUTOBOT_OLLAMA_PORT", str(NetworkConstants.OLLAMA_PORT))
+        host = ConfigRegistry.get("vm.ollama", NetworkConstants.AI_STACK_VM_IP)
+        port = ConfigRegistry.get("port.ollama", str(NetworkConstants.OLLAMA_PORT))
         return f"http://{host}:{port}"
 
     @staticmethod
@@ -206,8 +157,8 @@ class ModelConfig:
     DEFAULT_MAX_TOKENS: int = 2048
     DEFAULT_NUM_CTX: int = 4096  # Ollama context window
 
-    # Timeouts (in seconds) - prefer SSOT for these
-    DEFAULT_TIMEOUT: int = _ssot.timeout.llm if _ssot else 30
+    # Timeouts (in seconds) - Issue #763: Now uses ConfigRegistry
+    DEFAULT_TIMEOUT: int = int(ConfigRegistry.get("timeout.llm", "30"))
     LONG_GENERATION_TIMEOUT: int = 120
 
     # Retry settings
@@ -245,10 +196,9 @@ def get_default_model(provider: Optional[str] = None) -> str:
     """
     Get the default model for a specific provider or the system default.
 
-    SSOT Migration (Issue #602):
-        Prefer using SSOT directly:
-            from src.config.ssot_config import config
-            model = config.llm.default_model
+    Issue #763: Prefer using ConfigRegistry directly:
+        from src.config.registry import ConfigRegistry
+        model = ConfigRegistry.get("llm.default_model", "mistral:7b-instruct")
 
     Issue #380: Added @lru_cache since models don't change at runtime.
 
@@ -275,10 +225,10 @@ def get_model_endpoint(provider: str) -> str:
     """
     Get the endpoint URL for a specific provider.
 
-    SSOT Migration (Issue #602):
-        Prefer using SSOT directly:
-            from src.config.ssot_config import config
-            url = config.ollama_url
+    Issue #763: Prefer using ConfigRegistry directly:
+        from src.config.registry import ConfigRegistry
+        host = ConfigRegistry.get("vm.ollama", "172.16.168.24")
+        port = ConfigRegistry.get("port.ollama", "11434")
 
     Issue #380: Added @lru_cache since endpoints don't change at runtime.
 
