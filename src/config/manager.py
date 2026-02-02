@@ -5,15 +5,15 @@
 """
 Core UnifiedConfigManager using composition of specialized modules.
 
-SSOT Migration (Issue #602):
-    This manager now integrates with the SSOT config system (ssot_config.py).
-    The SSOT config provides infrastructure values (VMs, ports, LLM models),
-    while UnifiedConfigManager continues to manage runtime config (config.yaml).
+SSOT Migration (Issue #763):
+    Infrastructure values (VMs, ports, LLM models) are now accessed via
+    ConfigRegistry with five-tier fallback:
+    Cache → Redis → Environment → Registry Defaults → Caller Default
 
-    For infrastructure values, prefer SSOT directly:
-        from src.config.ssot_config import config
-        redis_host = config.vm.redis
-        default_model = config.llm.default_model
+    For infrastructure values, use ConfigRegistry:
+        from src.config.registry import ConfigRegistry
+        redis_host = ConfigRegistry.get("vm.redis", "172.16.168.23")
+        default_model = ConfigRegistry.get("llm.default_model", "mistral:7b-instruct")
 """
 
 import asyncio
@@ -37,16 +37,6 @@ from src.constants.path_constants import PATH
 logger = logging.getLogger(__name__)
 
 
-def _get_ssot_config():
-    """Get SSOT config with graceful fallback."""
-    try:
-        from src.config.ssot_config import get_config
-
-        return get_config()
-    except Exception:
-        return None
-
-
 class UnifiedConfigManager(
     SyncOperationsMixin,
     AsyncOperationsMixin,
@@ -60,10 +50,10 @@ class UnifiedConfigManager(
     Unified configuration manager combining sync/async operations,
     file management, caching, and model management.
 
-    SSOT Migration (Issue #602):
-        This class now integrates with SSOT config. Infrastructure values
-        (VMs, ports, models) are sourced from SSOT, while runtime config
-        (user preferences, feature flags) comes from config.yaml.
+    SSOT Migration (Issue #763):
+        Infrastructure values (VMs, ports, models) are now accessed via
+        ConfigRegistry. Runtime config (user preferences, feature flags)
+        continues to come from config.yaml.
 
     Uses composition pattern with multiple mixins for different functionality areas.
     """
@@ -79,9 +69,6 @@ class UnifiedConfigManager(
         self.config_dir = self.project_root / config_dir
         self.base_config_file = self.config_dir / "config.yaml"
         self.settings_file = self.config_dir / "settings.json"
-
-        # SSOT config integration (Issue #602)
-        self._ssot = _get_ssot_config()
 
         # Async settings
         self.settings = settings or UnifiedConfigSettings()
@@ -104,28 +91,12 @@ class UnifiedConfigManager(
         # Ensure config directory exists
         self.config_dir.mkdir(parents=True, exist_ok=True)
 
-    @property
-    def ssot(self):
-        """
-        Get SSOT config for infrastructure values.
-
-        SSOT Migration (Issue #602):
-            Access infrastructure config (VMs, ports, LLM) via this property.
-            Example:
-                manager.ssot.vm.redis  # Redis VM IP
-                manager.ssot.llm.default_model  # Default LLM model
-        """
-        return self._ssot
-
     def _reload_config(self) -> None:
-        """Reload configuration from files"""
+        """Reload configuration from files."""
         self._config = load_configuration(
             self.config_dir, self.base_config_file, self.settings_file
         )
         self._sync_cache_timestamp = time.time()
-
-        # Also refresh SSOT reference
-        self._ssot = _get_ssot_config()
 
 
 # Create singleton instance with thread-safe locking (Issue #613)
