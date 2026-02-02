@@ -56,6 +56,28 @@ export interface FleetSyncResponse {
   nodes_queued: number
 }
 
+// Issue #741 Phase 8: Fleet sync job tracking types
+export interface FleetSyncNodeStatus {
+  node_id: string
+  hostname: string
+  status: 'pending' | 'syncing' | 'success' | 'failed'
+  message: string | null
+  started_at: string | null
+  completed_at: string | null
+}
+
+export interface FleetSyncJobStatus {
+  job_id: string
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  strategy: string
+  total_nodes: number
+  completed_nodes: number
+  failed_nodes: number
+  nodes: FleetSyncNodeStatus[]
+  created_at: string
+  completed_at: string | null
+}
+
 export interface RefreshResponse {
   success: boolean
   latest_version?: string
@@ -238,8 +260,11 @@ export function useCodeSync() {
         payload
       )
 
-      // Refresh pending nodes and status after sync
-      if (response.data.success) {
+      // Set error if sync failed
+      if (!response.data.success) {
+        error.value = response.data.message
+      } else {
+        // Refresh pending nodes and status after successful sync
         await fetchPendingNodes()
         await fetchStatus()
       }
@@ -279,8 +304,11 @@ export function useCodeSync() {
         payload
       )
 
-      // Refresh status after fleet sync is queued
-      if (response.data.success) {
+      // Set error if fleet sync failed
+      if (!response.data.success) {
+        error.value = response.data.message
+      } else {
+        // Refresh status after fleet sync is queued
         await fetchStatus()
       }
 
@@ -294,6 +322,45 @@ export function useCodeSync() {
       return { success: false, message: error.value || message, job_id: '', nodes_queued: 0 }
     } finally {
       loading.value = false
+    }
+  }
+
+  /**
+   * Get status of a fleet sync job.
+   *
+   * @param jobId - The job ID returned from syncFleet
+   */
+  async function getJobStatus(jobId: string): Promise<FleetSyncJobStatus | null> {
+    try {
+      const response = await client.get<FleetSyncJobStatus>(
+        `/code-sync/fleet/jobs/${jobId}`
+      )
+      return response.data
+    } catch (e) {
+      if (axios.isAxiosError(e) && e.response?.data?.detail) {
+        error.value = e.response.data.detail
+      }
+      return null
+    }
+  }
+
+  /**
+   * List recent fleet sync jobs.
+   *
+   * @param limit - Maximum number of jobs to return (default: 10)
+   */
+  async function getRecentJobs(limit = 10): Promise<FleetSyncJobStatus[]> {
+    try {
+      const response = await client.get<FleetSyncJobStatus[]>(
+        '/code-sync/fleet/jobs',
+        { params: { limit } }
+      )
+      return response.data
+    } catch (e) {
+      if (axios.isAxiosError(e) && e.response?.data?.detail) {
+        error.value = e.response.data.detail
+      }
+      return []
     }
   }
 
@@ -341,6 +408,8 @@ export function useCodeSync() {
     fetchPendingNodes,
     syncNode,
     syncFleet,
+    getJobStatus,
+    getRecentJobs,
     clearError,
     reset,
   }

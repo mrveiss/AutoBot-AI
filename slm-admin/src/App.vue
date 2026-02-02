@@ -3,9 +3,16 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+/**
+ * Main App Component
+ *
+ * Issue #741: Added UpdateNotification for code sync alerts.
+ */
+
 import { onMounted, watch, computed } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import Sidebar from '@/components/common/Sidebar.vue'
+import UpdateNotification from '@/components/UpdateNotification.vue'
 import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
@@ -64,9 +71,13 @@ onMounted(async () => {
   <template v-else>
     <div class="flex min-h-screen bg-gray-100">
       <Sidebar />
-      <main class="flex-1 overflow-auto">
-        <RouterView />
-      </main>
+      <div class="flex-1 flex flex-col overflow-hidden">
+        <!-- Issue #741: Top-bar notification for code updates -->
+        <UpdateNotification />
+        <main class="flex-1 overflow-auto">
+          <RouterView />
+        </main>
+      </div>
     </div>
   </template>
 </template>

@@ -17,6 +17,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
 
+from sqlalchemy import select
+
+from models.database import Setting
+from services.database import db_service
+
 logger = logging.getLogger(__name__)
 
 # Configuration
@@ -46,22 +51,17 @@ class CodeDistributor:
         self.package_dir.mkdir(parents=True, exist_ok=True)
 
     async def get_current_commit(self) -> Optional[str]:
-        """Get current commit hash from repository."""
+        """Get current commit hash from database settings."""
         try:
-            proc = await asyncio.create_subprocess_exec(
-                "git",
-                "-C",
-                str(self.repo_path),
-                "rev-parse",
-                "HEAD",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, _ = await proc.communicate()
-            if proc.returncode == 0:
-                return stdout.decode().strip()
+            async with db_service.session() as db:
+                result = await db.execute(
+                    select(Setting).where(Setting.key == "slm_agent_latest_commit")
+                )
+                setting = result.scalar_one_or_none()
+                if setting:
+                    return setting.value
         except Exception as e:
-            logger.error("Failed to get commit hash: %s", e)
+            logger.error("Failed to get commit hash from database: %s", e)
         return None
 
     async def build_package(self, commit_hash: Optional[str] = None) -> Optional[Path]:
