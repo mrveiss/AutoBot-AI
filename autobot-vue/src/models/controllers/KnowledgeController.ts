@@ -254,6 +254,100 @@ export class KnowledgeController {
     }
   }
 
+  // Issue #747: Bulk update operations
+  async bulkUpdateCategory(documentIds: string[], category: string): Promise<void> {
+    try {
+      this.knowledgeStore.setLoading(true)
+
+      // Update each document's category
+      await Promise.all(
+        documentIds.map(id => knowledgeRepository.updateDocument(id, { category }))
+      )
+
+      // Update local store
+      documentIds.forEach(id => {
+        this.knowledgeStore.updateDocument(id, { category })
+      })
+
+      await this.refreshStats()
+
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      this.appStore.setGlobalError(`Failed to update categories: ${errorMessage}`)
+      throw error
+    } finally {
+      this.knowledgeStore.setLoading(false)
+    }
+  }
+
+  async bulkAddTags(documentIds: string[], tagsToAdd: string[]): Promise<void> {
+    try {
+      this.knowledgeStore.setLoading(true)
+
+      // Get current documents and add new tags
+      const updates = documentIds.map(id => {
+        const doc = this.knowledgeStore.documents.find(d => d.id === id)
+        if (!doc) return null
+
+        const currentTags = doc.tags || []
+        const newTags = [...new Set([...currentTags, ...tagsToAdd])]
+
+        return { id, tags: newTags }
+      }).filter(Boolean) as Array<{ id: string; tags: string[] }>
+
+      // Update each document
+      await Promise.all(
+        updates.map(({ id, tags }) => knowledgeRepository.updateDocument(id, { tags }))
+      )
+
+      // Update local store
+      updates.forEach(({ id, tags }) => {
+        this.knowledgeStore.updateDocument(id, { tags })
+      })
+
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      this.appStore.setGlobalError(`Failed to add tags: ${errorMessage}`)
+      throw error
+    } finally {
+      this.knowledgeStore.setLoading(false)
+    }
+  }
+
+  async bulkRemoveTags(documentIds: string[], tagsToRemove: string[]): Promise<void> {
+    try {
+      this.knowledgeStore.setLoading(true)
+
+      // Get current documents and remove specified tags
+      const updates = documentIds.map(id => {
+        const doc = this.knowledgeStore.documents.find(d => d.id === id)
+        if (!doc) return null
+
+        const currentTags = doc.tags || []
+        const newTags = currentTags.filter(tag => !tagsToRemove.includes(tag))
+
+        return { id, tags: newTags }
+      }).filter(Boolean) as Array<{ id: string; tags: string[] }>
+
+      // Update each document
+      await Promise.all(
+        updates.map(({ id, tags }) => knowledgeRepository.updateDocument(id, { tags }))
+      )
+
+      // Update local store
+      updates.forEach(({ id, tags }) => {
+        this.knowledgeStore.updateDocument(id, { tags })
+      })
+
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      this.appStore.setGlobalError(`Failed to remove tags: ${errorMessage}`)
+      throw error
+    } finally {
+      this.knowledgeStore.setLoading(false)
+    }
+  }
+
   // Category operations
   async loadCategories(): Promise<void> {
     try {

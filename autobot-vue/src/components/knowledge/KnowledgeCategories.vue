@@ -25,6 +25,14 @@
           :style="{ borderColor: category.color }"
           @click="selectMainCategory(category.id)"
         >
+          <!-- Issue #747: Edit button -->
+          <button
+            class="category-edit-btn"
+            title="Edit category"
+            @click="openCategoryEdit(category, $event)"
+          >
+            <i class="fas fa-pencil-alt"></i>
+          </button>
           <div class="category-icon-large" :style="{ backgroundColor: category.color }">
             <i :class="category.icon"></i>
           </div>
@@ -128,6 +136,14 @@
         </div>
       </div>
     </BaseModal>
+
+    <!-- Issue #747: Category Edit Modal -->
+    <CategoryEditModal
+      v-model="showCategoryEditModal"
+      :category="categoryToEdit"
+      @updated="handleCategoryUpdated"
+      @deleted="handleCategoryDeleted"
+    />
     </div>
 
   </div>
@@ -141,6 +157,7 @@ import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
 import KnowledgeBrowser from './KnowledgeBrowser.vue'
 import DocumentChangeFeed from './DocumentChangeFeed.vue'
+import CategoryEditModal from './modals/CategoryEditModal.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -180,6 +197,10 @@ const showCategoryDocuments = ref(false)
 const selectedCategoryPath = ref('')
 const showDocumentModal = ref(false)
 const currentDocument = ref<any>(null)
+
+// Issue #747: Category edit modal state
+const showCategoryEditModal = ref(false)
+const categoryToEdit = ref<any>(null)
 
 // Computed properties
 const systemCategories = computed(() => {
@@ -265,6 +286,30 @@ const getSelectedCategoryName = () => {
   return category?.name || 'Knowledge Browser'
 }
 
+// Issue #747: Category edit/delete handlers
+const openCategoryEdit = (category: any, event: Event) => {
+  event.stopPropagation() // Prevent card click from triggering
+  categoryToEdit.value = category
+  showCategoryEditModal.value = true
+}
+
+const handleCategoryUpdated = (updatedCategory: any) => {
+  // Update the category in the list
+  const index = mainCategories.value.findIndex(c => c.id === updatedCategory.id)
+  if (index !== -1) {
+    mainCategories.value[index] = { ...mainCategories.value[index], ...updatedCategory }
+  }
+  showCategoryEditModal.value = false
+  categoryToEdit.value = null
+}
+
+const handleCategoryDeleted = (categoryId: string) => {
+  // Remove the category from the list
+  mainCategories.value = mainCategories.value.filter(c => c.id !== categoryId)
+  showCategoryEditModal.value = false
+  categoryToEdit.value = null
+}
+
 // Load data on mount
 onMounted(() => {
   getKBStats()
@@ -336,6 +381,35 @@ onUnmounted(() => {
   text-align: center;
   position: relative;
   overflow: hidden;
+}
+
+/* Issue #747: Category edit button */
+.category-edit-btn {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: 0.375rem;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.category-edit-btn:hover {
+  background: var(--color-info);
+  color: var(--text-on-primary);
+}
+
+.main-category-card:hover .category-edit-btn {
+  opacity: 1;
 }
 
 .main-category-card::before {

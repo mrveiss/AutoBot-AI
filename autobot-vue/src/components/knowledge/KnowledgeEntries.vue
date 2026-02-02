@@ -48,40 +48,37 @@
 
     <!-- Manage Tab Content -->
     <div v-if="manageTab === 'manage'" class="entries-content">
+    <!-- Search Bar -->
     <div class="entries-header">
-      <div class="header-actions">
-        <div class="search-box">
-          <i class="fas fa-search search-icon"></i>
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Search entries..."
-            class="search-input"
-            @input="filterEntries"
-          />
-        </div>
-        <BaseButton
-          variant="primary"
-          size="sm"
-          @click="exportSelected"
-          :disabled="selectedEntries.length === 0"
-          class="action-btn"
-        >
-          <i class="fas fa-download"></i>
-          Export ({{ selectedEntries.length }})
-        </BaseButton>
-        <BaseButton
-          variant="danger"
-          size="sm"
-          @click="deleteSelected"
-          :disabled="selectedEntries.length === 0"
-          class="action-btn danger"
-        >
-          <i class="fas fa-trash"></i>
-          Delete ({{ selectedEntries.length }})
-        </BaseButton>
+      <div class="search-box">
+        <i class="fas fa-search search-icon"></i>
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Search entries..."
+          class="search-input"
+          @input="filterEntries"
+        />
       </div>
+      <span class="total-count">{{ filteredDocuments.length }} entries</span>
     </div>
+
+    <!-- Issue #747: Bulk Actions Toolbar -->
+    <BulkActionsToolbar
+      :selected-count="selectedEntries.length"
+      :total-count="filteredDocuments.length"
+      :page-count="paginatedEntries.length"
+      :all-page-selected="allSelected"
+      :all-matching-selected="allMatchingSelected"
+      @select-all-page="selectAllPage"
+      @select-all-matching="selectAllMatching"
+      @clear-selection="clearSelection"
+      @export="handleExport"
+      @change-category="openBulkCategoryChange"
+      @add-tags="openBulkAddTags"
+      @remove-tags="openBulkRemoveTags"
+      @delete="deleteSelected"
+    />
 
     <!-- Filter bar -->
     <div class="filter-bar">
@@ -391,6 +388,14 @@
         </BaseButton>
       </template>
     </BaseModal>
+
+    <!-- Issue #747: Bulk Edit Modal -->
+    <BulkEditModal
+      v-model="showBulkEditModal"
+      :mode="bulkEditMode"
+      :selected-entries="selectedBulkEditEntries"
+      @confirm="handleBulkEditConfirm"
+    />
     </div>
   </div>
 </template>
@@ -408,6 +413,9 @@ import ManPageManager from '@/components/ManPageManager.vue'
 import FailedVectorizationsManager from '@/components/knowledge/FailedVectorizationsManager.vue'
 import DeduplicationManager from '@/components/knowledge/DeduplicationManager.vue'
 import SessionOrphanManager from '@/components/knowledge/SessionOrphanManager.vue'
+import BulkActionsToolbar from '@/components/knowledge/BulkActionsToolbar.vue'
+import BulkEditModal from '@/components/knowledge/modals/BulkEditModal.vue'
+import type { BulkEditMode, BulkEditEntry, ExportFormat } from '@/components/knowledge/modals/BulkEditModal.vue'
 import { formatDate, formatDateTime } from '@/utils/formatHelpers'
 import { getDocumentTypeIcon } from '@/utils/iconMappings'
 import { useDebounce } from '@/composables/useDebounce'
@@ -438,6 +446,11 @@ const itemsPerPage = 20
 
 // Selection state
 const selectedEntries = ref<string[]>([])
+const allMatchingSelected = ref(false)
+
+// Bulk edit state (Issue #747)
+const showBulkEditModal = ref(false)
+const bulkEditMode = ref<BulkEditMode>('category')
 
 // Dialog state
 const { isOpen: showDialog, open: openDialog, close: closeDialogModal } = useModal({ id: 'entry-dialog' })
@@ -508,6 +521,18 @@ const allSelected = computed(() =>
   paginatedEntries.value.length > 0 &&
   paginatedEntries.value.every(entry => selectedEntries.value.includes(entry.id))
 )
+
+// Issue #747: Bulk edit computed properties
+const selectedBulkEditEntries = computed<BulkEditEntry[]>(() => {
+  return store.documents
+    .filter(doc => selectedEntries.value.includes(doc.id))
+    .map(doc => ({
+      id: doc.id,
+      title: doc.title || 'Untitled',
+      category: doc.category,
+      tags: doc.tags
+    }))
+})
 
 // Methods
 const filterEntries = () => {
@@ -593,28 +618,163 @@ const deleteSelected = async () => {
 }
 
 const exportSelected = async () => {
+  handleExport('json')
+}
+
+// Issue #747: Enhanced export with multiple formats
+const handleExport = (format: ExportFormat) => {
   const entries = store.documents.filter(doc =>
     selectedEntries.value.includes(doc.id)
   )
 
-  const data = entries.map(entry => ({
-    title: entry.title,
-    content: entry.content,
-    category: entry.category,
-    type: entry.type,
-    source: entry.source,
-    tags: entry.tags,
-    createdAt: entry.createdAt,
-    updatedAt: entry.updatedAt
-  }))
+  let content: string
+  let mimeType: string
+  let extension: string
 
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  switch (format) {
+    case 'markdown':
+      content = generateMarkdownExport(entries)
+      mimeType = 'text/markdown'
+      extension = 'md'
+      break
+    case 'csv':
+      content = generateCsvExport(entries)
+      mimeType = 'text/csv'
+      extension = 'csv'
+      break
+    case 'json':
+    default:
+      content = JSON.stringify(entries.map(entry => ({
+        title: entry.title,
+        content: entry.content,
+        category: entry.category,
+        type: entry.type,
+        source: entry.source,
+        tags: entry.tags,
+        createdAt: entry.createdAt,
+        updatedAt: entry.updatedAt
+      })), null, 2)
+      mimeType = 'application/json'
+      extension = 'json'
+  }
+
+  downloadFile(content, `knowledge-export-${new Date().toISOString().split('T')[0]}.${extension}`, mimeType)
+}
+
+const generateMarkdownExport = (entries: KnowledgeDocument[]): string => {
+  const lines: string[] = ['# Knowledge Base Export', '']
+  lines.push(`> Exported on ${new Date().toLocaleDateString()}`)
+  lines.push(`> ${entries.length} entries`)
+  lines.push('')
+
+  entries.forEach((entry, index) => {
+    lines.push(`## ${index + 1}. ${entry.title || 'Untitled'}`)
+    lines.push('')
+    lines.push(`**Category:** ${entry.category}`)
+    lines.push(`**Type:** ${entry.type}`)
+    lines.push(`**Source:** ${entry.source}`)
+    if (entry.tags.length > 0) {
+      lines.push(`**Tags:** ${entry.tags.join(', ')}`)
+    }
+    lines.push(`**Created:** ${formatDateTime(entry.createdAt)}`)
+    lines.push(`**Updated:** ${formatDateTime(entry.updatedAt)}`)
+    lines.push('')
+    lines.push('### Content')
+    lines.push('')
+    lines.push(entry.content)
+    lines.push('')
+    lines.push('---')
+    lines.push('')
+  })
+
+  return lines.join('\n')
+}
+
+const generateCsvExport = (entries: KnowledgeDocument[]): string => {
+  const headers = ['Title', 'Category', 'Type', 'Source', 'Tags', 'Created', 'Updated', 'Content']
+  const rows = entries.map(entry => [
+    escapeCsvField(entry.title || 'Untitled'),
+    escapeCsvField(entry.category),
+    escapeCsvField(entry.type),
+    escapeCsvField(entry.source),
+    escapeCsvField(entry.tags.join('; ')),
+    escapeCsvField(formatDateTime(entry.createdAt)),
+    escapeCsvField(formatDateTime(entry.updatedAt)),
+    escapeCsvField(entry.content.substring(0, 500) + (entry.content.length > 500 ? '...' : ''))
+  ])
+
+  return [headers.join(','), ...rows.map(row => row.join(','))].join('\n')
+}
+
+const escapeCsvField = (field: string): string => {
+  if (field.includes(',') || field.includes('"') || field.includes('\n')) {
+    return `"${field.replace(/"/g, '""')}"`
+  }
+  return field
+}
+
+const downloadFile = (content: string, filename: string, mimeType: string) => {
+  const blob = new Blob([content], { type: mimeType })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `knowledge-export-${new Date().toISOString().split('T')[0]}.json`
+  a.download = filename
   a.click()
   URL.revokeObjectURL(url)
+}
+
+// Issue #747: Bulk actions toolbar handlers
+const selectAllPage = () => {
+  allMatchingSelected.value = false
+  paginatedEntries.value.forEach(entry => {
+    if (!selectedEntries.value.includes(entry.id)) {
+      selectedEntries.value.push(entry.id)
+    }
+  })
+}
+
+const selectAllMatching = () => {
+  allMatchingSelected.value = true
+  selectedEntries.value = filteredDocuments.value.map(doc => doc.id)
+}
+
+const clearSelection = () => {
+  selectedEntries.value = []
+  allMatchingSelected.value = false
+}
+
+const openBulkCategoryChange = () => {
+  bulkEditMode.value = 'category'
+  showBulkEditModal.value = true
+}
+
+const openBulkAddTags = () => {
+  bulkEditMode.value = 'tags-add'
+  showBulkEditModal.value = true
+}
+
+const openBulkRemoveTags = () => {
+  bulkEditMode.value = 'tags-remove'
+  showBulkEditModal.value = true
+}
+
+const handleBulkEditConfirm = async (payload: { mode: BulkEditMode; value: string | string[] }) => {
+  try {
+    const ids = selectedEntries.value
+
+    if (payload.mode === 'category') {
+      await controller.bulkUpdateCategory(ids, payload.value as string)
+    } else if (payload.mode === 'tags-add') {
+      await controller.bulkAddTags(ids, payload.value as string[])
+    } else if (payload.mode === 'tags-remove') {
+      await controller.bulkRemoveTags(ids, payload.value as string[])
+    }
+
+    // Clear selection after successful bulk edit
+    clearSelection()
+  } catch (error) {
+    logger.error('Bulk edit failed:', error)
+  }
 }
 
 const switchToEdit = () => {
@@ -712,10 +872,10 @@ watch([debouncedSearchQuery, filterCategory, filterType], () => {
   color: var(--text-primary);
 }
 
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-3);
+.total-count {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .search-box {
