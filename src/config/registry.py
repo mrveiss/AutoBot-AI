@@ -146,3 +146,69 @@ class ConfigRegistry:
             cls._cache.clear()
             cls._cache_timestamps.clear()
             cls._redis_client = None
+
+    @classmethod
+    def get_section(cls, prefix: str) -> Dict[str, Any]:
+        """
+        Get all config values matching a prefix as a dictionary.
+
+        Args:
+            prefix: Key prefix (e.g., "redis" returns all "redis.*" keys)
+
+        Returns:
+            Dictionary with keys stripped of prefix
+        """
+        result = {}
+        prefix_dot = f"{prefix}."
+
+        with cls._lock:
+            for key, value in cls._cache.items():
+                if key.startswith(prefix_dot):
+                    short_key = key[len(prefix_dot) :]
+                    result[short_key] = value
+
+        return result
+
+    @classmethod
+    def set(cls, key: str, value: Any) -> bool:
+        """
+        Set configuration value in Redis and local cache.
+
+        Args:
+            key: Config key in dot notation
+            value: Value to store
+
+        Returns:
+            True if successfully stored in Redis, False otherwise
+        """
+        try:
+            redis_client = cls._get_redis()
+            if redis_client is not None:
+                redis_key = f"{REDIS_CONFIG_PREFIX}{key}"
+                redis_client.set(redis_key, str(value))
+
+            cls._update_cache(key, value)
+            return True
+        except Exception as e:
+            logger.warning("Config set failed for %s: %s", key, e)
+            cls._update_cache(key, value)  # Still cache locally
+            return False
+
+    @classmethod
+    def refresh(cls, key: str) -> Any:
+        """
+        Force refresh a key from Redis, bypassing cache.
+
+        Args:
+            key: Config key to refresh
+
+        Returns:
+            Fresh value from Redis or None
+        """
+        with cls._lock:
+            if key in cls._cache:
+                del cls._cache[key]
+            if key in cls._cache_timestamps:
+                del cls._cache_timestamps[key]
+
+        return cls.get(key)

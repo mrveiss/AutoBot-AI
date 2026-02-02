@@ -199,3 +199,124 @@ class TestConfigRegistryCaching:
 
         assert "key1" not in ConfigRegistry._cache
         assert "key2" not in ConfigRegistry._cache
+
+
+class TestConfigRegistrySections:
+    """ConfigRegistry section operations tests."""
+
+    def test_get_section_returns_dict(self):
+        """Test that get_section returns a dictionary of matching keys."""
+        from src.config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+
+        # Pre-populate cache with section values
+        ConfigRegistry._cache = {
+            "redis.host": "172.16.168.23",
+            "redis.port": "6379",
+            "redis.database": "0",
+            "backend.port": "8001",
+        }
+        ConfigRegistry._cache_timestamps = {
+            k: time.time() for k in ConfigRegistry._cache
+        }
+
+        result = ConfigRegistry.get_section("redis")
+        assert result == {
+            "host": "172.16.168.23",
+            "port": "6379",
+            "database": "0",
+        }
+
+    def test_get_section_returns_empty_for_no_matches(self):
+        """Test that get_section returns empty dict when no keys match."""
+        from src.config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+
+        ConfigRegistry._cache = {
+            "redis.host": "172.16.168.23",
+        }
+        ConfigRegistry._cache_timestamps = {
+            k: time.time() for k in ConfigRegistry._cache
+        }
+
+        result = ConfigRegistry.get_section("nonexistent")
+        assert result == {}
+
+    def test_set_updates_cache(self):
+        """Test that set() updates the local cache."""
+        from src.config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+
+        # Mock Redis to avoid actual connection
+        with patch.object(ConfigRegistry, "_get_redis", return_value=None):
+            result = ConfigRegistry.set("test.key", "test_value")
+
+        assert result is True
+        assert ConfigRegistry._cache["test.key"] == "test_value"
+        assert "test.key" in ConfigRegistry._cache_timestamps
+
+    def test_set_stores_in_redis(self):
+        """Test that set() stores value in Redis."""
+        from src.config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+
+        mock_redis = MagicMock()
+        with patch.object(ConfigRegistry, "_get_redis", return_value=mock_redis):
+            result = ConfigRegistry.set("redis.host", "10.0.0.1")
+
+        assert result is True
+        mock_redis.set.assert_called_once_with("autobot:config:redis.host", "10.0.0.1")
+
+    def test_set_returns_false_on_redis_error(self):
+        """Test that set() returns False but still caches on Redis error."""
+        from src.config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+
+        mock_redis = MagicMock()
+        mock_redis.set.side_effect = Exception("Connection failed")
+        with patch.object(ConfigRegistry, "_get_redis", return_value=mock_redis):
+            result = ConfigRegistry.set("fail.key", "value")
+
+        assert result is False
+        # Value should still be cached locally
+        assert ConfigRegistry._cache["fail.key"] == "value"
+
+    def test_refresh_bypasses_cache(self):
+        """Test that refresh() bypasses cache and fetches fresh from Redis."""
+        from src.config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+
+        # Pre-populate cache with old value
+        ConfigRegistry._cache["refresh.key"] = "old_value"
+        ConfigRegistry._cache_timestamps["refresh.key"] = time.time()
+
+        with patch.object(
+            ConfigRegistry, "_fetch_from_redis", return_value="new_value"
+        ) as mock_fetch:
+            result = ConfigRegistry.refresh("refresh.key")
+
+        assert result == "new_value"
+        mock_fetch.assert_called_once()
+
+    def test_refresh_clears_cache_entry(self):
+        """Test that refresh() clears the cache entry before fetching."""
+        from src.config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+
+        ConfigRegistry._cache["clear.key"] = "cached"
+        ConfigRegistry._cache_timestamps["clear.key"] = time.time()
+
+        with patch.object(ConfigRegistry, "_fetch_from_redis", return_value=None):
+            with patch.dict(os.environ, {}, clear=True):
+                ConfigRegistry.refresh("clear.key")
+
+        # After refresh with no Redis value and no env, key should not be in cache
+        # (since we don't cache defaults)
+        assert "clear.key" not in ConfigRegistry._cache
