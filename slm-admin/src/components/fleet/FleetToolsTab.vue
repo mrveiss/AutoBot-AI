@@ -8,39 +8,24 @@
  *
  * Provides diagnostic and management tools for fleet operations.
  * Extracted from ToolsView for use as a tab in Fleet Overview.
+ *
  * Related to Issue #729.
+ * Refactored in Issue #737 Phase 2: Removed duplicate tools (Network Test,
+ * Health Check, Service Manager) that overlap with NodeCard/Panel functionality.
  */
 
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
+import { useNodeServices } from '@/composables/useNodeServices'
 
 const fleetStore = useFleetStore()
 const authStore = useAuthStore()
 
-// Tool definitions
+// Tool definitions - reduced to 3 unique tools per Issue #737
+// Removed: network-test (use NodeCard "Test"), health-check (use NodeLifecyclePanel),
+//          service-restart (use NodeServicesPanel)
 const tools = [
-  {
-    id: 'network-test',
-    name: 'Network Connectivity Test',
-    description: 'Test SSH and network connectivity to nodes',
-    icon: 'network',
-    available: true,
-  },
-  {
-    id: 'redis-cli',
-    name: 'Redis CLI',
-    description: 'Execute Redis commands on the cluster',
-    icon: 'database',
-    available: true,
-  },
-  {
-    id: 'service-restart',
-    name: 'Service Manager',
-    description: 'Start, stop, or restart services on nodes',
-    icon: 'refresh',
-    available: true,
-  },
   {
     id: 'log-viewer',
     name: 'Service Logs',
@@ -49,10 +34,10 @@ const tools = [
     available: true,
   },
   {
-    id: 'health-check',
-    name: 'Deep Health Check',
-    description: 'Run comprehensive health diagnostics',
-    icon: 'heart',
+    id: 'redis-cli',
+    name: 'Redis CLI',
+    description: 'Execute Redis commands on the cluster',
+    icon: 'database',
     available: true,
   },
   {
@@ -76,6 +61,9 @@ const redisCommand = ref<string>('PING')
 const shellCommand = ref<string>('uptime')
 const logLines = ref<number>(100)
 
+// Node services composable for log viewer (Issue #737)
+const nodeServices = useNodeServices(selectedNode)
+
 // Available nodes for selection
 const nodes = computed(() => fleetStore.nodeList)
 
@@ -97,81 +85,7 @@ function closeTool(): void {
   result.value = null
 }
 
-async function runNetworkTest(): Promise<void> {
-  if (!selectedNode.value) {
-    error.value = 'Please select a node'
-    return
-  }
-
-  loading.value = true
-  error.value = null
-  result.value = null
-
-  try {
-    const response = await fetch(`/api/nodes/test-connection`, {
-      method: 'POST',
-      headers: {
-        ...authStore.getAuthHeaders(),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        ip_address: selectedNodeDetails.value?.ip_address,
-        ssh_user: selectedNodeDetails.value?.ssh_user || 'autobot',
-        ssh_port: selectedNodeDetails.value?.ssh_port || 22,
-        auth_method: selectedNodeDetails.value?.auth_method || 'key',
-      }),
-    })
-
-    if (!response.ok) {
-      const err = await response.json()
-      throw new Error(err.detail || 'Connection test failed')
-    }
-
-    const data = await response.json()
-    result.value = data.success
-      ? `Connection successful!\n\nHost: ${data.hostname || 'unknown'}\nOS: ${data.os_info || 'unknown'}\nLatency: ${data.latency_ms || 'N/A'}ms`
-      : `Connection failed: ${data.error || 'Unknown error'}`
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Test failed'
-  } finally {
-    loading.value = false
-  }
-}
-
-async function runHealthCheck(): Promise<void> {
-  if (!selectedNode.value) {
-    error.value = 'Please select a node'
-    return
-  }
-
-  loading.value = true
-  error.value = null
-  result.value = null
-
-  try {
-    const response = await fetch(`/api/nodes/${selectedNode.value}/health`, {
-      headers: authStore.getAuthHeaders(),
-    })
-
-    if (!response.ok) {
-      throw new Error('Health check failed')
-    }
-
-    const data = await response.json()
-    result.value = `Health Check Results:\n\n` +
-      `Status: ${data.status || 'unknown'}\n` +
-      `CPU: ${data.cpu_percent?.toFixed(1) || 'N/A'}%\n` +
-      `Memory: ${data.memory_percent?.toFixed(1) || 'N/A'}%\n` +
-      `Disk: ${data.disk_percent?.toFixed(1) || 'N/A'}%\n` +
-      `Last Heartbeat: ${data.last_heartbeat || 'N/A'}\n\n` +
-      `Services:\n${(data.services || []).map((s: any) => `  - ${s.name}: ${s.status}`).join('\n') || '  No services found'}`
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Health check failed'
-  } finally {
-    loading.value = false
-  }
-}
-
+// Log viewer using useNodeServices composable (Issue #737)
 async function getServiceLogs(): Promise<void> {
   if (!selectedNode.value || !selectedService.value) {
     error.value = 'Please select a node and service'
@@ -183,55 +97,10 @@ async function getServiceLogs(): Promise<void> {
   result.value = null
 
   try {
-    const response = await fetch(
-      `/api/nodes/${selectedNode.value}/services/${selectedService.value}/logs?lines=${logLines.value}`,
-      { headers: authStore.getAuthHeaders() }
-    )
-
-    if (!response.ok) {
-      const err = await response.json()
-      throw new Error(err.detail || 'Failed to fetch logs')
-    }
-
-    const data = await response.json()
-    result.value = data.logs || 'No logs available'
+    const logs = await nodeServices.getLogs(selectedService.value, logLines.value)
+    result.value = logs || 'No logs available'
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to fetch logs'
-  } finally {
-    loading.value = false
-  }
-}
-
-async function serviceAction(action: 'start' | 'stop' | 'restart'): Promise<void> {
-  if (!selectedNode.value || !selectedService.value) {
-    error.value = 'Please select a node and service'
-    return
-  }
-
-  loading.value = true
-  error.value = null
-  result.value = null
-
-  try {
-    const response = await fetch(
-      `/api/nodes/${selectedNode.value}/services/${selectedService.value}/${action}`,
-      {
-        method: 'POST',
-        headers: authStore.getAuthHeaders(),
-      }
-    )
-
-    if (!response.ok) {
-      const err = await response.json()
-      throw new Error(err.detail || `Failed to ${action} service`)
-    }
-
-    const data = await response.json()
-    result.value = data.success
-      ? `Service ${action} successful!\n\n${data.message || ''}`
-      : `Service ${action} failed: ${data.message || 'Unknown error'}`
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : `Failed to ${action} service`
   } finally {
     loading.value = false
   }
@@ -347,27 +216,15 @@ async function runShellCommand(): Promise<void> {
       >
         <div class="flex items-start gap-4">
           <div class="p-3 bg-primary-100 rounded-lg">
-            <!-- Network icon -->
-            <svg v-if="tool.icon === 'network'" class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+            <!-- Document icon (log-viewer) -->
+            <svg v-if="tool.icon === 'document'" class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            <!-- Database icon -->
+            <!-- Database icon (redis-cli) -->
             <svg v-else-if="tool.icon === 'database'" class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
             </svg>
-            <!-- Refresh icon -->
-            <svg v-else-if="tool.icon === 'refresh'" class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            <!-- Document icon -->
-            <svg v-else-if="tool.icon === 'document'" class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <!-- Heart icon -->
-            <svg v-else-if="tool.icon === 'heart'" class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-            </svg>
-            <!-- Terminal icon -->
+            <!-- Terminal icon (ansible-runner) -->
             <svg v-else-if="tool.icon === 'terminal'" class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
@@ -399,112 +256,8 @@ async function runShellCommand(): Promise<void> {
 
       <!-- Panel Content -->
       <div class="p-6">
-        <!-- Network Test Tool -->
-        <div v-if="activeTool === 'network-test'" class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">Select Node</label>
-            <select
-              v-model="selectedNode"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            >
-              <option value="">-- Select a node --</option>
-              <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
-                {{ node.hostname }} ({{ node.ip_address }})
-              </option>
-            </select>
-          </div>
-          <button
-            @click="runNetworkTest"
-            :disabled="loading || !selectedNode"
-            class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center gap-2"
-          >
-            <svg v-if="loading" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            {{ loading ? 'Testing...' : 'Run Test' }}
-          </button>
-        </div>
-
-        <!-- Health Check Tool -->
-        <div v-else-if="activeTool === 'health-check'" class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">Select Node</label>
-            <select
-              v-model="selectedNode"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            >
-              <option value="">-- Select a node --</option>
-              <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
-                {{ node.hostname }} ({{ node.ip_address }})
-              </option>
-            </select>
-          </div>
-          <button
-            @click="runHealthCheck"
-            :disabled="loading || !selectedNode"
-            class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center gap-2"
-          >
-            <svg v-if="loading" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            {{ loading ? 'Checking...' : 'Run Health Check' }}
-          </button>
-        </div>
-
-        <!-- Service Manager Tool -->
-        <div v-else-if="activeTool === 'service-restart'" class="space-y-4">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Select Node</label>
-              <select
-                v-model="selectedNode"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              >
-                <option value="">-- Select a node --</option>
-                <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
-                  {{ node.hostname }} ({{ node.ip_address }})
-                </option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Service Name</label>
-              <input
-                type="text"
-                v-model="selectedService"
-                placeholder="e.g., autobot-agent, redis, nginx"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              />
-            </div>
-          </div>
-          <div class="flex gap-2">
-            <button
-              @click="serviceAction('start')"
-              :disabled="loading || !selectedNode || !selectedService"
-              class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-            >
-              Start
-            </button>
-            <button
-              @click="serviceAction('stop')"
-              :disabled="loading || !selectedNode || !selectedService"
-              class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-            >
-              Stop
-            </button>
-            <button
-              @click="serviceAction('restart')"
-              :disabled="loading || !selectedNode || !selectedService"
-              class="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors disabled:opacity-50"
-            >
-              Restart
-            </button>
-          </div>
-        </div>
-
         <!-- Log Viewer Tool -->
-        <div v-else-if="activeTool === 'log-viewer'" class="space-y-4">
+        <div v-if="activeTool === 'log-viewer'" class="space-y-4">
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">Select Node</label>

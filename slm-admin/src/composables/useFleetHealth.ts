@@ -6,11 +6,24 @@
  * Fleet Health Composable
  *
  * Provides aggregated fleet health state management.
+ *
+ * @deprecated Issue #737 Phase 2 - This composable is deprecated.
+ * Use the following specialized composables instead:
+ * - useNodeHealth: For individual node health monitoring with WebSocket
+ * - useNodeConnectionTest: For connection testing
+ * - useNodeServices: For service management
+ *
+ * This composable will be removed in a future release.
+ * Migrate to the fleet store (useFleetStore) for fleet-wide health aggregation.
  */
 
 import { ref, computed } from 'vue'
 import type { SLMNode, NodeHealth, FleetSummary, HealthStatus } from '@/types/slm'
 
+/**
+ * @deprecated Use useNodeHealth, useNodeConnectionTest, or useNodeServices instead.
+ * See Issue #737 for migration details.
+ */
 export function useFleetHealth() {
   const nodes = ref<Map<string, SLMNode>>(new Map())
   const healthData = ref<Map<string, NodeHealth>>(new Map())

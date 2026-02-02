@@ -6,6 +6,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useFleetStore } from '@/stores/fleet'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
+import { useNodeConnectionTest } from '@/composables/useNodeConnectionTest'
 import type { SLMNode, NodeRole, NodeHealth } from '@/types/slm'
 import { createLogger } from '@/utils/debugUtils'
 import NodeCard from '@/components/fleet/NodeCard.vue'
@@ -17,6 +18,9 @@ import FleetToolsTab from '@/components/fleet/FleetToolsTab.vue'
 
 const logger = createLogger('FleetOverview')
 const fleetStore = useFleetStore()
+
+// Connection test composable (Issue #737)
+const connectionTest = useNodeConnectionTest()
 
 // WebSocket for real-time updates
 const ws = useSlmWebSocket()
@@ -43,16 +47,11 @@ const editingNode = ref<SLMNode | null>(null)
 // Action states
 const isDeleting = ref(false)
 const isEnrolling = ref(false)
-const isTesting = ref(false)
 const isUpdatingRoles = ref(false)
 
-// Connection test result
-const connectionTestResult = ref<{
-  success: boolean
-  message?: string
-  error?: string
-  latency_ms?: number
-} | null>(null)
+// Connection test state from composable (Issue #737)
+const isTesting = computed(() => connectionTest.isLoading.value)
+const connectionTestResult = computed(() => connectionTest.result.value)
 
 // Role management
 const selectedRoles = ref<NodeRole[]>([])
@@ -239,29 +238,16 @@ async function handleEnroll(nodeId: string): Promise<void> {
   }
 }
 
-// Connection Test
+// Connection Test - using useNodeConnectionTest composable (Issue #737)
 async function handleTestConnection(nodeId: string): Promise<void> {
-  isTesting.value = true
-  connectionTestResult.value = null
-
-  try {
-    const result = await fleetStore.testConnection(nodeId)
-    connectionTestResult.value = result
-    showConnectionTestResult.value = true
-  } catch (err) {
-    connectionTestResult.value = {
-      success: false,
-      error: err instanceof Error ? err.message : 'Connection test failed',
-    }
-    showConnectionTestResult.value = true
-  } finally {
-    isTesting.value = false
-  }
+  connectionTest.reset()
+  await connectionTest.testByNodeId(nodeId)
+  showConnectionTestResult.value = true
 }
 
 function closeConnectionTestResult(): void {
   showConnectionTestResult.value = false
-  connectionTestResult.value = null
+  connectionTest.reset()
 }
 
 // Role Management
