@@ -356,12 +356,64 @@ class Service(Base):
     memory_bytes = Column(Integer, nullable=True)
     last_checked = Column(DateTime, nullable=True)
     extra_data = Column(JSON, default=dict)
+
+    # Service Discovery Fields (Issue #760)
+    port = Column(Integer, nullable=True)  # e.g., 8001, 6379
+    protocol = Column(String(10), default="http")  # http, https, ws, wss, redis, tcp
+    endpoint_path = Column(String(256), nullable=True)  # e.g., "/api/health"
+    is_discoverable = Column(Boolean, default=True)  # Include in discovery responses
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Composite unique constraint - one service record per node
     __table_args__ = (
         UniqueConstraint("node_id", "service_name", name="uq_node_service"),
+    )
+
+
+class NodeConfig(Base):
+    """Per-node configuration with inheritance support (Issue #760).
+
+    When node_id is NULL, the config is a global default.
+    Resolution order: node-specific → global default → not found.
+    """
+
+    __tablename__ = "node_configs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    node_id = Column(String(64), nullable=True, index=True)  # NULL = global default
+    config_key = Column(String(128), nullable=False, index=True)
+    config_value = Column(Text, nullable=True)
+    value_type = Column(String(20), default="string")  # string, int, bool, json
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("node_id", "config_key", name="uq_node_config"),)
+
+
+class ServiceConflict(Base):
+    """Tracks services that cannot coexist on the same node (Issue #760).
+
+    Examples: redis-server vs redis-stack-server (port 6379),
+    apache2 vs nginx (port 80/443).
+    """
+
+    __tablename__ = "service_conflicts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    service_name_a = Column(String(128), nullable=False, index=True)
+    service_name_b = Column(String(128), nullable=False, index=True)
+    reason = Column(Text, nullable=True)  # e.g., "Both bind to port 6379"
+    conflict_type = Column(String(32), default="port")  # port, dependency, resource
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "service_name_a", "service_name_b", name="uq_service_conflict"
+        ),
     )
 
 
