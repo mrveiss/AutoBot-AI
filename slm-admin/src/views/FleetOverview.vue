@@ -7,6 +7,12 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useFleetStore } from '@/stores/fleet'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useNodeConnectionTest } from '@/composables/useNodeConnectionTest'
+import {
+  DEFAULT_ROLES,
+  getRoleDisplayName,
+  getRoleDescription as getSharedRoleDescription,
+  getRoleTools as getSharedRoleTools,
+} from '@/constants/node-roles'
 import type { SLMNode, NodeRole, NodeHealth } from '@/types/slm'
 import { createLogger } from '@/utils/debugUtils'
 import NodeCard from '@/components/fleet/NodeCard.vue'
@@ -53,9 +59,13 @@ const isUpdatingRoles = ref(false)
 const isTesting = computed(() => connectionTest.isLoading.value)
 const connectionTestResult = computed(() => connectionTest.result.value)
 
-// Role management
+// Role management - use fleet store with fallback to constants (Issue #737 Phase 3)
 const selectedRoles = ref<NodeRole[]>([])
-const availableRoles: NodeRole[] = ['slm-agent', 'redis', 'backend', 'frontend', 'llm', 'ai-stack', 'npu-worker', 'browser-automation', 'monitoring']
+const availableRoles = computed(() =>
+  fleetStore.availableRoles.length > 0
+    ? fleetStore.availableRoles.map(r => r.name as NodeRole)
+    : DEFAULT_ROLES
+)
 
 // Lifecycle
 onMounted(async () => {
@@ -250,65 +260,26 @@ function closeConnectionTestResult(): void {
   connectionTest.reset()
 }
 
-// Role Management
-const roleData: Record<NodeRole, { name: string; description: string; tools: string[] }> = {
-  'slm-agent': {
-    name: 'SLM Agent',
-    description: 'SLM monitoring agent for node health reporting',
-    tools: ['systemd', 'journalctl', 'htop', 'netstat'],
-  },
-  'redis': {
-    name: 'Redis',
-    description: 'Redis Stack server for data persistence',
-    tools: ['redis-server', 'redis-cli', 'redis-sentinel'],
-  },
-  'backend': {
-    name: 'Backend',
-    description: 'FastAPI backend server',
-    tools: ['uvicorn', 'gunicorn', 'python3', 'pip'],
-  },
-  'frontend': {
-    name: 'Frontend',
-    description: 'Vue.js frontend server',
-    tools: ['nginx', 'node', 'npm', 'vite'],
-  },
-  'llm': {
-    name: 'LLM Provider',
-    description: 'LLM inference provider (Ollama/vLLM)',
-    tools: ['ollama', 'vllm', 'llama-cpp'],
-  },
-  'ai-stack': {
-    name: 'AI Stack',
-    description: 'AI tools and processing stack',
-    tools: ['chromadb', 'langchain', 'transformers', 'torch', 'onnxruntime'],
-  },
-  'npu-worker': {
-    name: 'NPU Worker',
-    description: 'Intel NPU acceleration worker',
-    tools: ['openvino', 'intel-npu-driver', 'benchmark_app'],
-  },
-  'browser-automation': {
-    name: 'Browser Automation',
-    description: 'Playwright browser automation service',
-    tools: ['playwright', 'chromium', 'firefox', 'webkit'],
-  },
-  'monitoring': {
-    name: 'Monitoring',
-    description: 'Prometheus and Grafana monitoring stack',
-    tools: ['prometheus', 'grafana', 'node_exporter', 'alertmanager'],
-  },
-}
+// Role Management - using shared constants (Issue #737 Phase 3)
+// Role metadata now comes from @/constants/node-roles.ts
 
 function formatRoleName(role: NodeRole): string {
-  return roleData[role]?.name || role
+  // Use API data if available, fallback to constants
+  const apiRole = fleetStore.availableRoles.find(r => r.name === role)
+  if (apiRole) return apiRole.name.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+  return getRoleDisplayName(role)
 }
 
 function getRoleDescription(role: NodeRole): string {
-  return roleData[role]?.description || 'Unknown role'
+  const apiRole = fleetStore.availableRoles.find(r => r.name === role)
+  if (apiRole) return apiRole.description
+  return getSharedRoleDescription(role)
 }
 
 function getRoleTools(role: NodeRole): string[] {
-  return roleData[role]?.tools || []
+  const apiRole = fleetStore.availableRoles.find(r => r.name === role)
+  if (apiRole) return apiRole.tools
+  return getSharedRoleTools(role)
 }
 
 function openRoleModal(node: SLMNode): void {

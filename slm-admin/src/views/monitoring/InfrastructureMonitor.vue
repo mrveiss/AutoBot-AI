@@ -7,11 +7,22 @@
  * InfrastructureMonitor - VM and infrastructure monitoring dashboard
  *
  * Displays real-time status of all VMs, services, and infrastructure components.
+ *
+ * NOTE: This component is intentionally separate from SLM node management (#737).
+ * - Purpose: Monitor fixed infrastructure VMs defined in SSOT config
+ * - Data source: SSOT config (config.vm.*) + fleet store health data
+ * - Role field: Human-readable description, NOT technical NodeRole
+ *
+ * For dynamic node management, see:
+ * - FleetOverview.vue for SLM node management
+ * - @/constants/node-roles.ts for role definitions
+ * - @/utils/node-status.ts for shared status utilities
  */
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useFleetStore } from '@/stores/fleet'
 import { getConfig } from '@/config/ssot-config'
+import { getStatusBgColor, getMetricColor as getSharedMetricColor } from '@/utils/node-status'
 
 const fleetStore = useFleetStore()
 const config = getConfig()
@@ -58,23 +69,22 @@ const summaryStats = computed(() => {
   }
 })
 
+// Status utilities - using shared functions from @/utils/node-status.ts
 function getStatusColor(status: string): string {
-  switch (status) {
-    case 'healthy':
-    case 'online': return 'bg-success-500'
-    case 'degraded': return 'bg-warning-500'
-    case 'unhealthy':
-    case 'critical': return 'bg-danger-500'
-    case 'offline':
-    case 'unknown':
-    default: return 'bg-gray-400'
-  }
+  // Map to Tailwind classes used in this component
+  const color = getStatusBgColor(status)
+  // Convert bg-green-500 -> bg-success-500 for legacy compatibility
+  return color.replace('bg-green-', 'bg-success-')
+    .replace('bg-yellow-', 'bg-warning-')
+    .replace('bg-red-', 'bg-danger-')
 }
 
 function getMetricColor(value: number): string {
-  if (value >= 90) return 'text-danger-500'
-  if (value >= 70) return 'text-warning-500'
-  return 'text-success-500'
+  const color = getSharedMetricColor(value)
+  // Convert text-green-500 -> text-success-500 for legacy compatibility
+  return color.replace('text-green-', 'text-success-')
+    .replace('text-yellow-', 'text-warning-')
+    .replace('text-red-', 'text-danger-')
 }
 
 function formatLastSeen(timestamp: string | null): string {
