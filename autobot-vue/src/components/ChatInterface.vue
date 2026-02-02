@@ -398,22 +398,27 @@ export default {
 
     const checkLLMConnection = async () => {
       try {
-        // Check if we can reach the LLM endpoint
-        const llmEndpoint = settings.value.backend.ollama_endpoint || getConfig().ollamaUrl;
-        const response = await fetch(`${llmEndpoint}/api/tags`, {
+        // Issue #Fix: Check LLM status via backend API instead of direct Ollama connection
+        // Ollama only listens on localhost, so frontend can't connect directly
+        const backendUrl = settings.value.backend.api_endpoint || getConfig().backendUrl;
+        const response = await fetch(`${backendUrl}/api/llm/status`, {
           method: 'GET',
-          timeout: 5000
         });
         if (response.ok) {
-          llmStatus.value = {
-            connected: true,
-            class: 'connected',
-            text: 'Connected',
-            message: 'LLM service is available'
-          };
-          return true;
+          const data = await response.json();
+          if (data.status === 'connected' && data.model) {
+            llmStatus.value = {
+              connected: true,
+              class: 'connected',
+              text: 'Connected',
+              message: `LLM service available: ${data.model}`
+            };
+            return true;
+          } else {
+            throw new Error(data.error || 'LLM not configured');
+          }
         } else {
-          throw new Error(`LLM service returned ${response.status}`);
+          throw new Error(`LLM status check returned ${response.status}`);
         }
       } catch (error) {
         llmStatus.value = {
