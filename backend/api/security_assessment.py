@@ -10,22 +10,13 @@ Issue: #260
 """
 
 import logging
-import uuid
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.services.security_tool_parsers import parse_tool_output
-
-
-def generate_request_id() -> str:
-    """Generate a unique request ID for tracking."""
-    return str(uuid.uuid4())
-
-
 from src.services.security_workflow_manager import (
     PHASE_DESCRIPTIONS,
     VALID_TRANSITIONS,
@@ -33,6 +24,10 @@ from src.services.security_workflow_manager import (
     SecurityWorkflowManager,
     get_security_workflow_manager,
 )
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
+
+# Issue #756: Consolidated from src/utils/request_utils.py
+from src.utils.request_utils import generate_request_id
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +49,9 @@ class AdvancePhaseRequest(BaseModel):
     """Request to advance to the next phase."""
 
     reason: str = Field("", description="Reason for phase transition")
-    target_phase: Optional[str] = Field(None, description="Specific phase to transition to")
+    target_phase: Optional[str] = Field(
+        None, description="Specific phase to transition to"
+    )
 
 
 class AddHostRequest(BaseModel):
@@ -102,7 +99,9 @@ class ParseToolOutputRequest(BaseModel):
     """Request to parse tool output."""
 
     output: str = Field(..., min_length=1, description="Raw tool output")
-    tool: Optional[str] = Field(None, description="Tool name (auto-detect if not provided)")
+    tool: Optional[str] = Field(
+        None, description="Tool name (auto-detect if not provided)"
+    )
 
 
 class RecoverErrorRequest(BaseModel):
@@ -634,7 +633,8 @@ async def get_findings(
 
     if severity:
         findings = [
-            f for f in findings
+            f
+            for f in findings
             if f.get("data", {}).get("severity") == severity
             or f.get("severity") == severity
         ]
@@ -645,11 +645,13 @@ async def get_findings(
         for vuln in host.vulnerabilities:
             if severity and vuln.get("severity") != severity:
                 continue
-            vulnerabilities.append({
-                "type": "vulnerability",
-                "host": host.ip,
-                **vuln,
-            })
+            vulnerabilities.append(
+                {
+                    "type": "vulnerability",
+                    "host": host.ip,
+                    **vuln,
+                }
+            )
 
     return JSONResponse(
         status_code=200,
@@ -764,9 +766,7 @@ async def parse_and_store_tool_output(
     # Parse the output
     parsed = parse_tool_output(request.output, request.tool)
     if not parsed:
-        raise HTTPException(
-            status_code=400, detail="Could not parse tool output"
-        )
+        raise HTTPException(status_code=400, detail="Could not parse tool output")
 
     # Store parsed data using extracted helpers
     hosts_added, ports_added = await _store_parsed_hosts(manager, assessment_id, parsed)

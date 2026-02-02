@@ -28,18 +28,19 @@ Performance:
 """
 
 import logging
-import uuid
 from datetime import datetime
 from typing import Dict, List, Optional
-
-from backend.type_defs.common import Metadata
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, validator
 
+from backend.type_defs.common import Metadata
 from src.autobot_memory_graph import AutoBotMemoryGraph
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+
+# Issue #756: Consolidated from src/utils/request_utils.py
+from src.utils.request_utils import generate_request_id
 
 # ====================================================================
 # Router Configuration
@@ -205,9 +206,7 @@ def get_memory_graph(request: Request) -> AutoBotMemoryGraph:
     return memory_graph
 
 
-def generate_request_id() -> str:
-    """Generate unique request ID for tracking"""
-    return str(uuid.uuid4())
+# Note: generate_request_id is now imported from src/utils/request_utils.py (Issue #756)
 
 
 # ====================================================================
@@ -288,7 +287,7 @@ async def create_entity(
             tags=entity_data.tags,
         )
 
-        logger.info("[%s] Entity created successfully: %s", request_id, entity['id'])
+        logger.info("[%s] Entity created successfully: %s", request_id, entity["id"])
 
         return JSONResponse(
             status_code=201,
@@ -407,11 +406,19 @@ async def find_orphaned_conversation_entities(
         )
 
         if not all_entities:
-            return JSONResponse(status_code=200, content={
-                "success": True,
-                "data": {"total_conversation_entities": 0, "orphaned_count": 0, "orphaned_entities": []},
-                "message": "No conversation entities found", "request_id": request_id,
-            })
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "data": {
+                        "total_conversation_entities": 0,
+                        "orphaned_count": 0,
+                        "orphaned_entities": [],
+                    },
+                    "message": "No conversation entities found",
+                    "request_id": request_id,
+                },
+            )
 
         # Issue #665: Use extracted helpers
         existing_session_ids = await _get_existing_session_ids(request)
@@ -419,30 +426,41 @@ async def find_orphaned_conversation_entities(
 
         logger.info(
             "[%s] Found %d conversation entities, %d active sessions",
-            request_id, len(all_entities), len(existing_session_ids)
+            request_id,
+            len(all_entities),
+            len(existing_session_ids),
         )
 
         # Issue #665: Format orphaned entities for response
         orphaned_entities = _format_orphaned_for_response(orphaned_raw)
 
-        logger.info("[%s] Found %d orphaned conversation entities", request_id, len(orphaned_entities))
+        logger.info(
+            "[%s] Found %d orphaned conversation entities",
+            request_id,
+            len(orphaned_entities),
+        )
 
-        return JSONResponse(status_code=200, content={
-            "success": True,
-            "data": {
-                "total_conversation_entities": len(all_entities),
-                "active_sessions": len(existing_session_ids),
-                "orphaned_count": len(orphaned_entities),
-                "orphaned_entities": orphaned_entities,
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "data": {
+                    "total_conversation_entities": len(all_entities),
+                    "active_sessions": len(existing_session_ids),
+                    "orphaned_count": len(orphaned_entities),
+                    "orphaned_entities": orphaned_entities,
+                },
+                "request_id": request_id,
             },
-            "request_id": request_id,
-        })
+        )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error("[%s] Error finding orphaned entities: %s", request_id, e)
-        raise HTTPException(status_code=500, detail=f"Failed to find orphaned entities: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to find orphaned entities: {str(e)}"
+        )
 
 
 # =============================================================================
@@ -475,7 +493,9 @@ async def _get_existing_session_ids(request: Request) -> set:
     return {s["id"] for s in existing_sessions}
 
 
-def _find_orphaned_entities(entities: List[Dict], existing_session_ids: set) -> List[Dict]:
+def _find_orphaned_entities(
+    entities: List[Dict], existing_session_ids: set
+) -> List[Dict]:
     """
     Find entities that reference non-existent sessions.
 
@@ -541,8 +561,7 @@ async def _delete_entities(
     failed_deletions = []
 
     logger.info(
-        "[%s] Deleting %d orphaned conversation entities",
-        request_id, len(entities)
+        "[%s] Deleting %d orphaned conversation entities", request_id, len(entities)
     )
 
     for entity in entities:
@@ -554,25 +573,23 @@ async def _delete_entities(
             if deleted:
                 deleted_count += 1
             else:
-                failed_deletions.append({
-                    "id": entity.get("id"),
-                    "name": entity_name,
-                    "reason": "delete returned False"
-                })
+                failed_deletions.append(
+                    {
+                        "id": entity.get("id"),
+                        "name": entity_name,
+                        "reason": "delete returned False",
+                    }
+                )
         except Exception as e:
             logger.warning(
-                "[%s] Failed to delete entity %s: %s",
-                request_id, entity_name, e
+                "[%s] Failed to delete entity %s: %s", request_id, entity_name, e
             )
-            failed_deletions.append({
-                "id": entity.get("id"),
-                "name": entity_name,
-                "reason": str(e)
-            })
+            failed_deletions.append(
+                {"id": entity.get("id"), "name": entity_name, "reason": str(e)}
+            )
 
     logger.info(
-        "[%s] Deleted %d/%d orphaned entities",
-        request_id, deleted_count, len(entities)
+        "[%s] Deleted %d/%d orphaned entities", request_id, deleted_count, len(entities)
     )
 
     return deleted_count, failed_deletions
@@ -638,7 +655,8 @@ async def cleanup_orphaned_conversation_entities(
     try:
         logger.info(
             "[%s] Finding orphaned conversation entities (dry_run=%s)",
-            request_id, dry_run
+            request_id,
+            dry_run,
         )
 
         # Get all conversation entities
@@ -659,7 +677,10 @@ async def cleanup_orphaned_conversation_entities(
 
         if not orphaned_entities:
             return _build_orphan_cleanup_response(
-                request_id, dry_run, 0, message="No orphaned conversation entities found"
+                request_id,
+                dry_run,
+                0,
+                message="No orphaned conversation entities found",
             )
 
         # Delete if not dry run
@@ -728,7 +749,7 @@ async def get_entity_by_id(
                 status_code=404, detail=f"Entity not found: {entity_id}"
             )
 
-        logger.info("[%s] Entity retrieved: %s", request_id, entity['name'])
+        logger.info("[%s] Entity retrieved: %s", request_id, entity["name"])
 
         return JSONResponse(
             status_code=200,
@@ -782,7 +803,7 @@ async def get_entity_by_name(
             logger.warning("[%s] Entity not found: %s", request_id, name)
             raise HTTPException(status_code=404, detail=f"Entity not found: {name}")
 
-        logger.info("[%s] Entity found: %s", request_id, entity['id'])
+        logger.info("[%s] Entity found: %s", request_id, entity["id"])
 
         return JSONResponse(
             status_code=200,
@@ -833,7 +854,9 @@ async def add_observations(
             entity_name=entity_name, observations=observation_data.observations
         )
         obs_count = len(observation_data.observations)
-        logger.info("[%s] Added %s observations to %s", request_id, obs_count, entity_name)
+        logger.info(
+            "[%s] Added %s observations to %s", request_id, obs_count, entity_name
+        )
 
         return JSONResponse(
             status_code=200,
@@ -894,7 +917,9 @@ async def delete_entity(
             entity_name=entity_name, cascade_relations=cascade_relations
         )
         if not deleted:
-            raise HTTPException(status_code=404, detail=f"Entity not found: {entity_id}")
+            raise HTTPException(
+                status_code=404, detail=f"Entity not found: {entity_id}"
+            )
 
         logger.info("[%s] Entity deleted: %s", request_id, entity_name)
 

@@ -22,17 +22,18 @@ Endpoints:
 """
 
 import logging
-import uuid
 from typing import Dict, List, Optional
-
-from backend.type_defs.common import Metadata
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, validator
 
+from backend.type_defs.common import Metadata
 from src.services.graph_rag_service import GraphRAGService
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+
+# Issue #756: Consolidated from src/utils/request_utils.py
+from src.utils.request_utils import generate_request_id
 
 # ====================================================================
 # Router Configuration
@@ -53,7 +54,9 @@ class GraphRAGSearchRequest(BaseModel):
         ..., min_length=1, max_length=1000, description="Search query string"
     )
     start_entity: Optional[str] = Field(
-        None, max_length=200, description="Optional starting entity name for graph traversal"
+        None,
+        max_length=200,
+        description="Optional starting entity name for graph traversal",
     )
     max_depth: int = Field(
         2, ge=1, le=3, description="Maximum graph traversal depth (1-3 hops)"
@@ -88,7 +91,9 @@ class GraphRAGSearchResponse(BaseModel):
 class GraphRAGHealthResponse(BaseModel):
     """Response model for health check."""
 
-    status: str = Field(..., description="Service status (healthy, degraded, unhealthy)")
+    status: str = Field(
+        ..., description="Service status (healthy, degraded, unhealthy)"
+    )
     components: Dict[str, str] = Field(..., description="Component health status")
     timestamp: str = Field(..., description="Timestamp of health check")
 
@@ -121,15 +126,13 @@ def get_graph_rag_service(request: Request) -> GraphRAGService:
         logger.error("GraphRAGService not initialized in app state")
         raise HTTPException(
             status_code=503,
-            detail="Graph-RAG service not available. Service initialization required."
+            detail="Graph-RAG service not available. Service initialization required.",
         )
 
     return service
 
 
-def generate_request_id() -> str:
-    """Generate unique request ID for tracking."""
-    return str(uuid.uuid4())
+# Note: generate_request_id is now imported from src/utils/request_utils.py (Issue #756)
 
 
 # ====================================================================
@@ -242,7 +245,9 @@ async def graph_rag_search(
 
     except Exception as e:
         logger.error("[%s] Graph-RAG search failed: %s", request_id, e, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Graph-RAG search failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Graph-RAG search failed: {str(e)}"
+        )
 
 
 @with_error_handling(
@@ -352,6 +357,5 @@ async def graph_rag_metrics(
     except Exception as e:
         logger.error("Metrics retrieval failed: %s", e, exc_info=True)
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to retrieve metrics: {str(e)}"
+            status_code=500, detail=f"Failed to retrieve metrics: {str(e)}"
         )

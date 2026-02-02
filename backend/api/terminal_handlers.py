@@ -23,21 +23,21 @@ Related Issues: #185 (Split), #210 (Terminal split), #290 (God class refactoring
 import asyncio
 import json
 import logging
+import os
 import time
 from datetime import datetime
 from typing import Awaitable, Callable, Dict, Optional
 
 from fastapi import WebSocket
 
-from backend.services.simple_pty import simple_pty_manager
-
 # Import models from dedicated module (Issue #185)
 from backend.api.terminal_models import (
-    CommandRiskLevel,
     MODERATE_RISK_PATTERNS,
     RISKY_COMMAND_PATTERNS,
+    CommandRiskLevel,
     SecurityLevel,
 )
+from backend.services.simple_pty import simple_pty_manager
 
 # Import extracted modules (Issue #290)
 from backend.services.terminal_websocket import (
@@ -54,6 +54,7 @@ _TERMINAL_CLOSE_EVENTS = frozenset({"eo", "close"})
 
 # Issue #665: Module-level signal mapping for _handle_signal_message
 import signal as _signal_module
+
 _SIGNAL_MAP = {
     "SIGINT": _signal_module.SIGINT,
     "SIGTERM": _signal_module.SIGTERM,
@@ -366,7 +367,9 @@ class ConsolidatedTerminalWebSocket:
 
                 self.output_queue.put_nowait({"type": "stop"})
             except queue.Full:
-                logger.debug("Output queue full during shutdown, sender will stop via active flag")
+                logger.debug(
+                    "Output queue full during shutdown, sender will stop via active flag"
+                )
             except Exception as e:
                 logger.error("Error signaling output sender to stop: %s", e)
 
@@ -410,11 +413,150 @@ class ConsolidatedTerminalWebSocket:
             "ping": self._handle_ping_message,
             "resize": self._handle_resize,
             "signal": self._handle_signal_message,
+            "tab_completion": self._handle_tab_completion,  # Issue #756
         }
 
     async def _handle_ping_message(self, message: dict) -> None:
         """Handle ping message (Issue #336 - extracted handler)."""
         await self.send_message({"type": "pong", "timestamp": time.time()})
+
+    async def _handle_tab_completion(self, message: dict) -> None:
+        """
+        Handle tab completion request (Issue #756 - Quick Win #5).
+
+        Provides simple directory listing completion for terminal commands.
+        The frontend sends partial input and cursor position, and this handler
+        returns matching file/directory completions.
+
+        Message format:
+            {
+                "type": "tab_completion",
+                "text": "ls /home/user/Doc",  # Current input text
+                "cursor": 18,  # Cursor position
+            }
+
+        Response format:
+            {
+                "type": "tab_completion",
+                "completions": ["Documents/", "Downloads/"],
+                "prefix": "/home/user/Doc",
+            }
+        """
+        try:
+            text = message.get("text", "")
+            cursor_pos = message.get("cursor", len(text))
+
+            # Extract the word at cursor position for completion
+            prefix = self._extract_completion_prefix(text, cursor_pos)
+
+            # Get completions for the prefix
+            completions = await self._get_path_completions(prefix)
+
+            await self.send_message(
+                {
+                    "type": "tab_completion",
+                    "completions": completions,
+                    "prefix": prefix,
+                }
+            )
+
+        except Exception as e:
+            logger.warning("Tab completion error: %s", e)
+            await self.send_message(
+                {
+                    "type": "tab_completion",
+                    "completions": [],
+                    "prefix": "",
+                    "error": str(e),
+                }
+            )
+
+    def _extract_completion_prefix(self, text: str, cursor_pos: int) -> str:
+        """
+        Extract the word/path at cursor position for completion.
+
+        Issue #756: Helper for tab completion.
+        """
+        if not text:
+            return ""
+
+        # Get text up to cursor
+        text_to_cursor = text[:cursor_pos]
+
+        # Find the start of the current word (space-delimited)
+        # Look for the last space before cursor
+        last_space = text_to_cursor.rfind(" ")
+        if last_space == -1:
+            prefix = text_to_cursor
+        else:
+            prefix = text_to_cursor[last_space + 1 :]
+
+        # Expand home directory
+        if prefix.startswith("~"):
+            prefix = os.path.expanduser(prefix)
+
+        return prefix
+
+    async def _get_path_completions(self, prefix: str, max_results: int = 20) -> list:
+        """
+        Get file/directory completions for a path prefix.
+
+        Issue #756: Simple directory listing for tab completion.
+
+        Args:
+            prefix: Path prefix to complete
+            max_results: Maximum number of completions to return
+
+        Returns:
+            List of matching paths with directory indicator (/)
+        """
+
+        if not prefix:
+            return []
+
+        try:
+            # Normalize path
+            if prefix.startswith("~"):
+                prefix = os.path.expanduser(prefix)
+
+            # Get directory and partial name
+            if os.path.isdir(prefix):
+                directory = prefix
+                partial = ""
+            else:
+                directory = os.path.dirname(prefix) or "."
+                partial = os.path.basename(prefix)
+
+            # Check directory exists
+            if not os.path.isdir(directory):
+                return []
+
+            # List directory contents
+            try:
+                entries = os.listdir(directory)
+            except PermissionError:
+                return []
+
+            # Filter by prefix
+            matching = []
+            for entry in entries:
+                if partial and not entry.lower().startswith(partial.lower()):
+                    continue
+
+                full_path = os.path.join(directory, entry)
+                if os.path.isdir(full_path):
+                    matching.append(entry + "/")
+                else:
+                    matching.append(entry)
+
+                if len(matching) >= max_results:
+                    break
+
+            return sorted(matching)
+
+        except Exception as e:
+            logger.debug("Path completion error for '%s': %s", prefix, e)
+            return []
 
     async def handle_message(self, message: dict):
         """Enhanced message handling with security and workflow features"""
@@ -476,18 +618,14 @@ class ConsolidatedTerminalWebSocket:
 
             transcript_file = f"{self.conversation_id}_terminal_transcript.txt"
             transcript_path = Path("data/chats") / transcript_file
-            async with aiofiles.open(
-                transcript_path, "a", encoding="utf-8"
-            ) as f:
+            async with aiofiles.open(transcript_path, "a", encoding="utf-8") as f:
                 await f.write(clean_text)
         except OSError as e:
             logger.error("Failed to write input to transcript (I/O error): %s", e)
         except Exception as e:
             logger.error("Failed to write input to transcript: %s", e)
 
-    async def _log_command_to_terminal_logger(
-        self, command: str, status: str
-    ) -> None:
+    async def _log_command_to_terminal_logger(self, command: str, status: str) -> None:
         """Log command to TerminalLogger (Issue #281: extracted)."""
         if not (self.terminal_logger and self.conversation_id):
             logger.warning(
@@ -732,9 +870,7 @@ class ConsolidatedTerminalWebSocket:
 
         return True
 
-    async def _handle_stdin_error(
-        self, error: Exception, is_password: bool
-    ) -> None:
+    async def _handle_stdin_error(self, error: Exception, is_password: bool) -> None:
         """Handle stdin write error with echo recovery (Issue #315: extracted).
 
         Args:
@@ -867,11 +1003,13 @@ class ConsolidatedTerminalWebSocket:
 
     async def _send_signal_error(self, message: str) -> None:
         """Send signal error message to client (Issue #665: extracted helper)."""
-        await self.send_message({
-            "type": "error",
-            "content": message,
-            "timestamp": time.time(),
-        })
+        await self.send_message(
+            {
+                "type": "error",
+                "content": message,
+                "timestamp": time.time(),
+            }
+        )
 
     async def _send_signal_to_pty(self, signal_name: str, sig: int) -> bool:
         """
@@ -887,11 +1025,13 @@ class ConsolidatedTerminalWebSocket:
         success = self.pty_process.send_signal(sig)
         if success:
             logger.info("Sent %s to PTY process", signal_name)
-            await self.send_message({
-                "type": "signal_sent",
-                "signal": signal_name,
-                "timestamp": time.time(),
-            })
+            await self.send_message(
+                {
+                    "type": "signal_sent",
+                    "signal": signal_name,
+                    "timestamp": time.time(),
+                }
+            )
         else:
             logger.error("Failed to send %s", signal_name)
             await self._send_signal_error(f"Failed to send signal: {signal_name}")
@@ -998,7 +1138,9 @@ class ConsolidatedTerminalWebSocket:
             try:
                 self.output_queue.get_nowait()
                 self.output_queue.put_nowait(message)
-                logger.warning("Output queue full for session %s, dropped oldest", self.session_id)
+                logger.warning(
+                    "Output queue full for session %s, dropped oldest", self.session_id
+                )
                 return True
             except (queue.Empty, queue.Full):
                 logger.error("Failed to queue output for session %s", self.session_id)
@@ -1014,7 +1156,9 @@ class ConsolidatedTerminalWebSocket:
             return
 
         from pathlib import Path
+
         import aiofiles
+
         from src.utils.encoding_utils import strip_ansi_codes
 
         try:
@@ -1023,7 +1167,9 @@ class ConsolidatedTerminalWebSocket:
             if not clean_content:
                 return
 
-            transcript_path = Path("data/chats") / f"{self.conversation_id}_terminal_transcript.txt"
+            transcript_path = (
+                Path("data/chats") / f"{self.conversation_id}_terminal_transcript.txt"
+            )
             async with aiofiles.open(transcript_path, "a", encoding="utf-8") as f:
                 await f.write(clean_content)
         except OSError as e:
@@ -1070,7 +1216,10 @@ class ConsolidatedTerminalWebSocket:
         if self.enable_logging and content.strip():
             self._log_command_activity(
                 "command_output",
-                {"output_length": len(content), "timestamp": datetime.now().isoformat()},
+                {
+                    "output_length": len(content),
+                    "timestamp": datetime.now().isoformat(),
+                },
             )
 
     def _get_next_message_from_queue(self):
@@ -1081,6 +1230,7 @@ class ConsolidatedTerminalWebSocket:
             Message dict or None if queue is empty
         """
         import queue
+
         try:
             return self.output_queue.get_nowait()
         except queue.Empty:
@@ -1211,7 +1361,9 @@ class ConsolidatedTerminalManager:
             try:
                 success = terminal.pty_process.send_signal(sig)
                 if success:
-                    logger.info("Sent signal %s to terminal session %s", sig, session_id)
+                    logger.info(
+                        "Sent signal %s to terminal session %s", sig, session_id
+                    )
                 return success
             except Exception as e:
                 logger.error("Failed to send signal to session %s: %s", session_id, e)

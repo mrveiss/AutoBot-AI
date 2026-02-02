@@ -20,32 +20,41 @@ import aiohttp
 import xxhash
 
 from src.config import UnifiedConfigManager
+from src.constants.model_constants import ModelConstants
 from src.utils.error_boundaries import error_boundary, get_error_boundary_manager
 from src.utils.http_client import get_http_client
-from src.constants.model_constants import ModelConstants
 
-from .models import LLMSettings, LLMResponse, LLMRequest, ChatMessage
-from .types import ProviderType, LLMType
-from .hardware import HardwareDetector, TORCH_AVAILABLE
-from .streaming import StreamingManager
-from .cache import LLMResponseCache, CachedResponse, get_llm_cache
-from .mock_providers import local_llm, palm
+from .cache import CachedResponse, get_llm_cache
+from .hardware import HardwareDetector
+from .models import ChatMessage, LLMRequest, LLMResponse, LLMSettings
+from .optimization import (
+    CompressionConfig,
+    ConnectionPoolManager,
+    OptimizationCategory,
+    OptimizationConfig,
+    OptimizationRouter,
+    PoolConfig,
+    PromptCompressor,
+    RateLimitConfig,
+    RateLimitHandler,
+)
+from .providers.mock_handler import LocalHandler, MockHandler
 from .providers.ollama import OllamaProvider
 from .providers.openai_provider import OpenAIProvider
 from .providers.transformers_provider import TransformersProvider
 from .providers.vllm_provider import VLLMProviderHandler
-from .providers.mock_handler import MockHandler, LocalHandler
-from .optimization import (
-    OptimizationRouter,
-    OptimizationConfig,
-    PromptCompressor,
-    CompressionConfig,
-    RateLimitHandler,
-    RateLimitConfig,
-    ConnectionPoolManager,
-    PoolConfig,
-    OptimizationCategory,
-)
+from .streaming import StreamingManager
+from .types import ProviderType
+
+# Issue #756: Import provider health checking to prevent stalls
+try:
+    from backend.services.provider_health import ProviderHealthManager, ProviderStatus
+
+    HEALTH_CHECK_AVAILABLE = True
+except ImportError:
+    HEALTH_CHECK_AVAILABLE = False
+    ProviderHealthManager = None
+    ProviderStatus = None
 
 # Optional imports
 try:
@@ -55,6 +64,7 @@ except ImportError:
 
 try:
     from src.utils.logging_manager import get_llm_logger
+
     logger = get_llm_logger(__name__)
 except ImportError:
     logger = logging.getLogger(__name__)
@@ -62,9 +72,10 @@ except ImportError:
 # LLM Pattern Analyzer integration for cost optimization (Issue #229)
 try:
     from backend.api.analytics_llm_patterns import (
-        get_pattern_analyzer,
         UsageRecordRequest,
+        get_pattern_analyzer,
     )
+
     PATTERN_ANALYZER_AVAILABLE = True
 except ImportError:
     PATTERN_ANALYZER_AVAILABLE = False
@@ -271,7 +282,9 @@ class LLMInterface:
                 enabled=compression_config.get("enabled", True),
                 target_ratio=compression_config.get("target_ratio", 0.7),
                 min_length_to_compress=compression_config.get("min_length", 100),
-                preserve_code_blocks=compression_config.get("preserve_code_blocks", True),
+                preserve_code_blocks=compression_config.get(
+                    "preserve_code_blocks", True
+                ),
             )
         )
 
@@ -309,10 +322,17 @@ class LLMInterface:
         """Convert provider string to ProviderType enum."""
         provider_lower = provider.lower()
         if provider_lower in ("ollama", "vllm", "transformers", "local"):
-            return ProviderType.OLLAMA if provider_lower == "ollama" else (
-                ProviderType.VLLM if provider_lower == "vllm" else (
-                    ProviderType.TRANSFORMERS if provider_lower == "transformers" else
-                    ProviderType.LOCAL
+            return (
+                ProviderType.OLLAMA
+                if provider_lower == "ollama"
+                else (
+                    ProviderType.VLLM
+                    if provider_lower == "vllm"
+                    else (
+                        ProviderType.TRANSFORMERS
+                        if provider_lower == "transformers"
+                        else ProviderType.LOCAL
+                    )
                 )
             )
         elif provider_lower == "openai":
@@ -348,10 +368,12 @@ class LLMInterface:
             tokens_saved = result.original_tokens - result.compressed_tokens
             total_saved += tokens_saved
 
-            compressed_messages.append({
-                **msg,
-                "content": result.compressed_text,
-            })
+            compressed_messages.append(
+                {
+                    **msg,
+                    "content": result.compressed_text,
+                }
+            )
 
         if total_saved > 0:
             self._optimization_metrics["prompts_compressed"] += 1
@@ -425,9 +447,7 @@ class LLMInterface:
         """Get Ollama base URL."""
         return f"http://{self.settings.ollama_host}:{self.settings.ollama_port}"
 
-    async def _generate_cache_key(
-        self, messages: List[ChatMessage], **params
-    ) -> str:
+    async def _generate_cache_key(self, messages: List[ChatMessage], **params) -> str:
         """Generate cache key with high-performance hashing."""
         key_data = (
             tuple((m.role, m.content) for m in messages),
@@ -465,6 +485,7 @@ class LLMInterface:
         """Load prompt content from a file asynchronously."""
         try:
             from src.utils.async_file_operations import read_file_async
+
             content = await read_file_async(file_path)
             return content.strip()
         except FileNotFoundError:
@@ -503,7 +524,9 @@ class LLMInterface:
             logger.error("Base prompt file not found: %s", base_file_path)
             return ""
         except Exception as e:
-            logger.error("Error loading composite prompt from %s: %s", base_file_path, e)
+            logger.error(
+                "Error loading composite prompt from %s: %s", base_file_path, e
+            )
             return ""
 
     @error_boundary(component="llm_interface", function="check_ollama_connection")
@@ -535,8 +558,13 @@ class LLMInterface:
             return False
 
     async def _check_cache(
-        self, messages: list, model_name: str, provider: str,
-        request_id: str, start_time: float, **kwargs
+        self,
+        messages: list,
+        model_name: str,
+        provider: str,
+        request_id: str,
+        start_time: float,
+        **kwargs,
     ) -> tuple[Optional[LLMResponse], Optional[str]]:
         """
         Check L1/L2 cache for existing response.
@@ -556,15 +584,18 @@ class LLMInterface:
             self._metrics["cache_hits"] += 1
             processing_time = time.time() - start_time
             logger.debug(f"Cache hit for request {request_id[:8]}...")
-            return LLMResponse(
-                content=cached.content,
-                model=cached.model,
-                provider=provider,
-                processing_time=processing_time,
-                request_id=request_id,
-                cached=True,
-                metadata=cached.metadata or {},
-            ), cache_key
+            return (
+                LLMResponse(
+                    content=cached.content,
+                    model=cached.model,
+                    provider=provider,
+                    processing_time=processing_time,
+                    request_id=request_id,
+                    cached=True,
+                    metadata=cached.metadata or {},
+                ),
+                cache_key,
+            )
         self._metrics["cache_misses"] += 1
         return None, cache_key
 
@@ -733,6 +764,30 @@ class LLMInterface:
         last_error = None
         for provider_name in provider_order:
             try:
+                # Issue #756: Quick health check before attempting provider
+                # Skip providers that are known to be unavailable (cached check)
+                if HEALTH_CHECK_AVAILABLE and provider_name in ("ollama", "openai"):
+                    try:
+                        health_result = (
+                            await ProviderHealthManager.check_provider_health(
+                                provider_name, timeout=2.0, use_cache=True
+                            )
+                        )
+                        if health_result.status == ProviderStatus.UNAVAILABLE:
+                            logger.debug(
+                                f"Skipping unavailable provider {provider_name}: "
+                                f"{health_result.message}"
+                            )
+                            last_error = (
+                                f"{provider_name} unavailable: {health_result.message}"
+                            )
+                            continue
+                    except Exception as health_err:
+                        # If health check fails, proceed anyway and let actual call fail
+                        logger.debug(
+                            f"Health check for {provider_name} failed: {health_err}"
+                        )
+
                 handler = self.provider_routing[provider_name]
 
                 # Issue #717: Apply rate limit handling for cloud providers
@@ -782,9 +837,7 @@ class LLMInterface:
             error=f"All providers failed. Last error: {last_error}",
         )
 
-    def _determine_provider_and_model(
-        self, llm_type: str, **kwargs
-    ) -> tuple[str, str]:
+    def _determine_provider_and_model(self, llm_type: str, **kwargs) -> tuple[str, str]:
         """Determine the best provider and model for the request."""
         if "provider" in kwargs:
             provider = kwargs["provider"]

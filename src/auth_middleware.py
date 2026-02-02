@@ -17,8 +17,8 @@ import bcrypt
 import jwt
 from fastapi import Request
 
-from src.security_layer import SecurityLayer
 from src.config import UnifiedConfigManager
+from src.security_layer import SecurityLayer
 from src.utils.catalog_http_exceptions import raise_auth_error
 
 logger = logging.getLogger(__name__)
@@ -199,9 +199,7 @@ class AuthenticationMiddleware:
             "Account is temporarily locked due to excessive failed attempts",
         )
 
-    def _handle_failed_login(
-        self, username: str, ip_address: str, reason: str
-    ) -> None:
+    def _handle_failed_login(self, username: str, ip_address: str, reason: str) -> None:
         """Issue #665: Extracted from authenticate_user to reduce function length.
 
         Record failed login attempt and audit log.
@@ -443,23 +441,23 @@ class AuthenticationMiddleware:
                 return user_data
 
         # Method 3: Development Mode (X-User-Role header)
+        # Only in debug mode AND with explicit X-User-Role header
         dev_mode = config.get("development.debug", False)
         if dev_mode:
-            user_role = request.headers.get("X-User-Role", "guest")
-            return {
-                "username": f"dev_{user_role}",
-                "role": user_role,
-                "email": f"dev_{user_role}@autobot.local",
-                "auth_method": "development",
-            }
+            user_role = request.headers.get("X-User-Role")
+            if user_role:  # Only if header is explicitly provided
+                return {
+                    "username": f"dev_{user_role}",
+                    "role": user_role,
+                    "email": f"dev_{user_role}@autobot.local",
+                    "auth_method": "development",
+                }
 
-        # Method 4: Default guest access
-        return {
-            "username": "guest",
-            "role": "guest",
-            "email": "guest@autobot.local",
-            "auth_method": "guest",
-        }
+        # Issue #756: Security hardening - no guest fallback for sensitive endpoints
+        # Return None to require explicit authentication
+        # Callers should handle None and return appropriate 401 response
+        logger.debug("No valid authentication found, denying access")
+        return None
 
     def check_file_permissions(
         self, request: Request, operation: str
@@ -554,6 +552,7 @@ def require_file_permission(operation: str):
 
     def decorator(func):
         """Wrap function with permission check for the specified operation."""
+
         async def wrapper(request: Request, *args, **kwargs):
             """Check permission and execute function with user in request state."""
             has_permission, user_data = auth_middleware.check_file_permissions(

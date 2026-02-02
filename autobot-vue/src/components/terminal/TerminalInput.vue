@@ -87,6 +87,8 @@ interface Emits {
   (e: 'start-example-workflow'): void
   (e: 'download-log'): void
   (e: 'share-session'): void
+  // Issue #756: Tab completion support
+  (e: 'tab-completion', payload: { text: string, cursor: number }): void
 }
 
 const props = defineProps<Props>()
@@ -137,7 +139,14 @@ const handleKeydown = (event: KeyboardEvent) => {
 
     case 'Tab':
       event.preventDefault()
-      // TODO: Implement tab completion
+      // Issue #756: Emit tab completion request with current text and cursor position
+      {
+        const cursorPos = terminalInput.value?.selectionStart ?? currentInput.value.length
+        emit('tab-completion', {
+          text: currentInput.value,
+          cursor: cursorPos
+        })
+      }
       break
 
     case 'c':

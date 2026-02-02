@@ -352,9 +352,44 @@ const handleTerminalMessage = (data: any) => {
     case 'status':
       statusMessage.value = data.message
       break
+    // Issue #756: Handle tab completion response
+    case 'tab_completion':
+      handleTabCompletionResponse(data)
+      break
     default:
       addTerminalLine('', JSON.stringify(data), 'info')
   }
+}
+
+// Issue #756: Handle tab completion response from backend
+const handleTabCompletionResponse = (data: { completions: string[], prefix: string, error?: string }) => {
+  if (data.error) {
+    // Silently ignore errors - don't disrupt user experience
+    return
+  }
+
+  const completions = data.completions || []
+
+  if (completions.length === 0) {
+    // No completions found - do nothing
+    return
+  }
+
+  if (completions.length === 1) {
+    // Single completion - apply it directly
+    applyCompletion(data.prefix, completions[0])
+  } else {
+    // Multiple completions - show them as output
+    addTerminalLine('', completions.join('  '), 'info')
+  }
+}
+
+// Issue #756: Apply a single completion to the current command
+const applyCompletion = (prefix: string, completion: string) => {
+  const cmd = currentCommand.value
+  const lastSpaceIdx = cmd.lastIndexOf(' ')
+  const beforePrefix = lastSpaceIdx >= 0 ? cmd.slice(0, lastSpaceIdx + 1) : ''
+  currentCommand.value = beforePrefix + completion
 }
 
 const addTerminalLine = (prefix: string, content: string, type: string = 'output') => {
@@ -431,7 +466,16 @@ const handleKeydown = (event: KeyboardEvent) => {
 
     case 'Tab':
       event.preventDefault()
-      // TODO: Implement tab completion
+      // Issue #756: Send tab completion request
+      if (isConnected.value) {
+        const cursorPos = (event.target as HTMLInputElement)?.selectionStart ?? currentCommand.value.length
+        wsSend({
+          type: 'tab_completion',
+          text: currentCommand.value,
+          cursor: cursorPos,
+          session_id: sessionId.value
+        })
+      }
       break
   }
 }

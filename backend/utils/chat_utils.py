@@ -28,14 +28,16 @@ Created: 2025-01-14
 import logging
 import re
 from typing import Any, Optional
-
-from src.utils.path_validation import contains_injection_patterns
-
-from backend.type_defs.common import Metadata
 from uuid import uuid4
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
+
+from backend.type_defs.common import Metadata
+from src.utils.path_validation import contains_injection_patterns
+
+# Issue #756: Consolidated from src/utils/request_utils.py
+from src.utils.request_utils import generate_request_id
 
 logger = logging.getLogger(__name__)
 
@@ -47,20 +49,7 @@ _SESSION_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 # ID Generation Functions
 # =============================================================================
 
-
-def generate_request_id() -> str:
-    """
-    Generate a unique request ID for tracking API requests.
-
-    Returns:
-        str: UUID4 string for request tracking
-
-    Example:
-        >>> request_id = generate_request_id()
-        >>> print(request_id)
-        'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
-    """
-    return str(uuid4())
+# Note: generate_request_id is now imported from src/utils/request_utils.py (Issue #756)
 
 
 def generate_chat_session_id() -> str:
@@ -314,8 +303,8 @@ def get_chat_history_manager(request: Request):
         >>> manager = get_chat_history_manager(request)
         >>> # Use manager for chat operations...
     """
-    from src.utils.lazy_singleton import lazy_init_singleton
     from src.chat_history import ChatHistoryManager
+    from src.utils.lazy_singleton import lazy_init_singleton
 
     return lazy_init_singleton(
         request.app.state, "chat_history_manager", ChatHistoryManager
