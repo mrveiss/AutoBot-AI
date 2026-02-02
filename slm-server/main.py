@@ -13,6 +13,7 @@ import sys
 from contextlib import asynccontextmanager
 
 from api import (
+    agents_router,
     auth_router,
     blue_green_router,
     code_sync_router,
@@ -129,6 +130,7 @@ app.add_middleware(
 )
 
 app.include_router(health_router, prefix="/api")
+app.include_router(agents_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(nodes_router, prefix="/api")
 app.include_router(services_router, prefix="/api")

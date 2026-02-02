@@ -7,6 +7,7 @@ SLM API Package
 FastAPI routers for the SLM backend.
 """
 
+from .agents import router as agents_router
 from .auth import router as auth_router
 from .blue_green import router as blue_green_router
 from .code_sync import router as code_sync_router
@@ -30,6 +31,7 @@ from .vnc import node_vnc_router, vnc_router
 from .websocket import router as websocket_router
 
 __all__ = [
+    "agents_router",
     "auth_router",
     "nodes_router",
     "deployments_router",
