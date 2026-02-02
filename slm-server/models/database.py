@@ -417,6 +417,37 @@ class ServiceConflict(Base):
     )
 
 
+class Agent(Base):
+    """AI Agent with LLM configuration (Issue #760 Phase 2).
+
+    Each agent can have its own LLM provider configuration.
+    One agent with is_default=True serves as fallback.
+    """
+
+    __tablename__ = "agents"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    agent_id = Column(String(64), unique=True, nullable=False, index=True)
+    name = Column(String(128), nullable=False)
+    description = Column(Text, nullable=True)
+
+    # LLM Configuration
+    llm_provider = Column(String(32), nullable=False)  # ollama, openai, anthropic
+    llm_endpoint = Column(String(256), nullable=True)
+    llm_model = Column(String(64), nullable=False)
+    llm_api_key_encrypted = Column(Text, nullable=True)
+    llm_timeout = Column(Integer, default=30)
+    llm_temperature = Column(Float, default=0.7)
+    llm_max_tokens = Column(Integer, nullable=True)
+
+    # State
+    is_default = Column(Boolean, default=False, index=True)
+    is_active = Column(Boolean, default=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class MaintenanceWindow(Base):
     """Maintenance window scheduling for nodes."""
 
