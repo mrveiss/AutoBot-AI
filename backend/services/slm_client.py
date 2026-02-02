@@ -60,6 +60,60 @@ class CacheEntry:
         return time.time() > self.expires_at
 
 
+class ServiceDiscoveryCache:
+    """Cache for discovered service URLs with TTL."""
+
+    def __init__(self, ttl_seconds: int = 60):
+        """
+        Initialize service discovery cache.
+
+        Args:
+            ttl_seconds: Time-to-live for cache entries (default: 60)
+        """
+        self._cache: Dict[str, CacheEntry] = {}
+        self._ttl = ttl_seconds
+
+    def get(self, service_name: str) -> Optional[str]:
+        """
+        Get cached URL for service.
+
+        Args:
+            service_name: Service identifier
+
+        Returns:
+            Cached URL or None if not found/expired
+        """
+        entry = self._cache.get(service_name)
+        if entry and not entry.is_expired():
+            logger.debug("Service discovery cache hit for %s", service_name)
+            return entry.config.get("url")
+        elif entry:
+            logger.debug("Service discovery cache expired for %s", service_name)
+            del self._cache[service_name]
+        return None
+
+    def set(self, service_name: str, discovery_data: dict) -> None:
+        """
+        Store discovery data in cache.
+
+        Args:
+            service_name: Service identifier
+            discovery_data: Dict with url, healthy, etc.
+        """
+        expires_at = time.time() + self._ttl
+        self._cache[service_name] = CacheEntry(
+            config=discovery_data, expires_at=expires_at
+        )
+        logger.debug(
+            "Cached service discovery for %s (TTL: %ds)", service_name, self._ttl
+        )
+
+    def clear(self) -> None:
+        """Clear entire cache."""
+        self._cache.clear()
+        logger.debug("Cleared service discovery cache")
+
+
 class AgentConfigCache:
     """In-memory cache for agent configurations with TTL."""
 
