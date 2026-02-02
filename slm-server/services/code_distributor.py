@@ -174,7 +174,9 @@ class CodeDistributor:
         if Path(SSH_KEY_PATH).exists():
             ssh_opts += f" -i {SSH_KEY_PATH}"
 
-        # Step 1: Ensure remote directory exists
+        # Step 1: Ensure remote directory structure exists
+        # The agent module needs to be at /opt/slm-agent/slm/agent/
+        # so Python can import it as `python3 -m slm.agent.agent`
         mkdir_cmd = [
             "ssh",
             "-o",
@@ -188,8 +190,9 @@ class CodeDistributor:
         ]
         if Path(SSH_KEY_PATH).exists():
             mkdir_cmd.extend(["-i", SSH_KEY_PATH])
+        # Create proper Python package structure: /opt/slm-agent/slm/agent/
         mkdir_script = (
-            f"sudo mkdir -p {REMOTE_AGENT_PATH} && "
+            f"sudo mkdir -p {REMOTE_AGENT_PATH}/slm/agent && "
             f"sudo chown -R {ssh_user}:{ssh_user} {REMOTE_AGENT_PATH}"
         )
         mkdir_cmd.extend([f"{ssh_user}@{ip_address}", mkdir_script])
@@ -204,7 +207,43 @@ class CodeDistributor:
         except Exception as e:
             logger.warning("Could not create remote dir on %s: %s", node_id, e)
 
+        # Step 1.5: Create slm package __init__.py for proper Python import
+        slm_init_cmd = [
+            "ssh",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "ConnectTimeout=30",
+            "-p",
+            str(ssh_port),
+        ]
+        if Path(SSH_KEY_PATH).exists():
+            slm_init_cmd.extend(["-i", SSH_KEY_PATH])
+        slm_init_content = (
+            "# AutoBot - AI-Powered Automation Platform\\n"
+            "# Copyright (c) 2025 mrveiss\\n"
+            "# Author: mrveiss\\n"
+            '"""SLM Package."""'
+        )
+        slm_init_script = (
+            f"echo -e '{slm_init_content}' > {REMOTE_AGENT_PATH}/slm/__init__.py"
+        )
+        slm_init_cmd.extend([f"{ssh_user}@{ip_address}", slm_init_script])
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *slm_init_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            await asyncio.wait_for(proc.communicate(), timeout=30.0)
+        except Exception as e:
+            logger.warning("Could not create slm/__init__.py on %s: %s", node_id, e)
+
         # Step 2: Rsync agent code to remote node
+        # Sync to /opt/slm-agent/slm/agent/ for proper Python module import
         rsync_cmd = [
             "rsync",
             "-avz",
@@ -218,7 +257,7 @@ class CodeDistributor:
             "-e",
             ssh_opts,
             f"{agent_source}/",
-            f"{ssh_user}@{ip_address}:{REMOTE_AGENT_PATH}/",
+            f"{ssh_user}@{ip_address}:{REMOTE_AGENT_PATH}/slm/agent/",
         ]
 
         try:

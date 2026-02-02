@@ -10,31 +10,29 @@ Related to Issue #728.
 
 import asyncio
 import logging
-import uuid
 from datetime import datetime
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 
-from typing_extensions import Annotated
-
+from api.websocket import ws_manager
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
 from models.database import Node, Service, ServiceStatus
 from models.schemas import (
-    ServiceResponse,
-    ServiceListResponse,
-    ServiceActionResponse,
-    ServiceLogsResponse,
-    ServiceCategoryUpdate,
-    FleetServiceStatus,
     FleetServicesResponse,
+    FleetServiceStatus,
     RestartAllServicesRequest,
     RestartAllServicesResponse,
+    ServiceActionResponse,
+    ServiceCategoryUpdate,
+    ServiceListResponse,
+    ServiceLogsResponse,
+    ServiceResponse,
 )
 from services.auth import get_current_user
 from services.database import get_db
-from api.websocket import ws_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["services"])
@@ -81,11 +79,16 @@ async def _run_ansible_service_action(
 
     ssh_cmd = [
         "/usr/bin/ssh",
-        "-o", "StrictHostKeyChecking=no",
-        "-o", "ConnectTimeout=10",
-        "-o", "BatchMode=yes",
-        "-i", ssh_key,
-        "-p", str(ssh_port),
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "ConnectTimeout=10",
+        "-o",
+        "BatchMode=yes",
+        "-i",
+        ssh_key,
+        "-p",
+        str(ssh_port),
         f"{ssh_user}@{node.ip_address}",
         remote_cmd,
     ]
@@ -104,15 +107,12 @@ async def _run_ansible_service_action(
 
         if process.returncode == 0:
             logger.info(
-                "Service %s %s on %s completed",
-                service_name, action, node.hostname
+                "Service %s %s on %s completed", service_name, action, node.hostname
             )
             return True, f"Service {service_name} {action} completed"
         else:
             error = stderr.decode("utf-8", errors="replace")
-            logger.error(
-                "Service action failed on %s: %s", node.hostname, error[:500]
-            )
+            logger.error("Service action failed on %s: %s", node.hostname, error[:500])
             return False, f"Failed to {action} service: {error[:200]}"
 
     except asyncio.TimeoutError:
@@ -120,6 +120,69 @@ async def _run_ansible_service_action(
     except Exception as e:
         logger.exception("Service action error: %s", e)
         return False, f"Error: {str(e)[:200]}"
+
+
+# Port mapping for services that bind to specific ports
+SERVICE_PORT_MAP = {
+    "autobot-frontend": 5173,
+    "autobot-backend": 8001,
+    "slm-backend": 8000,
+    "slm-admin-ui": 5174,
+    "redis-server": 6379,
+    "redis": 6379,
+    "grafana-server": 3000,
+    "prometheus": 9090,
+    "nginx": 80,
+}
+
+
+async def _kill_orphan_on_port(node: Node, port: int) -> Tuple[bool, str]:
+    """
+    Kill any orphaned process using a specific port on a node.
+
+    This is needed when a service fails to start due to "Port already in use"
+    but the blocking process is not managed by systemd (orphaned process).
+
+    Returns (killed_something, message).
+    """
+    ssh_user = node.ssh_user or "autobot"
+    ssh_port = node.ssh_port or 22
+    ssh_key = "/home/autobot/.ssh/id_rsa"
+
+    # Command to find and kill process on port
+    # Using fuser which is more reliable than lsof for this purpose
+    kill_cmd = f"sudo -n fuser -k {port}/tcp 2>/dev/null || true"
+
+    ssh_cmd = [
+        "/usr/bin/ssh",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "ConnectTimeout=10",
+        "-o",
+        "BatchMode=yes",
+        "-i",
+        ssh_key,
+        "-p",
+        str(ssh_port),
+        f"{ssh_user}@{node.ip_address}",
+        kill_cmd,
+    ]
+
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *ssh_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        await asyncio.wait_for(process.communicate(), timeout=15.0)
+        logger.info("Killed orphan processes on port %d on %s", port, node.hostname)
+        return True, f"Killed orphan processes on port {port}"
+
+    except Exception as e:
+        logger.warning("Could not kill orphan on port %d: %s", port, e)
+        return False, str(e)
 
 
 async def _run_ansible_get_logs(
@@ -145,11 +208,16 @@ async def _run_ansible_get_logs(
 
     ssh_cmd = [
         "/usr/bin/ssh",
-        "-o", "StrictHostKeyChecking=no",
-        "-o", "ConnectTimeout=10",
-        "-o", "BatchMode=yes",
-        "-i", ssh_key,
-        "-p", str(ssh_port),
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "ConnectTimeout=10",
+        "-o",
+        "BatchMode=yes",
+        "-i",
+        ssh_key,
+        "-p",
+        str(ssh_port),
         f"{ssh_user}@{node.ip_address}",
         journal_cmd,
     ]
@@ -237,9 +305,7 @@ async def start_service(
     """Start a service on a node."""
     node = await _get_node_or_404(db, node_id)
 
-    success, message = await _run_ansible_service_action(
-        node, service_name, "start"
-    )
+    success, message = await _run_ansible_service_action(node, service_name, "start")
 
     # Update service status in DB if we have a record
     if success:
@@ -299,9 +365,7 @@ async def stop_service(
     """Stop a service on a node."""
     node = await _get_node_or_404(db, node_id)
 
-    success, message = await _run_ansible_service_action(
-        node, service_name, "stop"
-    )
+    success, message = await _run_ansible_service_action(node, service_name, "stop")
 
     if success:
         result = await db.execute(
@@ -356,12 +420,37 @@ async def restart_service(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
 ) -> ServiceActionResponse:
-    """Restart a service on a node."""
+    """Restart a service on a node.
+
+    For services that bind to specific ports, this will:
+    1. Stop the service
+    2. Kill any orphaned processes on the port
+    3. Start the service
+
+    This ensures orphaned processes don't block the service from starting.
+    """
     node = await _get_node_or_404(db, node_id)
 
-    success, message = await _run_ansible_service_action(
-        node, service_name, "restart"
-    )
+    # Check if service uses a known port - if so, do stop/kill/start
+    port = SERVICE_PORT_MAP.get(service_name)
+    if port:
+        # Stop service first
+        await _run_ansible_service_action(node, service_name, "stop")
+        # Small delay to let port release
+        await asyncio.sleep(1)
+        # Kill any orphan processes on the port
+        await _kill_orphan_on_port(node, port)
+        # Small delay after kill
+        await asyncio.sleep(1)
+        # Start the service
+        success, message = await _run_ansible_service_action(
+            node, service_name, "start"
+        )
+    else:
+        # Regular restart for services without known ports
+        success, message = await _run_ansible_service_action(
+            node, service_name, "restart"
+        )
 
     if success:
         result = await db.execute(
@@ -421,9 +510,7 @@ async def get_service_logs(
     """Get logs for a service on a node."""
     node = await _get_node_or_404(db, node_id)
 
-    success, logs = await _run_ansible_get_logs(
-        node, service_name, lines, since
-    )
+    success, logs = await _run_ansible_get_logs(node, service_name, lines, since)
 
     if not success:
         raise HTTPException(
@@ -534,12 +621,14 @@ async def restart_all_node_services(
             node, svc.service_name, "restart"
         )
 
-        results.append({
-            "service_name": svc.service_name,
-            "success": success,
-            "message": message,
-            "is_slm_agent": is_slm,  # Renamed for backwards compat but indicates any SLM service
-        })
+        results.append(
+            {
+                "service_name": svc.service_name,
+                "success": success,
+                "message": message,
+                "is_slm_agent": is_slm,  # Indicates any SLM service
+            }
+        )
 
         if success:
             successful += 1
@@ -633,11 +722,13 @@ async def get_fleet_services(
                 "category": getattr(svc, "category", "system") or "system",
             }
         node = nodes.get(svc.node_id)
-        service_map[svc.service_name]["nodes"].append({
-            "node_id": svc.node_id,
-            "hostname": node.hostname if node else "unknown",
-            "status": svc.status,
-        })
+        service_map[svc.service_name]["nodes"].append(
+            {
+                "node_id": svc.node_id,
+                "hostname": node.hostname if node else "unknown",
+                "status": svc.status,
+            }
+        )
 
     # Build response
     fleet_services = []
@@ -732,9 +823,7 @@ async def start_fleet_service(
 
     # Get nodes
     node_ids = [s.node_id for s in services]
-    nodes_result = await db.execute(
-        select(Node).where(Node.node_id.in_(node_ids))
-    )
+    nodes_result = await db.execute(select(Node).where(Node.node_id.in_(node_ids)))
     nodes = {n.node_id: n for n in nodes_result.scalars().all()}
 
     # Start on each node
@@ -805,9 +894,7 @@ async def stop_fleet_service(
         )
 
     node_ids = [s.node_id for s in services]
-    nodes_result = await db.execute(
-        select(Node).where(Node.node_id.in_(node_ids))
-    )
+    nodes_result = await db.execute(select(Node).where(Node.node_id.in_(node_ids)))
     nodes = {n.node_id: n for n in nodes_result.scalars().all()}
 
     success_count = 0
@@ -877,9 +964,7 @@ async def restart_fleet_service(
         )
 
     node_ids = [s.node_id for s in services]
-    nodes_result = await db.execute(
-        select(Node).where(Node.node_id.in_(node_ids))
-    )
+    nodes_result = await db.execute(select(Node).where(Node.node_id.in_(node_ids)))
     nodes = {n.node_id: n for n in nodes_result.scalars().all()}
 
     success_count = 0
