@@ -134,7 +134,6 @@ def get_graph_rag_service(request: Request) -> GraphRAGService:
 
 # Note: generate_request_id is now imported from src/utils/request_utils.py (Issue #756)
 
-
 # ====================================================================
 # API Endpoints
 # ====================================================================

@@ -34,6 +34,9 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from backend.type_defs.common import Metadata
+from backend.utils.response_helpers import (
+    create_error_response as _canonical_create_error_response,
+)
 from src.utils.path_validation import contains_injection_patterns
 
 # Issue #756: Consolidated from src/utils/request_utils.py
@@ -50,6 +53,7 @@ _SESSION_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 # =============================================================================
 
 # Note: generate_request_id is now imported from src/utils/request_utils.py (Issue #756)
+# and re-exported here for backward compatibility (Issue #751)
 
 
 def generate_chat_session_id() -> str:
@@ -176,10 +180,7 @@ def validate_message_content(content: str) -> bool:
 # Response Formatting Functions
 # =============================================================================
 
-# Import canonical create_error_response from response_helpers (Issue #292)
-from backend.utils.response_helpers import (
-    create_error_response as _canonical_create_error_response,
-)
+# Note: _canonical_create_error_response imported at top of file (Issue #292)
 
 
 def create_success_response(

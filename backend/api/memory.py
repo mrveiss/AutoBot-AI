@@ -208,7 +208,6 @@ def get_memory_graph(request: Request) -> AutoBotMemoryGraph:
 
 # Note: generate_request_id is now imported from src/utils/request_utils.py (Issue #756)
 
-
 # ====================================================================
 # Helper Functions (Issue #398: Extracted to reduce method length)
 # ====================================================================
@@ -980,7 +979,11 @@ async def create_relation(
 
     try:
         logger.info(
-            f"[{request_id}] Creating relation: {relation_data.from_entity} --[{relation_data.relation_type}]--> {relation_data.to_entity}"
+            "[%s] Creating relation: %s --[%s]--> %s",
+            request_id,
+            relation_data.from_entity,
+            relation_data.relation_type,
+            relation_data.to_entity,
         )
 
         relation = await memory_graph.create_relation(

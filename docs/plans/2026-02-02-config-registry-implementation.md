@@ -1003,3 +1003,42 @@ git commit -m "docs: add ConfigRegistry usage to developer guide (#751)"
 | 19 | Documentation | +20 lines |
 
 **Total: ~260 lines removed, ~394 added = net +134 lines but 13→2 source locations**
+
+---
+
+## Implementation Status (Updated 2026-02-02)
+
+### Completed Tasks
+
+| Task | Status | Commit |
+|------|--------|--------|
+| Task 1: ConfigRegistry Core | ✅ Done | `1e03e8f1` |
+| Task 2: Env Var Fallback Tests | ✅ Done | `c23a0ea2` |
+| Task 3: Caching Tests | ✅ Done | `32326ac3` |
+| Task 4: get_section/set Methods | ✅ Done | `7aeb09be` |
+| Task 5: Registry Defaults | ✅ Done | `4f9b39f2`, `0d3e2824` |
+| Task 12: chat_improved.py | ✅ Done | `81937c01` |
+| Tasks 13-17: entity_extraction, memory, graph_rag, security_assessment, chat_utils | ✅ Done | `d0be1fd8` |
+| Task 18: Verification | ✅ Done | Passed |
+
+### Deferred Tasks
+
+| Task | Status | Reason |
+|------|--------|--------|
+| Tasks 6-11: _get_ssot_config migrations | 🔄 Deferred | Complex type conversions needed. network_constants.py alone is 400+ lines with attribute access patterns (`_ssot.redis.host`) that require more careful migration. |
+
+### Results
+
+- **`generate_request_id` functions**: Reduced from 7 definitions to 1 canonical location
+- **ConfigRegistry**: Fully implemented with 27 passing tests
+- **Files modified**: 6 backend API files migrated to use canonical request_utils
+- **Pre-existing linting issues fixed**: E501 in memory.py, E402 in chat_utils.py
+
+### Future Work (Issue #751 - Phase 2)
+
+The `_get_ssot_config()` migrations (Tasks 6-11) require:
+1. Type conversion handling (strings from Registry → typed objects)
+2. Attribute access pattern changes (`_ssot.redis.host` → `ConfigRegistry.get("redis.host")`)
+3. Careful testing with actual Redis connectivity
+
+Recommend creating separate sub-issue for this phase.
