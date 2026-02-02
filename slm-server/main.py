@@ -16,11 +16,14 @@ from api import (
     auth_router,
     blue_green_router,
     code_sync_router,
+    config_router,
     deployments_router,
+    discovery_router,
     fleet_services_router,
     health_router,
     maintenance_router,
     monitoring_router,
+    node_config_router,
     node_tls_router,
     node_vnc_router,
     nodes_router,
@@ -145,6 +148,9 @@ app.include_router(tls_router, prefix="/api")
 app.include_router(security_router, prefix="/api")
 app.include_router(code_sync_router, prefix="/api")
 app.include_router(orchestration_router, prefix="/api")
+app.include_router(discovery_router, prefix="/api")
+app.include_router(config_router, prefix="/api")
+app.include_router(node_config_router, prefix="/api/nodes")
 
 
 @app.get("/")

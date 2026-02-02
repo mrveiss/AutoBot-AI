@@ -10,7 +10,10 @@ FastAPI routers for the SLM backend.
 from .auth import router as auth_router
 from .blue_green import router as blue_green_router
 from .code_sync import router as code_sync_router
+from .config import node_config_router
+from .config import router as config_router
 from .deployments import router as deployments_router
+from .discovery import router as discovery_router
 from .health import router as health_router
 from .maintenance import router as maintenance_router
 from .monitoring import router as monitoring_router
@@ -47,4 +50,7 @@ __all__ = [
     "security_router",
     "code_sync_router",
     "orchestration_router",
+    "config_router",
+    "node_config_router",
+    "discovery_router",
 ]

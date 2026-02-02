@@ -19,7 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
-from models.database import Node, Service, ServiceStatus
+from models.database import Node, Service, ServiceConflict, ServiceStatus
 from models.schemas import (
     FleetServicesResponse,
     FleetServiceStatus,
@@ -27,6 +27,9 @@ from models.schemas import (
     RestartAllServicesResponse,
     ServiceActionResponse,
     ServiceCategoryUpdate,
+    ServiceConflictCreateRequest,
+    ServiceConflictListResponse,
+    ServiceConflictResponse,
     ServiceListResponse,
     ServiceLogsResponse,
     ServiceResponse,
@@ -687,6 +690,122 @@ async def restart_all_node_services(
         failed_restarts=failed,
         results=results,
         slm_agent_restarted=slm_agent_restarted,
+    )
+
+
+# =============================================================================
+# Service Conflicts endpoints (Issue #760)
+# =============================================================================
+
+
+@router.get("/conflicts", response_model=ServiceConflictListResponse)
+async def list_service_conflicts(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> ServiceConflictListResponse:
+    """List all known service conflicts."""
+    result = await db.execute(
+        select(ServiceConflict).order_by(ServiceConflict.service_name_a)
+    )
+    conflicts = result.scalars().all()
+
+    return ServiceConflictListResponse(
+        conflicts=[ServiceConflictResponse.model_validate(c) for c in conflicts],
+        total=len(conflicts),
+    )
+
+
+@router.post("/conflicts", response_model=ServiceConflictResponse, status_code=201)
+async def create_service_conflict(
+    request: ServiceConflictCreateRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> ServiceConflictResponse:
+    """Create a new service conflict."""
+    # Normalize order (alphabetical) to prevent duplicates
+    service_a, service_b = sorted([request.service_a, request.service_b])
+
+    # Check if already exists
+    result = await db.execute(
+        select(ServiceConflict).where(
+            ServiceConflict.service_name_a == service_a,
+            ServiceConflict.service_name_b == service_b,
+        )
+    )
+    if result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Conflict already exists",
+        )
+
+    conflict = ServiceConflict(
+        service_name_a=service_a,
+        service_name_b=service_b,
+        reason=request.reason,
+        conflict_type=request.conflict_type,
+    )
+    db.add(conflict)
+    await db.commit()
+    await db.refresh(conflict)
+
+    logger.info(
+        "Created service conflict: %s <-> %s (%s)",
+        service_a,
+        service_b,
+        request.conflict_type,
+    )
+
+    return ServiceConflictResponse.model_validate(conflict)
+
+
+@router.delete("/conflicts/{conflict_id}")
+async def delete_service_conflict(
+    conflict_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> dict:
+    """Delete a service conflict."""
+    result = await db.execute(
+        select(ServiceConflict).where(ServiceConflict.id == conflict_id)
+    )
+    conflict = result.scalar_one_or_none()
+
+    if not conflict:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conflict not found",
+        )
+
+    await db.delete(conflict)
+    await db.commit()
+
+    logger.info(
+        "Deleted service conflict: %s <-> %s",
+        conflict.service_name_a,
+        conflict.service_name_b,
+    )
+
+    return {"message": "Conflict deleted", "id": conflict_id}
+
+
+@router.get("/{service_name}/conflicts")
+async def get_service_conflicts(
+    service_name: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> ServiceConflictListResponse:
+    """Get all conflicts for a specific service."""
+    result = await db.execute(
+        select(ServiceConflict).where(
+            (ServiceConflict.service_name_a == service_name)
+            | (ServiceConflict.service_name_b == service_name)
+        )
+    )
+    conflicts = result.scalars().all()
+
+    return ServiceConflictListResponse(
+        conflicts=[ServiceConflictResponse.model_validate(c) for c in conflicts],
+        total=len(conflicts),
     )
 
 
