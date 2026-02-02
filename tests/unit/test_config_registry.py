@@ -6,7 +6,7 @@
 
 import os
 import time
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 class TestConfigRegistryBasic:
@@ -137,3 +137,65 @@ class TestConfigRegistryBasic:
             ):
                 result = ConfigRegistry.get("backend.api.port", default="8001")
                 assert result == "9000"
+
+
+class TestConfigRegistryCaching:
+    """ConfigRegistry caching behavior tests."""
+
+    def test_cached_value_returned_without_redis_call(self):
+        """Test that cached values don't trigger Redis fetch."""
+        from src.config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+
+        mock_fetch = MagicMock(return_value="cached_value")
+        with patch.object(ConfigRegistry, "_fetch_from_redis", mock_fetch):
+            # First call should fetch from Redis
+            result1 = ConfigRegistry.get("test.key")
+            assert result1 == "cached_value"
+            assert mock_fetch.call_count == 1
+
+            # Second call should use cache
+            result2 = ConfigRegistry.get("test.key")
+            assert result2 == "cached_value"
+            assert mock_fetch.call_count == 1  # Still 1, not 2
+
+    def test_cache_expires_after_ttl(self):
+        """Test that cache expires after TTL seconds."""
+        from src.config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+        original_ttl = ConfigRegistry._ttl_seconds
+        ConfigRegistry._ttl_seconds = 0.1  # 100ms for testing
+
+        try:
+            mock_fetch = MagicMock(return_value="value")
+            with patch.object(ConfigRegistry, "_fetch_from_redis", mock_fetch):
+                ConfigRegistry.get("expiring.key")
+                assert mock_fetch.call_count == 1
+
+                # Wait for expiration
+                time.sleep(0.15)
+
+                ConfigRegistry.get("expiring.key")
+                assert mock_fetch.call_count == 2  # Cache expired, fetched again
+        finally:
+            ConfigRegistry._ttl_seconds = original_ttl
+
+    def test_clear_cache_removes_all_values(self):
+        """Test that clear_cache removes all cached values."""
+        from src.config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+
+        with patch.object(ConfigRegistry, "_fetch_from_redis", return_value="val"):
+            ConfigRegistry.get("key1")
+            ConfigRegistry.get("key2")
+
+        assert "key1" in ConfigRegistry._cache
+        assert "key2" in ConfigRegistry._cache
+
+        ConfigRegistry.clear_cache()
+
+        assert "key1" not in ConfigRegistry._cache
+        assert "key2" not in ConfigRegistry._cache
