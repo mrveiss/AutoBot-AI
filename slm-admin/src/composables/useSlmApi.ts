@@ -343,6 +343,36 @@ export function useSlmApi() {
     return response.data
   }
 
+  async function stopReplication(replicationId: string): Promise<ActionResponse> {
+    const response = await client.post<ActionResponse>(
+      `/stateful/replications/${replicationId}/stop`
+    )
+    return response.data
+  }
+
+  interface SyncVerifyResponse {
+    is_healthy: boolean
+    service_type: string
+    details: {
+      source?: Record<string, unknown>
+      target?: Record<string, unknown>
+      comparison?: Record<string, unknown>
+      lag?: Record<string, unknown>
+    }
+    checks: Array<{
+      name: string
+      status: string
+      message: string
+    }>
+  }
+
+  async function verifyReplicationSync(replicationId: string): Promise<SyncVerifyResponse> {
+    const response = await client.post<SyncVerifyResponse>(
+      `/stateful/replications/${replicationId}/verify-sync`
+    )
+    return response.data
+  }
+
   // Data Verification
   async function verifyData(
     nodeId: string,
@@ -443,6 +473,305 @@ export function useSlmApi() {
       category: string
       nodes_updated: number
     }>(`/fleet/services/${serviceName}/category`, { category })
+    return response.data
+  }
+
+  // Restart All Services on a Node (Issue #725)
+  interface RestartAllServicesRequest {
+    category?: 'autobot' | 'system' | 'all'
+    exclude_services?: string[]
+  }
+
+  interface RestartAllServicesResponse {
+    node_id: string
+    success: boolean
+    message: string
+    total_services: number
+    successful_restarts: number
+    failed_restarts: number
+    results: Array<{
+      service_name: string
+      success: boolean
+      message: string
+      is_slm_agent: boolean
+    }>
+    slm_agent_restarted: boolean
+  }
+
+  async function restartAllNodeServices(
+    nodeId: string,
+    options?: RestartAllServicesRequest
+  ): Promise<RestartAllServicesResponse> {
+    const response = await client.post<RestartAllServicesResponse>(
+      `/nodes/${nodeId}/services/restart-all`,
+      options || {}
+    )
+    return response.data
+  }
+
+  // VNC Credentials (Issue #725)
+  interface VNCCredentialCreate {
+    vnc_type?: 'desktop' | 'browser' | 'custom'
+    name?: string
+    password: string
+    port?: number
+    display_number?: number
+    vnc_port?: number
+    websockify_enabled?: boolean
+  }
+
+  interface VNCCredentialResponse {
+    id: number
+    credential_id: string
+    node_id: string
+    vnc_type: string | null
+    name: string | null
+    port: number | null
+    display_number: number | null
+    vnc_port: number | null
+    websockify_enabled: boolean
+    is_active: boolean
+    last_used: string | null
+    created_at: string
+    updated_at: string
+    websocket_url: string | null
+  }
+
+  interface VNCEndpointResponse {
+    credential_id: string
+    node_id: string
+    hostname: string
+    ip_address: string
+    vnc_type: string
+    name: string | null
+    port: number
+    websocket_url: string
+    is_active: boolean
+  }
+
+  interface VNCEndpointsResponse {
+    endpoints: VNCEndpointResponse[]
+    total: number
+  }
+
+  interface VNCConnectionInfo {
+    credential_id: string
+    node_id: string
+    vnc_type: string
+    host: string
+    port: number
+    display_number: number
+    websocket_url: string
+    connection_token: string | null
+    token_expires_at: string | null
+  }
+
+  async function getVncEndpoints(includeInactive = false): Promise<VNCEndpointsResponse> {
+    const params = includeInactive ? '?include_inactive=true' : ''
+    const response = await client.get<VNCEndpointsResponse>(`/vnc/endpoints${params}`)
+    return response.data
+  }
+
+  async function getNodeVncCredentials(nodeId: string): Promise<{ credentials: VNCCredentialResponse[]; total: number }> {
+    const response = await client.get<{ credentials: VNCCredentialResponse[]; total: number }>(
+      `/nodes/${nodeId}/vnc-credentials`
+    )
+    return response.data
+  }
+
+  async function createVncCredential(nodeId: string, data: VNCCredentialCreate): Promise<VNCCredentialResponse> {
+    const response = await client.post<VNCCredentialResponse>(
+      `/nodes/${nodeId}/vnc-credentials`,
+      data
+    )
+    return response.data
+  }
+
+  async function updateVncCredential(
+    credentialId: string,
+    data: Partial<VNCCredentialCreate> & { is_active?: boolean }
+  ): Promise<VNCCredentialResponse> {
+    const response = await client.patch<VNCCredentialResponse>(
+      `/vnc/credentials/${credentialId}`,
+      data
+    )
+    return response.data
+  }
+
+  async function deleteVncCredential(credentialId: string): Promise<void> {
+    await client.delete(`/vnc/credentials/${credentialId}`)
+  }
+
+  async function getVncConnectionInfo(credentialId: string): Promise<VNCConnectionInfo> {
+    const response = await client.post<VNCConnectionInfo>(
+      `/vnc/credentials/${credentialId}/connect`
+    )
+    return response.data
+  }
+
+  // TLS Credentials (Issue #725: mTLS support)
+  interface TLSCredentialCreate {
+    name?: string
+    ca_cert: string
+    server_cert: string
+    server_key: string
+    common_name?: string
+    expires_at?: string
+  }
+
+  interface TLSCredentialResponse {
+    id: number
+    credential_id: string
+    node_id: string
+    name: string | null
+    common_name: string | null
+    expires_at: string | null
+    fingerprint: string | null
+    is_active: boolean
+    created_at: string
+    updated_at: string
+  }
+
+  interface TLSEndpointResponse {
+    credential_id: string
+    node_id: string
+    hostname: string
+    ip_address: string
+    name: string | null
+    common_name: string | null
+    expires_at: string | null
+    is_active: boolean
+    days_until_expiry: number | null
+  }
+
+  interface TLSEndpointsResponse {
+    endpoints: TLSEndpointResponse[]
+    total: number
+    expiring_soon: number
+  }
+
+  async function getTlsEndpoints(includeInactive = false): Promise<TLSEndpointsResponse> {
+    const params = includeInactive ? '?include_inactive=true' : ''
+    const response = await client.get<TLSEndpointsResponse>(`/tls/endpoints${params}`)
+    return response.data
+  }
+
+  async function getTlsExpiringCertificates(days = 30): Promise<TLSEndpointsResponse> {
+    const response = await client.get<TLSEndpointsResponse>(`/tls/expiring?days=${days}`)
+    return response.data
+  }
+
+  async function getNodeTlsCredentials(nodeId: string, includeInactive = false): Promise<{ credentials: TLSCredentialResponse[]; total: number }> {
+    const params = includeInactive ? '?include_inactive=true' : ''
+    const response = await client.get<{ credentials: TLSCredentialResponse[]; total: number }>(
+      `/nodes/${nodeId}/tls-credentials${params}`
+    )
+    return response.data
+  }
+
+  async function getTlsCredential(credentialId: string): Promise<TLSCredentialResponse> {
+    const response = await client.get<TLSCredentialResponse>(`/tls/credentials/${credentialId}`)
+    return response.data
+  }
+
+  async function createTlsCredential(nodeId: string, data: TLSCredentialCreate): Promise<TLSCredentialResponse> {
+    const response = await client.post<TLSCredentialResponse>(
+      `/nodes/${nodeId}/tls-credentials`,
+      data
+    )
+    return response.data
+  }
+
+  async function updateTlsCredential(
+    credentialId: string,
+    data: Partial<TLSCredentialCreate> & { is_active?: boolean }
+  ): Promise<TLSCredentialResponse> {
+    const response = await client.patch<TLSCredentialResponse>(
+      `/tls/credentials/${credentialId}`,
+      data
+    )
+    return response.data
+  }
+
+  async function deleteTlsCredential(credentialId: string): Promise<void> {
+    await client.delete(`/tls/credentials/${credentialId}`)
+  }
+
+  async function downloadTlsCaCert(credentialId: string): Promise<string> {
+    const response = await client.get<string>(`/tls/credentials/${credentialId}/ca-cert`)
+    return response.data
+  }
+
+  async function downloadTlsServerCert(credentialId: string): Promise<string> {
+    const response = await client.get<string>(`/tls/credentials/${credentialId}/server-cert`)
+    return response.data
+  }
+
+  // TLS Certificate Lifecycle (Issue #725: renew/rotate workflows)
+  interface TLSRenewResponse {
+    success: boolean
+    message: string
+    old_credential_id: string
+    new_credential_id: string
+    expires_at: string | null
+    deployed: boolean
+    deployment_message: string | null
+  }
+
+  interface TLSRotateResponse {
+    success: boolean
+    message: string
+    old_credential_id: string
+    old_deactivated: boolean
+    new_credential_id: string
+    expires_at: string | null
+    deployed: boolean
+    deployment_message: string | null
+  }
+
+  interface TLSBulkRenewResponse {
+    success: boolean
+    message: string
+    renewed: number
+    failed: number
+    results: Array<{
+      old_credential_id: string
+      new_credential_id?: string
+      node_id: string
+      success: boolean
+      deployed?: boolean
+      error?: string
+    }>
+  }
+
+  async function renewTlsCertificate(
+    credentialId: string,
+    deploy = false
+  ): Promise<TLSRenewResponse> {
+    const response = await client.post<TLSRenewResponse>(
+      `/tls/credentials/${credentialId}/renew?deploy=${deploy}`
+    )
+    return response.data
+  }
+
+  async function rotateTlsCertificate(
+    credentialId: string,
+    deploy = true,
+    deactivateOld = true
+  ): Promise<TLSRotateResponse> {
+    const response = await client.post<TLSRotateResponse>(
+      `/tls/credentials/${credentialId}/rotate?deploy=${deploy}&deactivate_old=${deactivateOld}`
+    )
+    return response.data
+  }
+
+  async function bulkRenewExpiringCertificates(
+    days = 30,
+    deploy = false
+  ): Promise<TLSBulkRenewResponse> {
+    const response = await client.post<TLSBulkRenewResponse>(
+      `/tls/bulk-renew?days=${days}&deploy=${deploy}`
+    )
     return response.data
   }
 
@@ -761,6 +1090,11 @@ export function useSlmApi() {
     return response.data
   }
 
+  async function retryBlueGreen(deploymentId: string): Promise<ActionResponse> {
+    const response = await client.post<ActionResponse>(`/blue-green/${deploymentId}/retry`)
+    return response.data
+  }
+
   async function getEligibleNodes(roles: string[]): Promise<{ nodes: EligibleNode[]; total: number }> {
     const params = new URLSearchParams()
     params.append('roles', roles.join(','))
@@ -825,6 +1159,8 @@ export function useSlmApi() {
     getReplication,
     startReplication,
     promoteReplica,
+    stopReplication,
+    verifyReplicationSync,
     // Verification
     verifyData,
     // Services (Issue #728)
@@ -838,6 +1174,27 @@ export function useSlmApi() {
     stopFleetService,
     restartFleetService,
     updateServiceCategory,
+    restartAllNodeServices,  // Issue #725
+    // VNC Credentials (Issue #725)
+    getVncEndpoints,
+    getNodeVncCredentials,
+    createVncCredential,
+    updateVncCredential,
+    deleteVncCredential,
+    getVncConnectionInfo,
+    // TLS Credentials (Issue #725: mTLS support)
+    getTlsEndpoints,
+    getTlsExpiringCertificates,
+    getNodeTlsCredentials,
+    getTlsCredential,
+    createTlsCredential,
+    updateTlsCredential,
+    deleteTlsCredential,
+    downloadTlsCaCert,
+    downloadTlsServerCert,
+    renewTlsCertificate,
+    rotateTlsCertificate,
+    bulkRenewExpiringCertificates,
     // Maintenance Windows
     getMaintenanceWindows,
     getActiveMaintenanceWindows,
@@ -862,6 +1219,7 @@ export function useSlmApi() {
     switchBlueGreenTraffic,
     rollbackBlueGreen,
     cancelBlueGreen,
+    retryBlueGreen,
     getEligibleNodes,
     purgeRoles,
   }

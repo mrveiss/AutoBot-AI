@@ -9,6 +9,9 @@ on first SSH connection. Uses deduplication to store commands once in
 the knowledge base with relations indicating which hosts have them.
 
 Related Issue: #715 - Dynamic SSH/VNC host management via secrets
+Related Issue: #729 - SSH operations now proxied through SLM API
+
+TODO (#729): This service needs refactoring to proxy SSH through SLM API
 
 Key Features:
 - Extracts all available commands via compgen -c
@@ -24,8 +27,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, List, Optional, Set
 
-from backend.services.infrastructure_host_service import get_infrastructure_host_service
-from backend.services.ssh_connection_service import get_ssh_connection_service
+# TODO (#729): SSH proxied through SLM API
+# Infrastructure services removed - now managed by SLM server (#729)
+# from backend.services.ssh_connection_service import get_ssh_connection_service
 
 logger = logging.getLogger(__name__)
 
@@ -193,14 +197,14 @@ async def extract_host_commands(host_id: str) -> Dict[str, ExtractedCommand]:
     Returns:
         Dict mapping command names to ExtractedCommand objects
     """
-    ssh_service = get_ssh_connection_service()
-    host_service = get_infrastructure_host_service()
+    # TODO (#729): SSH proxied through SLM API - Update in Task 5.2
+    raise NotImplementedError("Command extraction temporarily disabled - SSH proxied through SLM API (#729)")
 
-    host = host_service.get_host(host_id)
-    if not host:
-        raise ValueError(f"Host not found: {host_id}")
-
-    logger.info("Starting command extraction for host: %s (%s)", host.name, host.host)
+    # OLD CODE - will be updated to use SLM proxy:
+    # Infrastructure services removed - now managed by SLM server (#729)
+    # ssh_service = get_ssh_connection_service()
+    # host_service = get_infrastructure_host_service()
+    # host = host_service.get_host(host_id)
 
     # Extract command list
     commands = await _extract_command_list(ssh_service, host_id)
@@ -256,10 +260,10 @@ async def store_commands_in_knowledge_base(
         logger.warning("Knowledge base service not available")
         return 0
 
-    host_service = get_infrastructure_host_service()
-    host = host_service.get_host(host_id)
-    if not host:
-        return 0
+    # Infrastructure services removed - now managed by SLM server (#729)
+    # TODO (#729): Get host info from SLM API
+    logger.warning("store_commands_in_knowledge_base temporarily disabled - infrastructure services removed (#729)")
+    return 0
 
     new_count = 0
 
@@ -330,17 +334,10 @@ async def get_commands_for_host(host_id: str) -> List[str]:
     Returns:
         List of command names available on the host
     """
-    host_service = get_infrastructure_host_service()
-    host = host_service.get_host(host_id)
-
-    if not host:
-        return []
-
-    if not host.commands_extracted:
-        # Trigger extraction
-        commands = await extract_host_commands(host_id)
-        await store_commands_in_knowledge_base(commands, host_id)
-        return list(commands.keys())
+    # Infrastructure services removed - now managed by SLM server (#729)
+    # TODO (#729): Get host info from SLM API
+    logger.warning("get_available_commands temporarily disabled - infrastructure services removed (#729)")
+    return []
 
     # Query knowledge base for commands on this host
     try:
@@ -390,14 +387,9 @@ async def search_commands(
 
         # Filter by host if specified
         if host_id:
-            host_service = get_infrastructure_host_service()
-            host = host_service.get_host(host_id)
-            if host:
-                results = [
-                    r for r in results
-                    if host.name in r.get("content", "") or
-                    r["metadata"].get("source_host") == host.name
-                ]
+            # Infrastructure services removed - now managed by SLM server (#729)
+            # TODO (#729): Get host info from SLM API for filtering
+            logger.warning("Host filtering temporarily disabled - infrastructure services removed (#729)")
 
         # Filter by category if specified
         if category:

@@ -45,10 +45,23 @@ const router = createRouter({
       meta: { title: 'Backups' }
     },
     {
+      path: '/replications',
+      name: 'replications',
+      component: () => import('@/views/ReplicationView.vue'),
+      meta: { title: 'Replication' }
+    },
+    {
       path: '/maintenance',
       name: 'maintenance',
       component: () => import('@/views/MaintenanceView.vue'),
       meta: { title: 'Maintenance' }
+    },
+    {
+      // Issue #741: Code sync management for fleet-wide updates
+      path: '/code-sync',
+      name: 'code-sync',
+      component: () => import('@/views/CodeSyncView.vue'),
+      meta: { title: 'Code Sync' }
     },
     {
       path: '/settings',
@@ -74,9 +87,10 @@ const router = createRouter({
           meta: { title: 'Infrastructure', parent: 'settings' }
         },
         {
+          // Issue #737: Consolidated to Fleet Overview - redirect for backwards compatibility
           path: 'nodes',
           name: 'settings-nodes',
-          component: () => import('@/views/settings/NodesSettings.vue'),
+          redirect: '/',
           meta: { title: 'Nodes Management', parent: 'settings' }
         },
         {

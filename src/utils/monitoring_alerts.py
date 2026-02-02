@@ -694,41 +694,23 @@ class MonitoringAlertsManager:
         if self.running:
             logger.warning("Monitoring already running")
             return
-        
+
         self.running = True
         logger.info("🔍 Started monitoring alerts system")
-        
+
+        # Issue #729: Infrastructure monitoring moved to SLM server
+        # This legacy monitoring_alerts.py was replaced by Prometheus AlertManager (Issue #69)
+        # Infrastructure data now available via SLM API instead of backend.api.infrastructure_monitor
+        logger.warning("⚠️ Infrastructure monitoring deprecated - use SLM server and Prometheus AlertManager")
+
         while self.running:
             try:
-                # Import here to avoid circular dependency
-                from backend.api.infrastructure_monitor import monitor
-                
-                # Get infrastructure status
-                machines = await monitor.get_infrastructure_status()
-                
-                # Convert to dict format for metric checking
-                infrastructure_data = {}
-                for machine in machines:
-                    machine_data = {
-                        'stats': {
-                            'cpu_usage': machine.stats.cpu_usage if machine.stats else None,
-                            'memory_percent': machine.stats.memory_percent if machine.stats else None,
-                            'disk_percent': machine.stats.disk_percent if machine.stats else None,
-                            'cpu_load_1m': machine.stats.cpu_load_1m if machine.stats else None
-                        },
-                        'services': {
-                            'core': {service.name.lower().replace(' ', '_'): {'status': service.status} for service in machine.services.core},
-                            'database': {service.name.lower().replace(' ', '_'): {'status': service.status} for service in machine.services.database},
-                            'application': {service.name.lower().replace(' ', '_'): {'status': service.status} for service in machine.services.application}
-                        }
-                    }
-                    infrastructure_data[machine.id] = machine_data
-                
-                # Check metrics against alert rules
-                await self.check_metrics(infrastructure_data)
-                
+                # TODO #729: Implement SLM-based infrastructure monitoring if needed
+                # For now, this monitoring loop is disabled as infrastructure APIs moved to SLM
+                logger.info("Monitoring loop running (infrastructure checks disabled - see Issue #729)")
+
                 await asyncio.sleep(self.check_interval)
-                
+
             except Exception as e:
                 logger.error(f"Error in monitoring loop: {e}")
                 await asyncio.sleep(30)  # Wait longer on error

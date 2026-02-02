@@ -1,0 +1,11 @@
+{# AutoBot - AI-Powered Automation Platform #}
+{# Copyright (c) 2025 mrveiss #}
+{# Author: mrveiss #}
+{# Issue #741: Version tracking for SLM agents #}
+{
+  "commit": "{{ slm_agent_version | default(git_commit) }}",
+  "built_at": "{{ ansible_date_time.iso8601 }}",
+  "deployed_at": "{{ ansible_date_time.iso8601 }}",
+  "deployed_by": "ansible",
+  "node_id": "{{ inventory_hostname }}"
+}

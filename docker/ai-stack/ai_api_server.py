@@ -366,14 +366,31 @@ if __name__ == "__main__":
     host = os.getenv("AI_SERVER_HOST", "0.0.0.0")
     port = int(os.getenv("AI_SERVER_PORT", "8080"))
     workers = int(os.getenv("AI_SERVER_WORKERS", "1"))
-    
-    # Run server
-    uvicorn.run(
-        "ai_api_server:app",
-        host=host,
-        port=port,
-        workers=workers,
-        log_level="info",
-        access_log=True,
-        reload=False  # Disable reload in container
-    )
+
+    # TLS Configuration - Issue #725 Phase 5
+    tls_enabled = os.getenv("AI_SERVER_TLS_ENABLED", "false").lower() == "true"
+    ssl_keyfile = None
+    ssl_certfile = None
+
+    if tls_enabled:
+        cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "/etc/autobot/certs")
+        ssl_keyfile = os.path.join(cert_dir, "server-key.pem")
+        ssl_certfile = os.path.join(cert_dir, "server-cert.pem")
+        port = int(os.getenv("AI_SERVER_TLS_PORT", "8445"))
+        logging.info("TLS enabled - using HTTPS on port %s", port)
+
+    uvicorn_config = {
+        "app": "ai_api_server:app",
+        "host": host,
+        "port": port,
+        "workers": workers,
+        "log_level": "info",
+        "access_log": True,
+        "reload": False,
+    }
+
+    if tls_enabled and ssl_keyfile and ssl_certfile:
+        uvicorn_config["ssl_keyfile"] = ssl_keyfile
+        uvicorn_config["ssl_certfile"] = ssl_certfile
+
+    uvicorn.run(**uvicorn_config)

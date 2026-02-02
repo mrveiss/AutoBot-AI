@@ -49,6 +49,8 @@ declare -A VMS=(
     ["redis"]="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
     ["ai-stack"]="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
     ["browser"]="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
+    # Issue #729: SLM machine for infrastructure management
+    ["slm"]="${AUTOBOT_SLM_HOST:-172.16.168.19}"
 )
 
 SSH_KEY="$HOME/.ssh/autobot_key"

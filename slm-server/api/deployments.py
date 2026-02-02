@@ -100,6 +100,17 @@ AVAILABLE_ROLES = [
         variables={"prometheus_port": 9090, "grafana_port": 3000},
         tools=["prometheus", "grafana", "node_exporter", "alertmanager"],
     ),
+    RoleInfo(
+        name="vnc",
+        description="VNC remote desktop server with noVNC web interface",
+        category="remote-access",
+        dependencies=["slm-agent"],
+        variables={
+            "websockify_enabled": True,
+            "security_type": "VeNCrypt",
+        },
+        tools=["tigervnc-standalone-server", "websockify", "novnc", "x11vnc"],
+    ),
 ]
 
 

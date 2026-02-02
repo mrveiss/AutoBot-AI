@@ -56,6 +56,8 @@ export interface VMConfig {
   browser: string;
   /** Ollama host (typically localhost) */
   ollama: string;
+  /** SLM Backend (Service Lifecycle Manager) - Issue #725 */
+  slm: string;
 }
 
 /**
@@ -72,6 +74,10 @@ export interface PortConfig {
   npu: number;
   prometheus: number;
   grafana: number;
+  /** SLM Backend port - Issue #725 */
+  slm: number;
+  /** SLM Admin frontend port - Issue #729 */
+  slmAdmin: number;
 }
 
 /**
@@ -241,6 +247,10 @@ export interface AutoBotConfig {
   readonly npuWorkerUrl: string;
   readonly browserServiceUrl: string;
   readonly vncUrl: string;
+  /** SLM Backend URL - Issue #725 */
+  readonly slmUrl: string;
+  /** SLM Admin frontend URL - Issue #729 */
+  readonly slmAdminUrl: string;
 }
 
 // =============================================================================
@@ -300,6 +310,7 @@ function buildConfig(): AutoBotConfig {
     aistack: getEnv('VITE_AI_STACK_HOST', '172.16.168.24'),
     browser: getEnv('VITE_BROWSER_HOST', '172.16.168.25'),
     ollama: getEnv('VITE_OLLAMA_HOST', '127.0.0.1'),
+    slm: getEnv('VITE_SLM_HOST', '172.16.168.19'),
   };
 
   // Service ports
@@ -314,6 +325,8 @@ function buildConfig(): AutoBotConfig {
     npu: getEnvNumber('VITE_NPU_WORKER_PORT', 8081),
     prometheus: getEnvNumber('VITE_PROMETHEUS_PORT', 9090),
     grafana: getEnvNumber('VITE_GRAFANA_PORT', 3000),
+    slm: getEnvNumber('VITE_SLM_PORT', 8000),
+    slmAdmin: getEnvNumber('VITE_SLM_ADMIN_PORT', 5174),
   };
 
   // LLM configuration
@@ -415,6 +428,16 @@ function buildConfig(): AutoBotConfig {
     get vncUrl(): string {
       return `${httpProtocol}://${vm.main}:${port.vnc}/vnc.html`;
     },
+
+    get slmUrl(): string {
+      return `${httpProtocol}://${vm.slm}:${port.slm}`;
+    },
+
+    get slmAdminUrl(): string {
+      // Issue #729: SLM Admin is behind nginx on port 443
+      // Nginx proxies / -> slm-admin:5174, /api/ -> slm-server:8000
+      return `https://${vm.slm}`;
+    },
   };
 
   return configObj;
@@ -475,6 +498,9 @@ export function getServiceUrl(serviceName: string): string | undefined {
     npu_worker: cfg.npuWorkerUrl,
     browser: cfg.browserServiceUrl,
     vnc: cfg.vncUrl,
+    slm: cfg.slmUrl,
+    slm_admin: cfg.slmAdminUrl,
+    slmadmin: cfg.slmAdminUrl,
   };
   return urlMap[serviceName.toLowerCase()];
 }
@@ -497,6 +523,7 @@ export function getVmIp(vmName: string): string | undefined {
     ai_stack: cfg.vm.aistack,
     browser: cfg.vm.browser,
     ollama: cfg.vm.ollama,
+    slm: cfg.vm.slm,
   };
   return vmMap[vmName.toLowerCase()];
 }
@@ -552,4 +579,18 @@ export function getBackendWsUrl(): string {
  */
 export function getApiTimeout(): number {
   return getConfig().timeout.api;
+}
+
+/**
+ * Get SLM Backend URL (Issue #725).
+ */
+export function getSLMUrl(): string {
+  return getConfig().slmUrl;
+}
+
+/**
+ * Get SLM Admin frontend URL (Issue #729).
+ */
+export function getSLMAdminUrl(): string {
+  return getConfig().slmAdminUrl;
 }

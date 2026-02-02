@@ -23,11 +23,10 @@ repos:
     rev: 7.0.0
     hooks:
       - id: flake8
-        args: [
-          --max-line-length=100,
-          --extend-ignore=E203,W503,
-          --exclude=node_modules,.venv,venv,__pycache__,.git,temp,logs,reports,archive
-        ]
+        args:
+          - "--max-line-length=100"
+          - "--extend-ignore=E203,W503"
+          - "--exclude=node_modules,.venv,venv,__pycache__,.git,temp,logs,reports,archive"
 
   # Remove unused imports and variables with autoflake
   - repo: https://github.com/PyCQA/autoflake
@@ -67,14 +66,28 @@ repos:
       - id: debug-statements  # Check for debugger imports
       - id: name-tests-test  # Ensure test files are named correctly
         args: [--pytest-test-first]
+        exclude: ^tests/(conftest|mock_llm_interface|ci_cd_integration|integration_test_infrastructure|security_port_audit|frontend_comprehensive_corrected|phase9_comprehensive_test_suite)\.py$
 
   # Security checks with bandit
   - repo: https://github.com/PyCQA/bandit
     rev: 1.7.6
     hooks:
       - id: bandit
-        args: [-c, .bandit, -r, backend/, src/]
+        args: [-c, .bandit]
+        files: ^(backend/|src/)
         additional_dependencies: ["bandit[toml]"]
+
+  # Hardcoded value detection (Issue #694)
+  - repo: local
+    hooks:
+      - id: detect-hardcoded-values
+        name: Detect Hardcoded Values (Strict)
+        entry: scripts/hooks/pre-commit-hardcoded-values
+        language: script
+        types: [python, ts, vue]
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Blocks commits with hardcoded IPs, ports, magic numbers, and role strings"
 
 # Configuration for specific file types
 default_language_version:

@@ -34,9 +34,16 @@ class Settings(BaseSettings):
     debug: bool = False
 
     # Authentication
-    secret_key: str = os.getenv("SLM_SECRET_KEY", "change-me-in-production")
+    secret_key: str = os.getenv("SLM_SECRET_KEY", "")
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24  # 24 hours
+
+    # Encryption for sensitive data (credentials, etc.)
+    encryption_key: str = os.getenv("SLM_ENCRYPTION_KEY", "")
+
+    # VNC defaults (configurable via env vars)
+    vnc_default_port: int = int(os.getenv("SLM_VNC_DEFAULT_PORT", "6080"))
+    vnc_default_display: int = int(os.getenv("SLM_VNC_DEFAULT_DISPLAY", "1"))
 
     # Monitoring
     monitoring_mode: str = "local"  # local or remote

@@ -12,14 +12,22 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 
-from typing_extensions import Annotated
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
-from models.database import Certificate, EventSeverity, EventType, Node, NodeEvent, NodeStatus
+from models.database import (
+    Certificate,
+    CodeStatus,
+    EventSeverity,
+    EventType,
+    Node,
+    NodeEvent,
+    NodeStatus,
+    Setting,
+)
 from models.schemas import (
     CertificateActionResponse,
     CertificateResponse,
@@ -27,6 +35,7 @@ from models.schemas import (
     ConnectionTestResponse,
     EnrollRequest,
     HeartbeatRequest,
+    HeartbeatResponse,
     NodeCreate,
     NodeEventListResponse,
     NodeEventResponse,
@@ -36,10 +45,23 @@ from models.schemas import (
 )
 from services.auth import get_current_user
 from services.database import get_db
+from services.encryption import encrypt_data
 from services.reconciler import reconciler_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["nodes"])
+
+
+async def _broadcast_lifecycle_event(
+    node_id: str, event_type: str, details: dict = None
+) -> None:
+    """Broadcast a node lifecycle event via WebSocket."""
+    try:
+        from api.websocket import ws_manager
+
+        await ws_manager.send_node_lifecycle_event(node_id, event_type, details)
+    except Exception as e:
+        logger.debug("Failed to broadcast lifecycle event: %s", e)
 
 
 async def _create_node_event(
@@ -121,10 +143,18 @@ async def create_node(
         initial_status = NodeStatus.PENDING.value
 
     # Store SSH password in extra_data if provided (for enrollment)
-    # TODO: Encrypt sensitive credentials in a future security enhancement
+    # Password is encrypted using AES-256-GCM before storage
     extra_data = {}
     if node_data.ssh_password and node_data.auth_method == "password":
-        extra_data["ssh_password"] = node_data.ssh_password
+        try:
+            extra_data["ssh_password"] = encrypt_data(node_data.ssh_password)
+            extra_data["ssh_password_encrypted"] = True
+        except Exception as e:
+            logger.error("Failed to encrypt SSH password: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to securely store credentials",
+            )
 
     node = Node(
         node_id=node_id,
@@ -151,13 +181,30 @@ async def create_node(
         EventType.STATE_CHANGE,
         EventSeverity.INFO,
         event_msg,
-        {"status": initial_status, "roles": node_data.roles, "import_existing": node_data.import_existing},
+        {
+            "status": initial_status,
+            "roles": node_data.roles,
+            "import_existing": node_data.import_existing,
+        },
     )
 
     await db.commit()
     await db.refresh(node)
 
     logger.info(event_msg)
+
+    # Broadcast lifecycle event via WebSocket
+    await _broadcast_lifecycle_event(
+        node_id,
+        "node_created",
+        {
+            "hostname": node.hostname,
+            "ip_address": node.ip_address,
+            "status": initial_status,
+            "roles": node_data.roles,
+            "import_existing": node_data.import_existing,
+        },
+    )
 
     return NodeResponse.model_validate(node)
 
@@ -214,6 +261,7 @@ async def update_node(
 
 class RolesUpdateRequest(BaseModel):
     """Request to update node roles."""
+
     roles: List[str]
 
 
@@ -258,10 +306,21 @@ async def delete_node(
             detail="Node not found",
         )
 
+    # Store node info before deletion for the event
+    hostname = node.hostname
+    ip_address = node.ip_address
+
     await db.delete(node)
     await db.commit()
 
     logger.info("Node deleted: %s", node_id)
+
+    # Broadcast lifecycle event via WebSocket
+    await _broadcast_lifecycle_event(
+        node_id,
+        "node_deleted",
+        {"hostname": hostname, "ip_address": ip_address},
+    )
 
 
 @router.put("/{node_id}/replace", response_model=NodeResponse)
@@ -310,6 +369,19 @@ async def replace_node(
     else:
         initial_status = NodeStatus.PENDING.value
 
+    # Store encrypted SSH password if provided
+    extra_data = {}
+    if node_data.ssh_password and node_data.auth_method == "password":
+        try:
+            extra_data["ssh_password"] = encrypt_data(node_data.ssh_password)
+            extra_data["ssh_password_encrypted"] = True
+        except Exception as e:
+            logger.error("Failed to encrypt SSH password: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to securely store credentials",
+            )
+
     new_node = Node(
         node_id=new_node_id,
         hostname=node_data.hostname,
@@ -319,6 +391,7 @@ async def replace_node(
         ssh_port=node_data.ssh_port,
         auth_method=node_data.auth_method,
         status=initial_status,
+        extra_data=extra_data if extra_data else None,
     )
     db.add(new_node)
     await db.commit()
@@ -334,12 +407,12 @@ async def replace_node(
     return NodeResponse.model_validate(new_node)
 
 
-@router.post("/{node_id}/heartbeat", response_model=NodeResponse)
+@router.post("/{node_id}/heartbeat", response_model=HeartbeatResponse)
 async def node_heartbeat(
     node_id: str,
     heartbeat: HeartbeatRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> NodeResponse:
+) -> HeartbeatResponse:
     """Receive heartbeat from node agent."""
     node = await reconciler_service.update_node_heartbeat(
         db,
@@ -358,7 +431,42 @@ async def node_heartbeat(
             detail="Node not found",
         )
 
-    return NodeResponse.model_validate(node)
+    # Store code_version if provided (Issue #741)
+    if heartbeat.code_version:
+        node.code_version = heartbeat.code_version
+
+    # Get latest agent code version from settings (Issue #741)
+    latest_result = await db.execute(
+        select(Setting).where(Setting.key == "slm_agent_latest_commit")
+    )
+    latest_setting = latest_result.scalar_one_or_none()
+    latest_version = latest_setting.value if latest_setting else None
+
+    # Compare and update code_status (Issue #741)
+    if heartbeat.code_version and latest_version:
+        if heartbeat.code_version == latest_version:
+            node.code_status = CodeStatus.UP_TO_DATE.value
+        else:
+            node.code_status = CodeStatus.OUTDATED.value
+    elif heartbeat.code_version:
+        # No latest version configured yet
+        node.code_status = CodeStatus.UNKNOWN.value
+
+    # Commit changes to database
+    await db.commit()
+    await db.refresh(node)
+
+    # Build and return HeartbeatResponse (Issue #741)
+    update_available = (
+        node.code_status == CodeStatus.OUTDATED.value and latest_version is not None
+    )
+
+    return HeartbeatResponse(
+        status="ok",
+        update_available=update_available,
+        latest_version=latest_version if update_available else None,
+        update_url=f"/api/nodes/{node_id}/code-package" if update_available else None,
+    )
 
 
 @router.post("/{node_id}/enroll")
@@ -394,6 +502,13 @@ async def enroll_node(
     )
     await db.commit()
 
+    # Broadcast enrollment started via WebSocket
+    await _broadcast_lifecycle_event(
+        node_id,
+        "enrollment_started",
+        {"auth_method": "password" if ssh_password else "key"},
+    )
+
     # Run enrollment (deploys agent via Ansible)
     success, message = await deployment_service.enroll_node(
         db, node_id, ssh_password=ssh_password
@@ -410,6 +525,14 @@ async def enroll_node(
             {"error": message},
         )
         await db.commit()
+
+        # Broadcast enrollment failed via WebSocket
+        await _broadcast_lifecycle_event(
+            node_id,
+            "enrollment_failed",
+            {"error": message},
+        )
+
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=message,
@@ -426,9 +549,22 @@ async def enroll_node(
         EventType.DEPLOYMENT_COMPLETED,
         EventSeverity.INFO,
         f"Enrollment completed for node {node_id}",
-        {"hostname": node.hostname if node else None, "status": node.status if node else None},
+        {
+            "hostname": node.hostname if node else None,
+            "status": node.status if node else None,
+        },
     )
     await db.commit()
+
+    # Broadcast enrollment completed via WebSocket
+    await _broadcast_lifecycle_event(
+        node_id,
+        "enrollment_completed",
+        {
+            "hostname": node.hostname if node else None,
+            "status": node.status if node else None,
+        },
+    )
 
     logger.info("Node enrollment completed: %s", node_id)
     return {
@@ -507,6 +643,110 @@ async def resume_node(
     return NodeResponse.model_validate(node)
 
 
+@router.post("/{node_id}/reboot")
+async def reboot_node(
+    node_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+):
+    """
+    Reboot a node via SSH.
+
+    This sends a reboot command to the node. The node will go offline
+    temporarily and should come back online after the reboot completes.
+    """
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Node not found",
+        )
+
+    if node.status == NodeStatus.OFFLINE.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot reboot an offline node",
+        )
+
+    # Create reboot event before issuing command
+    await _create_node_event(
+        db,
+        node_id,
+        EventType.MANUAL_ACTION,
+        EventSeverity.WARNING,
+        f"Reboot initiated for {node.hostname}",
+        {"action": "reboot", "initiated_by": "api"},
+    )
+    await db.commit()
+
+    # Broadcast lifecycle event via WebSocket
+    await _broadcast_lifecycle_event(
+        node_id,
+        "reboot_initiated",
+        {"hostname": node.hostname, "ip_address": node.ip_address},
+    )
+
+    # Execute reboot via SSH
+    success, message = await _reboot_via_ssh(
+        node.ip_address,
+        node.ssh_user or "autobot",
+        node.ssh_port or 22,
+    )
+
+    if success:
+        logger.info("Reboot initiated for node %s (%s)", node_id, node.ip_address)
+        return {
+            "success": True,
+            "message": f"Reboot initiated for {node.hostname}. Node will be temporarily offline.",
+            "node_id": node_id,
+        }
+    else:
+        logger.error("Failed to reboot node %s: %s", node_id, message)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reboot node: {message}",
+        )
+
+
+async def _reboot_via_ssh(ip_address: str, ssh_user: str, ssh_port: int) -> tuple:
+    """Execute reboot command on a remote node via SSH."""
+    try:
+        ssh_cmd = [
+            "ssh",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "ConnectTimeout=10",
+            "-o",
+            "BatchMode=yes",
+            "-p",
+            str(ssh_port),
+            f"{ssh_user}@{ip_address}",
+            "sudo reboot",
+        ]
+
+        proc = await asyncio.create_subprocess_exec(
+            *ssh_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=30.0)
+
+        # Reboot command often returns non-zero or connection closes
+        # Success is if the command was accepted (might get connection reset)
+        return True, "Reboot command sent"
+
+    except asyncio.TimeoutError:
+        return False, "SSH connection timed out"
+    except Exception as e:
+        return False, str(e)
+
+
 @router.post("/{node_id}/acknowledge-remediation")
 async def acknowledge_remediation(
     node_id: str,
@@ -562,7 +802,10 @@ async def test_connection(
     start_time = time.time()
 
     try:
-        remote_cmd = "uname -a && cat /etc/os-release 2>/dev/null | head -5 || echo 'OS info unavailable'"
+        remote_cmd = (
+            "uname -a && cat /etc/os-release 2>/dev/null | "
+            "head -5 || echo 'OS info unavailable'"
+        )
 
         # Build SSH command based on auth method
         if request.auth_method == "password" and request.password:
@@ -576,13 +819,20 @@ async def test_connection(
 
             # Use sshpass for password authentication
             ssh_cmd = [
-                "sshpass", "-p", request.password,
+                "sshpass",
+                "-p",
+                request.password,
                 "ssh",
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "ConnectTimeout=10",
-                "-o", "PubkeyAuthentication=no",
-                "-p", str(request.ssh_port),
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
+                "-o",
+                "ConnectTimeout=10",
+                "-o",
+                "PubkeyAuthentication=no",
+                "-p",
+                str(request.ssh_port),
                 f"{request.ssh_user}@{request.ip_address}",
                 remote_cmd,
             ]
@@ -590,11 +840,16 @@ async def test_connection(
             # Use key-based authentication (BatchMode)
             ssh_cmd = [
                 "ssh",
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "ConnectTimeout=10",
-                "-o", "BatchMode=yes",
-                "-p", str(request.ssh_port),
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
+                "-o",
+                "ConnectTimeout=10",
+                "-o",
+                "BatchMode=yes",
+                "-p",
+                str(request.ssh_port),
                 f"{request.ssh_user}@{request.ip_address}",
                 remote_cmd,
             ]
@@ -876,9 +1131,10 @@ async def get_node_updates(
     _: Annotated[dict, Depends(get_current_user)],
 ):
     """Get available updates for a node."""
+    from sqlalchemy import or_
+
     from models.database import UpdateInfo
     from models.schemas import UpdateCheckResponse, UpdateInfoResponse
-    from sqlalchemy import or_
 
     # Verify node exists
     node_result = await db.execute(select(Node).where(Node.node_id == node_id))
@@ -891,7 +1147,7 @@ async def get_node_updates(
     # Get updates for this node (or global updates)
     query = (
         select(UpdateInfo)
-        .where(UpdateInfo.is_applied == False)
+        .where(UpdateInfo.is_applied.is_(False))
         .where(or_(UpdateInfo.node_id == node_id, UpdateInfo.node_id.is_(None)))
         .order_by(UpdateInfo.severity.desc(), UpdateInfo.created_at.desc())
     )
@@ -953,7 +1209,9 @@ async def apply_node_updates(
     logger.info("Applied %d updates to node %s", len(applied), node_id)
     return UpdateApplyResponse(
         success=len(failed) == 0,
-        message=f"Applied {len(applied)} update(s)" if applied else "No updates applied",
+        message=f"Applied {len(applied)} update(s)"
+        if applied
+        else "No updates applied",
         applied_updates=applied,
         failed_updates=failed,
     )

@@ -7,10 +7,11 @@ SLM Database Models
 SQLAlchemy models for SLM state persistence.
 """
 
+import enum
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Column,
     DateTime,
@@ -18,21 +19,18 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
-    JSON,
-    Enum,
     UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase
-import enum
 
 
 class Base(DeclarativeBase):
     """Base class for all models."""
-    pass
 
 
 class NodeStatus(str, enum.Enum):
     """Node status enumeration."""
+
     PENDING = "pending"
     ENROLLING = "enrolling"
     ONLINE = "online"
@@ -44,6 +42,7 @@ class NodeStatus(str, enum.Enum):
 
 class DeploymentStatus(str, enum.Enum):
     """Deployment status enumeration."""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -54,10 +53,19 @@ class DeploymentStatus(str, enum.Enum):
 
 class BackupStatus(str, enum.Enum):
     """Backup status enumeration."""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class CodeStatus(str, enum.Enum):
+    """Code version status (Issue #741)."""
+
+    UP_TO_DATE = "up_to_date"
+    OUTDATED = "outdated"
+    UNKNOWN = "unknown"
 
 
 class Node(Base):
@@ -87,6 +95,10 @@ class Node(Base):
     agent_version = Column(String(20), nullable=True)
     os_info = Column(String(255), nullable=True)
     extra_data = Column(JSON, default=dict)
+
+    # Code version tracking (Issue #741)
+    code_version = Column(String(64), nullable=True)
+    code_status = Column(String(20), default=CodeStatus.UNKNOWN.value)
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -171,6 +183,7 @@ class User(Base):
 
 class EventType(str, enum.Enum):
     """Node event type enumeration."""
+
     STATE_CHANGE = "state_change"
     HEALTH_CHECK = "health_check"
     DEPLOYMENT_STARTED = "deployment_started"
@@ -188,6 +201,7 @@ class EventType(str, enum.Enum):
 
 class EventSeverity(str, enum.Enum):
     """Event severity enumeration."""
+
     INFO = "info"
     WARNING = "warning"
     ERROR = "error"
@@ -196,6 +210,7 @@ class EventSeverity(str, enum.Enum):
 
 class ReplicationStatus(str, enum.Enum):
     """Replication status enumeration."""
+
     PENDING = "pending"
     SYNCING = "syncing"
     ACTIVE = "active"
@@ -205,6 +220,7 @@ class ReplicationStatus(str, enum.Enum):
 
 class ServiceStatus(str, enum.Enum):
     """Systemd service status enumeration."""
+
     RUNNING = "running"
     STOPPED = "stopped"
     FAILED = "failed"
@@ -213,6 +229,7 @@ class ServiceStatus(str, enum.Enum):
 
 class ServiceCategory(str, enum.Enum):
     """Service category enumeration for filtering."""
+
     AUTOBOT = "autobot"
     SYSTEM = "system"
 
@@ -289,6 +306,38 @@ class UpdateInfo(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class UpdateJobStatus(str, enum.Enum):
+    """Update job execution status."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class UpdateJob(Base):
+    """Update job tracking for async update operations."""
+
+    __tablename__ = "update_jobs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    job_id = Column(String(64), unique=True, nullable=False, index=True)
+    node_id = Column(String(64), nullable=False, index=True)
+    status = Column(String(20), default=UpdateJobStatus.PENDING.value)
+    update_ids = Column(JSON, default=list)  # List of update_ids being applied
+    progress = Column(Integer, default=0)  # 0-100
+    current_step = Column(String(256), nullable=True)  # Current step description
+    total_steps = Column(Integer, default=0)
+    completed_steps = Column(Integer, default=0)
+    error = Column(Text, nullable=True)
+    output = Column(Text, nullable=True)  # Command output/logs
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class Service(Base):
     """Service tracking for systemd services on nodes."""
 
@@ -330,7 +379,9 @@ class MaintenanceWindow(Base):
     auto_drain = Column(Boolean, default=False)  # drain services before maintenance
     suppress_alerts = Column(Boolean, default=True)  # suppress alerts during window
     suppress_remediation = Column(Boolean, default=True)  # suppress auto-remediation
-    status = Column(String(20), default="scheduled")  # scheduled, active, completed, cancelled
+    status = Column(
+        String(20), default="scheduled"
+    )  # scheduled, active, completed, cancelled
     created_by = Column(String(64), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -338,12 +389,14 @@ class MaintenanceWindow(Base):
 
 class BlueGreenStatus(str, enum.Enum):
     """Blue-green deployment status enumeration."""
+
     PENDING = "pending"
     BORROWING = "borrowing"  # Borrowing roles to green node
     DEPLOYING = "deploying"  # Deploying to green node
     VERIFYING = "verifying"  # Health verification
     SWITCHING = "switching"  # Traffic switch in progress
-    ACTIVE = "active"  # Green is live
+    ACTIVE = "active"  # Green is live, traffic switched
+    MONITORING = "monitoring"  # Post-deployment health monitoring (Issue #726 Phase 3)
     ROLLING_BACK = "rolling_back"  # Rollback in progress
     ROLLED_BACK = "rolled_back"  # Reverted to blue
     COMPLETED = "completed"  # Successfully switched
@@ -378,11 +431,25 @@ class BlueGreenDeployment(Base):
     purge_on_complete = Column(Boolean, default=True)  # Clean slate on completion
 
     # Deployment configuration
-    deployment_type = Column(String(32), default="upgrade")  # upgrade, migration, failover
+    deployment_type = Column(
+        String(32), default="upgrade"
+    )  # upgrade, migration, failover
     health_check_url = Column(String(512), nullable=True)  # Optional health endpoint
     health_check_interval = Column(Integer, default=10)  # Seconds between checks
-    health_check_timeout = Column(Integer, default=300)  # Max time for health verification
+    health_check_timeout = Column(
+        Integer, default=300
+    )  # Max time for health verification
     auto_rollback = Column(Boolean, default=True)  # Rollback on health failure
+
+    # Post-deployment health monitoring (Issue #726 Phase 3)
+    post_deploy_monitor_duration = Column(
+        Integer, default=1800
+    )  # 30 min monitoring after switch
+    health_failure_threshold = Column(
+        Integer, default=3
+    )  # Consecutive failures before rollback
+    health_failures = Column(Integer, default=0)  # Current consecutive failure count
+    monitoring_started_at = Column(DateTime, nullable=True)  # When monitoring started
 
     # Status tracking
     status = Column(String(32), default=BlueGreenStatus.PENDING.value)
@@ -400,4 +467,295 @@ class BlueGreenDeployment(Base):
     triggered_by = Column(String(64), nullable=True)
     extra_data = Column(JSON, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class CredentialType(str, enum.Enum):
+    """Credential type enumeration."""
+
+    VNC = "vnc"
+    SSH = "ssh"
+    API_KEY = "api_key"
+    DATABASE = "database"
+    TLS = "tls"  # Issue #725: TLS certificates for mTLS
+
+
+class NodeCredential(Base):
+    """Encrypted credential storage for node services.
+
+    Supports VNC, SSH, and other credential types with
+    Fernet-encrypted sensitive fields.
+    """
+
+    __tablename__ = "node_credentials"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    credential_id = Column(String(64), unique=True, nullable=False, index=True)
+    node_id = Column(String(64), nullable=False, index=True)
+    credential_type = Column(String(32), nullable=False)  # vnc, ssh, api_key, etc.
+    name = Column(String(128), nullable=True)  # Optional friendly name
+
+    # Encrypted fields (Fernet)
+    encrypted_password = Column(String(512), nullable=True)
+    encrypted_data = Column(Text, nullable=True)  # Encrypted JSON blob
+
+    # VNC-specific fields (non-sensitive, stored unencrypted)
+    port = Column(Integer, nullable=True)  # websockify port
+    vnc_type = Column(String(32), nullable=True)  # desktop, browser, custom
+    display_number = Column(Integer, nullable=True)  # X display
+    vnc_port = Column(Integer, nullable=True)  # Raw VNC port
+    websockify_enabled = Column(Boolean, default=True)
+
+    # TLS-specific fields (Issue #725: mTLS certificate storage)
+    # Certs stored in encrypted_data as JSON: {"ca_cert", "server_cert", "server_key"}
+    tls_common_name = Column(String(255), nullable=True)  # CN from certificate
+    tls_expires_at = Column(DateTime, nullable=True)  # Certificate expiration
+    tls_fingerprint = Column(String(64), nullable=True)  # SHA256 fingerprint
+
+    # State
+    is_active = Column(Boolean, default=True)
+    last_used = Column(DateTime, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Composite unique constraint - one credential per node/type/name combo
+    __table_args__ = (
+        UniqueConstraint(
+            "node_id", "credential_type", "name", name="uq_node_cred_type_name"
+        ),
+    )
+
+
+# =============================================================================
+# Security Models (Issue #728: Security Analytics)
+# =============================================================================
+
+
+class AuditLogCategory(str, enum.Enum):
+    """Audit log category enumeration."""
+
+    AUTHENTICATION = "authentication"
+    AUTHORIZATION = "authorization"
+    CONFIGURATION = "configuration"
+    DEPLOYMENT = "deployment"
+    NODE_MANAGEMENT = "node_management"
+    SERVICE_CONTROL = "service_control"
+    SECURITY = "security"
+    SYSTEM = "system"
+
+
+class SecurityEventType(str, enum.Enum):
+    """Security event type enumeration."""
+
+    LOGIN_SUCCESS = "login_success"
+    LOGIN_FAILURE = "login_failure"
+    LOGOUT = "logout"
+    SESSION_EXPIRED = "session_expired"
+    BRUTE_FORCE_DETECTED = "brute_force_detected"
+    UNAUTHORIZED_ACCESS = "unauthorized_access"
+    PRIVILEGE_ESCALATION = "privilege_escalation"
+    POLICY_VIOLATION = "policy_violation"
+    CERTIFICATE_EXPIRING = "certificate_expiring"
+    CERTIFICATE_EXPIRED = "certificate_expired"
+    SSH_KEY_ADDED = "ssh_key_added"
+    SSH_KEY_REMOVED = "ssh_key_removed"
+    FIREWALL_RULE_CHANGED = "firewall_rule_changed"
+    SUSPICIOUS_ACTIVITY = "suspicious_activity"
+    MALWARE_DETECTED = "malware_detected"
+
+
+class SecurityEventSeverity(str, enum.Enum):
+    """Security event severity enumeration."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class PolicyStatus(str, enum.Enum):
+    """Security policy status enumeration."""
+
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    DRAFT = "draft"
+
+
+class AuditLog(Base):
+    """Audit log for tracking all user actions and system events."""
+
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    log_id = Column(String(64), unique=True, nullable=False, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # Actor information
+    user_id = Column(String(64), nullable=True, index=True)
+    username = Column(String(64), nullable=True)
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(String(512), nullable=True)
+
+    # Action details
+    category = Column(String(32), nullable=False, index=True)
+    action = Column(String(128), nullable=False)
+    resource_type = Column(String(64), nullable=True)  # node, service, deployment, etc.
+    resource_id = Column(String(64), nullable=True)
+    description = Column(Text, nullable=True)
+
+    # Request/Response details
+    request_method = Column(String(10), nullable=True)  # GET, POST, etc.
+    request_path = Column(String(512), nullable=True)
+    request_body = Column(JSON, nullable=True)  # Sanitized request body
+    response_status = Column(Integer, nullable=True)
+    response_time_ms = Column(Float, nullable=True)
+
+    # Outcome
+    success = Column(Boolean, default=True)
+    error_message = Column(Text, nullable=True)
+
+    # Metadata
+    extra_data = Column(JSON, default=dict)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class SecurityEvent(Base):
+    """Security event tracking for threat detection and monitoring."""
+
+    __tablename__ = "security_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    event_id = Column(String(64), unique=True, nullable=False, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # Event classification
+    event_type = Column(String(64), nullable=False, index=True)
+    severity = Column(String(16), default=SecurityEventSeverity.LOW.value, index=True)
+    category = Column(String(32), nullable=True)
+
+    # Source information
+    source_ip = Column(String(45), nullable=True, index=True)
+    source_user = Column(String(64), nullable=True)
+    source_node_id = Column(String(64), nullable=True, index=True)
+
+    # Target information
+    target_resource = Column(String(128), nullable=True)
+    target_node_id = Column(String(64), nullable=True)
+
+    # Event details
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    raw_data = Column(JSON, default=dict)
+
+    # Threat intelligence
+    threat_indicator = Column(String(255), nullable=True)  # IOC, hash, IP, etc.
+    threat_score = Column(Float, nullable=True)  # 0.0 - 1.0
+    mitre_technique = Column(String(32), nullable=True)  # MITRE ATT&CK ID
+
+    # Status
+    is_acknowledged = Column(Boolean, default=False)
+    acknowledged_by = Column(String(64), nullable=True)
+    acknowledged_at = Column(DateTime, nullable=True)
+    is_resolved = Column(Boolean, default=False)
+    resolved_by = Column(String(64), nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+    resolution_notes = Column(Text, nullable=True)
+
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SecurityPolicy(Base):
+    """Security policy definitions for enforcement across the fleet."""
+
+    __tablename__ = "security_policies"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    policy_id = Column(String(64), unique=True, nullable=False, index=True)
+
+    # Policy identification
+    name = Column(String(128), nullable=False)
+    description = Column(Text, nullable=True)
+    category = Column(
+        String(64), nullable=False
+    )  # authentication, access_control, network, etc.
+
+    # Policy configuration
+    policy_type = Column(String(32), default="custom")  # builtin, custom
+    rules = Column(JSON, default=list)  # List of rule definitions
+    parameters = Column(JSON, default=dict)  # Policy parameters
+
+    # Scope
+    applies_to_nodes = Column(JSON, default=list)  # Empty = all nodes
+    applies_to_roles = Column(JSON, default=list)  # Empty = all roles
+
+    # Status
+    status = Column(String(16), default=PolicyStatus.DRAFT.value)
+    is_enforced = Column(Boolean, default=False)
+
+    # Compliance tracking
+    last_evaluated = Column(DateTime, nullable=True)
+    compliance_score = Column(Float, nullable=True)  # 0.0 - 100.0
+    violations_count = Column(Integer, default=0)
+
+    # Versioning
+    version = Column(Integer, default=1)
+    previous_version_id = Column(String(64), nullable=True)
+
+    # Metadata
+    created_by = Column(String(64), nullable=True)
+    updated_by = Column(String(64), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# =============================================================================
+# Code Sync Models (Issue #741: Phase 7 - Scheduled Updates)
+# =============================================================================
+
+
+class ScheduleTargetType(str, enum.Enum):
+    """Schedule target type enumeration."""
+
+    ALL = "all"
+    SPECIFIC = "specific"
+    TAG = "tag"
+
+
+class UpdateSchedule(Base):
+    """Scheduled code sync configuration.
+
+    Allows administrators to configure automatic code updates at specific
+    times using cron expressions for maintenance windows and automated rollouts.
+    """
+
+    __tablename__ = "update_schedules"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False)
+    cron_expression = Column(String(100), nullable=False)  # e.g., "0 2 * * *"
+    enabled = Column(Boolean, default=True, nullable=False)
+
+    # Target configuration
+    target_type = Column(String(20), default=ScheduleTargetType.ALL.value)
+    target_nodes = Column(JSON, nullable=True)  # List of node_ids or tag names
+
+    # Sync options
+    restart_strategy = Column(
+        String(20), default="graceful"
+    )  # graceful, immediate, manual
+    restart_after_sync = Column(Boolean, default=True)
+
+    # Execution tracking
+    last_run = Column(DateTime, nullable=True)
+    next_run = Column(DateTime, nullable=True)
+    last_run_status = Column(String(20), nullable=True)  # success, failed, partial
+    last_run_message = Column(Text, nullable=True)
+
+    # Metadata
+    created_by = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

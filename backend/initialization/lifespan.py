@@ -335,36 +335,18 @@ async def _init_slm_reconciler(app: FastAPI):
     """
     Initialize SLM reconciliation loop with WebSocket broadcasting (NON-CRITICAL).
 
+    DEPRECATED: Issue #729 - SLM services moved to slm-server at 172.16.168.19.
+    This function is disabled as backend/services/slm/ has been removed.
+    SLM server runs its own reconciler independently.
+
     Issue #726: Starts the Service Lifecycle Manager reconciler that monitors
     node health and triggers remediation actions. Wires up WebSocket callbacks
     for real-time event broadcasting.
     """
-    logger.info("✅ [ 92%] SLM Reconciler: Initializing service lifecycle reconciler...")
-    try:
-        from backend.api.slm.websockets import create_reconciler_callbacks
-        from backend.services.slm.reconciler import SLMReconciler, get_reconciler
-
-        # Get WebSocket callbacks for real-time broadcasting
-        on_state_change, on_alert = create_reconciler_callbacks()
-
-        # Configure reconciler with callbacks
-        reconciler = get_reconciler()
-        reconciler.on_state_change = on_state_change
-        reconciler.on_alert = on_alert
-
-        # Start the reconciler
-        await reconciler.start()
-        app.state.slm_reconciler = reconciler
-        await update_app_state("slm_reconciler", reconciler)
-        logger.info(
-            "✅ [ 92%] SLM Reconciler: Started with WebSocket broadcasting (interval=%ds)",
-            reconciler.interval,
-        )
-
-    except ImportError as import_error:
-        logger.debug("SLM Reconciler not available: %s", import_error)
-    except Exception as slm_error:
-        logger.warning("SLM Reconciler initialization failed: %s", slm_error)
+    logger.info("✅ [ 92%] SLM Reconciler: Skipped (moved to SLM server at 172.16.168.19)")
+    # REMOVED as part of Issue #729 layer separation
+    # SLM server now runs its own reconciler - no longer initialized from backend
+    return
 
 
 async def _init_graph_rag_service(app: FastAPI, memory_graph):
@@ -569,12 +551,9 @@ async def cleanup_services(app: FastAPI):
             pass  # Watcher not available
 
         # Issue #726: Stop SLM reconciler
-        try:
-            from backend.services.slm.reconciler import stop_reconciler
-            await stop_reconciler()
-            logger.info("✅ SLM Reconciler stopped")
-        except ImportError:
-            pass  # SLM not available
+        # REMOVED as part of Issue #729 - SLM moved to slm-server
+        # SLM server manages its own reconciler lifecycle
+        pass  # SLM reconciler now in slm-server
 
         # Redis connections automatically managed by get_redis_client()
         logger.info("✅ Cleanup completed successfully")

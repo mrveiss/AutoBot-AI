@@ -16,3 +16,24 @@ redis_install_from_repo: true
 # Persistence
 redis_save_enabled: true
 redis_appendonly: true
+
+# TLS Configuration (Issue #725: mTLS support)
+redis_tls_enabled: "{{ lookup('env', 'AUTOBOT_REDIS_TLS_ENABLED') | default('false', true) | lower == 'true' }}"
+redis_tls_port: "{{ lookup('env', 'AUTOBOT_REDIS_TLS_PORT') | default(6380, true) }}"
+redis_tls_auth_clients: "{{ lookup('env', 'AUTOBOT_REDIS_TLS_AUTH_CLIENTS') | default('optional', true) }}"
+redis_tls_disable_plain_port: "{{ lookup('env', 'AUTOBOT_REDIS_TLS_DISABLE_PLAIN') | default('false', true) | lower == 'true' }}"
+redis_tls_cert_dir: "{{ lookup('env', 'AUTOBOT_TLS_REMOTE_CERT_DIR') | default('/etc/autobot/certs', true) }}"
+
+# Certificate source: 'local' (files) or 'slm-api' (fetch from SLM)
+redis_tls_source: "{{ lookup('env', 'AUTOBOT_TLS_SOURCE') | default('local', true) }}"
+
+# SLM API configuration (for redis_tls_source='slm-api')
+slm_api_url: "{{ lookup('env', 'SLM_API_URL') | default('http://172.16.168.19:8000', true) }}"
+slm_api_token: "{{ lookup('env', 'SLM_API_TOKEN') | default('', true) }}"
+redis_tls_credential_id: "{{ lookup('env', 'REDIS_TLS_CREDENTIAL_ID') | default('', true) }}"
+
+# Certificate source paths (for redis_tls_source='local')
+redis_tls_local_cert_dir: "{{ lookup('env', 'AUTOBOT_TLS_CERT_DIR') | default('certs', true) }}"
+redis_tls_ca_cert: "{{ redis_tls_local_cert_dir }}/ca/ca-cert.pem"
+redis_tls_server_cert: "{{ redis_tls_local_cert_dir }}/redis/server-cert.pem"
+redis_tls_server_key: "{{ redis_tls_local_cert_dir }}/redis/server-key.pem"

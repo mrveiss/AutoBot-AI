@@ -242,14 +242,16 @@ def _get_vm_definitions() -> Dict[str, str]:
         from src.config.ssot_config import get_config
         return get_config().vm_definitions
     except Exception:
-        # Fallback for standalone PKI tool usage
+        # Fallback for standalone PKI tool usage - use SSOT defaults
+        from src.config.ssot_config import VMConfig
+        vm = VMConfig()
         return {
-            "main-host": "172.16.168.20",
-            "frontend": "172.16.168.21",
-            "npu-worker": "172.16.168.22",
-            "redis": "172.16.168.23",
-            "ai-stack": "172.16.168.24",
-            "browser": "172.16.168.25",
+            "main-host": vm.main,
+            "frontend": vm.frontend,
+            "npu-worker": vm.npu,
+            "redis": vm.redis,
+            "ai-stack": vm.aistack,
+            "browser": vm.browser,
         }
 
 VM_DEFINITIONS: Dict[str, str] = _get_vm_definitions()

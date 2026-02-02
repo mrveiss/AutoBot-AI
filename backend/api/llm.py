@@ -9,10 +9,10 @@ from fastapi.responses import JSONResponse
 
 from backend.services.config_service import ConfigService
 from backend.utils.connection_utils import ConnectionTester, ModelManager
+from src.config import UnifiedConfigManager
 
 # Import unified configuration system - NO HARDCODED VALUES
 from src.constants.model_constants import ModelConstants
-from src.config import UnifiedConfigManager
 
 # Import caching utilities from unified cache manager (P4 Cache Consolidation)
 from src.utils.advanced_cache_manager import cache_response
@@ -169,7 +169,9 @@ async def update_llm_provider(provider_data: dict):
                 cloud_provider = provider_data.get("cloud_provider")
                 cloud_model = provider_data.get("cloud_model")
                 logger.info(
-                    f"UNIFIED CONFIG: Updating cloud provider to: {cloud_provider}, model: {cloud_model}"
+                    "UNIFIED CONFIG: Updating cloud provider to: %s, model: %s",
+                    cloud_provider,
+                    cloud_model,
                 )
 
                 # Update provider type
@@ -239,9 +241,7 @@ async def get_available_embedding_models():
             # Cache model_name.lower() to avoid repeated computation (Issue #323)
             model_name_lower = model_name.lower()
             # Common embedding model patterns
-            if any(
-                pattern in model_name_lower for pattern in EMBEDDING_MODEL_PATTERNS
-            ):
+            if any(pattern in model_name_lower for pattern in EMBEDDING_MODEL_PATTERNS):
                 embedding_models.append(model)
             elif "text" in model_name_lower and any(
                 size in model_name_lower for size in TEXT_MODEL_SIZE_INDICATORS
@@ -287,7 +287,9 @@ async def update_embedding_model(embedding_data: dict):
         if not model:
             raise HTTPException(status_code=400, detail="Model name is required")
 
-        logger.info("UNIFIED CONFIG: Updating embedding model to: %s/%s", provider, model)
+        logger.info(
+            "UNIFIED CONFIG: Updating embedding model to: %s/%s", provider, model
+        )
 
         # Update embedding configuration in unified config
         config.set("backend.llm.embedding.provider", provider)
@@ -333,9 +335,7 @@ async def update_embedding_model(embedding_data: dict):
         )
 
 
-def _build_local_provider_status(
-    local_config: dict, ollama_url: str
-) -> dict:
+def _build_local_provider_status(local_config: dict, ollama_url: str) -> dict:
     """
     Build status dictionary for local LLM providers.
 
@@ -394,9 +394,13 @@ def _build_cloud_provider_status(cloud_config: dict) -> dict:
         },
         "anthropic": {
             "configured": bool(anthropic_config.get("api_key")),
-            "status": "connected" if anthropic_config.get("api_key") else "disconnected",
+            "status": "connected"
+            if anthropic_config.get("api_key")
+            else "disconnected",
             "model": anthropic_config.get("selected_model", ""),
-            "endpoint": anthropic_config.get("endpoint", "https://api.anthropic.com/v1"),
+            "endpoint": anthropic_config.get(
+                "endpoint", "https://api.anthropic.com/v1"
+            ),
         },
     }
 
@@ -510,37 +514,64 @@ async def get_llm_status():
 @cache_response(cache_key="llm_status_quick", ttl=15)  # Cache for 15 seconds
 async def get_quick_llm_status():
     """Get quick LLM status check for dashboard"""
+    from datetime import datetime, timezone
+
     try:
-        # Use unified configuration system
+        # Issue #Fix: Use ConfigService.get_llm_config() which reads from backend.llm
+        # This is the same method used by /api/llm/config endpoint
+        llm_config = ConfigService.get_llm_config()
 
-        llm_config = config.get("llm", {})
+        # Get model from the config returned by get_llm_config
+        # Priority: direct ollama.selected_model > unified paths
+        model = ""
+        provider_type = "local"
 
-        # Get provider type from unified config structure
-        unified_config = llm_config.get("unified", {})
-        provider_type = unified_config.get("provider_type", "local")
+        # First, try direct ollama config path (most common - this is what get_llm_config returns)
+        ollama_config = llm_config.get("ollama", {})
+        if ollama_config.get("selected_model"):
+            model = ollama_config.get("selected_model", "")
+            provider_type = "local"
 
-        if provider_type == "local":
-            # Look in the correct path: unified.local.providers.ollama
-            local_config = unified_config.get("local", {})
-            model = (
-                local_config.get("providers", {})
-                .get("ollama", {})
-                .get("selected_model", "")
-            )
-            status = "connected" if model else "disconnected"
-        else:
-            # Look in the correct path: unified.cloud.providers.[provider]
-            cloud_config = unified_config.get("cloud", {})
-            provider = cloud_config.get("provider", "openai")
-            api_key = (
-                cloud_config.get("providers", {}).get(provider, {}).get("api_key", "")
-            )
-            model = (
-                cloud_config.get("providers", {})
-                .get(provider, {})
-                .get("selected_model", "")
-            )
-            status = "connected" if api_key and model else "disconnected"
+        # Fall back to unified config structure if direct path didn't work
+        if not model:
+            unified_config = llm_config.get("unified", {})
+            provider_type = unified_config.get("provider_type", "local")
+
+            if provider_type == "local":
+                # Check unified.local.providers.ollama path
+                local_config = unified_config.get("local", {})
+                model = (
+                    local_config.get("providers", {})
+                    .get("ollama", {})
+                    .get("selected_model", "")
+                )
+                # Also check nested unified path if not found
+                if not model:
+                    nested_local = unified_config.get("unified", {}).get("local", {})
+                    model = (
+                        nested_local.get("providers", {})
+                        .get("ollama", {})
+                        .get("selected_model", "")
+                    )
+            else:
+                # Cloud provider path
+                cloud_config = unified_config.get("cloud", {})
+                provider = cloud_config.get("provider", "openai")
+                api_key = (
+                    cloud_config.get("providers", {})
+                    .get(provider, {})
+                    .get("api_key", "")
+                )
+                model = (
+                    cloud_config.get("providers", {})
+                    .get(provider, {})
+                    .get("selected_model", "")
+                )
+                if not (api_key and model):
+                    model = ""
+
+        # Determine connection status based on model availability
+        status = "connected" if model else "disconnected"
 
         return JSONResponse(
             status_code=200,
@@ -548,12 +579,16 @@ async def get_quick_llm_status():
                 "status": status,
                 "provider_type": provider_type,
                 "model": model,
-                "timestamp": "2025-08-18T10:31:00Z",
+                "timestamp": datetime.now(timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z"),
             },
         )
 
     except Exception as e:
         logger.error("Failed to get quick LLM status: %s", e)
+        from datetime import datetime, timezone
+
         return JSONResponse(
             status_code=200,
             content={
@@ -561,5 +596,8 @@ async def get_quick_llm_status():
                 "provider_type": "unknown",
                 "model": "",
                 "error": str(e),
+                "timestamp": datetime.now(timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z"),
             },
         )

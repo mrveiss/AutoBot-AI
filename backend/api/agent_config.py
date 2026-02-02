@@ -55,7 +55,9 @@ async def _get_available_models() -> list:
     try:
         result = await ModelManager.get_available_models()
         if result and "models" in result:
-            return [m.get("name", m) if isinstance(m, dict) else m for m in result["models"]]
+            return [
+                m.get("name", m) if isinstance(m, dict) else m for m in result["models"]
+            ]
         return []
     except Exception as e:
         logger.warning("Could not fetch available models: %s", e)
@@ -271,13 +273,18 @@ DEFAULT_AGENT_CONFIGS = {
     },
     "advanced_web_research": {
         "name": "Advanced Web Research Agent",
-        "description": "Tier 2 web research with Playwright browser automation, anti-detection measures, and CAPTCHA handling via human-in-loop. Runs on Browser VM (172.16.168.25) for isolated execution.",
+        "description": "Tier 2 web research with Playwright browser automation, anti-detection measures, and CAPTCHA handling via human-in-loop. Runs on Browser VM for isolated execution.",
         "default_model": TIER_3_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 3,
         "tasks": ["multi_source_research", "content_synthesis", "trend_analysis"],
-        "mcp_tools": ["browser_mcp", "http_client_mcp", "knowledge_mcp", "sequential_thinking_mcp"],
+        "mcp_tools": [
+            "browser_mcp",
+            "http_client_mcp",
+            "knowledge_mcp",
+            "sequential_thinking_mcp",
+        ],
         "invoked_by": "WebResearchAssistant, browser_mcp tools",
         "source_file": "src/agents/advanced_web_research.py",
     },
@@ -320,12 +327,16 @@ DEFAULT_AGENT_CONFIGS = {
     # Tier 4: Advanced Agents (multi-modal, priority 4) - Larger model for complex reasoning
     "npu_code_search": {
         "name": "NPU Code Search Agent",
-        "description": "High-performance semantic code search using NPU acceleration (OpenVINO) with Redis indexing. Extends StandardizedAgent with hardware-optimized embeddings. Handles large codebase analysis efficiently on NPU Worker VM (172.16.168.22).",
+        "description": "High-performance semantic code search using NPU acceleration (OpenVINO) with Redis indexing. Extends StandardizedAgent with hardware-optimized embeddings. Handles large codebase analysis efficiently on NPU Worker VM.",
         "default_model": TIER_4_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 4,
-        "tasks": ["semantic_code_search", "npu_acceleration", "large_codebase_analysis"],
+        "tasks": [
+            "semantic_code_search",
+            "npu_acceleration",
+            "large_codebase_analysis",
+        ],
         "mcp_tools": ["filesystem_mcp", "git_mcp", "knowledge_mcp"],
         "invoked_by": "DevelopmentSpeedupAgent, Codebase Analytics for semantic search",
         "source_file": "src/agents/npu_code_search_agent.py",
@@ -349,7 +360,11 @@ DEFAULT_AGENT_CONFIGS = {
         "provider": "ollama",
         "enabled": True,
         "priority": 4,
-        "tasks": ["isolated_processing", "secure_document_handling", "container_orchestration"],
+        "tasks": [
+            "isolated_processing",
+            "secure_document_handling",
+            "container_orchestration",
+        ],
         "mcp_tools": ["filesystem_mcp", "knowledge_mcp"],
         "invoked_by": "LibrarianAssistant when containerized mode configured",
         "source_file": "src/agents/containerized_librarian_assistant.py",
@@ -361,8 +376,17 @@ DEFAULT_AGENT_CONFIGS = {
         "provider": "ollama",
         "enabled": True,
         "priority": 4,
-        "tasks": ["knowledge_integration", "system_documentation", "context_management"],
-        "mcp_tools": ["knowledge_mcp", "filesystem_mcp", "database_mcp", "prometheus_mcp"],
+        "tasks": [
+            "knowledge_integration",
+            "system_documentation",
+            "context_management",
+        ],
+        "mcp_tools": [
+            "knowledge_mcp",
+            "filesystem_mcp",
+            "database_mcp",
+            "prometheus_mcp",
+        ],
         "invoked_by": "System initialization, knowledge base maintenance tasks",
         "source_file": "src/agents/system_knowledge_manager.py",
     },
@@ -373,7 +397,11 @@ DEFAULT_AGENT_CONFIGS = {
         "provider": "ollama",
         "enabled": True,
         "priority": 4,
-        "tasks": ["hardware_optimization", "resource_aware_processing", "adaptive_caching"],
+        "tasks": [
+            "hardware_optimization",
+            "resource_aware_processing",
+            "adaptive_caching",
+        ],
         "mcp_tools": ["knowledge_mcp", "prometheus_mcp"],
         "invoked_by": "SystemKnowledgeManager for machine-specific operations",
         "source_file": "src/agents/machine_aware_system_knowledge_manager.py",
@@ -446,7 +474,12 @@ DEFAULT_AGENT_CONFIGS = {
         "provider": "ollama",
         "enabled": True,
         "priority": 3,
-        "tasks": ["task_decomposition", "plan_creation", "step_orchestration", "dependency_management"],
+        "tasks": [
+            "task_decomposition",
+            "plan_creation",
+            "step_orchestration",
+            "dependency_management",
+        ],
         "mcp_tools": ["sequential_thinking_mcp", "structured_thinking_mcp"],
         "invoked_by": "AsyncChatWorkflow for complex multi-step queries requiring task planning",
         "source_file": "src/agents/overseer/overseer_agent.py",
@@ -458,7 +491,13 @@ DEFAULT_AGENT_CONFIGS = {
         "provider": "ollama",
         "enabled": True,
         "priority": 3,
-        "tasks": ["step_execution", "command_validation", "pty_terminal", "output_streaming", "explanation_generation"],
+        "tasks": [
+            "step_execution",
+            "command_validation",
+            "pty_terminal",
+            "output_streaming",
+            "explanation_generation",
+        ],
         "mcp_tools": ["filesystem_mcp"],
         "invoked_by": "OverseerAgent during task plan execution",
         "source_file": "src/agents/overseer/step_executor_agent.py",

@@ -98,56 +98,59 @@ class ConnectionManager:
         self, node_id: str, cpu: float, memory: float, disk: float, status: str,
         last_heartbeat: str = None
     ) -> None:
-        """Send health update to global event channel."""
+        """Send health update to global and node-specific event channels."""
         from datetime import datetime
-        await self.broadcast(
-            "events:global",
-            {
-                "type": "health_update",
-                "node_id": node_id,
-                "data": {
-                    "status": status,
-                    "cpu_percent": cpu,
-                    "memory_percent": memory,
-                    "disk_percent": disk,
-                    "last_heartbeat": last_heartbeat or datetime.utcnow().isoformat(),
-                },
-                "timestamp": asyncio.get_event_loop().time(),
+        message = {
+            "type": "health_update",
+            "node_id": node_id,
+            "data": {
+                "status": status,
+                "cpu_percent": cpu,
+                "memory_percent": memory,
+                "disk_percent": disk,
+                "last_heartbeat": last_heartbeat or datetime.utcnow().isoformat(),
             },
-        )
+            "timestamp": asyncio.get_event_loop().time(),
+        }
+        # Broadcast to global channel
+        await self.broadcast("events:global", message)
+        # Broadcast to node-specific channel
+        await self.broadcast(f"node:{node_id}", message)
 
     async def send_node_status(self, node_id: str, status: str, hostname: str = None) -> None:
-        """Send node status change to global event channel."""
-        await self.broadcast(
-            "events:global",
-            {
-                "type": "node_status",
-                "node_id": node_id,
-                "data": {
-                    "status": status,
-                    "hostname": hostname,
-                },
-                "timestamp": asyncio.get_event_loop().time(),
+        """Send node status change to global and node-specific event channels."""
+        message = {
+            "type": "node_status",
+            "node_id": node_id,
+            "data": {
+                "status": status,
+                "hostname": hostname,
             },
-        )
+            "timestamp": asyncio.get_event_loop().time(),
+        }
+        # Broadcast to global channel
+        await self.broadcast("events:global", message)
+        # Broadcast to node-specific channel
+        await self.broadcast(f"node:{node_id}", message)
 
     async def send_remediation_event(
         self, node_id: str, event_type: str, success: bool = None, message: str = None
     ) -> None:
-        """Send remediation event to global event channel."""
-        await self.broadcast(
-            "events:global",
-            {
-                "type": "remediation_event",
-                "node_id": node_id,
-                "data": {
-                    "event_type": event_type,
-                    "success": success,
-                    "message": message,
-                },
-                "timestamp": asyncio.get_event_loop().time(),
+        """Send remediation event to global and node-specific event channels."""
+        event_message = {
+            "type": "remediation_event",
+            "node_id": node_id,
+            "data": {
+                "event_type": event_type,
+                "success": success,
+                "message": message,
             },
-        )
+            "timestamp": asyncio.get_event_loop().time(),
+        }
+        # Broadcast to global channel
+        await self.broadcast("events:global", event_message)
+        # Broadcast to node-specific channel
+        await self.broadcast(f"node:{node_id}", event_message)
 
     async def send_service_status(
         self,
@@ -158,22 +161,41 @@ class ConnectionManager:
         success: bool = True,
         message: str = None,
     ) -> None:
-        """Send service status change to global event channel."""
-        await self.broadcast(
-            "events:global",
-            {
-                "type": "service_status",
-                "node_id": node_id,
-                "data": {
-                    "service_name": service_name,
-                    "status": status,
-                    "action": action,
-                    "success": success,
-                    "message": message,
-                },
-                "timestamp": asyncio.get_event_loop().time(),
+        """Send service status change to global and node-specific event channels."""
+        event_message = {
+            "type": "service_status",
+            "node_id": node_id,
+            "data": {
+                "service_name": service_name,
+                "status": status,
+                "action": action,
+                "success": success,
+                "message": message,
             },
-        )
+            "timestamp": asyncio.get_event_loop().time(),
+        }
+        # Broadcast to global channel
+        await self.broadcast("events:global", event_message)
+        # Broadcast to node-specific channel
+        await self.broadcast(f"node:{node_id}", event_message)
+
+    async def send_node_lifecycle_event(
+        self, node_id: str, event_type: str, details: dict = None
+    ) -> None:
+        """Send a general node lifecycle event (enrollment, deletion, etc.)."""
+        event_message = {
+            "type": "lifecycle_event",
+            "node_id": node_id,
+            "data": {
+                "event_type": event_type,
+                "details": details or {},
+            },
+            "timestamp": asyncio.get_event_loop().time(),
+        }
+        # Broadcast to global channel
+        await self.broadcast("events:global", event_message)
+        # Broadcast to node-specific channel
+        await self.broadcast(f"node:{node_id}", event_message)
 
 
 # Global connection manager instance
@@ -248,5 +270,50 @@ async def events_websocket(websocket: WebSocket):
         logger.debug("Client disconnected from events")
     except Exception as e:
         logger.error("WebSocket error for events: %s", e)
+    finally:
+        await ws_manager.disconnect(websocket, channel)
+
+
+@router.websocket("/nodes/{node_id}")
+async def node_events_websocket(websocket: WebSocket, node_id: str):
+    """
+    WebSocket endpoint for watching a specific node's lifecycle events.
+
+    Events include:
+    - health_update: CPU, memory, disk metrics
+    - node_status: Status changes (online, offline, degraded, error)
+    - remediation_event: Auto-remediation attempts and results
+    - service_status: Service start/stop/restart events
+    - lifecycle_event: Node enrollment, deletion, configuration changes
+
+    Clients receive only events for the specified node_id.
+    """
+    channel = f"node:{node_id}"
+    await ws_manager.connect(websocket, channel)
+
+    try:
+        await websocket.send_json({
+            "type": "connected",
+            "node_id": node_id,
+            "message": f"Connected to lifecycle events for node {node_id}",
+        })
+
+        while True:
+            try:
+                data = await asyncio.wait_for(
+                    websocket.receive_text(), timeout=30.0
+                )
+                if data == "ping":
+                    await websocket.send_text("pong")
+            except asyncio.TimeoutError:
+                try:
+                    await websocket.send_json({"type": "ping"})
+                except Exception:
+                    break
+
+    except WebSocketDisconnect:
+        logger.debug("Client disconnected from node %s events", node_id)
+    except Exception as e:
+        logger.error("WebSocket error for node %s: %s", node_id, e)
     finally:
         await ws_manager.disconnect(websocket, channel)

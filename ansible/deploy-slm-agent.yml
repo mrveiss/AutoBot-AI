@@ -7,7 +7,7 @@
 #
 # Usage:
 #   ansible-playbook -i inventory/slm-nodes.yml deploy-slm-agent.yml
-#   ansible-playbook -i inventory/slm-nodes.yml deploy-slm-agent.yml --limit 01-Backend
+#   ansible-playbook -i inventory/slm-nodes.yml deploy-slm-agent.yml --limit 01-Code-Source
 ---
 - name: Deploy SLM Agent to Managed Nodes
   hosts: slm_nodes
@@ -24,8 +24,8 @@
         name: autobot
         state: present
         system: yes
-        create_home: no
-        shell: /usr/sbin/nologin
+        create_home: yes
+        shell: /bin/bash
       tags: ['setup']
 
   roles:
@@ -35,7 +35,7 @@
   post_tasks:
     - name: "Post-check | Verify agent is running"
       systemd:
-        name: autobot-agent
+        name: slm-agent
       register: agent_status
       tags: ['verify']
 

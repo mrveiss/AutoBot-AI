@@ -35,6 +35,11 @@
     autobot_log_dir: "/var/log/autobot"
     autobot_cert_dir: "/etc/autobot/certs"
 
+    # Emergency admin user for fallback access when SSH keys fail
+    emergency_admin_user: "autobot_admin"
+    # Password hash generated with: python3 -c "from passlib.hash import sha512_crypt; print(sha512_crypt.hash('password'))"
+    emergency_admin_password_hash: "$6$rounds=656000$VqQZbIggJvVNjHfl$hunhLQdMKj/TCyE.ftDknskbz4SCnGz5e6Yo4YJzHeIIhdRAp/oIDKdwd54oktyBwmb2nP09MWRyXNu0mLg1L1"
+
     # Role-specific defaults
     role_configs:
       frontend:
@@ -57,6 +62,14 @@
         services: ['playwright-service', 'vnc-server']
         packages: ['python3', 'xvfb', 'tigervnc-standalone-server']
         ports: [3000, 5900]
+      slm-agent:
+        services: ['slm-agent']
+        packages: ['python3', 'python3-pip', 'python3-venv']
+        ports: [8000]
+      code-source:
+        services: ['slm-agent']
+        packages: ['python3', 'python3-pip', 'python3-venv', 'git', 'rsync']
+        ports: [8000, 873]  # 873 = rsync daemon
 
   pre_tasks:
     - name: "Display enrollment information"
@@ -144,6 +157,35 @@
             state: present
             key: "{{ lookup('file', '~/.ssh/autobot_key.pub') }}"
           ignore_errors: yes  # Key may not exist during initial enrollment
+
+        - name: "Create emergency admin user"
+          user:
+            name: "{{ emergency_admin_user }}"
+            comment: "Emergency Admin User (fallback access)"
+            shell: /bin/bash
+            create_home: yes
+            groups: sudo
+            append: yes
+            password: "{{ emergency_admin_password_hash }}"
+            state: present
+
+        - name: "Configure passwordless sudo for emergency admin"
+          copy:
+            content: "{{ emergency_admin_user }} ALL=(ALL) NOPASSWD: ALL\n"
+            dest: "/etc/sudoers.d/90-{{ emergency_admin_user }}"
+            owner: root
+            group: root
+            mode: '0440'
+            validate: 'visudo -cf %s'
+
+        - name: "Configure passwordless sudo for autobot user"
+          copy:
+            content: "{{ autobot_user }} ALL=(ALL) NOPASSWD: ALL\n"
+            dest: "/etc/sudoers.d/90-{{ autobot_user }}"
+            owner: root
+            group: root
+            mode: '0440'
+            validate: 'visudo -cf %s'
 
       tags: ['base', 'common']
 
@@ -243,6 +285,32 @@
                   - libgbm1
                   - libasound2
                 state: present
+
+        # Code-source setup (Issue #741)
+        - name: "Setup Code Source Node"
+          when: node_role == 'code-source'
+          block:
+            - name: "Create git hooks directory"
+              file:
+                path: "{{ slm_code_repository | default('/home/kali/Desktop/AutoBot') }}/.git/hooks"
+                state: directory
+                mode: '0755'
+
+            - name: "Deploy SLM post-commit hook"
+              copy:
+                src: "{{ playbook_dir }}/../../scripts/hooks/slm-post-commit"
+                dest: "{{ slm_code_repository | default('/home/kali/Desktop/AutoBot') }}/.git/hooks/post-commit"
+                mode: '0755'
+
+            - name: "Create SLM agent environment file for code-source"
+              copy:
+                content: |
+                  SLM_CODE_SOURCE=true
+                  SLM_NOTIFY_PORT=8000
+                  SLM_ADMIN_URL={{ slm_admin_url | default('http://172.16.168.19:8000') }}
+                dest: /etc/slm-agent/environment
+                mode: '0644'
+              notify: restart slm-agent
 
       tags: ['role-setup']
 

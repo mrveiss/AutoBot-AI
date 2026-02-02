@@ -176,14 +176,22 @@ class UnifiedMemoryManager:
 
         Backward compatibility wrapper for synchronous code.
 
-        ⚠️ WARNING: DO NOT call from async code - use log_task() instead.
-        This uses asyncio.run() which creates a new event loop. It will fail
-        if called from within an existing async context (RuntimeError: cannot
-        be called from a running event loop).
+        Handles both sync and async contexts properly by detecting if an event
+        loop is already running and using a thread executor in that case.
 
-        For async code, always use: await manager.log_task(record)
+        For async code, prefer using: await manager.log_task(record)
         """
-        return asyncio.run(self.log_task(record))
+        try:
+            asyncio.get_running_loop()
+            # Already in async context - use thread executor
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(asyncio.run, self.log_task(record))
+                return future.result()
+        except RuntimeError:
+            # No running loop - safe to use asyncio.run
+            return asyncio.run(self.log_task(record))
 
     async def update_task_status(
         self, task_id: str, status: TaskStatus, **kwargs

@@ -3,24 +3,8 @@
 # Author: mrveiss
 """
 Pydantic Schemas for FastAPI Request/Response Validation
+
+Note: Infrastructure schemas removed - now managed by SLM server (#729)
 """
 
-from backend.schemas.infrastructure import (
-    DeploymentCreate,
-    DeploymentResponse,
-    HostCreate,
-    HostResponse,
-    HostUpdate,
-    RoleResponse,
-    StatisticsResponse,
-)
-
-__all__ = [
-    "HostCreate",
-    "HostResponse",
-    "HostUpdate",
-    "DeploymentCreate",
-    "DeploymentResponse",
-    "RoleResponse",
-    "StatisticsResponse",
-]
+__all__ = []

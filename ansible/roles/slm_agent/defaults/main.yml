@@ -40,3 +40,8 @@ slm_agent_debug: false
 # Systemd service configuration
 slm_agent_restart_sec: 10
 slm_agent_watchdog_sec: 60
+
+# Issue #741: Version tracking
+# Set this to override the git commit (e.g., for releases)
+# When empty, the current git commit hash is auto-detected
+slm_agent_version: ""

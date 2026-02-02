@@ -11,18 +11,18 @@
 
 - name: Restart SLM agent
   systemd:
-    name: autobot-agent
+    name: slm-agent
     state: restarted
   become: yes
 
 - name: Stop SLM agent
   systemd:
-    name: autobot-agent
+    name: slm-agent
     state: stopped
   become: yes
 
 - name: Start SLM agent
   systemd:
-    name: autobot-agent
+    name: slm-agent
     state: started
   become: yes

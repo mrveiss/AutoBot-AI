@@ -10,6 +10,7 @@ Manages Ansible-based role deployments to nodes.
 import asyncio
 import logging
 import os
+import shutil
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -21,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import settings
 from models.database import Deployment, DeploymentStatus, Node, NodeStatus
 from models.schemas import DeploymentCreate, DeploymentResponse
+from services.encryption import decrypt_data
 
 logger = logging.getLogger(__name__)
 
@@ -244,8 +246,33 @@ class DeploymentService:
             await db.commit()
 
             try:
+                # Get SSH credentials from node for authentication
+                ssh_user = node.ssh_user or "autobot"
+                ssh_port = node.ssh_port or 22
+
+                # Get stored password for SSH and sudo authentication
+                # Password is encrypted during node registration and stored in extra_data
+                ssh_password = None
+                if node.extra_data:
+                    encrypted_password = node.extra_data.get("ssh_password")
+                    if encrypted_password:
+                        # Check if password is encrypted (new format) or plaintext (legacy)
+                        if node.extra_data.get("ssh_password_encrypted"):
+                            try:
+                                ssh_password = decrypt_data(encrypted_password)
+                            except Exception as e:
+                                logger.error("Failed to decrypt SSH password for node %s: %s", node_id, e)
+                                raise RuntimeError("Failed to decrypt stored credentials")
+                        else:
+                            # Legacy plaintext password (migration path)
+                            ssh_password = encrypted_password
+
                 output = await self._execute_ansible_playbook(
-                    node.ip_address, deployment.roles
+                    node.ip_address,
+                    deployment.roles,
+                    ssh_user=ssh_user,
+                    ssh_port=ssh_port,
+                    ssh_password=ssh_password,
                 )
 
                 deployment.status = DeploymentStatus.COMPLETED.value
@@ -270,29 +297,101 @@ class DeploymentService:
                 await db.commit()
                 logger.error("Deployment failed: %s - %s", deployment_id, e)
 
+    def _find_ansible_playbook(self) -> str:
+        """Find the ansible-playbook executable with system PATH."""
+        # First try with current PATH
+        ansible_path = shutil.which("ansible-playbook")
+        if ansible_path:
+            return ansible_path
+
+        # Try common system paths if not in current PATH
+        common_paths = [
+            "/usr/bin/ansible-playbook",
+            "/usr/local/bin/ansible-playbook",
+            "/opt/ansible/bin/ansible-playbook",
+        ]
+        for path in common_paths:
+            if os.path.isfile(path) and os.access(path, os.X_OK):
+                return path
+
+        raise FileNotFoundError(
+            "ansible-playbook not found. Install Ansible: apt install ansible"
+        )
+
     async def _execute_ansible_playbook(
-        self, host: str, roles: List[str]
+        self,
+        host: str,
+        roles: List[str],
+        ssh_user: Optional[str] = None,
+        ssh_port: Optional[int] = None,
+        ssh_password: Optional[str] = None,
     ) -> str:
-        """Execute an Ansible playbook for the given roles."""
+        """
+        Execute an Ansible playbook for the given roles.
+
+        Args:
+            host: Target host IP address
+            roles: List of roles to deploy
+            ssh_user: SSH username (optional, uses ansible default if not provided)
+            ssh_port: SSH port (optional, uses 22 if not provided)
+            ssh_password: SSH password for authentication and sudo (optional)
+
+        Returns:
+            Ansible playbook output
+        """
         playbook_path = self.ansible_dir / "deploy.yml"
 
         if not playbook_path.exists():
             raise FileNotFoundError(f"Playbook not found: {playbook_path}")
 
+        ansible_cmd = self._find_ansible_playbook()
         roles_str = ",".join(roles)
         cmd = [
-            "ansible-playbook",
+            ansible_cmd,
             str(playbook_path),
             "-i", f"{host},",
             "-e", f"target_roles={roles_str}",
             "-e", f"target_host={host}",
+            "-e", "ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ControlPath=none'",
+            "-e", "ansible_ssh_pipelining=false",
         ]
+
+        # Add SSH user if provided
+        if ssh_user:
+            cmd.extend(["-e", f"ansible_user={ssh_user}"])
+
+        # Add SSH port if provided
+        if ssh_port:
+            cmd.extend(["-e", f"ansible_port={ssh_port}"])
+
+        # Add password authentication if provided (for both SSH and sudo)
+        if ssh_password:
+            if not shutil.which("sshpass"):
+                raise RuntimeError(
+                    "Password auth requires 'sshpass'. Install: sudo apt install sshpass"
+                )
+            cmd.extend([
+                "-e", "ansible_ssh_pass=" + ssh_password,
+                "-e", "ansible_become_pass=" + ssh_password,
+            ])
+
+        logger.debug("Running deployment: %s", " ".join(cmd[:10]) + " ...")
+
+        # Set environment to avoid TTY issues when running from uvicorn
+        env = {
+            **os.environ,
+            "ANSIBLE_FORCE_COLOR": "0",
+            "ANSIBLE_NOCOLOR": "1",
+            "ANSIBLE_HOST_KEY_CHECKING": "False",
+            "ANSIBLE_SSH_RETRIES": "3",
+        }
 
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             cwd=str(self.ansible_dir),
+            env=env,
         )
 
         stdout, _ = await process.communicate()
@@ -345,7 +444,18 @@ class DeploymentService:
         # Use provided password, or fall back to stored password from node registration
         effective_password = ssh_password
         if not effective_password and node.extra_data:
-            effective_password = node.extra_data.get("ssh_password")
+            encrypted_password = node.extra_data.get("ssh_password")
+            if encrypted_password:
+                # Check if password is encrypted (new format) or plaintext (legacy)
+                if node.extra_data.get("ssh_password_encrypted"):
+                    try:
+                        effective_password = decrypt_data(encrypted_password)
+                    except Exception as e:
+                        logger.error("Failed to decrypt SSH password for node %s: %s", node_id, e)
+                        return False, "Failed to decrypt stored credentials"
+                else:
+                    # Legacy plaintext password (migration path)
+                    effective_password = encrypted_password
 
         try:
             # Deploy the slm-agent role
@@ -385,8 +495,6 @@ class DeploymentService:
         ssh_password: Optional[str] = None
     ) -> str:
         """Execute the SLM agent enrollment playbook."""
-        import shutil
-
         playbook_path = self.ansible_dir / "enroll.yml"
 
         # Create enrollment playbook if it doesn't exist
@@ -396,11 +504,14 @@ class DeploymentService:
         # Use external_url from config for the admin URL that nodes will use
         admin_url = settings.external_url
 
+        # Find ansible-playbook executable
+        ansible_cmd = self._find_ansible_playbook()
+
         # Build the ansible command
         # Always skip host key checking for automated enrollment
         # Use ControlPath=none to avoid PTY issues when running from uvicorn
         cmd = [
-            "ansible-playbook",
+            ansible_cmd,
             str(playbook_path),
             "-i", f"{host},",
             "-e", f"ansible_host={host}",

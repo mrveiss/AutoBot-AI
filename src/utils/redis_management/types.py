@@ -32,9 +32,11 @@ class RedisDatabase(Enum):
     WORKFLOWS = 7
     VECTORS = 8
     MODELS = 9
+    CACHE = 10  # General application cache (consolidated from redis_pool.py)
     MEMORY = 0  # Uses DB 0 - required for RediSearch indexing (FT.* commands)
     ANALYTICS = 11
-    AUDIT = 10
+    AUDIT = 10  # Note: Shares DB 10 with CACHE - review if separation needed
+    FACTS = 11  # Knowledge facts and rules (consolidated from redis_pool.py)
     NOTIFICATIONS = 12
     JOBS = 13
     SEARCH = 14
@@ -79,5 +81,6 @@ DATABASE_MAPPING = {
     "analytics": 9,  # Maps to models database
     "websockets": 10,
     "config": 11,  # CRITICAL: Cache configuration storage
+    "facts": 11,  # Knowledge facts and rules (consolidated from redis_pool.py)
     "audit": 12,  # Security audit logging (OWASP/NIST compliant)
 }

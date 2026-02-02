@@ -4,16 +4,15 @@ This module provides backward compatibility while redirecting to the unified pro
 """
 
 import logging
-import time
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict
 
-# Import from unified processor for consistency
-from src.unified_multimodal_processor import (
-    ModalityType,
-    ProcessingIntent,
-    MultiModalInput,
-    ProcessingResult,
+# Import from implementation module for consistency
+from src.multimodal_processor_impl import (
     ConfidenceLevel,
+    ModalityType,
+    MultiModalInput,
+    ProcessingIntent,
+    ProcessingResult,
     unified_processor,
 )
 
@@ -27,19 +26,19 @@ class MultiModalProcessor:
     """
     Compatibility class that wraps the unified processor
     """
-    
+
     def __init__(self):
         self._unified = unified_processor
         logger.info("Using unified multi-modal processor for backward compatibility")
-    
+
     async def process(self, input_data: MultiModalInput) -> ProcessingResult:
         """Process multi-modal input using unified processor"""
         return await self._unified.process(input_data)
-    
+
     def get_stats(self) -> Dict[str, Any]:
         """Get processing statistics"""
         return self._unified.get_stats()
-    
+
     def reset_stats(self):
         """Reset processing statistics"""
         self._unified.reset_stats()
@@ -50,13 +49,13 @@ multimodal_processor = MultiModalProcessor()
 
 # Export key components for compatibility
 __all__ = [
-    'ModalityType',
-    'ProcessingIntent', 
-    'MultiModalInput',
-    'ModalInput',  # Alias
-    'ProcessingResult',
-    'ConfidenceLevel',
-    'MultiModalProcessor',
-    'multimodal_processor',
-    'unified_processor'
+    "ModalityType",
+    "ProcessingIntent",
+    "MultiModalInput",
+    "ModalInput",  # Alias
+    "ProcessingResult",
+    "ConfidenceLevel",
+    "MultiModalProcessor",
+    "multimodal_processor",
+    "unified_processor",
 ]

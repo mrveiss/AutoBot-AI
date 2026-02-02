@@ -29,30 +29,24 @@ from typing import Any, Dict, List, Optional, Union
 
 import redis
 import redis.asyncio as async_redis
+from redis.asyncio.connection import SSLConnection as AsyncSSLConnection
 from redis.backoff import ExponentialBackoff
-from redis.connection import ConnectionPool
+from redis.connection import ConnectionPool, SSLConnection
 from redis.exceptions import ConnectionError, ResponseError
 from redis.retry import Retry
 
+from src.config import config as config_manager
 from src.constants.network_constants import NetworkConstants
 from src.constants.threshold_constants import RetryConfig, TimingConstants
 from src.monitoring.prometheus_metrics import get_metrics_manager
-from src.config import config as config_manager
-from src.utils.redis_management.config import (
-    PoolConfig,
-    RedisConfig,
-    RedisConfigLoader,
-)
+from src.utils.redis_management.config import PoolConfig, RedisConfig, RedisConfigLoader
 from src.utils.redis_management.statistics import (
     ConnectionMetrics,
     ManagerStats,
     PoolStatistics,
     RedisStats,
 )
-from src.utils.redis_management.types import (
-    ConnectionState,
-    DATABASE_MAPPING,
-)
+from src.utils.redis_management.types import DATABASE_MAPPING, ConnectionState
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +54,20 @@ logger = logging.getLogger(__name__)
 class RedisConnectionManager:
     """
     Centralized Redis connection manager with circuit breaker and health monitoring.
+
+    CONNECTION POOLING (Issue #743):
+    =================================
+    This manager implements SINGLETON CONNECTION POOLS for memory efficiency:
+
+    - Pools are created ONCE per database and reused for all requests
+    - _sync_pools: Dict[str, ConnectionPool] - one sync pool per database
+    - _async_pools: Dict[str, ConnectionPool] - one async pool per database
+    - Each pool maintains up to MAX_CONNECTIONS_POOL connections (default: 20)
+    - Connections are borrowed from pool and returned after use
+    - Idle connections are automatically cleaned up
+
+    When you call get_sync_client("main") 100 times, you get 100 client objects
+    but they all share THE SAME underlying connection pool of max 20 connections.
 
     Consolidates features from:
     - redis_pool_manager.py: Connection pooling, metrics
@@ -264,12 +272,12 @@ class RedisConnectionManager:
                 )
                 return False
 
-        logger.error("Redis '%s' did not become ready within %ss", database_name, max_wait)
+        logger.error(
+            "Redis '%s' did not become ready within %ss", database_name, max_wait
+        )
         return False
 
-    def _build_async_pool_params(
-        self, config: RedisConfig, database_name: str
-    ) -> dict:
+    def _build_async_pool_params(self, config: RedisConfig, database_name: str) -> dict:
         """
         Build connection pool parameters for async Redis.
 
@@ -299,15 +307,17 @@ class RedisConnectionManager:
         }
 
         # Add TLS parameters if enabled
+        # Use connection_class=AsyncSSLConnection for proper TLS handling
         if config.ssl:
-            import ssl
-            ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+            pool_params["connection_class"] = AsyncSSLConnection
             if config.ssl_ca_certs:
-                ssl_context.load_verify_locations(config.ssl_ca_certs)
-            if config.ssl_certfile and config.ssl_keyfile:
-                ssl_context.load_cert_chain(config.ssl_certfile, config.ssl_keyfile)
-            pool_params["ssl"] = ssl_context
-            logger.info(f"TLS enabled for Redis connection '{database_name}'")
+                pool_params["ssl_ca_certs"] = config.ssl_ca_certs
+            if config.ssl_certfile:
+                pool_params["ssl_certfile"] = config.ssl_certfile
+            if config.ssl_keyfile:
+                pool_params["ssl_keyfile"] = config.ssl_keyfile
+            pool_params["ssl_cert_reqs"] = config.ssl_cert_reqs or "required"
+            logger.info(f"TLS enabled for async Redis connection '{database_name}'")
 
         return pool_params
 
@@ -344,7 +354,9 @@ class RedisConnectionManager:
                         f"Redis database '{database_name}' not ready after waiting"
                     )
 
-                logger.info(f"Created async pool for '{database_name}' with retry protection")
+                logger.info(
+                    f"Created async pool for '{database_name}' with retry protection"
+                )
                 return pool
 
             except (ConnectionError, asyncio.TimeoutError) as e:
@@ -396,14 +408,16 @@ class RedisConnectionManager:
         }
 
         # Add TLS parameters if enabled
+        # Use connection_class=SSLConnection for proper TLS handling
         if config.ssl:
-            import ssl
-            ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+            pool_params["connection_class"] = SSLConnection
             if config.ssl_ca_certs:
-                ssl_context.load_verify_locations(config.ssl_ca_certs)
-            if config.ssl_certfile and config.ssl_keyfile:
-                ssl_context.load_cert_chain(config.ssl_certfile, config.ssl_keyfile)
-            pool_params["ssl"] = ssl_context
+                pool_params["ssl_ca_certs"] = config.ssl_ca_certs
+            if config.ssl_certfile:
+                pool_params["ssl_certfile"] = config.ssl_certfile
+            if config.ssl_keyfile:
+                pool_params["ssl_keyfile"] = config.ssl_keyfile
+            pool_params["ssl_cert_reqs"] = config.ssl_cert_reqs or "required"
             logger.info(f"TLS enabled for sync Redis connection '{database_name}'")
 
         # Remove None values
@@ -556,7 +570,18 @@ class RedisConnectionManager:
             ) / len(self._request_times[database_name])
 
     def _create_sync_pool(self, database_name: str) -> ConnectionPool:
-        """Create synchronous Redis connection pool."""
+        """
+        Create synchronous Redis connection pool (SINGLETON - Issue #743).
+
+        This pool is created ONCE per database and stored in self._sync_pools.
+        All subsequent get_sync_client() calls for this database reuse this pool.
+
+        Pool Configuration:
+        - max_connections: 20 (from REDIS_CONFIG.MAX_CONNECTIONS_POOL)
+        - socket_timeout: 5.0 seconds
+        - TCP keepalive enabled
+        - Exponential backoff retry
+        """
         if database_name in self._configs:
             config = self._configs[database_name]
         else:
@@ -579,7 +604,19 @@ class RedisConnectionManager:
     async def _create_async_pool(
         self, database_name: str
     ) -> async_redis.ConnectionPool:
-        """Create asynchronous Redis connection pool."""
+        """
+        Create asynchronous Redis connection pool (SINGLETON - Issue #743).
+
+        This pool is created ONCE per database and stored in self._async_pools.
+        All subsequent get_async_client() calls for this database reuse this pool.
+
+        Pool Configuration:
+        - max_connections: 20 (from REDIS_CONFIG.MAX_CONNECTIONS_POOL)
+        - socket_timeout: 5.0 seconds
+        - TCP keepalive enabled
+        - Manual retry with exponential backoff
+        - Loading dataset handling
+        """
         if database_name in self._configs:
             config = self._configs[database_name]
         else:
@@ -603,6 +640,22 @@ class RedisConnectionManager:
     def get_sync_client(self, database_name: str = "main") -> Optional[redis.Redis]:
         """
         Get synchronous Redis client with circuit breaker.
+
+        POOLING BEHAVIOR (Issue #743):
+        ===============================
+        This method returns a client backed by a SINGLETON connection pool.
+        The pool is created ONCE on first call and reused for all subsequent calls.
+
+        Example:
+            # First call creates pool with max 20 connections
+            client1 = manager.get_sync_client("main")  # Pool created
+
+            # Subsequent calls reuse THE SAME pool
+            client2 = manager.get_sync_client("main")  # Pool reused
+            client3 = manager.get_sync_client("main")  # Pool reused
+
+            # All 3 clients share the same pool of max 20 connections
+            # Memory usage: 1 pool, not 3 pools
 
         Features:
         - Circuit breaker protection
@@ -657,6 +710,22 @@ class RedisConnectionManager:
         """
         Get asynchronous Redis client with circuit breaker.
 
+        POOLING BEHAVIOR (Issue #743):
+        ===============================
+        This method returns a client backed by a SINGLETON async connection pool.
+        The pool is created ONCE on first call and reused for all subsequent calls.
+
+        Example:
+            # First call creates async pool with max 20 connections
+            client1 = await manager.get_async_client("main")  # Pool created
+
+            # Subsequent calls reuse THE SAME pool
+            client2 = await manager.get_async_client("main")  # Pool reused
+            client3 = await manager.get_async_client("main")  # Pool reused
+
+            # All 3 clients share the same pool of max 20 connections
+            # Memory usage: 1 pool, not 3 pools
+
         Features:
         - Circuit breaker protection
         - Loading dataset handling
@@ -681,9 +750,9 @@ class RedisConnectionManager:
             if database_name not in self._async_pools:
                 async with self._async_lock:
                     if database_name not in self._async_pools:
-                        self._async_pools[database_name] = (
-                            await self._create_async_pool(database_name)
-                        )
+                        self._async_pools[
+                            database_name
+                        ] = await self._create_async_pool(database_name)
 
             client = async_redis.Redis(connection_pool=self._async_pools[database_name])
             await client.ping()
@@ -876,7 +945,9 @@ class RedisConnectionManager:
                 idle_connections=0,
             )
 
-    def _count_idle_connections(self, available_conns: list, threshold: int = 60) -> int:
+    def _count_idle_connections(
+        self, available_conns: list, threshold: int = 60
+    ) -> int:
         """Count connections idle longer than threshold."""
         idle_count = 0
         for conn in available_conns:
@@ -940,7 +1011,9 @@ class RedisConnectionManager:
             return cleaned_count
 
         except Exception as e:
-            logger.error("Error cleaning idle connections for '%s': %s", database_name, e)
+            logger.error(
+                "Error cleaning idle connections for '%s': %s", database_name, e
+            )
             return 0
 
     async def _cleanup_idle_connections_task(self):

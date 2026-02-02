@@ -18,6 +18,7 @@ export type NodeRole =
   | 'npu-worker'
   | 'browser-automation'
   | 'monitoring'
+  | 'vnc'
 
 export type HealthStatus = 'healthy' | 'degraded' | 'unhealthy' | 'unknown'
 
@@ -135,7 +136,7 @@ export interface UpdateInfo {
 /**
  * Role category for grouping
  */
-export type RoleCategory = 'core' | 'data' | 'application' | 'ai' | 'automation' | 'observability'
+export type RoleCategory = 'core' | 'data' | 'application' | 'ai' | 'automation' | 'observability' | 'remote-access'
 
 /**
  * Available role information from backend

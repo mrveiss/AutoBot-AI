@@ -40,6 +40,7 @@ from models.schemas import (
 )
 from services.auth import get_current_user
 from services.database import get_db
+from services.replication import replication_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/stateful", tags=["stateful"])
@@ -304,10 +305,12 @@ async def start_replication(
     await db.commit()
     await db.refresh(replication)
 
-    # Start async replication job
-    asyncio.create_task(_run_replication(
-        replication_id, source_node.ip_address, target_node.ip_address, request.service_type
-    ))
+    # Start async replication job using the ReplicationService (Issue #726 Phase 4)
+    asyncio.create_task(
+        replication_service.setup_replication(
+            db, replication_id, source_node, target_node, request.service_type
+        )
+    )
 
     logger.info("Replication started: %s (%s -> %s)",
                 replication_id, request.source_node_id, request.target_node_id)
@@ -320,7 +323,68 @@ async def promote_replica(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
 ) -> ActionResponse:
-    """Promote a replica to primary."""
+    """Promote a replica to primary (Issue #726 Phase 4).
+
+    This uses Ansible to properly promote the replica node to primary,
+    removing the REPLICAOF configuration and making it a standalone master.
+    """
+    success, message = await replication_service.promote_replica(db, replication_id)
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=message,
+        )
+
+    logger.info("Replica promoted: %s", replication_id)
+    return ActionResponse(
+        action="promote",
+        success=True,
+        message=message,
+        resource_id=replication_id,
+    )
+
+
+@router.post("/replications/{replication_id}/stop", response_model=ActionResponse)
+async def stop_replication(
+    replication_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> ActionResponse:
+    """Stop replication without promotion (Issue #726 Phase 4).
+
+    Stops the replication link but does not promote the replica to primary.
+    """
+    success, message = await replication_service.stop_replication(db, replication_id)
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=message,
+        )
+
+    logger.info("Replication stopped: %s", replication_id)
+    return ActionResponse(
+        action="stop",
+        success=True,
+        message=message,
+        resource_id=replication_id,
+    )
+
+
+@router.post("/replications/{replication_id}/verify-sync", response_model=DataVerifyResponse)
+async def verify_replication_sync(
+    replication_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> DataVerifyResponse:
+    """Verify data sync between source and target nodes (Issue #726 Phase 4).
+
+    Performs keyspace analysis to compare:
+    - Key counts between source and target
+    - Replication lag in bytes
+    - Master link status
+    """
     result = await db.execute(
         select(Replication).where(Replication.replication_id == replication_id)
     )
@@ -332,23 +396,50 @@ async def promote_replica(
             detail="Replication not found",
         )
 
-    if replication.status != ReplicationStatus.ACTIVE.value:
+    # Get source and target nodes
+    source_result = await db.execute(
+        select(Node).where(Node.node_id == replication.source_node_id)
+    )
+    source_node = source_result.scalar_one_or_none()
+
+    target_result = await db.execute(
+        select(Node).where(Node.node_id == replication.target_node_id)
+    )
+    target_node = target_result.scalar_one_or_none()
+
+    if not source_node or not target_node:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot promote replication in status: {replication.status}",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Source or target node not found",
         )
 
-    # Mark replication as stopped (promotion complete)
-    replication.status = ReplicationStatus.STOPPED.value
-    replication.completed_at = datetime.utcnow()
-    await db.commit()
+    # Get Redis password from source
+    from services.replication import replication_service
+    redis_password = await replication_service._get_redis_password(
+        source_node.ip_address,
+        source_node.ssh_user or "autobot",
+        source_node.ssh_port or 22,
+    )
 
-    logger.info("Replica promoted: %s", replication_id)
-    return ActionResponse(
-        action="promote",
-        success=True,
-        message="Replica promoted to primary successfully",
-        resource_id=replication_id,
+    # Verify sync
+    sync_result = await replication_service.verify_sync(
+        source_node.ip_address,
+        target_node.ip_address,
+        source_node.ssh_user or "autobot",
+        source_node.ssh_port or 22,
+        redis_password,
+    )
+
+    return DataVerifyResponse(
+        is_healthy=sync_result.get("synced", False),
+        service_type=replication.service_type,
+        details={
+            "source": sync_result.get("source", {}),
+            "target": sync_result.get("target", {}),
+            "comparison": sync_result.get("comparison", {}),
+            "lag": sync_result.get("lag", {}),
+        },
+        checks=sync_result.get("checks", []),
     )
 
 
@@ -476,59 +567,9 @@ async def _run_restore(job_id: str, backup_id: str, node_id: str) -> None:
             logger.error("Restore %s failed: %s", job_id, message)
 
 
-async def _run_replication(
-    replication_id: str, source_host: str, target_host: str, service_type: str
-) -> None:
-    """Set up and monitor replication asynchronously."""
-    from services.database import db_service
-
-    logger.info("Setting up replication %s: %s -> %s", replication_id, source_host, target_host)
-
-    async with db_service.session() as db:
-        result = await db.execute(
-            select(Replication).where(Replication.replication_id == replication_id)
-        )
-        replication = result.scalar_one_or_none()
-        if not replication:
-            return
-
-        replication.status = ReplicationStatus.SYNCING.value
-        replication.started_at = datetime.utcnow()
-        await db.commit()
-
-        try:
-            if service_type == "redis":
-                # Configure Redis replication via SSH
-                cmd = [
-                    "ssh", "-o", "StrictHostKeyChecking=no",
-                    "-o", "ConnectTimeout=10",
-                    f"autobot@{target_host}",
-                    f"redis-cli REPLICAOF {source_host} 6379",
-                ]
-                process = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
-
-                if process.returncode == 0:
-                    replication.status = ReplicationStatus.ACTIVE.value
-                else:
-                    replication.status = ReplicationStatus.FAILED.value
-                    replication.error = stderr.decode()[:500]
-            else:
-                replication.status = ReplicationStatus.FAILED.value
-                replication.error = f"Unsupported service type: {service_type}"
-
-        except asyncio.TimeoutError:
-            replication.status = ReplicationStatus.FAILED.value
-            replication.error = "Replication setup timed out"
-        except Exception as e:
-            replication.status = ReplicationStatus.FAILED.value
-            replication.error = str(e)[:500]
-
-        await db.commit()
+# NOTE: Replication is now handled by services/replication.py using Ansible
+# The old _run_replication function has been replaced by replication_service.setup_replication
+# Issue #726 Phase 4
 
 
 async def _verify_redis(host: str) -> dict:

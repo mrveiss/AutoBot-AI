@@ -150,17 +150,13 @@ class LLMConfig(BaseSettings):
         default=DEFAULT_LLM_MODEL, alias="AUTOBOT_REASONING_MODEL"
     )
     rag_model: str = Field(default=DEFAULT_LLM_MODEL, alias="AUTOBOT_RAG_MODEL")
-    coding_model: str = Field(
-        default=DEFAULT_LLM_MODEL, alias="AUTOBOT_CODING_MODEL"
-    )
+    coding_model: str = Field(default=DEFAULT_LLM_MODEL, alias="AUTOBOT_CODING_MODEL")
 
     # Agent/workflow models - all use DEFAULT_LLM_MODEL constant
     orchestrator_model: str = Field(
         default=DEFAULT_LLM_MODEL, alias="AUTOBOT_ORCHESTRATOR_MODEL"
     )
-    agent_model: str = Field(
-        default=DEFAULT_LLM_MODEL, alias="AUTOBOT_AGENT_MODEL"
-    )
+    agent_model: str = Field(default=DEFAULT_LLM_MODEL, alias="AUTOBOT_AGENT_MODEL")
     research_model: str = Field(
         default=DEFAULT_LLM_MODEL, alias="AUTOBOT_RESEARCH_MODEL"
     )
@@ -187,9 +183,7 @@ class LLMConfig(BaseSettings):
     anthropic_endpoint: str = Field(
         default="https://api.anthropic.com/v1", alias="AUTOBOT_ANTHROPIC_ENDPOINT"
     )
-    custom_endpoint: str = Field(
-        default="", alias="AUTOBOT_CUSTOM_LLM_ENDPOINT"
-    )
+    custom_endpoint: str = Field(default="", alias="AUTOBOT_CUSTOM_LLM_ENDPOINT")
 
     # API keys (optional - can also come from provider-specific env vars)
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
@@ -457,6 +451,196 @@ class RedisConfig(BaseSettings):
     password: Optional[str] = Field(default=None, alias="AUTOBOT_REDIS_PASSWORD")
 
 
+class CacheCoordinatorConfig(BaseSettings):
+    """
+    Cache coordinator configuration for memory pressure management.
+
+    Controls automatic eviction when system memory is under pressure.
+    The coordinator monitors memory usage and triggers cache eviction
+    across all caches to maintain performance and prevent OOM conditions.
+
+    Issue: #743 - Memory Optimization (Phase 3.1)
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=str(PROJECT_ROOT / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    pressure_threshold: float = Field(
+        default=0.80,
+        alias="AUTOBOT_CACHE_COORDINATOR_PRESSURE_THRESHOLD",
+        description="Trigger eviction at this memory usage percentage (0.0-1.0)",
+    )
+    eviction_ratio: float = Field(
+        default=0.20,
+        alias="AUTOBOT_CACHE_COORDINATOR_EVICTION_RATIO",
+        description="Percentage of each cache to evict during pressure (0.0-1.0)",
+    )
+    check_interval: int = Field(
+        default=30,
+        alias="AUTOBOT_CACHE_COORDINATOR_CHECK_INTERVAL",
+        description="Seconds between memory pressure checks",
+    )
+
+
+class CacheRedisConfig(BaseSettings):
+    """
+    Redis connection pool configuration for caching.
+
+    Controls connection pooling behavior for Redis cache operations.
+    Separate from main Redis config to allow independent tuning.
+
+    Issue: #743 - Memory Optimization (Phase 3.1)
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=str(PROJECT_ROOT / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    max_connections: int = Field(
+        default=20,
+        alias="AUTOBOT_CACHE_REDIS_MAX_CONNECTIONS",
+        description="Maximum Redis connections in pool",
+    )
+    socket_timeout: float = Field(
+        default=5.0,
+        alias="AUTOBOT_CACHE_REDIS_SOCKET_TIMEOUT",
+        description="Socket timeout in seconds",
+    )
+    socket_connect_timeout: float = Field(
+        default=5.0,
+        alias="AUTOBOT_CACHE_REDIS_SOCKET_CONNECT_TIMEOUT",
+        description="Socket connection timeout in seconds",
+    )
+
+
+class CacheL1Config(BaseSettings):
+    """
+    L1 (in-memory) cache size configuration.
+
+    Controls maximum number of items stored in each in-memory LRU cache.
+    These are fast but consume RAM, so sizes should be tuned based on
+    available memory and usage patterns.
+
+    Issue: #743 - Memory Optimization (Phase 3.1)
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=str(PROJECT_ROOT / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    lru_memory: int = Field(
+        default=1000,
+        alias="AUTOBOT_CACHE_L1_LRU_MEMORY",
+        description="Max items in LRU memory cache",
+    )
+    embedding: int = Field(
+        default=1000,
+        alias="AUTOBOT_CACHE_L1_EMBEDDING",
+        description="Max items in embedding cache",
+    )
+    llm_response: int = Field(
+        default=100,
+        alias="AUTOBOT_CACHE_L1_LLM_RESPONSE",
+        description="Max items in LLM response cache",
+    )
+    ast: int = Field(
+        default=1000, alias="AUTOBOT_CACHE_L1_AST", description="Max items in AST cache"
+    )
+    file_content: int = Field(
+        default=500,
+        alias="AUTOBOT_CACHE_L1_FILE_CONTENT",
+        description="Max items in file content cache",
+    )
+    weak_cache: int = Field(
+        default=128,
+        alias="AUTOBOT_CACHE_L1_WEAK_CACHE",
+        description="Max items in weak reference cache",
+    )
+
+
+class CacheL2Config(BaseSettings):
+    """
+    L2 (Redis) cache TTL configuration.
+
+    Controls time-to-live (in seconds) for different types of cached data in Redis.
+    Longer TTLs reduce recomputation but may serve stale data.
+    Shorter TTLs keep data fresh but increase computation load.
+
+    Issue: #743 - Memory Optimization (Phase 3.1)
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=str(PROJECT_ROOT / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    llm_response: int = Field(
+        default=300,
+        alias="AUTOBOT_CACHE_L2_LLM_RESPONSE",
+        description="TTL for LLM responses in seconds (5 minutes)",
+    )
+    knowledge: int = Field(
+        default=300,
+        alias="AUTOBOT_CACHE_L2_KNOWLEDGE",
+        description="TTL for knowledge base entries in seconds (5 minutes)",
+    )
+    session: int = Field(
+        default=300,
+        alias="AUTOBOT_CACHE_L2_SESSION",
+        description="TTL for session data in seconds (5 minutes)",
+    )
+    user_prefs: int = Field(
+        default=3600,
+        alias="AUTOBOT_CACHE_L2_USER_PREFS",
+        description="TTL for user preferences in seconds (1 hour)",
+    )
+    computed: int = Field(
+        default=7200,
+        alias="AUTOBOT_CACHE_L2_COMPUTED",
+        description="TTL for computed results in seconds (2 hours)",
+    )
+
+
+class CacheConfig(BaseSettings):
+    """
+    Master cache configuration for AutoBot.
+
+    Aggregates all cache-related settings including coordinator,
+    Redis connection pool, L1 (in-memory) sizes, and L2 (Redis) TTLs.
+
+    Usage:
+        from src.config.ssot_config import config
+
+        # Access cache settings
+        pressure = config.cache.coordinator.pressure_threshold
+        max_conns = config.cache.redis.max_connections
+        lru_size = config.cache.l1.lru_memory
+        ttl = config.cache.l2.llm_response
+
+    Issue: #743 - Memory Optimization (Phase 3.1)
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=str(PROJECT_ROOT / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    # Sub-configurations
+    coordinator: CacheCoordinatorConfig = Field(default_factory=CacheCoordinatorConfig)
+    redis: CacheRedisConfig = Field(default_factory=CacheRedisConfig)
+    l1: CacheL1Config = Field(default_factory=CacheL1Config)
+    l2: CacheL2Config = Field(default_factory=CacheL2Config)
+
+
 class PermissionMode(str, Enum):
     """
     Permission modes for command execution control.
@@ -582,10 +766,14 @@ class TLSConfig(BaseSettings):
     mode: TLSMode = Field(default=TLSMode.DISABLED, alias="AUTOBOT_TLS_MODE")
     cert_dir: str = Field(default="certs", alias="AUTOBOT_TLS_CERT_DIR")
     ca_cert: str = Field(default="certs/ca/ca-cert.pem", alias="AUTOBOT_TLS_CA_CERT")
-    remote_cert_dir: str = Field(default="/etc/autobot/certs", alias="AUTOBOT_TLS_REMOTE_CERT_DIR")
+    remote_cert_dir: str = Field(
+        default="/etc/autobot/certs", alias="AUTOBOT_TLS_REMOTE_CERT_DIR"
+    )
     redis_tls_enabled: bool = Field(default=False, alias="AUTOBOT_REDIS_TLS_ENABLED")
     redis_tls_port: int = Field(default=6380, alias="AUTOBOT_REDIS_TLS_PORT")
-    backend_tls_enabled: bool = Field(default=False, alias="AUTOBOT_BACKEND_TLS_ENABLED")
+    backend_tls_enabled: bool = Field(
+        default=False, alias="AUTOBOT_BACKEND_TLS_ENABLED"
+    )
 
     @property
     def is_enabled(self) -> bool:
@@ -640,6 +828,7 @@ class AutoBotConfig(BaseSettings):
     llm: LLMConfig = Field(default_factory=LLMConfig)
     timeout: TimeoutConfig = Field(default_factory=TimeoutConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
+    cache: CacheConfig = Field(default_factory=CacheConfig)
     tls: TLSConfig = Field(default_factory=TLSConfig)
     feature: FeatureConfig = Field(default_factory=FeatureConfig)
     permission: PermissionConfig = Field(default_factory=PermissionConfig)
@@ -690,7 +879,10 @@ class AutoBotConfig(BaseSettings):
         This allows flexibility: use the configured endpoint or build from host/port.
         """
         # If ollama_endpoint is set and not the default, use it directly
-        if self.llm.ollama_endpoint and self.llm.ollama_endpoint != "http://127.0.0.1:11434":
+        if (
+            self.llm.ollama_endpoint
+            and self.llm.ollama_endpoint != "http://127.0.0.1:11434"
+        ):
             return self.llm.ollama_endpoint
         # Otherwise construct from VM config (allows using different Ollama host)
         return f"http://{self.vm.ollama}:{self.port.ollama}"
@@ -893,7 +1085,6 @@ def get_default_llm_model() -> str:
 
 class AgentConfigurationError(Exception):
     """Raised when agent LLM configuration is missing or invalid."""
-    pass
 
 
 def get_agent_llm_config_explicit(agent_id: str) -> dict:
@@ -1107,6 +1298,11 @@ __all__ = [
     "LLMConfig",
     "TimeoutConfig",
     "RedisConfig",
+    "CacheConfig",
+    "CacheCoordinatorConfig",
+    "CacheRedisConfig",
+    "CacheL1Config",
+    "CacheL2Config",
     "FeatureConfig",
     "get_config",
     "reload_config",

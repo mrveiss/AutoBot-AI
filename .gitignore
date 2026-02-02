@@ -431,3 +431,5 @@ ansible/inventory/group_vars/vault.yml
 
 # Redis admin credentials (Issue #725)
 certs/.redis-admin-credentials
+slm-server/.env
+dev_creds_backup

@@ -39,3 +39,6 @@ psutil>=5.9.0
 
 # SSH connectivity (for connection testing and node management)
 paramiko>=3.4.0
+
+# Cron expression parsing (Issue #741 - Scheduled updates)
+croniter>=2.0.0

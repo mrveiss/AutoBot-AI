@@ -33,7 +33,7 @@
 
   post_tasks:
     - name: Verify agent is running
-      command: systemctl is-active autobot-agent
+      command: systemctl is-active slm-agent
       register: agent_status
       changed_when: false
       failed_when: agent_status.rc != 0

@@ -20,6 +20,10 @@ common_packages:
 autobot_user: autobot
 autobot_home: /home/autobot
 
+# Emergency admin user for fallback access when SSH keys fail
+emergency_admin_user: autobot_admin
+emergency_admin_password_hash: "$6$rounds=656000$VqQZbIggJvVNjHfl$hunhLQdMKj/TCyE.ftDknskbz4SCnGz5e6Yo4YJzHeIIhdRAp/oIDKdwd54oktyBwmb2nP09MWRyXNu0mLg1L1"
+
 autobot_directories:
   - "{{ autobot_home }}/autobot-vue"
   - "{{ autobot_home }}/backend"

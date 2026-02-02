@@ -1,0 +1,95 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# VNC Role - Install and configure VNC server with noVNC web interface
+---
+- name: Install VNC server packages
+  ansible.builtin.apt:
+    name:
+      - tigervnc-standalone-server
+      - tigervnc-common
+      - tigervnc-tools
+      - websockify
+      - novnc
+      - xfce4
+      - xfce4-terminal
+      - dbus-x11
+    state: present
+    update_cache: true
+  become: true
+
+- name: Create VNC user if not exists
+  ansible.builtin.user:
+    name: "{{ vnc_user }}"
+    shell: /bin/bash
+    create_home: true
+    state: present
+  become: true
+
+- name: Create VNC configuration directory
+  ansible.builtin.file:
+    path: "/home/{{ vnc_user }}/.vnc"
+    state: directory
+    mode: "0700"
+    owner: "{{ vnc_user }}"
+    group: "{{ vnc_group }}"
+  become: true
+
+- name: Deploy VNC xstartup script
+  ansible.builtin.template:
+    src: xstartup.j2
+    dest: "/home/{{ vnc_user }}/.vnc/xstartup"
+    mode: "0755"
+    owner: "{{ vnc_user }}"
+    group: "{{ vnc_group }}"
+  become: true
+  notify: restart vnc-server
+
+- name: Deploy VNC config file
+  ansible.builtin.template:
+    src: vnc-config.j2
+    dest: "/home/{{ vnc_user }}/.vnc/config"
+    mode: "0644"
+    owner: "{{ vnc_user }}"
+    group: "{{ vnc_group }}"
+  become: true
+  notify: restart vnc-server
+
+- name: Deploy VNC server systemd service
+  ansible.builtin.template:
+    src: vnc-server.service.j2
+    dest: /etc/systemd/system/{{ vnc_service_name }}.service
+    mode: "0644"
+  become: true
+  notify:
+    - reload systemd
+    - restart vnc-server
+
+- name: Deploy websockify systemd service
+  ansible.builtin.template:
+    src: vnc-websockify.service.j2
+    dest: /etc/systemd/system/{{ websockify_service_name }}.service
+    mode: "0644"
+  become: true
+  when: websockify_enabled | bool
+  notify:
+    - reload systemd
+    - restart websockify
+
+- name: Enable and start VNC server
+  ansible.builtin.systemd:
+    name: "{{ vnc_service_name }}"
+    state: started
+    enabled: true
+    daemon_reload: true
+  become: true
+
+- name: Enable and start websockify
+  ansible.builtin.systemd:
+    name: "{{ websockify_service_name }}"
+    state: started
+    enabled: true
+    daemon_reload: true
+  become: true
+  when: websockify_enabled | bool

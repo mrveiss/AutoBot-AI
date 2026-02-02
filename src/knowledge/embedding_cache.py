@@ -15,6 +15,8 @@ import time
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional
 
+from src.config.ssot_config import config
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,23 +27,42 @@ class EmbeddingCache:
     Performance Impact:
     - 60-80% reduction in embedding computation for repeated queries
     - Reduces ChromaDB search latency significantly
+
+    Issue: #743 - Memory Optimization (Phase 3.3)
+    Reads default maxsize from SSOT config.cache.l1.embedding
     """
 
-    def __init__(self, maxsize: int = 1000, ttl_seconds: int = 3600):
+    def __init__(self, maxsize: int = None, ttl_seconds: int = 3600):
         """
         Initialize embedding cache.
 
         Args:
-            maxsize: Maximum number of embeddings to cache (default: 1000)
+            maxsize: Maximum items (default from SSOT config.cache.l1.embedding)
             ttl_seconds: Time-to-live for cached embeddings (default: 1 hour)
         """
         self._cache: OrderedDict = OrderedDict()
         self._timestamps: Dict[str, float] = {}
-        self._maxsize = maxsize
+        # Issue #743: Read from SSOT config, allow explicit override
+        self._maxsize = maxsize if maxsize is not None else config.cache.l1.embedding
         self._ttl_seconds = ttl_seconds
         self._hits = 0
         self._misses = 0
         self._lock = asyncio.Lock()
+
+    @property
+    def name(self) -> str:
+        """Unique cache identifier."""
+        return "embedding"
+
+    @property
+    def size(self) -> int:
+        """Current number of items."""
+        return len(self._cache)
+
+    @property
+    def max_size(self) -> int:
+        """Maximum capacity."""
+        return self._maxsize
 
     def _make_key(self, query: str) -> str:
         """Create cache key from query text using hash."""
@@ -59,6 +80,25 @@ class EmbeddingCache:
             oldest_key = next(iter(self._cache))
             del self._cache[oldest_key]
             self._timestamps.pop(oldest_key, None)
+
+    def evict(self, count: int) -> int:
+        """
+        Evict oldest items from cache.
+
+        Args:
+            count: Number of items to evict
+
+        Returns:
+            Actual number of items evicted
+        """
+        evicted = 0
+        for _ in range(min(count, len(self._cache))):
+            if self._cache:
+                oldest_key = next(iter(self._cache))
+                del self._cache[oldest_key]
+                self._timestamps.pop(oldest_key, None)
+                evicted += 1
+        return evicted
 
     async def get(self, query: str) -> Optional[List[float]]:
         """
@@ -109,16 +149,16 @@ class EmbeddingCache:
             self._cache.move_to_end(key)
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get cache statistics."""
+        """Return cache statistics."""
         total = self._hits + self._misses
-        hit_rate = (self._hits / total * 100) if total > 0 else 0.0
+        hit_rate = (self._hits / total) if total > 0 else 0.0
         return {
+            "name": self.name,
+            "size": len(self._cache),
+            "max_size": self._maxsize,
             "hits": self._hits,
             "misses": self._misses,
-            "total_requests": total,
-            "hit_rate_percent": round(hit_rate, 2),
-            "cache_size": len(self._cache),
-            "max_size": self._maxsize,
+            "hit_rate": hit_rate,
             "ttl_seconds": self._ttl_seconds,
         }
 
@@ -132,7 +172,8 @@ class EmbeddingCache:
 
 
 # Global embedding cache instance
-_embedding_cache = EmbeddingCache(maxsize=1000, ttl_seconds=3600)
+# Issue #743: Uses SSOT config defaults (no explicit size needed)
+_embedding_cache = EmbeddingCache(ttl_seconds=3600)
 
 
 def get_embedding_cache() -> EmbeddingCache:

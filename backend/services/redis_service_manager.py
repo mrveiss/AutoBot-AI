@@ -5,10 +5,14 @@
 Redis Service Manager
 Manages Redis Stack service lifecycle and health on the Redis VM (see NetworkConstants.REDIS_VM_IP)
 
+Related Issue: #729 - SSH operations now proxied through SLM API
+
+TODO (#729): This service needs refactoring to proxy SSH through SLM API
+
 Features:
 - Service control operations (start/stop/restart)
 - Health monitoring and status checks
-- Integration with SSHManager for remote operations
+- Integration with SSHManager for remote operations (will proxy through SLM)
 - Audit logging for all service operations
 - RBAC enforcement for admin/operator roles
 """
@@ -22,11 +26,17 @@ from typing import List, Optional
 
 from backend.type_defs.common import Metadata
 
-from backend.services.ssh_manager import RemoteCommandResult, SSHManager
+# TODO (#729): SSH proxied through SLM API
+# from backend.services.ssh_manager import RemoteCommandResult, SSHManager
 from src.constants.network_constants import NetworkConstants
 from src.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
+
+# TODO (#729): Temporary placeholders until refactored to use SLM proxy
+# These are used for type hints only
+SSHManager = object  # type: ignore
+RemoteCommandResult = object  # type: ignore
 
 
 # Custom exceptions for Redis Stack service operations
@@ -106,7 +116,10 @@ class RedisServiceManager:
             service_name: Systemd service name (default: 'redis-stack-server')
             enable_audit_logging: Enable audit logging (default: True)
         """
-        self.ssh_manager = ssh_manager or SSHManager(enable_audit_logging=True)
+        # TODO (#729): SSH proxied through SLM API - This service needs refactoring
+        raise NotImplementedError("Redis Service Manager temporarily disabled - SSH proxied through SLM API (#729)")
+        # OLD CODE:
+        # self.ssh_manager = ssh_manager or SSHManager(enable_audit_logging=True)
         self.redis_host = redis_host
         self.service_name = service_name
         self.enable_audit_logging = enable_audit_logging

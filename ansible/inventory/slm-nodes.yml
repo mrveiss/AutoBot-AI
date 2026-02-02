@@ -18,15 +18,21 @@ all:
         00-SLM-Manager:
           ansible_host: 172.16.168.19
           slm_node_id: "00-SLM-Manager"
+          slm_node_role: "slm-manager"
           slm_services_to_monitor:
             - slm-server
 
-        # Backend server
-        01-Backend:
+        # Code Source / Development Machine
+        # Primary source of truth for all AutoBot code
+        01-Code-Source:
           ansible_host: 172.16.168.20
-          slm_node_id: "01-Backend"
+          ansible_user: kali  # Dev machine uses kali user
+          slm_node_id: "01-Code-Source"
+          slm_node_role: "code-source"
+          slm_code_repository: "/home/kali/Desktop/AutoBot"
+          slm_is_code_source: true
           slm_services_to_monitor:
-            - autobot-backend
+            - slm-agent
 
         # Frontend server
         02-Frontend:
@@ -42,6 +48,13 @@ all:
           slm_services_to_monitor:
             - npu-worker
 
+        # AI Stack
+        03-AI-Stack:
+          ansible_host: 172.16.168.24
+          slm_node_id: "03-AI-Stack"
+          slm_services_to_monitor:
+            - ollama
+
         # Databases
         04-Databases:
           ansible_host: 172.16.168.23
@@ -53,4 +66,16 @@ all:
         browser-automation:
           ansible_host: 172.16.168.25
           slm_node_id: "browser-automation"
+          slm_services_to_monitor: []
+
+        # New node - pending role assignment
+        05-Node-26:
+          ansible_host: 172.16.168.26
+          slm_node_id: "05-Node-26"
+          slm_services_to_monitor: []
+
+        # New node - pending role assignment
+        06-Node-27:
+          ansible_host: 172.16.168.27
+          slm_node_id: "06-Node-27"
           slm_services_to_monitor: []

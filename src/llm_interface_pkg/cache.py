@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional
 
 import xxhash
 
+from src.config.ssot_config import config
 from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -53,29 +54,41 @@ class LLMResponseCache:
     - Cache miss: 100-10000ms (LLM API call)
 
     This provides 3-5x faster cache lookups compared to single-tier caching.
+
+    Issue: #743 - Memory Optimization (Phase 3.3)
+    Reads default L1 size from config.cache.l1.llm_response
+    Reads default L2 TTL from config.cache.l2.llm_response
     """
 
     def __init__(
         self,
-        memory_cache_max_size: int = 100,
-        redis_ttl: int = 300,  # 5 minutes default
+        memory_cache_max_size: int = None,
+        redis_ttl: int = None,
         redis_database: str = "main",
     ):
         """
         Initialize the dual-tier cache.
 
         Args:
-            memory_cache_max_size: Maximum items in L1 memory cache
-            redis_ttl: Time-to-live for L2 Redis cache entries (seconds)
+            memory_cache_max_size: Max L1 items (default from SSOT config.cache.l1.llm_response)
+            redis_ttl: L2 TTL seconds (default from SSOT config.cache.l2.llm_response)
             redis_database: Redis database name for L2 cache
         """
         # L1 In-memory cache
         self._memory_cache: Dict[str, CachedResponse] = {}
         self._memory_cache_access: List[str] = []  # LRU tracking
-        self._memory_cache_max_size = memory_cache_max_size
+        # Issue #743: Read from SSOT config, allow explicit override
+        self._memory_cache_max_size = (
+            memory_cache_max_size
+            if memory_cache_max_size is not None
+            else config.cache.l1.llm_response
+        )
 
         # L2 Redis cache configuration
-        self._redis_ttl = redis_ttl
+        # Issue #743: Read from SSOT config, allow explicit override
+        self._redis_ttl = (
+            redis_ttl if redis_ttl is not None else config.cache.l2.llm_response
+        )
         self._redis_database = redis_database
 
         # Cache metrics
@@ -94,6 +107,21 @@ class LLMResponseCache:
             f"LLM Response Cache initialized: L1={memory_cache_max_size} items, "
             f"L2 TTL={redis_ttl}s, Redis DB={redis_database}"
         )
+
+    @property
+    def name(self) -> str:
+        """Unique cache identifier."""
+        return "llm_l1"
+
+    @property
+    def size(self) -> int:
+        """Current number of items in L1 cache."""
+        return len(self._memory_cache)
+
+    @property
+    def max_size(self) -> int:
+        """Maximum capacity of L1 cache."""
+        return self._memory_cache_max_size
 
     def generate_cache_key(
         self,
@@ -186,6 +214,26 @@ class LLMResponseCache:
         self._metrics["misses"] += 1
         return None
 
+    def evict(self, count: int) -> int:
+        """
+        Evict oldest items from L1 memory cache.
+
+        Args:
+            count: Number of items to evict
+
+        Returns:
+            Actual number of items evicted
+        """
+        evicted = 0
+        for _ in range(min(count, len(self._memory_cache))):
+            if self._memory_cache_access:
+                oldest_key = self._memory_cache_access.pop(0)
+                if oldest_key in self._memory_cache:
+                    del self._memory_cache[oldest_key]
+                    evicted += 1
+                    self._metrics["l1_evictions"] += 1
+        return evicted
+
     async def _store_memory_cache(
         self, cache_key: str, response: CachedResponse
     ) -> None:
@@ -252,18 +300,31 @@ class LLMResponseCache:
                     "metadata": essential_metadata,
                 }
 
-                await redis_client.set(
-                    cache_key, json.dumps(data), ex=self._redis_ttl
-                )
+                await redis_client.set(cache_key, json.dumps(data), ex=self._redis_ttl)
                 logger.debug(
                     f"Cached in L1+L2: {cache_key[:24]}... (TTL={self._redis_ttl}s)"
                 )
         except Exception as e:
             logger.debug(f"L2 Redis cache storage failed (non-critical): {e}")
 
+    def get_stats(self) -> Dict[str, Any]:
+        """Return cache statistics for CacheProtocol compliance."""
+        total = self._metrics["total_requests"]
+        total_hits = self._metrics["l1_hits"] + self._metrics["l2_hits"]
+        hit_rate = (total_hits / total) if total > 0 else 0.0
+
+        return {
+            "name": self.name,
+            "size": len(self._memory_cache),
+            "max_size": self._memory_cache_max_size,
+            "hits": total_hits,
+            "misses": self._metrics["misses"],
+            "hit_rate": hit_rate,
+        }
+
     def get_metrics(self) -> Dict[str, Any]:
         """
-        Get cache performance metrics.
+        Get cache performance metrics (detailed version for monitoring).
 
         Returns:
             Dictionary with cache statistics including hit rates
@@ -271,7 +332,7 @@ class LLMResponseCache:
         total = self._metrics["total_requests"]
         l1_hits = self._metrics["l1_hits"]
         l2_hits = self._metrics["l2_hits"]
-        misses = self._metrics["misses"]
+        self._metrics["misses"]
 
         l1_hit_rate = (l1_hits / total * 100) if total > 0 else 0.0
         l2_hit_rate = (l2_hits / total * 100) if total > 0 else 0.0
@@ -285,6 +346,12 @@ class LLMResponseCache:
             "l1_cache_size": len(self._memory_cache),
             "l1_max_size": self._memory_cache_max_size,
         }
+
+    def clear(self) -> None:
+        """Clear L1 memory cache (CacheProtocol compliance)."""
+        self._memory_cache.clear()
+        self._memory_cache_access.clear()
+        logger.info("L1 cache cleared")
 
     def clear_l1(self) -> int:
         """

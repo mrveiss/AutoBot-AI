@@ -67,6 +67,39 @@ export interface SearchFilters {
   }
 }
 
+// New interfaces for Issue #747
+
+export interface SystemDoc {
+  id: string
+  title: string
+  path: string
+  content: string
+  type: string
+  collection: string
+  updated_at?: string
+  metadata?: Record<string, unknown>
+}
+
+export interface Prompt {
+  id: string
+  name: string
+  type: 'system' | 'agent' | 'template'
+  path: string
+  content: string
+  full_content_available: boolean
+}
+
+export interface Category {
+  id: string
+  name: string
+  description?: string
+  icon?: string
+  color?: string
+  parent_id?: string | null
+  fact_count?: number
+  children?: Category[]
+}
+
 export const useKnowledgeStore = defineStore('knowledge', () => {
   // State
   const documents = ref<KnowledgeDocument[]>([])
@@ -115,6 +148,36 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   const ragAvailable = ref(true)
   const ragError = ref<string | null>(null)
   const lastRagQuery = ref('')
+
+  // System Docs state (Issue #747)
+  const systemDocs = ref<SystemDoc[]>([])
+  const systemDocsLoading = ref(false)
+  const selectedDocumentId = ref<string | null>(null)
+
+  // Prompts state (Issue #747)
+  const prompts = ref<Prompt[]>([])
+  const promptsLoading = ref(false)
+  const selectedPromptId = ref<string | null>(null)
+
+  // Category edit modal state (Issue #747)
+  const categoryEditModal = ref<{
+    open: boolean
+    category: Category | null
+    mode: 'edit' | 'delete'
+  }>({
+    open: false,
+    category: null,
+    mode: 'edit'
+  })
+
+  // Source preview panel state (Issue #747)
+  const sourcePanel = ref<{
+    open: boolean
+    document: SystemDoc | null
+  }>({
+    open: false,
+    document: null
+  })
 
   // Computed
   const documentCount = computed(() => documents.value.length)
@@ -316,7 +379,8 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     return newCategory.id
   }
 
-  function updateCategory(categoryId: string, updates: Partial<KnowledgeCategory>) {
+  // Legacy local category update (for KnowledgeCategory)
+  function updateCategoryLocal(categoryId: string, updates: Partial<KnowledgeCategory>) {
     const catIndex = categories.value.findIndex(cat => cat.id === categoryId)
     if (catIndex !== -1) {
       categories.value[catIndex] = {
@@ -327,7 +391,8 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     }
   }
 
-  function deleteCategory(categoryId: string) {
+  // Legacy local category delete (for KnowledgeCategory)
+  function deleteCategoryLocal(categoryId: string) {
     const catIndex = categories.value.findIndex(cat => cat.id === categoryId)
     if (catIndex !== -1) {
       const categoryName = categories.value[catIndex].name
@@ -340,6 +405,156 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
       })
 
       categories.value.splice(catIndex, 1)
+    }
+  }
+
+  // API-based category update (Issue #747)
+  async function updateCategory(id: string, data: Partial<Category>) {
+    try {
+      const response = await ApiClient.put(`/api/knowledge_base/categories/${id}`, data)
+      const result = await response.json()
+      if (result.status === 'success') {
+        logger.info('Category updated successfully: %s', id)
+        return result.category
+      } else {
+        throw new Error(result.message || 'Failed to update category')
+      }
+    } catch (error) {
+      logger.error('Failed to update category: %s', error)
+      throw error
+    }
+  }
+
+  // API-based category delete (Issue #747)
+  async function deleteCategory(id: string) {
+    try {
+      const response = await ApiClient.delete(`/api/knowledge_base/categories/${id}`)
+      const result = await response.json()
+      if (result.status === 'success') {
+        logger.info('Category deleted successfully: %s', id)
+        return result
+      } else {
+        throw new Error(result.message || 'Failed to delete category')
+      }
+    } catch (error) {
+      logger.error('Failed to delete category: %s', error)
+      throw error
+    }
+  }
+
+  // Category edit modal actions (Issue #747)
+  function openCategoryEditModal(category: Category, mode: 'edit' | 'delete') {
+    categoryEditModal.value = {
+      open: true,
+      category,
+      mode
+    }
+  }
+
+  function closeCategoryEditModal() {
+    categoryEditModal.value = {
+      open: false,
+      category: null,
+      mode: 'edit'
+    }
+  }
+
+  // System Docs actions (Issue #747)
+  async function loadSystemDocs() {
+    try {
+      systemDocsLoading.value = true
+      const response = await ApiClient.get(
+        '/api/knowledge_base/entries?collection=autobot-documentation'
+      )
+      const result = await response.json()
+      systemDocs.value = result.entries || result.documents || []
+      logger.info('Loaded %d system docs', systemDocs.value.length)
+    } catch (error) {
+      logger.error('Failed to load system docs: %s', error)
+      systemDocs.value = []
+    } finally {
+      systemDocsLoading.value = false
+    }
+  }
+
+  function setSelectedDocument(id: string | null) {
+    selectedDocumentId.value = id
+  }
+
+  // Prompts actions (Issue #747)
+  async function loadPrompts() {
+    try {
+      promptsLoading.value = true
+      const response = await ApiClient.get('/api/prompts')
+      const result = await response.json()
+      prompts.value = result.prompts || []
+      logger.info('Loaded %d prompts', prompts.value.length)
+    } catch (error) {
+      logger.error('Failed to load prompts: %s', error)
+      prompts.value = []
+    } finally {
+      promptsLoading.value = false
+    }
+  }
+
+  async function updatePrompt(id: string, content: string) {
+    try {
+      const response = await ApiClient.put(`/api/prompts/${id}`, { content })
+      const result = await response.json()
+      // Update the prompt in local state
+      const promptIndex = prompts.value.findIndex(p => p.id === id)
+      if (promptIndex !== -1) {
+        prompts.value[promptIndex] = {
+          ...prompts.value[promptIndex],
+          content: content.slice(0, 1000),
+          full_content_available: content.length > 1000
+        }
+      }
+      logger.info('Prompt updated successfully: %s', id)
+      return result
+    } catch (error) {
+      logger.error('Failed to update prompt: %s', error)
+      throw error
+    }
+  }
+
+  async function revertPrompt(id: string) {
+    try {
+      const response = await ApiClient.post(`/api/prompts/${id}/revert`, {})
+      const result = await response.json()
+      // Update the prompt in local state
+      const promptIndex = prompts.value.findIndex(p => p.id === id)
+      if (promptIndex !== -1 && result.content) {
+        prompts.value[promptIndex] = {
+          ...prompts.value[promptIndex],
+          content: result.content.slice(0, 1000),
+          full_content_available: result.content.length > 1000
+        }
+      }
+      logger.info('Prompt reverted successfully: %s', id)
+      return result
+    } catch (error) {
+      logger.error('Failed to revert prompt: %s', error)
+      throw error
+    }
+  }
+
+  function setSelectedPrompt(id: string | null) {
+    selectedPromptId.value = id
+  }
+
+  // Source panel actions (Issue #747)
+  function openSourcePanel(document: SystemDoc) {
+    sourcePanel.value = {
+      open: true,
+      document
+    }
+  }
+
+  function closeSourcePanel() {
+    sourcePanel.value = {
+      open: false,
+      document: null
     }
   }
 
@@ -434,6 +649,22 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     ragError,
     lastRagQuery,
 
+    // System Docs state (Issue #747)
+    systemDocs,
+    systemDocsLoading,
+    selectedDocumentId,
+
+    // Prompts state (Issue #747)
+    prompts,
+    promptsLoading,
+    selectedPromptId,
+
+    // Category edit modal state (Issue #747)
+    categoryEditModal,
+
+    // Source preview panel state (Issue #747)
+    sourcePanel,
+
     // Computed
     documentCount,
     categoryCount,
@@ -460,8 +691,20 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     deleteDocument,
     selectDocument,
     addCategory,
+    updateCategoryLocal,
+    deleteCategoryLocal,
     updateCategory,
     deleteCategory,
+    openCategoryEditModal,
+    closeCategoryEditModal,
+    loadSystemDocs,
+    setSelectedDocument,
+    loadPrompts,
+    updatePrompt,
+    revertPrompt,
+    setSelectedPrompt,
+    openSourcePanel,
+    closeSourcePanel,
     updateFilters,
     clearFilters,
     updateSearchResults,

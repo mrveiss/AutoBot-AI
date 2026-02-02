@@ -9,7 +9,7 @@
  * Unified view for standard and blue-green deployments (Issue #726).
  */
 
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
@@ -29,6 +29,7 @@ const deployments = ref<Deployment[]>([])
 const isLoading = ref(false)
 const showWizard = ref(false)
 const isRetrying = ref<string | null>(null)
+const isRetryingBg = ref<string | null>(null)
 const isCancelling = ref<string | null>(null)
 const isRollingBack = ref<string | null>(null)
 const selectedDeployment = ref<Deployment | null>(null)
@@ -48,6 +49,18 @@ const rollbackNotification = ref<{
   success: false,
   message: '',
 })
+
+// New standard deployment form
+const newDeployment = ref<{
+  node_id: string
+  roles: string[]
+  force: boolean
+}>({
+  node_id: '',
+  roles: [],
+  force: false,
+})
+const isCreatingDeployment = ref(false)
 
 // Standard stats
 const standardStats = computed(() => ({
@@ -89,6 +102,65 @@ const newBgDeployment = ref<BlueGreenDeploymentCreate>({
 
 // Available roles
 const availableRoles = computed(() => fleetStore.availableRoles.map(r => r.name))
+
+// Role categories with descriptions and compatibility info
+const roleCategories = computed(() => {
+  const roles = fleetStore.availableRoles
+  const categories: Record<string, {
+    label: string
+    description: string
+    roles: Array<{ name: string; description: string; dependencies: string[] }>
+  }> = {
+    core: {
+      label: 'Core Infrastructure',
+      description: 'Required base components for all nodes',
+      roles: [],
+    },
+    data: {
+      label: 'Data Layer',
+      description: 'Database and caching services',
+      roles: [],
+    },
+    application: {
+      label: 'Application Layer',
+      description: 'Backend API and frontend web servers',
+      roles: [],
+    },
+    ai: {
+      label: 'AI/ML Services',
+      description: 'LLM inference and AI processing',
+      roles: [],
+    },
+    automation: {
+      label: 'Automation',
+      description: 'Browser automation and scripting',
+      roles: [],
+    },
+    observability: {
+      label: 'Observability',
+      description: 'Monitoring and logging stack',
+      roles: [],
+    },
+    'remote-access': {
+      label: 'Remote Access',
+      description: 'VNC and remote desktop services',
+      roles: [],
+    },
+  }
+
+  for (const role of roles) {
+    const cat = role.category || 'core'
+    if (categories[cat]) {
+      categories[cat].roles.push({
+        name: role.name,
+        description: role.description,
+        dependencies: role.dependencies || [],
+      })
+    }
+  }
+
+  return categories
+})
 
 // Blue-green stats
 const bgStats = computed(() => ({
@@ -252,19 +324,37 @@ async function fetchEligibleNodes(roles: string[]): Promise<void> {
 }
 
 async function handleCreateBgDeployment(): Promise<void> {
-  if (!newBgDeployment.value.blue_node_id || !newBgDeployment.value.green_node_id || newBgDeployment.value.roles.length === 0) {
+  if (!newBgDeployment.value.blue_node_id) {
+    alert('Please select a blue (source) node')
+    return
+  }
+  if (!newBgDeployment.value.green_node_id) {
+    alert('Please select a green (target) node')
+    return
+  }
+  if (newBgDeployment.value.roles.length === 0) {
+    alert('Please select at least one role to migrate')
     return
   }
 
   isCreatingBg.value = true
   try {
+    logger.info('Creating blue-green deployment:', newBgDeployment.value)
     await api.createBlueGreenDeployment(newBgDeployment.value)
     showBgCreateDialog.value = false
     resetBgForm()
     await fetchBgDeployments()
-  } catch (err) {
+  } catch (err: unknown) {
     logger.error('Failed to create blue-green deployment:', err)
-    alert('Failed to create deployment')
+    const errorMessage = err instanceof Error ? err.message : String(err)
+    const axiosError = err as { response?: { data?: { detail?: string }; status?: number } }
+    const detail = axiosError?.response?.data?.detail || errorMessage
+    const status = axiosError?.response?.status
+    if (status === 403) {
+      alert('Access denied: Blue-green deployments require admin privileges')
+    } else {
+      alert(`Failed to create blue-green deployment: ${detail}`)
+    }
   } finally {
     isCreatingBg.value = false
   }
@@ -312,6 +402,23 @@ async function handleBgCancel(deploymentId: string): Promise<void> {
   }
 }
 
+async function handleBgRetry(deploymentId: string): Promise<void> {
+  if (!confirm('Are you sure you want to retry this deployment?')) {
+    return
+  }
+
+  isRetryingBg.value = deploymentId
+  try {
+    await api.retryBlueGreen(deploymentId)
+    await fetchBgDeployments()
+  } catch (err) {
+    logger.error('Failed to retry deployment:', err)
+    alert('Failed to retry deployment')
+  } finally {
+    isRetryingBg.value = null
+  }
+}
+
 function resetBgForm(): void {
   newBgDeployment.value = {
     blue_node_id: '',
@@ -343,6 +450,60 @@ function toggleRole(role: NodeRole): void {
     roles.push(role)
   }
   fetchEligibleNodes(roles)
+}
+
+// ===== STANDARD DEPLOYMENT CREATE METHODS =====
+async function handleCreateDeployment(): Promise<void> {
+  if (!newDeployment.value.node_id) {
+    alert('Please select a target node')
+    return
+  }
+  if (newDeployment.value.roles.length === 0) {
+    alert('Please select at least one role to deploy')
+    return
+  }
+
+  isCreatingDeployment.value = true
+  try {
+    logger.info('Creating deployment:', {
+      node_id: newDeployment.value.node_id,
+      roles: newDeployment.value.roles,
+      force: newDeployment.value.force,
+    })
+    await api.createDeployment({
+      node_id: newDeployment.value.node_id,
+      roles: newDeployment.value.roles as NodeRole[],
+      force: newDeployment.value.force,
+    })
+    showWizard.value = false
+    resetDeploymentForm()
+    await fetchDeployments()
+  } catch (err: unknown) {
+    logger.error('Failed to create deployment:', err)
+    const errorMessage = err instanceof Error ? err.message : String(err)
+    const axiosError = err as { response?: { data?: { detail?: string } } }
+    const detail = axiosError?.response?.data?.detail || errorMessage
+    alert(`Failed to create deployment: ${detail}`)
+  } finally {
+    isCreatingDeployment.value = false
+  }
+}
+
+function resetDeploymentForm(): void {
+  newDeployment.value = {
+    node_id: '',
+    roles: [],
+    force: false,
+  }
+}
+
+function toggleDeploymentRole(role: string): void {
+  const index = newDeployment.value.roles.indexOf(role)
+  if (index >= 0) {
+    newDeployment.value.roles.splice(index, 1)
+  } else {
+    newDeployment.value.roles.push(role)
+  }
 }
 
 // ===== SHARED HELPERS =====
@@ -919,6 +1080,18 @@ function getNodeHostname(nodeId: string): string {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
+
+                    <button
+                      v-if="deployment.status === 'failed'"
+                      @click="handleBgRetry(deployment.bg_deployment_id)"
+                      :disabled="isRetryingBg === deployment.bg_deployment_id"
+                      class="text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                      title="Retry deployment"
+                    >
+                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -937,6 +1110,178 @@ function getNodeHostname(nodeId: string): string {
 
       <div v-if="isLoadingBg" class="flex items-center justify-center py-12">
         <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
+      </div>
+    </div>
+
+    <!-- Standard Deployment Wizard Dialog -->
+    <div
+      v-if="showWizard"
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      @click.self="showWizard = false"
+    >
+      <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h3 class="text-lg font-semibold text-gray-900">New Deployment</h3>
+          <p class="text-sm text-gray-500 mt-1">
+            Deploy roles to a node in your fleet
+          </p>
+        </div>
+        <div class="px-6 py-4 space-y-4">
+          <!-- Node Selection -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Target Node</label>
+            <select
+              v-model="newDeployment.node_id"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+            >
+              <option value="">Select a node...</option>
+              <option v-for="opt in nodeOptions" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Node Info (if selected) -->
+          <div v-if="newDeployment.node_id" class="bg-gray-50 rounded-lg p-3">
+            <p class="text-sm font-medium text-gray-700 mb-1">Current Roles</p>
+            <div class="flex flex-wrap gap-1">
+              <span
+                v-for="role in (nodeOptions.find(n => n.value === newDeployment.node_id)?.roles || [])"
+                :key="role"
+                class="px-2 py-0.5 text-xs font-medium bg-gray-200 text-gray-700 rounded"
+              >
+                {{ role }}
+              </span>
+              <span v-if="(nodeOptions.find(n => n.value === newDeployment.node_id)?.roles || []).length === 0" class="text-xs text-gray-500">
+                No roles assigned
+              </span>
+            </div>
+          </div>
+
+          <!-- Roles Selection by Category -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Roles to Deploy</label>
+            <p v-if="availableRoles.length === 0" class="text-sm text-gray-500">
+              Loading available roles...
+            </p>
+            <div v-else class="space-y-3">
+              <template v-for="(category, catKey) in roleCategories" :key="catKey">
+                <div v-if="category.roles.length > 0" class="border border-gray-200 rounded-lg overflow-hidden">
+                  <!-- Category Header -->
+                  <div class="bg-gray-50 px-3 py-2 border-b border-gray-200">
+                    <div class="flex items-center justify-between">
+                      <span class="text-sm font-medium text-gray-800">{{ category.label }}</span>
+                      <span class="text-xs text-gray-500">{{ category.description }}</span>
+                    </div>
+                  </div>
+                  <!-- Category Roles -->
+                  <div class="p-3 space-y-2">
+                    <div
+                      v-for="role in category.roles"
+                      :key="role.name"
+                      @click="toggleDeploymentRole(role.name)"
+                      :class="[
+                        'flex items-start gap-3 p-2 rounded-md cursor-pointer transition-colors',
+                        newDeployment.roles.includes(role.name)
+                          ? 'bg-primary-50 border border-primary-200'
+                          : 'hover:bg-gray-50 border border-transparent'
+                      ]"
+                    >
+                      <!-- Checkbox -->
+                      <div :class="[
+                        'w-5 h-5 rounded flex-shrink-0 flex items-center justify-center mt-0.5',
+                        newDeployment.roles.includes(role.name)
+                          ? 'bg-primary-600'
+                          : 'border-2 border-gray-300'
+                      ]">
+                        <svg
+                          v-if="newDeployment.roles.includes(role.name)"
+                          class="w-3 h-3 text-white"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                      <!-- Role Info -->
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span :class="[
+                            'text-sm font-medium',
+                            newDeployment.roles.includes(role.name) ? 'text-primary-700' : 'text-gray-900'
+                          ]">
+                            {{ role.name }}
+                          </span>
+                          <!-- Dependencies Badge -->
+                          <span
+                            v-if="role.dependencies.length > 0"
+                            class="px-1.5 py-0.5 text-xs bg-amber-100 text-amber-700 rounded"
+                            :title="'Requires: ' + role.dependencies.join(', ')"
+                          >
+                            needs: {{ role.dependencies.join(', ') }}
+                          </span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-0.5">{{ role.description }}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Selected Roles Summary -->
+          <div v-if="newDeployment.roles.length > 0" class="bg-green-50 border border-green-200 rounded-md p-3">
+            <p class="text-sm font-medium text-green-800 mb-1">Selected Roles ({{ newDeployment.roles.length }})</p>
+            <div class="flex flex-wrap gap-1">
+              <span
+                v-for="role in newDeployment.roles"
+                :key="role"
+                class="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded"
+              >
+                {{ role }}
+              </span>
+            </div>
+          </div>
+
+          <!-- Force Option -->
+          <div class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="force-deploy"
+              v-model="newDeployment.force"
+              class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+            />
+            <label for="force-deploy" class="text-sm text-gray-700">
+              Force deployment (skip checks and redeploy even if roles already exist)
+            </label>
+          </div>
+
+          <!-- Info Box -->
+          <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
+            <p class="text-sm text-blue-700">
+              This will deploy the selected roles to the target node using Ansible.
+              The deployment progress can be tracked in real-time.
+            </p>
+          </div>
+        </div>
+        <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+          <button
+            @click="showWizard = false; resetDeploymentForm()"
+            class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+          >
+            Cancel
+          </button>
+          <button
+            @click="handleCreateDeployment"
+            :disabled="!newDeployment.node_id || newDeployment.roles.length === 0 || isCreatingDeployment"
+            class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            <div v-if="isCreatingDeployment" class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+            Start Deployment
+          </button>
+        </div>
       </div>
     </div>
 
@@ -1311,6 +1656,14 @@ function getNodeHostname(nodeId: string): string {
                 class="btn bg-orange-600 text-white hover:bg-orange-700"
               >
                 Rollback
+              </button>
+              <button
+                v-if="selectedBgDeployment.status === 'failed'"
+                @click="handleBgRetry(selectedBgDeployment.bg_deployment_id); closeBgDetails()"
+                :disabled="isRetryingBg === selectedBgDeployment.bg_deployment_id"
+                class="btn bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {{ isRetryingBg === selectedBgDeployment.bg_deployment_id ? 'Retrying...' : 'Retry Deployment' }}
               </button>
               <button @click="closeBgDetails" class="btn btn-secondary">
                 Close
