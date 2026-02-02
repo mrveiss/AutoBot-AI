@@ -320,6 +320,21 @@ class CodeDistributor:
             except Exception as e:
                 logger.warning("Could not restart slm-agent on %s: %s", node_id, e)
 
+        # Step 5: Update node version in database
+        try:
+            from models.database import CodeStatus, Node
+
+            async with db_service.session() as db:
+                result = await db.execute(select(Node).where(Node.node_id == node_id))
+                node = result.scalar_one_or_none()
+                if node:
+                    node.code_version = commit_hash
+                    node.code_status = CodeStatus.UP_TO_DATE
+                    await db.commit()
+                    logger.info("Updated node %s version in database", node_id)
+        except Exception as e:
+            logger.warning("Could not update node version in database: %s", e)
+
         return True, f"Code synced successfully (commit: {commit_hash[:12]})"
 
 
