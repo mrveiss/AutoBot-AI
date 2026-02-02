@@ -555,7 +555,7 @@ async def notify_code_version(
     logger.info(
         "Code version notification from %s: %s",
         node_id,
-        commit[:12],
+        commit,
     )
 
     # Verify this is from a known code-source node
@@ -603,7 +603,7 @@ async def notify_code_version(
 
     logger.info(
         "Updated latest version to %s, %d nodes marked outdated",
-        commit[:12],
+        commit,
         len(outdated_nodes),
     )
 
@@ -629,7 +629,7 @@ async def notify_code_version(
 
     return CodeVersionNotificationResponse(
         success=True,
-        message=f"Version updated to {commit[:12]}",
+        message=f"Version updated to {commit}",
         new_version=commit,
         nodes_notified=1,  # WebSocket broadcast
         outdated_nodes=len(outdated_nodes),

@@ -335,7 +335,7 @@ class CodeDistributor:
         except Exception as e:
             logger.warning("Could not update node version in database: %s", e)
 
-        return True, f"Code synced successfully (commit: {commit_hash[:12]})"
+        return True, f"Code synced successfully (commit: {commit_hash})"
 
 
 # Singleton instance

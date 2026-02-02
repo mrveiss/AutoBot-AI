@@ -145,8 +145,8 @@ export function useCodeSync() {
   })
 
   const latestVersionShort = computed(() => {
-    const version = latestVersion.value
-    return version ? version.substring(0, 12) : null
+    // Return full version - no truncation per user request
+    return latestVersion.value
   })
 
   const totalNodes = computed(() => {

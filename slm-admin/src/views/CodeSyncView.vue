@@ -64,7 +64,7 @@ function toggleNode(nodeId: string): void {
 
 function formatVersion(version: string | null): string {
   if (!version) return 'Unknown'
-  return version.length > 12 ? version.substring(0, 12) + '...' : version
+  return version  // Return full version - no truncation
 }
 
 function formatDate(dateStr: string | null): string {
