@@ -111,3 +111,29 @@ class TestConfigRegistryBasic:
             with patch.dict(os.environ, {}, clear=True):
                 result = ConfigRegistry.get("error.key", default="safe_default")
                 assert result == "safe_default"
+
+    def test_get_falls_back_to_env_var(self):
+        """Test that get() falls back to environment variable."""
+        from src.config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+
+        with patch.object(ConfigRegistry, "_fetch_from_redis", return_value=None):
+            with patch.dict(
+                os.environ, {"AUTOBOT_REDIS_HOST": "10.0.0.99"}, clear=True
+            ):
+                result = ConfigRegistry.get("redis.host", default="172.16.168.23")
+                assert result == "10.0.0.99"
+
+    def test_env_var_key_conversion(self):
+        """Test that dot notation converts to underscore for env vars."""
+        from src.config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+
+        with patch.object(ConfigRegistry, "_fetch_from_redis", return_value=None):
+            with patch.dict(
+                os.environ, {"AUTOBOT_BACKEND_API_PORT": "9000"}, clear=True
+            ):
+                result = ConfigRegistry.get("backend.api.port", default="8001")
+                assert result == "9000"
