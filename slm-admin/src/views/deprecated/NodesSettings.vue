@@ -4,8 +4,21 @@
 // Author: mrveiss
 
 /**
- * NodesSettings - Node management for SLM Admin
+ * @deprecated Issue #737: This component has been deprecated and archived.
  *
+ * DEPRECATION NOTICE:
+ * - Archived: 2026-02-02
+ * - Reason: Consolidated duplicate UI into FleetOverview.vue
+ * - Migration: All node management is now in FleetOverview (/)
+ * - Route /settings/nodes redirects to Fleet Overview
+ *
+ * This file is preserved for reference during Phase 2 & 3 of issue #737
+ * which involves creating shared composables and unifying data models.
+ *
+ * DO NOT USE THIS COMPONENT - Use FleetOverview.vue instead.
+ *
+ * Original description:
+ * NodesSettings - Node management for SLM Admin
  * Provides infrastructure node management including enrollment,
  * testing, updates, and certificate management.
  */
