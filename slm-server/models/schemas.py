@@ -1590,3 +1590,88 @@ class ServiceConflictListResponse(BaseModel):
 
     conflicts: List[ServiceConflictResponse]
     total: int
+
+
+# =============================================================================
+# Agent Schemas (Issue #760 Phase 2)
+# =============================================================================
+
+
+class AgentLLMConfig(BaseModel):
+    """LLM configuration for an agent (excludes API key)."""
+
+    llm_provider: str
+    llm_endpoint: Optional[str] = None
+    llm_model: str
+    llm_timeout: int = 30
+    llm_temperature: float = 0.7
+    llm_max_tokens: Optional[int] = None
+
+
+class AgentResponse(BaseModel):
+    """Agent response with LLM config."""
+
+    id: int
+    agent_id: str
+    name: str
+    description: Optional[str] = None
+    llm_provider: str
+    llm_endpoint: Optional[str] = None
+    llm_model: str
+    llm_timeout: int = 30
+    llm_temperature: float = 0.7
+    llm_max_tokens: Optional[int] = None
+    is_default: bool = False
+    is_active: bool = True
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AgentCreateRequest(BaseModel):
+    """Request to create an agent."""
+
+    agent_id: str = Field(..., min_length=1, max_length=64, pattern="^[a-z0-9-]+$")
+    name: str = Field(..., min_length=1, max_length=128)
+    description: Optional[str] = None
+    llm_provider: str = Field(..., pattern="^(ollama|openai|anthropic|vllm)$")
+    llm_endpoint: Optional[str] = None
+    llm_model: str = Field(..., min_length=1, max_length=64)
+    llm_api_key: Optional[str] = None  # Will be encrypted before storage
+    llm_timeout: int = Field(default=30, ge=1, le=300)
+    llm_temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    llm_max_tokens: Optional[int] = Field(default=None, ge=1, le=128000)
+    is_default: bool = False
+    is_active: bool = True
+
+
+class AgentUpdateRequest(BaseModel):
+    """Request to update an agent."""
+
+    name: Optional[str] = Field(default=None, min_length=1, max_length=128)
+    description: Optional[str] = None
+    llm_provider: Optional[str] = Field(
+        default=None, pattern="^(ollama|openai|anthropic|vllm)$"
+    )
+    llm_endpoint: Optional[str] = None
+    llm_model: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    llm_api_key: Optional[str] = None  # Will be encrypted before storage
+    llm_timeout: Optional[int] = Field(default=None, ge=1, le=300)
+    llm_temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0)
+    llm_max_tokens: Optional[int] = Field(default=None, ge=1, le=128000)
+    is_default: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+
+class AgentListResponse(BaseModel):
+    """List of agents."""
+
+    agents: List[AgentResponse]
+    total: int
+
+
+class AgentLLMConfigWithKey(AgentLLMConfig):
+    """LLM config including decrypted API key (for backend only)."""
+
+    llm_api_key: Optional[str] = None
