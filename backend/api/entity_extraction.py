@@ -23,20 +23,16 @@ Endpoints:
 """
 
 import logging
-import uuid
 from typing import Dict, List, Optional
-
-from backend.type_defs.common import Metadata
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, validator
 
-from src.agents.graph_entity_extractor import (
-    GraphEntityExtractor,
-    ExtractionResult,
-)
+from backend.type_defs.common import Metadata
+from src.agents.graph_entity_extractor import ExtractionResult, GraphEntityExtractor
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.utils.request_utils import generate_request_id
 
 # Issue #380: Module-level frozenset for valid message roles
 _VALID_ROLES = frozenset({"user", "assistant", "system"})
@@ -130,7 +126,9 @@ class BatchExtractionResponse(BaseModel):
 class HealthResponse(BaseModel):
     """Response model for health check."""
 
-    status: str = Field(..., description="Service status (healthy, degraded, unhealthy)")
+    status: str = Field(
+        ..., description="Service status (healthy, degraded, unhealthy)"
+    )
     components: Dict[str, str] = Field(..., description="Component health status")
     timestamp: str = Field(..., description="Timestamp of health check")
 
@@ -167,11 +165,6 @@ def get_entity_extractor(request: Request) -> GraphEntityExtractor:
         )
 
     return extractor
-
-
-def generate_request_id() -> str:
-    """Generate unique request ID for tracking."""
-    return str(uuid.uuid4())
 
 
 # ====================================================================
@@ -389,7 +382,9 @@ def _process_extraction_results(
         conv_id = batch_request.conversations[idx].conversation_id
 
         if isinstance(result, Exception):
-            logger.error("[%s] Extraction failed for %s: %s", request_id, conv_id, result)
+            logger.error(
+                "[%s] Extraction failed for %s: %s", request_id, conv_id, result
+            )
             failed_results.append(
                 {
                     "success": False,
@@ -447,8 +442,8 @@ async def extract_entities_batch(
     Raises:
         HTTPException: If batch extraction fails
     """
-    import time
     import asyncio
+    import time
 
     request_id = generate_request_id()
     start_time = time.perf_counter()
@@ -462,7 +457,9 @@ async def extract_entities_batch(
         tasks = _build_extraction_tasks(batch_request, extractor)
 
         # Wait for all extractions to complete
-        results: List[ExtractionResult] = await asyncio.gather(*tasks, return_exceptions=True)
+        results: List[ExtractionResult] = await asyncio.gather(
+            *tasks, return_exceptions=True
+        )
 
         # Process results (Issue #281: uses helper)
         successful_results, failed_results = _process_extraction_results(
