@@ -7,16 +7,13 @@ Centralized Redis Key Constants for AutoBot
 
 Single source of truth for all Redis key patterns and connection configuration.
 
-SSOT Migration (Issue #602):
-    Connection parameters (host, port, database numbers) are now read from
-    the SSOT config system. This module retains key pattern definitions
-    and connection pool settings.
+SSOT Migration (Issue #763):
+    Database numbers now use ConfigRegistry with five-tier fallback:
+    Cache → Redis → Environment → Registry Defaults → Caller Default
 
     For Redis connection parameters, prefer:
-        from src.config.ssot_config import config
-        host = config.vm.redis
-        port = config.port.redis
-        db_main = config.redis.db_main
+        from src.config.registry import ConfigRegistry
+        db_main = int(ConfigRegistry.get("redis.db_main", "0"))
 
 Usage:
     from src.constants.redis_constants import REDIS_KEY, REDIS_CONFIG
@@ -30,18 +27,7 @@ Usage:
 
 from dataclasses import dataclass
 
-
-def _get_ssot_config():
-    """Get SSOT config with graceful fallback."""
-    try:
-        from src.config.ssot_config import get_config
-
-        return get_config()
-    except Exception:
-        return None
-
-
-_ssot = _get_ssot_config()
+from src.config.registry import ConfigRegistry
 
 
 @dataclass(frozen=True)
@@ -73,27 +59,26 @@ class RedisConnectionConfig:
     # Retry settings
     RETRY_ON_TIMEOUT: bool = True
 
-    # Database assignments (from SSOT)
-    # These are convenience accessors - prefer using ssot_config directly
+    # Database assignments (Issue #763: Now uses ConfigRegistry)
     @property
     def db_main(self) -> int:
-        """Main database number from SSOT."""
-        return _ssot.redis.db_main if _ssot else 0
+        """Main database number from ConfigRegistry."""
+        return int(ConfigRegistry.get("redis.db_main", "0"))
 
     @property
     def db_knowledge(self) -> int:
-        """Knowledge database number from SSOT."""
-        return _ssot.redis.db_knowledge if _ssot else 1
+        """Knowledge database number from ConfigRegistry."""
+        return int(ConfigRegistry.get("redis.db_knowledge", "1"))
 
     @property
     def db_cache(self) -> int:
-        """Cache database number from SSOT."""
-        return _ssot.redis.db_cache if _ssot else 5
+        """Cache database number from ConfigRegistry."""
+        return int(ConfigRegistry.get("redis.db_cache", "5"))
 
     @property
     def db_sessions(self) -> int:
-        """Sessions database number from SSOT."""
-        return _ssot.redis.db_sessions if _ssot else 6
+        """Sessions database number from ConfigRegistry."""
+        return int(ConfigRegistry.get("redis.db_sessions", "6"))
 
 
 @dataclass(frozen=True)
