@@ -17,9 +17,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
+from src.auth_middleware import check_admin_permission
 from src.constants.threshold_constants import TimingConstants
 from src.utils.redis_client import get_redis_client
 
@@ -34,7 +35,9 @@ CONTROL_FLOW_KEYWORDS = {"if ", "elif ", "else:", "try:", "except:", "for ", "wh
 _FUNCTION_DEF_PREFIXES = ("def ", "async def ")
 
 
-def _no_data_response(message: str = "No bug prediction data available. Run codebase analysis first.") -> dict:
+def _no_data_response(
+    message: str = "No bug prediction data available. Run codebase analysis first.",
+) -> dict:
     """
     Standardized no-data response.
 
@@ -259,7 +262,9 @@ def get_suggested_tests(file_path: str, factors: dict[str, float]) -> list[str]:
         suggestions.append(f"Add regression tests for recent changes in {basename}")
 
     if factors.get("bug_history", 0) > 50:
-        suggestions.append(f"Create tests covering previous bug scenarios in {basename}")
+        suggestions.append(
+            f"Create tests covering previous bug scenarios in {basename}"
+        )
 
     if factors.get("test_coverage", 0) > 50:  # High means low coverage
         suggestions.append(f"Increase unit test coverage for {basename}")
@@ -288,7 +293,9 @@ async def get_git_bug_history() -> dict[str, Any]:
         )
 
         try:
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=TimingConstants.SHORT_TIMEOUT)
+            stdout, _ = await asyncio.wait_for(
+                proc.communicate(), timeout=TimingConstants.SHORT_TIMEOUT
+            )
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
@@ -321,7 +328,9 @@ async def get_file_change_frequency() -> dict[str, int]:
         )
 
         try:
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=TimingConstants.SHORT_TIMEOUT)
+            stdout, _ = await asyncio.wait_for(
+                proc.communicate(), timeout=TimingConstants.SHORT_TIMEOUT
+            )
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
@@ -379,7 +388,9 @@ def _calculate_max_indent(lines: list) -> int:
 
 def _calculate_conditional_density(lines: list, line_count: int) -> float:
     """Calculate conditional statement density (Issue #398: extracted)."""
-    conditionals = sum(1 for line in lines if any(kw in line for kw in CONTROL_FLOW_KEYWORDS))
+    conditionals = sum(
+        1 for line in lines if any(kw in line for kw in CONTROL_FLOW_KEYWORDS)
+    )
     return conditionals / max(line_count, 1) * 100
 
 
@@ -387,9 +398,15 @@ def _calculate_complexity_score(lines: list) -> int:
     """Calculate total complexity score from code lines (Issue #398: extracted)."""
     line_count = len(lines)
     score = _score_from_thresholds(line_count, [(500, 30), (300, 20), (100, 10)])
-    score += _score_from_thresholds(_calculate_max_indent(lines), [(6, 25), (4, 15), (2, 5)])
-    score += _score_from_thresholds(_calculate_conditional_density(lines, line_count), [(15, 25), (10, 15), (5, 5)])
-    func_count = sum(1 for line in lines if line.strip().startswith(_FUNCTION_DEF_PREFIXES))
+    score += _score_from_thresholds(
+        _calculate_max_indent(lines), [(6, 25), (4, 15), (2, 5)]
+    )
+    score += _score_from_thresholds(
+        _calculate_conditional_density(lines, line_count), [(15, 25), (10, 15), (5, 5)]
+    )
+    func_count = sum(
+        1 for line in lines if line.strip().startswith(_FUNCTION_DEF_PREFIXES)
+    )
     score += _score_from_thresholds(func_count, [(20, 20), (10, 10)])
     return min(100, score)
 
@@ -400,7 +417,9 @@ async def analyze_file_complexity(file_path: str) -> float:
         path = Path(file_path)
         if not await asyncio.to_thread(path.exists):
             return 30
-        content = await asyncio.to_thread(path.read_text, encoding="utf-8", errors="ignore")
+        content = await asyncio.to_thread(
+            path.read_text, encoding="utf-8", errors="ignore"
+        )
         return _calculate_complexity_score(content.split("\n"))
     except Exception as e:
         logger.warning("Failed to analyze complexity for %s: %s", file_path, e)
@@ -452,7 +471,9 @@ async def _store_prediction_history(
         # Calculate average risk score
         avg_risk = 0.0
         if analyzed_files:
-            avg_risk = sum(f.get("risk_score", 0) for f in analyzed_files) / len(analyzed_files)
+            avg_risk = sum(f.get("risk_score", 0) for f in analyzed_files) / len(
+                analyzed_files
+            )
 
         # Build prediction snapshot
         prediction_snapshot = {
@@ -558,7 +579,9 @@ def _calculate_trend_metrics(history: List[Dict[str, Any]]) -> Dict[str, Any]:
     high_risk_counts = [h.get("high_risk_count", 0) for h in history]
 
     overall_avg = sum(avg_risk_scores) / len(avg_risk_scores) if avg_risk_scores else 0
-    avg_high_risk = sum(high_risk_counts) / len(high_risk_counts) if high_risk_counts else 0
+    avg_high_risk = (
+        sum(high_risk_counts) / len(high_risk_counts) if high_risk_counts else 0
+    )
 
     # Calculate trend direction (compare first half to second half)
     half = len(history) // 2
@@ -567,7 +590,9 @@ def _calculate_trend_metrics(history: List[Dict[str, Any]]) -> Dict[str, Any]:
         second_half_avg = sum(avg_risk_scores[half:]) / (len(avg_risk_scores) - half)
 
         if first_half_avg > 0:
-            risk_change_pct = ((second_half_avg - first_half_avg) / first_half_avg) * 100
+            risk_change_pct = (
+                (second_half_avg - first_half_avg) / first_half_avg
+            ) * 100
         else:
             risk_change_pct = 0
 
@@ -585,12 +610,14 @@ def _calculate_trend_metrics(history: List[Dict[str, Any]]) -> Dict[str, Any]:
     # Build data points for charting
     data_points = []
     for h in history:
-        data_points.append({
-            "timestamp": h.get("timestamp"),
-            "average_risk": h.get("average_risk_score", 0),
-            "high_risk_count": h.get("high_risk_count", 0),
-            "total_files": h.get("total_files", 0),
-        })
+        data_points.append(
+            {
+                "timestamp": h.get("timestamp"),
+                "average_risk": h.get("average_risk_score", 0),
+                "high_risk_count": h.get("high_risk_count", 0),
+                "total_files": h.get("total_files", 0),
+            }
+        )
 
     return {
         "data_points": data_points,
@@ -620,7 +647,10 @@ def _calculate_risk_level_trends(history: List[Dict[str, Any]]) -> Dict[str, Any
     trends = {}
 
     for level in risk_levels:
-        counts = [h.get(f"{level}_count", h.get("risk_distribution", {}).get(level, 0)) for h in history]
+        counts = [
+            h.get(f"{level}_count", h.get("risk_distribution", {}).get(level, 0))
+            for h in history
+        ]
         if counts:
             avg = sum(counts) / len(counts)
             latest = counts[-1] if counts else 0
@@ -678,9 +708,7 @@ async def _analyze_files_parallel(
         async with semaphore:
             return await _analyze_single_file(fp, change_freq, bug_history)
 
-    return list(await asyncio.gather(
-        *[analyze_with_semaphore(fp) for fp in files]
-    ))
+    return list(await asyncio.gather(*[analyze_with_semaphore(fp) for fp in files]))
 
 
 async def _analyze_single_file(
@@ -734,17 +762,21 @@ async def _safe_store_prediction_history(
             analyzed_files=analyzed_files,
         )
     except Exception as e:
-        logger.error("Background prediction history storage failed: %s", e, exc_info=True)
+        logger.error(
+            "Background prediction history storage failed: %s", e, exc_info=True
+        )
 
 
 @router.get("/analyze")
 async def analyze_codebase(
+    admin_check: bool = Depends(check_admin_permission),
     path: str = Query(".", description="Path to analyze"),
     include_pattern: str = Query("*.py", description="File pattern to include"),
     limit: int = Query(1000, ge=1, le=5000, description="Maximum files to analyze"),
 ) -> dict[str, Any]:
     """
     Analyze codebase for bug risk (Issue #543: no demo data).
+    Issue #744: Requires admin authentication.
 
     Returns risk assessment for all files matching the pattern.
     Issue #569: Also stores prediction history for trend tracking.
@@ -758,10 +790,14 @@ async def analyze_codebase(
         )
 
         if not files_to_analyze:
-            return _no_data_response(f"No files matching '{include_pattern}' found in '{path}'")
+            return _no_data_response(
+                f"No files matching '{include_pattern}' found in '{path}'"
+            )
 
         # Issue #609: Analyze files in parallel
-        analyzed_files = await _analyze_files_parallel(files_to_analyze, change_freq, bug_history)
+        analyzed_files = await _analyze_files_parallel(
+            files_to_analyze, change_freq, bug_history
+        )
         analyzed_files.sort(key=lambda x: x["risk_score"], reverse=True)
         high_risk = sum(1 for f in analyzed_files if f["risk_score"] >= 60)
 
@@ -772,12 +808,14 @@ async def analyze_codebase(
             risk_dist[level.value] += 1
 
         # Store prediction history asynchronously (don't block response)
-        asyncio.create_task(_safe_store_prediction_history(
-            total_files=len(files_to_analyze),
-            high_risk_count=high_risk,
-            risk_distribution=risk_dist,
-            analyzed_files=analyzed_files,
-        ))
+        asyncio.create_task(
+            _safe_store_prediction_history(
+                total_files=len(files_to_analyze),
+                high_risk_count=high_risk,
+                risk_distribution=risk_dist,
+                analyzed_files=analyzed_files,
+            )
+        )
 
         return {
             "status": "success",
@@ -795,6 +833,7 @@ async def analyze_codebase(
 
 @router.get("/high-risk")
 async def get_high_risk_files(
+    admin_check: bool = Depends(check_admin_permission),
     threshold: float = Query(60, ge=0, le=100),
     limit: int = Query(20, ge=1, le=100),
     path: str = Query(".", description="Path to analyze"),
@@ -802,6 +841,7 @@ async def get_high_risk_files(
 ) -> dict[str, Any]:
     """
     Get files with high bug risk (Issue #543: no demo data).
+    Issue #744: Requires admin authentication.
 
     Returns files with risk score above the threshold.
     """
@@ -814,10 +854,14 @@ async def get_high_risk_files(
         )
 
         if not files_to_analyze:
-            return _no_data_response(f"No files matching '{include_pattern}' found in '{path}'")
+            return _no_data_response(
+                f"No files matching '{include_pattern}' found in '{path}'"
+            )
 
         # Issue #609: Analyze files in parallel
-        analyzed_files = await _analyze_files_parallel(files_to_analyze, change_freq, bug_history)
+        analyzed_files = await _analyze_files_parallel(
+            files_to_analyze, change_freq, bug_history
+        )
 
         # Filter high-risk files
         high_risk_files = [f for f in analyzed_files if f["risk_score"] >= threshold]
@@ -837,10 +881,16 @@ async def get_high_risk_files(
 
 def _build_file_risk_response(file_path: str, factors: dict, bug_history: dict) -> dict:
     """Build file risk response from factors (Issue #398: extracted)."""
-    risk_score = sum(factors.get(f.value, 0) * w for f, w in RISK_WEIGHTS.items() if f.value in factors)
+    risk_score = sum(
+        factors.get(f.value, 0) * w
+        for f, w in RISK_WEIGHTS.items()
+        if f.value in factors
+    )
     return {
-        "file_path": file_path, "risk_score": round(risk_score, 1),
-        "risk_level": get_risk_level(risk_score).value, "factors": factors,
+        "file_path": file_path,
+        "risk_score": round(risk_score, 1),
+        "risk_level": get_risk_level(risk_score).value,
+        "factors": factors,
         "factor_weights": {k.value: v for k, v in RISK_WEIGHTS.items()},
         "bug_count_history": bug_history.get(file_path, 0),
         "prevention_tips": get_prevention_tips(factors),
@@ -850,8 +900,14 @@ def _build_file_risk_response(file_path: str, factors: dict, bug_history: dict) 
 
 
 @router.get("/file/{file_path:path}")
-async def get_file_risk(file_path: str) -> dict[str, Any]:
-    """Get detailed risk assessment for a specific file (Issue #543: no demo data)."""
+async def get_file_risk(
+    file_path: str,
+    admin_check: bool = Depends(check_admin_permission),
+) -> dict[str, Any]:
+    """
+    Get detailed risk assessment for a specific file (Issue #543: no demo data).
+    Issue #744: Requires admin authentication.
+    """
     path = Path(file_path)
     if not await asyncio.to_thread(path.exists):
         return _no_data_response(f"File not found: {file_path}")
@@ -897,8 +953,10 @@ def _get_file_recommendation(risk_score: float, factors: dict[str, float]) -> st
 
 # Heatmap legend configuration (Issue #398: extracted)
 _HEATMAP_LEGEND = {
-    "critical": {"min": 80, "color": "#ef4444"}, "high": {"min": 60, "color": "#f97316"},
-    "medium": {"min": 40, "color": "#eab308"}, "low": {"min": 20, "color": "#22c55e"},
+    "critical": {"min": 80, "color": "#ef4444"},
+    "high": {"min": 60, "color": "#f97316"},
+    "medium": {"min": 40, "color": "#eab308"},
+    "low": {"min": 20, "color": "#22c55e"},
     "minimal": {"min": 0, "color": "#3b82f6"},
 }
 
@@ -914,27 +972,42 @@ def _group_files_by_directory(files: list) -> list:
     heatmap_data = []
     for group_name, group_files in groups.items():
         avg_risk = sum(f["risk_score"] for f in group_files) / len(group_files)
-        heatmap_data.append({
-            "name": group_name, "value": round(avg_risk, 1), "file_count": len(group_files),
-            "risk_level": get_risk_level(avg_risk).value, "files": group_files,
-        })
+        heatmap_data.append(
+            {
+                "name": group_name,
+                "value": round(avg_risk, 1),
+                "file_count": len(group_files),
+                "risk_level": get_risk_level(avg_risk).value,
+                "files": group_files,
+            }
+        )
     return sorted(heatmap_data, key=lambda x: x["value"], reverse=True)
 
 
 def _get_flat_heatmap_data(files: list) -> list:
     """Get flat heatmap data (Issue #398: extracted)."""
-    return [{"name": f["file_path"], "value": f["risk_score"], "risk_level": get_risk_level(f["risk_score"]).value}
-            for f in sorted(files, key=lambda x: x["risk_score"], reverse=True)]
+    return [
+        {
+            "name": f["file_path"],
+            "value": f["risk_score"],
+            "risk_level": get_risk_level(f["risk_score"]).value,
+        }
+        for f in sorted(files, key=lambda x: x["risk_score"], reverse=True)
+    ]
 
 
 @router.get("/heatmap")
 async def get_risk_heatmap(
+    admin_check: bool = Depends(check_admin_permission),
     grouping: str = Query("directory", regex="^(directory|module|flat)$"),
     path: str = Query(".", description="Path to analyze"),
     include_pattern: str = Query("*.py", description="File pattern to include"),
     limit: int = Query(100, ge=1, le=300),
 ) -> dict[str, Any]:
-    """Get risk heatmap data for visualization (Issue #543: no demo data)."""
+    """
+    Get risk heatmap data for visualization (Issue #543: no demo data).
+    Issue #744: Requires admin authentication.
+    """
     try:
         # Issue #664: Parallelize independent data fetches
         bug_history, change_freq, files_to_analyze = await asyncio.gather(
@@ -944,13 +1017,21 @@ async def get_risk_heatmap(
         )
 
         if not files_to_analyze:
-            return _no_data_response(f"No files matching '{include_pattern}' found in '{path}'")
+            return _no_data_response(
+                f"No files matching '{include_pattern}' found in '{path}'"
+            )
 
         # Issue #609: Analyze files in parallel
-        analyzed_files = await _analyze_files_parallel(files_to_analyze, change_freq, bug_history)
+        analyzed_files = await _analyze_files_parallel(
+            files_to_analyze, change_freq, bug_history
+        )
 
         # Generate heatmap data
-        data = _group_files_by_directory(analyzed_files) if grouping == "directory" else _get_flat_heatmap_data(analyzed_files)
+        data = (
+            _group_files_by_directory(analyzed_files)
+            if grouping == "directory"
+            else _get_flat_heatmap_data(analyzed_files)
+        )
 
         return {
             "status": "success",
@@ -966,10 +1047,12 @@ async def get_risk_heatmap(
 
 @router.get("/trends")
 async def get_prediction_trends(
+    admin_check: bool = Depends(check_admin_permission),
     period: str = Query("30d", regex="^(7d|30d|90d)$"),
 ) -> dict[str, Any]:
     """
     Get historical bug prediction accuracy trends.
+    Issue #744: Requires admin authentication.
 
     Issue #569: Returns real trend data from stored prediction history.
     Prediction history is automatically captured each time /analyze is called.
@@ -1008,12 +1091,14 @@ async def get_prediction_trends(
 
 @router.get("/summary")
 async def get_prediction_summary(
+    admin_check: bool = Depends(check_admin_permission),
     path: str = Query(".", description="Path to analyze"),
     include_pattern: str = Query("*.py", description="File pattern to include"),
     limit: int = Query(1000, ge=1, le=5000, description="Maximum files to analyze"),
 ) -> dict[str, Any]:
     """
     Get summary of bug predictions and risk assessment (Issue #543: no demo data).
+    Issue #744: Requires admin authentication.
 
     Returns high-level metrics for dashboard display.
     """
@@ -1026,10 +1111,14 @@ async def get_prediction_summary(
         )
 
         if not files_to_analyze:
-            return _no_data_response(f"No files matching '{include_pattern}' found in '{path}'")
+            return _no_data_response(
+                f"No files matching '{include_pattern}' found in '{path}'"
+            )
 
         # Issue #609: Analyze files in parallel
-        analyzed_files = await _analyze_files_parallel(files_to_analyze, change_freq, bug_history)
+        analyzed_files = await _analyze_files_parallel(
+            files_to_analyze, change_freq, bug_history
+        )
 
         # Risk distribution
         risk_dist = {level.value: 0 for level in RiskLevel}
@@ -1049,13 +1138,19 @@ async def get_prediction_summary(
         high_risk_count = risk_dist.get("high", 0) + risk_dist.get("critical", 0)
         recommendations = []
         if high_risk_count > 0:
-            recommendations.append(f"Focus testing efforts on {high_risk_count} high-risk files")
+            recommendations.append(
+                f"Focus testing efforts on {high_risk_count} high-risk files"
+            )
 
         # Get top 3 highest risk files for recommendations
-        top_risky = sorted(analyzed_files, key=lambda x: x["risk_score"], reverse=True)[:3]
+        top_risky = sorted(analyzed_files, key=lambda x: x["risk_score"], reverse=True)[
+            :3
+        ]
         for f in top_risky:
             if f["risk_score"] >= 60:
-                recommendations.append(f"Review {f['file_path']} (risk score: {f['risk_score']:.1f})")
+                recommendations.append(
+                    f"Review {f['file_path']} (risk score: {f['risk_score']:.1f})"
+                )
 
         if not recommendations:
             recommendations.append("All files are within acceptable risk levels")
@@ -1083,9 +1178,12 @@ async def get_prediction_summary(
 
 
 @router.get("/factors")
-async def get_risk_factors() -> dict[str, Any]:
+async def get_risk_factors(
+    admin_check: bool = Depends(check_admin_permission),
+) -> dict[str, Any]:
     """
     Get all risk factors and their weights.
+    Issue #744: Requires admin authentication.
 
     Returns factor definitions and how they contribute to risk scores.
     """
@@ -1128,12 +1226,14 @@ def _get_factor_description(factor: RiskFactor) -> str:
 
 @router.post("/record-bug")
 async def record_bug(
-    file_path: str,
+    admin_check: bool = Depends(check_admin_permission),
+    file_path: str = None,
     description: str = "",
     severity: str = "medium",
 ) -> dict[str, Any]:
     """
     Record a new bug for model improvement.
+    Issue #744: Requires admin authentication.
 
     Updates prediction accuracy based on actual bug occurrences.
     """

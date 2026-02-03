@@ -25,8 +25,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, BackgroundTasks, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from pydantic import BaseModel, Field
+
+from src.auth_middleware import check_admin_permission
 
 logger = logging.getLogger(__name__)
 
@@ -164,9 +166,7 @@ class LearningConfig(BaseModel):
     monitoring_enabled: bool = True
     auto_retrain_enabled: bool = True
     insight_generation_enabled: bool = True
-    monitored_paths: List[str] = Field(
-        default_factory=lambda: ["backend/", "src/"]
-    )
+    monitored_paths: List[str] = Field(default_factory=lambda: ["backend/", "src/"])
     scan_interval_seconds: int = 300
     retrain_interval_hours: int = 24
     feedback_threshold: int = 50
@@ -380,9 +380,10 @@ class LearningPipeline:
             s.true_positives + s.false_positives for s in self.pattern_stats.values()
         )
         if total_feedback >= THRESHOLDS["feedback_for_retrain"]:
-            if self.last_retrain is None or (
-                datetime.now() - self.last_retrain
-            ).seconds > 3600:
+            if (
+                self.last_retrain is None
+                or (datetime.now() - self.last_retrain).seconds > 3600
+            ):
                 return True
 
         # Check accuracy drop
@@ -463,7 +464,7 @@ class LearningPipeline:
         }
 
     def _generate_active_pattern_insight(
-        self, recent_patterns: List["PatternStats"]
+        self, recent_patterns: List["PatternStats"]  # noqa: F821
     ) -> Optional[Insight]:
         """Generate insight for most active pattern (Issue #398: extracted)."""
         if not recent_patterns:
@@ -492,7 +493,7 @@ class LearningPipeline:
         )
 
     def _generate_false_positive_insight(
-        self, pattern: "PatternStats"
+        self, pattern: "PatternStats"  # noqa: F821
     ) -> Optional[Insight]:
         """Generate insight for high false positive pattern (Issue #398: extracted)."""
         total = pattern.true_positives + pattern.false_positives
@@ -597,16 +598,12 @@ class LearningPipeline:
         hour_ago = now - timedelta(hours=1)
         day_ago = now - timedelta(days=1)
 
-        events_last_hour = sum(
-            1 for e in self.events if e.timestamp >= hour_ago
-        )
+        events_last_hour = sum(1 for e in self.events if e.timestamp >= hour_ago)
         events_last_day = sum(1 for e in self.events if e.timestamp >= day_ago)
 
         patterns_learned = len(self.pattern_stats)
         patterns_updated = sum(
-            1
-            for s in self.pattern_stats.values()
-            if len(s.evolution_history) > 1
+            1 for s in self.pattern_stats.values() if len(s.evolution_history) > 1
         )
         false_positives_reduced = sum(
             s.false_positives for s in self.pattern_stats.values()
@@ -620,9 +617,7 @@ class LearningPipeline:
             )
 
         active_insights = sum(
-            1
-            for i in self.insights
-            if i.expires_at is None or i.expires_at > now
+            1 for i in self.insights if i.expires_at is None or i.expires_at > now
         )
 
         return LearningMetrics(
@@ -677,9 +672,7 @@ class FileMonitor:
         await self._scan_files()
 
         # Start monitoring task
-        self._monitor_task = asyncio.create_task(
-            self._monitor_loop(interval)
-        )
+        self._monitor_task = asyncio.create_task(self._monitor_loop(interval))
         self.state = MonitoringState.RUNNING
 
         logger.info("File monitoring started for %s paths", len(paths))
@@ -750,9 +743,7 @@ class FileMonitor:
                 except Exception as e:
                     logger.debug("File read/hash error, skipping %s: %s", py_file, e)
 
-    def _process_file_change(
-        self, py_file: Path, changes: list
-    ) -> None:
+    def _process_file_change(self, py_file: Path, changes: list) -> None:
         """Process a single file for changes. (Issue #315 - extracted)"""
         file_path = str(py_file)
         try:
@@ -999,9 +990,7 @@ class ContinuousLearningEngine:
             "action": result.get("action", "none"),
         }
 
-    async def trigger_retrain(
-        self, request: RetrainingRequest
-    ) -> Dict[str, Any]:
+    async def trigger_retrain(self, request: RetrainingRequest) -> Dict[str, Any]:
         """Manually trigger model retraining."""
         return await self.pipeline.retrain_models(
             reason=request.reason,
@@ -1064,57 +1053,99 @@ async def get_engine() -> ContinuousLearningEngine:
 
 
 @router.post("/start", summary="Start continuous learning")
-async def start_learning(background_tasks: BackgroundTasks) -> Dict[str, Any]:
-    """Start the continuous learning system."""
+async def start_learning(
+    admin_check: bool = Depends(check_admin_permission),
+    background_tasks: BackgroundTasks = None,
+) -> Dict[str, Any]:
+    """
+    Start the continuous learning system.
+
+    Issue #744: Requires admin authentication.
+    """
     engine = await get_engine()
     return await engine.start()
 
 
 @router.post("/stop", summary="Stop continuous learning")
-async def stop_learning() -> Dict[str, Any]:
-    """Stop the continuous learning system."""
+async def stop_learning(
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, Any]:
+    """
+    Stop the continuous learning system.
+
+    Issue #744: Requires admin authentication.
+    """
     engine = await get_engine()
     return await engine.stop()
 
 
 @router.get("/status", summary="Get learning status")
-async def get_status() -> Dict[str, Any]:
-    """Get current status of the learning system."""
+async def get_status(
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, Any]:
+    """
+    Get current status of the learning system.
+
+    Issue #744: Requires admin authentication.
+    """
     engine = await get_engine()
     return engine.get_status()
 
 
 @router.get("/metrics", summary="Get learning metrics")
-async def get_metrics() -> LearningMetrics:
-    """Get learning metrics."""
+async def get_metrics(
+    admin_check: bool = Depends(check_admin_permission),
+) -> LearningMetrics:
+    """
+    Get learning metrics.
+
+    Issue #744: Requires admin authentication.
+    """
     engine = await get_engine()
     return engine.get_metrics()
 
 
 @router.post("/feedback", summary="Submit pattern feedback")
 async def submit_feedback(
-    pattern_id: str,
-    is_correct: bool,
+    admin_check: bool = Depends(check_admin_permission),
+    pattern_id: str = None,
+    is_correct: bool = None,
     details: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Submit feedback for a pattern detection."""
+    """
+    Submit feedback for a pattern detection.
+
+    Issue #744: Requires admin authentication.
+    """
     engine = await get_engine()
     return await engine.submit_feedback(pattern_id, is_correct, details)
 
 
 @router.post("/retrain", summary="Trigger model retraining")
-async def trigger_retrain(request: RetrainingRequest) -> Dict[str, Any]:
-    """Manually trigger model retraining."""
+async def trigger_retrain(
+    admin_check: bool = Depends(check_admin_permission),
+    request: RetrainingRequest = None,
+) -> Dict[str, Any]:
+    """
+    Manually trigger model retraining.
+
+    Issue #744: Requires admin authentication.
+    """
     engine = await get_engine()
     return await engine.trigger_retrain(request)
 
 
 @router.get("/insights", summary="Get generated insights")
 async def get_insights(
+    admin_check: bool = Depends(check_admin_permission),
     active_only: bool = Query(True, description="Only active insights"),
     limit: int = Query(20, ge=1, le=100, description="Maximum insights"),
 ) -> Dict[str, Any]:
-    """Get generated insights."""
+    """
+    Get generated insights.
+
+    Issue #744: Requires admin authentication.
+    """
     engine = await get_engine()
     insights = await engine.get_insights(active_only, limit)
     return {
@@ -1124,8 +1155,14 @@ async def get_insights(
 
 
 @router.post("/insights/generate", summary="Generate insights now")
-async def generate_insights_now() -> Dict[str, Any]:
-    """Manually trigger insight generation."""
+async def generate_insights_now(
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, Any]:
+    """
+    Manually trigger insight generation.
+
+    Issue #744: Requires admin authentication.
+    """
     engine = await get_engine()
     new_insights = await engine.pipeline.generate_insights()
     return {
@@ -1135,30 +1172,55 @@ async def generate_insights_now() -> Dict[str, Any]:
 
 
 @router.get("/monitoring", summary="Get monitoring status")
-async def get_monitoring_status() -> MonitoringStatus:
-    """Get file monitoring status."""
+async def get_monitoring_status(
+    admin_check: bool = Depends(check_admin_permission),
+) -> MonitoringStatus:
+    """
+    Get file monitoring status.
+
+    Issue #744: Requires admin authentication.
+    """
     engine = await get_engine()
     return engine.monitor.get_status()
 
 
 @router.put("/config", summary="Update learning config")
-async def update_config(config: LearningConfig) -> Dict[str, Any]:
-    """Update learning configuration."""
+async def update_config(
+    admin_check: bool = Depends(check_admin_permission),
+    config: LearningConfig = None,
+) -> Dict[str, Any]:
+    """
+    Update learning configuration.
+
+    Issue #744: Requires admin authentication.
+    """
     engine = await get_engine()
     engine.config = config
     return {"updated": True, "config": config.model_dump()}
 
 
 @router.get("/config", summary="Get learning config")
-async def get_config() -> LearningConfig:
-    """Get current learning configuration."""
+async def get_config(
+    admin_check: bool = Depends(check_admin_permission),
+) -> LearningConfig:
+    """
+    Get current learning configuration.
+
+    Issue #744: Requires admin authentication.
+    """
     engine = await get_engine()
     return engine.config
 
 
 @router.get("/health", summary="Health check")
-async def health_check() -> Dict[str, Any]:
-    """Check health of the learning system."""
+async def health_check(
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, Any]:
+    """
+    Check health of the learning system.
+
+    Issue #744: Requires admin authentication.
+    """
     engine = await get_engine()
     return {
         "status": "healthy",

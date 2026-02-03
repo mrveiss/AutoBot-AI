@@ -14,13 +14,14 @@ import os
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from backend.services.config_service import ConfigService
 from backend.services.slm_client import get_slm_client
 from backend.utils.connection_utils import ModelManager
+from src.auth_middleware import check_admin_permission
 from src.constants.model_constants import ModelConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
@@ -543,8 +544,12 @@ DEFAULT_AGENT_CONFIGS = {
     error_code_prefix="AGENT_CONFIG",
 )
 @router.get("/agents")
-async def list_agents():
-    """Get list of all available agents with their configurations"""
+async def list_agents(admin_check: bool = Depends(check_admin_permission)):
+    """
+    Get list of all available agents with their configurations
+
+    Issue #744: Requires admin authentication.
+    """
     from src.config import unified_config_manager
 
     llm_config = unified_config_manager.get_llm_config()
@@ -616,11 +621,13 @@ async def list_agents():
     error_code_prefix="AGENT_CONFIG",
 )
 @router.get("/agents/all")
-async def get_all_agents():
+async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
     """
     Get all AutoBot agents for the Agent Registry dashboard.
 
     Returns list of backend agents with their configurations and status.
+
+    Issue #744: Requires admin authentication.
     """
     from src.config import unified_config_manager
 
@@ -682,8 +689,14 @@ async def get_all_agents():
     error_code_prefix="AGENT_CONFIG",
 )
 @router.get("/agents/{agent_id}")
-async def get_agent_config(agent_id: str):
-    """Get detailed configuration for a specific agent"""
+async def get_agent_config(
+    agent_id: str, admin_check: bool = Depends(check_admin_permission)
+):
+    """
+    Get detailed configuration for a specific agent
+
+    Issue #744: Requires admin authentication.
+    """
     if agent_id not in DEFAULT_AGENT_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
@@ -746,8 +759,16 @@ async def get_agent_config(agent_id: str):
     error_code_prefix="AGENT_CONFIG",
 )
 @router.post("/agents/{agent_id}/model")
-async def update_agent_model(agent_id: str, update: AgentModelUpdate):
-    """Update the LLM model for a specific agent"""
+async def update_agent_model(
+    agent_id: str,
+    update: AgentModelUpdate,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Update the LLM model for a specific agent
+
+    Issue #744: Requires admin authentication.
+    """
     if agent_id not in DEFAULT_AGENT_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
@@ -802,8 +823,14 @@ async def update_agent_model(agent_id: str, update: AgentModelUpdate):
     error_code_prefix="AGENT_CONFIG",
 )
 @router.post("/agents/{agent_id}/enable")
-async def enable_agent(agent_id: str):
-    """Enable a specific agent"""
+async def enable_agent(
+    agent_id: str, admin_check: bool = Depends(check_admin_permission)
+):
+    """
+    Enable a specific agent
+
+    Issue #744: Requires admin authentication.
+    """
     if agent_id not in DEFAULT_AGENT_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
@@ -831,8 +858,14 @@ async def enable_agent(agent_id: str):
     error_code_prefix="AGENT_CONFIG",
 )
 @router.post("/agents/{agent_id}/disable")
-async def disable_agent(agent_id: str):
-    """Disable a specific agent"""
+async def disable_agent(
+    agent_id: str, admin_check: bool = Depends(check_admin_permission)
+):
+    """
+    Disable a specific agent
+
+    Issue #744: Requires admin authentication.
+    """
     if agent_id not in DEFAULT_AGENT_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
@@ -860,8 +893,14 @@ async def disable_agent(agent_id: str):
     error_code_prefix="AGENT_CONFIG",
 )
 @router.get("/agents/{agent_id}/health")
-async def check_agent_health(agent_id: str):
-    """Perform health check on a specific agent"""
+async def check_agent_health(
+    agent_id: str, admin_check: bool = Depends(check_admin_permission)
+):
+    """
+    Perform health check on a specific agent
+
+    Issue #744: Requires admin authentication.
+    """
     if agent_id not in DEFAULT_AGENT_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
@@ -932,8 +971,12 @@ async def check_agent_health(agent_id: str):
     error_code_prefix="AGENT_CONFIG",
 )
 @router.get("/status/overview")
-async def get_agents_overview():
-    """Get overview of all agents' status for dashboard"""
+async def get_agents_overview(admin_check: bool = Depends(check_admin_permission)):
+    """
+    Get overview of all agents' status for dashboard
+
+    Issue #744: Requires admin authentication.
+    """
     from src.config import unified_config_manager
 
     total_agents = len(DEFAULT_AGENT_CONFIGS)

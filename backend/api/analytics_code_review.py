@@ -17,9 +17,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from src.auth_middleware import check_admin_permission
 from src.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
@@ -31,8 +32,8 @@ REVIEWABLE_EXTENSIONS = {".py", ".vue", ".ts", ".js"}
 
 # Issue #380: Pre-compiled regex patterns for code review
 _HUNK_HEADER_RE = re.compile(r"@@ -(\d+),?\d* \+(\d+),?\d* @@")
-_FUNC_DEFINITION_RE = re.compile(r'^(async\s+)?def\s+(\w+)\s*\(', re.MULTILINE)
-_NEXT_TOPLEVEL_RE = re.compile(r'\n(?=\S)')
+_FUNC_DEFINITION_RE = re.compile(r"^(async\s+)?def\s+(\w+)\s*\(", re.MULTILINE)
+_NEXT_TOPLEVEL_RE = re.compile(r"\n(?=\S)")
 
 
 # ============================================================================
@@ -113,7 +114,7 @@ REVIEW_PATTERNS = {
     },
     "SEC003": {
         "name": "Unsafe eval",
-        "pattern": r'\beval\s*\(',
+        "pattern": r"\beval\s*\(",
         "category": ReviewCategory.SECURITY,
         "severity": ReviewSeverity.CRITICAL,
         "message": "Use of eval() is a security risk. Avoid if possible.",
@@ -122,7 +123,7 @@ REVIEW_PATTERNS = {
     # Performance patterns
     "PERF001": {
         "name": "N+1 Query Pattern",
-        "pattern": r'for\s+\w+\s+in\s+\w+:.*\n.*\.(get|filter|select)',
+        "pattern": r"for\s+\w+\s+in\s+\w+:.*\n.*\.(get|filter|select)",
         "category": ReviewCategory.PERFORMANCE,
         "severity": ReviewSeverity.WARNING,
         "message": "Potential N+1 query pattern. Consider using bulk operations.",
@@ -130,7 +131,7 @@ REVIEW_PATTERNS = {
     },
     "PERF002": {
         "name": "Large list in memory",
-        "pattern": r'list\(\w+\.objects\.all\(\)\)',
+        "pattern": r"list\(\w+\.objects\.all\(\)\)",
         "category": ReviewCategory.PERFORMANCE,
         "severity": ReviewSeverity.WARNING,
         "message": "Loading entire queryset into memory. Consider pagination.",
@@ -139,7 +140,7 @@ REVIEW_PATTERNS = {
     # Style patterns
     "STYLE001": {
         "name": "Magic Number",
-        "pattern": r'(?<![\w])(?:if|elif|while|for|return)\s+.*[^0-9]\d{2,}[^0-9]',
+        "pattern": r"(?<![\w])(?:if|elif|while|for|return)\s+.*[^0-9]\d{2,}[^0-9]",
         "category": ReviewCategory.STYLE,
         "severity": ReviewSeverity.SUGGESTION,
         "message": "Magic number detected. Consider using a named constant.",
@@ -156,7 +157,7 @@ REVIEW_PATTERNS = {
     # Bug risk patterns
     "BUG001": {
         "name": "Empty except block",
-        "pattern": r'except\s*:\s*\n\s*(pass|\.\.\.)',
+        "pattern": r"except\s*:\s*\n\s*(pass|\.\.\.)",
         "category": ReviewCategory.BUG_RISK,
         "severity": ReviewSeverity.WARNING,
         "message": "Empty except block silently swallows all exceptions.",
@@ -164,7 +165,7 @@ REVIEW_PATTERNS = {
     },
     "BUG002": {
         "name": "Mutable default argument",
-        "pattern": r'def\s+\w+\s*\([^)]*=\s*(\[\]|\{\}|set\(\))',
+        "pattern": r"def\s+\w+\s*\([^)]*=\s*(\[\]|\{\}|set\(\))",
         "category": ReviewCategory.BUG_RISK,
         "severity": ReviewSeverity.WARNING,
         "message": "Mutable default argument can cause unexpected behavior.",
@@ -182,7 +183,7 @@ REVIEW_PATTERNS = {
     # Testing patterns
     "TEST001": {
         "name": "No assertions",
-        "pattern": r'def\s+test_\w+\([^)]*\):[^}]+(?<!assert)',
+        "pattern": r"def\s+test_\w+\([^)]*\):[^}]+(?<!assert)",
         "category": ReviewCategory.TESTING,
         "severity": ReviewSeverity.WARNING,
         "message": "Test function appears to have no assertions.",
@@ -191,7 +192,7 @@ REVIEW_PATTERNS = {
     # Best practice patterns
     "BP001": {
         "name": "Print statement",
-        "pattern": r'(?<!#.*)\bprint\s*\(',
+        "pattern": r"(?<!#.*)\bprint\s*\(",
         "category": ReviewCategory.BEST_PRACTICE,
         "severity": ReviewSeverity.SUGGESTION,
         "message": "Print statement found. Use logging for production code.",
@@ -199,7 +200,7 @@ REVIEW_PATTERNS = {
     },
     "BP002": {
         "name": "TODO comment",
-        "pattern": r'#\s*TODO',
+        "pattern": r"#\s*TODO",
         "category": ReviewCategory.BEST_PRACTICE,
         "severity": ReviewSeverity.INFO,
         "message": "TODO comment found. Consider creating an issue.",
@@ -213,7 +214,9 @@ REVIEW_PATTERNS = {
 # ============================================================================
 
 
-def _no_data_response(message: str = "No code review data. Run a code review first.") -> dict:
+def _no_data_response(
+    message: str = "No code review data. Run a code review first.",
+) -> dict:
     """Standardized no-data response (Issue #543)."""
     return {
         "status": "no_data",
@@ -260,7 +263,12 @@ def parse_diff(diff_content: str) -> list[dict[str, Any]]:
                 files.append(current_file)
             parts = line.split(" b/")
             file_path = parts[-1] if len(parts) > 1 else "unknown"
-            current_file = {"path": file_path, "hunks": [], "additions": 0, "deletions": 0}
+            current_file = {
+                "path": file_path,
+                "hunks": [],
+                "additions": 0,
+                "deletions": 0,
+            }
             current_hunks = []
             current_hunk = None
             continue
@@ -301,9 +309,11 @@ def analyze_code(content: str, file_path: str) -> list[ReviewComment]:
     for pattern_id, pattern_def in REVIEW_PATTERNS.items():
         if pattern_def.get("pattern"):
             try:
-                for match in re.finditer(pattern_def["pattern"], content, re.IGNORECASE | re.MULTILINE):
+                for match in re.finditer(
+                    pattern_def["pattern"], content, re.IGNORECASE | re.MULTILINE
+                ):
                     # Calculate line number
-                    line_num = content[:match.start()].count("\n") + 1
+                    line_num = content[: match.start()].count("\n") + 1
                     code_snippet = lines[line_num - 1] if line_num <= len(lines) else ""
 
                     comments.append(
@@ -324,12 +334,12 @@ def analyze_code(content: str, file_path: str) -> list[ReviewComment]:
 
     # Check for long functions
     for match in _FUNC_DEFINITION_RE.finditer(content):
-        func_start = content[:match.start()].count("\n") + 1
+        func_start = content[: match.start()].count("\n") + 1
         # Find function end (simple heuristic)
-        remaining = content[match.end():]
+        remaining = content[match.end() :]
         indent_match = _NEXT_TOPLEVEL_RE.search(remaining)
         if indent_match:
-            func_end = func_start + remaining[:indent_match.start()].count("\n")
+            func_end = func_start + remaining[: indent_match.start()].count("\n")
             if func_end - func_start > 50:
                 func_length = func_end - func_start
                 func_name = match.group(2)
@@ -390,7 +400,9 @@ def generate_summary(comments: list[ReviewComment]) -> dict[str, Any]:
         "info_count": by_severity.get("info", 0) + by_severity.get("suggestion", 0),
         "top_issues": [
             {"category": cat, "count": count}
-            for cat, count in sorted(by_category.items(), key=lambda x: x[1], reverse=True)[:5]
+            for cat, count in sorted(
+                by_category.items(), key=lambda x: x[1], reverse=True
+            )[:5]
         ],
     }
 
@@ -405,17 +417,19 @@ async def get_git_diff(commit_range: Optional[str] = None) -> str:
             cmd.append("HEAD~1..HEAD")
 
         process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
         try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=TimingConstants.SHORT_TIMEOUT)
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(), timeout=TimingConstants.SHORT_TIMEOUT
+            )
             return stdout.decode("utf-8") if process.returncode == 0 else ""
         except asyncio.TimeoutError:
             process.kill()
             await process.wait()
-            logger.warning("Git diff timed out after %s seconds", TimingConstants.SHORT_TIMEOUT)
+            logger.warning(
+                "Git diff timed out after %s seconds", TimingConstants.SHORT_TIMEOUT
+            )
             return ""
     except Exception as e:
         logger.warning("Failed to get git diff: %s", e)
@@ -429,10 +443,15 @@ async def get_git_diff(commit_range: Optional[str] = None) -> str:
 
 @router.get("/analyze")
 async def analyze_diff(
-    commit_range: Optional[str] = Query(None, description="Git commit range (e.g., HEAD~1..HEAD)"),
+    admin_check: bool = Depends(check_admin_permission),
+    commit_range: Optional[str] = Query(
+        None, description="Git commit range (e.g., HEAD~1..HEAD)"
+    ),
 ) -> dict[str, Any]:
     """
     Analyze git diff and generate review comments.
+
+    Issue #744: Requires admin authentication.
 
     Returns review findings with severity and suggestions.
     """
@@ -440,7 +459,9 @@ async def analyze_diff(
 
     if not diff_content:
         # Issue #543: Return no-data response instead of demo data
-        return _no_data_response("No git diff available. Make changes or specify a commit range.")
+        return _no_data_response(
+            "No git diff available. Make changes or specify a commit range."
+        )
 
     # Parse diff
     files = parse_diff(diff_content)
@@ -462,7 +483,7 @@ async def analyze_diff(
                 comments = analyze_code(content, str(file_path))
                 all_comments.extend(comments)
         except Exception as e:
-            logger.warning("Failed to analyze %s: %s", file_info['path'], e)
+            logger.warning("Failed to analyze %s: %s", file_info["path"], e)
 
     score = calculate_review_score(all_comments)
     summary = generate_summary(all_comments)
@@ -481,11 +502,14 @@ async def analyze_diff(
 
 @router.post("/review-file")
 async def review_file(
-    file_path: str,
+    admin_check: bool = Depends(check_admin_permission),
+    file_path: str = None,
     content: Optional[str] = None,
 ) -> dict[str, Any]:
     """
     Review a specific file.
+
+    Issue #744: Requires admin authentication.
 
     Can accept file path or content directly.
     """
@@ -498,7 +522,9 @@ async def review_file(
                     path.read_text, encoding="utf-8", errors="ignore"
                 )
             else:
-                raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
+                raise HTTPException(
+                    status_code=404, detail=f"File not found: {file_path}"
+                )
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -517,9 +543,13 @@ async def review_file(
 
 
 @router.get("/patterns")
-async def get_review_patterns() -> list[dict[str, Any]]:
+async def get_review_patterns(
+    admin_check: bool = Depends(check_admin_permission),
+) -> list[dict[str, Any]]:
     """
     Get all review patterns used for analysis.
+
+    Issue #744: Requires admin authentication.
 
     Returns pattern definitions with categories and severities.
     """
@@ -539,39 +569,52 @@ async def get_review_patterns() -> list[dict[str, Any]]:
 
 @router.get("/history")
 async def get_review_history(
+    admin_check: bool = Depends(check_admin_permission),
     limit: int = Query(20, ge=1, le=100),
     since: Optional[str] = Query(None, description="ISO date string"),
 ) -> dict[str, Any]:
     """
     Get review history.
 
+    Issue #744: Requires admin authentication.
+
     Returns past reviews for trend analysis.
     """
     # Issue #543: Return no-data response instead of demo data
-    return _no_data_response("No review history available. Reviews will be stored here once you run code reviews.")
+    return _no_data_response(
+        "No review history available. Reviews will be stored here once you run code reviews."
+    )
 
 
 @router.get("/metrics")
 async def get_review_metrics(
+    admin_check: bool = Depends(check_admin_permission),
     period: str = Query("30d", regex="^(7d|30d|90d)$"),
 ) -> dict[str, Any]:
     """
     Get review metrics over time.
 
+    Issue #744: Requires admin authentication.
+
     Returns aggregated statistics for trend analysis.
     """
     # Issue #543: Return no-data response instead of demo data
-    return _no_data_response("No review metrics available. Metrics will accumulate as you run code reviews.")
+    return _no_data_response(
+        "No review metrics available. Metrics will accumulate as you run code reviews."
+    )
 
 
 @router.post("/feedback")
 async def submit_feedback(
-    comment_id: str,
-    is_helpful: bool,
+    admin_check: bool = Depends(check_admin_permission),
+    comment_id: str = None,
+    is_helpful: bool = None,
     feedback_text: Optional[str] = None,
 ) -> dict[str, Any]:
     """
     Submit feedback on a review comment.
+
+    Issue #744: Requires admin authentication.
 
     Used for model improvement and learning.
     """
@@ -608,9 +651,13 @@ async def submit_feedback(
 
 
 @router.get("/summary")
-async def get_review_summary() -> dict[str, Any]:
+async def get_review_summary(
+    admin_check: bool = Depends(check_admin_permission),
+) -> dict[str, Any]:
     """
     Get overall review system summary.
+
+    Issue #744: Requires admin authentication.
 
     Returns dashboard-level metrics.
     """
@@ -621,9 +668,13 @@ async def get_review_summary() -> dict[str, Any]:
 
 
 @router.get("/categories")
-async def get_review_categories() -> list[dict[str, Any]]:
+async def get_review_categories(
+    admin_check: bool = Depends(check_admin_permission),
+) -> list[dict[str, Any]]:
     """
     Get all review categories with descriptions.
+
+    Issue #744: Requires admin authentication.
     """
     return [
         {
