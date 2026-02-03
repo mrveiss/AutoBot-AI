@@ -902,3 +902,19 @@ class NodeRole(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (UniqueConstraint("node_id", "role_name", name="uq_node_role"),)
+
+
+class CodeSource(Base):
+    """Code source node configuration (Issue #779)."""
+
+    __tablename__ = "code_sources"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    node_id = Column(String(64), nullable=False, index=True)
+    is_active = Column(Boolean, default=False)
+    repo_path = Column(String(255), nullable=False)
+    branch = Column(String(100), default="main")
+    last_known_commit = Column(String(64), nullable=True)
+    last_notified_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
