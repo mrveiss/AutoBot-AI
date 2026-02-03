@@ -24,6 +24,8 @@ REGISTRY_DEFAULTS = {
     "vm.aistack": "172.16.168.24",
     "vm.browser": "172.16.168.25",
     "vm.ollama": "127.0.0.1",
+    # Provider-agnostic LLM service (defaults to Ollama endpoint)
+    "vm.llm": "172.16.168.24",  # AI stack host
     # Convenience aliases
     "redis.host": "172.16.168.23",
     "redis.port": "6379",
@@ -42,6 +44,7 @@ REGISTRY_DEFAULTS = {
     "port.frontend": "5173",
     "port.redis": "6379",
     "port.ollama": "11434",
+    "port.llm": "11434",  # Provider-agnostic LLM port (defaults to Ollama)
     "port.vnc": "6080",
     "port.browser": "3000",
     "port.aistack": "8080",
