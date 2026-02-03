@@ -14,12 +14,15 @@ import os
 from typing import Any, Dict
 
 from src.config.registry import ConfigRegistry
-from src.constants.model_constants import ModelConstants
-from src.constants.network_constants import NetworkConstants
 
 
-def _get_backend_config(ollama_host: str, ollama_port: int) -> Dict[str, Any]:
+def _get_backend_config(
+    ollama_host: str, ollama_port: int, bind_host: str, backend_port: int
+) -> Dict[str, Any]:
     """Get backend LLM and server configuration."""
+    # Lazy import to avoid circular dependency
+    from src.constants.model_constants import ModelConstants
+
     return {
         "llm": {
             "provider_type": "local",
@@ -51,10 +54,8 @@ def _get_backend_config(ollama_host: str, ollama_port: int) -> Dict[str, Any]:
                 },
             },
         },
-        "server_host": NetworkConstants.BIND_ALL_INTERFACES,
-        "server_port": int(
-            os.getenv("AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT))
-        ),
+        "server_host": bind_host,
+        "server_port": int(os.getenv("AUTOBOT_BACKEND_PORT", str(backend_port))),
         "timeout": 60,
         "max_retries": 3,
         "streaming": False,
@@ -265,6 +266,9 @@ def get_default_config() -> Dict[str, Any]:
 
     Issue #763: Now uses ConfigRegistry with fallback to NetworkConstants.
     """
+    # Lazy import to avoid circular dependency
+    from src.constants.network_constants import NetworkConstants
+
     # Use ConfigRegistry with NetworkConstants fallbacks
     ollama_host = ConfigRegistry.get("vm.ollama", NetworkConstants.AI_STACK_HOST)
     ollama_port = int(
@@ -272,15 +276,17 @@ def get_default_config() -> Dict[str, Any]:
     )
     redis_host = ConfigRegistry.get("vm.redis", NetworkConstants.REDIS_VM_IP)
     redis_port = int(ConfigRegistry.get("port.redis", str(NetworkConstants.REDIS_PORT)))
+    bind_host = NetworkConstants.BIND_ALL_INTERFACES
+    backend_port = NetworkConstants.BACKEND_PORT
 
     config = {
-        "backend": _get_backend_config(ollama_host, ollama_port),
+        "backend": _get_backend_config(
+            ollama_host, ollama_port, bind_host, backend_port
+        ),
         "deployment": {
             "mode": "local",
             "host": redis_host,
-            "port": int(
-                os.getenv("AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT))
-            ),
+            "port": int(os.getenv("AUTOBOT_BACKEND_PORT", str(backend_port))),
         },
         "redis": {
             "host": redis_host,

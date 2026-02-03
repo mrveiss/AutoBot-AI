@@ -9,8 +9,8 @@ Network Constants for AutoBot
 Centralized network configuration constants.
 
 MIGRATION (Issue #763):
-    All values now use ConfigRegistry with five-tier fallback:
-    Cache → Redis → Environment → Registry Defaults → Caller Default
+    All values now use registry_defaults with environment variable override.
+    Fallback chain: Environment → Registry Defaults → Hardcoded Default
 
 Usage:
     from src.constants.network_constants import NetworkConstants, ServiceURLs
@@ -21,9 +21,9 @@ Usage:
     # Use service URLs
     backend_url = ServiceURLs.BACKEND_API
 
-    # Preferred: Use ConfigRegistry directly
+    # Preferred: Use ConfigRegistry directly (after module load)
     from src.config.registry import ConfigRegistry
-    redis_ip = ConfigRegistry.get("vm.redis", "172.16.168.23")
+    redis_ip = _get_config("vm.redis", "172.16.168.23")
 """
 
 import os
@@ -31,7 +31,54 @@ import warnings
 from functools import cached_property
 from typing import Optional
 
-from src.config.registry import ConfigRegistry
+# Inline registry defaults to avoid importing from src.config package (circular import)
+# These values match src/config/registry_defaults.py
+_REGISTRY_DEFAULTS = {
+    "vm.main": "172.16.168.20",
+    "vm.frontend": "172.16.168.21",
+    "vm.npu": "172.16.168.22",
+    "vm.redis": "172.16.168.23",
+    "vm.aistack": "172.16.168.24",
+    "vm.browser": "172.16.168.25",
+    "vm.ollama": "127.0.0.1",
+    "port.backend": "8001",
+    "port.frontend": "5173",
+    "port.redis": "6379",
+    "port.ollama": "11434",
+    "port.vnc": "6080",
+    "port.browser": "3000",
+    "port.aistack": "8080",
+    "port.npu": "8081",
+    "port.prometheus": "9090",
+    "port.grafana": "3000",
+    "deployment.mode": "distributed",
+    "deployment.environment": "production",
+}
+
+
+def _get_config(key: str, default: str) -> str:
+    """
+    Get config value with fallback chain.
+
+    Priority: Environment Variable → Registry Default → Hardcoded Default
+
+    This avoids importing ConfigRegistry at module load time to prevent
+    circular imports with src.config package.
+    """
+    # Try environment variable first (AUTOBOT_VM_REDIS format)
+    env_key = f"AUTOBOT_{key.upper().replace('.', '_')}"
+    env_value = os.getenv(env_key)
+    if env_value is not None:
+        return env_value
+
+    # Try inline registry defaults
+    registry_value = _REGISTRY_DEFAULTS.get(key)
+    if registry_value is not None:
+        return registry_value
+
+    # Return hardcoded default
+    return default
+
 
 # Deprecation flag - set to True to enable deprecation warnings
 _SHOW_DEPRECATION_WARNINGS = (
@@ -70,17 +117,17 @@ class NetworkConstants:
     # === VM Infrastructure IPs (from ConfigRegistry) ===
 
     # Main machine (WSL)
-    MAIN_MACHINE_IP: str = ConfigRegistry.get("vm.main", "172.16.168.20")
+    MAIN_MACHINE_IP: str = _get_config("vm.main", "172.16.168.20")
 
     # VM Infrastructure IPs
-    FRONTEND_VM_IP: str = ConfigRegistry.get("vm.frontend", "172.16.168.21")
-    NPU_WORKER_VM_IP: str = ConfigRegistry.get("vm.npu", "172.16.168.22")
-    REDIS_VM_IP: str = ConfigRegistry.get("vm.redis", "172.16.168.23")
-    AI_STACK_VM_IP: str = ConfigRegistry.get("vm.aistack", "172.16.168.24")
-    BROWSER_VM_IP: str = ConfigRegistry.get("vm.browser", "172.16.168.25")
+    FRONTEND_VM_IP: str = _get_config("vm.frontend", "172.16.168.21")
+    NPU_WORKER_VM_IP: str = _get_config("vm.npu", "172.16.168.22")
+    REDIS_VM_IP: str = _get_config("vm.redis", "172.16.168.23")
+    AI_STACK_VM_IP: str = _get_config("vm.aistack", "172.16.168.24")
+    BROWSER_VM_IP: str = _get_config("vm.browser", "172.16.168.25")
 
     # Backward compatibility aliases
-    AI_STACK_HOST: str = ConfigRegistry.get("vm.aistack", "172.16.168.24")
+    AI_STACK_HOST: str = _get_config("vm.aistack", "172.16.168.24")
 
     # === Local/Localhost addresses (static - not from SSOT) ===
     LOCALHOST_IP: str = "127.0.0.1"
@@ -112,25 +159,25 @@ class NetworkConstants:
     TEST_HOST_IP: str = "172.16.168.99"  # Test host IP for unit tests (not a real VM)
 
     # === Standard ports (from ConfigRegistry) ===
-    BACKEND_PORT: int = int(ConfigRegistry.get("port.backend", "8001"))
-    FRONTEND_PORT: int = int(ConfigRegistry.get("port.frontend", "5173"))
-    REDIS_PORT: int = int(ConfigRegistry.get("port.redis", "6379"))
-    OLLAMA_PORT: int = int(ConfigRegistry.get("port.ollama", "11434"))
-    VNC_PORT: int = int(ConfigRegistry.get("port.vnc", "6080"))
-    BROWSER_SERVICE_PORT: int = int(ConfigRegistry.get("port.browser", "3000"))
-    AI_STACK_PORT: int = int(ConfigRegistry.get("port.aistack", "8080"))
-    NPU_WORKER_PORT: int = int(ConfigRegistry.get("port.npu", "8081"))
+    BACKEND_PORT: int = int(_get_config("port.backend", "8001"))
+    FRONTEND_PORT: int = int(_get_config("port.frontend", "5173"))
+    REDIS_PORT: int = int(_get_config("port.redis", "6379"))
+    OLLAMA_PORT: int = int(_get_config("port.ollama", "11434"))
+    VNC_PORT: int = int(_get_config("port.vnc", "6080"))
+    BROWSER_SERVICE_PORT: int = int(_get_config("port.browser", "3000"))
+    AI_STACK_PORT: int = int(_get_config("port.aistack", "8080"))
+    NPU_WORKER_PORT: int = int(_get_config("port.npu", "8081"))
     NPU_WORKER_WINDOWS_PORT: int = 8082  # Windows NPU worker (static)
     CHROME_DEBUGGER_PORT: int = 9222  # Chrome DevTools Protocol port (static)
 
     # Issue #474: Monitoring stack ports (from ConfigRegistry)
-    PROMETHEUS_PORT: int = int(ConfigRegistry.get("port.prometheus", "9090"))
+    PROMETHEUS_PORT: int = int(_get_config("port.prometheus", "9090"))
     ALERTMANAGER_PORT: int = 9093  # Not in ConfigRegistry currently
-    GRAFANA_PORT: int = int(ConfigRegistry.get("port.grafana", "3000"))
+    GRAFANA_PORT: int = int(_get_config("port.grafana", "3000"))
 
     # Development ports (aliases)
-    DEV_FRONTEND_PORT: int = int(ConfigRegistry.get("port.frontend", "5173"))
-    DEV_BACKEND_PORT: int = int(ConfigRegistry.get("port.backend", "8001"))
+    DEV_FRONTEND_PORT: int = int(_get_config("port.frontend", "5173"))
+    DEV_BACKEND_PORT: int = int(_get_config("port.backend", "8001"))
 
     # === External service URLs (static) ===
     GOOGLE_SEARCH_BASE_URL: str = "https://www.google.com/search"
@@ -212,7 +259,7 @@ class ServiceURLs:
         URLs are now computed from ConfigRegistry values.
         For direct access, use:
             from src.config.registry import ConfigRegistry
-            backend = f"http://{ConfigRegistry.get('vm.main', '...')}:..."
+            backend = f"http://{_get_config('vm.main', '...')}:..."
     """
 
     # Backend API URLs (computed from ConfigRegistry)
@@ -307,16 +354,16 @@ class NetworkConfig:
         This class now uses ConfigRegistry for deployment mode.
         For direct access, prefer using ConfigRegistry:
             from src.config.registry import ConfigRegistry
-            mode = ConfigRegistry.get("deployment.mode", "distributed")
+            mode = _get_config("deployment.mode", "distributed")
     """
 
     def __init__(self):
         """Initialize network config using ConfigRegistry values."""
-        self._deployment_mode = ConfigRegistry.get(
+        self._deployment_mode = _get_config(
             "deployment.mode", os.getenv("AUTOBOT_DEPLOYMENT_MODE", "distributed")
         )
         self._is_development = (
-            ConfigRegistry.get(
+            _get_config(
                 "deployment.environment",
                 os.getenv("AUTOBOT_ENV", "production"),
             )
@@ -369,7 +416,7 @@ class NetworkConfig:
 
         Issue #763: Prefer using ConfigRegistry directly:
             from src.config.registry import ConfigRegistry
-            host = ConfigRegistry.get("vm.redis", "172.16.168.23")
+            host = _get_config("vm.redis", "172.16.168.23")
 
         Args:
             service_name: Name of the service (backend, frontend, redis, etc.)
@@ -397,7 +444,7 @@ class NetworkConfig:
 
         Issue #763: Prefer using ConfigRegistry directly:
             from src.config.registry import ConfigRegistry
-            ip = ConfigRegistry.get("vm.redis", "172.16.168.23")
+            ip = _get_config("vm.redis", "172.16.168.23")
 
         Args:
             vm_name: Name of the VM (frontend, redis, ai_stack, etc.)

@@ -23,7 +23,7 @@ Usage:
 
     # Preferred: Use ConfigRegistry directly
     from src.config.registry import ConfigRegistry
-    model_name = ConfigRegistry.get("llm.default_model", "mistral:7b-instruct")
+    model_name = _get_model_config("llm.default_model", "mistral:7b-instruct")
 """
 
 import os
@@ -31,7 +31,23 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Optional
 
-from src.config.registry import ConfigRegistry
+# Inline defaults to avoid importing from src.config package (circular import)
+_MODEL_DEFAULTS = {
+    "llm.default_model": "mistral:7b-instruct",
+    "llm.embedding_model": "nomic-embed-text:latest",
+    "vm.aistack": "172.16.168.24",
+    "port.ollama": "11434",
+}
+
+
+def _get_model_config(key: str, default: str) -> str:
+    """Get model config from env or default (avoids circular import)."""
+    env_key = f"AUTOBOT_{key.upper().replace('.', '_')}"
+    env_value = os.getenv(env_key)
+    if env_value is not None:
+        return env_value
+    return _MODEL_DEFAULTS.get(key, default)
+
 
 # =============================================================================
 # FALLBACK DEFAULTS - DEFINED ONCE, USED EVERYWHERE
@@ -61,28 +77,28 @@ class ModelConstants:
     # DEFAULT MODELS - Read from ConfigRegistry with fallbacks
     # =========================================================================
 
-    DEFAULT_OLLAMA_MODEL: str = ConfigRegistry.get("llm.default_model", FALLBACK_MODEL)
-    DEFAULT_OPENAI_MODEL: str = ConfigRegistry.get(
+    DEFAULT_OLLAMA_MODEL: str = _get_model_config("llm.default_model", FALLBACK_MODEL)
+    DEFAULT_OPENAI_MODEL: str = _get_model_config(
         "llm.openai_model", FALLBACK_OPENAI_MODEL
     )
-    DEFAULT_ANTHROPIC_MODEL: str = ConfigRegistry.get(
+    DEFAULT_ANTHROPIC_MODEL: str = _get_model_config(
         "llm.anthropic_model", FALLBACK_ANTHROPIC_MODEL
     )
-    DEFAULT_GOOGLE_MODEL: str = ConfigRegistry.get(
+    DEFAULT_GOOGLE_MODEL: str = _get_model_config(
         "llm.google_model", FALLBACK_GOOGLE_MODEL
     )
 
     # Additional model types
-    EMBEDDING_MODEL: str = ConfigRegistry.get(
+    EMBEDDING_MODEL: str = _get_model_config(
         "llm.embedding_model", "nomic-embed-text:latest"
     )
-    CLASSIFICATION_MODEL: str = ConfigRegistry.get(
+    CLASSIFICATION_MODEL: str = _get_model_config(
         "llm.classification_model", FALLBACK_MODEL
     )
-    REASONING_MODEL: str = ConfigRegistry.get("llm.reasoning_model", FALLBACK_MODEL)
-    RAG_MODEL: str = ConfigRegistry.get("llm.rag_model", FALLBACK_MODEL)
-    CODING_MODEL: str = ConfigRegistry.get("llm.coding_model", FALLBACK_MODEL)
-    ORCHESTRATOR_MODEL: str = ConfigRegistry.get(
+    REASONING_MODEL: str = _get_model_config("llm.reasoning_model", FALLBACK_MODEL)
+    RAG_MODEL: str = _get_model_config("llm.rag_model", FALLBACK_MODEL)
+    CODING_MODEL: str = _get_model_config("llm.coding_model", FALLBACK_MODEL)
+    ORCHESTRATOR_MODEL: str = _get_model_config(
         "llm.orchestrator_model", FALLBACK_MODEL
     )
 
@@ -97,7 +113,7 @@ class ModelConstants:
     PROVIDER_LM_STUDIO: str = "lm_studio"
 
     # Current provider from ConfigRegistry
-    CURRENT_PROVIDER: str = ConfigRegistry.get("llm.provider", "ollama")
+    CURRENT_PROVIDER: str = _get_model_config("llm.provider", "ollama")
 
     # =========================================================================
     # MODEL ENDPOINTS
@@ -112,8 +128,8 @@ class ModelConstants:
         """
         from src.constants.network_constants import NetworkConstants
 
-        host = ConfigRegistry.get("vm.ollama", NetworkConstants.AI_STACK_VM_IP)
-        port = ConfigRegistry.get("port.ollama", str(NetworkConstants.OLLAMA_PORT))
+        host = _get_model_config("vm.ollama", NetworkConstants.AI_STACK_VM_IP)
+        port = _get_model_config("port.ollama", str(NetworkConstants.OLLAMA_PORT))
         return f"http://{host}:{port}"
 
     @staticmethod
@@ -158,7 +174,7 @@ class ModelConfig:
     DEFAULT_NUM_CTX: int = 4096  # Ollama context window
 
     # Timeouts (in seconds) - Issue #763: Now uses ConfigRegistry
-    DEFAULT_TIMEOUT: int = int(ConfigRegistry.get("timeout.llm", "30"))
+    DEFAULT_TIMEOUT: int = int(_get_model_config("timeout.llm", "30"))
     LONG_GENERATION_TIMEOUT: int = 120
 
     # Retry settings
@@ -198,7 +214,7 @@ def get_default_model(provider: Optional[str] = None) -> str:
 
     Issue #763: Prefer using ConfigRegistry directly:
         from src.config.registry import ConfigRegistry
-        model = ConfigRegistry.get("llm.default_model", "mistral:7b-instruct")
+        model = _get_model_config("llm.default_model", "mistral:7b-instruct")
 
     Issue #380: Added @lru_cache since models don't change at runtime.
 
@@ -227,8 +243,8 @@ def get_model_endpoint(provider: str) -> str:
 
     Issue #763: Prefer using ConfigRegistry directly:
         from src.config.registry import ConfigRegistry
-        host = ConfigRegistry.get("vm.ollama", "172.16.168.24")
-        port = ConfigRegistry.get("port.ollama", "11434")
+        host = _get_model_config("vm.ollama", "172.16.168.24")
+        port = _get_model_config("port.ollama", "11434")
 
     Issue #380: Added @lru_cache since endpoints don't change at runtime.
 

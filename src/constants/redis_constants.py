@@ -25,9 +25,14 @@ Usage:
     timeout = REDIS_CONFIG.SOCKET_TIMEOUT
 """
 
+import os
 from dataclasses import dataclass
 
-from src.config.registry import ConfigRegistry
+
+def _get_redis_config(key: str, default: str) -> str:
+    """Get Redis config from env or default (avoids circular import)."""
+    env_key = f"AUTOBOT_{key.upper().replace('.', '_')}"
+    return os.getenv(env_key, default)
 
 
 @dataclass(frozen=True)
@@ -59,26 +64,26 @@ class RedisConnectionConfig:
     # Retry settings
     RETRY_ON_TIMEOUT: bool = True
 
-    # Database assignments (Issue #763: Now uses ConfigRegistry)
+    # Database assignments (Issue #763: Uses env vars with defaults)
     @property
     def db_main(self) -> int:
-        """Main database number from ConfigRegistry."""
-        return int(ConfigRegistry.get("redis.db_main", "0"))
+        """Main database number."""
+        return int(_get_redis_config("redis.db_main", "0"))
 
     @property
     def db_knowledge(self) -> int:
-        """Knowledge database number from ConfigRegistry."""
-        return int(ConfigRegistry.get("redis.db_knowledge", "1"))
+        """Knowledge database number."""
+        return int(_get_redis_config("redis.db_knowledge", "1"))
 
     @property
     def db_cache(self) -> int:
-        """Cache database number from ConfigRegistry."""
-        return int(ConfigRegistry.get("redis.db_cache", "5"))
+        """Cache database number."""
+        return int(_get_redis_config("redis.db_cache", "5"))
 
     @property
     def db_sessions(self) -> int:
-        """Sessions database number from ConfigRegistry."""
-        return int(ConfigRegistry.get("redis.db_sessions", "6"))
+        """Sessions database number."""
+        return int(_get_redis_config("redis.db_sessions", "6"))
 
 
 @dataclass(frozen=True)

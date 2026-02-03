@@ -10,9 +10,6 @@ import logging
 import os
 from typing import Any, Dict
 
-from src.constants.model_constants import ModelConstants
-from src.constants.network_constants import NetworkConstants
-
 logger = logging.getLogger(__name__)
 
 
@@ -37,10 +34,14 @@ class ModelConfigMixin:
         # Only fall back to environment if config.yaml doesn't have the value
         env_model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL")
         if env_model:
-            logger.info("UNIFIED CONFIG: Selected model from environment: %s", env_model)
+            logger.info(
+                "UNIFIED CONFIG: Selected model from environment: %s", env_model
+            )
             return env_model
 
-        # Final fallback - use centralized constant
+        # Final fallback - use centralized constant (lazy import to avoid circular dep)
+        from src.constants.model_constants import ModelConstants
+
         fallback_model = ModelConstants.DEFAULT_OLLAMA_MODEL
         logger.warning(
             "UNIFIED CONFIG: No model configured, using fallback: %s", fallback_model
@@ -67,6 +68,9 @@ class ModelConfigMixin:
 
         # Ensure we have proper structure
         if not backend_llm:
+            # Lazy import to avoid circular dependency
+            from src.constants.network_constants import NetworkConstants
+
             # Create default structure
             backend_llm = {
                 "provider_type": "local",
@@ -77,10 +81,12 @@ class ModelConfigMixin:
                             "selected_model": self.get_selected_model(),
                             "models": [],
                             "endpoint": (
-                                f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}/api/generate"
+                                f"http://{NetworkConstants.LOCALHOST_NAME}"
+                                f":{NetworkConstants.OLLAMA_PORT}/api/generate"
                             ),
                             "host": (
-                                f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}"
+                                f"http://{NetworkConstants.LOCALHOST_NAME}"
+                                f":{NetworkConstants.OLLAMA_PORT}"
                             ),
                         }
                     },
