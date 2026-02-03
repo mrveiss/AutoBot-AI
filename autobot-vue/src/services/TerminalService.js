@@ -183,6 +183,8 @@ class TerminalService {
    * @param {Function} callbacks.onStatusChange - Called when connection status changes
    * @param {Function} callbacks.onError - Called when an error occurs
    * @param {Function} callbacks.onTabCompletion - Called when tab completion results arrive (Issue #749)
+   * @param {Function} callbacks.onHistory - Called when history data arrives (Issue #749)
+   * @param {Function} callbacks.onHistorySearch - Called when history search results arrive (Issue #749)
    */
   async connect(sessionId, callbacks = {}) {
     if (this.connections.has(sessionId)) {
@@ -405,6 +407,21 @@ class TerminalService {
           });
           break;
 
+        // Issue #749: Handle history response from backend
+        case 'history':
+          this.triggerCallback(sessionId, 'onHistory', {
+            commands: message.commands || []
+          });
+          break;
+
+        // Issue #749: Handle history search response from backend
+        case 'history_search':
+          this.triggerCallback(sessionId, 'onHistorySearch', {
+            matches: message.matches || [],
+            query: message.query || ''
+          });
+          break;
+
         default:
           logger.warn(`Unknown message type: ${message.type}`, message);
       }
@@ -511,6 +528,64 @@ class TerminalService {
       return true;
     } catch (error) {
       logger.error('[TAB] Failed to send tab completion:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Request command history from backend (Issue #749)
+   * @param {string} sessionId - Session ID
+   * @param {number} limit - Maximum number of history entries to retrieve (default: 100)
+   * @returns {boolean} Whether the request was sent successfully
+   */
+  sendHistoryGet(sessionId, limit = 100) {
+    const connection = this.connections.get(sessionId);
+    if (!connection || connection.readyState !== WebSocket.OPEN) {
+      logger.debug(`[HISTORY] No active connection for session ${sessionId}`);
+      return false;
+    }
+
+    try {
+      const message = {
+        type: 'history_get',
+        limit: limit
+      };
+
+      connection.send(JSON.stringify(message));
+      logger.debug(`[HISTORY] Sent history get request: limit=${limit}`);
+      return true;
+    } catch (error) {
+      logger.error('[HISTORY] Failed to send history get:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Search command history on backend (Issue #749)
+   * @param {string} sessionId - Session ID
+   * @param {string} query - Search query string
+   * @param {number} limit - Maximum number of results (default: 50)
+   * @returns {boolean} Whether the request was sent successfully
+   */
+  sendHistorySearch(sessionId, query, limit = 50) {
+    const connection = this.connections.get(sessionId);
+    if (!connection || connection.readyState !== WebSocket.OPEN) {
+      logger.debug(`[HISTORY] No active connection for session ${sessionId}`);
+      return false;
+    }
+
+    try {
+      const message = {
+        type: 'history_search',
+        query: query,
+        limit: limit
+      };
+
+      connection.send(JSON.stringify(message));
+      logger.debug(`[HISTORY] Sent history search request: query="${query}", limit=${limit}`);
+      return true;
+    } catch (error) {
+      logger.error('[HISTORY] Failed to send history search:', error);
       return false;
     }
   }
@@ -713,6 +788,8 @@ export function useTerminalService() {
     sendInput: terminalService.sendInput.bind(terminalService),
     sendStdin: terminalService.sendStdin.bind(terminalService),  // Issue #33
     sendTabCompletion: terminalService.sendTabCompletion.bind(terminalService),  // Issue #749
+    sendHistoryGet: terminalService.sendHistoryGet.bind(terminalService),  // Issue #749
+    sendHistorySearch: terminalService.sendHistorySearch.bind(terminalService),  // Issue #749
     sendSignal: terminalService.sendSignal.bind(terminalService),
     resize: terminalService.resize.bind(terminalService),
     // Note: connect, disconnect, closeSession are defined below with reactive updates

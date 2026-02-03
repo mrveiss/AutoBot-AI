@@ -5,6 +5,10 @@
 </template>
 
 <script setup lang="ts">
+// AutoBot - AI-Powered Automation Platform
+// Copyright (c) 2025 mrveiss
+// Author: mrveiss
+
 import { ref, shallowRef, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -32,13 +36,16 @@ const props = withDefaults(defineProps<Props>(), {
   fontFamily: 'Monaco, Menlo, Ubuntu Mono, monospace'
 })
 
-// Emits - Issue #749: Added tabCompletion emit
+// Emits - Issue #749: Added tabCompletion and history navigation emits
 const emit = defineEmits<{
   ready: [terminal: Terminal]
   data: [data: string]
   resize: [cols: number, rows: number]
   disposed: []
   tabCompletion: [payload: { text: string; cursor: number }]
+  historyNavigate: [payload: { direction: 'up' | 'down'; lineBuffer: string }]
+  reverseSearch: [payload: { active: boolean; query: string }]
+  commandExecuted: [command: string]
 }>()
 
 // Refs
@@ -57,6 +64,10 @@ const addonsLoaded = ref(false)
 // Issue #749: State for tracking current line buffer for tab completion
 const currentLineBuffer = ref('')
 const cursorPosition = ref(0)
+
+// Issue #749: Reverse search state
+const reverseSearchMode = ref(false)
+const reverseSearchQuery = ref('')
 
 // Theme configurations
 const themes = {
@@ -108,6 +119,60 @@ const themes = {
   }
 }
 
+/**
+ * Issue #749: Handle Up arrow key for history navigation.
+ * Emits historyNavigate event for parent to handle.
+ */
+const handleUpArrow = (): void => {
+  logger.debug('[HISTORY] Up arrow pressed, requesting previous command')
+  emit('historyNavigate', {
+    direction: 'up',
+    lineBuffer: currentLineBuffer.value
+  })
+}
+
+/**
+ * Issue #749: Handle Down arrow key for history navigation.
+ * Emits historyNavigate event for parent to handle.
+ */
+const handleDownArrow = (): void => {
+  logger.debug('[HISTORY] Down arrow pressed, requesting next command')
+  emit('historyNavigate', {
+    direction: 'down',
+    lineBuffer: currentLineBuffer.value
+  })
+}
+
+/**
+ * Issue #749: Handle Ctrl+R for reverse search mode.
+ * Toggles reverse search mode and emits event.
+ */
+const handleCtrlR = (): void => {
+  reverseSearchMode.value = !reverseSearchMode.value
+  if (reverseSearchMode.value) {
+    reverseSearchQuery.value = ''
+    logger.debug('[HISTORY] Entering reverse search mode')
+  } else {
+    logger.debug('[HISTORY] Exiting reverse search mode')
+  }
+  emit('reverseSearch', {
+    active: reverseSearchMode.value,
+    query: reverseSearchQuery.value
+  })
+}
+
+/**
+ * Issue #749: Update reverse search query and emit event.
+ * @param char - Character to add to search query
+ */
+const updateReverseSearchQuery = (char: string): void => {
+  reverseSearchQuery.value += char
+  emit('reverseSearch', {
+    active: reverseSearchMode.value,
+    query: reverseSearchQuery.value
+  })
+}
+
 // Issue #749: Handle data input and track line buffer for tab completion
 const handleTerminalData = (data: string) => {
   logger.debug('onData fired:', {
@@ -117,6 +182,51 @@ const handleTerminalData = (data: string) => {
   })
 
   if (props.readOnly) {
+    return
+  }
+
+  // Issue #749: Handle Ctrl+R for reverse search
+  if (data === '\x12') {
+    handleCtrlR()
+    return
+  }
+
+  // Issue #749: If in reverse search mode, handle input differently
+  if (reverseSearchMode.value) {
+    if (data === '\x1b' || data === '\x03') {
+      // Escape or Ctrl+C exits search mode
+      reverseSearchMode.value = false
+      reverseSearchQuery.value = ''
+      emit('reverseSearch', { active: false, query: '' })
+      return
+    }
+    if (data === '\r' || data === '\n') {
+      // Enter accepts current search result and exits
+      reverseSearchMode.value = false
+      emit('reverseSearch', { active: false, query: reverseSearchQuery.value })
+      // Continue to normal processing to execute the command
+    } else if (data === '\x7f' || data === '\b') {
+      // Backspace removes last character from search
+      reverseSearchQuery.value = reverseSearchQuery.value.slice(0, -1)
+      emit('reverseSearch', { active: true, query: reverseSearchQuery.value })
+      return
+    } else if (data.length === 1 && data.charCodeAt(0) >= 32) {
+      // Add character to search query
+      updateReverseSearchQuery(data)
+      return
+    }
+    return
+  }
+
+  // Issue #749: Check for Up/Down arrow keys for history navigation
+  if (data === '\x1b[A') {
+    // Up arrow
+    handleUpArrow()
+    return
+  }
+  if (data === '\x1b[B') {
+    // Down arrow
+    handleDownArrow()
     return
   }
 
@@ -132,6 +242,13 @@ const handleTerminalData = (data: string) => {
 
   // Issue #749: Track line buffer for tab completion
   updateLineBuffer(data)
+
+  // Issue #749: Emit commandExecuted when Enter is pressed
+  if (data === '\r' || data === '\n') {
+    if (currentLineBuffer.value.trim()) {
+      emit('commandExecuted', currentLineBuffer.value.trim())
+    }
+  }
 
   // Emit data for normal processing
   emit('data', data)
@@ -252,8 +369,8 @@ const updateLineBuffer = (data: string): void => {
     return
   }
 
-  // Handle arrow keys for cursor movement
-  if (data.startsWith('\x1b[')) {
+  // Handle arrow keys for cursor movement (but not Up/Down which are history)
+  if (data.startsWith('\x1b[') && !data.includes('A') && !data.includes('B')) {
     handleArrowKeys(data.slice(2))
     return
   }
@@ -339,6 +456,58 @@ const handleCompletionResponse = (data: { completions: string[]; prefix: string;
     // Show all options
     showCompletions(completions)
   }
+}
+
+/**
+ * Issue #749: Replace current line buffer with history command.
+ * Used when navigating through command history.
+ * @param command - The command to display on the line
+ */
+const replaceLineWithHistoryCommand = (command: string): void => {
+  if (!terminal.value) {
+    return
+  }
+
+  // Clear current line: move to start and clear to end
+  // First, move cursor to beginning of line
+  const moveLeft = '\x1b[D'.repeat(cursorPosition.value)
+  // Then clear from cursor to end of line
+  const clearLine = '\x1b[K'
+  // Write the new command
+  terminal.value.write(moveLeft + clearLine + command)
+
+  // Update line buffer state
+  currentLineBuffer.value = command
+  cursorPosition.value = command.length
+
+  logger.debug('[HISTORY] Replaced line with:', command)
+}
+
+/**
+ * Issue #749: Display reverse search prompt.
+ * Shows the search interface in the terminal.
+ * @param query - Current search query
+ * @param match - Current matching command (if any)
+ */
+const showReverseSearchPrompt = (query: string, match: string): void => {
+  if (!terminal.value) {
+    return
+  }
+
+  // Format: (reverse-i-search)`query': match
+  const searchPrompt = `\r(reverse-i-search)\`${query}': ${match}`
+  terminal.value.write('\r\x1b[K' + searchPrompt)
+
+  logger.debug('[HISTORY] Showing reverse search:', { query, match })
+}
+
+/**
+ * Issue #749: Exit reverse search and restore normal prompt.
+ */
+const exitReverseSearch = (): void => {
+  reverseSearchMode.value = false
+  reverseSearchQuery.value = ''
+  // Clear the search line and show normal prompt will be handled by parent
 }
 
 // Initialize terminal
@@ -462,6 +631,8 @@ const reset = () => {
   // Issue #749: Also reset line buffer state
   currentLineBuffer.value = ''
   cursorPosition.value = 0
+  reverseSearchMode.value = false
+  reverseSearchQuery.value = ''
 }
 
 const fit = () => {
@@ -496,6 +667,12 @@ const resetLineBuffer = () => {
   cursorPosition.value = 0
 }
 
+// Issue #749: Set line buffer (e.g., when applying history command)
+const setLineBuffer = (text: string, cursor?: number) => {
+  currentLineBuffer.value = text
+  cursorPosition.value = cursor !== undefined ? cursor : text.length
+}
+
 // Expose methods for parent components
 defineExpose({
   write,
@@ -509,9 +686,14 @@ defineExpose({
   // Issue #749: Tab completion methods
   getLineBuffer,
   resetLineBuffer,
+  setLineBuffer,
   applyCompletion,
   showCompletions,
-  handleCompletionResponse
+  handleCompletionResponse,
+  // Issue #749: History navigation methods
+  replaceLineWithHistoryCommand,
+  showReverseSearchPrompt,
+  exitReverseSearch
 })
 
 // Watch for theme changes
