@@ -565,11 +565,89 @@ def _calculate_complexity_metrics(
     }
 
 
+def _build_quality_trends(metrics: dict[str, float], days: int = 30) -> list[dict]:
+    """
+    Build quality trend data for the specified number of days.
+
+    Issue #620: Extracted from calculate_real_quality_metrics to reduce function length.
+
+    Args:
+        metrics: Dictionary of metric scores (maintainability, reliability, etc.)
+        days: Number of days of trend data to generate
+
+    Returns:
+        List of trend data points with date and weighted score
+    """
+    # Weights for calculating overall weighted score
+    weights = {
+        "maintainability": 0.25,
+        "reliability": 0.20,
+        "security": 0.20,
+        "performance": 0.15,
+        "testability": 0.10,
+        "documentation": 0.10,
+    }
+
+    weighted_score = sum(
+        metrics.get(category, 0) * weight for category, weight in weights.items()
+    )
+
+    return [
+        {
+            "date": (datetime.now() - timedelta(days=i)).isoformat(),
+            "score": weighted_score,
+        }
+        for i in range(days, -1, -1)
+    ]
+
+
+def _calculate_all_quality_scores(
+    problems: list[dict],
+    stats: dict[str, Any],
+    total_files: int,
+) -> dict[str, float]:
+    """
+    Calculate all quality metric scores from problems and stats.
+
+    Issue #620: Extracted from calculate_real_quality_metrics.
+
+    Args:
+        problems: List of problem dictionaries from analysis
+        stats: Codebase statistics from analysis
+        total_files: Total number of files in codebase
+
+    Returns:
+        Dictionary mapping metric categories to scores
+    """
+    metrics = {
+        "maintainability": _calculate_maintainability_score(problems, total_files),
+        "reliability": _calculate_reliability_score(problems),
+        "security": _calculate_security_score(problems),
+        "performance": _calculate_performance_score(problems),
+        "testability": _calculate_testability_score(stats, total_files),
+        "documentation": _calculate_documentation_score(stats),
+    }
+
+    logger.info(
+        "Calculated quality metrics: maintainability=%.1f, reliability=%.1f, "
+        "security=%.1f, performance=%.1f, testability=%.1f, documentation=%.1f",
+        metrics["maintainability"],
+        metrics["reliability"],
+        metrics["security"],
+        metrics["performance"],
+        metrics["testability"],
+        metrics["documentation"],
+    )
+
+    return metrics
+
+
 async def calculate_real_quality_metrics() -> Optional[dict[str, Any]]:
     """
     Calculate real quality metrics from ChromaDB analysis data.
 
     Issue #541: This replaces static demo values with actual calculated metrics.
+    Issue #620: Refactored to use helper functions.
 
     Returns:
         Dict with calculated quality metrics, or None if no data available
@@ -586,64 +664,19 @@ async def calculate_real_quality_metrics() -> Optional[dict[str, Any]]:
     total_files = int(stats.get("total_files", 0)) or 100  # Default estimate
     total_lines = int(stats.get("total_lines", 0)) or 10000
 
-    # Calculate individual metrics
-    maintainability = _calculate_maintainability_score(problems, total_files)
-    reliability = _calculate_reliability_score(problems)
-    security = _calculate_security_score(problems)
-    performance = _calculate_performance_score(problems)
-    testability = _calculate_testability_score(stats, total_files)
-    documentation = _calculate_documentation_score(stats)
-
-    logger.info(
-        "Calculated quality metrics: maintainability=%.1f, reliability=%.1f, "
-        "security=%.1f, performance=%.1f, testability=%.1f, documentation=%.1f",
-        maintainability,
-        reliability,
-        security,
-        performance,
-        testability,
-        documentation,
-    )
-
-    # Build patterns from problems
-    patterns = _categorize_problems_for_patterns(problems)
-
-    # Calculate complexity metrics
-    complexity = _calculate_complexity_metrics(stats, problems)
-
-    # Build trends (would need historical data, for now just current)
-    trends = [
-        {
-            "date": (datetime.now() - timedelta(days=i)).isoformat(),
-            "score": (
-                maintainability * 0.25
-                + reliability * 0.20
-                + security * 0.20
-                + performance * 0.15
-                + testability * 0.10
-                + documentation * 0.10
-            ),
-        }
-        for i in range(30, -1, -1)
-    ]
+    # Calculate metrics using helper (Issue #620)
+    metrics = _calculate_all_quality_scores(problems, stats, total_files)
 
     return {
-        "metrics": {
-            "maintainability": round(maintainability, 1),
-            "reliability": round(reliability, 1),
-            "security": round(security, 1),
-            "performance": round(performance, 1),
-            "testability": round(testability, 1),
-            "documentation": round(documentation, 1),
-        },
-        "patterns": patterns,
-        "complexity": complexity,
+        "metrics": {k: round(v, 1) for k, v in metrics.items()},
+        "patterns": _categorize_problems_for_patterns(problems),
+        "complexity": _calculate_complexity_metrics(stats, problems),
         "stats": {
             "file_count": total_files,
             "line_count": total_lines,
             "issues_count": len(problems),
         },
-        "trends": trends,
+        "trends": _build_quality_trends(metrics),
         "source": "calculated",
         "calculated_at": datetime.now().isoformat(),
     }

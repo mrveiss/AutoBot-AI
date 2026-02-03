@@ -271,6 +271,101 @@ async def export_full_json(
 # ============================================================================
 
 
+def _build_cost_metrics_lines(cost_summary: dict) -> list[str]:
+    """
+    Build Prometheus metrics lines for LLM cost data.
+
+    Issue #620: Extracted from export_prometheus to reduce function length.
+
+    Args:
+        cost_summary: Cost summary data from cost tracker
+
+    Returns:
+        List of Prometheus-formatted metric lines
+    """
+    lines = []
+
+    # Total cost
+    lines.append("# HELP autobot_llm_cost_total_usd Total LLM costs in USD")
+    lines.append("# TYPE autobot_llm_cost_total_usd gauge")
+    lines.append(f'autobot_llm_cost_total_usd {cost_summary.get("total_cost_usd", 0)}')
+
+    # Daily cost
+    lines.append("")
+    lines.append("# HELP autobot_llm_daily_cost_usd Daily LLM cost in USD")
+    lines.append("# TYPE autobot_llm_daily_cost_usd gauge")
+    lines.append(f'autobot_llm_daily_cost_usd {cost_summary.get("avg_daily_cost", 0)}')
+
+    # Model-specific costs
+    lines.append("")
+    lines.append("# HELP autobot_llm_model_cost_usd Cost by model in USD")
+    lines.append("# TYPE autobot_llm_model_cost_usd gauge")
+    for model, data in cost_summary.get("by_model", {}).items():
+        cost = data.get("cost_usd", 0)
+        lines.append(f'autobot_llm_model_cost_usd{{model="{model}"}} {cost}')
+
+    # Model token usage
+    lines.append("")
+    lines.append("# HELP autobot_llm_model_tokens Token usage by model")
+    lines.append("# TYPE autobot_llm_model_tokens counter")
+    for model, data in cost_summary.get("by_model", {}).items():
+        input_tokens = data.get("input_tokens", 0)
+        output_tokens = data.get("output_tokens", 0)
+        lines.append(
+            f'autobot_llm_model_tokens{{model="{model}",type="input"}} {input_tokens}'
+        )
+        lines.append(
+            f'autobot_llm_model_tokens{{model="{model}",type="output"}} {output_tokens}'
+        )
+
+    return lines
+
+
+def _build_agent_metrics_lines(agent_metrics: list) -> list[str]:
+    """
+    Build Prometheus metrics lines for agent performance data.
+
+    Issue #620: Extracted from export_prometheus to reduce function length.
+
+    Args:
+        agent_metrics: List of AgentMetrics objects
+
+    Returns:
+        List of Prometheus-formatted metric lines
+    """
+    lines = []
+
+    # Tasks total
+    lines.append("")
+    lines.append("# HELP autobot_agent_tasks_total Total tasks by agent")
+    lines.append("# TYPE autobot_agent_tasks_total counter")
+    for m in agent_metrics:
+        lines.append(m.to_prometheus_tasks_line())
+
+    # Success rate
+    lines.append("")
+    lines.append("# HELP autobot_agent_success_rate Agent success rate percentage")
+    lines.append("# TYPE autobot_agent_success_rate gauge")
+    for m in agent_metrics:
+        lines.append(m.to_prometheus_success_rate_line())
+
+    # Error rate
+    lines.append("")
+    lines.append("# HELP autobot_agent_error_rate Agent error rate percentage")
+    lines.append("# TYPE autobot_agent_error_rate gauge")
+    for m in agent_metrics:
+        lines.append(m.to_prometheus_error_rate_line())
+
+    # Duration
+    lines.append("")
+    lines.append("# HELP autobot_agent_avg_duration_ms Average task duration in ms")
+    lines.append("# TYPE autobot_agent_avg_duration_ms gauge")
+    for m in agent_metrics:
+        lines.append(m.to_prometheus_duration_line())
+
+    return lines
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_prometheus",
@@ -286,6 +381,7 @@ async def export_prometheus(
     Returns metrics compatible with Prometheus/Grafana scraping.
 
     Issue #744: Requires admin authentication.
+    Issue #620: Refactored to use helper functions.
     """
     tracker = get_cost_tracker()
     analytics = get_agent_analytics()
@@ -296,63 +392,9 @@ async def export_prometheus(
         analytics.get_all_agents_metrics(),
     )
 
-    lines = []
-
-    # Add header
-    lines.append("# HELP autobot_llm_cost_total_usd Total LLM costs in USD")
-    lines.append("# TYPE autobot_llm_cost_total_usd gauge")
-    lines.append(f'autobot_llm_cost_total_usd {cost_summary.get("total_cost_usd", 0)}')
-
-    lines.append("")
-    lines.append("# HELP autobot_llm_daily_cost_usd Daily LLM cost in USD")
-    lines.append("# TYPE autobot_llm_daily_cost_usd gauge")
-    lines.append(f'autobot_llm_daily_cost_usd {cost_summary.get("avg_daily_cost", 0)}')
-
-    # Model-specific costs
-    lines.append("")
-    lines.append("# HELP autobot_llm_model_cost_usd Cost by model in USD")
-    lines.append("# TYPE autobot_llm_model_cost_usd gauge")
-    for model, data in cost_summary.get("by_model", {}).items():
-        cost = data.get("cost_usd", 0)
-        lines.append(f'autobot_llm_model_cost_usd{{model="{model}"}} {cost}')
-
-    lines.append("")
-    lines.append("# HELP autobot_llm_model_tokens Token usage by model")
-    lines.append("# TYPE autobot_llm_model_tokens counter")
-    for model, data in cost_summary.get("by_model", {}).items():
-        input_tokens = data.get("input_tokens", 0)
-        output_tokens = data.get("output_tokens", 0)
-        lines.append(
-            f'autobot_llm_model_tokens{{model="{model}",type="input"}} {input_tokens}'
-        )
-        lines.append(
-            f'autobot_llm_model_tokens{{model="{model}",type="output"}} {output_tokens}'
-        )
-
-    # Agent metrics using model methods (Issue #372 - reduces feature envy)
-    lines.append("")
-    lines.append("# HELP autobot_agent_tasks_total Total tasks by agent")
-    lines.append("# TYPE autobot_agent_tasks_total counter")
-    for m in agent_metrics:
-        lines.append(m.to_prometheus_tasks_line())
-
-    lines.append("")
-    lines.append("# HELP autobot_agent_success_rate Agent success rate percentage")
-    lines.append("# TYPE autobot_agent_success_rate gauge")
-    for m in agent_metrics:
-        lines.append(m.to_prometheus_success_rate_line())
-
-    lines.append("")
-    lines.append("# HELP autobot_agent_error_rate Agent error rate percentage")
-    lines.append("# TYPE autobot_agent_error_rate gauge")
-    for m in agent_metrics:
-        lines.append(m.to_prometheus_error_rate_line())
-
-    lines.append("")
-    lines.append("# HELP autobot_agent_avg_duration_ms Average task duration in ms")
-    lines.append("# TYPE autobot_agent_avg_duration_ms gauge")
-    for m in agent_metrics:
-        lines.append(m.to_prometheus_duration_line())
+    # Build metrics using helper functions (Issue #620)
+    lines = _build_cost_metrics_lines(cost_summary)
+    lines.extend(_build_agent_metrics_lines(agent_metrics))
 
     prometheus_output = "\n".join(lines) + "\n"
 
