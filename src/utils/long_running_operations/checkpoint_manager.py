@@ -10,7 +10,7 @@ Handles checkpoint save/load/resume functionality.
 
 import json
 import logging
-import pickle
+import pickle  # nosec B403 - pickle used for internal checkpoint serialization only
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -122,7 +122,7 @@ class OperationCheckpointManager:
                     redis_key = keys[0]
                     data = await self.redis_client.hget(redis_key, "data")
                     if data:
-                        checkpoint_data = pickle.loads(data)
+                        checkpoint_data = pickle.loads(data)  # nosec B301
                         return OperationCheckpoint(
                             checkpoint_id=checkpoint_data["checkpoint_id"],
                             operation_id=checkpoint_data["operation_id"],
@@ -154,11 +154,106 @@ class OperationCheckpointManager:
 
         return None
 
-    async def list_checkpoints(
+    def _parse_checkpoint_data(
+        self, checkpoint_data: Dict[str, Any]
+    ) -> OperationCheckpoint:
+        """
+        Parse checkpoint data dict into OperationCheckpoint object.
+
+        Issue #620: Extracted from list_checkpoints to reduce duplication.
+
+        Args:
+            checkpoint_data: Dictionary containing checkpoint data
+
+        Returns:
+            OperationCheckpoint object
+        """
+        return OperationCheckpoint(
+            checkpoint_id=checkpoint_data["checkpoint_id"],
+            operation_id=checkpoint_data["operation_id"],
+            checkpoint_time=datetime.fromisoformat(checkpoint_data["checkpoint_time"]),
+            progress_percent=checkpoint_data["progress_percent"],
+            state_data=checkpoint_data["state_data"],
+            metadata=checkpoint_data.get("metadata", {}),
+        )
+
+    async def _list_checkpoints_from_redis(
         self, operation_id: str
     ) -> List[OperationCheckpoint]:
         """
+        List checkpoints from Redis storage.
+
+        Issue #620: Extracted from list_checkpoints to reduce function length.
+
+        Args:
+            operation_id: The operation ID
+
+        Returns:
+            List of checkpoints from Redis
+        """
+        checkpoints = []
+        if not self.redis_client:
+            return checkpoints
+
+        try:
+            keys = await self.redis_client.keys(f"checkpoint:{operation_id}:*")
+            # Issue #397: Fix N+1 query pattern - use pipeline for batch retrieval
+            if keys:
+                pipe = self.redis_client.pipeline()
+                for key in keys:
+                    pipe.hget(key, "data")
+                results = await pipe.execute()
+
+                for data in results:
+                    if data:
+                        checkpoint_data = pickle.loads(data)  # nosec B301
+                        checkpoints.append(self._parse_checkpoint_data(checkpoint_data))
+        except Exception as e:
+            logger.warning("Failed to list checkpoints from Redis: %s", e)
+
+        return checkpoints
+
+    async def _list_checkpoints_from_files(
+        self,
+        operation_id: str,
+        existing_ids: set,
+    ) -> List[OperationCheckpoint]:
+        """
+        List checkpoints from file storage, avoiding duplicates.
+
+        Issue #620: Extracted from list_checkpoints to reduce function length.
+
+        Args:
+            operation_id: The operation ID
+            existing_ids: Set of checkpoint IDs already found (to avoid duplicates)
+
+        Returns:
+            List of checkpoints from file storage
+        """
+        checkpoints = []
+
+        for checkpoint_file in self.checkpoint_dir.glob("*.json"):
+            try:
+                async with aiofiles.open(checkpoint_file, "r", encoding="utf-8") as f:
+                    checkpoint_data = json.loads(await f.read())
+                    if checkpoint_data.get("operation_id") == operation_id:
+                        checkpoint_id = checkpoint_data["checkpoint_id"]
+                        if checkpoint_id not in existing_ids:
+                            checkpoints.append(
+                                self._parse_checkpoint_data(checkpoint_data)
+                            )
+            except Exception as e:
+                logger.warning(
+                    "Failed to read checkpoint file %s: %s", checkpoint_file, e
+                )
+
+        return checkpoints
+
+    async def list_checkpoints(self, operation_id: str) -> List[OperationCheckpoint]:
+        """
         List all checkpoints for an operation.
+
+        Issue #620: Refactored to use helper methods.
 
         Args:
             operation_id: The operation ID
@@ -166,67 +261,15 @@ class OperationCheckpointManager:
         Returns:
             List of checkpoints sorted by time
         """
-        checkpoints = []
+        # Get checkpoints from Redis
+        checkpoints = await self._list_checkpoints_from_redis(operation_id)
 
-        # Check Redis first
-        if self.redis_client:
-            try:
-                keys = await self.redis_client.keys(f"checkpoint:{operation_id}:*")
-                # Issue #397: Fix N+1 query pattern - use pipeline for batch retrieval
-                if keys:
-                    pipe = self.redis_client.pipeline()
-                    for key in keys:
-                        pipe.hget(key, "data")
-                    results = await pipe.execute()
-
-                    for data in results:
-                        if data:
-                            checkpoint_data = pickle.loads(data)
-                            checkpoints.append(
-                                OperationCheckpoint(
-                                    checkpoint_id=checkpoint_data["checkpoint_id"],
-                                    operation_id=checkpoint_data["operation_id"],
-                                    checkpoint_time=datetime.fromisoformat(
-                                        checkpoint_data["checkpoint_time"]
-                                    ),
-                                    progress_percent=checkpoint_data["progress_percent"],
-                                    state_data=checkpoint_data["state_data"],
-                                    metadata=checkpoint_data.get("metadata", {}),
-                                )
-                            )
-            except Exception as e:
-                logger.warning("Failed to list checkpoints from Redis: %s", e)
-
-        # Also check file storage
-        for checkpoint_file in self.checkpoint_dir.glob("*.json"):
-            try:
-                async with aiofiles.open(
-                    checkpoint_file, "r", encoding="utf-8"
-                ) as f:
-                    checkpoint_data = json.loads(await f.read())
-                    if checkpoint_data.get("operation_id") == operation_id:
-                        checkpoint = OperationCheckpoint(
-                            checkpoint_id=checkpoint_data["checkpoint_id"],
-                            operation_id=checkpoint_data["operation_id"],
-                            checkpoint_time=datetime.fromisoformat(
-                                checkpoint_data["checkpoint_time"]
-                            ),
-                            progress_percent=checkpoint_data["progress_percent"],
-                            state_data=checkpoint_data["state_data"],
-                            metadata=checkpoint_data.get("metadata", {}),
-                        )
-                        # Avoid duplicates
-                        if not any(
-                            c.checkpoint_id == checkpoint.checkpoint_id
-                            for c in checkpoints
-                        ):
-                            checkpoints.append(checkpoint)
-            except Exception as e:
-                logger.warning(
-                    "Failed to read checkpoint file %s: %s",
-                    checkpoint_file,
-                    e,
-                )
+        # Get checkpoints from file storage (avoiding duplicates)
+        existing_ids = {c.checkpoint_id for c in checkpoints}
+        file_checkpoints = await self._list_checkpoints_from_files(
+            operation_id, existing_ids
+        )
+        checkpoints.extend(file_checkpoints)
 
         # Sort by checkpoint time
         checkpoints.sort(key=lambda x: x.checkpoint_time)
