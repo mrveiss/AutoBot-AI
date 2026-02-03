@@ -21,8 +21,6 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 
 class TestVMConfig:
     """Tests for VMConfig class."""
@@ -65,8 +63,9 @@ class TestPortConfig:
         """Test that default ports are correct."""
         from src.config.ssot_config import PortConfig
 
+        # Clear env AND disable .env file loading to test true defaults
         with patch.dict(os.environ, {}, clear=True):
-            config = PortConfig()
+            config = PortConfig(_env_file=None)
             assert config.backend == 8001
             assert config.frontend == 5173
             assert config.redis == 6379
