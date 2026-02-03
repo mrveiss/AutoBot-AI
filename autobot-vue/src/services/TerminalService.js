@@ -182,6 +182,9 @@ class TerminalService {
    * @param {Function} callbacks.onPromptChange - Called when prompt changes
    * @param {Function} callbacks.onStatusChange - Called when connection status changes
    * @param {Function} callbacks.onError - Called when an error occurs
+   * @param {Function} callbacks.onTabCompletion - Called when tab completion results arrive (Issue #749)
+   * @param {Function} callbacks.onHistory - Called when history data arrives (Issue #749)
+   * @param {Function} callbacks.onHistorySearch - Called when history search results arrive (Issue #749)
    */
   async connect(sessionId, callbacks = {}) {
     if (this.connections.has(sessionId)) {
@@ -395,6 +398,30 @@ class TerminalService {
           }
           break;
 
+        // Issue #749: Handle tab completion response from backend
+        case 'tab_completion':
+          this.triggerCallback(sessionId, 'onTabCompletion', {
+            completions: message.completions || [],
+            prefix: message.prefix || '',
+            common_prefix: message.common_prefix || ''
+          });
+          break;
+
+        // Issue #749: Handle history response from backend
+        case 'history':
+          this.triggerCallback(sessionId, 'onHistory', {
+            commands: message.commands || []
+          });
+          break;
+
+        // Issue #749: Handle history search response from backend
+        case 'history_search':
+          this.triggerCallback(sessionId, 'onHistorySearch', {
+            matches: message.matches || [],
+            query: message.query || ''
+          });
+          break;
+
         default:
           logger.warn(`Unknown message type: ${message.type}`, message);
       }
@@ -465,6 +492,100 @@ class TerminalService {
     } catch (error) {
       logger.error('[STDIN] Failed to send stdin:', error);
       this.triggerCallback(sessionId, 'onError', 'Failed to send stdin');
+      return false;
+    }
+  }
+
+  /**
+   * Send tab completion request to backend (Issue #749)
+   * @param {string} sessionId - Session ID
+   * @param {string} text - Current command line text
+   * @param {number} cursor - Cursor position in the text
+   * @param {string} cwd - Current working directory (optional)
+   * @returns {boolean} Whether the request was sent successfully
+   */
+  sendTabCompletion(sessionId, text, cursor, cwd = null) {
+    const connection = this.connections.get(sessionId);
+    if (!connection || connection.readyState !== WebSocket.OPEN) {
+      logger.debug(`[TAB] No active connection for session ${sessionId}`);
+      return false;
+    }
+
+    try {
+      const message = {
+        type: 'tab_completion',
+        text: text,
+        cursor: cursor
+      };
+
+      // Only include cwd if provided
+      if (cwd) {
+        message.cwd = cwd;
+      }
+
+      connection.send(JSON.stringify(message));
+      logger.debug(`[TAB] Sent tab completion request: text="${text}", cursor=${cursor}`);
+      return true;
+    } catch (error) {
+      logger.error('[TAB] Failed to send tab completion:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Request command history from backend (Issue #749)
+   * @param {string} sessionId - Session ID
+   * @param {number} limit - Maximum number of history entries to retrieve (default: 100)
+   * @returns {boolean} Whether the request was sent successfully
+   */
+  sendHistoryGet(sessionId, limit = 100) {
+    const connection = this.connections.get(sessionId);
+    if (!connection || connection.readyState !== WebSocket.OPEN) {
+      logger.debug(`[HISTORY] No active connection for session ${sessionId}`);
+      return false;
+    }
+
+    try {
+      const message = {
+        type: 'history_get',
+        limit: limit
+      };
+
+      connection.send(JSON.stringify(message));
+      logger.debug(`[HISTORY] Sent history get request: limit=${limit}`);
+      return true;
+    } catch (error) {
+      logger.error('[HISTORY] Failed to send history get:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Search command history on backend (Issue #749)
+   * @param {string} sessionId - Session ID
+   * @param {string} query - Search query string
+   * @param {number} limit - Maximum number of results (default: 50)
+   * @returns {boolean} Whether the request was sent successfully
+   */
+  sendHistorySearch(sessionId, query, limit = 50) {
+    const connection = this.connections.get(sessionId);
+    if (!connection || connection.readyState !== WebSocket.OPEN) {
+      logger.debug(`[HISTORY] No active connection for session ${sessionId}`);
+      return false;
+    }
+
+    try {
+      const message = {
+        type: 'history_search',
+        query: query,
+        limit: limit
+      };
+
+      connection.send(JSON.stringify(message));
+      logger.debug(`[HISTORY] Sent history search request: query="${query}", limit=${limit}`);
+      return true;
+    } catch (error) {
+      logger.error('[HISTORY] Failed to send history search:', error);
       return false;
     }
   }
@@ -666,6 +787,9 @@ export function useTerminalService() {
     // Service instance methods
     sendInput: terminalService.sendInput.bind(terminalService),
     sendStdin: terminalService.sendStdin.bind(terminalService),  // Issue #33
+    sendTabCompletion: terminalService.sendTabCompletion.bind(terminalService),  // Issue #749
+    sendHistoryGet: terminalService.sendHistoryGet.bind(terminalService),  // Issue #749
+    sendHistorySearch: terminalService.sendHistorySearch.bind(terminalService),  // Issue #749
     sendSignal: terminalService.sendSignal.bind(terminalService),
     resize: terminalService.resize.bind(terminalService),
     // Note: connect, disconnect, closeSession are defined below with reactive updates

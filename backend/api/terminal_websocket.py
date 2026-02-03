@@ -6,6 +6,7 @@ Handles bi-directional WebSocket communication for interactive terminal sessions
 import asyncio
 import json
 import logging
+import os
 from typing import Any, Dict
 
 from fastapi import WebSocket, WebSocketDisconnect
@@ -13,11 +14,17 @@ from starlette.websockets import WebSocketState
 
 from src.agents.system_command_agent import SystemCommandAgent
 from src.event_manager import event_manager
+from src.services.terminal_completion_service import TerminalCompletionService
+from src.services.terminal_history_service import TerminalHistoryService
 
 logger = logging.getLogger(__name__)
 
 # Global instance of system command agent
 system_command_agent = SystemCommandAgent()
+
+# Terminal completion and history services
+completion_service = TerminalCompletionService()
+history_service = TerminalHistoryService()
 
 
 class TerminalWebSocketHandler:
@@ -149,6 +156,11 @@ class TerminalWebSocketHandler:
             await system_command_agent.send_input_to_session(
                 chat_id=chat_id, user_input=user_input, is_password=is_password
             )
+            # Record command to history (Issue #749)
+            if user_input.strip() and not is_password:
+                asyncio.create_task(
+                    history_service.add_command(chat_id, user_input.strip())
+                )
         except ValueError as e:
             await self._send_error_to_chat(chat_id, str(e))
 
@@ -187,6 +199,64 @@ class TerminalWebSocketHandler:
             chat_id, {"type": "sessions", "sessions": sessions}
         )
 
+    async def _handle_tab_completion(self, chat_id: str, data: Dict[str, Any]) -> None:
+        """Handle tab_completion message. Issue #749."""
+        text = data.get("text", "")
+        cursor = data.get("cursor", len(text))
+        cwd = data.get("cwd", os.path.expanduser("~"))
+        if not os.path.isdir(cwd):
+            cwd = os.path.expanduser("~")
+
+        try:
+            result = await completion_service.get_completions(text, cursor, cwd)
+            await self._send_message_to_chat(
+                chat_id,
+                {
+                    "type": "tab_completion",
+                    "completions": result.completions,
+                    "prefix": result.prefix,
+                    "common_prefix": result.common_prefix,
+                },
+            )
+        except Exception as e:
+            logger.error("Tab completion error: %s", e)
+            await self._send_message_to_chat(
+                chat_id, {"type": "tab_completion", "completions": [], "error": str(e)}
+            )
+
+    async def _handle_history_get(self, chat_id: str, data: Dict[str, Any]) -> None:
+        """Handle history_get message. Issue #749."""
+        limit = min(max(1, data.get("limit", 100)), 1000)
+        user_id = data.get("user_id", chat_id)  # Default to chat_id as user identifier
+
+        try:
+            commands = await history_service.get_history(user_id, limit=limit)
+            await self._send_message_to_chat(
+                chat_id, {"type": "history", "commands": commands}
+            )
+        except Exception as e:
+            logger.error("History get error: %s", e)
+            await self._send_message_to_chat(
+                chat_id, {"type": "history", "commands": [], "error": str(e)}
+            )
+
+    async def _handle_history_search(self, chat_id: str, data: Dict[str, Any]) -> None:
+        """Handle history_search message. Issue #749."""
+        query = data.get("query", "")
+        user_id = data.get("user_id", chat_id)
+        limit = min(max(1, data.get("limit", 50)), 1000)
+
+        try:
+            matches = await history_service.search_history(user_id, query, limit=limit)
+            await self._send_message_to_chat(
+                chat_id, {"type": "history_search", "matches": matches, "query": query}
+            )
+        except Exception as e:
+            logger.error("History search error: %s", e)
+            await self._send_message_to_chat(
+                chat_id, {"type": "history_search", "matches": [], "error": str(e)}
+            )
+
     async def _process_client_message(self, chat_id: str, data: Dict[str, Any]):
         """
         Process messages from the client.
@@ -209,6 +279,12 @@ class TerminalWebSocketHandler:
             await self._handle_resize(chat_id, data)
         elif msg_type == "get_sessions":
             await self._handle_get_sessions(chat_id)
+        elif msg_type == "tab_completion":
+            await self._handle_tab_completion(chat_id, data)
+        elif msg_type == "history_get":
+            await self._handle_history_get(chat_id, data)
+        elif msg_type == "history_search":
+            await self._handle_history_search(chat_id, data)
         else:
             await self._send_error_to_chat(chat_id, f"Unknown message type: {msg_type}")
 
