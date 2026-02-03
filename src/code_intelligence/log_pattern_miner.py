@@ -298,9 +298,7 @@ class LogParser:
         # Try standard AutoBot format first
         match = cls.STANDARD_PATTERN.match(line)
         if match:
-            return cls._create_entry_from_standard(
-                match, line, line_number, file_path
-            )
+            return cls._create_entry_from_standard(match, line, line_number, file_path)
 
         # Try Python logging format
         match = cls.PYTHON_PATTERN.match(line)
@@ -548,8 +546,7 @@ class LogPatternMiner:
     def _extract_error_patterns(self) -> None:
         """Extract recurring error patterns."""
         error_entries = [
-            e for e in self.entries
-            if e.level in _ERROR_CRITICAL_WARNING_LEVELS
+            e for e in self.entries if e.level in _ERROR_CRITICAL_WARNING_LEVELS
         ]
 
         if not error_entries:
@@ -568,26 +565,29 @@ class LogPatternMiner:
             if len(entries) >= self.min_pattern_occurrences:
                 affected_components = list(set(e.logger_name for e in entries))
 
-                self.patterns.append(LogPattern(
-                    id=f"ERR-{len(self.patterns) + 1}",
-                    pattern_type=PatternType.RECURRING_ERROR,
-                    description=f"Recurring error: {normalized_msg[:100]}",
-                    occurrences=len(entries),
-                    first_seen=entries[0].timestamp,
-                    last_seen=entries[-1].timestamp,
-                    affected_components=affected_components,
-                    sample_entries=entries[:5],
-                    severity=entries[0].level,
-                    extra_data={
-                        "normalized_message": normalized_msg,
-                        "unique_messages": len(set(e.message for e in entries)),
-                    },
-                ))
+                self.patterns.append(
+                    LogPattern(
+                        id=f"ERR-{len(self.patterns) + 1}",
+                        pattern_type=PatternType.RECURRING_ERROR,
+                        description=f"Recurring error: {normalized_msg[:100]}",
+                        occurrences=len(entries),
+                        first_seen=entries[0].timestamp,
+                        last_seen=entries[-1].timestamp,
+                        affected_components=affected_components,
+                        sample_entries=entries[:5],
+                        severity=entries[0].level,
+                        extra_data={
+                            "normalized_message": normalized_msg,
+                            "unique_messages": len(set(e.message for e in entries)),
+                        },
+                    )
+                )
 
     def _extract_performance_patterns(self) -> None:
         """Extract performance bottleneck patterns."""
         slow_requests = [
-            e for e in self.entries
+            e
+            for e in self.entries
             if e.duration_ms and e.duration_ms > self.slow_request_threshold_ms
         ]
 
@@ -607,23 +607,25 @@ class LogPatternMiner:
                 durations = [e.duration_ms for e in entries if e.duration_ms]
                 avg_duration = mean(durations) if durations else 0
 
-                self.patterns.append(LogPattern(
-                    id=f"PERF-{len(self.patterns) + 1}",
-                    pattern_type=PatternType.PERFORMANCE_BOTTLENECK,
-                    description=f"Slow endpoint: {endpoint} (avg: {avg_duration:.1f}ms)",
-                    occurrences=len(entries),
-                    first_seen=entries[0].timestamp,
-                    last_seen=entries[-1].timestamp,
-                    affected_components=[endpoint],
-                    sample_entries=entries[:5],
-                    severity=LogLevel.WARNING,
-                    extra_data={
-                        "avg_duration_ms": round(avg_duration, 2),
-                        "max_duration_ms": max(durations) if durations else 0,
-                        "min_duration_ms": min(durations) if durations else 0,
-                        "threshold_ms": self.slow_request_threshold_ms,
-                    },
-                ))
+                self.patterns.append(
+                    LogPattern(
+                        id=f"PERF-{len(self.patterns) + 1}",
+                        pattern_type=PatternType.PERFORMANCE_BOTTLENECK,
+                        description=f"Slow endpoint: {endpoint} (avg: {avg_duration:.1f}ms)",
+                        occurrences=len(entries),
+                        first_seen=entries[0].timestamp,
+                        last_seen=entries[-1].timestamp,
+                        affected_components=[endpoint],
+                        sample_entries=entries[:5],
+                        severity=LogLevel.WARNING,
+                        extra_data={
+                            "avg_duration_ms": round(avg_duration, 2),
+                            "max_duration_ms": max(durations) if durations else 0,
+                            "min_duration_ms": min(durations) if durations else 0,
+                            "threshold_ms": self.slow_request_threshold_ms,
+                        },
+                    )
+                )
 
     def _extract_api_patterns(self) -> None:
         """Extract API usage patterns."""
@@ -656,24 +658,30 @@ class LogPatternMiner:
                 durations = stats["durations"]
                 error_count = len([c for c in stats["status_codes"] if c >= 400])
 
-                self.patterns.append(LogPattern(
-                    id=f"API-{len(self.patterns) + 1}",
-                    pattern_type=PatternType.API_USAGE,
-                    description=f"High-traffic endpoint: {endpoint}",
-                    occurrences=stats["count"],
-                    first_seen=stats["entries"][0].timestamp,
-                    last_seen=stats["entries"][-1].timestamp,
-                    affected_components=[endpoint.split()[1] if " " in endpoint else endpoint],
-                    sample_entries=stats["entries"][:3],
-                    severity=LogLevel.WARNING if error_count > 0 else LogLevel.INFO,
-                    extra_data={
-                        "avg_duration_ms": round(mean(durations), 2) if durations else 0,
-                        "error_count": error_count,
-                        "success_rate": round(
-                            (stats["count"] - error_count) / stats["count"] * 100, 1
-                        ),
-                    },
-                ))
+                self.patterns.append(
+                    LogPattern(
+                        id=f"API-{len(self.patterns) + 1}",
+                        pattern_type=PatternType.API_USAGE,
+                        description=f"High-traffic endpoint: {endpoint}",
+                        occurrences=stats["count"],
+                        first_seen=stats["entries"][0].timestamp,
+                        last_seen=stats["entries"][-1].timestamp,
+                        affected_components=[
+                            endpoint.split()[1] if " " in endpoint else endpoint
+                        ],
+                        sample_entries=stats["entries"][:3],
+                        severity=LogLevel.WARNING if error_count > 0 else LogLevel.INFO,
+                        extra_data={
+                            "avg_duration_ms": round(mean(durations), 2)
+                            if durations
+                            else 0,
+                            "error_count": error_count,
+                            "success_rate": round(
+                                (stats["count"] - error_count) / stats["count"] * 100, 1
+                            ),
+                        },
+                    )
+                )
 
     def _extract_session_flows(self) -> None:
         """Extract user session flow patterns."""
@@ -708,25 +716,27 @@ class LogPatternMiner:
         # Create session flow patterns for sessions with errors
         error_sessions = [s for s in self.sessions.values() if s.errors]
         if len(error_sessions) >= self.min_pattern_occurrences:
-            self.patterns.append(LogPattern(
-                id=f"SESS-{len(self.patterns) + 1}",
-                pattern_type=PatternType.SESSION_FLOW,
-                description=f"Sessions with errors: {len(error_sessions)} sessions",
-                occurrences=len(error_sessions),
-                first_seen=min(s.start_time for s in error_sessions),
-                last_seen=max(s.end_time or s.start_time for s in error_sessions),
-                affected_components=list(set(
-                    e for s in error_sessions for e in s.endpoints[:3]
-                )),
-                severity=LogLevel.WARNING,
-                extra_data={
-                    "total_sessions": len(self.sessions),
-                    "error_session_count": len(error_sessions),
-                    "error_rate": round(
-                        len(error_sessions) / len(self.sessions) * 100, 1
+            self.patterns.append(
+                LogPattern(
+                    id=f"SESS-{len(self.patterns) + 1}",
+                    pattern_type=PatternType.SESSION_FLOW,
+                    description=f"Sessions with errors: {len(error_sessions)} sessions",
+                    occurrences=len(error_sessions),
+                    first_seen=min(s.start_time for s in error_sessions),
+                    last_seen=max(s.end_time or s.start_time for s in error_sessions),
+                    affected_components=list(
+                        set(e for s in error_sessions for e in s.endpoints[:3])
                     ),
-                },
-            ))
+                    severity=LogLevel.WARNING,
+                    extra_data={
+                        "total_sessions": len(self.sessions),
+                        "error_session_count": len(error_sessions),
+                        "error_rate": round(
+                            len(error_sessions) / len(self.sessions) * 100, 1
+                        ),
+                    },
+                )
+            )
 
     def _detect_anomalies(self) -> None:
         """Detect anomalies in log patterns."""
@@ -745,21 +755,23 @@ class LogPatternMiner:
                         anomaly_type = (
                             AnomalyType.SPIKE if deviation > 0 else AnomalyType.DROP
                         )
-                        self.anomalies.append(Anomaly(
-                            id=f"ANOM-{len(self.anomalies) + 1}",
-                            anomaly_type=anomaly_type,
-                            description=(
-                                f"Unusual duration: {entry.duration_ms:.1f}ms "
-                                f"(expected: {avg:.1f}ms)"
-                            ),
-                            detected_at=entry.timestamp,
-                            severity=LogLevel.WARNING,
-                            metric_name="request_duration",
-                            expected_value=avg,
-                            actual_value=entry.duration_ms,
-                            deviation_percent=abs(deviation) * 100,
-                            related_entries=[entry],
-                        ))
+                        self.anomalies.append(
+                            Anomaly(
+                                id=f"ANOM-{len(self.anomalies) + 1}",
+                                anomaly_type=anomaly_type,
+                                description=(
+                                    f"Unusual duration: {entry.duration_ms:.1f}ms "
+                                    f"(expected: {avg:.1f}ms)"
+                                ),
+                                detected_at=entry.timestamp,
+                                severity=LogLevel.WARNING,
+                                metric_name="request_duration",
+                                expected_value=avg,
+                                actual_value=entry.duration_ms,
+                                deviation_percent=abs(deviation) * 100,
+                                related_entries=[entry],
+                            )
+                        )
 
         # Detect error rate anomalies by hour
         hourly_errors: dict[str, int] = defaultdict(int)
@@ -785,17 +797,19 @@ class LogPatternMiner:
                     rate = hourly_errors[hour] / total * 100 if total > 0 else 0
                     deviation = (rate - avg_rate) / std_rate
                     if deviation > self.anomaly_deviation_threshold:
-                        self.anomalies.append(Anomaly(
-                            id=f"ANOM-{len(self.anomalies) + 1}",
-                            anomaly_type=AnomalyType.SPIKE,
-                            description=f"High error rate: {rate:.1f}% at {hour}",
-                            detected_at=datetime.strptime(hour, "%Y-%m-%d %H:00"),
-                            severity=LogLevel.ERROR,
-                            metric_name="error_rate",
-                            expected_value=avg_rate,
-                            actual_value=rate,
-                            deviation_percent=abs(deviation) * 100,
-                        ))
+                        self.anomalies.append(
+                            Anomaly(
+                                id=f"ANOM-{len(self.anomalies) + 1}",
+                                anomaly_type=AnomalyType.SPIKE,
+                                description=f"High error rate: {rate:.1f}% at {hour}",
+                                detected_at=datetime.strptime(hour, "%Y-%m-%d %H:00"),
+                                severity=LogLevel.ERROR,
+                                metric_name="error_rate",
+                                expected_value=avg_rate,
+                                actual_value=rate,
+                                deviation_percent=abs(deviation) * 100,
+                            )
+                        )
 
     def _normalize_error_message(self, message: str) -> str:
         """Normalize error message by removing variable parts."""
@@ -812,9 +826,7 @@ class LogPatternMiner:
         """Calculate log statistics."""
         level_counts = Counter(e.level.value for e in self.entries)
         logger_counts = Counter(e.logger_name for e in self.entries)
-        hourly_counts = Counter(
-            e.timestamp.strftime("%H:00") for e in self.entries
-        )
+        hourly_counts = Counter(e.timestamp.strftime("%H:00") for e in self.entries)
 
         durations = [e.duration_ms for e in self.entries if e.duration_ms]
 
@@ -822,24 +834,24 @@ class LogPatternMiner:
             "by_level": dict(level_counts),
             "by_logger": dict(logger_counts.most_common(10)),
             "by_hour": dict(sorted(hourly_counts.items())),
-            "total_errors": level_counts.get("error", 0) + level_counts.get("critical", 0),
+            "total_errors": level_counts.get("error", 0)
+            + level_counts.get("critical", 0),
             "total_warnings": level_counts.get("warning", 0),
             "avg_duration_ms": round(mean(durations), 2) if durations else 0,
             "max_duration_ms": max(durations) if durations else 0,
             "min_duration_ms": min(durations) if durations else 0,
             "unique_sessions": len(self.sessions),
-            "unique_endpoints": len(set(e.endpoint for e in self.entries if e.endpoint)),
+            "unique_endpoints": len(
+                set(e.endpoint for e in self.entries if e.endpoint)
+            ),
         }
 
     def _generate_summary(self) -> dict[str, Any]:
         """Generate analysis summary."""
         critical_patterns = [
-            p for p in self.patterns
-            if p.severity in _ERROR_CRITICAL_LEVELS
+            p for p in self.patterns if p.severity in _ERROR_CRITICAL_LEVELS
         ]
-        warning_patterns = [
-            p for p in self.patterns if p.severity == LogLevel.WARNING
-        ]
+        warning_patterns = [p for p in self.patterns if p.severity == LogLevel.WARNING]
 
         return {
             "total_patterns": len(self.patterns),
@@ -869,8 +881,7 @@ class LogPatternMiner:
 
         # Deduct for errors
         error_rate = sum(
-            1 for e in self.entries
-            if e.level in _ERROR_CRITICAL_LEVELS
+            1 for e in self.entries if e.level in _ERROR_CRITICAL_LEVELS
         ) / len(self.entries)
         score -= min(30, error_rate * 100)
 
@@ -882,7 +893,8 @@ class LogPatternMiner:
 
         # Deduct for slow requests
         slow_rate = sum(
-            1 for e in self.entries
+            1
+            for e in self.entries
             if e.duration_ms and e.duration_ms > self.slow_request_threshold_ms
         ) / len(self.entries)
         score -= min(15, slow_rate * 100)

@@ -15,8 +15,8 @@ from fastapi.responses import JSONResponse
 
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
-from ..storage import get_redis_connection, get_code_collection
-from ..scanner import indexing_tasks, _tasks_sync_lock
+from ..scanner import _tasks_sync_lock, indexing_tasks
+from ..storage import get_code_collection, get_redis_connection
 from .shared import _in_memory_storage
 
 logger = logging.getLogger(__name__)
@@ -28,11 +28,25 @@ def _parse_stats_metadata(stats_metadata: dict) -> dict:
     """Parse stats from ChromaDB metadata. (Issue #315 - extracted)"""
     stats = {}
     numeric_fields = [
-        "total_files", "python_files", "javascript_files", "typescript_files",
-        "vue_files", "css_files", "html_files", "config_files", "doc_files",
-        "other_code_files", "other_files", "total_lines", "total_functions",
-        "total_classes", "code_lines", "comment_lines", "docstring_lines",
-        "documentation_lines", "blank_lines",
+        "total_files",
+        "python_files",
+        "javascript_files",
+        "typescript_files",
+        "vue_files",
+        "css_files",
+        "html_files",
+        "config_files",
+        "doc_files",
+        "other_code_files",
+        "other_files",
+        "total_lines",
+        "total_functions",
+        "total_classes",
+        "code_lines",
+        "comment_lines",
+        "docstring_lines",
+        "documentation_lines",
+        "blank_lines",
     ]
     for field in numeric_fields:
         if field in stats_metadata:
@@ -88,6 +102,7 @@ def _is_task_stale(task_info: dict) -> bool:
 
     try:
         from datetime import datetime
+
         start_time = datetime.fromisoformat(started_at)
         elapsed = (datetime.now() - start_time).total_seconds()
         return elapsed > _STALE_TASK_TIMEOUT_SECONDS
@@ -113,7 +128,8 @@ def _get_active_indexing_task() -> Optional[dict]:
                 if _is_task_stale(task_info):
                     logger.warning(
                         "Ignoring stale indexing task %s (started: %s)",
-                        task_id, task_info.get("started_at")
+                        task_id,
+                        task_info.get("started_at"),
                     )
                     continue
 
@@ -146,12 +162,14 @@ def _build_indexing_response(
     Returns:
         JSONResponse with indexing status
     """
-    return JSONResponse({
-        "status": "indexing",
-        "message": message,
-        "indexing": active_task,
-        "stats": stats,
-    })
+    return JSONResponse(
+        {
+            "status": "indexing",
+            "message": message,
+            "indexing": active_task,
+            "stats": stats,
+        }
+    )
 
 
 @with_error_handling(
@@ -392,25 +410,31 @@ async def get_embedding_stats() -> JSONResponse:
         # - False if only fallback was used
         npu_available = None if total == 0 else npu_count > 0
 
-        return JSONResponse({
-            "status": "success",
-            "embedding_stats": stats,
-            "npu_available": npu_available,
-        })
+        return JSONResponse(
+            {
+                "status": "success",
+                "embedding_stats": stats,
+                "npu_available": npu_available,
+            }
+        )
     except ImportError as e:
         logger.warning("NPU embeddings module not available: %s", e)
-        return JSONResponse({
-            "status": "unavailable",
-            "message": "NPU embeddings module not loaded",
-            "embedding_stats": None,
-        })
+        return JSONResponse(
+            {
+                "status": "unavailable",
+                "message": "NPU embeddings module not loaded",
+                "embedding_stats": None,
+            }
+        )
     except Exception as e:
         logger.error("Failed to get embedding stats: %s", e)
-        return JSONResponse({
-            "status": "error",
-            "message": str(e),
-            "embedding_stats": None,
-        })
+        return JSONResponse(
+            {
+                "status": "error",
+                "message": str(e),
+                "embedding_stats": None,
+            }
+        )
 
 
 @with_error_handling(
@@ -433,22 +457,28 @@ async def reset_embedding_stats_endpoint() -> JSONResponse:
         from ..npu_embeddings import reset_embedding_stats
 
         await reset_embedding_stats()
-        return JSONResponse({
-            "status": "success",
-            "message": "Embedding statistics reset successfully",
-        })
+        return JSONResponse(
+            {
+                "status": "success",
+                "message": "Embedding statistics reset successfully",
+            }
+        )
     except ImportError as e:
         logger.warning("NPU embeddings module not available: %s", e)
-        return JSONResponse({
-            "status": "unavailable",
-            "message": "NPU embeddings module not loaded",
-        })
+        return JSONResponse(
+            {
+                "status": "unavailable",
+                "message": "NPU embeddings module not loaded",
+            }
+        )
     except Exception as e:
         logger.error("Failed to reset embedding stats: %s", e)
-        return JSONResponse({
-            "status": "error",
-            "message": str(e),
-        })
+        return JSONResponse(
+            {
+                "status": "error",
+                "message": str(e),
+            }
+        )
 
 
 @with_error_handling(
@@ -469,18 +499,22 @@ async def get_codebase_problems(problem_type: Optional[str] = None):
             all_problems = _fetch_problems_from_chromadb(code_collection, problem_type)
             logger.info("Retrieved %s problems from ChromaDB", len(all_problems))
         except Exception as chroma_error:
-            logger.warning("ChromaDB query failed: %s, falling back to Redis", chroma_error)
+            logger.warning(
+                "ChromaDB query failed: %s, falling back to Redis", chroma_error
+            )
             code_collection = None
 
     # Fallback to Redis if ChromaDB fails
     if not code_collection:
         all_problems, success = await _fetch_problems_from_redis(problem_type)
         if not success:
-            return JSONResponse({
-                "status": "no_data",
-                "message": "No codebase data found. Run indexing first.",
-                "problems": [],
-            })
+            return JSONResponse(
+                {
+                    "status": "no_data",
+                    "message": "No codebase data found. Run indexing first.",
+                    "problems": [],
+                }
+            )
         storage_type = "redis"
 
     # Sort by severity (high, medium, low)
