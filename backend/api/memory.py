@@ -365,6 +365,89 @@ async def _get_entity_graph_sample(memory_graph: AutoBotMemoryGraph) -> Dict:
     }
 
 
+def _build_related_entities_response(
+    request_id: str,
+    entity_id: str,
+    entity_name: str,
+    related: List[Dict],
+    relation_type: Optional[str],
+    direction: str,
+    max_depth: int,
+) -> JSONResponse:
+    """
+    Build response for get_related_entities operation.
+
+    Issue #620: Extracted from get_related_entities.
+
+    Args:
+        request_id: Request tracking ID
+        entity_id: Source entity UUID
+        entity_name: Source entity name
+        related: List of related entities
+        relation_type: Filter applied (if any)
+        direction: Direction filter
+        max_depth: Traversal depth used
+
+    Returns:
+        JSONResponse with related entities data
+    """
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "data": {
+                "entity_id": entity_id,
+                "entity_name": entity_name,
+                "related_entities": related,
+                "total_count": len(related),
+                "filters": {
+                    "relation_type": relation_type,
+                    "direction": direction,
+                    "max_depth": max_depth,
+                },
+            },
+            "request_id": request_id,
+        },
+    )
+
+
+def _build_list_entities_response(
+    request_id: str,
+    entities: List[Dict],
+    entity_type: Optional[str],
+    limit: int,
+) -> JSONResponse:
+    """
+    Build response for list_all_entities operation.
+
+    Issue #620: Extracted from list_all_entities.
+
+    Args:
+        request_id: Request tracking ID
+        entities: List of entities found
+        entity_type: Type filter applied (if any)
+        limit: Limit applied
+
+    Returns:
+        JSONResponse with entities list
+    """
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "data": {
+                "entities": entities,
+                "total_count": len(entities),
+                "filters": {
+                    "entity_type": entity_type,
+                    "limit": limit,
+                },
+            },
+            "request_id": request_id,
+        },
+    )
+
+
 # ====================================================================
 # Entity Management Endpoints
 # ====================================================================
@@ -451,51 +534,22 @@ async def list_all_entities(
     """
     List all entities in the memory graph.
 
+    Issue #620: Refactored using Extract Method pattern.
     Issue #744: Requires admin authentication.
 
-    This endpoint must be defined BEFORE /entities/{entity_id} to ensure
-    proper route matching (static paths before dynamic paths).
-
-    Args:
-        admin_check: Admin permission verification
-        entity_type: Filter by entity type (optional)
-        limit: Maximum results to return (default 100, max 500)
-        memory_graph: Memory graph instance
-
-    Returns:
-        List of all entities with optional type filtering
+    Note: Must be defined BEFORE /entities/{entity_id} for proper routing.
     """
     request_id = generate_request_id()
 
     try:
-        logger.info(
-            f"[{request_id}] Listing all entities: type={entity_type}, limit={limit}"
-        )
+        logger.info("[%s] Listing entities: type=%s, limit=%s", request_id, entity_type, limit)
 
-        # Use search with wildcard to get all entities
         entities = await memory_graph.search_entities(
-            query="*",
-            entity_type=entity_type,
-            limit=limit,
+            query="*", entity_type=entity_type, limit=limit
         )
 
         logger.info("[%s] Found %s entities", request_id, len(entities))
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "data": {
-                    "entities": entities,
-                    "total_count": len(entities),
-                    "filters": {
-                        "entity_type": entity_type,
-                        "limit": limit,
-                    },
-                },
-                "request_id": request_id,
-            },
-        )
+        return _build_list_entities_response(request_id, entities, entity_type, limit)
 
     except Exception as e:
         logger.error("[%s] Error listing entities: %s", request_id, e)
@@ -1213,23 +1267,10 @@ async def get_related_entities(
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
     """
-    Get entities related to specified entity
+    Get entities related to specified entity.
 
+    Issue #620: Refactored using Extract Method pattern.
     Issue #744: Requires admin authentication.
-
-    Args:
-        entity_id: Entity UUID
-        admin_check: Admin permission verification
-        relation_type: Filter by relation type (optional)
-        direction: Relation direction (outgoing, incoming, both)
-        max_depth: Traversal depth
-        memory_graph: Memory graph instance
-
-    Returns:
-        List of related entities with relation metadata
-
-    Raises:
-        HTTPException: If entity not found
     """
     request_id = generate_request_id()
 
@@ -1245,23 +1286,9 @@ async def get_related_entities(
         )
         logger.info("[%s] Found %s related entities", request_id, len(related))
 
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "data": {
-                    "entity_id": entity_id,
-                    "entity_name": entity_name,
-                    "related_entities": related,
-                    "total_count": len(related),
-                    "filters": {
-                        "relation_type": relation_type,
-                        "direction": direction,
-                        "max_depth": max_depth,
-                    },
-                },
-                "request_id": request_id,
-            },
+        return _build_related_entities_response(
+            request_id, entity_id, entity_name, related,
+            relation_type, direction, max_depth
         )
 
     except HTTPException:
