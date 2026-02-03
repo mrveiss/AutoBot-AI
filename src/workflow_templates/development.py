@@ -15,6 +15,64 @@ from src.autobot_types import TaskComplexity
 from .types import TemplateCategory, WorkflowStep, WorkflowTemplate
 
 
+def _create_deployment_pipeline_steps() -> List[WorkflowStep]:
+    """Create workflow steps for the deployment pipeline template.
+
+    Issue #620.
+    """
+    return [
+        WorkflowStep(
+            id="pipeline_research",
+            agent_type="research",
+            action="Research deployment pipeline best practices",
+            description="Research: Pipeline Best Practices",
+            expected_duration_ms=30000,
+        ),
+        WorkflowStep(
+            id="environment_setup",
+            agent_type="system_commands",
+            action="Setup and configure deployment environment",
+            description="System_Commands: Environment Setup (requires your approval)",
+            requires_approval=True,
+            dependencies=["pipeline_research"],
+            expected_duration_ms=40000,
+        ),
+        WorkflowStep(
+            id="pipeline_config",
+            agent_type="orchestrator",
+            action="Configure deployment pipeline and stages",
+            description="Orchestrator: Pipeline Configuration",
+            dependencies=["environment_setup"],
+            expected_duration_ms=20000,
+        ),
+        WorkflowStep(
+            id="deploy_application",
+            agent_type="system_commands",
+            action="Execute deployment pipeline",
+            description="System_Commands: Application Deployment (requires your approval)",
+            requires_approval=True,
+            dependencies=["pipeline_config"],
+            expected_duration_ms=35000,
+        ),
+        WorkflowStep(
+            id="verify_deployment",
+            agent_type="system_commands",
+            action="Verify deployment success and perform health checks",
+            description="System_Commands: Deployment Verification",
+            dependencies=["deploy_application"],
+            expected_duration_ms=20000,
+        ),
+        WorkflowStep(
+            id="document_pipeline",
+            agent_type="knowledge_manager",
+            action="Document deployment pipeline and procedures",
+            description="Knowledge_Manager: Document Pipeline",
+            dependencies=["verify_deployment"],
+            expected_duration_ms=8000,
+        ),
+    ]
+
+
 def create_code_review_template() -> WorkflowTemplate:
     """Create code review workflow template."""
     return WorkflowTemplate(
@@ -110,57 +168,7 @@ def create_deployment_pipeline_template() -> WorkflowTemplate:
             "environment": "Target deployment environment",
             "deployment_strategy": "Deployment strategy (blue-green, rolling, canary)",
         },
-        steps=[
-            WorkflowStep(
-                id="pipeline_research",
-                agent_type="research",
-                action="Research deployment pipeline best practices",
-                description="Research: Pipeline Best Practices",
-                expected_duration_ms=30000,
-            ),
-            WorkflowStep(
-                id="environment_setup",
-                agent_type="system_commands",
-                action="Setup and configure deployment environment",
-                description="System_Commands: Environment Setup (requires your approval)",
-                requires_approval=True,
-                dependencies=["pipeline_research"],
-                expected_duration_ms=40000,
-            ),
-            WorkflowStep(
-                id="pipeline_config",
-                agent_type="orchestrator",
-                action="Configure deployment pipeline and stages",
-                description="Orchestrator: Pipeline Configuration",
-                dependencies=["environment_setup"],
-                expected_duration_ms=20000,
-            ),
-            WorkflowStep(
-                id="deploy_application",
-                agent_type="system_commands",
-                action="Execute deployment pipeline",
-                description="System_Commands: Application Deployment (requires your approval)",
-                requires_approval=True,
-                dependencies=["pipeline_config"],
-                expected_duration_ms=35000,
-            ),
-            WorkflowStep(
-                id="verify_deployment",
-                agent_type="system_commands",
-                action="Verify deployment success and perform health checks",
-                description="System_Commands: Deployment Verification",
-                dependencies=["deploy_application"],
-                expected_duration_ms=20000,
-            ),
-            WorkflowStep(
-                id="document_pipeline",
-                agent_type="knowledge_manager",
-                action="Document deployment pipeline and procedures",
-                description="Knowledge_Manager: Document Pipeline",
-                dependencies=["verify_deployment"],
-                expected_duration_ms=8000,
-            ),
-        ],
+        steps=_create_deployment_pipeline_steps(),
     )
 
 

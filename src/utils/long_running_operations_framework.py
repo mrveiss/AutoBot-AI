@@ -270,6 +270,48 @@ async def _save_test_checkpoint_if_needed(
 # =============================================================================
 
 
+async def _process_indexing_file_with_progress(
+    file_path: Path,
+    index: int,
+    total_files: int,
+    start_time: float,
+    context: "OperationExecutionContext",
+) -> Dict[str, Any]:
+    """Process a single file for indexing with progress update.
+
+    Issue #620.
+    """
+    await asyncio.sleep(0.1)  # Simulate processing
+    file_info = await _process_index_file(file_path)
+
+    # Update progress
+    elapsed = time.time() - start_time
+    files_per_second = (index + 1) / max(1, elapsed)
+    await context.update_progress(
+        f"Processing {file_path.name}",
+        index + 1,
+        total_files,
+        {"files_per_second": files_per_second},
+        f"Indexed {index + 1} of {total_files} files",
+    )
+
+    return file_info
+
+
+async def _save_indexing_checkpoint_if_needed(
+    index: int,
+    results: List[Dict[str, Any]],
+    context: "OperationExecutionContext",
+    checkpoint_interval: int = 100,
+) -> None:
+    """Save a checkpoint if the current index is at a checkpoint interval.
+
+    Issue #620.
+    """
+    if (index + 1) % checkpoint_interval == 0:
+        await context.save_checkpoint({"processed_files": results}, f"file_{index + 1}")
+
+
 # Convenience functions for common operations
 async def execute_codebase_indexing(
     codebase_path: str,
@@ -290,7 +332,7 @@ async def execute_codebase_indexing(
     async def indexing_operation(context: OperationExecutionContext) -> Dict[str, Any]:
         """Index files in codebase with progress tracking and checkpoints.
 
-        Issue #665: Refactored to use extracted helper functions.
+        Issue #620.
         """
         path = Path(codebase_path)
         patterns = file_patterns or ["*.py", "*.js", "*.vue", "*.ts", "*.jsx", "*.tsx"]
@@ -305,27 +347,11 @@ async def execute_codebase_indexing(
 
         for i, file_path in enumerate(all_files):
             try:
-                await asyncio.sleep(0.1)  # Simulate processing
-                file_info = await _process_index_file(file_path)
-                results.append(file_info)
-
-                # Update progress
-                elapsed = time.time() - start_time
-                files_per_second = (i + 1) / max(1, elapsed)
-                await context.update_progress(
-                    f"Processing {file_path.name}",
-                    i + 1,
-                    total_files,
-                    {"files_per_second": files_per_second},
-                    f"Indexed {i + 1} of {total_files} files",
+                file_info = await _process_indexing_file_with_progress(
+                    file_path, i, total_files, start_time, context
                 )
-
-                # Save checkpoint every 100 files
-                if (i + 1) % 100 == 0:
-                    await context.save_checkpoint(
-                        {"processed_files": results}, f"file_{i + 1}"
-                    )
-
+                results.append(file_info)
+                await _save_indexing_checkpoint_if_needed(i, results, context)
             except Exception as e:
                 context.logger.warning("Failed to process %s: %s", file_path, e)
 

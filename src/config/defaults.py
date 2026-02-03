@@ -154,77 +154,76 @@ def _get_system_config() -> Dict[str, Any]:
     }
 
 
+def _get_prompt_compression_config() -> Dict[str, Any]:
+    """Get prompt compression configuration for LLM optimization.
+
+    Issue #620.
+    """
+    return {
+        "enabled": os.getenv("AUTOBOT_PROMPT_COMPRESSION_ENABLED", "true").lower()
+        == "true",
+        "target_ratio": float(os.getenv("AUTOBOT_PROMPT_COMPRESSION_RATIO", "0.7")),
+        "min_length": int(os.getenv("AUTOBOT_PROMPT_COMPRESSION_MIN_LENGTH", "100")),
+        "preserve_code_blocks": True,
+        "aggressive_mode": False,
+    }
+
+
+def _get_cloud_optimization_config() -> Dict[str, Any]:
+    """Get cloud-specific LLM optimization configuration.
+
+    Issue #620.
+    """
+    return {
+        "connection_pool_size": int(
+            os.getenv("AUTOBOT_CLOUD_CONNECTION_POOL_SIZE", "100")
+        ),
+        "batch_window_ms": int(os.getenv("AUTOBOT_CLOUD_BATCH_WINDOW_MS", "50")),
+        "max_batch_size": int(os.getenv("AUTOBOT_CLOUD_MAX_BATCH_SIZE", "10")),
+        "retry_max_attempts": int(os.getenv("AUTOBOT_CLOUD_RETRY_MAX_ATTEMPTS", "3")),
+        "retry_base_delay": float(os.getenv("AUTOBOT_CLOUD_RETRY_BASE_DELAY", "1.0")),
+        "retry_max_delay": float(os.getenv("AUTOBOT_CLOUD_RETRY_MAX_DELAY", "60.0")),
+    }
+
+
+def _get_local_optimization_config() -> Dict[str, Any]:
+    """Get local-specific LLM optimization configuration (vLLM/Ollama).
+
+    Issue #620.
+    """
+    return {
+        "speculation_enabled": os.getenv("AUTOBOT_SPECULATION_ENABLED", "false").lower()
+        == "true",
+        "speculation_draft_model": os.getenv("AUTOBOT_SPECULATION_DRAFT_MODEL", ""),
+        "speculation_num_tokens": int(os.getenv("AUTOBOT_SPECULATION_NUM_TOKENS", "5")),
+        "speculation_use_ngram": os.getenv(
+            "AUTOBOT_SPECULATION_USE_NGRAM", "false"
+        ).lower()
+        == "true",
+        "quantization_type": os.getenv("AUTOBOT_QUANTIZATION_TYPE", "none"),
+        "vllm_multi_step": int(os.getenv("AUTOBOT_VLLM_MULTI_STEP", "8")),
+        "vllm_prefix_caching": os.getenv("AUTOBOT_VLLM_PREFIX_CACHING", "true").lower()
+        == "true",
+        "vllm_async_output": os.getenv("AUTOBOT_VLLM_ASYNC_OUTPUT", "true").lower()
+        == "true",
+    }
+
+
 def _get_llm_optimization_config() -> Dict[str, Any]:
-    """Get LLM optimization configuration (Issue #717)."""
+    """Get LLM optimization configuration (Issue #717).
+
+    Issue #620: Refactored to extract helper methods.
+    """
     return {
         "optimization": {
-            # Prompt compression (applies to both local and cloud)
-            "prompt_compression": {
-                "enabled": os.getenv(
-                    "AUTOBOT_PROMPT_COMPRESSION_ENABLED", "true"
-                ).lower()
-                == "true",
-                "target_ratio": float(
-                    os.getenv("AUTOBOT_PROMPT_COMPRESSION_RATIO", "0.7")
-                ),
-                "min_length": int(
-                    os.getenv("AUTOBOT_PROMPT_COMPRESSION_MIN_LENGTH", "100")
-                ),
-                "preserve_code_blocks": True,
-                "aggressive_mode": False,
-            },
-            # Response caching (L1/L2)
+            "prompt_compression": _get_prompt_compression_config(),
             "cache": {
                 "enabled": os.getenv("AUTOBOT_CACHE_ENABLED", "true").lower() == "true",
                 "l1_size": int(os.getenv("AUTOBOT_CACHE_L1_SIZE", "100")),
                 "l2_ttl": int(os.getenv("AUTOBOT_CACHE_L2_TTL", "300")),
             },
-            # Cloud-specific optimizations
-            "cloud": {
-                "connection_pool_size": int(
-                    os.getenv("AUTOBOT_CLOUD_CONNECTION_POOL_SIZE", "100")
-                ),
-                "batch_window_ms": int(
-                    os.getenv("AUTOBOT_CLOUD_BATCH_WINDOW_MS", "50")
-                ),
-                "max_batch_size": int(os.getenv("AUTOBOT_CLOUD_MAX_BATCH_SIZE", "10")),
-                "retry_max_attempts": int(
-                    os.getenv("AUTOBOT_CLOUD_RETRY_MAX_ATTEMPTS", "3")
-                ),
-                "retry_base_delay": float(
-                    os.getenv("AUTOBOT_CLOUD_RETRY_BASE_DELAY", "1.0")
-                ),
-                "retry_max_delay": float(
-                    os.getenv("AUTOBOT_CLOUD_RETRY_MAX_DELAY", "60.0")
-                ),
-            },
-            # Local-specific optimizations (vLLM/Ollama)
-            "local": {
-                "speculation_enabled": os.getenv(
-                    "AUTOBOT_SPECULATION_ENABLED", "false"
-                ).lower()
-                == "true",
-                "speculation_draft_model": os.getenv(
-                    "AUTOBOT_SPECULATION_DRAFT_MODEL", ""
-                ),
-                "speculation_num_tokens": int(
-                    os.getenv("AUTOBOT_SPECULATION_NUM_TOKENS", "5")
-                ),
-                "speculation_use_ngram": os.getenv(
-                    "AUTOBOT_SPECULATION_USE_NGRAM", "false"
-                ).lower()
-                == "true",
-                "quantization_type": os.getenv("AUTOBOT_QUANTIZATION_TYPE", "none"),
-                "vllm_multi_step": int(os.getenv("AUTOBOT_VLLM_MULTI_STEP", "8")),
-                "vllm_prefix_caching": os.getenv(
-                    "AUTOBOT_VLLM_PREFIX_CACHING", "true"
-                ).lower()
-                == "true",
-                "vllm_async_output": os.getenv(
-                    "AUTOBOT_VLLM_ASYNC_OUTPUT", "true"
-                ).lower()
-                == "true",
-            },
+            "cloud": _get_cloud_optimization_config(),
+            "local": _get_local_optimization_config(),
         },
     }
 

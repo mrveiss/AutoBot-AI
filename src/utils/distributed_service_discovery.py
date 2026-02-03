@@ -77,7 +77,8 @@ class DistributedServiceDiscovery:
         self._backend_config = unified_config_manager.get_backend_config()
         self._redis_config = unified_config_manager.get_redis_config()
         self._system_defaults = (
-            unified_config_manager.get_config_section("service_discovery_defaults") or {}
+            unified_config_manager.get_config_section("service_discovery_defaults")
+            or {}
         )
 
         # Build service registries
@@ -87,7 +88,9 @@ class DistributedServiceDiscovery:
         self.services.update(primary_services)
         self.backup_endpoints.update(backup_endpoints)
 
-        logger.info("🌐 Service registry initialized with %s services", len(self.services))
+        logger.info(
+            "🌐 Service registry initialized with %s services", len(self.services)
+        )
 
     def _get_config_value(self, service_name: str, key: str, default_key: str):
         """Get configuration value with fallback to system defaults. Issue #281: Extracted helper."""
@@ -102,7 +105,11 @@ class DistributedServiceDiscovery:
         if not value:
             value = self._system_defaults.get(
                 default_key,
-                NetworkConstants.LOCALHOST_NAME if key == "host" else NetworkConstants.BACKEND_PORT
+                (
+                    NetworkConstants.LOCALHOST_NAME
+                    if key == "host"
+                    else NetworkConstants.BACKEND_PORT
+                ),
             )
         return value
 
@@ -135,8 +142,12 @@ class DistributedServiceDiscovery:
                 "http",
             ),
             "browser": ServiceEndpoint(
-                self._get_config_value("browser_service", "host", "browser_service_host"),
-                self._get_config_value("browser_service", "port", "browser_service_port"),
+                self._get_config_value(
+                    "browser_service", "host", "browser_service_host"
+                ),
+                self._get_config_value(
+                    "browser_service", "port", "browser_service_port"
+                ),
                 "http",
             ),
             "ollama": ServiceEndpoint(
@@ -320,7 +331,12 @@ class DistributedServiceDiscovery:
             return False
 
     async def _try_health_url(
-        self, url: str, http_client, timeout, start_time: float, endpoint: ServiceEndpoint
+        self,
+        url: str,
+        http_client,
+        timeout,
+        start_time: float,
+        endpoint: ServiceEndpoint,
     ) -> bool:
         """Try a single health URL check. (Issue #315 - extracted)"""
         try:
@@ -331,7 +347,7 @@ class DistributedServiceDiscovery:
                     endpoint.last_check = time.time()
                     return True
         except Exception:
-            pass
+            pass  # nosec B110 - intentional fallback for health check failures
         return False
 
     async def _check_http_health(self, endpoint: ServiceEndpoint) -> bool:
@@ -344,7 +360,9 @@ class DistributedServiceDiscovery:
             # Try health endpoint first, then root
             health_urls = [f"{endpoint.url}/health", f"{endpoint.url}/", endpoint.url]
             for url in health_urls:
-                if await self._try_health_url(url, http_client, timeout, start_time, endpoint):
+                if await self._try_health_url(
+                    url, http_client, timeout, start_time, endpoint
+                ):
                     return True
 
             endpoint.is_healthy = False
@@ -393,7 +411,9 @@ class DistributedServiceDiscovery:
                 # Check all services in parallel
                 tasks = []
                 for service_name, endpoint in self.services.items():
-                    if endpoint.is_stale(TimingConstants.STANDARD_TIMEOUT):  # Check stale services
+                    if endpoint.is_stale(
+                        TimingConstants.STANDARD_TIMEOUT
+                    ):  # Check stale services
                         task = asyncio.create_task(self._quick_health_check(endpoint))
                         tasks.append((service_name, task))
 
@@ -402,11 +422,15 @@ class DistributedServiceDiscovery:
                         *[task for _, task in tasks], return_exceptions=True
                     )
 
-                await asyncio.sleep(ServiceDiscoveryConfig.HEALTH_CHECK_INTERVAL_S)  # Check every 30 seconds
+                await asyncio.sleep(
+                    ServiceDiscoveryConfig.HEALTH_CHECK_INTERVAL_S
+                )  # Check every 30 seconds
 
             except Exception as e:
                 logger.error("Background health monitoring error: %s", e)
-                await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Back off on errors
+                await asyncio.sleep(
+                    TimingConstants.STANDARD_TIMEOUT
+                )  # Back off on errors
 
 
 # Global instance for easy access (thread-safe)
@@ -443,8 +467,12 @@ async def get_service_url(service_name: str) -> str:
             unified_config_manager.get_config_section("service_discovery_defaults")
             or {}
         )
-        fallback_host = system_defaults.get("fallback_host", NetworkConstants.LOCALHOST_NAME)
-        fallback_port = system_defaults.get("fallback_port", NetworkConstants.BACKEND_PORT)
+        fallback_host = system_defaults.get(
+            "fallback_host", NetworkConstants.LOCALHOST_NAME
+        )
+        fallback_port = system_defaults.get(
+            "fallback_port", NetworkConstants.BACKEND_PORT
+        )
         return f"http://{fallback_host}:{fallback_port}"
 
 
@@ -489,12 +517,144 @@ def get_redis_connection_params_sync() -> Dict:
     }
 
 
-def get_service_endpoint_sync(service_name: str) -> Optional[Dict]:
-    """
-    Get service endpoint synchronously for sync contexts
+def _get_sync_config_value(
+    svc_name: str,
+    key: str,
+    default_key: str,
+    default_val,
+    services_config: Dict,
+    backend_config: Dict,
+    redis_config: Dict,
+    system_defaults: Dict,
+):
+    """Get service config value with fallback to defaults.
 
-    Returns endpoint information as a dict with host, port, protocol
-    Gets values from unified configuration
+    Issue #620.
+    """
+    if svc_name == "backend":
+        val = backend_config.get(key)
+    elif svc_name == "redis":
+        val = redis_config.get(key)
+    else:
+        svc_cfg = services_config.get(svc_name, {})
+        val = svc_cfg.get(key)
+    return val or system_defaults.get(default_key, default_val)
+
+
+def _build_service_endpoints_map(
+    services_config: Dict,
+    backend_config: Dict,
+    redis_config: Dict,
+    system_defaults: Dict,
+) -> Dict[str, Dict]:
+    """Build the service endpoints mapping from configuration.
+
+    Issue #620.
+    """
+
+    def get_val(svc_name, key, default_key, default_val):
+        return _get_sync_config_value(
+            svc_name,
+            key,
+            default_key,
+            default_val,
+            services_config,
+            backend_config,
+            redis_config,
+            system_defaults,
+        )
+
+    return {
+        "redis": {
+            "host": get_val(
+                "redis", "host", "redis_host", NetworkConstants.LOCALHOST_NAME
+            ),
+            "port": int(
+                get_val("redis", "port", "redis_port", NetworkConstants.REDIS_PORT)
+            ),
+            "protocol": "redis",
+        },
+        "backend": {
+            "host": get_val(
+                "backend", "host", "backend_host", NetworkConstants.LOCALHOST_NAME
+            ),
+            "port": int(
+                get_val(
+                    "backend", "port", "backend_port", NetworkConstants.BACKEND_PORT
+                )
+            ),
+            "protocol": "http",
+        },
+        "frontend": {
+            "host": get_val(
+                "frontend", "host", "frontend_host", NetworkConstants.LOCALHOST_NAME
+            ),
+            "port": int(
+                get_val(
+                    "frontend", "port", "frontend_port", NetworkConstants.FRONTEND_PORT
+                )
+            ),
+            "protocol": "http",
+        },
+        "npu_worker": {
+            "host": get_val(
+                "npu_worker", "host", "npu_worker_host", NetworkConstants.LOCALHOST_NAME
+            ),
+            "port": int(
+                get_val(
+                    "npu_worker",
+                    "port",
+                    "npu_worker_port",
+                    NetworkConstants.NPU_WORKER_PORT,
+                )
+            ),
+            "protocol": "http",
+        },
+        "ai_stack": {
+            "host": get_val(
+                "ai_stack", "host", "ai_stack_host", NetworkConstants.LOCALHOST_NAME
+            ),
+            "port": int(
+                get_val(
+                    "ai_stack", "port", "ai_stack_port", NetworkConstants.AI_STACK_PORT
+                )
+            ),
+            "protocol": "http",
+        },
+        "browser": {
+            "host": get_val(
+                "browser_service",
+                "host",
+                "browser_service_host",
+                NetworkConstants.LOCALHOST_NAME,
+            ),
+            "port": int(
+                get_val(
+                    "browser_service",
+                    "port",
+                    "browser_service_port",
+                    NetworkConstants.BROWSER_SERVICE_PORT,
+                )
+            ),
+            "protocol": "http",
+        },
+        "ollama": {
+            "host": get_val(
+                "ollama", "host", "ollama_host", NetworkConstants.LOCALHOST_NAME
+            ),
+            "port": int(
+                get_val("ollama", "port", "ollama_port", NetworkConstants.OLLAMA_PORT)
+            ),
+            "protocol": "http",
+        },
+    }
+
+
+def get_service_endpoint_sync(service_name: str) -> Optional[Dict]:
+    """Get service endpoint synchronously for sync contexts.
+
+    Returns endpoint information as a dict with host, port, protocol.
+    Gets values from unified configuration.
     """
     from src.config import unified_config_manager
 
@@ -506,59 +666,9 @@ def get_service_endpoint_sync(service_name: str) -> Optional[Dict]:
         unified_config_manager.get_config_section("service_discovery_defaults") or {}
     )
 
-    # Helper to get config value
-    def get_value(svc_name, key, default_key, default_val):
-        """Get service config value with fallback to defaults."""
-        if svc_name == "backend":
-            val = backend_config.get(key)
-        elif svc_name == "redis":
-            val = redis_config.get(key)
-        else:
-            svc_cfg = services_config.get(svc_name, {})
-            val = svc_cfg.get(key)
-        return val or system_defaults.get(default_key, default_val)
-
-    # Service endpoint mapping from configuration
-    service_endpoints = {
-        "redis": {
-            "host": get_value("redis", "host", "redis_host", NetworkConstants.LOCALHOST_NAME),
-            "port": int(get_value("redis", "port", "redis_port", NetworkConstants.REDIS_PORT)),
-            "protocol": "redis",
-        },
-        "backend": {
-            "host": get_value("backend", "host", "backend_host", NetworkConstants.LOCALHOST_NAME),
-            "port": int(get_value("backend", "port", "backend_port", NetworkConstants.BACKEND_PORT)),
-            "protocol": "http",
-        },
-        "frontend": {
-            "host": get_value("frontend", "host", "frontend_host", NetworkConstants.LOCALHOST_NAME),
-            "port": int(get_value("frontend", "port", "frontend_port", NetworkConstants.FRONTEND_PORT)),
-            "protocol": "http",
-        },
-        "npu_worker": {
-            "host": get_value("npu_worker", "host", "npu_worker_host", NetworkConstants.LOCALHOST_NAME),
-            "port": int(get_value("npu_worker", "port", "npu_worker_port", NetworkConstants.NPU_WORKER_PORT)),
-            "protocol": "http",
-        },
-        "ai_stack": {
-            "host": get_value("ai_stack", "host", "ai_stack_host", NetworkConstants.LOCALHOST_NAME),
-            "port": int(get_value("ai_stack", "port", "ai_stack_port", NetworkConstants.AI_STACK_PORT)),
-            "protocol": "http",
-        },
-        "browser": {
-            "host": get_value(
-                "browser_service", "host", "browser_service_host", NetworkConstants.LOCALHOST_NAME
-            ),
-            "port": int(
-                get_value("browser_service", "port", "browser_service_port", NetworkConstants.BROWSER_SERVICE_PORT)
-            ),
-            "protocol": "http",
-        },
-        "ollama": {
-            "host": get_value("ollama", "host", "ollama_host", NetworkConstants.LOCALHOST_NAME),
-            "port": int(get_value("ollama", "port", "ollama_port", NetworkConstants.OLLAMA_PORT)),
-            "protocol": "http",
-        },
-    }
+    # Build service endpoints using helper (Issue #620)
+    service_endpoints = _build_service_endpoints_map(
+        services_config, backend_config, redis_config, system_defaults
+    )
 
     return service_endpoints.get(service_name)

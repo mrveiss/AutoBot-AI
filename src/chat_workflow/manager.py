@@ -769,6 +769,123 @@ class ChatWorkflowManager(
             current_message_type,
         )
 
+    def _initialize_stream_state(
+        self,
+        selected_model: str,
+        terminal_session_id: str,
+        used_knowledge: bool,
+        rag_citations: List[Dict[str, Any]],
+    ) -> tuple:
+        """Initialize state for streaming LLM response.
+
+        Issue #620.
+        """
+        streaming_msg = self._init_streaming_message(
+            "response",
+            selected_model,
+            terminal_session_id,
+            used_knowledge,
+            rag_citations,
+        )
+        return "", "", "response", False, streaming_msg
+
+    async def _process_stream_chunk_iteration(
+        self,
+        chunk_data: Dict[str, Any],
+        llm_response: str,
+        current_segment: str,
+        current_message_type: str,
+        tool_call_completed: bool,
+        streaming_msg,
+        selected_model: str,
+        terminal_session_id: str,
+        used_knowledge: bool,
+        rag_citations: List[Dict[str, Any]],
+    ):
+        """Process a single chunk iteration in the stream.
+
+        Issue #620.
+        """
+        (
+            chunk_text,
+            llm_response,
+            current_segment,
+            new_type,
+        ) = self._process_chunk_and_detect_type(
+            chunk_data, llm_response, current_segment, current_message_type
+        )
+
+        (
+            done_result,
+            should_break,
+            tool_call_completed,
+        ) = self._handle_tool_call_completion_check(
+            chunk_data, llm_response, tool_call_completed
+        )
+
+        if should_break:
+            yield (
+                "break",
+                done_result,
+                llm_response,
+                tool_call_completed,
+                streaming_msg,
+                current_segment,
+                current_message_type,
+            )
+            return
+        if tool_call_completed:
+            yield (
+                "continue",
+                None,
+                llm_response,
+                tool_call_completed,
+                streaming_msg,
+                current_segment,
+                current_message_type,
+            )
+            return
+
+        if chunk_text:
+            (
+                complete_msg,
+                workflow_msg,
+                streaming_msg,
+                current_segment,
+                current_message_type,
+            ) = self._yield_chunk_messages(
+                chunk_text,
+                new_type,
+                current_message_type,
+                streaming_msg,
+                selected_model,
+                terminal_session_id,
+                used_knowledge,
+                rag_citations,
+                llm_response,
+                current_segment,
+            )
+            yield (
+                "chunk",
+                complete_msg,
+                workflow_msg,
+                llm_response,
+                tool_call_completed,
+                streaming_msg,
+                current_segment,
+                current_message_type,
+            )
+        else:
+            yield (
+                "no_chunk",
+                None,
+                llm_response,
+                tool_call_completed,
+                streaming_msg,
+                current_segment,
+                current_message_type,
+            )
+
     async def _stream_llm_response(
         self,
         response,
@@ -777,15 +894,18 @@ class ChatWorkflowManager(
         used_knowledge: bool,
         rag_citations: List[Dict[str, Any]],
     ):
-        """Stream LLM response chunks. Issue #620."""
-        llm_response, current_segment, current_message_type = "", "", "response"
-        tool_call_completed = False
-        streaming_msg = self._init_streaming_message(
-            "response",
-            selected_model,
-            terminal_session_id,
-            used_knowledge,
-            rag_citations,
+        """Stream LLM response chunks.
+
+        Issue #620.
+        """
+        (
+            llm_response,
+            current_segment,
+            current_message_type,
+            tool_call_completed,
+            streaming_msg,
+        ) = self._initialize_stream_state(
+            selected_model, terminal_session_id, used_knowledge, rag_citations
         )
 
         async for line in response.content:
@@ -793,50 +913,48 @@ class ChatWorkflowManager(
             if not chunk_data:
                 continue
 
-            (
-                chunk_text,
+            async for result in self._process_stream_chunk_iteration(
+                chunk_data,
                 llm_response,
                 current_segment,
-                new_type,
-            ) = self._process_chunk_and_detect_type(
-                chunk_data, llm_response, current_segment, current_message_type
-            )
-
-            (
-                done_result,
-                should_break,
+                current_message_type,
                 tool_call_completed,
-            ) = self._handle_tool_call_completion_check(
-                chunk_data, llm_response, tool_call_completed
-            )
-            if should_break:
-                yield done_result
-                break
-            if tool_call_completed:
-                continue
-
-            if chunk_text:
-                (
-                    complete_msg,
-                    workflow_msg,
-                    streaming_msg,
-                    current_segment,
-                    current_message_type,
-                ) = self._yield_chunk_messages(
-                    chunk_text,
-                    new_type,
-                    current_message_type,
-                    streaming_msg,
-                    selected_model,
-                    terminal_session_id,
-                    used_knowledge,
-                    rag_citations,
-                    llm_response,
-                    current_segment,
-                )
-                if complete_msg:
-                    yield (complete_msg, llm_response, False, True)
-                yield (workflow_msg, llm_response, False, False)
+                streaming_msg,
+                selected_model,
+                terminal_session_id,
+                used_knowledge,
+                rag_citations,
+            ):
+                action = result[0]
+                if action == "break":
+                    yield result[1]
+                    return
+                elif action == "continue":
+                    llm_response, tool_call_completed = result[2], result[3]
+                    streaming_msg, current_segment, current_message_type = (
+                        result[4],
+                        result[5],
+                        result[6],
+                    )
+                    break
+                elif action == "chunk":
+                    complete_msg, workflow_msg = result[1], result[2]
+                    llm_response, tool_call_completed = result[3], result[4]
+                    streaming_msg, current_segment, current_message_type = (
+                        result[5],
+                        result[6],
+                        result[7],
+                    )
+                    if complete_msg:
+                        yield (complete_msg, llm_response, False, True)
+                    yield (workflow_msg, llm_response, False, False)
+                else:
+                    llm_response, tool_call_completed = result[2], result[3]
+                    streaming_msg, current_segment, current_message_type = (
+                        result[4],
+                        result[5],
+                        result[6],
+                    )
 
             if chunk_data.get("done", False):
                 self._log_stream_completion(llm_response)

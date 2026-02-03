@@ -83,7 +83,9 @@ class HierarchicalAgent:
             "[Issue #657] HierarchicalAgent created: id=%s, level=%d, parent=%s",
             context.agent_id[:8] if len(context.agent_id) > 8 else context.agent_id,
             context.level,
-            context.parent_id[:8] if context.parent_id and len(context.parent_id) > 8 else context.parent_id,
+            context.parent_id[:8]
+            if context.parent_id and len(context.parent_id) > 8
+            else context.parent_id,
         )
 
     def _validate_delegation_depth(self) -> None:
@@ -202,6 +204,56 @@ class HierarchicalAgent:
             },
         )
 
+    def _record_delegation_history(
+        self, subordinate_id: str, task: str, reason: str
+    ) -> None:
+        """
+        Record delegation action in agent history.
+
+        Issue #620.
+        """
+        import time
+
+        self.history.append(
+            {
+                "action": "delegate",
+                "subordinate_id": subordinate_id,
+                "task": task,
+                "reason": reason,
+                "timestamp": time.time(),
+            }
+        )
+
+    def _create_failed_delegation_result(
+        self,
+        subordinate_id: str,
+        task: str,
+        start_time: float,
+        error: Exception,
+    ) -> DelegationResult:
+        """
+        Create a DelegationResult for a failed delegation.
+
+        Issue #620.
+        """
+        import time
+
+        execution_time = time.time() - start_time
+        logger.error(
+            "[Issue #657] Subordinate %s failed: %s",
+            subordinate_id[:8],
+            str(error),
+        )
+
+        return DelegationResult(
+            agent_id=subordinate_id,
+            task=task,
+            result="",
+            success=False,
+            execution_time=execution_time,
+            error=str(error),
+        )
+
     async def delegate(
         self,
         task: str,
@@ -216,6 +268,7 @@ class HierarchicalAgent:
         delegate if needed (up to max_depth).
 
         Issue #665: Refactored to extract helper methods.
+        Issue #620: Further refactored to reduce function length.
 
         Args:
             task: Task description for the subordinate
@@ -231,50 +284,25 @@ class HierarchicalAgent:
         import time
 
         start_time = time.time()
-
-        # Validate delegation is allowed
         self._validate_delegation_depth()
 
-        # Create subordinate agent
         subordinate_id = str(uuid.uuid4())
         subordinate, sub_context = self._create_subordinate(
             subordinate_id, task, reason
         )
-
-        # Record delegation in history
-        self.history.append({
-            "action": "delegate",
-            "subordinate_id": subordinate_id,
-            "task": task,
-            "reason": reason,
-            "timestamp": time.time(),
-        })
+        self._record_delegation_history(subordinate_id, task, reason)
 
         try:
             if wait_for_result:
                 return await self._execute_sync_delegation(
                     subordinate, subordinate_id, task, sub_context, start_time
                 )
-            else:
-                return self._execute_async_delegation(
-                    subordinate, subordinate_id, task, sub_context
-                )
-
-        except Exception as e:
-            execution_time = time.time() - start_time
-            logger.error(
-                "[Issue #657] Subordinate %s failed: %s",
-                subordinate_id[:8],
-                str(e),
+            return self._execute_async_delegation(
+                subordinate, subordinate_id, task, sub_context
             )
-
-            return DelegationResult(
-                agent_id=subordinate_id,
-                task=task,
-                result="",
-                success=False,
-                execution_time=execution_time,
-                error=str(e),
+        except Exception as e:
+            return self._create_failed_delegation_result(
+                subordinate_id, task, start_time, e
             )
 
     async def execute(self, task: str) -> str:
@@ -308,13 +336,15 @@ class HierarchicalAgent:
             execution_time = time.time() - start_time
 
             # Record execution in history
-            self.history.append({
-                "action": "execute",
-                "task": task,
-                "result_length": len(str(result)),
-                "execution_time": execution_time,
-                "timestamp": time.time(),
-            })
+            self.history.append(
+                {
+                    "action": "execute",
+                    "task": task,
+                    "result_length": len(str(result)),
+                    "execution_time": execution_time,
+                    "timestamp": time.time(),
+                }
+            )
 
             return result
 
@@ -373,13 +403,15 @@ class HierarchicalAgent:
         processed_results = []
         for i, r in enumerate(results):
             if isinstance(r, Exception):
-                processed_results.append(DelegationResult(
-                    agent_id="error",
-                    task=tasks[i].get("task", ""),
-                    result="",
-                    success=False,
-                    error=str(r),
-                ))
+                processed_results.append(
+                    DelegationResult(
+                        agent_id="error",
+                        task=tasks[i].get("task", ""),
+                        result="",
+                        success=False,
+                        error=str(r),
+                    )
+                )
             else:
                 processed_results.append(r)
 
@@ -395,12 +427,8 @@ class HierarchicalAgent:
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get statistics about this agent's delegations."""
-        delegation_count = sum(
-            1 for h in self.history if h.get("action") == "delegate"
-        )
-        execution_count = sum(
-            1 for h in self.history if h.get("action") == "execute"
-        )
+        delegation_count = sum(1 for h in self.history if h.get("action") == "delegate")
+        execution_count = sum(1 for h in self.history if h.get("action") == "execute")
 
         return {
             "agent_id": self.context.agent_id,
