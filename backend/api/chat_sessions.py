@@ -175,6 +175,157 @@ DEFAULT_SESSION_TITLE = "New Chat Session"
 
 
 # ====================================================================
+# Validation Helpers (Issue #620)
+# ====================================================================
+
+
+def _validate_session_id_or_raise(session_id: str) -> None:
+    """
+    Validate session ID format and raise ValidationError if invalid.
+
+    Issue #620.
+
+    Args:
+        session_id: Session ID to validate
+
+    Raises:
+        ValidationError: If session ID format is invalid
+    """
+    if not validate_chat_session_id(session_id):
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ValidationError("Invalid session ID format")
+
+
+def _validate_pagination_params(page: int, per_page: int) -> None:
+    """
+    Validate pagination parameters and raise ValidationError if invalid.
+
+    Issue #620.
+
+    Args:
+        page: Page number (must be >= 1)
+        per_page: Items per page (must be 1-100)
+
+    Raises:
+        ValidationError: If parameters are invalid
+    """
+    if page < 1 or per_page < 1 or per_page > 100:
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ValidationError("Invalid pagination parameters")
+
+
+async def _fetch_session_messages_or_raise(
+    chat_history_manager, session_id: str, limit: int
+) -> List:
+    """
+    Fetch session messages and raise ResourceNotFoundError if session not found.
+
+    Issue #620.
+
+    Args:
+        chat_history_manager: Chat history manager instance
+        session_id: Session ID to fetch messages for
+        limit: Maximum messages to return
+
+    Returns:
+        List of messages
+
+    Raises:
+        ResourceNotFoundError: If session does not exist
+    """
+    messages = await chat_history_manager.get_session_messages(session_id, limit=limit)
+
+    if messages is None:
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ResourceNotFoundError(f"Session {session_id} not found")
+
+    return messages
+
+
+def _validate_export_format_or_raise(export_format: str) -> None:
+    """
+    Validate export format and raise ValidationError if invalid.
+
+    Issue #620.
+
+    Args:
+        export_format: Format to validate (json, txt, csv)
+
+    Raises:
+        ValidationError: If format is not supported
+    """
+    if export_format not in VALID_EXPORT_FORMATS:
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ValidationError("Invalid export format. Supported: json, txt, csv")
+
+
+async def _export_session_data_or_raise(
+    chat_history_manager, session_id: str, export_format: str
+) -> str:
+    """
+    Export session data and raise ResourceNotFoundError if session not found.
+
+    Issue #620.
+
+    Args:
+        chat_history_manager: Chat history manager instance
+        session_id: Session ID to export
+        export_format: Export format (json, txt, csv)
+
+    Returns:
+        Exported session data as string
+
+    Raises:
+        ResourceNotFoundError: If session does not exist
+    """
+    session_data = await chat_history_manager.export_session(session_id, export_format)
+
+    if session_data is None:
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ResourceNotFoundError(f"Session {session_id} not found")
+
+    return session_data
+
+
+# Content type mapping for export formats (Issue #620)
+_EXPORT_CONTENT_TYPES = {
+    "json": "application/json",
+    "txt": "text/plain",
+    "csv": "text/csv",
+}
+
+
+# ====================================================================
 # API Endpoints - Session Management
 # ====================================================================
 
@@ -194,63 +345,33 @@ async def get_session_messages(
     page: int = 1,
     per_page: int = 50,
 ):
-    """Get messages for a specific chat session"""
+    """
+    Get messages for a specific chat session.
+
+    Issue #620: Refactored using Extract Method pattern.
+    """
     request_id = generate_request_id()
     log_request_context(request, "get_session_messages", request_id)
 
-    # Validate session ID
-    if not validate_chat_session_id(session_id):
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise ValidationError("Invalid session ID format")
+    # Validate inputs (Issue #620: use helpers)
+    _validate_session_id_or_raise(session_id)
+    _validate_pagination_params(page, per_page)
 
-    # Validate pagination parameters
-    if page < 1 or per_page < 1 or per_page > 100:
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise ValidationError("Invalid pagination parameters")
-
-    # Get dependencies from request state
     chat_history_manager = get_chat_history_manager(request)
 
-    # Get session messages
-    # NOTE: get_session_messages doesn't support pagination yet - uses limit parameter
-    messages = await chat_history_manager.get_session_messages(
-        session_id, limit=per_page
+    messages = await _fetch_session_messages_or_raise(
+        chat_history_manager, session_id, per_page
     )
-
-    if messages is None:
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise ResourceNotFoundError(f"Session {session_id} not found")
-
     total_count = await chat_history_manager.get_session_message_count(session_id)
 
-    response_data = {
-        "messages": messages,
-        "session_id": session_id,
-        "total_count": total_count,
-        "page": page,
-        "per_page": per_page,
-    }
-
     return create_success_response(
-        data=response_data,
+        data={
+            "messages": messages,
+            "session_id": session_id,
+            "total_count": total_count,
+            "page": page,
+            "per_page": per_page,
+        },
         message="Session messages retrieved successfully",
         request_id=request_id,
     )
@@ -637,76 +758,116 @@ async def _cleanup_terminal_sessions(request: Request, session_id: str) -> dict:
     return terminal_cleanup_result
 
 
+def _get_knowledge_base_or_none(request: Request):
+    """
+    Get knowledge base from app state or None if unavailable.
+
+    Issue #620.
+    """
+    return getattr(request.app.state, "knowledge_base", None)
+
+
+def _create_kb_cleanup_result() -> dict:
+    """
+    Create initial KB cleanup result dictionary.
+
+    Issue #620.
+    """
+    return {
+        "facts_deleted": 0,
+        "facts_preserved": 0,
+        "cleanup_error": None,
+    }
+
+
+def _process_kb_deletion_result(result: dict, kb_cleanup_result: dict) -> None:
+    """
+    Process and update cleanup result from knowledge base deletion.
+
+    Issue #620.
+
+    Args:
+        result: Result from knowledge_base.delete_facts_by_session
+        kb_cleanup_result: Result dict to update in place
+    """
+    kb_cleanup_result["facts_deleted"] = result.get("deleted_count", 0)
+    kb_cleanup_result["facts_preserved"] = result.get("preserved_count", 0)
+
+    if result.get("errors"):
+        kb_cleanup_result[
+            "cleanup_error"
+        ] = f"{len(result['errors'])} errors during cleanup"
+
+
+def _log_kb_cleanup_result(
+    session_id: str, kb_cleanup_result: dict, errors: Optional[List] = None
+) -> None:
+    """
+    Log KB cleanup results appropriately based on outcome.
+
+    Issue #620.
+
+    Args:
+        session_id: Session being cleaned up
+        kb_cleanup_result: Cleanup result dictionary
+        errors: Optional list of errors from deletion
+    """
+    if errors:
+        logger.warning(
+            "KB cleanup completed with errors for session %s: %s",
+            session_id,
+            errors,
+        )
+
+    if (
+        kb_cleanup_result["facts_deleted"] > 0
+        or kb_cleanup_result["facts_preserved"] > 0
+    ):
+        logger.info(
+            "KB cleanup for session %s: deleted=%d, preserved=%d",
+            session_id,
+            kb_cleanup_result["facts_deleted"],
+            kb_cleanup_result["facts_preserved"],
+        )
+
+
 async def _cleanup_knowledge_base_facts(request: Request, session_id: str) -> dict:
     """
     Clean up knowledge base facts created during this session.
 
     Issue #547: Fixes orphaned KB data when conversations are deleted.
-
-    This function:
-    1. Finds all facts created during this session (via session:facts:{session_id})
-    2. Deletes them from Redis and ChromaDB
-    3. Preserves facts marked as 'important' or 'preserve' in metadata
-    4. Cleans up session-fact relationship tracking keys
+    Issue #620: Refactored using Extract Method pattern.
 
     Args:
         request: FastAPI request object with app.state
         session_id: Chat session ID being deleted
 
     Returns:
-        Dict with cleanup statistics:
-        - facts_deleted: Number of facts removed
-        - facts_preserved: Number of important facts kept
-        - cleanup_error: Error message if any
+        Dict with cleanup statistics
     """
-    kb_cleanup_result = {
-        "facts_deleted": 0,
-        "facts_preserved": 0,
-        "cleanup_error": None,
-    }
+    kb_cleanup_result = _create_kb_cleanup_result()
 
-    # Get knowledge base from app state
-    knowledge_base = getattr(request.app.state, "knowledge_base", None)
+    knowledge_base = _get_knowledge_base_or_none(request)
     if not knowledge_base:
         logger.warning(
-            f"Knowledge base not available, "
-            f"skipping KB cleanup for session {session_id}"
+            "Knowledge base not available, skipping KB cleanup for session %s",
+            session_id,
         )
         return kb_cleanup_result
 
     try:
-        # Delete facts associated with this session
-        # Uses the new delete_facts_by_session method from Issue #547
         result = await knowledge_base.delete_facts_by_session(
             session_id=session_id,
-            preserve_important=True,  # Keep user-marked important facts
+            preserve_important=True,
         )
-
-        kb_cleanup_result["facts_deleted"] = result.get("deleted_count", 0)
-        kb_cleanup_result["facts_preserved"] = result.get("preserved_count", 0)
-
-        if result.get("errors"):
-            kb_cleanup_result[
-                "cleanup_error"
-            ] = f"{len(result['errors'])} errors during cleanup"
-            logger.warning(
-                f"KB cleanup completed with errors for session {session_id}: "
-                f"{result['errors']}"
-            )
-
-        if (
-            kb_cleanup_result["facts_deleted"] > 0
-            or kb_cleanup_result["facts_preserved"] > 0
-        ):
-            logger.info(
-                f"KB cleanup for session {session_id}: "
-                f"deleted={kb_cleanup_result['facts_deleted']}, "
-                f"preserved={kb_cleanup_result['facts_preserved']}"
-            )
+        _process_kb_deletion_result(result, kb_cleanup_result)
+        _log_kb_cleanup_result(session_id, kb_cleanup_result, result.get("errors"))
 
     except Exception as kb_cleanup_error:
         logger.error(
-            f"Failed to cleanup KB facts for session {session_id}: {kb_cleanup_error}",
+            "Failed to cleanup KB facts for session %s: %s",
+            session_id,
+            kb_cleanup_error,
             exc_info=True,
         )
         kb_cleanup_result["cleanup_error"] = str(kb_cleanup_error)
@@ -821,73 +982,30 @@ async def _delete_session_and_verify(chat_history_manager, session_id: str) -> N
         raise ResourceNotFoundError(f"Session {session_id} not found")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_session",
-    error_code_prefix="CHAT",
-)
-@router.delete("/chat/sessions/{session_id}")
-async def delete_session(
+def _build_delete_session_response(
     session_id: str,
-    request: Request,
-    ownership: Dict = Depends(
-        validate_session_ownership
-    ),  # SECURITY: Validate ownership
-    file_action: str = "delete",
-    file_options: Optional[str] = None,
-):
-    """Delete a chat session with comprehensive cleanup.
+    request_id: str,
+    file_deletion_result: dict,
+    terminal_cleanup_result: dict,
+    kb_cleanup_result: dict,
+    transcript_cleanup_result: dict,
+) -> dict:
+    """
+    Build response data for delete_session endpoint.
 
-    Issue #281: Refactored from 176 lines to use extracted helper methods.
-    Issue #547: Added knowledge base facts cleanup to prevent orphaned data.
-    Issue #665: Further refactored to reduce function below 50 lines.
+    Issue #620.
 
     Args:
-        session_id: Chat session ID to delete
-        file_action: How to handle conversation files ("delete", "transfer_kb", "transfer_shared")
-        file_options: JSON string with transfer options
+        session_id: Deleted session ID
+        request_id: Request tracking ID
+        file_deletion_result: Result from file handling
+        terminal_cleanup_result: Result from terminal cleanup
+        kb_cleanup_result: Result from KB cleanup
+        transcript_cleanup_result: Result from transcript cleanup
 
     Returns:
-        Success response with deletion details including KB cleanup stats
+        Success response with deletion details
     """
-    request_id = generate_request_id()
-    log_request_context(request, "delete_session", request_id)
-
-    # Validate parameters and parse options
-    parsed_file_options = _validate_delete_session_params(
-        session_id, file_action, file_options
-    )
-
-    # Get chat history manager
-    chat_history_manager = get_chat_history_manager(request)
-
-    # Perform all cleanup operations (Issue #665: orchestration via helper)
-    (
-        file_deletion_result,
-        terminal_cleanup_result,
-        kb_cleanup_result,
-        transcript_cleanup_result,
-    ) = await _perform_all_session_cleanup(
-        request, session_id, file_action, parsed_file_options
-    )
-
-    # Delete session and verify success (Issue #665: verification via helper)
-    await _delete_session_and_verify(chat_history_manager, session_id)
-
-    # Log deletion event with all cleanup results
-    log_chat_event(
-        "session_deleted",
-        session_id,
-        {
-            "request_id": request_id,
-            "file_action": file_action,
-            "file_deletion_result": file_deletion_result,
-            "terminal_cleanup_result": terminal_cleanup_result,
-            "kb_cleanup_result": kb_cleanup_result,
-            "transcript_cleanup_result": transcript_cleanup_result,
-        },
-    )
-
     return create_success_response(
         data={
             "session_id": session_id,
@@ -904,59 +1022,85 @@ async def delete_session(
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
+    operation="delete_session",
+    error_code_prefix="CHAT",
+)
+@router.delete("/chat/sessions/{session_id}")
+async def delete_session(
+    session_id: str,
+    request: Request,
+    ownership: Dict = Depends(
+        validate_session_ownership
+    ),  # SECURITY: Validate ownership
+    file_action: str = "delete",
+    file_options: Optional[str] = None,
+):
+    """
+    Delete a chat session with comprehensive cleanup.
+
+    Issue #281, #547, #620: Refactored using Extract Method pattern.
+    """
+    request_id = generate_request_id()
+    log_request_context(request, "delete_session", request_id)
+
+    parsed_file_options = _validate_delete_session_params(
+        session_id, file_action, file_options
+    )
+
+    chat_history_manager = get_chat_history_manager(request)
+
+    # Perform all cleanup operations (Issue #620)
+    (
+        file_result,
+        terminal_result,
+        kb_result,
+        transcript_result,
+    ) = await _perform_all_session_cleanup(
+        request, session_id, file_action, parsed_file_options
+    )
+
+    await _delete_session_and_verify(chat_history_manager, session_id)
+
+    log_chat_event(
+        "session_deleted",
+        session_id,
+        {"request_id": request_id, "file_action": file_action},
+    )
+
+    return _build_delete_session_response(
+        session_id,
+        request_id,
+        file_result,
+        terminal_result,
+        kb_result,
+        transcript_result,
+    )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
     operation="export_session",
     error_code_prefix="CHAT",
 )
 @router.get("/chat/sessions/{session_id}/export")
 async def export_session(session_id: str, request: Request, format: str = "json"):
-    """Export a chat session in various formats"""
+    """
+    Export a chat session in various formats.
+
+    Issue #620: Refactored using Extract Method pattern.
+    """
     request_id = generate_request_id()
     log_request_context(request, "export_session", request_id)
 
-    # Validate session ID
-    if not validate_chat_session_id(session_id):
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise ValidationError("Invalid session ID format")
+    # Validate inputs (Issue #620: use helpers)
+    _validate_session_id_or_raise(session_id)
+    _validate_export_format_or_raise(format)
 
-    # Validate format
-    if format not in VALID_EXPORT_FORMATS:
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise ValidationError("Invalid export format. Supported: json, txt, csv")
-
-    # Get dependencies from request state
     chat_history_manager = get_chat_history_manager(request)
 
-    # Get session data
-    session_data = await chat_history_manager.export_session(session_id, format)
-
-    if session_data is None:
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise ResourceNotFoundError(f"Session {session_id} not found")
-
-    # Set appropriate content type
-    content_types = {
-        "json": "application/json",
-        "txt": "text/plain",
-        "csv": "text/csv",
-    }
+    session_data = await _export_session_data_or_raise(
+        chat_history_manager, session_id, format
+    )
 
     log_chat_event(
         "session_exported", session_id, {"format": format, "request_id": request_id}
@@ -964,7 +1108,7 @@ async def export_session(session_id: str, request: Request, format: str = "json"
 
     return Response(
         content=session_data,
-        media_type=content_types[format],
+        media_type=_EXPORT_CONTENT_TYPES[format],
         headers={
             "Content-Disposition": (
                 f"attachment; filename=chat_session_{session_id}.{format}"
@@ -1089,23 +1233,6 @@ async def reset_chat(
 # ====================================================================
 
 
-def _validate_session_id_or_raise(session_id: str) -> None:
-    """
-    Validate session ID format and raise ValidationError if invalid.
-
-    Issue #665: Extracted helper to reduce duplication in activity endpoints.
-    """
-    if not validate_chat_session_id(session_id):
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise ValidationError("Invalid session ID format")
-
-
 def _get_memory_graph_or_none(request: Request) -> Optional[AutoBotMemoryGraph]:
     """
     Get memory graph from app state or None if unavailable.
@@ -1161,6 +1288,51 @@ async def _store_single_activity(
             **(activity.metadata or {}),
         },
     )
+
+
+async def _process_activity_batch(
+    memory_graph: AutoBotMemoryGraph,
+    session_id: str,
+    activities: List[ActivityCreate],
+    request_id: str,
+) -> Dict:
+    """
+    Process a batch of activities and store them in memory graph.
+
+    Issue #620.
+
+    Args:
+        memory_graph: Memory graph instance for storage
+        session_id: Session ID for the activities
+        activities: List of activities to process
+        request_id: Request ID for logging
+
+    Returns:
+        Dict with stored_count, failed_count, and stored_ids
+    """
+    stored_count = 0
+    failed_count = 0
+    stored_ids: List[str] = []
+
+    for activity in activities:
+        try:
+            await _store_single_activity(memory_graph, session_id, activity)
+            stored_count += 1
+            stored_ids.append(activity.activity_id)
+        except Exception as activity_error:
+            logger.warning(
+                "[%s] Failed to store activity %s: %s",
+                request_id,
+                activity.activity_id,
+                activity_error,
+            )
+            failed_count += 1
+
+    return {
+        "stored_count": stored_count,
+        "failed_count": failed_count,
+        "stored_ids": stored_ids,
+    }
 
 
 @with_error_handling(
@@ -1243,7 +1415,7 @@ async def add_session_activities_batch(
     Add multiple activities to a chat session in a single request.
 
     Issue #608: User-Centric Session Tracking - Phase 3
-    Issue #665: Refactored to use extracted helpers for validation and storage.
+    Issue #620: Refactored using Extract Method pattern.
     """
     request_id = generate_request_id()
     log_request_context(request, "add_session_activities_batch", request_id)
@@ -1263,31 +1435,18 @@ async def add_session_activities_batch(
             total_activities, request_id, is_batch=True
         )
 
-    stored_count = 0
-    failed_count = 0
-    stored_ids: List[str] = []
-
-    for activity in batch_data.activities:
-        try:
-            await _store_single_activity(memory_graph, session_id, activity)
-            stored_count += 1
-            stored_ids.append(activity.activity_id)
-        except Exception as activity_error:
-            logger.warning(
-                "[%s] Failed to store activity %s: %s",
-                request_id,
-                activity.activity_id,
-                activity_error,
-            )
-            failed_count += 1
+    # Process batch using extracted helper (Issue #620)
+    result = await _process_activity_batch(
+        memory_graph, session_id, batch_data.activities, request_id
+    )
 
     log_chat_event(
         "activities_batch_created",
         session_id,
         {
             "total": total_activities,
-            "stored": stored_count,
-            "failed": failed_count,
+            "stored": result["stored_count"],
+            "failed": result["failed_count"],
             "request_id": request_id,
         },
     )
@@ -1295,13 +1454,13 @@ async def add_session_activities_batch(
     return create_success_response(
         data={
             "total": total_activities,
-            "stored": stored_count,
-            "failed": failed_count,
-            "stored_ids": stored_ids,
+            "stored": result["stored_count"],
+            "failed": result["failed_count"],
+            "stored_ids": result["stored_ids"],
         },
-        message=f"Batch processed: {stored_count} stored, {failed_count} failed",
+        message=f"Batch processed: {result['stored_count']} stored, {result['failed_count']} failed",
         request_id=request_id,
-        status_code=201 if stored_count > 0 else 200,
+        status_code=201 if result["stored_count"] > 0 else 200,
     )
 
 

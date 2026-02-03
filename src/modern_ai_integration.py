@@ -146,6 +146,21 @@ class BaseAIProvider(ABC):
         if wait_time > 0:
             await asyncio.sleep(wait_time)
 
+    def _create_error_response(self, request: AIRequest, error_msg: str) -> AIResponse:
+        """Create a standardized error response for provider failures. Issue #620."""
+        return AIResponse(
+            request_id=request.request_id,
+            provider=self.config.provider,
+            model_name=self.config.model_name,
+            content=f"Error: {error_msg}",
+            usage={"prompt_tokens": 0, "completion_tokens": 0},
+            finish_reason="error",
+            tool_calls=None,
+            confidence=0.0,
+            processing_time=0.0,
+            metadata={"error": error_msg},
+        )
+
 
 class OpenAIGPT4VProvider(BaseAIProvider):
     """OpenAI GPT-4 Vision provider"""
@@ -211,13 +226,52 @@ class OpenAIGPT4VProvider(BaseAIProvider):
             logger.error("OpenAI GPT-4 text generation failed: %s", e)
             return self._create_error_response(request, str(e))
 
+    def _build_openai_image_content(
+        self, prompt: str, images: List[str]
+    ) -> List[Dict[str, Any]]:
+        """Build content list with text and images for OpenAI API. Issue #620."""
+        content = [{"type": "text", "text": prompt}]
+        for image_b64 in images:
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/png;base64,{image_b64}",
+                        "detail": "high",
+                    },
+                }
+            )
+        return content
+
+    def _build_openai_vision_response(
+        self, request: AIRequest, response: Any, processing_time: float
+    ) -> AIResponse:
+        """Build AIResponse from OpenAI vision API response. Issue #620."""
+        return AIResponse(
+            request_id=request.request_id,
+            provider=self.config.provider,
+            model_name="gpt-4-vision-preview",
+            content=response.choices[0].message.content,
+            usage={
+                "prompt_tokens": response.usage.prompt_tokens,
+                "completion_tokens": response.usage.completion_tokens,
+            },
+            finish_reason=response.choices[0].finish_reason,
+            tool_calls=None,
+            confidence=0.85,
+            processing_time=processing_time,
+            metadata={
+                "response_id": response.id,
+                "images_analyzed": len(request.images),
+            },
+        )
+
     async def analyze_image(self, request: AIRequest) -> AIResponse:
-        """Analyze image using GPT-4V"""
+        """Analyze image using GPT-4V. Issue #620."""
         await self._check_rate_limit()
 
         if not self.client:
             return self._create_error_response(request, "OpenAI client not available")
-
         if not request.images:
             return self._create_error_response(
                 request, "No images provided for analysis"
@@ -225,54 +279,22 @@ class OpenAIGPT4VProvider(BaseAIProvider):
 
         try:
             start_time = time.time()
-
-            # Prepare messages with images
             messages = []
             if request.system_message:
                 messages.append({"role": "system", "content": request.system_message})
 
-            # Create content with text and images
-            content = [{"type": "text", "text": request.prompt}]
-
-            for image_b64 in request.images:
-                content.append(
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/png;base64,{image_b64}",
-                            "detail": "high",
-                        },
-                    }
-                )
-
+            content = self._build_openai_image_content(request.prompt, request.images)
             messages.append({"role": "user", "content": content})
 
             response = await self.client.chat.completions.create(
-                model="gpt-4-vision-preview",  # Use vision model
+                model="gpt-4-vision-preview",
                 messages=messages,
                 max_tokens=request.max_tokens or 1000,
                 temperature=request.temperature or self.config.temperature,
             )
 
-            processing_time = time.time() - start_time
-
-            return AIResponse(
-                request_id=request.request_id,
-                provider=self.config.provider,
-                model_name="gpt-4-vision-preview",
-                content=response.choices[0].message.content,
-                usage={
-                    "prompt_tokens": response.usage.prompt_tokens,
-                    "completion_tokens": response.usage.completion_tokens,
-                },
-                finish_reason=response.choices[0].finish_reason,
-                tool_calls=None,
-                confidence=0.85,
-                processing_time=processing_time,
-                metadata={
-                    "response_id": response.id,
-                    "images_analyzed": len(request.images),
-                },
+            return self._build_openai_vision_response(
+                request, response, time.time() - start_time
             )
 
         except Exception as e:
@@ -350,15 +372,55 @@ class AnthropicClaudeProvider(BaseAIProvider):
             logger.error("Anthropic Claude text generation failed: %s", e)
             return self._create_error_response(request, str(e))
 
+    def _build_anthropic_image_content(
+        self, prompt: str, images: List[str]
+    ) -> List[Dict[str, Any]]:
+        """Build content list with text and images for Anthropic API. Issue #620."""
+        content = [{"type": "text", "text": prompt}]
+        for image_b64 in images:
+            content.append(
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": image_b64,
+                    },
+                }
+            )
+        return content
+
+    def _build_anthropic_vision_response(
+        self, request: AIRequest, response: Any, processing_time: float
+    ) -> AIResponse:
+        """Build AIResponse from Anthropic vision API response. Issue #620."""
+        return AIResponse(
+            request_id=request.request_id,
+            provider=self.config.provider,
+            model_name="claude-3-opus-20240229",
+            content=response.content[0].text,
+            usage={
+                "prompt_tokens": response.usage.input_tokens,
+                "completion_tokens": response.usage.output_tokens,
+            },
+            finish_reason=response.stop_reason,
+            tool_calls=None,
+            confidence=0.9,
+            processing_time=processing_time,
+            metadata={
+                "response_id": response.id,
+                "images_analyzed": len(request.images),
+            },
+        )
+
     async def analyze_image(self, request: AIRequest) -> AIResponse:
-        """Analyze image using Claude-3 Vision"""
+        """Analyze image using Claude-3 Vision. Issue #620."""
         await self._check_rate_limit()
 
         if not self.client:
             return self._create_error_response(
                 request, "Anthropic client not available"
             )
-
         if not request.images:
             return self._create_error_response(
                 request, "No images provided for analysis"
@@ -366,51 +428,21 @@ class AnthropicClaudeProvider(BaseAIProvider):
 
         try:
             start_time = time.time()
-
-            # Prepare content with images
-            content = [{"type": "text", "text": request.prompt}]
-
-            for image_b64 in request.images:
-                content.append(
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/png",
-                            "data": image_b64,
-                        },
-                    }
-                )
-
+            content = self._build_anthropic_image_content(
+                request.prompt, request.images
+            )
             messages = [{"role": "user", "content": content}]
 
             response = await self.client.messages.create(
-                model="claude-3-opus-20240229",  # Use vision-capable model
+                model="claude-3-opus-20240229",
                 max_tokens=request.max_tokens or 1000,
                 temperature=request.temperature or self.config.temperature,
                 system=request.system_message,
                 messages=messages,
             )
 
-            processing_time = time.time() - start_time
-
-            return AIResponse(
-                request_id=request.request_id,
-                provider=self.config.provider,
-                model_name="claude-3-opus-20240229",
-                content=response.content[0].text,
-                usage={
-                    "prompt_tokens": response.usage.input_tokens,
-                    "completion_tokens": response.usage.output_tokens,
-                },
-                finish_reason=response.stop_reason,
-                tool_calls=None,
-                confidence=0.9,
-                processing_time=processing_time,
-                metadata={
-                    "response_id": response.id,
-                    "images_analyzed": len(request.images),
-                },
+            return self._build_anthropic_vision_response(
+                request, response, time.time() - start_time
             )
 
         except Exception as e:
@@ -842,92 +874,104 @@ class ModernAIIntegration:
 
         logger.info("Modern AI Integration initialized")
 
-    def _load_model_configurations(self) -> Dict[AIProvider, AIModelConfig]:
-        """Load model configurations"""
-        configs = {
-            AIProvider.OPENAI_GPT4V: AIModelConfig(
-                provider=AIProvider.OPENAI_GPT4V,
-                model_name="gpt-4-turbo-preview",
-                capabilities=[
-                    ModelCapability.TEXT_GENERATION,
-                    ModelCapability.IMAGE_ANALYSIS,
-                    ModelCapability.CODE_GENERATION,
-                    ModelCapability.REASONING,
-                    ModelCapability.MULTIMODAL,
-                    ModelCapability.FUNCTION_CALLING,
-                    ModelCapability.VISION,
-                ],
-                api_endpoint=os.getenv(
-                    "OPENAI_API_BASE_URL", "https://api.openai.com/v1"
-                )
-                + "/chat/completions",
-                api_key=None,  # Should be loaded from config/environment
-                max_tokens=4000,
-                temperature=0.7,
-                supports_streaming=True,
-                rate_limit_per_minute=50,
-                cost_per_token=0.00003,
-                metadata={"context_window": 128000},
-            ),
-            AIProvider.ANTHROPIC_CLAUDE: AIModelConfig(
-                provider=AIProvider.ANTHROPIC_CLAUDE,
-                model_name="claude-3-opus-20240229",
-                capabilities=[
-                    ModelCapability.TEXT_GENERATION,
-                    ModelCapability.IMAGE_ANALYSIS,
-                    ModelCapability.CODE_GENERATION,
-                    ModelCapability.REASONING,
-                    ModelCapability.MULTIMODAL,
-                    ModelCapability.VISION,
-                ],
-                api_endpoint=os.getenv(
-                    "ANTHROPIC_API_BASE_URL", "https://api.anthropic.com/v1"
-                )
-                + "/messages",
-                api_key=None,  # Should be loaded from config/environment
-                max_tokens=4000,
-                temperature=0.7,
-                supports_streaming=True,
-                rate_limit_per_minute=50,
-                cost_per_token=0.000015,
-                metadata={"context_window": 200000},
-            ),
-            AIProvider.GOOGLE_GEMINI: AIModelConfig(
-                provider=AIProvider.GOOGLE_GEMINI,
-                model_name="gemini-pro",
-                capabilities=[
-                    ModelCapability.TEXT_GENERATION,
-                    ModelCapability.IMAGE_ANALYSIS,
-                    ModelCapability.CODE_GENERATION,
-                    ModelCapability.REASONING,
-                    ModelCapability.MULTIMODAL,
-                    ModelCapability.VISION,
-                ],
-                api_endpoint="https://generativelanguage.googleapis.com/v1beta/models",
-                api_key=None,  # Should be loaded from config/environment
-                max_tokens=2048,
-                temperature=0.7,
-                supports_streaming=False,
-                rate_limit_per_minute=60,
-                cost_per_token=0.00001,
-                metadata={"context_window": 32000},
-            ),
-            AIProvider.LOCAL_MODEL: AIModelConfig(
-                provider=AIProvider.LOCAL_MODEL,
-                model_name="local-model",
-                capabilities=[ModelCapability.TEXT_GENERATION],
-                api_endpoint=get_service_url("ollama"),
-                api_key=None,
-                max_tokens=2048,
-                temperature=0.7,
-                supports_streaming=False,
-                rate_limit_per_minute=1000,
-                cost_per_token=0.0,
-                metadata={"context_window": 4096},
-            ),
-        }
+    def _create_openai_config(self) -> AIModelConfig:
+        """Create OpenAI GPT-4V model configuration. Issue #620."""
+        return AIModelConfig(
+            provider=AIProvider.OPENAI_GPT4V,
+            model_name="gpt-4-turbo-preview",
+            capabilities=[
+                ModelCapability.TEXT_GENERATION,
+                ModelCapability.IMAGE_ANALYSIS,
+                ModelCapability.CODE_GENERATION,
+                ModelCapability.REASONING,
+                ModelCapability.MULTIMODAL,
+                ModelCapability.FUNCTION_CALLING,
+                ModelCapability.VISION,
+            ],
+            api_endpoint=os.getenv("OPENAI_API_BASE_URL", "https://api.openai.com/v1")
+            + "/chat/completions",
+            api_key=None,
+            max_tokens=4000,
+            temperature=0.7,
+            supports_streaming=True,
+            rate_limit_per_minute=50,
+            cost_per_token=0.00003,
+            metadata={"context_window": 128000},
+        )
 
-        return configs
+    def _create_anthropic_config(self) -> AIModelConfig:
+        """Create Anthropic Claude model configuration. Issue #620."""
+        return AIModelConfig(
+            provider=AIProvider.ANTHROPIC_CLAUDE,
+            model_name="claude-3-opus-20240229",
+            capabilities=[
+                ModelCapability.TEXT_GENERATION,
+                ModelCapability.IMAGE_ANALYSIS,
+                ModelCapability.CODE_GENERATION,
+                ModelCapability.REASONING,
+                ModelCapability.MULTIMODAL,
+                ModelCapability.VISION,
+            ],
+            api_endpoint=os.getenv(
+                "ANTHROPIC_API_BASE_URL", "https://api.anthropic.com/v1"
+            )
+            + "/messages",
+            api_key=None,
+            max_tokens=4000,
+            temperature=0.7,
+            supports_streaming=True,
+            rate_limit_per_minute=50,
+            cost_per_token=0.000015,
+            metadata={"context_window": 200000},
+        )
+
+    def _create_gemini_config(self) -> AIModelConfig:
+        """Create Google Gemini model configuration. Issue #620."""
+        return AIModelConfig(
+            provider=AIProvider.GOOGLE_GEMINI,
+            model_name="gemini-pro",
+            capabilities=[
+                ModelCapability.TEXT_GENERATION,
+                ModelCapability.IMAGE_ANALYSIS,
+                ModelCapability.CODE_GENERATION,
+                ModelCapability.REASONING,
+                ModelCapability.MULTIMODAL,
+                ModelCapability.VISION,
+            ],
+            api_endpoint="https://generativelanguage.googleapis.com/v1beta/models",
+            api_key=None,
+            max_tokens=2048,
+            temperature=0.7,
+            supports_streaming=False,
+            rate_limit_per_minute=60,
+            cost_per_token=0.00001,
+            metadata={"context_window": 32000},
+        )
+
+    def _create_local_model_config(self) -> AIModelConfig:
+        """Create local model configuration. Issue #620."""
+        return AIModelConfig(
+            provider=AIProvider.LOCAL_MODEL,
+            model_name="local-model",
+            capabilities=[ModelCapability.TEXT_GENERATION],
+            api_endpoint=get_service_url("ollama"),
+            api_key=None,
+            max_tokens=2048,
+            temperature=0.7,
+            supports_streaming=False,
+            rate_limit_per_minute=1000,
+            cost_per_token=0.0,
+            metadata={"context_window": 4096},
+        )
+
+    def _load_model_configurations(self) -> Dict[AIProvider, AIModelConfig]:
+        """Load model configurations. Issue #620."""
+        return {
+            AIProvider.OPENAI_GPT4V: self._create_openai_config(),
+            AIProvider.ANTHROPIC_CLAUDE: self._create_anthropic_config(),
+            AIProvider.GOOGLE_GEMINI: self._create_gemini_config(),
+            AIProvider.LOCAL_MODEL: self._create_local_model_config(),
+        }
 
     def _get_provider_class(self, provider_enum: AIProvider):
         """Get provider class for enum (Issue #315: extracted for depth reduction).
@@ -966,6 +1010,51 @@ class ModernAIIntegration:
                     f"Failed to initialize provider {provider_enum.value}: {e}"
                 )
 
+    def _create_ai_request(
+        self,
+        provider: AIProvider,
+        prompt: str,
+        images: Optional[List[str]],
+        system_message: Optional[str],
+        task_type: str,
+        **kwargs,
+    ) -> AIRequest:
+        """Create an AI request object with provided parameters. Issue #620."""
+        return AIRequest(
+            request_id=f"ai_req_{int(time.time() * 1000)}",
+            provider=provider,
+            model_name=self.model_configs[provider].model_name,
+            prompt=prompt,
+            images=images,
+            system_message=system_message,
+            max_tokens=kwargs.get("max_tokens"),
+            temperature=kwargs.get("temperature"),
+            tools=kwargs.get("tools"),
+            stream=kwargs.get("stream", False),
+            metadata={"task_type": task_type},
+        )
+
+    def _update_request_history(self, response: AIResponse) -> None:
+        """Update request history with response, maintaining max size. Issue #620."""
+        self.request_history.append(response)
+        if len(self.request_history) > self.max_history:
+            self.request_history = self.request_history[-self.max_history :]
+
+    def _build_task_inputs(
+        self,
+        provider: AIProvider,
+        task_type: str,
+        images: Optional[List[str]],
+        prompt: str,
+    ) -> Dict[str, Any]:
+        """Build inputs dict for task tracking context. Issue #620."""
+        return {
+            "provider": provider.value,
+            "task_type": task_type,
+            "has_images": bool(images),
+            "prompt_length": len(prompt),
+        }
+
     async def process_with_ai(
         self,
         provider: AIProvider,
@@ -975,53 +1064,30 @@ class ModernAIIntegration:
         task_type: str = "general",
         **kwargs,
     ) -> AIResponse:
-        """Process request with specified AI provider"""
-
+        """Process request with specified AI provider. Issue #620."""
+        task_inputs = self._build_task_inputs(provider, task_type, images, prompt)
         async with task_tracker.track_task(
             f"AI Processing: {provider.value}",
             f"Processing {task_type} request with {provider.value}",
             agent_type="modern_ai_integration",
             priority=TaskPriority.HIGH,
-            inputs={
-                "provider": provider.value,
-                "task_type": task_type,
-                "has_images": bool(images),
-                "prompt_length": len(prompt),
-            },
+            inputs=task_inputs,
         ) as task_context:
             try:
-                # Check if provider is available
                 if provider not in self.providers:
                     raise ValueError(f"Provider {provider.value} not available")
 
                 provider_instance = self.providers[provider]
-
-                # Create request
-                request = AIRequest(
-                    request_id=f"ai_req_{int(time.time() * 1000)}",
-                    provider=provider,
-                    model_name=self.model_configs[provider].model_name,
-                    prompt=prompt,
-                    images=images,
-                    system_message=system_message,
-                    max_tokens=kwargs.get("max_tokens"),
-                    temperature=kwargs.get("temperature"),
-                    tools=kwargs.get("tools"),
-                    stream=kwargs.get("stream", False),
-                    metadata={"task_type": task_type},
+                request = self._create_ai_request(
+                    provider, prompt, images, system_message, task_type, **kwargs
                 )
 
-                # Route to appropriate method
                 if images:
                     response = await provider_instance.analyze_image(request)
                 else:
                     response = await provider_instance.generate_text(request)
 
-                # Update history
-                self.request_history.append(response)
-                if len(self.request_history) > self.max_history:
-                    self.request_history = self.request_history[-self.max_history :]
-
+                self._update_request_history(response)
                 task_context.set_outputs(
                     {
                         "response_length": len(response.content),
@@ -1030,9 +1096,10 @@ class ModernAIIntegration:
                         "finish_reason": response.finish_reason,
                     }
                 )
-
                 logger.info(
-                    f"AI processing completed: {provider.value} - {response.finish_reason}"
+                    "AI processing completed: %s - %s",
+                    provider.value,
+                    response.finish_reason,
                 )
                 return response
 

@@ -340,6 +340,68 @@ async def get_data_quality_metrics(
     return result
 
 
+def _determine_health_status(stats: dict, quality: dict) -> str:
+    """
+    Determine overall health status from stats and quality metrics. Issue #620.
+
+    Args:
+        stats: Knowledge base statistics dict
+        quality: Data quality metrics dict
+
+    Returns:
+        Health status string: "healthy", "warning", "degraded", or "error"
+    """
+    if stats.get("status") == "error":
+        return "error"
+
+    overall_score = quality.get("overall_score", 100)
+    if overall_score < 50:
+        return "degraded"
+    if overall_score < 70:
+        return "warning"
+    return "healthy"
+
+
+def _build_stats_summary(stats: dict) -> dict:
+    """
+    Build stats summary dict from raw stats. Issue #620.
+
+    Args:
+        stats: Raw knowledge base statistics
+
+    Returns:
+        Formatted stats summary dict
+    """
+    return {
+        "total_facts": stats.get("total_facts", 0),
+        "total_vectors": stats.get("total_vectors", 0),
+        "db_size": stats.get("db_size", 0),
+        "categories": len(stats.get("categories", [])),
+        "embedding_cache": stats.get("embedding_cache", {}),
+    }
+
+
+def _build_quality_summary(quality: dict) -> dict:
+    """
+    Build quality summary dict from raw quality metrics. Issue #620.
+
+    Args:
+        quality: Raw data quality metrics
+
+    Returns:
+        Formatted quality summary dict
+    """
+    return {
+        "overall_score": quality.get("overall_score", 0),
+        "dimensions": {
+            dim: data.get("score", 0)
+            for dim, data in quality.get("dimensions", {}).items()
+        },
+        "critical_issues": quality.get("summary", {}).get("critical_issues", 0),
+        "warnings": quality.get("summary", {}).get("warnings", 0),
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_health_dashboard",
@@ -354,6 +416,7 @@ async def get_health_dashboard(
     Get a combined health dashboard with stats and quality metrics.
 
     Issue #418: Health dashboard endpoint.
+    Issue #620: Refactored using Extract Method pattern.
     Issue #744: Requires admin authentication.
 
     Returns:
@@ -371,41 +434,13 @@ async def get_health_dashboard(
 
     logger.info("Health dashboard requested")
 
-    # Get both stats and quality metrics in parallel
-    stats_task = kb.get_stats()
-    quality_task = kb.get_data_quality_metrics()
-
-    stats, quality = await asyncio.gather(stats_task, quality_task)
-
-    # Determine overall health status
-    health_status = "healthy"
-    if quality.get("overall_score", 100) < 50:
-        health_status = "degraded"
-    elif quality.get("overall_score", 100) < 70:
-        health_status = "warning"
-
-    if stats.get("status") == "error":
-        health_status = "error"
+    stats, quality = await asyncio.gather(kb.get_stats(), kb.get_data_quality_metrics())
 
     return {
-        "status": health_status,
+        "status": _determine_health_status(stats, quality),
         "last_updated": datetime.now().isoformat(),
-        "stats": {
-            "total_facts": stats.get("total_facts", 0),
-            "total_vectors": stats.get("total_vectors", 0),
-            "db_size": stats.get("db_size", 0),
-            "categories": len(stats.get("categories", [])),
-            "embedding_cache": stats.get("embedding_cache", {}),
-        },
-        "quality": {
-            "overall_score": quality.get("overall_score", 0),
-            "dimensions": {
-                dim: data.get("score", 0)
-                for dim, data in quality.get("dimensions", {}).items()
-            },
-            "critical_issues": quality.get("summary", {}).get("critical_issues", 0),
-            "warnings": quality.get("summary", {}).get("warnings", 0),
-        },
+        "stats": _build_stats_summary(stats),
+        "quality": _build_quality_summary(quality),
         "top_recommendations": quality.get("recommendations", [])[:3],
     }
 
@@ -551,6 +586,51 @@ async def _process_vectorization(kb, scanner, result: dict, machine_id: str) -> 
     return vectorization_results
 
 
+def _extract_scan_params(request_data: ScanHostChangesRequest) -> tuple:
+    """
+    Extract and return scan parameters from request. Issue #620.
+
+    Args:
+        request_data: The scan host changes request
+
+    Returns:
+        Tuple of (machine_id, force, scan_type, auto_vectorize)
+    """
+    return (
+        request_data.machine_id,
+        request_data.force,
+        request_data.scan_type,
+        request_data.auto_vectorize,
+    )
+
+
+def _perform_fast_scan(
+    redis_client, machine_id: str, scan_type: str, force: bool
+) -> tuple:
+    """
+    Initialize scanner and perform fast document scan. Issue #620.
+
+    Args:
+        redis_client: Redis client instance
+        machine_id: Machine identifier
+        scan_type: Type of scan to perform
+        force: Whether to force rescan
+
+    Returns:
+        Tuple of (scanner instance, scan result dict)
+    """
+    from backend.services.fast_document_scanner import FastDocumentScanner
+
+    scanner = FastDocumentScanner(redis_client)
+    result = scanner.scan_for_changes(
+        machine_id=machine_id,
+        scan_type=scan_type,
+        limit=100,
+        force=force,
+    )
+    return scanner, result
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="scan_host_changes",
@@ -564,61 +644,31 @@ async def scan_host_changes(
 ):
     """
     ULTRA-FAST document change scanner using file metadata.
+
     Issue #281: Refactored from 162 lines to use extracted helper methods.
+    Issue #620: Further refactored with Extract Method pattern.
     Issue #744: Requires admin authentication.
 
     Performance: ~0.5 seconds for 10,000 documents (100x faster than subprocess approach)
-
-    Detects:
-    - New documents (software installed)
-    - Updated documents (man pages changed via mtime/size)
-    - Removed documents (software uninstalled)
-
-    Method:
-    - Uses file metadata (mtime, size) instead of content reading
-    - Direct filesystem access (no subprocess overhead)
-    - Redis caching for incremental scans
 
     Args:
         request_data: Scan configuration with machine_id, force, and scan_type
 
     Returns:
-        Dictionary with change detection results:
-        - added: List of new documents
-        - updated: List of changed documents (mtime/size changed)
-        - removed: List of removed documents
-        - unchanged: Count of unchanged documents
-        - scan_duration_seconds: Actual scan time
+        Dictionary with change detection results
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-
     if kb is None:
         raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
-    # Extract parameters from request
-    machine_id = request_data.machine_id
-    force = request_data.force
-    scan_type = request_data.scan_type
-    auto_vectorize = request_data.auto_vectorize
+    machine_id, force, scan_type, auto_vectorize = _extract_scan_params(request_data)
 
     logger.info(
         f"Fast scan starting for {machine_id} (type={scan_type}, auto_vectorize={auto_vectorize})"
     )
 
-    # Use ultra-fast metadata-based scanner
-    from backend.services.fast_document_scanner import FastDocumentScanner
+    scanner, result = _perform_fast_scan(kb.redis_client, machine_id, scan_type, force)
 
-    scanner = FastDocumentScanner(kb.redis_client)
-
-    # Perform fast scan (limit to 100 for reasonable response time)
-    result = scanner.scan_for_changes(
-        machine_id=machine_id,
-        scan_type=scan_type,
-        limit=100,  # Process first 100 documents
-        force=force,
-    )
-
-    # Auto-vectorization (Issue #281: uses helper)
     if auto_vectorize:
         result["vectorization"] = await _process_vectorization(
             kb, scanner, result, machine_id
@@ -696,6 +746,62 @@ def _process_orphan_batch(keys: list, results: list) -> tuple:
     return file_based_count, orphaned_facts
 
 
+def _scan_redis_for_orphans(redis_client) -> tuple:
+    """
+    Scan Redis for orphaned facts (file-based facts with missing source files). Issue #620.
+
+    Args:
+        redis_client: Redis client instance
+
+    Returns:
+        Tuple of (total_checked, orphaned_facts_list)
+    """
+    orphaned_facts = []
+    cursor = 0
+    total_checked = 0
+
+    while True:
+        cursor, keys = redis_client.scan(cursor, match="fact:*", count=100)
+
+        if not keys:
+            if cursor == 0:
+                break
+            continue
+
+        pipe = redis_client.pipeline()
+        for key in keys:
+            pipe.hget(key, "metadata")
+        results = pipe.execute()
+
+        batch_checked, batch_orphans = _process_orphan_batch(keys, results)
+        total_checked += batch_checked
+        orphaned_facts.extend(batch_orphans)
+
+        if cursor == 0:
+            break
+
+    return total_checked, orphaned_facts
+
+
+def _build_orphan_response(total_checked: int, orphaned_facts: list) -> dict:
+    """
+    Build the response dict for orphan finding operations. Issue #620.
+
+    Args:
+        total_checked: Number of facts checked
+        orphaned_facts: List of orphaned facts
+
+    Returns:
+        Response dict with status and orphan info
+    """
+    return {
+        "status": "success",
+        "total_facts_checked": total_checked,
+        "orphaned_count": len(orphaned_facts),
+        "orphaned_facts": orphaned_facts,
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="find_orphaned_facts",
@@ -708,62 +814,28 @@ async def find_orphaned_facts(
 ):
     """
     Find facts whose source files no longer exist.
-    Only checks facts with file_path metadata.
 
+    Issue #620: Refactored using Extract Method pattern.
     Issue #744: Requires admin authentication.
 
     Returns:
-        List of orphaned facts
+        List of orphaned facts with file_path metadata
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-
     if kb is None:
         raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
     logger.info("Scanning for orphaned facts...")
 
-    # Issue #361 - avoid blocking - run scan/pipeline in thread pool
-    def _scan_for_orphans():
-        orphaned_facts = []
-        cursor = 0
-        total_checked = 0
-
-        while True:
-            cursor, keys = kb.redis_client.scan(cursor, match="fact:*", count=100)
-
-            if not keys:
-                if cursor == 0:
-                    break
-                continue
-
-            # Use pipeline for batch operations
-            pipe = kb.redis_client.pipeline()
-            for key in keys:
-                pipe.hget(key, "metadata")
-            results = pipe.execute()
-
-            # Process batch (extracted helper reduces nesting)
-            batch_checked, batch_orphans = _process_orphan_batch(keys, results)
-            total_checked += batch_checked
-            orphaned_facts.extend(batch_orphans)
-
-            if cursor == 0:
-                break
-
-        return total_checked, orphaned_facts
-
-    total_checked, orphaned_facts = await asyncio.to_thread(_scan_for_orphans)
+    total_checked, orphaned_facts = await asyncio.to_thread(
+        _scan_redis_for_orphans, kb.redis_client
+    )
 
     logger.info(
         f"Checked {total_checked} facts with file paths, found {len(orphaned_facts)} orphans"
     )
 
-    return {
-        "status": "success",
-        "total_facts_checked": total_checked,
-        "orphaned_count": len(orphaned_facts),
-        "orphaned_facts": orphaned_facts,
-    }
+    return _build_orphan_response(total_checked, orphaned_facts)
 
 
 @with_error_handling(
@@ -1285,6 +1357,87 @@ async def import_knowledge(
 # ===== FACT MANAGEMENT ENDPOINTS =====
 
 
+def _validate_update_fact_request(fact_id: str, request: UpdateFactRequest) -> None:
+    """
+    Validate update fact request parameters. Issue #620.
+
+    Args:
+        fact_id: The fact ID to validate
+        request: The update request to validate
+
+    Raises:
+        HTTPException: If validation fails
+    """
+    if not fact_id or not isinstance(fact_id, str):
+        raise HTTPException(status_code=400, detail="Invalid fact_id format")
+
+    if request.content is None and request.metadata is None:
+        raise HTTPException(
+            status_code=400,
+            detail="At least one field (content or metadata) must be provided",
+        )
+
+
+async def _get_kb_with_method(req: Request, method_name: str) -> object:
+    """
+    Get knowledge base instance and verify it has the required method. Issue #620.
+
+    Args:
+        req: FastAPI request object
+        method_name: Name of method that must exist on kb
+
+    Returns:
+        Knowledge base instance
+
+    Raises:
+        HTTPException: If kb not initialized or method not available
+    """
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge base not initialized - please check logs for errors",
+        )
+
+    if not hasattr(kb, method_name):
+        op_name = method_name.replace("_", " ").title()
+        raise HTTPException(
+            status_code=501,
+            detail=f"{op_name} operation not supported by current KB implementation",
+        )
+
+    return kb
+
+
+def _handle_update_fact_result(result: dict, fact_id: str) -> dict:
+    """
+    Handle the result from kb.update_fact and return appropriate response. Issue #620.
+
+    Args:
+        result: Result dict from kb.update_fact
+        fact_id: The fact ID that was updated
+
+    Returns:
+        Success response dict
+
+    Raises:
+        HTTPException: If update failed
+    """
+    if result.get("success"):
+        return {
+            "status": "success",
+            "fact_id": fact_id,
+            "updated_fields": result.get("updated_fields", []),
+            "vector_updated": result.get("vector_updated", False),
+            "message": result.get("message", "Fact updated successfully"),
+        }
+
+    error_message = result.get("message", "Unknown error")
+    if "not found" in error_message.lower():
+        raise HTTPException(status_code=404, detail=error_message)
+    raise HTTPException(status_code=500, detail=error_message)
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_fact",
@@ -1301,6 +1454,7 @@ async def update_fact(
     Update an existing knowledge base fact.
 
     Issue #744: Requires admin authentication.
+    Issue #620: Refactored using Extract Method pattern.
 
     Parameters:
     - fact_id: UUID of the fact to update
@@ -1313,31 +1467,9 @@ async def update_fact(
     - updated_fields: List of fields that were updated
     - message: Success or error message
     """
-    # Validate fact_id format
-    if not fact_id or not isinstance(fact_id, str):
-        raise HTTPException(status_code=400, detail="Invalid fact_id format")
+    _validate_update_fact_request(fact_id, request)
 
-    # Validate at least one field is provided
-    if request.content is None and request.metadata is None:
-        raise HTTPException(
-            status_code=400,
-            detail="At least one field (content or metadata) must be provided",
-        )
-
-    # Get knowledge base instance
-    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-    if kb is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Knowledge base not initialized - please check logs for errors",
-        )
-
-    # Check if update_fact method exists (KnowledgeBaseV2)
-    if not hasattr(kb, "update_fact"):
-        raise HTTPException(
-            status_code=501,
-            detail="Update operation not supported by current knowledge base implementation",
-        )
+    kb = await _get_kb_with_method(req, "update_fact")
 
     content_status = "provided" if request.content else "unchanged"
     metadata_status = "provided" if request.metadata else "unchanged"
@@ -1345,27 +1477,11 @@ async def update_fact(
         f"Updating fact {fact_id}: content={content_status}, metadata={metadata_status}"
     )
 
-    # Call update_fact method
     result = await kb.update_fact(
         fact_id=fact_id, content=request.content, metadata=request.metadata
     )
 
-    # Check if update was successful
-    if result.get("success"):
-        return {
-            "status": "success",
-            "fact_id": fact_id,
-            "updated_fields": result.get("updated_fields", []),
-            "vector_updated": result.get("vector_updated", False),
-            "message": result.get("message", "Fact updated successfully"),
-        }
-    else:
-        # Update failed - return error
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        else:
-            raise HTTPException(status_code=500, detail=error_message)
+    return _handle_update_fact_result(result, fact_id)
 
 
 @with_error_handling(

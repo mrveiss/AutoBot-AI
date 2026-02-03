@@ -255,6 +255,61 @@ async def _generate_batch_embeddings(
     return await _generate_batch_embeddings_fallback(documents, batch_size)
 
 
+def _convert_embeddings_to_lists(batch_embeddings: List) -> List[List[float]]:
+    """
+    Convert numpy arrays to lists for ChromaDB compatibility.
+
+    Issue #620: Extracted from _generate_batch_embeddings_fallback. Issue #620.
+    """
+    result = []
+    for emb in batch_embeddings:
+        result.append(emb.tolist() if hasattr(emb, "tolist") else list(emb))
+    return result
+
+
+def _create_empty_embeddings(count: int) -> List[List[float]]:
+    """
+    Create empty embedding vectors for failed batch processing.
+
+    Issue #620: Extracted from _generate_batch_embeddings_fallback. Issue #620.
+    """
+    return [[0.0] * 384 for _ in range(count)]  # MiniLM-L6-v2 dimension
+
+
+async def _process_embedding_batch(
+    chunker,
+    batch_docs: List[str],
+    batch_index: int,
+    batch_size: int,
+    total_docs: int,
+) -> List[List[float]]:
+    """
+    Process a single batch of documents for embeddings.
+
+    Issue #620: Extracted from _generate_batch_embeddings_fallback. Issue #620.
+    """
+    try:
+        batch_embeddings = await chunker._compute_sentence_embeddings_async(batch_docs)
+        result = _convert_embeddings_to_lists(batch_embeddings)
+
+        if total_docs > 100 and (batch_index + batch_size) % (batch_size * 5) == 0:
+            progress = min(100, int((batch_index + batch_size) / total_docs * 100))
+            logger.info(
+                "Fallback embedding progress: %d%% (%d/%d)",
+                progress,
+                batch_index + batch_size,
+                total_docs,
+            )
+
+        if batch_index % (batch_size * 2) == 0:
+            await asyncio.sleep(0)
+
+        return result
+    except Exception as e:
+        logger.error("Fallback batch embedding failed at index %d: %s", batch_index, e)
+        return _create_empty_embeddings(len(batch_docs))
+
+
 async def _generate_batch_embeddings_fallback(
     documents: List[str],
     batch_size: int = EMBEDDING_BATCH_SIZE,
@@ -262,8 +317,8 @@ async def _generate_batch_embeddings_fallback(
     """
     Generate embeddings using local semantic chunker (fallback).
 
-    Issue #681: Original implementation preserved as fallback when
-    NPU worker is unavailable or fails.
+    Issue #681: Original implementation preserved as fallback.
+    Issue #620: Refactored with helper functions. Issue #620.
 
     Args:
         documents: List of document strings to embed
@@ -283,43 +338,14 @@ async def _generate_batch_embeddings_fallback(
 
     all_embeddings = []
     total_docs = len(documents)
-
     start_time = asyncio.get_running_loop().time()
 
     for i in range(0, total_docs, batch_size):
         batch_docs = documents[i : i + batch_size]
-
-        try:
-            # Use async batch embedding method
-            batch_embeddings = await chunker._compute_sentence_embeddings_async(
-                batch_docs
-            )
-
-            # Convert numpy arrays to lists for ChromaDB
-            for emb in batch_embeddings:
-                all_embeddings.append(
-                    emb.tolist() if hasattr(emb, "tolist") else list(emb)
-                )
-
-            # Log progress for large batches
-            if total_docs > 100 and (i + batch_size) % (batch_size * 5) == 0:
-                progress = min(100, int((i + batch_size) / total_docs * 100))
-                logger.info(
-                    "Fallback embedding progress: %d%% (%d/%d)",
-                    progress,
-                    i + batch_size,
-                    total_docs,
-                )
-
-            # Yield to event loop periodically
-            if i % (batch_size * 2) == 0:
-                await asyncio.sleep(0)
-
-        except Exception as e:
-            logger.error("Fallback batch embedding failed at index %d: %s", i, e)
-            # Fill with empty embeddings for failed batch
-            for _ in batch_docs:
-                all_embeddings.append([0.0] * 384)  # MiniLM-L6-v2 dimension
+        batch_result = await _process_embedding_batch(
+            chunker, batch_docs, i, batch_size, total_docs
+        )
+        all_embeddings.extend(batch_result)
 
     elapsed = asyncio.get_running_loop().time() - start_time
     logger.info(
@@ -1322,6 +1348,140 @@ async def _process_batches_parallel(
     return items_stored
 
 
+async def _process_batches_sequential(
+    code_collection,
+    batch_ids: list,
+    batch_documents: list,
+    batch_metadatas: list,
+    batch_size: int,
+    total_batches: int,
+    total_items: int,
+    task_id: str,
+    update_progress,
+    update_stats,
+    batch_embeddings: Optional[List[List[float]]],
+) -> int:
+    """
+    Process batches sequentially (one at a time).
+
+    Issue #620: Extracted from _store_batches_to_chromadb to reduce function length.
+
+    Returns:
+        Total number of items stored. Issue #620.
+    """
+    items_stored = 0
+    for i in range(0, total_items, batch_size):
+        batch_num = i // batch_size + 1
+        items_stored += await _store_single_batch(
+            code_collection,
+            batch_ids,
+            batch_documents,
+            batch_metadatas,
+            i,
+            batch_size,
+            batch_num,
+            total_batches,
+            total_items,
+            task_id,
+            update_progress,
+            update_stats,
+            batch_embeddings=batch_embeddings,
+        )
+    return items_stored
+
+
+def _log_chromadb_storage_config(
+    task_id: str,
+    total_batches: int,
+    batch_embeddings: Optional[List[List[float]]],
+) -> None:
+    """
+    Log ChromaDB storage configuration details.
+
+    Issue #620: Extracted from _store_batches_to_chromadb. Issue #620.
+    """
+    logger.info(
+        "[Task %s] ChromaDB storage config: batch_size=%d, parallel_batches=%d, "
+        "total_batches=%d, embeddings=%s",
+        task_id,
+        CHROMADB_BATCH_SIZE,
+        PARALLEL_BATCH_COUNT,
+        total_batches,
+        "precomputed" if batch_embeddings else "auto",
+    )
+
+
+async def _update_chromadb_progress(
+    update_progress,
+    total_items: int,
+    total_batches: int,
+) -> None:
+    """
+    Send initial progress update for ChromaDB batch storage.
+
+    Issue #620: Extracted from _store_batches_to_chromadb. Issue #620.
+    """
+    await update_progress(
+        operation="Writing to ChromaDB",
+        current=0,
+        total=total_items,
+        current_file=f"Batch storage ({PARALLEL_BATCH_COUNT} parallel)...",
+        phase="store",
+        batch_info={"current": 0, "total": total_batches, "items": 0},
+    )
+
+
+async def _execute_batch_storage(
+    code_collection,
+    batch_ids: list,
+    batch_documents: list,
+    batch_metadatas: list,
+    total_batches: int,
+    total_items: int,
+    task_id: str,
+    update_progress,
+    update_stats,
+    batch_embeddings: Optional[List[List[float]]],
+) -> int:
+    """
+    Execute batch storage using parallel or sequential processing.
+
+    Issue #620: Extracted from _store_batches_to_chromadb. Issue #620.
+    """
+    batch_indices = list(range(0, total_items, CHROMADB_BATCH_SIZE))
+
+    if PARALLEL_BATCH_COUNT > 1:
+        return await _process_batches_parallel(
+            code_collection,
+            batch_ids,
+            batch_documents,
+            batch_metadatas,
+            batch_indices,
+            CHROMADB_BATCH_SIZE,
+            PARALLEL_BATCH_COUNT,
+            total_batches,
+            total_items,
+            task_id,
+            update_progress,
+            update_stats,
+            batch_embeddings,
+        )
+
+    return await _process_batches_sequential(
+        code_collection,
+        batch_ids,
+        batch_documents,
+        batch_metadatas,
+        CHROMADB_BATCH_SIZE,
+        total_batches,
+        total_items,
+        task_id,
+        update_progress,
+        update_stats,
+        batch_embeddings,
+    )
+
+
 async def _store_batches_to_chromadb(
     code_collection,
     batch_ids: list,
@@ -1339,86 +1499,40 @@ async def _store_batches_to_chromadb(
     Issue #281, #398: refactored
     Issue #539: Added configurable batch size and parallel processing
     Issue #660: Added pre-computed embeddings for 5-10x speedup
-    Issue #665: Refactored to extract helper methods.
+    Issue #620, #665: Refactored to extract helper methods.
 
     Configuration via environment variables:
         CODEBASE_INDEX_BATCH_SIZE: Items per batch (default: 5000)
         CODEBASE_INDEX_PARALLEL_BATCHES: Concurrent batches (default: 1)
         CODEBASE_INDEX_EMBEDDING_MODE: "precompute", "auto", or "skip" (default: precompute)
     """
-    # Pre-compute embeddings if configured
     batch_embeddings = await _precompute_embeddings(
         batch_documents, task_id, update_progress, update_phase
     )
-
     update_phase("store", "running")
 
-    batch_size = CHROMADB_BATCH_SIZE
-    parallel_count = PARALLEL_BATCH_COUNT
     total_items = len(batch_ids)
-    total_batches = (total_items + batch_size - 1) // batch_size
+    total_batches = (total_items + CHROMADB_BATCH_SIZE - 1) // CHROMADB_BATCH_SIZE
 
-    logger.info(
-        "[Task %s] ChromaDB storage config: batch_size=%d, parallel_batches=%d, total_batches=%d, embeddings=%s",
-        task_id,
-        batch_size,
-        parallel_count,
-        total_batches,
-        "precomputed" if batch_embeddings else "auto",
-    )
-
+    _log_chromadb_storage_config(task_id, total_batches, batch_embeddings)
     update_batch_info(0, total_batches, 0)
-    await update_progress(
-        operation="Writing to ChromaDB",
-        current=0,
-        total=total_items,
-        current_file=f"Batch storage ({parallel_count} parallel)...",
-        phase="store",
-        batch_info={"current": 0, "total": total_batches, "items": 0},
+    await _update_chromadb_progress(update_progress, total_items, total_batches)
+
+    items_stored = await _execute_batch_storage(
+        code_collection,
+        batch_ids,
+        batch_documents,
+        batch_metadatas,
+        total_batches,
+        total_items,
+        task_id,
+        update_progress,
+        update_stats,
+        batch_embeddings,
     )
-
-    batch_indices = list(range(0, total_items, batch_size))
-
-    if parallel_count > 1:
-        items_stored = await _process_batches_parallel(
-            code_collection,
-            batch_ids,
-            batch_documents,
-            batch_metadatas,
-            batch_indices,
-            batch_size,
-            parallel_count,
-            total_batches,
-            total_items,
-            task_id,
-            update_progress,
-            update_stats,
-            batch_embeddings,
-        )
-    else:
-        items_stored = 0
-        for i in range(0, total_items, batch_size):
-            batch_num = i // batch_size + 1
-            items_stored += await _store_single_batch(
-                code_collection,
-                batch_ids,
-                batch_documents,
-                batch_metadatas,
-                i,
-                batch_size,
-                batch_num,
-                total_batches,
-                total_items,
-                task_id,
-                update_progress,
-                update_stats,
-                batch_embeddings=batch_embeddings,
-            )
 
     update_phase("store", "completed")
-    logger.info(
-        "[Task %s] ✅ Stored total of %s items in ChromaDB", task_id, items_stored
-    )
+    logger.info("[Task %s] Stored total of %s items in ChromaDB", task_id, items_stored)
     return items_stored
 
 
@@ -1485,83 +1599,94 @@ async def _store_hardcodes_to_redis(
     return stored_count
 
 
+def _create_empty_category_dict(default_value=0) -> Dict:
+    """
+    Create a dictionary with all file categories initialized to a default value.
+
+    Issue #620: Extracted from _create_empty_analysis_results. Issue #620.
+    """
+    return {
+        FILE_CATEGORY_CODE: default_value if default_value != 0 else 0,
+        FILE_CATEGORY_DOCS: default_value if default_value != 0 else 0,
+        FILE_CATEGORY_LOGS: default_value if default_value != 0 else 0,
+        FILE_CATEGORY_BACKUP: default_value if default_value != 0 else 0,
+        FILE_CATEGORY_ARCHIVE: default_value if default_value != 0 else 0,
+        FILE_CATEGORY_CONFIG: default_value if default_value != 0 else 0,
+        FILE_CATEGORY_TEST: default_value if default_value != 0 else 0,
+        FILE_CATEGORY_DATA: default_value if default_value != 0 else 0,
+        FILE_CATEGORY_ASSETS: default_value if default_value != 0 else 0,
+    }
+
+
+def _create_empty_category_list_dict() -> Dict:
+    """
+    Create a dictionary with all file categories initialized to empty lists.
+
+    Issue #620: Extracted from _create_empty_analysis_results. Issue #620.
+    """
+    return {
+        FILE_CATEGORY_CODE: [],
+        FILE_CATEGORY_DOCS: [],
+        FILE_CATEGORY_LOGS: [],
+        FILE_CATEGORY_BACKUP: [],
+        FILE_CATEGORY_ARCHIVE: [],
+        FILE_CATEGORY_CONFIG: [],
+        FILE_CATEGORY_TEST: [],
+        FILE_CATEGORY_DATA: [],
+        FILE_CATEGORY_ASSETS: [],
+    }
+
+
+def _create_empty_stats_dict() -> Dict:
+    """
+    Create the stats dictionary structure for analysis results.
+
+    Issue #620: Extracted from _create_empty_analysis_results. Issue #620.
+    """
+    return {
+        "total_files": 0,
+        "python_files": 0,
+        "javascript_files": 0,
+        "typescript_files": 0,
+        "vue_files": 0,
+        "css_files": 0,
+        "html_files": 0,
+        "config_files": 0,
+        "doc_files": 0,
+        "other_code_files": 0,
+        "other_files": 0,
+        "total_lines": 0,
+        "code_lines": 0,
+        "comment_lines": 0,
+        "docstring_lines": 0,
+        "documentation_lines": 0,
+        "blank_lines": 0,
+        "total_functions": 0,
+        "total_classes": 0,
+        "lines_by_category": _create_empty_category_dict(0),
+        "files_by_category": _create_empty_category_dict(0),
+    }
+
+
 def _create_empty_analysis_results() -> Dict:
     """
     Create empty analysis results dictionary structure.
 
-    Issue #281: Extracted from scan_codebase to reduce function length
-    and improve testability.
+    Issue #281: Extracted from scan_codebase to reduce function length.
+    Issue #620: Further refactored with helper functions. Issue #620.
 
     Returns:
         Dict with initialized structure for files, stats, functions,
-        classes, hardcodes, and problems. Includes category-specific
-        tracking for code, docs, logs, backup, and archive files.
+        classes, hardcodes, and problems.
     """
     return {
         "files": {},
-        "stats": {
-            "total_files": 0,
-            # By language/type
-            "python_files": 0,
-            "javascript_files": 0,
-            "typescript_files": 0,
-            "vue_files": 0,
-            "css_files": 0,
-            "html_files": 0,
-            "config_files": 0,
-            "doc_files": 0,
-            "other_code_files": 0,
-            "other_files": 0,
-            # Line counts
-            "total_lines": 0,
-            "code_lines": 0,
-            "comment_lines": 0,
-            "docstring_lines": 0,
-            "documentation_lines": 0,
-            "blank_lines": 0,
-            # Declarations
-            "total_functions": 0,
-            "total_classes": 0,
-            # Category-specific stats (code lines not counted for docs/logs)
-            "lines_by_category": {
-                FILE_CATEGORY_CODE: 0,
-                FILE_CATEGORY_DOCS: 0,
-                FILE_CATEGORY_LOGS: 0,
-                FILE_CATEGORY_BACKUP: 0,
-                FILE_CATEGORY_ARCHIVE: 0,
-                FILE_CATEGORY_CONFIG: 0,
-                FILE_CATEGORY_TEST: 0,
-                FILE_CATEGORY_DATA: 0,
-                FILE_CATEGORY_ASSETS: 0,
-            },
-            "files_by_category": {
-                FILE_CATEGORY_CODE: 0,
-                FILE_CATEGORY_DOCS: 0,
-                FILE_CATEGORY_LOGS: 0,
-                FILE_CATEGORY_BACKUP: 0,
-                FILE_CATEGORY_ARCHIVE: 0,
-                FILE_CATEGORY_CONFIG: 0,
-                FILE_CATEGORY_TEST: 0,
-                FILE_CATEGORY_DATA: 0,
-                FILE_CATEGORY_ASSETS: 0,
-            },
-        },
+        "stats": _create_empty_stats_dict(),
         "all_functions": [],
         "all_classes": [],
         "all_hardcodes": [],
         "all_problems": [],
-        # Problems by category (for separate reporting)
-        "problems_by_category": {
-            FILE_CATEGORY_CODE: [],
-            FILE_CATEGORY_DOCS: [],
-            FILE_CATEGORY_LOGS: [],
-            FILE_CATEGORY_BACKUP: [],
-            FILE_CATEGORY_ARCHIVE: [],
-            FILE_CATEGORY_CONFIG: [],
-            FILE_CATEGORY_TEST: [],
-            FILE_CATEGORY_DATA: [],
-            FILE_CATEGORY_ASSETS: [],
-        },
+        "problems_by_category": _create_empty_category_list_dict(),
     }
 
 
@@ -2005,15 +2130,43 @@ async def _process_files_parallel(
     return results
 
 
+def _update_file_type_stats(stats: Dict, result: "FileAnalysisResult") -> None:
+    """
+    Update file type statistics from a FileAnalysisResult.
+
+    Issue #620: Extracted from _aggregate_from_file_result. Issue #620.
+    """
+    if result.stat_key:
+        stats[result.stat_key] = stats.get(result.stat_key, 0) + 1
+    else:
+        stats["other_files"] = stats.get("other_files", 0) + 1
+    stats["total_files"] += 1
+
+
+def _update_countable_category_stats(stats: Dict, result: "FileAnalysisResult") -> None:
+    """
+    Update stats for countable file categories (code, config, test).
+
+    Issue #620: Extracted from _aggregate_from_file_result. Issue #620.
+    """
+    stats["total_lines"] += result.line_count
+    stats["total_functions"] += len(result.functions)
+    stats["total_classes"] += len(result.classes)
+    stats["code_lines"] += result.code_lines
+    stats["comment_lines"] += result.comment_lines
+    stats["docstring_lines"] += result.docstring_lines
+    stats["blank_lines"] += result.blank_lines
+
+
 def _aggregate_from_file_result(
     analysis_results: Dict,
-    result: FileAnalysisResult,
+    result: "FileAnalysisResult",
 ) -> None:
     """
     Aggregate a single FileAnalysisResult into the main results dict.
 
     Issue #711: Helper for single-pass aggregation from immutable results.
-    This is called sequentially after parallel processing completes.
+    Issue #620: Refactored with helper functions. Issue #620.
 
     Args:
         analysis_results: Main results dictionary to update
@@ -2022,43 +2175,25 @@ def _aggregate_from_file_result(
     if not result.was_processed:
         return
 
-    relative_path = result.relative_path
     file_category = result.file_category
     stats = analysis_results["stats"]
 
-    # Store file analysis dict
-    analysis_results["files"][relative_path] = result.to_dict()
+    analysis_results["files"][result.relative_path] = result.to_dict()
+    _update_file_type_stats(stats, result)
 
-    # Update file type stats
-    if result.stat_key:
-        stats[result.stat_key] = stats.get(result.stat_key, 0) + 1
-    else:
-        stats["other_files"] = stats.get("other_files", 0) + 1
-
-    stats["total_files"] += 1
-
-    # Update category stats
     stats["lines_by_category"][file_category] += result.line_count
     stats["files_by_category"][file_category] += 1
 
-    # Update line counts for countable categories
     is_countable = file_category in (
         FILE_CATEGORY_CODE,
         FILE_CATEGORY_CONFIG,
         FILE_CATEGORY_TEST,
     )
     if is_countable:
-        stats["total_lines"] += result.line_count
-        stats["total_functions"] += len(result.functions)
-        stats["total_classes"] += len(result.classes)
-        stats["code_lines"] += result.code_lines
-        stats["comment_lines"] += result.comment_lines
-        stats["docstring_lines"] += result.docstring_lines
-        stats["blank_lines"] += result.blank_lines
+        _update_countable_category_stats(stats, result)
 
     stats["documentation_lines"] += result.documentation_lines
 
-    # Aggregate lists
     analysis_results["all_functions"].extend(result.functions)
     analysis_results["all_classes"].extend(result.classes)
     analysis_results["all_hardcodes"].extend(result.hardcodes)
@@ -2225,7 +2360,7 @@ async def _process_single_file(
     return True, False
 
 
-async def _iterate_and_process_files(
+async def _iterate_files_sequential(
     all_files: list,
     root_path_obj: Path,
     analysis_results: Dict,
@@ -2235,43 +2370,13 @@ async def _iterate_and_process_files(
     redis_client=None,
 ) -> Tuple[int, int]:
     """
-    Iterate through files and process each one.
+    Process files sequentially (fallback when parallel mode disabled).
 
-    Issue #398: Extracted from scan_codebase to reduce method length.
-    Issue #539: Added incremental indexing - returns (processed, skipped) counts.
-    Issue #659: Added batch parallel processing for 3-5x speedup.
-    Issue #711: Added parallel mode with PARALLEL_MODE_ENABLED flag.
-                When enabled, uses asyncio.gather() with semaphore for
-                true parallel processing with thread-safe aggregation.
+    Issue #620: Extracted from _iterate_and_process_files. Issue #620.
     """
-    # Issue #711: Use parallel processing when enabled
-    if PARALLEL_MODE_ENABLED:
-        logger.info(
-            "[Issue #711] Parallel mode enabled (concurrency=%d)",
-            PARALLEL_FILE_CONCURRENCY,
-        )
-        (
-            parallel_results,
-            files_processed,
-            files_skipped,
-        ) = await _iterate_and_process_files_parallel(
-            all_files,
-            root_path_obj,
-            immediate_store_collection,
-            progress_callback,
-            total_files,
-            redis_client,
-        )
-        # Update analysis_results with parallel results
-        analysis_results.update(parallel_results)
-        return files_processed, files_skipped
-
-    # Sequential processing fallback (original implementation)
     logger.info("[Issue #711] Sequential mode (parallel disabled)")
     files_processed = 0
     files_skipped = 0
-
-    # Issue #659: Sequential processing with thread pool for file I/O
     progress_interval = max(10, PARALLEL_FILE_PROCESSING // 5)
 
     for file_path in all_files:
@@ -2298,6 +2403,52 @@ async def _iterate_and_process_files(
                 await asyncio.sleep(0)
 
     return files_processed, files_skipped
+
+
+async def _iterate_and_process_files(
+    all_files: list,
+    root_path_obj: Path,
+    analysis_results: Dict,
+    immediate_store_collection,
+    progress_callback,
+    total_files: int,
+    redis_client=None,
+) -> Tuple[int, int]:
+    """
+    Iterate through files and process each one.
+
+    Issue #398: Extracted from scan_codebase to reduce method length.
+    Issue #620: Refactored with helper functions. Issue #620.
+    """
+    if PARALLEL_MODE_ENABLED:
+        logger.info(
+            "[Issue #711] Parallel mode enabled (concurrency=%d)",
+            PARALLEL_FILE_CONCURRENCY,
+        )
+        (
+            parallel_results,
+            files_processed,
+            files_skipped,
+        ) = await _iterate_and_process_files_parallel(
+            all_files,
+            root_path_obj,
+            immediate_store_collection,
+            progress_callback,
+            total_files,
+            redis_client,
+        )
+        analysis_results.update(parallel_results)
+        return files_processed, files_skipped
+
+    return await _iterate_files_sequential(
+        all_files,
+        root_path_obj,
+        analysis_results,
+        immediate_store_collection,
+        progress_callback,
+        total_files,
+        redis_client,
+    )
 
 
 async def _gather_scannable_files(
