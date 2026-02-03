@@ -228,11 +228,13 @@ class PythonPatternExtractor(BasePatternExtractor):
         """Analyze a class definition."""
         # Check for Pydantic models
         base_names = [
-            base.id
-            if isinstance(base, ast.Name)
-            else base.attr
-            if isinstance(base, ast.Attribute)
-            else ""
+            (
+                base.id
+                if isinstance(base, ast.Name)
+                else base.attr
+                if isinstance(base, ast.Attribute)
+                else ""
+            )
             for base in node.bases
         ]
 
@@ -367,9 +369,9 @@ class PythonPatternExtractor(BasePatternExtractor):
             "is_async": is_async,
             "is_validator": is_validator,
             "parameters": params,
-            "return_type": self._get_type_annotation(node.returns)
-            if node.returns
-            else "None",
+            "return_type": (
+                self._get_type_annotation(node.returns) if node.returns else "None"
+            ),
         }
 
     def _extract_regex_patterns(self) -> List[Dict[str, Any]]:
@@ -634,26 +636,117 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
                 return False, None
         return in_string, string_char
 
-    def _find_matching_brace(self, start_pos: int) -> Optional[int]:
+    def _handle_comments_in_brace_match(
+        self, char: str, next_char: str, state: Dict[str, Any]
+    ) -> tuple[bool, int]:
         """
-        Find the matching closing brace, properly handling nested structures,
-        strings, and comments.
+        Handle comment state transitions during brace matching.
 
-        Issue #665: Refactored to use extracted helpers for comment and
-        string handling.
+        Processes both line and block comments. Issue #620.
 
         Args:
-            start_pos: Position to start searching from
+            char: Current character
+            next_char: Next character
+            state: Mutable state dict with comment flags
+
+        Returns:
+            Tuple of (was_comment_handled, chars_to_skip)
+        """
+        # Handle line comments
+        new_line_comment, skip = self._handle_line_comment(
+            char,
+            next_char,
+            state["in_string"],
+            state["in_block_comment"],
+            state["in_line_comment"],
+        )
+        if skip:
+            state["in_line_comment"] = new_line_comment
+            return True, skip
+
+        # Handle block comments
+        new_block_comment, skip = self._handle_block_comment(
+            char,
+            next_char,
+            state["in_string"],
+            state["in_line_comment"],
+            state["in_block_comment"],
+        )
+        if skip:
+            state["in_block_comment"] = new_block_comment
+            return True, skip
+
+        return False, 0
+
+    def _process_char_for_brace_match(
+        self,
+        char: str,
+        next_char: str,
+        prev_char: str,
+        state: Dict[str, Any],
+    ) -> tuple[int, Optional[int]]:
+        """
+        Process single character for brace matching. Issue #620.
+
+        Returns (chars_to_advance, match_position_or_none).
+        """
+        # Handle comments (Issue #620: uses helper)
+        handled, skip = self._handle_comments_in_brace_match(char, next_char, state)
+        if handled:
+            return skip, None
+
+        # Skip if in comment
+        if state["in_line_comment"] or state["in_block_comment"]:
+            return 1, None
+
+        # Handle strings
+        new_in_string, new_string_char = self._handle_string_char(
+            char, prev_char, state["in_string"], state["string_char"]
+        )
+        if (
+            new_in_string != state["in_string"]
+            or new_string_char != state["string_char"]
+        ):
+            state["in_string"] = new_in_string
+            state["string_char"] = new_string_char
+            return 1, None
+
+        # Skip if in string
+        if state["in_string"]:
+            return 1, None
+
+        # Count braces and check for match
+        if char == "{":
+            state["brace_count"] += 1
+        elif char == "}":
+            state["brace_count"] -= 1
+            if state["brace_count"] == 0:
+                return 1, state["current_pos"] + 1
+
+        return 1, None
+
+    def _find_matching_brace(self, start_pos: int) -> Optional[int]:
+        """
+        Find the matching closing brace for nested structures.
+
+        Handles strings, line comments, and block comments properly.
+        Issue #620: Refactored using Extract Method pattern.
+
+        Args:
+            start_pos: Position in source_code to start searching from
 
         Returns:
             Position after the closing brace, or None if not found
         """
         code = self.source_code[start_pos:]
-        brace_count = 0
-        in_string = False
-        string_char: Optional[str] = None
-        in_line_comment = False
-        in_block_comment = False
+        state = {
+            "in_string": False,
+            "string_char": None,
+            "in_line_comment": False,
+            "in_block_comment": False,
+            "brace_count": 0,
+            "current_pos": 0,
+        }
         i = 0
         length = len(code)
 
@@ -661,54 +754,16 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
             char = code[i]
             next_char = code[i + 1] if i + 1 < length else ""
             prev_char = code[i - 1] if i > 0 else ""
+            state["current_pos"] = i
 
-            # Handle line comments (Issue #665: uses helper)
-            new_line_comment, skip = self._handle_line_comment(
-                char, next_char, in_string, in_block_comment, in_line_comment
+            advance, match_pos = self._process_char_for_brace_match(
+                char, next_char, prev_char, state
             )
-            if skip:
-                in_line_comment = new_line_comment
-                i += skip
-                continue
 
-            # Handle block comments (Issue #665: uses helper)
-            new_block_comment, skip = self._handle_block_comment(
-                char, next_char, in_string, in_line_comment, in_block_comment
-            )
-            if skip:
-                in_block_comment = new_block_comment
-                i += skip
-                continue
+            if match_pos is not None:
+                return start_pos + match_pos
 
-            # Skip if in comment
-            if in_line_comment or in_block_comment:
-                i += 1
-                continue
-
-            # Handle strings (Issue #665: uses helper)
-            new_in_string, new_string_char = self._handle_string_char(
-                char, prev_char, in_string, string_char
-            )
-            if new_in_string != in_string or new_string_char != string_char:
-                in_string = new_in_string
-                string_char = new_string_char
-                i += 1
-                continue
-
-            # Skip if in string
-            if in_string:
-                i += 1
-                continue
-
-            # Count braces
-            if char == "{":
-                brace_count += 1
-            elif char == "}":
-                brace_count -= 1
-                if brace_count == 0:
-                    return start_pos + i + 1
-
-            i += 1
+            i += advance
 
         return None
 

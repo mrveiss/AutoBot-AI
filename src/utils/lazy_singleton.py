@@ -7,77 +7,12 @@ Lazy Singleton Initialization - Standardized Pattern
 This module provides utilities for lazy-initializing singleton objects on app state
 or other storage mechanisms. Eliminates duplicate lazy initialization code across API files.
 
-CONSOLIDATES PATTERNS FROM:
-==========================
-- backend/api/chat.py:66-79 (get_chat_history_manager)
-- backend/api/chat.py:92-105 (get_llm_service)
-- 10+ other similar functions across API files
+Usage:
+    from src.utils.lazy_singleton import lazy_init_singleton
 
-BENEFITS:
-=========
-✅ Eliminates 10-15 lines of duplicate code per function
-✅ Standardizes error handling and logging
-✅ Thread-safe lazy initialization
-✅ Consistent attribute naming
-✅ Reduces 100+ lines of duplicate code across codebase
-
-USAGE PATTERN:
-==============
-from src.utils.lazy_singleton import lazy_init_singleton
-
-# Old pattern (14 lines)
-def get_chat_history_manager(request):
-    manager = getattr(request.app.state, "chat_history_manager", None)
-    if manager is None:
-        try:
-            from src.chat_history import ChatHistoryManager
-            manager = ChatHistoryManager()
-            request.app.state.chat_history_manager = manager
-            logger.info("✅ Lazy-initialized chat_history_manager")
-        except Exception as e:
-            logger.error("Failed to lazy-initialize chat_history_manager: %s", e)
-    return manager
-
-# New pattern (3 lines)
-def get_chat_history_manager(request):
-    from src.chat_history import ChatHistoryManager
-    return lazy_init_singleton(request.app.state, "chat_history_manager", ChatHistoryManager)
-
-ADVANCED USAGE:
-===============
-# With initialization arguments
-def get_llm_service(request):
-    from src.llm_service import LLMService
-    return lazy_init_singleton(
-        request.app.state,
-        "llm_service",
-        LLMService,
-        model="gpt-4",
-        temperature=0.7
-    )
-
-# With async initialization
-async def get_async_service(request):
-    from src.async_service import AsyncService
-    return await lazy_init_singleton_async(
-        request.app.state,
-        "async_service",
-        AsyncService
-    )
-
-# With custom factory function
-def get_complex_service(request):
-    def factory():
-        service = ComplexService()
-        service.configure(config)
-        service.initialize()
-        return service
-
-    return lazy_init_singleton(
-        request.app.state,
-        "complex_service",
-        factory
-    )
+    def get_chat_history_manager(request):
+        from src.chat_history import ChatHistoryManager
+        return lazy_init_singleton(request.app.state, "chat_history_manager", ChatHistoryManager)
 """
 
 import asyncio
@@ -87,6 +22,113 @@ from typing import Any, Callable, Optional, TypeVar
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
+
+def _create_and_store_instance(
+    storage: Any,
+    attribute_name: str,
+    factory: Callable[..., T],
+    *args,
+    **kwargs,
+) -> Optional[T]:
+    """
+    Create instance using factory and store on storage object.
+
+    Helper function that handles the actual instance creation and storage.
+    Extracted from lazy_init_singleton for Issue #620.
+
+    Args:
+        storage: Storage object to store singleton
+        attribute_name: Name of attribute to store singleton under
+        factory: Callable that creates the singleton
+        *args: Positional arguments to pass to factory
+        **kwargs: Keyword arguments to pass to factory
+
+    Returns:
+        The created instance, or None if creation failed
+    """
+    try:
+        instance = factory(*args, **kwargs)
+        setattr(storage, attribute_name, instance)
+        logger.info("Lazy-initialized %s", attribute_name)
+        return instance
+    except Exception as e:
+        logger.error("Failed to lazy-initialize %s: %s", attribute_name, e)
+        return None
+
+
+def _validate_existing_instance(
+    instance: T,
+    attribute_name: str,
+    validator: Callable[[T], bool],
+) -> bool:
+    """
+    Validate an existing singleton instance.
+
+    Helper function that checks if an existing instance passes validation.
+    Extracted from lazy_init_singleton_with_check for Issue #620.
+
+    Args:
+        instance: The instance to validate
+        attribute_name: Name of the attribute (for logging)
+        validator: Function that returns True if instance is valid
+
+    Returns:
+        True if instance is valid, False if invalid or validation failed
+    """
+    try:
+        if not validator(instance):
+            logger.warning(
+                "Existing %s failed validation, re-initializing", attribute_name
+            )
+            return False
+        return True
+    except Exception as e:
+        logger.warning(
+            "Validation of existing %s failed: %s, re-initializing", attribute_name, e
+        )
+        return False
+
+
+def _create_and_validate_instance(
+    storage: Any,
+    attribute_name: str,
+    factory: Callable[..., T],
+    validator: Optional[Callable[[T], bool]],
+    *args,
+    **kwargs,
+) -> Optional[T]:
+    """
+    Create a new instance and optionally validate it before storing.
+
+    Helper function that handles instance creation with validation.
+    Extracted from lazy_init_singleton_with_check for Issue #620.
+
+    Args:
+        storage: Storage object to store singleton
+        attribute_name: Name of attribute to store singleton under
+        factory: Callable that creates the singleton
+        validator: Optional function to validate the instance
+        *args: Positional arguments to pass to factory
+        **kwargs: Keyword arguments to pass to factory
+
+    Returns:
+        The validated instance, or None if creation/validation failed
+    """
+    try:
+        instance = factory(*args, **kwargs)
+
+        if validator is not None and not validator(instance):
+            logger.error("Newly created %s failed validation", attribute_name)
+            return None
+
+        setattr(storage, attribute_name, instance)
+        logger.info("Lazy-initialized %s (with validation)", attribute_name)
+        return instance
+
+    except Exception as e:
+        logger.error("Failed to lazy-initialize %s: %s", attribute_name, e)
+        return None
 
 
 def lazy_init_singleton(
@@ -99,10 +141,6 @@ def lazy_init_singleton(
     """
     Lazy-initialize a singleton object on a storage object (e.g., app.state).
 
-    This function implements the lazy initialization pattern with proper error
-    handling and logging. It checks if the attribute already exists on the storage
-    object, and if not, creates it using the provided factory.
-
     Args:
         storage: Storage object (e.g., request.app.state) to store singleton
         attribute_name: Name of attribute to store singleton under
@@ -111,62 +149,18 @@ def lazy_init_singleton(
         **kwargs: Keyword arguments to pass to factory
 
     Returns:
-        T: The singleton instance, or None if initialization failed
+        The singleton instance, or None if initialization failed
 
-    Examples:
-        # Basic usage with class
+    Example:
         >>> manager = lazy_init_singleton(
-        ...     request.app.state,
-        ...     "chat_history_manager",
-        ...     ChatHistoryManager
+        ...     request.app.state, "chat_history_manager", ChatHistoryManager
         ... )
-
-        # With initialization arguments
-        >>> service = lazy_init_singleton(
-        ...     request.app.state,
-        ...     "llm_service",
-        ...     LLMService,
-        ...     model="gpt-4",
-        ...     temperature=0.7
-        ... )
-
-        # With factory function
-        >>> def create_service():
-        ...     service = ComplexService()
-        ...     service.configure(config)
-        ...     return service
-        >>> service = lazy_init_singleton(
-        ...     request.app.state,
-        ...     "complex_service",
-        ...     create_service
-        ... )
-
-    Thread Safety:
-        This function uses getattr/setattr which are atomic operations in Python,
-        making it thread-safe for the common case. However, if the factory itself
-        is not thread-safe or if initialization order matters, consider using
-        a lock or initializing during startup instead.
     """
-    # Check if already initialized
     instance = getattr(storage, attribute_name, None)
-
     if instance is not None:
         return instance
 
-    # Need to initialize
-    try:
-        # Create instance using factory
-        instance = factory(*args, **kwargs)
-
-        # Store on storage object
-        setattr(storage, attribute_name, instance)
-
-        logger.info("✅ Lazy-initialized %s", attribute_name)
-        return instance
-
-    except Exception as e:
-        logger.error("❌ Failed to lazy-initialize %s: %s", attribute_name, e)
-        return None
+    return _create_and_store_instance(storage, attribute_name, factory, *args, **kwargs)
 
 
 async def lazy_init_singleton_async(
@@ -179,8 +173,6 @@ async def lazy_init_singleton_async(
     """
     Async version of lazy_init_singleton for factories that return coroutines.
 
-    Use this when the factory function is async or returns an awaitable.
-
     Args:
         storage: Storage object (e.g., request.app.state) to store singleton
         attribute_name: Name of attribute to store singleton under
@@ -189,52 +181,25 @@ async def lazy_init_singleton_async(
         **kwargs: Keyword arguments to pass to factory
 
     Returns:
-        T: The singleton instance, or None if initialization failed
+        The singleton instance, or None if initialization failed
 
-    Examples:
-        # Basic async usage
+    Example:
         >>> manager = await lazy_init_singleton_async(
-        ...     request.app.state,
-        ...     "async_manager",
-        ...     AsyncManager
-        ... )
-
-        # With initialization
-        >>> async def create_service():
-        ...     service = AsyncService()
-        ...     await service.initialize()
-        ...     return service
-        >>> service = await lazy_init_singleton_async(
-        ...     request.app.state,
-        ...     "async_service",
-        ...     create_service
+        ...     request.app.state, "async_manager", AsyncManager
         ... )
     """
-    # Check if already initialized
     instance = getattr(storage, attribute_name, None)
-
     if instance is not None:
         return instance
 
-    # Need to initialize
     try:
-        # Create instance using factory
         result = factory(*args, **kwargs)
-
-        # Await if it's a coroutine
-        if asyncio.iscoroutine(result):
-            instance = await result
-        else:
-            instance = result
-
-        # Store on storage object
+        instance = await result if asyncio.iscoroutine(result) else result
         setattr(storage, attribute_name, instance)
-
-        logger.info("✅ Lazy-initialized %s (async)", attribute_name)
+        logger.info("Lazy-initialized %s (async)", attribute_name)
         return instance
-
     except Exception as e:
-        logger.error("❌ Failed to lazy-initialize %s (async): %s", attribute_name, e)
+        logger.error("Failed to lazy-initialize %s (async): %s", attribute_name, e)
         return None
 
 
@@ -261,68 +226,34 @@ def lazy_init_singleton_with_check(
         **kwargs: Keyword arguments to pass to factory
 
     Returns:
-        T: The singleton instance, or None if initialization/validation failed
+        The singleton instance, or None if initialization/validation failed
 
-    Examples:
-        >>> def validate_service(service):
-        ...     return service.is_initialized and service.is_healthy()
-        >>>
+    Example:
+        >>> def validate_service(svc):
+        ...     return svc.is_initialized and svc.is_healthy()
         >>> service = lazy_init_singleton_with_check(
-        ...     request.app.state,
-        ...     "validated_service",
-        ...     ServiceClass,
+        ...     request.app.state, "validated_service", ServiceClass,
         ...     validator=validate_service
         ... )
     """
-    # Check if already initialized and valid
     instance = getattr(storage, attribute_name, None)
 
+    # Check if existing instance is valid
     if instance is not None:
-        # If validator provided, check if still valid
-        if validator is not None:
-            try:
-                if not validator(instance):
-                    logger.warning(
-                        f"Existing {attribute_name} failed validation, re-initializing"
-                    ),
-                    instance = None
-            except Exception as e:
-                logger.warning(
-                    f"Validation of existing {attribute_name} failed: {e}, re-initializing"
-                ),
-                instance = None
+        if validator is None or _validate_existing_instance(
+            instance, attribute_name, validator
+        ):
+            return instance
+        instance = None  # Force re-initialization
 
-    # Need to initialize or re-initialize
-    if instance is None:
-        try:
-            # Create instance using factory
-            instance = factory(*args, **kwargs)
-
-            # Validate if validator provided
-            if validator is not None:
-                if not validator(instance):
-                    logger.error("Newly created %s failed validation", attribute_name)
-                    return None
-
-            # Store on storage object
-            setattr(storage, attribute_name, instance)
-
-            logger.info("✅ Lazy-initialized %s (with validation)", attribute_name)
-
-        except Exception as e:
-            logger.error("❌ Failed to lazy-initialize %s: %s", attribute_name, e)
-            return None
-
-    return instance
+    return _create_and_validate_instance(
+        storage, attribute_name, factory, validator, *args, **kwargs
+    )
 
 
-# Convenience decorators
 def singleton_getter(attribute_name: str, factory: Callable):
     """
     Decorator to create a lazy singleton getter function.
-
-    This decorator simplifies the creation of getter functions that lazily
-    initialize singletons.
 
     Args:
         attribute_name: Name of attribute on app.state
@@ -331,47 +262,22 @@ def singleton_getter(attribute_name: str, factory: Callable):
     Returns:
         Decorated function that performs lazy initialization
 
-    Examples:
-        # Without decorator (old way)
-        def get_chat_history_manager(request):
-            from src.chat_history import ChatHistoryManager
-            return lazy_init_singleton(
-                request.app.state,
-                "chat_history_manager",
-                ChatHistoryManager
-            )
-
-        # With decorator (new way)
-        @singleton_getter("chat_history_manager", ChatHistoryManager)
-        def get_chat_history_manager(request):
-            from src.chat_history import ChatHistoryManager
-            return ChatHistoryManager  # Return factory class
-
-        # Or even simpler with lambda
-        get_chat_history_manager = singleton_getter(
-            "chat_history_manager",
-            lambda: __import__('src.chat_history_manager').ChatHistoryManager()
-        )
+    Example:
+        >>> @singleton_getter("chat_history_manager", ChatHistoryManager)
+        ... def get_chat_history_manager(request):
+        ...     from src.chat_history import ChatHistoryManager
+        ...     return ChatHistoryManager
     """
 
     def decorator(func):
-        """Create wrapper function that performs lazy singleton initialization."""
+        """Create wrapper for lazy singleton initialization. Issue #620."""
 
         def wrapper(request, *args, **kwargs):
-            """Execute original function and lazily initialize singleton from result."""
-            # Execute original function to get factory (allows for imports)
+            """Execute function and lazily initialize singleton. Issue #620."""
             result = func(request, *args, **kwargs)
-
-            # If result is a class, use it as factory
-            if isinstance(result, type):
-                actual_factory = result
-            # If result is callable, use it
-            elif callable(result):
-                actual_factory = result
-            # Otherwise, use the decorator's factory
-            else:
-                actual_factory = factory
-
+            actual_factory = (
+                result if isinstance(result, type) or callable(result) else factory
+            )
             return lazy_init_singleton(
                 request.app.state, attribute_name, actual_factory, *args, **kwargs
             )
@@ -381,23 +287,18 @@ def singleton_getter(attribute_name: str, factory: Callable):
     return decorator
 
 
-# Storage class for non-request contexts
 class SingletonStorage:
     """
     Simple storage class for singletons when not using request.app.state.
 
     Useful for testing or when you need lazy singletons outside of a web framework.
 
-    Examples:
+    Example:
         >>> storage = SingletonStorage()
         >>> manager = lazy_init_singleton(storage, "manager", ManagerClass)
-        >>> # Later access
-        >>> same_manager = lazy_init_singleton(storage, "manager", ManagerClass)
-        >>> assert manager is same_manager
     """
 
 
-# Global storage for module-level singletons (use sparingly)
 _global_singleton_storage = SingletonStorage()
 
 
@@ -407,8 +308,7 @@ def global_lazy_singleton(
     """
     Lazy-initialize a global singleton (module-level).
 
-    Use this sparingly - prefer request.app.state for web applications.
-    This is mainly useful for CLI tools or scripts that need singletons.
+    Use sparingly - prefer request.app.state for web applications.
 
     Args:
         attribute_name: Name to store singleton under
@@ -419,12 +319,8 @@ def global_lazy_singleton(
     Returns:
         The singleton instance
 
-    Examples:
-        >>> # First call creates it
+    Example:
         >>> service = global_lazy_singleton("my_service", MyService)
-        >>> # Second call returns same instance
-        >>> same_service = global_lazy_singleton("my_service", MyService)
-        >>> assert service is same_service
     """
     return lazy_init_singleton(
         _global_singleton_storage, attribute_name, factory, *args, **kwargs
