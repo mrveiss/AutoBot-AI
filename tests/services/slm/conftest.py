@@ -15,11 +15,6 @@ import pytest  # noqa: E402
 from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 
-try:
-    from backend.models.infrastructure import Base as BackendBase  # noqa: E402
-except ImportError:
-    BackendBase = None
-
 from models.database import Base as SLMBase  # noqa: E402
 
 
