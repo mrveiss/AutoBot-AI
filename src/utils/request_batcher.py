@@ -57,7 +57,9 @@ class BatchableRequest:
         """Generate unique request ID if not provided."""
         if not self.id:
             # Generate unique ID based on content and timestamp
-            content_hash = hashlib.md5(self.content.encode(), usedforsecurity=False).hexdigest()[:8]
+            content_hash = hashlib.md5(
+                self.content.encode(), usedforsecurity=False
+            ).hexdigest()[:8]
             self.id = f"req_{content_hash}_{int(self.timestamp * 1000)}"
 
 
@@ -296,7 +298,9 @@ class IntelligentRequestBatcher:
         """
         async with self._task_lock:
             if self._processing_task is None:
-                self._processing_task = asyncio.create_task(self._batch_processing_loop())
+                self._processing_task = asyncio.create_task(
+                    self._batch_processing_loop()
+                )
                 logger.info("Intelligent request batcher started")
 
     async def stop(self):
@@ -348,10 +352,14 @@ class IntelligentRequestBatcher:
         while not self._shutdown:
             try:
                 await self._process_pending_requests()
-                await asyncio.sleep(TimingConstants.MICRO_DELAY)  # Small delay to prevent CPU spinning
+                await asyncio.sleep(
+                    TimingConstants.MICRO_DELAY
+                )  # Small delay to prevent CPU spinning
             except Exception as e:
                 logger.error("Error in batch processing loop: %s", e)
-                await asyncio.sleep(TimingConstants.STANDARD_DELAY)  # Longer delay on error
+                await asyncio.sleep(
+                    TimingConstants.STANDARD_DELAY
+                )  # Longer delay on error
 
     async def _process_pending_requests(self):
         """Process pending requests using intelligent batching"""
@@ -559,7 +567,9 @@ class IntelligentRequestBatcher:
                         response_text = individual_responses.get(request.id, response)
                         await request.callback(response_text)
                     except Exception as e:
-                        logger.error("Error executing callback for %s: %s", request.id, e)
+                        logger.error(
+                            "Error executing callback for %s: %s", request.id, e
+                        )
 
             logger.info(
                 f"Successfully executed batch {batch_id} with {len(batch)} requests"
@@ -622,9 +632,9 @@ class IntelligentRequestBatcher:
                 # Look for request ID in response
                 if request.id in response:
                     # Extract relevant portion (simplified)
-                    individual_responses[request.id] = (
-                        f"Response for {request.id}: {response[:200]}..."
-                    )
+                    individual_responses[
+                        request.id
+                    ] = f"Response for {request.id}: {response[:200]}..."
                 else:
                     individual_responses[request.id] = response
 
@@ -728,7 +738,7 @@ async def main():
         results = await asyncio.gather(*tasks)
 
         for i, result in enumerate(results):
-            logger.debug("Request %s result: %s", i+1, result)
+            logger.debug("Request %s result: %s", i + 1, result)
 
         # Print statistics
         logger.debug("\nBatching Statistics:")

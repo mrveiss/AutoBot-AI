@@ -18,7 +18,7 @@ from src.constants.status_enums import TaskStatus
 from src.constants.threshold_constants import BatchConfig, RetryConfig
 from src.events.types import create_action_event, create_observation_event
 from src.tools.parallel.analyzer import DependencyAnalyzer
-from src.tools.parallel.types import DependencyType, ExecutionMetrics, ToolCall
+from src.tools.parallel.types import ExecutionMetrics, ToolCall
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +100,9 @@ class ExecutionGraph:
 
     def get_completed_calls(self) -> list[ToolCall]:
         """Get all completed calls"""
-        return [c for c in self.calls.values() if c.status == TaskStatus.COMPLETED.value]
+        return [
+            c for c in self.calls.values() if c.status == TaskStatus.COMPLETED.value
+        ]
 
 
 # =============================================================================
@@ -156,8 +158,7 @@ class ParallelToolExecutor:
 
         semaphore = asyncio.Semaphore(self.config.max_parallel_calls)
         tasks = [
-            self._execute_with_semaphore(call, task_id, semaphore)
-            for call in group
+            self._execute_with_semaphore(call, task_id, semaphore) for call in group
         ]
 
         try:
@@ -372,7 +373,7 @@ class ParallelToolExecutor:
             call.status = TaskStatus.COMPLETED.value
             call.result = result
             return result
-        except Exception as e:
+        except Exception:
             return await self._retry_call(call, task_id, retry_count + 1)
 
 

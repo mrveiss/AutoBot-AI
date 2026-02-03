@@ -58,7 +58,10 @@ class SecretMaskingExtension(Extension):
         },
         {
             "name": "AWS Secret Key",
-            "pattern": r"(?i)(aws[_-]?secret[_-]?access[_-]?key|secret[_-]?key)\s*[:=]\s*['\"]?([a-zA-Z0-9/+=]{40})['\"]?",
+            "pattern": (
+                r"(?i)(aws[_-]?secret[_-]?access[_-]?key|secret[_-]?key)"
+                r"\s*[:=]\s*['\"]?([a-zA-Z0-9/+=]{40})['\"]?"
+            ),
             "group": 2,
         },
         {

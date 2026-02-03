@@ -14,15 +14,13 @@ Services configured:
 - Inter-service communication
 """
 
-import asyncio
 import logging
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 import asyncssh
 
-from src.pki.config import TLSConfig, VM_DEFINITIONS
+from src.pki.config import VM_DEFINITIONS, TLSConfig
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +69,7 @@ async def _write_tls_config_to_redis(conn, tls_config: str) -> None:
         conn: AsyncSSH connection
         tls_config: TLS configuration content to write
     """
-    temp_config = "/tmp/redis-tls.conf"
+    temp_config = "/tmp/redis-tls.conf"  # nosec B108 - Temp file for Redis TLS config
     async with conn.start_sftp_client() as sftp:
         async with sftp.open(temp_config, "w") as f:
             await f.write(tls_config)
@@ -137,6 +135,7 @@ class ServiceConfigurator:
             disable_plain_port: If True, disables non-TLS port (port 0)
         """
         from src.config.ssot_config import config
+
         vm_ip = VM_DEFINITIONS.get("redis", config.vm.redis)
 
         logger.info("Configuring Redis Stack for TLS")
@@ -211,9 +210,7 @@ class ServiceConfigurator:
                 message=str(e),
             )
 
-    async def restart_service(
-        self, vm_name: str, service_name: str
-    ) -> bool:
+    async def restart_service(self, vm_name: str, service_name: str) -> bool:
         """Restart a service on a VM."""
         vm_ip = VM_DEFINITIONS.get(vm_name)
         if not vm_ip:
@@ -228,7 +225,6 @@ class ServiceConfigurator:
                 known_hosts=None,
                 connect_timeout=10,
             ) as conn:
-
                 result = await conn.run(
                     f"sudo systemctl restart {service_name}",
                 )
@@ -237,9 +233,7 @@ class ServiceConfigurator:
                     logger.info(f"Restarted {service_name} on {vm_name}")
                     return True
                 else:
-                    logger.error(
-                        f"Failed to restart {service_name}: {result.stderr}"
-                    )
+                    logger.error(f"Failed to restart {service_name}: {result.stderr}")
                     return False
 
         except Exception as e:
@@ -273,6 +267,7 @@ class ServiceConfigurator:
     def get_redis_tls_url(self) -> str:
         """Get Redis URL with TLS. Issue #694: Use SSOT config."""
         from src.config.ssot_config import config
+
         redis_ip = VM_DEFINITIONS.get("redis", config.vm.redis)
         return f"rediss://{redis_ip}:6380"
 
@@ -307,7 +302,9 @@ class ServiceConfigurator:
 
         WARNING: Ensure all clients have valid certificates before calling this.
         """
-        logger.info("Enforcing mTLS: requiring client certificates, disabling plain port")
+        logger.info(
+            "Enforcing mTLS: requiring client certificates, disabling plain port"
+        )
         return await self.configure_redis_tls(
             auth_clients="yes",
             disable_plain_port=True,

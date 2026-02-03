@@ -48,7 +48,6 @@ from .tracking import (
     track_user_interaction_to_redis,
 )
 from .types import (
-    REDIS_METRIC_KEYS,
     SIGNIFICANT_CHANGES,
     SIGNIFICANT_INTERACTIONS,
     StateChangeType,
@@ -415,7 +414,9 @@ class EnhancedProjectStateTracker:
                 self.redis_client, endpoint, method, response_status
             )
 
-            logger.debug("API call tracked: %s %s -> %s", method, endpoint, response_status)
+            logger.debug(
+                "API call tracked: %s %s -> %s", method, endpoint, response_status
+            )
 
         except Exception as e:
             logger.error("Failed to track API call: %s", e)
@@ -449,7 +450,9 @@ class EnhancedProjectStateTracker:
                     metadata={"tracking_source": "enhanced_state_tracker"},
                 )
 
-            logger.debug("User interaction tracked: %s by %s", interaction_type, user_id)
+            logger.debug(
+                "User interaction tracked: %s by %s", interaction_type, user_id
+            )
 
         except Exception as e:
             logger.error("Failed to track user interaction: %s", e)
@@ -540,7 +543,9 @@ class EnhancedProjectStateTracker:
             summary,
             output_path,
             format,
-            report_generator=self.generate_state_report if format == "markdown" else None,
+            report_generator=self.generate_state_report
+            if format == "markdown"
+            else None,
         )
 
 

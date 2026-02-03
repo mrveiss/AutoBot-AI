@@ -8,7 +8,7 @@ Metrics for Claude API monitoring.
 Extracted from PrometheusMetricsManager as part of Issue #394.
 """
 
-from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram
+from prometheus_client import Counter, Gauge, Histogram
 
 from .base import BaseMetricsRecorder
 

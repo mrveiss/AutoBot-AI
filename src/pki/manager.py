@@ -11,18 +11,16 @@ Provides a unified interface for certificate lifecycle management.
 This is the primary entry point for all PKI operations in AutoBot.
 """
 
-import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
 from typing import Dict, List, Optional
 
-from src.pki.config import TLSConfig, TLSMode, VM_DEFINITIONS
+from src.pki.config import VM_DEFINITIONS, TLSConfig, TLSMode
+from src.pki.configurator import ServiceConfigurator
+from src.pki.distributor import CertificateDistributor
 from src.pki.generator import CertificateGenerator
-from src.pki.distributor import CertificateDistributor, DistributionResult
-from src.pki.configurator import ServiceConfigurator, ConfigurationResult
 
 logger = logging.getLogger(__name__)
 
@@ -197,6 +195,7 @@ class PKIManager:
 
         # Check OpenSSL is available
         import shutil
+
         if not shutil.which("openssl"):
             errors.append("OpenSSL not found in PATH")
 
@@ -225,8 +224,7 @@ class PKIManager:
 
         # Count certificates
         cert_count = sum(
-            1 for name, s in statuses.items()
-            if name != "ca" and s.exists and s.valid
+            1 for name, s in statuses.items() if name != "ca" and s.exists and s.valid
         )
 
         return PKIStatus(
@@ -330,7 +328,9 @@ class PKIManager:
                 else "N/A"
             )
             renewal_str = " (RENEWAL NEEDED)" if detail["needs_renewal"] else ""
-            logger.info("  %s %s: expires in %s%s", status_str, name, expiry_str, renewal_str)
+            logger.info(
+                "  %s %s: expires in %s%s", status_str, name, expiry_str, renewal_str
+            )
 
         if status.errors:
             logger.info("")

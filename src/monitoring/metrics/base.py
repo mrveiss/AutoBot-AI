@@ -25,7 +25,6 @@ class BaseMetricsRecorder:
 
     def _init_metrics(self) -> None:
         """Initialize metrics. Override in subclasses."""
-        pass
 
 
 __all__ = ["BaseMetricsRecorder"]

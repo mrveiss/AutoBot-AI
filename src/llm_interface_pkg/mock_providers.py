@@ -142,15 +142,23 @@ class LocalLLM:
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
-                        logger.error("Ollama request failed: HTTP %s - %s", response.status, error_text)
-                        return self._create_error_response(f"Error: Ollama returned HTTP {response.status}")
+                        logger.error(
+                            "Ollama request failed: HTTP %s - %s",
+                            response.status,
+                            error_text,
+                        )
+                        return self._create_error_response(
+                            f"Error: Ollama returned HTTP {response.status}"
+                        )
                     result = await response.json()
 
             return self._format_ollama_response(result)
 
         except Exception as e:
             logger.error("Ollama request failed: %s", e)
-            return self._create_error_response(f"Error: Local LLM request failed - {str(e)}")
+            return self._create_error_response(
+                f"Error: Local LLM request failed - {str(e)}"
+            )
 
 
 class MockPalm:
@@ -162,8 +170,6 @@ class MockPalm:
 
     class QuotaExceededError(Exception):
         """Exception raised when API quota is exceeded."""
-
-        pass
 
     def __init__(self):
         """Initialize MockPalm with debug message about mock usage."""

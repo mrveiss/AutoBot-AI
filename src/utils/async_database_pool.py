@@ -38,7 +38,12 @@ class PoolStats:
 class AsyncSQLiteConnectionPool:
     """Async SQLite connection pool with proper resource management."""
 
-    def __init__(self, db_path: str, pool_size: int = 20, timeout: float = TimingConstants.SHORT_TIMEOUT):
+    def __init__(
+        self,
+        db_path: str,
+        pool_size: int = 20,
+        timeout: float = TimingConstants.SHORT_TIMEOUT,
+    ):
         """
         Initialize async SQLite connection pool.
 
@@ -70,7 +75,7 @@ class AsyncSQLiteConnectionPool:
         try:
             await conn.close()
         except Exception:
-            pass  # Best-effort cleanup
+            pass  # nosec B110 - Best-effort cleanup, errors safely ignored
 
     async def _create_connection(self) -> aiosqlite.Connection:
         """Create a new async SQLite connection with optimized settings."""
@@ -83,7 +88,9 @@ class AsyncSQLiteConnectionPool:
                 self._created_connections += 1
                 self._stats.connections_created += 1
 
-            logger.debug("Created new async SQLite connection #%s", self._created_connections)
+            logger.debug(
+                "Created new async SQLite connection #%s", self._created_connections
+            )
             return conn
         except aiosqlite.Error as e:
             logger.error("Failed to create async SQLite connection: %s", e)
@@ -420,12 +427,14 @@ class AsyncBatchOperations:
         """
         placeholders = ", ".join(["?" for _ in columns])
         column_names = ", ".join(columns)
-        query = f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})"
+        query = f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})"  # nosec B608
 
         for i in range(0, len(data), batch_size):
             batch = data[i : i + batch_size]
             await conn.executemany(query, batch)
-            logger.debug("Inserted batch %s: %s records", i//batch_size + 1, len(batch))
+            logger.debug(
+                "Inserted batch %s: %s records", i // batch_size + 1, len(batch)
+            )
 
     @staticmethod
     async def batch_update(
@@ -448,9 +457,13 @@ class AsyncBatchOperations:
             batch_size: Number of records per batch
         """
         set_clause = ", ".join([f"{col} = ?" for col in set_columns])
-        query = f"UPDATE {table} SET {set_clause} WHERE {where_column} = ?"
+        query = (
+            f"UPDATE {table} SET {set_clause} WHERE {where_column} = ?"  # nosec B608
+        )
 
         for i in range(0, len(data), batch_size):
             batch = data[i : i + batch_size]
             await conn.executemany(query, batch)
-            logger.debug("Updated batch %s: %s records", i//batch_size + 1, len(batch))
+            logger.debug(
+                "Updated batch %s: %s records", i // batch_size + 1, len(batch)
+            )

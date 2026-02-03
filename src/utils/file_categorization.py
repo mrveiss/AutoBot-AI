@@ -126,10 +126,29 @@ JAVA_EXTENSIONS: Set[str] = {".java"}
 KOTLIN_EXTENSIONS: Set[str] = {".kt", ".kts"}
 SCALA_EXTENSIONS: Set[str] = {".scala", ".sc"}
 CSHARP_EXTENSIONS: Set[str] = {".cs", ".csx"}
-CPP_EXTENSIONS: Set[str] = {".cpp", ".cc", ".cxx", ".c++", ".hpp", ".hh", ".hxx", ".h++", ".h", ".c"}
+CPP_EXTENSIONS: Set[str] = {
+    ".cpp",
+    ".cc",
+    ".cxx",
+    ".c++",
+    ".hpp",
+    ".hh",
+    ".hxx",
+    ".h++",
+    ".h",
+    ".c",
+}
 SWIFT_EXTENSIONS: Set[str] = {".swift"}
 RUBY_EXTENSIONS: Set[str] = {".rb", ".rake", ".gemspec"}
-PHP_EXTENSIONS: Set[str] = {".php", ".phtml", ".php3", ".php4", ".php5", ".php7", ".phps"}
+PHP_EXTENSIONS: Set[str] = {
+    ".php",
+    ".phtml",
+    ".php3",
+    ".php4",
+    ".php5",
+    ".php7",
+    ".phps",
+}
 PERL_EXTENSIONS: Set[str] = {".pl", ".pm", ".pod", ".t"}
 
 # Shell / Scripting
@@ -223,40 +242,106 @@ ALL_CODE_EXTENSIONS: Set[str] = (
 
 # Configuration files
 CONFIG_EXTENSIONS: Set[str] = {
-    ".json", ".yaml", ".yml", ".toml", ".ini", ".conf", ".cfg",
-    ".env", ".properties", ".xml", ".plist", ".editorconfig",
-    ".eslintrc", ".prettierrc", ".babelrc", ".npmrc", ".yarnrc",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".ini",
+    ".conf",
+    ".cfg",
+    ".env",
+    ".properties",
+    ".xml",
+    ".plist",
+    ".editorconfig",
+    ".eslintrc",
+    ".prettierrc",
+    ".babelrc",
+    ".npmrc",
+    ".yarnrc",
 }
 
 # Documentation files
 DOC_EXTENSIONS: Set[str] = {
-    ".md", ".markdown", ".rst", ".txt", ".adoc", ".asciidoc",
-    ".org", ".tex", ".latex", ".rtf", ".doc", ".docx", ".odt",
+    ".md",
+    ".markdown",
+    ".rst",
+    ".txt",
+    ".adoc",
+    ".asciidoc",
+    ".org",
+    ".tex",
+    ".latex",
+    ".rtf",
+    ".doc",
+    ".docx",
+    ".odt",
 }
 
 # Log files
 LOG_EXTENSIONS: Set[str] = {
-    ".log", ".log.1", ".log.2", ".log.gz", ".log.bak",
-    ".logs", ".out", ".err",
+    ".log",
+    ".log.1",
+    ".log.2",
+    ".log.gz",
+    ".log.bak",
+    ".logs",
+    ".out",
+    ".err",
 }
 
 # Data files
 DATA_EXTENSIONS: Set[str] = {
-    ".csv", ".tsv", ".parquet", ".avro", ".jsonl", ".ndjson",
-    ".pickle", ".pkl", ".feather", ".hdf5", ".h5",
+    ".csv",
+    ".tsv",
+    ".parquet",
+    ".avro",
+    ".jsonl",
+    ".ndjson",
+    ".pickle",
+    ".pkl",
+    ".feather",
+    ".hdf5",
+    ".h5",
 }
 
 # Asset files (images, fonts, media)
 ASSET_EXTENSIONS: Set[str] = {
     # Images
-    ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp",
-    ".bmp", ".tiff", ".tif", ".psd", ".ai", ".eps",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".svg",
+    ".ico",
+    ".webp",
+    ".bmp",
+    ".tiff",
+    ".tif",
+    ".psd",
+    ".ai",
+    ".eps",
     # Fonts
-    ".ttf", ".otf", ".woff", ".woff2", ".eot",
+    ".ttf",
+    ".otf",
+    ".woff",
+    ".woff2",
+    ".eot",
     # Audio/Video
-    ".mp3", ".wav", ".ogg", ".mp4", ".webm", ".avi", ".mov",
+    ".mp3",
+    ".wav",
+    ".ogg",
+    ".mp4",
+    ".webm",
+    ".avi",
+    ".mov",
     # Other
-    ".pdf", ".zip", ".tar", ".gz", ".rar", ".7z",
+    ".pdf",
+    ".zip",
+    ".tar",
+    ".gz",
+    ".rar",
+    ".7z",
 }
 
 # =============================================================================
@@ -265,22 +350,57 @@ ASSET_EXTENSIONS: Set[str] = {
 
 # Directories to completely skip (no analysis value)
 SKIP_DIRS: Set[str] = {
-    "node_modules", ".git", "__pycache__", ".pytest_cache",
-    "dist", "build", ".venv", "venv", ".DS_Store", "temp",
-    ".next", ".nuxt", ".svelte-kit", ".cache", ".parcel-cache",
-    "coverage", ".nyc_output", "htmlcov", ".tox",
-    ".idea", ".vscode", ".vs",
-    "vendor", "bower_components",
+    "node_modules",
+    ".git",
+    "__pycache__",
+    ".pytest_cache",
+    "dist",
+    "build",
+    ".venv",
+    "venv",
+    ".DS_Store",
+    "temp",
+    ".next",
+    ".nuxt",
+    ".svelte-kit",
+    ".cache",
+    ".parcel-cache",
+    "coverage",
+    ".nyc_output",
+    "htmlcov",
+    ".tox",
+    ".idea",
+    ".vscode",
+    ".vs",
+    "vendor",
+    "bower_components",
     "target",  # Rust/Java build output
-    "bin", "obj",  # .NET build output
-    ".gradle", ".m2",  # Java build caches
+    "bin",
+    "obj",  # .NET build output
+    ".gradle",
+    ".m2",  # Java build caches
 }
 
 # Directory-based categories (not skipped, but categorized)
 BACKUP_DIRS: Set[str] = {"backup", "backups", "bak", ".backup"}
-ARCHIVE_DIRS: Set[str] = {"archive", "archives", "archived", "old", "deprecated", "legacy"}
+ARCHIVE_DIRS: Set[str] = {
+    "archive",
+    "archives",
+    "archived",
+    "old",
+    "deprecated",
+    "legacy",
+}
 LOG_DIRS: Set[str] = {"logs", "log"}
-TEST_DIRS: Set[str] = {"tests", "test", "__tests__", "spec", "specs", "e2e", "integration"}
+TEST_DIRS: Set[str] = {
+    "tests",
+    "test",
+    "__tests__",
+    "spec",
+    "specs",
+    "e2e",
+    "integration",
+}
 DOC_DIRS: Set[str] = {"docs", "doc", "documentation", "wiki"}
 ASSET_DIRS: Set[str] = {"assets", "static", "public", "media", "images", "img", "fonts"}
 
@@ -291,36 +411,78 @@ ASSET_DIRS: Set[str] = {"assets", "static", "public", "media", "images", "img", 
 # Map extensions to language names
 EXTENSION_TO_LANGUAGE: Dict[str, str] = {
     # Python
-    ".py": "python", ".pyw": "python", ".pyi": "python", ".pyx": "python",
+    ".py": "python",
+    ".pyw": "python",
+    ".pyi": "python",
+    ".pyx": "python",
     # JavaScript
-    ".js": "javascript", ".mjs": "javascript", ".cjs": "javascript", ".jsx": "javascript",
+    ".js": "javascript",
+    ".mjs": "javascript",
+    ".cjs": "javascript",
+    ".jsx": "javascript",
     # TypeScript
-    ".ts": "typescript", ".mts": "typescript", ".cts": "typescript", ".tsx": "typescript",
+    ".ts": "typescript",
+    ".mts": "typescript",
+    ".cts": "typescript",
+    ".tsx": "typescript",
     # Web
-    ".vue": "vue", ".svelte": "svelte", ".astro": "astro",
-    ".html": "html", ".htm": "html",
-    ".css": "css", ".scss": "scss", ".sass": "sass", ".less": "less",
+    ".vue": "vue",
+    ".svelte": "svelte",
+    ".astro": "astro",
+    ".html": "html",
+    ".htm": "html",
+    ".css": "css",
+    ".scss": "scss",
+    ".sass": "sass",
+    ".less": "less",
     # Backend
-    ".rs": "rust", ".go": "go", ".java": "java", ".kt": "kotlin",
-    ".cs": "csharp", ".cpp": "cpp", ".c": "c", ".h": "c",
-    ".swift": "swift", ".rb": "ruby", ".php": "php", ".pl": "perl",
+    ".rs": "rust",
+    ".go": "go",
+    ".java": "java",
+    ".kt": "kotlin",
+    ".cs": "csharp",
+    ".cpp": "cpp",
+    ".c": "c",
+    ".h": "c",
+    ".swift": "swift",
+    ".rb": "ruby",
+    ".php": "php",
+    ".pl": "perl",
     # Shell
-    ".sh": "bash", ".bash": "bash", ".zsh": "zsh", ".ps1": "powershell",
+    ".sh": "bash",
+    ".bash": "bash",
+    ".zsh": "zsh",
+    ".ps1": "powershell",
     # Data
-    ".sql": "sql", ".graphql": "graphql",
+    ".sql": "sql",
+    ".graphql": "graphql",
     # Mobile
-    ".dart": "dart", ".m": "objective-c",
+    ".dart": "dart",
+    ".m": "objective-c",
     # Functional
-    ".ex": "elixir", ".erl": "erlang", ".hs": "haskell",
-    ".clj": "clojure", ".fs": "fsharp", ".ml": "ocaml",
+    ".ex": "elixir",
+    ".erl": "erlang",
+    ".hs": "haskell",
+    ".clj": "clojure",
+    ".fs": "fsharp",
+    ".ml": "ocaml",
     # Other
-    ".lua": "lua", ".r": "r", ".jl": "julia", ".nim": "nim",
-    ".zig": "zig", ".cr": "crystal",
+    ".lua": "lua",
+    ".r": "r",
+    ".jl": "julia",
+    ".nim": "nim",
+    ".zig": "zig",
+    ".cr": "crystal",
     # Config
-    ".json": "json", ".yaml": "yaml", ".yml": "yaml", ".toml": "toml",
-    ".xml": "xml", ".ini": "ini",
+    ".json": "json",
+    ".yaml": "yaml",
+    ".yml": "yaml",
+    ".toml": "toml",
+    ".xml": "xml",
+    ".ini": "ini",
     # Docs
-    ".md": "markdown", ".rst": "restructuredtext",
+    ".md": "markdown",
+    ".rst": "restructuredtext",
 }
 
 
@@ -457,8 +619,13 @@ def is_web_file(file_path: Path) -> bool:
     """
     extension = file_path.suffix.lower()
     web_extensions = (
-        JS_EXTENSIONS | TS_EXTENSIONS | VUE_EXTENSIONS |
-        CSS_EXTENSIONS | HTML_EXTENSIONS | SVELTE_EXTENSIONS | ASTRO_EXTENSIONS
+        JS_EXTENSIONS
+        | TS_EXTENSIONS
+        | VUE_EXTENSIONS
+        | CSS_EXTENSIONS
+        | HTML_EXTENSIONS
+        | SVELTE_EXTENSIONS
+        | ASTRO_EXTENSIONS
     )
     return extension in web_extensions
 

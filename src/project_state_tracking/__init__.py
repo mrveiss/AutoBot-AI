@@ -10,23 +10,10 @@ capabilities, and system evolution.
 Part of Issue #381 - God Class Refactoring
 """
 
-import asyncio
 import json
 import logging
 import sys
 from typing import Any, Dict, Optional
-
-# Types and enums
-from .types import (
-    REDIS_METRIC_KEYS,
-    SIGNIFICANT_CHANGES,
-    SIGNIFICANT_INTERACTIONS,
-    StateChangeType,
-    TrackingMetric,
-)
-
-# Data models
-from .models import ProjectMilestone, StateChange, StateSnapshot
 
 # Database operations
 from .database import (
@@ -57,14 +44,8 @@ from .milestones import (
     evaluate_milestone_criteria,
 )
 
-# Tracking functions
-from .tracking import (
-    error_tracking_decorator,
-    is_significant_interaction,
-    track_api_call_to_redis,
-    track_error_to_redis,
-    track_user_interaction_to_redis,
-)
+# Data models
+from .models import ProjectMilestone, StateChange, StateSnapshot
 
 # Reports
 from .reports import (
@@ -76,6 +57,24 @@ from .reports import (
 
 # Main tracker class
 from .tracker import EnhancedProjectStateTracker, get_state_tracker
+
+# Tracking functions
+from .tracking import (
+    error_tracking_decorator,
+    is_significant_interaction,
+    track_api_call_to_redis,
+    track_error_to_redis,
+    track_user_interaction_to_redis,
+)
+
+# Types and enums
+from .types import (
+    REDIS_METRIC_KEYS,
+    SIGNIFICANT_CHANGES,
+    SIGNIFICANT_INTERACTIONS,
+    StateChangeType,
+    TrackingMetric,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -182,9 +181,7 @@ async def _handle_test_tracking_command(tracker):
 
 async def _handle_export_command(tracker, args):
     """Handle export command."""
-    output_path = (
-        args[2] if len(args) > 2 else "reports/state_tracking_export.json"
-    )
+    output_path = args[2] if len(args) > 2 else "reports/state_tracking_export.json"
     await tracker.export_state_data(output_path)
     _cli_output(f"Data exported to {output_path}")
 

@@ -32,7 +32,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.pki.manager import PKIManager, setup_pki
-from src.pki.config import TLSConfig
 
 logging.basicConfig(
     level=logging.INFO,

@@ -26,6 +26,7 @@ import psutil
 from src.config import UnifiedConfigManager
 from src.constants.network_constants import NetworkConstants
 from src.utils.http_client import get_http_client
+from src.utils.performance_monitoring.hardware import HardwareDetector
 from src.utils.performance_monitoring.metrics import (
     GPUMetrics,
     MultiModalMetrics,
@@ -33,11 +34,7 @@ from src.utils.performance_monitoring.metrics import (
     ServicePerformanceMetrics,
     SystemPerformanceMetrics,
 )
-from src.utils.performance_monitoring.hardware import HardwareDetector
-from src.utils.performance_monitoring.types import (
-    AUTOBOT_PROCESS_KEYWORDS,
-    CRITICAL_SERVICE_STATUSES,
-)
+from src.utils.performance_monitoring.types import AUTOBOT_PROCESS_KEYWORDS
 
 logger = logging.getLogger(__name__)
 config = UnifiedConfigManager()
@@ -338,9 +335,7 @@ class SystemCollector:
                 swap_usage_percent=swap.percent,
                 disk_read_mb_s=disk_read_speed,
                 disk_write_mb_s=disk_write_speed,
-                disk_usage_percent=round(
-                    (disk_usage.used / disk_usage.total) * 100, 1
-                ),
+                disk_usage_percent=round((disk_usage.used / disk_usage.total) * 100, 1),
                 disk_queue_depth=0,
                 network_upload_mb_s=network_upload_speed,
                 network_download_mb_s=network_download_speed,
@@ -567,9 +562,7 @@ class MultiModalCollector:
                         throughput_items_per_second=float(
                             multimodal_stats.get("throughput_ips", 0)
                         ),
-                        error_rate_percent=float(
-                            multimodal_stats.get("error_rate", 0)
-                        ),
+                        error_rate_percent=float(multimodal_stats.get("error_rate", 0)),
                     )
 
             return None

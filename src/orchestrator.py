@@ -20,21 +20,11 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
+from src.config import config_manager
+from src.constants.threshold_constants import LLMDefaults, TimingConstants
 from src.conversation import ConversationManager
 from src.llm_interface import LLMInterface
-from src.task_execution_tracker import Priority, TaskType, task_tracker
-from src.config import config_manager
 from src.memory import LongTermMemoryManager
-from src.utils.logging_manager import get_logger
-from src.constants.threshold_constants import LLMDefaults, TimingConstants
-
-# Import shared agent selection utilities (Issue #292 - Eliminate duplicate code)
-from src.utils.agent_selection import (
-    find_best_agent_for_task as _find_best_agent,
-    update_agent_performance as _update_performance,
-    reserve_agent as _reserve_agent,
-    release_agent as _release_agent,
-)
 
 # Issue #381: Import shared types from orchestration package
 from src.orchestration import (
@@ -44,6 +34,14 @@ from src.orchestration import (
     DocumentationType,
     WorkflowDocumentation,
 )
+from src.task_execution_tracker import Priority, TaskType, task_tracker
+
+# Import shared agent selection utilities (Issue #292 - Eliminate duplicate code)
+from src.utils.agent_selection import find_best_agent_for_task as _find_best_agent
+from src.utils.agent_selection import release_agent as _release_agent
+from src.utils.agent_selection import reserve_agent as _reserve_agent
+from src.utils.agent_selection import update_agent_performance as _update_performance
+from src.utils.logging_manager import get_logger
 
 logger = get_logger("orchestrator")
 
@@ -84,11 +82,9 @@ except ImportError:
 
         async def initialize(self):
             """Initialize placeholder - no operation when unavailable."""
-            pass
 
         async def cleanup(self):
             """Cleanup placeholder - no operation when unavailable."""
-            pass
 
         async def execute_agent_task(self, agent_name, task, context=None):
             """Return error indicating agent manager is not available."""
@@ -352,7 +348,9 @@ class ConsolidatedOrchestrator:
         """
         try:
             test_response = await self.llm_interface.generate_response(
-                "Test connection", model=model_name, max_tokens=LLMDefaults.MINIMAL_MAX_TOKENS
+                "Test connection",
+                model=model_name,
+                max_tokens=LLMDefaults.MINIMAL_MAX_TOKENS,
             )
             return bool(test_response)
         except Exception as e:
@@ -370,7 +368,8 @@ class ConsolidatedOrchestrator:
         # Try primary model
         if await self._validate_llm_model(self.config.orchestrator_llm_model):
             logger.info(
-                "✅ Orchestrator model '%s' is working", self.config.orchestrator_llm_model
+                "✅ Orchestrator model '%s' is working",
+                self.config.orchestrator_llm_model,
             )
             return
 
@@ -452,8 +451,8 @@ class ConsolidatedOrchestrator:
         uptime = datetime.now() - self.start_time if self.start_time else 0
         logger.info("Orchestrator session %s completed:", self.session_id)
         logger.info("  Uptime: %s", uptime)
-        logger.info("  Tasks completed: %s", self.metrics['tasks_completed'])
-        logger.info("  Tasks failed: %s", self.metrics['tasks_failed'])
+        logger.info("  Tasks completed: %s", self.metrics["tasks_completed"])
+        logger.info("  Tasks failed: %s", self.metrics["tasks_failed"])
         logger.info("✅ Orchestrator shutdown complete")
 
     async def process_user_request(
@@ -489,7 +488,12 @@ class ConsolidatedOrchestrator:
 
             # Execute based on mode (Issue #281 - uses helper)
             result = await self._execute_mode_request(
-                mode, user_message, task_id, target_llm_model, classification_result, context
+                mode,
+                user_message,
+                task_id,
+                target_llm_model,
+                classification_result,
+                context,
             )
 
             # Update metrics
@@ -505,7 +509,12 @@ class ConsolidatedOrchestrator:
             logger.info("✅ Request %s completed in %.2fs", task_id, processing_time)
 
             return self._build_success_response(
-                task_id, result, processing_time, classification_result, target_llm_model, mode
+                task_id,
+                result,
+                processing_time,
+                classification_result,
+                target_llm_model,
+                mode,
             )
 
         except Exception as e:
@@ -513,13 +522,13 @@ class ConsolidatedOrchestrator:
             processing_time = time.time() - start_time
             self.metrics["tasks_failed"] += 1
             task_tracker.fail_task(task_id, str(e))
-            logger.error("❌ Request %s failed after %.2fs: %s", task_id, processing_time, e)
+            logger.error(
+                "❌ Request %s failed after %.2fs: %s", task_id, processing_time, e
+            )
 
             return self._build_failure_response(task_id, e, processing_time, mode)
 
-    async def _classify_task(
-        self, user_message: str
-    ) -> Optional[Any]:
+    async def _classify_task(self, user_message: str) -> Optional[Any]:
         """Classify user request if classification agent is available (Issue #281 - extracted helper)."""
         if not self.classification_agent:
             return None
@@ -531,15 +540,19 @@ class ConsolidatedOrchestrator:
             logger.warning("Classification failed: %s", e)
             return None
 
-    def _select_model_for_task(
-        self, classification_result: Optional[Any]
-    ) -> str:
+    def _select_model_for_task(self, classification_result: Optional[Any]) -> str:
         """Select appropriate LLM model based on task classification (Issue #281 - extracted helper)."""
-        if classification_result and classification_result.complexity == TaskComplexity.SIMPLE:
+        if (
+            classification_result
+            and classification_result.complexity == TaskComplexity.SIMPLE
+        ):
             model = config_manager.get_default_llm_model()
             logger.info("Using fast model for simple task: %s", model)
             return model
-        logger.info("Generating plan using Orchestrator LLM: %s", self.config.orchestrator_llm_model)
+        logger.info(
+            "Generating plan using Orchestrator LLM: %s",
+            self.config.orchestrator_llm_model,
+        )
         return self.config.orchestrator_llm_model
 
     async def _execute_mode_request(
@@ -612,7 +625,10 @@ class ConsolidatedOrchestrator:
     ) -> Dict[str, Any]:
         """Process simple request with minimal orchestration"""
         response = await self.llm_interface.generate_response(
-            user_message, model=model, max_tokens=LLMDefaults.ENRICHED_MAX_TOKENS, context=context
+            user_message,
+            model=model,
+            max_tokens=LLMDefaults.ENRICHED_MAX_TOKENS,
+            context=context,
         )
 
         return {
@@ -789,7 +805,9 @@ class ConsolidatedOrchestrator:
 
         # Generate synthesis
         synthesis = await self.llm_interface.generate_response(
-            synthesis_prompt, model=self.config.orchestrator_llm_model, max_tokens=LLMDefaults.EXTENDED_MAX_TOKENS
+            synthesis_prompt,
+            model=self.config.orchestrator_llm_model,
+            max_tokens=LLMDefaults.EXTENDED_MAX_TOKENS,
         )
 
         return synthesis
@@ -803,12 +821,15 @@ class ConsolidatedOrchestrator:
         try:
             if agent_profile.agent_id in self.agent_registry:
                 logger.warning(
-                    "Agent %s already registered, updating profile", agent_profile.agent_id
+                    "Agent %s already registered, updating profile",
+                    agent_profile.agent_id,
                 )
 
             self.agent_registry[agent_profile.agent_id] = agent_profile
             logger.info(
-                "Agent %s registered with capabilities: %s", agent_profile.agent_id, agent_profile.capabilities
+                "Agent %s registered with capabilities: %s",
+                agent_profile.agent_id,
+                agent_profile.capabilities,
             )
 
             return True

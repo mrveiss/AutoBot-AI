@@ -8,7 +8,7 @@ Metrics for service health monitoring.
 Extracted from PrometheusMetricsManager as part of Issue #394.
 """
 
-from prometheus_client import CollectorRegistry, Gauge, Histogram
+from prometheus_client import Gauge, Histogram
 
 from .base import BaseMetricsRecorder
 

@@ -17,7 +17,7 @@ import sqlite3
 from datetime import datetime
 from typing import List, Optional, Tuple
 
-from .models import ProjectMilestone, StateSnapshot
+from .models import StateSnapshot
 from .types import TrackingMetric
 
 logger = logging.getLogger(__name__)
@@ -238,9 +238,7 @@ def save_milestone_sync(
         conn.commit()
 
 
-def load_snapshots_from_db(
-    db_path: str, limit: int = 100
-) -> List[StateSnapshot]:
+def load_snapshots_from_db(db_path: str, limit: int = 100) -> List[StateSnapshot]:
     """Load recent snapshots from database."""
     snapshots = []
 
@@ -274,9 +272,7 @@ def load_snapshots_from_db(
     return snapshots
 
 
-def load_milestones_from_db(
-    db_path: str, milestones: dict
-) -> None:
+def load_milestones_from_db(db_path: str, milestones: dict) -> None:
     """Load milestones from database and update the provided dict."""
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()

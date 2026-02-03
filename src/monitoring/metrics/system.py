@@ -8,7 +8,7 @@ Metrics for system resource monitoring.
 Extracted from PrometheusMetricsManager as part of Issue #394.
 """
 
-from prometheus_client import CollectorRegistry, Counter, Gauge
+from prometheus_client import Counter, Gauge
 
 from .base import BaseMetricsRecorder
 

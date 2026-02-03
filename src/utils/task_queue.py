@@ -19,9 +19,9 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
-
 try:
     from redis.exceptions import RedisError
+
     from src.utils.redis_client import get_redis_client
 except ImportError:
     RedisError = Exception  # Fallback if redis not available
@@ -42,7 +42,6 @@ ErrorCategory = None
 # except ImportError:
 def log_performance_metric(*args, **kwargs):
     """Log performance metric placeholder until logging_config module is created."""
-    pass
 
 
 class TaskStatus(Enum):
@@ -420,9 +419,13 @@ class TaskQueue:
                         )
                         await self.redis.zrem(self.scheduled_key, task_id)
 
-                        self.logger.debug("Moved scheduled task to pending: %s", task_id)
+                        self.logger.debug(
+                            "Moved scheduled task to pending: %s", task_id
+                        )
 
-                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)  # Check every 5 seconds
+                await asyncio.sleep(
+                    TimingConstants.ERROR_RECOVERY_DELAY
+                )  # Check every 5 seconds
 
             except asyncio.CancelledError:
                 break
@@ -473,12 +476,16 @@ class TaskQueue:
 
         self.logger.info(
             "Task %s completed successfully in %.2fs",
-            result.task_id, result.execution_time
+            result.task_id,
+            result.execution_time,
         )
 
     def _record_task_failure(
-        self, result: TaskResult, error: str, start_time: float,
-        error_traceback: Optional[str] = None
+        self,
+        result: TaskResult,
+        error: str,
+        start_time: float,
+        error_traceback: Optional[str] = None,
     ) -> None:
         """
         Record task failure.
@@ -515,8 +522,7 @@ class TaskQueue:
             return
 
         self.logger.info(
-            "Worker %s processing task %s: %s",
-            worker_name, task_id, task.function_name
+            "Worker %s processing task %s: %s", worker_name, task_id, task.function_name
         )
 
         result = TaskResult(
@@ -627,7 +633,9 @@ class TaskQueue:
         if not self.redis:
             return None
         # Issue #361 - avoid blocking
-        result_data = await asyncio.to_thread(self.redis.hget, self.results_key, task_id)
+        result_data = await asyncio.to_thread(
+            self.redis.hget, self.results_key, task_id
+        )
         if result_data:
             return TaskResult.from_dict(json.loads(result_data))
         return None
@@ -678,7 +686,9 @@ class TaskQueue:
 
             result_data = json.dumps(result.to_dict())
             # Issue #361 - avoid blocking
-            await asyncio.to_thread(self.redis.hset, self.results_key, task_id, result_data)
+            await asyncio.to_thread(
+                self.redis.hset, self.results_key, task_id, result_data
+            )
 
             self.logger.info("Cancelled task %s", task_id)
             return True

@@ -24,9 +24,6 @@ from typing import Any, Dict, List, Optional, Set
 
 from src.agents.agent_client import AgentRegistry as AgentClientRegistry
 from src.agents.llm_failsafe_agent import get_robust_llm_response
-from src.constants.threshold_constants import TimingConstants
-from src.event_manager import event_manager
-from src.utils.redis_client import get_redis_client
 
 # Re-export all public API from the package for backward compatibility
 from src.enhanced_orchestration import (
@@ -39,6 +36,8 @@ from src.enhanced_orchestration import (
     WorkflowPlan,
     WorkflowPlanner,
 )
+from src.event_manager import event_manager
+from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -153,9 +152,11 @@ class EnhancedMultiAgentOrchestrator:
             Formatted planning prompt string
         """
         capabilities_json = json.dumps(
-            {agent: [cap.value for cap in caps]
-             for agent, caps in self.agent_capabilities.items()},
-            indent=2
+            {
+                agent: [cap.value for cap in caps]
+                for agent, caps in self.agent_capabilities.items()
+            },
+            indent=2,
         )
 
         return f"""
@@ -438,9 +439,7 @@ class EnhancedMultiAgentOrchestrator:
 
         return [agent for agent, _ in suitable_agents]
 
-    async def _coordinate_collaboration(
-        self, plan: WorkflowPlan, collab_channel: str
-    ):
+    async def _coordinate_collaboration(self, plan: WorkflowPlan, collab_channel: str):
         """Coordinate inter-agent collaboration"""
         try:
             pubsub = self.redis_async.pubsub()
@@ -461,7 +460,10 @@ class EnhancedMultiAgentOrchestrator:
                         # Broadcast to other agents
                         await self._broadcast_to_agents(
                             collab_channel,
-                            {"type": "context_update", "shared_context": shared_context},
+                            {
+                                "type": "context_update",
+                                "shared_context": shared_context,
+                            },
                         )
                 except Exception as e:
                     self.logger.error("Collaboration coordination error: %s", e)
@@ -547,7 +549,7 @@ class EnhancedMultiAgentOrchestrator:
         self.logger.warning(
             "Agent '%s' not found in registry. Available agents: %s",
             agent_type,
-            self._agent_client_registry.list_agents()
+            self._agent_client_registry.list_agents(),
         )
         return None
 

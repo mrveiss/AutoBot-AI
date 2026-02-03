@@ -23,4 +23,3 @@ class ThreatAnalyzer(ABC):
         self, event: SecurityEvent, context: AnalysisContext
     ) -> Optional[ThreatEvent]:
         """Analyze event for specific threat type"""
-        pass

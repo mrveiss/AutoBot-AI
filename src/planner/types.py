@@ -8,12 +8,12 @@ Data structures for execution plans and steps.
 Based on Manus numbered pseudocode pattern.
 """
 
+import json
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
-import uuid
-import json
+from typing import Optional
 
 
 class StepStatus(Enum):
@@ -81,7 +81,9 @@ class PlanStep:
             "depends_on": self.depends_on,
             "blocks": self.blocks,
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "completed_at": self.completed_at.isoformat()
+            if self.completed_at
+            else None,
             "reflection": self.reflection,
             "tools_used": self.tools_used,
             "action_event_ids": self.action_event_ids,
@@ -221,9 +223,7 @@ class ExecutionPlan:
         self.completed_steps = sum(
             1 for s in self.steps if s.status == StepStatus.COMPLETED
         )
-        self.failed_steps = sum(
-            1 for s in self.steps if s.status == StepStatus.FAILED
-        )
+        self.failed_steps = sum(1 for s in self.steps if s.status == StepStatus.FAILED)
 
         # Update current step number
         for i, step in enumerate(self.steps):
@@ -236,8 +236,7 @@ class ExecutionPlan:
     def is_complete(self) -> bool:
         """Check if plan is fully completed"""
         return all(
-            s.status in (StepStatus.COMPLETED, StepStatus.SKIPPED)
-            for s in self.steps
+            s.status in (StepStatus.COMPLETED, StepStatus.SKIPPED) for s in self.steps
         )
 
     def has_failures(self) -> bool:
@@ -262,7 +261,9 @@ class ExecutionPlan:
             "current_step_number": self.current_step_number,
             "created_at": self.created_at.isoformat(),
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "completed_at": self.completed_at.isoformat()
+            if self.completed_at
+            else None,
             "version": self.version,
             "update_history": self.update_history,
             "total_steps": self.total_steps,
@@ -348,11 +349,13 @@ class ExecutionPlan:
                 StepStatus.SKIPPED: "completed",
             }
 
-            todos.append({
-                "content": step.description,
-                "status": status_map.get(step.status, "pending"),
-                "activeForm": f"Step {step.step_number}: {step.description}",
-            })
+            todos.append(
+                {
+                    "content": step.description,
+                    "status": status_map.get(step.status, "pending"),
+                    "activeForm": f"Step {step.step_number}: {step.description}",
+                }
+            )
 
         return todos
 

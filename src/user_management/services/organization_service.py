@@ -18,7 +18,7 @@ from typing import List, Optional
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.user_management.models import Organization, User, Team
+from src.user_management.models import Organization, Team, User
 from src.user_management.models.audit import AuditAction, AuditLog, AuditResourceType
 from src.user_management.services.base_service import BaseService, TenantContext
 
@@ -28,25 +28,17 @@ logger = logging.getLogger(__name__)
 class OrganizationServiceError(Exception):
     """Base exception for organization service errors."""
 
-    pass
-
 
 class OrganizationNotFoundError(OrganizationServiceError):
     """Raised when organization is not found."""
-
-    pass
 
 
 class DuplicateOrganizationError(OrganizationServiceError):
     """Raised when attempting to create a duplicate organization."""
 
-    pass
-
 
 class OrganizationLimitError(OrganizationServiceError):
     """Raised when organization limits are exceeded."""
-
-    pass
 
 
 class OrganizationService(BaseService):

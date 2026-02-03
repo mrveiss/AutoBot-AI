@@ -80,7 +80,6 @@ class EventStreamManager(ABC):
     @abstractmethod
     async def publish(self, event: AgentEvent) -> None:
         """Publish an event to the stream"""
-        pass
 
     @abstractmethod
     async def subscribe(
@@ -89,7 +88,6 @@ class EventStreamManager(ABC):
         task_id: Optional[str] = None,
     ) -> AsyncIterator[AgentEvent]:
         """Subscribe to events, optionally filtered by type or task"""
-        pass
 
     @abstractmethod
     async def get_latest(
@@ -99,22 +97,18 @@ class EventStreamManager(ABC):
         task_id: Optional[str] = None,
     ) -> list[AgentEvent]:
         """Get the most recent events"""
-        pass
 
     @abstractmethod
     async def get_task_events(self, task_id: str) -> list[AgentEvent]:
         """Get all events for a specific task"""
-        pass
 
     @abstractmethod
     async def get_event(self, event_id: str) -> Optional[AgentEvent]:
         """Get a specific event by ID"""
-        pass
 
     @abstractmethod
     async def close(self) -> None:
         """Close connections and cleanup"""
-        pass
 
 
 # =============================================================================

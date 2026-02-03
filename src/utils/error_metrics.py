@@ -12,7 +12,6 @@ import asyncio
 import logging
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from src.utils.error_boundaries import ErrorCategory
@@ -110,6 +109,7 @@ class ErrorMetricsCollector:
         # Phase 2 (Issue #345): Prometheus integration - primary metrics store
         try:
             from src.monitoring.prometheus_metrics import get_metrics_manager
+
             self.prometheus = get_metrics_manager()
         except (ImportError, Exception) as e:
             logger.warning("Prometheus metrics not available: %s", e)
@@ -144,9 +144,7 @@ class ErrorMetricsCollector:
         # Phase 5 (Issue #348): Record to Prometheus (single source of truth)
         if self.prometheus:
             self.prometheus.record_error(
-                category.value,
-                component,
-                error_code or "unknown"
+                category.value, component, error_code or "unknown"
             )
 
         # Check alert thresholds (increment count for threshold checking)
@@ -401,7 +399,8 @@ class ErrorMetricsCollector:
         async with self._lock:
             if component:
                 keys_to_remove = [
-                    key for key in self._last_error_counts.keys()
+                    key
+                    for key in self._last_error_counts.keys()
                     if key.startswith(f"{component}:")
                 ]
                 for key in keys_to_remove:

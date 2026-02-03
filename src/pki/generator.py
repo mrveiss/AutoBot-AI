@@ -13,17 +13,16 @@ Inspired by oVirt's ovirt-engine-pki-ca-create and ovirt-engine-pki-enroll.
 
 import logging
 import os
-import subprocess
+import subprocess  # nosec B404 - Required for PKI certificate generation
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
 
 from src.pki.config import (
+    VM_DEFINITIONS,
     CertificateStatus,
-    CertificateType,
     TLSConfig,
     VMCertificateInfo,
-    VM_DEFINITIONS,
 )
 
 logger = logging.getLogger(__name__)
@@ -154,8 +153,10 @@ class CertificateGenerator:
 
         # Generate CA private key
         key_cmd = [
-            "openssl", "genrsa",
-            "-out", str(ca_key),
+            "openssl",
+            "genrsa",
+            "-out",
+            str(ca_key),
             str(self.config.key_size),
         ]
 
@@ -170,12 +171,18 @@ class CertificateGenerator:
         subject = f"/C={self.config.country}/O={self.config.organization}/CN=AutoBot CA"
 
         cert_cmd = [
-            "openssl", "req",
-            "-new", "-x509",
-            "-key", str(ca_key),
-            "-out", str(ca_cert),
-            "-days", str(self.config.ca_validity_days),
-            "-subj", subject,
+            "openssl",
+            "req",
+            "-new",
+            "-x509",
+            "-key",
+            str(ca_key),
+            "-out",
+            str(ca_cert),
+            "-days",
+            str(self.config.ca_validity_days),
+            "-subj",
+            subject,
             "-sha256",
         ]
 
@@ -213,8 +220,10 @@ class CertificateGenerator:
 
         # Generate private key (Issue #665: uses helper)
         key_cmd = [
-            "openssl", "genrsa",
-            "-out", str(key_path),
+            "openssl",
+            "genrsa",
+            "-out",
+            str(key_path),
             str(self.config.key_size),
         ]
         success, _ = _run_openssl_command(key_cmd, "generate key", vm_info.name)
@@ -225,10 +234,15 @@ class CertificateGenerator:
         # Generate CSR (Issue #665: uses helper)
         csr_path = cert_path.parent / "server.csr"
         csr_cmd = [
-            "openssl", "req", "-new",
-            "-key", str(key_path),
-            "-out", str(csr_path),
-            "-config", str(conf_path),
+            "openssl",
+            "req",
+            "-new",
+            "-key",
+            str(key_path),
+            "-out",
+            str(csr_path),
+            "-config",
+            str(conf_path),
         ]
         success, _ = _run_openssl_command(csr_cmd, "generate CSR", vm_info.name)
         if not success:
@@ -236,16 +250,25 @@ class CertificateGenerator:
 
         # Sign with CA (Issue #665: uses helper)
         sign_cmd = [
-            "openssl", "x509", "-req",
-            "-in", str(csr_path),
-            "-CA", str(self.config.ca_cert_path),
-            "-CAkey", str(self.config.ca_key_path),
+            "openssl",
+            "x509",
+            "-req",
+            "-in",
+            str(csr_path),
+            "-CA",
+            str(self.config.ca_cert_path),
+            "-CAkey",
+            str(self.config.ca_key_path),
             "-CAcreateserial",
-            "-out", str(cert_path),
-            "-days", str(self.config.cert_validity_days),
+            "-out",
+            str(cert_path),
+            "-days",
+            str(self.config.cert_validity_days),
             "-sha256",
-            "-extfile", str(conf_path),
-            "-extensions", "v3_ext",
+            "-extfile",
+            str(conf_path),
+            "-extensions",
+            "v3_ext",
         ]
         success, _ = _run_openssl_command(sign_cmd, "sign certificate", vm_info.name)
         if not success:
@@ -264,10 +287,14 @@ class CertificateGenerator:
         try:
             # Get certificate info
             cmd = [
-                "openssl", "x509",
-                "-in", str(cert_path),
+                "openssl",
+                "x509",
+                "-in",
+                str(cert_path),
                 "-noout",
-                "-subject", "-issuer", "-dates",
+                "-subject",
+                "-issuer",
+                "-dates",
             ]
             result = subprocess.run(cmd, capture_output=True, check=True)
             output = result.stdout.decode()
@@ -291,18 +318,20 @@ class CertificateGenerator:
             if expires_at:
                 try:
                     # Parse OpenSSL date format
-                    expiry_date = datetime.strptime(
-                        expires_at, "%b %d %H:%M:%S %Y %Z"
-                    )
+                    expiry_date = datetime.strptime(expires_at, "%b %d %H:%M:%S %Y %Z")
                     days_until_expiry = (expiry_date - datetime.now()).days
-                    needs_renewal = days_until_expiry <= self.config.renewal_threshold_days
+                    needs_renewal = (
+                        days_until_expiry <= self.config.renewal_threshold_days
+                    )
                 except ValueError:
                     pass
 
             # Verify certificate
             verify_cmd = [
-                "openssl", "verify",
-                "-CAfile", str(self.config.ca_cert_path),
+                "openssl",
+                "verify",
+                "-CAfile",
+                str(self.config.ca_cert_path),
                 str(cert_path),
             ]
             verify_result = subprocess.run(verify_cmd, capture_output=True)

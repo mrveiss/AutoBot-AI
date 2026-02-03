@@ -89,7 +89,6 @@ class VisionProcessor(BaseModalProcessor):
 
             # Check if accelerate is available for device_map
             try:
-                pass
                 accelerate_available = True
             except ImportError:
                 accelerate_available = False
@@ -120,7 +119,9 @@ class VisionProcessor(BaseModalProcessor):
         except Exception as e:
             self.logger.error("Failed to load vision models: %s", e)
             # Issue #466: Will raise error on process() - no placeholder fallback
-            self.logger.warning("VisionProcessor will raise errors when processing - models unavailable")
+            self.logger.warning(
+                "VisionProcessor will raise errors when processing - models unavailable"
+            )
 
     def __del__(self):
         """Clean up GPU resources when processor is destroyed"""
@@ -181,9 +182,7 @@ class VisionProcessor(BaseModalProcessor):
             return data.convert("RGB")
         elif isinstance(data, str):
             # File path - read asynchronously (Issue #291)
-            return await asyncio.to_thread(
-                lambda p: Image.open(p).convert("RGB"), data
-            )
+            return await asyncio.to_thread(lambda p: Image.open(p).convert("RGB"), data)
         else:
             raise ValueError(f"Unsupported image data type: {type(data)}")
 
@@ -195,12 +194,8 @@ class VisionProcessor(BaseModalProcessor):
         with torch.no_grad():
             if torch.cuda.is_available():
                 with torch.autocast(device_type="cuda", dtype=torch.float16):
-                    clip_inputs = self.clip_processor(
-                        images=image, return_tensors="pt"
-                    )
-                    clip_inputs = {
-                        k: v.to(self.device) for k, v in clip_inputs.items()
-                    }
+                    clip_inputs = self.clip_processor(images=image, return_tensors="pt")
+                    clip_inputs = {k: v.to(self.device) for k, v in clip_inputs.items()}
                     return self.clip_model.get_image_features(**clip_inputs)
             else:
                 clip_inputs = self.clip_processor(images=image, return_tensors="pt")
@@ -214,9 +209,7 @@ class VisionProcessor(BaseModalProcessor):
         with torch.no_grad():
             if torch.cuda.is_available():
                 with torch.autocast(device_type="cuda", dtype=torch.float16):
-                    blip_inputs = self.blip_processor(
-                        images=image, return_tensors="pt"
-                    )
+                    blip_inputs = self.blip_processor(images=image, return_tensors="pt")
                     blip_inputs = {
                         k: v.to(self.device) if torch.is_tensor(v) else v
                         for k, v in blip_inputs.items()

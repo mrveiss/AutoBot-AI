@@ -10,7 +10,7 @@ Part of Issue #381 - God Class Refactoring
 """
 
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from .types import ConfidenceLevel, ContextType, DecisionType
@@ -40,7 +40,7 @@ class ContextElement:
     def apply_relevance_decay(self, decay_factor: float = 0.95) -> None:
         """Apply time-based relevance decay."""
         age_hours = self.get_age_hours()
-        self.relevance_score *= decay_factor ** age_hours
+        self.relevance_score *= decay_factor**age_hours
 
     def is_type(self, metadata_type: str) -> bool:
         """Check if element matches a specific metadata type."""
@@ -81,9 +81,7 @@ class DecisionContext:
         context_type: ContextType,
     ) -> List[ContextElement]:
         """Get context elements filtered by type."""
-        return [
-            ce for ce in self.context_elements if ce.context_type == context_type
-        ]
+        return [ce for ce in self.context_elements if ce.context_type == context_type]
 
     def get_elements_by_metadata_type(
         self,
@@ -91,7 +89,8 @@ class DecisionContext:
     ) -> List[ContextElement]:
         """Get context elements filtered by metadata type."""
         return [
-            ce for ce in self.context_elements
+            ce
+            for ce in self.context_elements
             if ce.metadata.get("type") == metadata_type
         ]
 

@@ -184,9 +184,7 @@ class Extension:
 
     # ========== Message Preparation Hooks ==========
 
-    async def on_before_message_process(
-        self, ctx: HookContext
-    ) -> Optional[None]:
+    async def on_before_message_process(self, ctx: HookContext) -> Optional[None]:
         """
         Called at the start of message handling.
 
@@ -198,11 +196,8 @@ class Extension:
         Returns:
             None (modify ctx.data directly)
         """
-        pass
 
-    async def on_after_prompt_build(
-        self, ctx: HookContext
-    ) -> Optional[str]:
+    async def on_after_prompt_build(self, ctx: HookContext) -> Optional[str]:
         """
         Called after system prompt is built.
 
@@ -214,13 +209,10 @@ class Extension:
         Returns:
             Modified prompt string or None to keep unchanged
         """
-        pass
 
     # ========== LLM Interaction Hooks ==========
 
-    async def on_before_llm_call(
-        self, ctx: HookContext
-    ) -> Optional[bool]:
+    async def on_before_llm_call(self, ctx: HookContext) -> Optional[bool]:
         """
         Called before calling the LLM.
 
@@ -232,11 +224,8 @@ class Extension:
         Returns:
             False to cancel LLM call, None to continue
         """
-        pass
 
-    async def on_during_llm_streaming(
-        self, ctx: HookContext
-    ) -> Optional[str]:
+    async def on_during_llm_streaming(self, ctx: HookContext) -> Optional[str]:
         """
         Called for each streaming chunk from LLM.
 
@@ -248,11 +237,8 @@ class Extension:
         Returns:
             Modified chunk or None to keep unchanged
         """
-        pass
 
-    async def on_after_llm_response(
-        self, ctx: HookContext
-    ) -> Optional[str]:
+    async def on_after_llm_response(self, ctx: HookContext) -> Optional[str]:
         """
         Called after full response is received.
 
@@ -264,13 +250,10 @@ class Extension:
         Returns:
             Modified response or None to keep unchanged
         """
-        pass
 
     # ========== Tool Execution Hooks ==========
 
-    async def on_before_tool_parse(
-        self, ctx: HookContext
-    ) -> Optional[str]:
+    async def on_before_tool_parse(self, ctx: HookContext) -> Optional[str]:
         """
         Called before parsing tool calls from response.
 
@@ -282,11 +265,8 @@ class Extension:
         Returns:
             Modified response or None to keep unchanged
         """
-        pass
 
-    async def on_before_tool_execute(
-        self, ctx: HookContext
-    ) -> Optional[bool]:
+    async def on_before_tool_execute(self, ctx: HookContext) -> Optional[bool]:
         """
         Called before each tool execution.
 
@@ -298,11 +278,8 @@ class Extension:
         Returns:
             False to cancel execution, None to continue
         """
-        pass
 
-    async def on_after_tool_execute(
-        self, ctx: HookContext
-    ) -> Optional[Any]:
+    async def on_after_tool_execute(self, ctx: HookContext) -> Optional[Any]:
         """
         Called after tool execution completes.
 
@@ -314,11 +291,8 @@ class Extension:
         Returns:
             Modified result or None to keep unchanged
         """
-        pass
 
-    async def on_tool_error(
-        self, ctx: HookContext
-    ) -> Optional[Any]:
+    async def on_tool_error(self, ctx: HookContext) -> Optional[Any]:
         """
         Called when a tool throws an error.
 
@@ -330,13 +304,10 @@ class Extension:
         Returns:
             RepairableException or None to use default handling
         """
-        pass
 
     # ========== Continuation Loop Hooks ==========
 
-    async def on_before_continuation(
-        self, ctx: HookContext
-    ) -> Optional[bool]:
+    async def on_before_continuation(self, ctx: HookContext) -> Optional[bool]:
         """
         Called before LLM continuation iteration.
 
@@ -348,11 +319,8 @@ class Extension:
         Returns:
             False to stop loop, None to continue
         """
-        pass
 
-    async def on_after_continuation(
-        self, ctx: HookContext
-    ) -> Optional[None]:
+    async def on_after_continuation(self, ctx: HookContext) -> Optional[None]:
         """
         Called after each continuation iteration.
 
@@ -364,11 +332,8 @@ class Extension:
         Returns:
             None
         """
-        pass
 
-    async def on_loop_complete(
-        self, ctx: HookContext
-    ) -> Optional[None]:
+    async def on_loop_complete(self, ctx: HookContext) -> Optional[None]:
         """
         Called when message loop completes.
 
@@ -380,13 +345,10 @@ class Extension:
         Returns:
             None
         """
-        pass
 
     # ========== Error Handling Hooks ==========
 
-    async def on_repairable_error(
-        self, ctx: HookContext
-    ) -> Optional[str]:
+    async def on_repairable_error(self, ctx: HookContext) -> Optional[str]:
         """
         Called when a repairable error occurs.
 
@@ -398,11 +360,8 @@ class Extension:
         Returns:
             Modified suggestion or None to keep unchanged
         """
-        pass
 
-    async def on_critical_error(
-        self, ctx: HookContext
-    ) -> Optional[None]:
+    async def on_critical_error(self, ctx: HookContext) -> Optional[None]:
         """
         Called when a critical error occurs.
 
@@ -414,13 +373,10 @@ class Extension:
         Returns:
             None (logging only)
         """
-        pass
 
     # ========== Response Hooks ==========
 
-    async def on_before_response_send(
-        self, ctx: HookContext
-    ) -> Optional[str]:
+    async def on_before_response_send(self, ctx: HookContext) -> Optional[str]:
         """
         Called before sending response via WebSocket.
 
@@ -432,11 +388,8 @@ class Extension:
         Returns:
             Modified response or None to keep unchanged
         """
-        pass
 
-    async def on_after_response_send(
-        self, ctx: HookContext
-    ) -> Optional[None]:
+    async def on_after_response_send(self, ctx: HookContext) -> Optional[None]:
         """
         Called after response is sent.
 
@@ -448,13 +401,10 @@ class Extension:
         Returns:
             None (logging only)
         """
-        pass
 
     # ========== Session Lifecycle Hooks ==========
 
-    async def on_session_create(
-        self, ctx: HookContext
-    ) -> Optional[None]:
+    async def on_session_create(self, ctx: HookContext) -> Optional[None]:
         """
         Called when a new session is created.
 
@@ -466,11 +416,8 @@ class Extension:
         Returns:
             None
         """
-        pass
 
-    async def on_session_destroy(
-        self, ctx: HookContext
-    ) -> Optional[None]:
+    async def on_session_destroy(self, ctx: HookContext) -> Optional[None]:
         """
         Called when a session is destroyed.
 
@@ -482,13 +429,10 @@ class Extension:
         Returns:
             None (cleanup only)
         """
-        pass
 
     # ========== Knowledge Integration Hooks ==========
 
-    async def on_before_rag_query(
-        self, ctx: HookContext
-    ) -> Optional[str]:
+    async def on_before_rag_query(self, ctx: HookContext) -> Optional[str]:
         """
         Called before querying knowledge base.
 
@@ -500,7 +444,6 @@ class Extension:
         Returns:
             Modified query or None to keep unchanged
         """
-        pass
 
     async def on_after_rag_results(
         self, ctx: HookContext
@@ -516,13 +459,10 @@ class Extension:
         Returns:
             Modified results or None to keep unchanged
         """
-        pass
 
     # ========== Approval Flow Hooks ==========
 
-    async def on_approval_required(
-        self, ctx: HookContext
-    ) -> Optional[bool]:
+    async def on_approval_required(self, ctx: HookContext) -> Optional[bool]:
         """
         Called when tool requires user approval.
 
@@ -534,11 +474,8 @@ class Extension:
         Returns:
             True to auto-approve, None for normal flow
         """
-        pass
 
-    async def on_approval_received(
-        self, ctx: HookContext
-    ) -> Optional[None]:
+    async def on_approval_received(self, ctx: HookContext) -> Optional[None]:
         """
         Called when user approval is received.
 
@@ -550,9 +487,10 @@ class Extension:
         Returns:
             None (logging only)
         """
-        pass
 
     # ========== Utility Methods ==========
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(name='{self.name}', priority={self.priority})"
+        return (
+            f"{self.__class__.__name__}(name='{self.name}', priority={self.priority})"
+        )

@@ -14,8 +14,6 @@ from typing import Any, Dict, List, Optional
 
 from src.constants.threshold_constants import RetryConfig, TimingConstants
 
-# Import our components
-
 from .conversation_rate_limiter import ConversationRateLimiter
 from .payload_optimizer import PayloadOptimizer
 from .request_batcher import (
@@ -24,6 +22,9 @@ from .request_batcher import (
     RequestPriority,
     create_batcher,
 )
+
+# Import our components
+
 
 logger = logging.getLogger(__name__)
 
@@ -566,7 +567,7 @@ async def main():
 
         responses = await manager.submit_multiple_requests(requests, parallel=True)
         for i, response in enumerate(responses):
-            logger.debug("Response %s: %s", i+2, response)
+            logger.debug("Response %s: %s", i + 2, response)
 
         # Print metrics
         logger.debug("\nPerformance Metrics:")

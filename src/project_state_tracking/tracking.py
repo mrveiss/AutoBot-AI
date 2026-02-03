@@ -15,7 +15,7 @@ import logging
 from datetime import datetime
 from typing import Any, Callable, Dict, Optional
 
-from .types import REDIS_METRIC_KEYS, SIGNIFICANT_INTERACTIONS, StateChangeType
+from .types import REDIS_METRIC_KEYS, SIGNIFICANT_INTERACTIONS
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +86,9 @@ async def track_user_interaction_to_redis(
             return
 
         current_hour = datetime.now().replace(minute=0, second=0, microsecond=0)
-        interaction_key = f"{REDIS_METRIC_KEYS['user_interactions']}:{current_hour.timestamp()}"
+        interaction_key = (
+            f"{REDIS_METRIC_KEYS['user_interactions']}:{current_hour.timestamp()}"
+        )
         type_key = f"autobot:metrics:interaction_types:{interaction_type}:count"
 
         # Issue #379: Batch all Redis operations using pipeline
@@ -136,9 +138,7 @@ def _handle_sync_error_tracking(
         logger.error("Error in %s: %s", func.__name__, error)
 
 
-def _schedule_error_tracking(
-    error: Exception, context: Dict[str, Any]
-) -> None:
+def _schedule_error_tracking(error: Exception, context: Dict[str, Any]) -> None:
     """Schedule error tracking in running event loop"""
     # Import here to avoid circular imports
     from . import track_system_error
@@ -146,9 +146,7 @@ def _schedule_error_tracking(
     asyncio.create_task(track_system_error(error, context))
 
 
-def _run_error_tracking(
-    error: Exception, context: Dict[str, Any]
-) -> None:
+def _run_error_tracking(error: Exception, context: Dict[str, Any]) -> None:
     """Run error tracking in new event loop"""
     # Import here to avoid circular imports
     from . import track_system_error

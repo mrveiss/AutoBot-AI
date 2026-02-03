@@ -35,7 +35,6 @@ except ImportError:
 
     async def record_error_metric(*args, **kwargs):
         """Fallback async function when error metrics module is unavailable."""
-        pass
 
 
 from .recovery_handlers import (

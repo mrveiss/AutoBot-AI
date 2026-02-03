@@ -16,8 +16,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 
-from src.config import UnifiedConfigManager
-
 
 def _get_default_postgres_host() -> str:
     """
@@ -28,10 +26,12 @@ def _get_default_postgres_host() -> str:
     """
     try:
         from src.config.ssot_config import get_config
+
         return get_config().vm.redis
     except Exception:
         # Fallback only if SSOT config completely unavailable
         import os
+
         return os.getenv("AUTOBOT_REDIS_HOST", "172.16.168.23")
 
 

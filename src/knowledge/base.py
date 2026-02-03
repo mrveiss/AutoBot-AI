@@ -22,12 +22,9 @@ from llama_index.embeddings.ollama import OllamaEmbedding as LlamaIndexOllamaEmb
 from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
-from src.constants.network_constants import NetworkConstants
 from src.config import UnifiedConfigManager
-from src.utils.chromadb_client import (
-    get_chromadb_client as create_chromadb_client,
-    wrap_collection_async,
-)
+from src.utils.chromadb_client import get_chromadb_client as create_chromadb_client
+from src.utils.chromadb_client import wrap_collection_async
 from src.utils.error_boundaries import error_boundary, get_error_boundary_manager
 from src.utils.knowledge_base_timeouts import kb_timeouts
 
@@ -40,7 +37,9 @@ config = UnifiedConfigManager()
 logger = logging.getLogger(__name__)
 
 
-def _extract_embedding_model_from_metadata(metadata_json: bytes | str | None) -> str | None:
+def _extract_embedding_model_from_metadata(
+    metadata_json: bytes | str | None,
+) -> str | None:
     """Extract embedding model from JSON metadata (Issue #315: extracted).
 
     Args:
@@ -80,15 +79,21 @@ class KnowledgeBaseCore:
         self.redis_port = config.get("redis.port")
         self.redis_password = config.get("redis.password")
         self.redis_db = 1  # Default for knowledge base (historical compatibility)
-        self.redis_index_name = config.get("redis.indexes.knowledge_base", "llama_index")
+        self.redis_index_name = config.get(
+            "redis.indexes.knowledge_base", "llama_index"
+        )
 
     def _init_chromadb_config(self) -> None:
         """Initialize ChromaDB configuration (Issue #398: extracted)."""
         self.chromadb_path = config.get("memory.chromadb.path", "data/chromadb")
-        self.chromadb_collection = config.get("memory.chromadb.collection_name", "autobot_memory")
+        self.chromadb_collection = config.get(
+            "memory.chromadb.collection_name", "autobot_memory"
+        )
         # Issue #72: HNSW parameters optimized for 545K+ vectors
         self.hnsw_space = config.get("memory.chromadb.hnsw.space", "cosine")
-        self.hnsw_construction_ef = config.get("memory.chromadb.hnsw.construction_ef", 300)
+        self.hnsw_construction_ef = config.get(
+            "memory.chromadb.hnsw.construction_ef", 300
+        )
         self.hnsw_search_ef = config.get("memory.chromadb.hnsw.search_ef", 100)
         self.hnsw_m = config.get("memory.chromadb.hnsw.M", 32)
 
@@ -186,6 +191,7 @@ class KnowledgeBaseCore:
             )
         elif provider == "openai":
             from llama_index.llms.openai import OpenAI as LlamaIndexOpenAI
+
             Settings.llm = LlamaIndexOpenAI(
                 model=model,
                 api_key=ssot_config.llm.openai_api_key,
@@ -193,6 +199,7 @@ class KnowledgeBaseCore:
             )
         elif provider == "anthropic":
             from llama_index.llms.anthropic import Anthropic as LlamaIndexAnthropic
+
             Settings.llm = LlamaIndexAnthropic(
                 model=model,
                 api_key=ssot_config.llm.anthropic_api_key,
@@ -224,6 +231,7 @@ class KnowledgeBaseCore:
             return 768  # nomic-embed-text dimensions
         elif provider == "openai":
             from llama_index.embeddings.openai import OpenAIEmbedding
+
             Settings.embed_model = OpenAIEmbedding(
                 model=model_name,
                 api_key=ssot_config.llm.openai_api_key,
@@ -251,7 +259,10 @@ class KnowledgeBaseCore:
 
         logger.info(
             "Configuring LlamaIndex: llm=%s@%s, embed_provider=%s@%s",
-            llm_model, llm_provider, embed_provider, embed_endpoint
+            llm_model,
+            llm_provider,
+            embed_provider,
+            embed_endpoint,
         )
 
         # Configure LLM (Issue #665: uses helper)
@@ -263,7 +274,9 @@ class KnowledgeBaseCore:
         stored_model = await self._detect_stored_embedding_model()
         if stored_model:
             embed_model_name = stored_model
-            logger.info("Using stored embedding model for consistency: %s", embed_model_name)
+            logger.info(
+                "Using stored embedding model for consistency: %s", embed_model_name
+            )
         else:
             embed_model_name = ssot_config.llm.embedding_model
             logger.info("Using embedding model from config: %s", embed_model_name)
@@ -279,7 +292,10 @@ class KnowledgeBaseCore:
 
         logger.info(
             "LlamaIndex configured: llm=%s@%s, embed=%s@%s",
-            llm_model, llm_provider, embed_model_name, embed_provider
+            llm_model,
+            llm_provider,
+            embed_model_name,
+            embed_provider,
         )
 
     async def _init_redis_connections(self):
@@ -298,7 +314,7 @@ class KnowledgeBaseCore:
             await asyncio.to_thread(self.redis_client.ping)
             logger.info(
                 "Knowledge Base Redis sync client connected (database %d)",
-                self.redis_db
+                self.redis_db,
             )
 
             # Get async Redis client using pool manager
@@ -328,8 +344,10 @@ class KnowledgeBaseCore:
         logger.info(
             "Creating ChromaDB collection with HNSW params: "
             "space=%s, construction_ef=%d, search_ef=%d, M=%d",
-            self.hnsw_space, self.hnsw_construction_ef,
-            self.hnsw_search_ef, self.hnsw_m
+            self.hnsw_space,
+            self.hnsw_construction_ef,
+            self.hnsw_search_ef,
+            self.hnsw_m,
         )
 
         chroma_collection = await asyncio.to_thread(
@@ -341,7 +359,10 @@ class KnowledgeBaseCore:
         self._async_chroma_collection = wrap_collection_async(chroma_collection)
         self.vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
 
-        logger.info("ChromaDB vector store initialized: collection='%s'", self.chromadb_collection)
+        logger.info(
+            "ChromaDB vector store initialized: collection='%s'",
+            self.chromadb_collection,
+        )
 
         collection_count = await asyncio.to_thread(chroma_collection.count)
         logger.info("ChromaDB collection contains %d vectors", collection_count)
@@ -359,11 +380,14 @@ class KnowledgeBaseCore:
             hnsw_metadata = self._build_hnsw_metadata()
             await self._create_chroma_collection(chroma_client, hnsw_metadata)
 
-            logger.info("Skipping eager vector index creation - will create on first query")
+            logger.info(
+                "Skipping eager vector index creation - will create on first query"
+            )
 
         except Exception as e:
             logger.error("Failed to initialize ChromaDB vector store: %s", e)
             import traceback
+
             logger.error(traceback.format_exc())
             self.vector_store = None
 

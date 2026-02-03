@@ -19,7 +19,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.user_management.models import User, Role, UserRole, Organization
+from src.user_management.models import Role, User, UserRole
 from src.user_management.models.audit import AuditAction, AuditLog, AuditResourceType
 from src.user_management.services.base_service import BaseService, TenantContext
 
@@ -29,25 +29,17 @@ logger = logging.getLogger(__name__)
 class UserServiceError(Exception):
     """Base exception for user service errors."""
 
-    pass
-
 
 class UserNotFoundError(UserServiceError):
     """Raised when user is not found."""
-
-    pass
 
 
 class DuplicateUserError(UserServiceError):
     """Raised when attempting to create a duplicate user."""
 
-    pass
-
 
 class InvalidCredentialsError(UserServiceError):
     """Raised when authentication fails."""
-
-    pass
 
 
 class UserService(BaseService):
@@ -181,8 +173,13 @@ class UserService(BaseService):
 
         effective_org_id = org_id or self.context.org_id
         user = self._build_user_object(
-            email_lower, username_lower, password, display_name,
-            username, effective_org_id, is_platform_admin
+            email_lower,
+            username_lower,
+            password,
+            display_name,
+            username,
+            effective_org_id,
+            is_platform_admin,
         )
 
         self.session.add(user)
@@ -196,7 +193,8 @@ class UserService(BaseService):
             resource_type=AuditResourceType.USER,
             resource_id=user.id,
             details={
-                "email": email, "username": username,
+                "email": email,
+                "username": username,
                 "org_id": str(effective_org_id) if effective_org_id else None,
                 "is_platform_admin": is_platform_admin,
             },
@@ -338,7 +336,9 @@ class UserService(BaseService):
         if new_value_lower != current_value.lower():
             existing = await lookup_func(new_value)
             if existing and existing.id != user_id:
-                raise DuplicateUserError(f"{field_name.title()} '{new_value}' already in use")
+                raise DuplicateUserError(
+                    f"{field_name.title()} '{new_value}' already in use"
+                )
             changes[field_name] = {"old": current_value, "new": new_value_lower}
             setattr(user, field_name, new_value_lower)
 

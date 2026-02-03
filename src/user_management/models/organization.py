@@ -12,17 +12,17 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.user_management.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
-    from src.user_management.models.user import User
-    from src.user_management.models.team import Team
     from src.user_management.models.role import Role
     from src.user_management.models.sso import SSOProvider
+    from src.user_management.models.team import Team
+    from src.user_management.models.user import User
 
 
 class Organization(Base, TimestampMixin):

@@ -9,13 +9,11 @@ This orchestrator eliminates all blocking operations that were causing 30+ secon
 - Only uses complex orchestration when absolutely necessary
 """
 
-import asyncio
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from src.autobot_types import TaskComplexity
-from src.config import config as global_config_manager
 from src.patterns.conversation_patterns import ConversationPatterns, ConversationType
 
 logger = logging.getLogger(__name__)
@@ -37,28 +35,32 @@ class LightweightOrchestrator:
 
         # Administrative endpoints that should never trigger LLM classification
         self.admin_endpoints = {
-            '/api/chats',
-            '/api/settings',
-            '/api/system',
-            '/api/llm',
-            '/api/hello',
-            '/api/version',
-            '/api/metrics'
+            "/api/chats",
+            "/api/settings",
+            "/api/system",
+            "/api/llm",
+            "/api/hello",
+            "/api/version",
+            "/api/metrics",
         }
 
         # Simple conversational patterns that don't need orchestration
         self.simple_patterns = [
-            re.compile(r'^(hello|hi|hey)!?$', re.IGNORECASE),
-            re.compile(r'^(thanks?|thank you)!?$', re.IGNORECASE),
-            re.compile(r'^(bye|goodbye|see you)!?$', re.IGNORECASE),
-            re.compile(r'^(ok|okay|yes|no)!?$', re.IGNORECASE),
+            re.compile(r"^(hello|hi|hey)!?$", re.IGNORECASE),
+            re.compile(r"^(thanks?|thank you)!?$", re.IGNORECASE),
+            re.compile(r"^(bye|goodbye|see you)!?$", re.IGNORECASE),
+            re.compile(r"^(ok|okay|yes|no)!?$", re.IGNORECASE),
         ]
 
     async def startup(self):
         """Lightweight startup - no blocking operations."""
-        logger.info("LightweightOrchestrator started successfully (no blocking operations)")
+        logger.info(
+            "LightweightOrchestrator started successfully (no blocking operations)"
+        )
 
-    async def should_bypass_orchestration(self, request_path: str, user_message: str = "") -> bool:
+    async def should_bypass_orchestration(
+        self, request_path: str, user_message: str = ""
+    ) -> bool:
         """
         Determine if a request should bypass full orchestration.
 
@@ -78,13 +80,20 @@ class LightweightOrchestrator:
         if user_message:
             message_clean = user_message.strip()
             if any(pattern.match(message_clean) for pattern in self.simple_patterns):
-                logger.debug(f"Bypassing orchestration for simple message: {message_clean}")
+                logger.debug(
+                    f"Bypassing orchestration for simple message: {message_clean}"
+                )
                 return True
 
             # Use conversation patterns for classification
             conv_type = self.conversation_patterns.classify_message(message_clean)
-            if conv_type in [ConversationType.GREETING, ConversationType.ACKNOWLEDGMENT]:
-                logger.debug(f"Bypassing orchestration for {conv_type.value}: {message_clean}")
+            if conv_type in [
+                ConversationType.GREETING,
+                ConversationType.ACKNOWLEDGMENT,
+            ]:
+                logger.debug(
+                    f"Bypassing orchestration for {conv_type.value}: {message_clean}"
+                )
                 return True
 
         return False
@@ -106,14 +115,16 @@ class LightweightOrchestrator:
             return "Hello! How can I help you today?"
         elif conv_type == ConversationType.ACKNOWLEDGMENT:
             return "You're welcome!"
-        elif message_clean.lower() in ['bye', 'goodbye', 'see you']:
+        elif message_clean.lower() in ["bye", "goodbye", "see you"]:
             return "Goodbye! Feel free to ask if you need anything else."
-        elif message_clean.lower() in ['ok', 'okay']:
+        elif message_clean.lower() in ["ok", "okay"]:
             return "Understood!"
 
         return None
 
-    async def classify_request_complexity_lightweight(self, user_message: str) -> TaskComplexity:
+    async def classify_request_complexity_lightweight(
+        self, user_message: str
+    ) -> TaskComplexity:
         """
         Lightweight complexity classification without expensive LLM calls.
 
@@ -127,25 +138,39 @@ class LightweightOrchestrator:
             return TaskComplexity.SIMPLE
 
         # System/admin queries
-        if any(word in message_lower for word in ['status', 'config', 'setting', 'list']):
+        if any(
+            word in message_lower for word in ["status", "config", "setting", "list"]
+        ):
             return TaskComplexity.SIMPLE
 
         # Complex operations
         complex_keywords = [
-            'analyze', 'research', 'install', 'configure', 'create',
-            'build', 'deploy', 'debug', 'troubleshoot', 'automate'
+            "analyze",
+            "research",
+            "install",
+            "configure",
+            "create",
+            "build",
+            "deploy",
+            "debug",
+            "troubleshoot",
+            "automate",
         ]
         if any(keyword in message_lower for keyword in complex_keywords):
             return TaskComplexity.COMPLEX
 
         # Code-related requests
-        if any(word in message_lower for word in ['code', 'script', 'function', 'class']):
+        if any(
+            word in message_lower for word in ["code", "script", "function", "class"]
+        ):
             return TaskComplexity.MODERATE
 
         # Default to simple to avoid unnecessary overhead
         return TaskComplexity.SIMPLE
 
-    async def route_request(self, request_path: str, user_message: str = "") -> Dict[str, Any]:
+    async def route_request(
+        self, request_path: str, user_message: str = ""
+    ) -> Dict[str, Any]:
         """
         Route request based on lightweight analysis.
 
@@ -156,7 +181,9 @@ class LightweightOrchestrator:
         Returns:
             Dict containing routing decision and metadata
         """
-        should_bypass = await self.should_bypass_orchestration(request_path, user_message)
+        should_bypass = await self.should_bypass_orchestration(
+            request_path, user_message
+        )
 
         if should_bypass:
             simple_response = None
@@ -167,15 +194,17 @@ class LightweightOrchestrator:
                 "bypass_orchestration": True,
                 "complexity": TaskComplexity.SIMPLE,
                 "simple_response": simple_response,
-                "routing_reason": "lightweight_pattern_match"
+                "routing_reason": "lightweight_pattern_match",
             }
         else:
-            complexity = await self.classify_request_complexity_lightweight(user_message)
+            complexity = await self.classify_request_complexity_lightweight(
+                user_message
+            )
             return {
                 "bypass_orchestration": False,
                 "complexity": complexity,
                 "simple_response": None,
-                "routing_reason": "requires_full_orchestration"
+                "routing_reason": "requires_full_orchestration",
             }
 
 

@@ -10,7 +10,7 @@ Extracted from PrometheusMetricsManager as part of Issue #394.
 
 from typing import Optional
 
-from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram
+from prometheus_client import Counter, Gauge, Histogram
 
 from .base import BaseMetricsRecorder
 

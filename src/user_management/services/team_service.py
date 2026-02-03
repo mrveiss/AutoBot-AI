@@ -17,7 +17,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.user_management.models import Team, TeamMembership, User
+from src.user_management.models import Team, TeamMembership
 from src.user_management.models.audit import AuditAction, AuditLog, AuditResourceType
 from src.user_management.services.base_service import BaseService, TenantContext
 
@@ -27,25 +27,17 @@ logger = logging.getLogger(__name__)
 class TeamServiceError(Exception):
     """Base exception for team service errors."""
 
-    pass
-
 
 class TeamNotFoundError(TeamServiceError):
     """Raised when team is not found."""
-
-    pass
 
 
 class DuplicateTeamError(TeamServiceError):
     """Raised when attempting to create a duplicate team."""
 
-    pass
-
 
 class MembershipError(TeamServiceError):
     """Raised for membership-related errors."""
-
-    pass
 
 
 class TeamService(BaseService):
@@ -341,7 +333,9 @@ class TeamService(BaseService):
         # Check if already a member
         existing = await self._get_membership(team_id, user_id)
         if existing:
-            raise MembershipError(f"User {user_id} is already a member of team {team_id}")
+            raise MembershipError(
+                f"User {user_id} is already a member of team {team_id}"
+            )
 
         membership = TeamMembership(
             id=uuid.uuid4(),
