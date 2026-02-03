@@ -471,7 +471,7 @@ class SLMClient:
         try:
             async with websockets.connect(
                 ws_url,
-                extra_headers=(
+                additional_headers=(
                     {"Authorization": f"Bearer {self.auth_token}"}
                     if self.auth_token
                     else {}
