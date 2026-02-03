@@ -64,6 +64,13 @@ const router = createRouter({
       meta: { title: 'Code Sync' }
     },
     {
+      // Issue #760: Agent LLM configuration management
+      path: '/agent-config',
+      name: 'agent-config',
+      component: () => import('@/views/AgentsView.vue'),
+      meta: { title: 'Agent Configuration' }
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('@/views/SettingsView.vue'),
