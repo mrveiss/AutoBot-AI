@@ -57,6 +57,31 @@ class UserResponse(BaseModel):
 
 
 # =============================================================================
+# Role Detection Schemas (Issue #779)
+# =============================================================================
+
+
+class PortInfo(BaseModel):
+    """Listening port info from agent."""
+
+    port: int
+    process: Optional[str] = None
+    pid: Optional[int] = None
+
+
+class RoleReportItem(BaseModel):
+    """Single role detection report from agent."""
+
+    path_exists: bool = False
+    path: Optional[str] = None
+    service_running: bool = False
+    service_name: Optional[str] = None
+    ports: List[int] = Field(default_factory=list)
+    version: Optional[str] = None
+    status: str = "not_installed"
+
+
+# =============================================================================
 # Node Schemas
 # =============================================================================
 
@@ -127,6 +152,9 @@ class HeartbeatRequest(BaseModel):
     os_info: Optional[str] = None
     code_version: Optional[str] = None  # Issue #741: Git commit hash
     extra_data: Dict = Field(default_factory=dict)
+    # Role detection (Issue #779)
+    role_report: Dict[str, RoleReportItem] = Field(default_factory=dict)
+    listening_ports: List[PortInfo] = Field(default_factory=list)
 
 
 class HeartbeatResponse(BaseModel):
