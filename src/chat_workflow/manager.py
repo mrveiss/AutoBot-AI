@@ -700,6 +700,75 @@ class ChatWorkflowManager(
         )
         return complete_msg, streaming_msg, current_segment, current_message_type
 
+    def _handle_tool_call_completion_check(
+        self,
+        chunk_data: Dict[str, Any],
+        llm_response: str,
+        tool_call_completed: bool,
+    ) -> tuple:
+        """Handle tool call completion detection during streaming.
+
+        Issue #620.
+
+        Returns:
+            Tuple of (done_result, should_break, tool_call_completed)
+        """
+        tool_call_completed = self._check_tool_call_completion(
+            llm_response, tool_call_completed
+        )
+        if tool_call_completed:
+            done_result = self._handle_tool_call_done(chunk_data, llm_response)
+            if done_result:
+                return (done_result, True, tool_call_completed)
+            return (None, False, tool_call_completed)
+        return (None, False, tool_call_completed)
+
+    def _yield_chunk_messages(
+        self,
+        chunk_text: str,
+        new_type: str,
+        current_message_type: str,
+        streaming_msg,
+        selected_model: str,
+        terminal_session_id: str,
+        used_knowledge: bool,
+        rag_citations: List[Dict[str, Any]],
+        llm_response: str,
+        current_segment: str,
+    ) -> tuple:
+        """Process chunk and prepare messages for yielding.
+
+        Issue #620.
+
+        Returns:
+            Tuple of (complete_msg, workflow_msg, streaming_msg, segment, msg_type)
+        """
+        (
+            complete_msg,
+            streaming_msg,
+            current_segment,
+            current_message_type,
+        ) = self._process_chunk_with_transitions(
+            chunk_text,
+            new_type,
+            current_message_type,
+            streaming_msg,
+            selected_model,
+            terminal_session_id,
+            used_knowledge,
+            rag_citations,
+            llm_response,
+            current_segment,
+        )
+        workflow_msg = streaming_msg.to_workflow_message()
+        return (
+            complete_msg,
+            workflow_msg,
+            streaming_msg,
+            current_segment,
+            current_message_type,
+        )
+
     async def _stream_llm_response(
         self,
         response,
@@ -732,24 +801,28 @@ class ChatWorkflowManager(
             ) = self._process_chunk_and_detect_type(
                 chunk_data, llm_response, current_segment, current_message_type
             )
-            tool_call_completed = self._check_tool_call_completion(
-                llm_response, tool_call_completed
-            )
 
+            (
+                done_result,
+                should_break,
+                tool_call_completed,
+            ) = self._handle_tool_call_completion_check(
+                chunk_data, llm_response, tool_call_completed
+            )
+            if should_break:
+                yield done_result
+                break
             if tool_call_completed:
-                done_result = self._handle_tool_call_done(chunk_data, llm_response)
-                if done_result:
-                    yield done_result
-                    break
                 continue
 
             if chunk_text:
                 (
                     complete_msg,
+                    workflow_msg,
                     streaming_msg,
                     current_segment,
                     current_message_type,
-                ) = self._process_chunk_with_transitions(
+                ) = self._yield_chunk_messages(
                     chunk_text,
                     new_type,
                     current_message_type,
@@ -763,7 +836,7 @@ class ChatWorkflowManager(
                 )
                 if complete_msg:
                     yield (complete_msg, llm_response, False, True)
-                yield (streaming_msg.to_workflow_message(), llm_response, False, False)
+                yield (workflow_msg, llm_response, False, False)
 
             if chunk_data.get("done", False):
                 self._log_stream_completion(llm_response)
@@ -1225,16 +1298,36 @@ before summarizing.
 
         yield (llm_response, tool_calls, False)
 
+    def _parse_tool_result_tuple(
+        self,
+        item: tuple,
+        current_results: List[Dict[str, Any]],
+    ) -> tuple:
+        """Parse tool result tuple with backwards compatibility.
+
+        Issue #620.
+
+        Returns:
+            Tuple of (new_results, has_pending_approval, should_break, break_loop_requested)
+        """
+        if len(item) == 4:
+            return item
+        elif len(item) == 3:
+            new_results, has_pending_approval, should_break = item
+            return (new_results, has_pending_approval, should_break, False)
+        else:
+            new_results_or_empty, should_break = item
+            if isinstance(new_results_or_empty, list):
+                return (new_results_or_empty, False, should_break, False)
+            return (current_results, False, should_break, False)
+
     async def _collect_tool_execution_results(
         self,
         tool_calls: List[Dict[str, Any]],
         iteration: int,
         ctx: LLMIterationContext,
     ):
-        """
-        Collect tool execution results and handle backwards compatibility.
-
-        Issue #665: Extracted from _run_continuation_iteration to reduce function length.
+        """Collect tool execution results. Issue #620.
 
         Yields:
             WorkflowMessages, then (new_results, has_pending_approval, should_break, break_loop_requested)
@@ -1245,10 +1338,12 @@ before summarizing.
             len(tool_calls),
         )
 
-        new_results = []
-        has_pending_approval = False
-        should_break = False
-        break_loop_requested = False
+        new_results, has_pending_approval, should_break, break_loop_requested = (
+            [],
+            False,
+            False,
+            False,
+        )
 
         async for item in self._process_tool_results(
             tool_calls,
@@ -1260,22 +1355,12 @@ before summarizing.
             ctx.workflow_messages,
         ):
             if isinstance(item, tuple):
-                # Issue #654: Now returns 4-tuple (results, has_pending_approval, should_break, break_loop_requested)
-                if len(item) == 4:
-                    (
-                        new_results,
-                        has_pending_approval,
-                        should_break,
-                        break_loop_requested,
-                    ) = item
-                elif len(item) == 3:
-                    # Backwards compatibility for 3-tuple
-                    new_results, has_pending_approval, should_break = item
-                else:
-                    # Backwards compatibility for 2-tuple
-                    new_results_or_empty, should_break = item
-                    if isinstance(new_results_or_empty, list):
-                        new_results = new_results_or_empty
+                (
+                    new_results,
+                    has_pending_approval,
+                    should_break,
+                    break_loop_requested,
+                ) = self._parse_tool_result_tuple(item, new_results)
             else:
                 yield item
 
@@ -1871,45 +1956,92 @@ before summarizing.
             messages.append(msg)
         return messages
 
+    async def _process_special_intents(
+        self,
+        session_id: str,
+        message: str,
+        user_wants_exit: bool,
+        workflow_messages: List[WorkflowMessage],
+    ):
+        """Handle exit intent and slash commands.
+
+        Issue #620.
+
+        Yields:
+            WorkflowMessage if special intent handled
+        Returns:
+            True if special intent was handled, False otherwise
+        """
+        if user_wants_exit:
+            async for msg in self._handle_exit_intent(session_id, workflow_messages):
+                yield msg
+            yield True
+            return
+
+        slash_handler = get_slash_command_handler()
+        if slash_handler.is_slash_command(message):
+            async for msg in self._handle_slash_command(
+                session_id, message, workflow_messages
+            ):
+                yield msg
+            yield True
+            return
+
+        yield False
+
+    def _create_processing_error_message(
+        self,
+        session_id: str,
+        error: Exception,
+        workflow_messages: List[WorkflowMessage],
+    ) -> WorkflowMessage:
+        """Create error message for processing failures.
+
+        Issue #620.
+
+        Returns:
+            WorkflowMessage with error details
+        """
+        logger.error(
+            "Error processing message for session %s: %s",
+            session_id,
+            error,
+            exc_info=True,
+        )
+        error_msg = WorkflowMessage(
+            type="error",
+            content=f"Error processing message: {str(error)}",
+            metadata={"error": True, "session_id": session_id},
+        )
+        workflow_messages.append(error_msg)
+        return error_msg
+
     async def process_message_stream(
         self, session_id: str, message: str, context: Optional[Dict[str, Any]] = None
     ):
-        """
-        Process a message through the workflow system as an async generator.
+        """Process a message through the workflow system as an async generator.
 
-        Delegates to specialized helper methods for each stage of the workflow.
+        Issue #620.
         """
         workflow_messages = []
 
         try:
-            # Stage 1: Initialize session and check for exit intent
             (
                 session,
                 terminal_session_id,
                 user_wants_exit,
             ) = await self._initialize_chat_session(session_id, message)
-
-            # Persist user message immediately to prevent data loss
             await self._persist_user_message(session_id, message)
 
-            # Handle exit intent
-            if user_wants_exit:
-                async for msg in self._handle_exit_intent(
-                    session_id, workflow_messages
-                ):
-                    yield msg
-                return
+            async for item in self._process_special_intents(
+                session_id, message, user_wants_exit, workflow_messages
+            ):
+                if isinstance(item, bool):
+                    if item:
+                        return
+                else:
+                    yield item
 
-            # Handle slash commands (/docs, /help, /status)
-            slash_handler = get_slash_command_handler()
-            if slash_handler.is_slash_command(message):
-                async for msg in self._handle_slash_command(
-                    session_id, message, workflow_messages
-                ):
-                    yield msg
-                return
-
-            # Execute main LLM workflow
             async for msg in self._execute_llm_workflow(
                 session_id,
                 session,
@@ -1921,19 +2053,9 @@ before summarizing.
                 yield msg
 
         except Exception as e:
-            logger.error(
-                "❌ Error processing message for session %s: %s",
-                session_id,
-                e,
-                exc_info=True,
+            yield self._create_processing_error_message(
+                session_id, e, workflow_messages
             )
-            error_msg = WorkflowMessage(
-                type="error",
-                content=f"Error processing message: {str(e)}",
-                metadata={"error": True, "session_id": session_id},
-            )
-            workflow_messages.append(error_msg)
-            yield error_msg
 
     async def shutdown(self):
         """Shutdown the workflow manager and clean up resources."""

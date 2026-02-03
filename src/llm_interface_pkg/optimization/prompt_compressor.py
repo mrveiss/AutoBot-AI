@@ -35,11 +35,11 @@ class CompressionConfig:
     """Configuration for prompt compression."""
 
     enabled: bool = True
-    target_ratio: float = 0.7          # Target 70% of original length
+    target_ratio: float = 0.7  # Target 70% of original length
     min_length_to_compress: int = 100  # Only compress prompts > 100 chars
     preserve_code_blocks: bool = True
     preserve_urls: bool = True
-    aggressive_mode: bool = False      # Enable aggressive compression
+    aggressive_mode: bool = False  # Enable aggressive compression
 
 
 class PromptCompressor:
@@ -207,70 +207,85 @@ class PromptCompressor:
             strategy_used="none",
         )
 
+    def _extract_and_placeholder(
+        self, text: str, pattern: str, prefix: str
+    ) -> tuple[str, List[str]]:
+        """
+        Extract pattern matches and replace with placeholders.
+
+        Used to preserve code blocks and URLs during compression. Issue #620.
+
+        Args:
+            text: Text to process
+            pattern: Regex pattern to match
+            prefix: Placeholder prefix (e.g., "__CODE_BLOCK_")
+
+        Returns:
+            Tuple of (text with placeholders, list of extracted items)
+        """
+        items = []
+        matches = list(re.finditer(pattern, text))
+        for i, match in enumerate(reversed(matches)):
+            placeholder = f"{prefix}{len(matches) - 1 - i}__"
+            items.insert(0, match.group())
+            text = text[: match.start()] + placeholder + text[match.end() :]
+        return text, items
+
+    def _restore_placeholders(self, text: str, items: List[str], prefix: str) -> str:
+        """
+        Restore extracted items from placeholders.
+
+        Issue #620.
+
+        Args:
+            text: Text with placeholders
+            items: List of extracted items to restore
+            prefix: Placeholder prefix used during extraction
+
+        Returns:
+            Text with placeholders replaced by original items
+        """
+        for i, item in enumerate(items):
+            text = text.replace(f"{prefix}{i}__", item)
+        return text
+
     def _rule_based_compression(self, text: str) -> str:
         """Apply rule-based compression techniques."""
         compressed = text
+        code_blocks: List[str] = []
+        urls: List[str] = []
 
-        # Preserve code blocks if configured
-        code_blocks = []
+        # Preserve code blocks and URLs (Issue #620: uses helper)
         if self.config.preserve_code_blocks:
-            # Extract code blocks
-            code_pattern = r"```[\s\S]*?```"
-            matches = list(re.finditer(code_pattern, compressed))
-            for i, match in enumerate(reversed(matches)):
-                placeholder = f"__CODE_BLOCK_{len(matches) - 1 - i}__"
-                code_blocks.insert(0, match.group())
-                compressed = (
-                    compressed[: match.start()]
-                    + placeholder
-                    + compressed[match.end() :]
-                )
-
-        # Preserve URLs if configured
-        urls = []
+            compressed, code_blocks = self._extract_and_placeholder(
+                compressed, r"```[\s\S]*?```", "__CODE_BLOCK_"
+            )
         if self.config.preserve_urls:
-            url_pattern = r"https?://\S+"
-            matches = list(re.finditer(url_pattern, compressed))
-            for i, match in enumerate(reversed(matches)):
-                placeholder = f"__URL_{len(matches) - 1 - i}__"
-                urls.insert(0, match.group())
-                compressed = (
-                    compressed[: match.start()]
-                    + placeholder
-                    + compressed[match.end() :]
-                )
+            compressed, urls = self._extract_and_placeholder(
+                compressed, r"https?://\S+", "__URL_"
+            )
 
-        # Remove excessive whitespace
+        # Apply compression rules
         compressed = re.sub(r"\s+", " ", compressed)
         compressed = re.sub(r"\n\s*\n", "\n", compressed)
 
-        # Remove filler phrases
         for phrase in self.FILLER_PHRASES:
             compressed = compressed.replace(phrase, "")
-
-        # Apply standard replacements
         for old, new in self.REPLACEMENTS.items():
             compressed = compressed.replace(old, new)
 
-        # Apply aggressive replacements if enabled
         if self.config.aggressive_mode:
             for old, new in self.AGGRESSIVE_REPLACEMENTS.items():
-                # Case-insensitive word replacement
                 pattern = rf"\b{re.escape(old)}\b"
                 compressed = re.sub(pattern, new, compressed, flags=re.IGNORECASE)
 
-        # Clean up extra spaces
-        compressed = re.sub(r" +", " ", compressed)
-        compressed = compressed.strip()
+        compressed = re.sub(r" +", " ", compressed).strip()
 
-        # Restore code blocks
-        for i, code in enumerate(code_blocks):
-            compressed = compressed.replace(f"__CODE_BLOCK_{i}__", code)
-
-        # Restore URLs
-        for i, url in enumerate(urls):
-            compressed = compressed.replace(f"__URL_{i}__", url)
-
+        # Restore preserved content (Issue #620: uses helper)
+        compressed = self._restore_placeholders(
+            compressed, code_blocks, "__CODE_BLOCK_"
+        )
+        compressed = self._restore_placeholders(compressed, urls, "__URL_")
         return compressed
 
     def _selective_compression(self, text: str) -> str:
@@ -329,9 +344,7 @@ class PromptCompressor:
         scored_contexts.sort(reverse=True, key=lambda x: x[0])
         return [ctx for _, ctx in scored_contexts[:max_contexts]]
 
-    def get_compression_stats(
-        self, results: List[CompressionResult]
-    ) -> Dict[str, Any]:
+    def get_compression_stats(self, results: List[CompressionResult]) -> Dict[str, Any]:
         """
         Get aggregate compression statistics.
 

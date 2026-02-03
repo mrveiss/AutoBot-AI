@@ -345,6 +345,47 @@ class ToolHandlerMixin:
                 exc_info=True,
             )
 
+    def _check_empty_command_history(self, elapsed_time: float) -> tuple:
+        """Handle empty command history case. Issue #620."""
+        logger.warning(
+            "pending_approval is None but no command history. "
+            "Breaking after %.1fs to prevent infinite loop.",
+            elapsed_time,
+        )
+        return None, None, True
+
+    def _check_command_mismatch(
+        self,
+        command: str,
+        last_command: Dict[str, Any],
+        elapsed_time: float,
+        max_wait_time: float,
+    ) -> tuple | None:
+        """Check for command mismatch in history. Issue #620."""
+        if last_command.get("command") == command:
+            return None  # Command matched, continue processing
+
+        if elapsed_time > max_wait_time - 3590:
+            logger.warning(
+                "Timeout: pending_approval is None but command not found. "
+                "Expected: '%s', Last: '%s'. Breaking after %.1fs.",
+                command,
+                last_command.get("command"),
+                elapsed_time,
+            )
+            return None, None, True
+        return None, None, False
+
+    def _build_approval_status_msg(
+        self, last_command: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Build approval status message from command history. Issue #620."""
+        approval_status = "approved" if last_command.get("approved_by") else "denied"
+        comment = last_command.get("approval_comment") or last_command.get(
+            "denial_reason"
+        )
+        return {"approval_status": approval_status, "approval_comment": comment}
+
     def _check_approval_completion(
         self,
         session_info: Dict[str, Any],
@@ -352,7 +393,7 @@ class ToolHandlerMixin:
         elapsed_time: float,
         max_wait_time: float,
     ) -> tuple:
-        """Check if approval is complete (Issue #332 - extracted helper).
+        """Check if approval is complete. Issue #620.
 
         Returns: (approval_result, status_msg, should_break)
         """
@@ -361,41 +402,23 @@ class ToolHandlerMixin:
 
         command_history = session_info.get("command_history", [])
         if not command_history:
-            logger.warning(
-                f"⚠️ [APPROVAL POLLING] pending_approval is None but no command "
-                f"history. Breaking after {elapsed_time:.1f}s to prevent infinite loop."
-            )
-            return None, None, True
+            return self._check_empty_command_history(elapsed_time)
 
         last_command = command_history[-1]
-        if last_command.get("command") != command:
-            if elapsed_time > max_wait_time - 3590:
-                logger.warning(
-                    f"⚠️ [APPROVAL POLLING] Timeout: pending_approval is None "
-                    f"but command not found in history. Expected: '{command}', "
-                    f"Last in history: '{last_command.get('command')}'. "
-                    f"Breaking after {elapsed_time:.1f}s."
-                )
-                return None, None, True
-            return None, None, False
+        mismatch_result = self._check_command_mismatch(
+            command, last_command, elapsed_time, max_wait_time
+        )
+        if mismatch_result is not None:
+            return mismatch_result
 
-        # Found the execution result
         approval_result = last_command.get("result", {})
         logger.info(
-            f"✅ [APPROVAL POLLING] Completion detected! Command: {command}, "
-            f"Status: {approval_result.get('status')}, Approved by: {last_command.get('approved_by')}"
+            "Completion detected! Command: %s, Status: %s, Approved by: %s",
+            command,
+            approval_result.get("status"),
+            last_command.get("approved_by"),
         )
-
-        approval_status = "approved" if last_command.get("approved_by") else "denied"
-        comment = last_command.get("approval_comment") or last_command.get(
-            "denial_reason"
-        )
-        status_msg = {
-            "approval_status": approval_status,
-            "approval_comment": comment,
-        }
-
-        return approval_result, status_msg, True
+        return approval_result, self._build_approval_status_msg(last_command), True
 
     def _build_approval_request_message(
         self,
@@ -434,6 +457,23 @@ class ToolHandlerMixin:
             metadata={"message_type": "approval_waiting", "command": command},
         )
 
+    def _log_polling_status(
+        self, poll_count: int, session_info: Dict[str, Any] | None, elapsed_time: float
+    ) -> None:
+        """Log periodic polling status updates. Issue #620."""
+        if poll_count % 20 != 0:
+            return
+        pending = (
+            session_info.get("pending_approval") is not None
+            if session_info
+            else "NO SESSION"
+        )
+        logger.info(
+            "Still waiting for approval... (elapsed: %.1fs, pending: %s)",
+            elapsed_time,
+            pending,
+        )
+
     async def _poll_for_approval(
         self,
         terminal_session_id: str,
@@ -441,11 +481,10 @@ class ToolHandlerMixin:
         max_wait_time: int = 3600,
         poll_interval: float = 0.5,
     ):
-        """
-        Poll for approval status until approved/denied or timeout.
+        """Poll for approval status until approved/denied or timeout. Issue #620.
 
         Yields:
-            Tuple of (approval_result, status_msg) when found, None while waiting
+            Tuple of (approval_result, status_msg) when found, None on timeout
         """
         elapsed_time = 0
         poll_count = 0
@@ -459,31 +498,18 @@ class ToolHandlerMixin:
                 session_info = await self.terminal_tool.get_session_info(
                     terminal_session_id
                 )
-
-                if poll_count % 20 == 0:
-                    pending = (
-                        session_info.get("pending_approval") is not None
-                        if session_info
-                        else "NO SESSION"
-                    )
-                    logger.info(
-                        "🔍 [APPROVAL POLLING] Still waiting... (elapsed: %.1fs, pending: %s)",
-                        elapsed_time,
-                        pending,
-                    )
+                self._log_polling_status(poll_count, session_info, elapsed_time)
 
                 result_data, status_msg, should_break = self._check_approval_completion(
                     session_info, command, elapsed_time, max_wait_time
                 )
-
                 if should_break:
                     yield (result_data, status_msg)
                     return
-
             except Exception as check_error:
                 logger.error("Error checking approval status: %s", check_error)
 
-        yield (None, None)  # Timeout
+        yield (None, None)
 
     async def _handle_pending_approval(
         self,
@@ -705,6 +731,63 @@ class ToolHandlerMixin:
                 # Issue #680: Only yield non-None WorkflowMessage objects
                 yield msg
 
+    async def _handle_pending_approval_command(
+        self,
+        session_id: str,
+        terminal_session_id: str,
+        command: str,
+        host: str,
+        result: Dict[str, Any],
+        description: str,
+        ollama_endpoint: str,
+        selected_model: str,
+        execution_results: List,
+        additional_response_parts: List,
+    ):
+        """Handle command requiring approval workflow. Issue #620."""
+        if not terminal_session_id:
+            logger.error("No terminal session found for conversation %s", session_id)
+            yield WorkflowMessage(
+                type="error",
+                content="Terminal session error - cannot request approval",
+                metadata={"error": True},
+            )
+            return
+
+        workflow_gen = self._handle_approval_workflow(
+            session_id,
+            command,
+            host,
+            result,
+            terminal_session_id,
+            description,
+            ollama_endpoint,
+            selected_model,
+        )
+        async for msg in self._collect_workflow_results(
+            workflow_gen, execution_results, additional_response_parts
+        ):
+            yield msg
+
+    async def _handle_successful_command(
+        self,
+        command: str,
+        host: str,
+        result: Dict[str, Any],
+        ollama_endpoint: str,
+        selected_model: str,
+        execution_results: List,
+        additional_response_parts: List,
+    ):
+        """Handle successful direct command execution. Issue #620."""
+        workflow_gen = self._handle_direct_execution(
+            command, host, result, ollama_endpoint, selected_model
+        )
+        async for msg in self._collect_workflow_results(
+            workflow_gen, execution_results, additional_response_parts
+        ):
+            yield msg
+
     async def _process_single_command(
         self,
         tool_call: Dict[str, Any],
@@ -715,10 +798,9 @@ class ToolHandlerMixin:
         execution_results: List,
         additional_response_parts: List,
     ):
-        """Process a single execute_command tool call (Issue #315: extracted).
+        """Process a single execute_command tool call. Issue #620.
 
-        Issue #655: Now wraps common errors as RepairableException to allow
-        LLM to retry with a different approach.
+        Issue #655: Wraps common errors as RepairableException for retry.
 
         Yields:
             WorkflowMessage items
@@ -732,44 +814,34 @@ class ToolHandlerMixin:
         result = await self._execute_terminal_command(
             session_id=session_id, command=command, host=host, description=description
         )
+        status = result.get("status")
 
-        if result.get("status") == "pending_approval":
-            if not terminal_session_id:
-                logger.error(
-                    "No terminal session found for conversation %s", session_id
-                )
-                yield WorkflowMessage(
-                    type="error",
-                    content="Terminal session error - cannot request approval",
-                    metadata={"error": True},
-                )
-                return
-
-            workflow_gen = self._handle_approval_workflow(
+        if status == "pending_approval":
+            async for msg in self._handle_pending_approval_command(
                 session_id,
+                terminal_session_id,
                 command,
                 host,
                 result,
-                terminal_session_id,
                 description,
                 ollama_endpoint,
                 selected_model,
-            )
-            async for msg in self._collect_workflow_results(
-                workflow_gen, execution_results, additional_response_parts
+                execution_results,
+                additional_response_parts,
             ):
                 yield msg
-
-        elif result.get("status") == "success":
-            workflow_gen = self._handle_direct_execution(
-                command, host, result, ollama_endpoint, selected_model
-            )
-            async for msg in self._collect_workflow_results(
-                workflow_gen, execution_results, additional_response_parts
+        elif status == "success":
+            async for msg in self._handle_successful_command(
+                command,
+                host,
+                result,
+                ollama_endpoint,
+                selected_model,
+                execution_results,
+                additional_response_parts,
             ):
                 yield msg
-
-        elif result.get("status") == "error":
+        elif status == "error":
             async for msg in self._handle_command_error(
                 command, result, additional_response_parts
             ):
@@ -935,6 +1007,65 @@ class ToolHandlerMixin:
             },
         )
 
+    def _build_execution_summary(
+        self, execution_results: List[Dict[str, Any]]
+    ) -> WorkflowMessage:
+        """Build execution summary message from results. Issue #620."""
+        return WorkflowMessage(
+            type="execution_summary",
+            content="",
+            metadata={
+                "execution_results": execution_results,
+                "total_commands": len(execution_results),
+                "successful_commands": sum(
+                    1 for r in execution_results if r.get("status") == "success"
+                ),
+            },
+        )
+
+    async def _dispatch_tool_call(
+        self,
+        tool_call: Dict[str, Any],
+        session_id: str,
+        terminal_session_id: str,
+        ollama_endpoint: str,
+        selected_model: str,
+        execution_results: List[Dict[str, Any]],
+        additional_response_parts: List[str],
+    ):
+        """Dispatch a single tool call to appropriate handler. Issue #620.
+
+        Yields:
+            WorkflowMessage for tool execution stages
+            Tuple of (break_loop, respond_content) for respond tool
+        """
+        tool_name = tool_call["name"]
+
+        if tool_name == "respond":
+            msg, break_loop, respond_content = self._handle_respond_tool(tool_call)
+            yield msg
+            yield (break_loop, respond_content)
+            return
+
+        if tool_name == "delegate":
+            yield self._handle_delegate_tool(tool_call, execution_results)
+            return
+
+        if tool_name != "execute_command":
+            logger.debug("[_process_tool_calls] Skipping unknown tool: %s", tool_name)
+            return
+
+        async for msg in self._process_single_command(
+            tool_call,
+            session_id,
+            terminal_session_id,
+            ollama_endpoint,
+            selected_model,
+            execution_results,
+            additional_response_parts,
+        ):
+            yield msg
+
     async def _process_tool_calls(
         self,
         tool_calls: List[Dict[str, Any]],
@@ -947,7 +1078,7 @@ class ToolHandlerMixin:
 
         Issue #315: Refactored to use helper methods for reduced nesting.
         Issue #654: Added support for 'respond' tool with break_loop pattern.
-        Issue #665: Refactored to extract tool-specific handlers.
+        Issue #620: Refactored using Extract Method pattern.
 
         Yields:
             WorkflowMessage for each stage of execution
@@ -960,26 +1091,7 @@ class ToolHandlerMixin:
         respond_content = None
 
         for tool_call in tool_calls:
-            tool_name = tool_call["name"]
-
-            if tool_name == "respond":
-                msg, break_loop_requested, respond_content = self._handle_respond_tool(
-                    tool_call
-                )
-                yield msg
-                continue
-
-            if tool_name == "delegate":
-                yield self._handle_delegate_tool(tool_call, execution_results)
-                continue
-
-            if tool_name != "execute_command":
-                logger.debug(
-                    "[_process_tool_calls] Skipping unknown tool: %s", tool_name
-                )
-                continue
-
-            async for msg in self._process_single_command(
+            async for result in self._dispatch_tool_call(
                 tool_call,
                 session_id,
                 terminal_session_id,
@@ -988,20 +1100,12 @@ class ToolHandlerMixin:
                 execution_results,
                 additional_response_parts,
             ):
-                yield msg
+                if isinstance(result, tuple):
+                    break_loop_requested, respond_content = result
+                else:
+                    yield result
 
         if execution_results:
-            yield WorkflowMessage(
-                type="execution_summary",
-                content="",
-                metadata={
-                    "execution_results": execution_results,
-                    "total_commands": len(execution_results),
-                    "successful_commands": sum(
-                        1 for r in execution_results if r.get("status") == "success"
-                    ),
-                },
-            )
+            yield self._build_execution_summary(execution_results)
 
-        # Issue #654: Yield break_loop signal as final item
         yield (break_loop_requested, respond_content)

@@ -89,6 +89,53 @@ class WorkflowExecutor:
         await self.process_next_step(workflow, workflows)
         return True
 
+    async def _evaluate_step_with_judges(
+        self, workflow: ActiveWorkflow, current_step: WorkflowStep
+    ) -> bool:
+        """
+        Evaluate step with LLM judges if enabled.
+
+        Args:
+            workflow: The active workflow
+            current_step: The step to evaluate
+
+        Returns:
+            True if step should proceed, False if rejected. Issue #620.
+        """
+        if not self.step_evaluator.judges_enabled:
+            return True
+
+        try:
+            step_evaluation = await self.step_evaluator.evaluate_step(
+                workflow, current_step
+            )
+            if step_evaluation.get("should_proceed", True):
+                return True
+
+            logger.warning(
+                f"Step {current_step.step_id} rejected by LLM judge: "
+                f"{step_evaluation.get('reason', 'Unknown')}"
+            )
+            current_step.status = WorkflowStepStatus.FAILED
+            workflow.is_paused = True
+            await self.messenger.send_message(
+                workflow.session_id,
+                {
+                    "type": "step_rejected_by_judge",
+                    "workflow_id": workflow.workflow_id,
+                    "step_id": current_step.step_id,
+                    "reason": step_evaluation.get(
+                        "reason", "Step rejected by safety evaluation"
+                    ),
+                    "suggestions": step_evaluation.get("suggestions", []),
+                },
+            )
+            return False
+        except Exception as e:
+            logger.error("Error evaluating workflow step with LLM judge: %s", e)
+            # Continue without judge evaluation
+            return True
+
     async def process_next_step(
         self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]
     ) -> None:
@@ -97,7 +144,6 @@ class WorkflowExecutor:
             return
 
         if workflow.current_step_index >= len(workflow.steps):
-            # Workflow completed
             await self._complete_workflow(workflow, workflows)
             return
 
@@ -111,35 +157,9 @@ class WorkflowExecutor:
             await self.process_next_step(workflow, workflows)
             return
 
-        # Evaluate step with LLM judges if enabled
-        if self.step_evaluator.judges_enabled:
-            try:
-                step_evaluation = await self.step_evaluator.evaluate_step(
-                    workflow, current_step
-                )
-                if not step_evaluation.get("should_proceed", True):
-                    logger.warning(
-                        f"Step {current_step.step_id} rejected by LLM judge: "
-                        f"{step_evaluation.get('reason', 'Unknown')}"
-                    )
-                    current_step.status = WorkflowStepStatus.FAILED
-                    workflow.is_paused = True
-                    await self.messenger.send_message(
-                        workflow.session_id,
-                        {
-                            "type": "step_rejected_by_judge",
-                            "workflow_id": workflow.workflow_id,
-                            "step_id": current_step.step_id,
-                            "reason": step_evaluation.get(
-                                "reason", "Step rejected by safety evaluation"
-                            ),
-                            "suggestions": step_evaluation.get("suggestions", []),
-                        },
-                    )
-                    return
-            except Exception as e:
-                logger.error("Error evaluating workflow step with LLM judge: %s", e)
-                # Continue without judge evaluation
+        # Evaluate step with LLM judges if enabled (Issue #620: extracted)
+        if not await self._evaluate_step_with_judges(workflow, current_step):
+            return
 
         # Update step status
         current_step.status = WorkflowStepStatus.WAITING_APPROVAL
@@ -192,6 +212,52 @@ class WorkflowExecutor:
 
         return True
 
+    def _record_step_metric(self, status: str) -> None:
+        """
+        Record Prometheus workflow step metric.
+
+        Args:
+            status: The step status ('completed' or 'failed'). Issue #620.
+        """
+        workflow_type = "automated_workflow"
+        step_type = "command_execution"
+        self.prometheus_metrics.record_workflow_step(
+            workflow_type=workflow_type, step_type=step_type, status=status
+        )
+
+    async def _handle_step_execution_failure(
+        self,
+        workflow: ActiveWorkflow,
+        current_step: WorkflowStep,
+        step_id: str,
+        error: Exception,
+    ) -> None:
+        """
+        Handle step execution failure.
+
+        Args:
+            workflow: The active workflow
+            current_step: The step that failed
+            step_id: The step ID
+            error: The exception that occurred. Issue #620.
+        """
+        logger.error("Step execution failed: %s", error)
+        current_step.status = WorkflowStepStatus.FAILED
+        current_step.execution_result = {"error": str(error)}
+
+        self._record_step_metric("failed")
+
+        workflow.is_paused = True
+        await self.messenger.send_message(
+            workflow.session_id,
+            {
+                "type": "step_failed",
+                "workflow_id": workflow.workflow_id,
+                "step_id": step_id,
+                "error": str(error),
+            },
+        )
+
     async def approve_and_execute_step(
         self,
         workflow: ActiveWorkflow,
@@ -210,7 +276,6 @@ class WorkflowExecutor:
         current_step.status = WorkflowStepStatus.EXECUTING
 
         try:
-            # Execute command via terminal
             result = await self._execute_command(
                 workflow.session_id, current_step.command
             )
@@ -219,42 +284,15 @@ class WorkflowExecutor:
             current_step.execution_result = result
             current_step.completed_at = datetime.now()
 
-            # Record Prometheus workflow step metric (success)
-            workflow_type = "automated_workflow"
-            step_type = "command_execution"
-            self.prometheus_metrics.record_workflow_step(
-                workflow_type=workflow_type, step_type=step_type, status="completed"
-            )
+            self._record_step_metric("completed")
 
-            # Move to next step
             workflow.current_step_index += 1
-
-            # Small delay before next step
             await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
             await self.process_next_step(workflow, workflows)
 
         except Exception as e:
-            logger.error("Step execution failed: %s", e)
-            current_step.status = WorkflowStepStatus.FAILED
-            current_step.execution_result = {"error": str(e)}
-
-            # Record Prometheus workflow step metric (failed)
-            workflow_type = "automated_workflow"
-            step_type = "command_execution"
-            self.prometheus_metrics.record_workflow_step(
-                workflow_type=workflow_type, step_type=step_type, status="failed"
-            )
-
-            # Pause workflow on error
-            workflow.is_paused = True
-            await self.messenger.send_message(
-                workflow.session_id,
-                {
-                    "type": "step_failed",
-                    "workflow_id": workflow.workflow_id,
-                    "step_id": step_id,
-                    "error": str(e),
-                },
+            await self._handle_step_execution_failure(
+                workflow, current_step, step_id, e
             )
 
     async def skip_step(
@@ -292,65 +330,100 @@ class WorkflowExecutor:
             "execution_time": 1.0,
         }
 
+    def _record_workflow_completion_metrics(
+        self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]
+    ) -> None:
+        """
+        Record Prometheus metrics for workflow completion.
+
+        Args:
+            workflow: The completed workflow
+            workflows: All active workflows for counting. Issue #620.
+        """
+        if not workflow.prometheus_start_time:
+            return
+
+        duration = time.time() - workflow.prometheus_start_time
+        workflow_type = "automated_workflow"
+        failed_steps = len(
+            [s for s in workflow.steps if s.status == WorkflowStepStatus.FAILED]
+        )
+        status = "failed" if failed_steps > 0 else "success"
+        self.prometheus_metrics.record_workflow_execution(
+            workflow_type=workflow_type, status=status, duration=duration
+        )
+
+        active_count = (
+            len([w for w in workflows.values() if w.started_at and not w.completed_at])
+            - 1
+        )
+        self.prometheus_metrics.update_active_workflows(
+            workflow_type=workflow_type, count=max(0, active_count)
+        )
+
+    def _build_completion_message(self, workflow: ActiveWorkflow) -> dict:
+        """
+        Build workflow completion message payload.
+
+        Args:
+            workflow: The completed workflow
+
+        Returns:
+            Completion message dict. Issue #620.
+        """
+        return {
+            "type": "workflow_completed",
+            "workflow_id": workflow.workflow_id,
+            "name": workflow.name,
+            "total_steps": len(workflow.steps),
+            "completed_steps": len(
+                [s for s in workflow.steps if s.status == WorkflowStepStatus.COMPLETED]
+            ),
+            "skipped_steps": len(
+                [s for s in workflow.steps if s.status == WorkflowStepStatus.SKIPPED]
+            ),
+            "failed_steps": len(
+                [s for s in workflow.steps if s.status == WorkflowStepStatus.FAILED]
+            ),
+        }
+
     async def _complete_workflow(
         self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]
     ) -> None:
         """Complete workflow execution"""
         workflow.completed_at = datetime.now()
 
-        # Record Prometheus workflow execution metric (success)
-        if workflow.prometheus_start_time:
-            duration = time.time() - workflow.prometheus_start_time
-            workflow_type = "automated_workflow"
-            failed_steps = len(
-                [s for s in workflow.steps if s.status == WorkflowStepStatus.FAILED]
-            )
-            status = "failed" if failed_steps > 0 else "success"
-            self.prometheus_metrics.record_workflow_execution(
-                workflow_type=workflow_type, status=status, duration=duration
-            )
+        self._record_workflow_completion_metrics(workflow, workflows)
 
-            # Update active workflows count (decrement)
-            active_count = (
-                len(
-                    [
-                        w
-                        for w in workflows.values()
-                        if w.started_at and not w.completed_at
-                    ]
-                )
-                - 1
-            )
-            self.prometheus_metrics.update_active_workflows(
-                workflow_type=workflow_type, count=max(0, active_count)
-            )
-
-        # Send completion message
         await self.messenger.send_message(
-            workflow.session_id,
-            {
-                "type": "workflow_completed",
-                "workflow_id": workflow.workflow_id,
-                "name": workflow.name,
-                "total_steps": len(workflow.steps),
-                "completed_steps": len(
-                    [
-                        s
-                        for s in workflow.steps
-                        if s.status == WorkflowStepStatus.COMPLETED
-                    ]
-                ),
-                "skipped_steps": len(
-                    [
-                        s
-                        for s in workflow.steps
-                        if s.status == WorkflowStepStatus.SKIPPED
-                    ]
-                ),
-                "failed_steps": len(
-                    [s for s in workflow.steps if s.status == WorkflowStepStatus.FAILED]
-                ),
-            },
+            workflow.session_id, self._build_completion_message(workflow)
+        )
+
+    def _record_cancellation_metrics(
+        self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]
+    ) -> None:
+        """
+        Record Prometheus metrics for workflow cancellation.
+
+        Args:
+            workflow: The cancelled workflow
+            workflows: All active workflows for counting. Issue #620.
+        """
+        if not workflow.prometheus_start_time:
+            return
+
+        duration = time.time() - workflow.prometheus_start_time
+        workflow_type = "automated_workflow"
+        self.prometheus_metrics.record_workflow_execution(
+            workflow_type=workflow_type, status="cancelled", duration=duration
+        )
+
+        active_count = (
+            len([w for w in workflows.values() if w.started_at and not w.completed_at])
+            - 1
+        )
+        self.prometheus_metrics.update_active_workflows(
+            workflow_type=workflow_type, count=max(0, active_count)
         )
 
     async def cancel_workflow(
@@ -363,28 +436,7 @@ class WorkflowExecutor:
         # Issue #390: Clear any pending approval when workflow is cancelled
         self.clear_pending_approval(workflow.workflow_id)
 
-        # Record Prometheus workflow execution metric (cancelled)
-        if workflow.prometheus_start_time:
-            duration = time.time() - workflow.prometheus_start_time
-            workflow_type = "automated_workflow"
-            self.prometheus_metrics.record_workflow_execution(
-                workflow_type=workflow_type, status="cancelled", duration=duration
-            )
-
-            # Update active workflows count (decrement)
-            active_count = (
-                len(
-                    [
-                        w
-                        for w in workflows.values()
-                        if w.started_at and not w.completed_at
-                    ]
-                )
-                - 1
-            )
-            self.prometheus_metrics.update_active_workflows(
-                workflow_type=workflow_type, count=max(0, active_count)
-            )
+        self._record_cancellation_metrics(workflow, workflows)
 
         await self.messenger.send_message(
             workflow.session_id,
@@ -432,9 +484,7 @@ class WorkflowExecutor:
 
         return timeout_seconds
 
-    def _check_existing_approval(
-        self, workflow_id: str
-    ) -> PlanApprovalRequest | None:
+    def _check_existing_approval(self, workflow_id: str) -> PlanApprovalRequest | None:
         """
         Check for existing pending approval (Issue #665: extracted helper).
 

@@ -50,7 +50,8 @@ class ConversationHandlerMixin:
                 return json.loads(history_json)
         except asyncio.TimeoutError:
             logger.warning(
-                "Redis get timeout after 2s for session %s, falling back to file", session_id
+                "Redis get timeout after 2s for session %s, falling back to file",
+                session_id,
             )
         return None
 
@@ -106,7 +107,8 @@ class ConversationHandlerMixin:
                 )
             except asyncio.TimeoutError:
                 logger.warning(
-                    "Redis set timeout after 2s for session %s - data may not be cached", session_id
+                    "Redis set timeout after 2s for session %s - data may not be cached",
+                    session_id,
                 )
 
         except Exception as e:
@@ -181,7 +183,9 @@ class ConversationHandlerMixin:
             if await asyncio.to_thread(temp_path.exists):
                 await asyncio.to_thread(temp_path.unlink)
         except OSError as os_err:
-            logger.error("Failed to write transcript file %s: %s", transcript_path, os_err)
+            logger.error(
+                "Failed to write transcript file %s: %s", transcript_path, os_err
+            )
 
     async def _append_to_transcript(
         self, session_id: str, user_message: str, assistant_message: str
@@ -198,7 +202,9 @@ class ConversationHandlerMixin:
             # Load existing transcript or create new
             # Issue #358 - avoid blocking
             if await asyncio.to_thread(transcript_path.exists):
-                transcript = await self._load_existing_transcript(transcript_path, session_id)
+                transcript = await self._load_existing_transcript(
+                    transcript_path, session_id
+                )
             else:
                 transcript = self._create_empty_transcript(session_id)
 
@@ -248,12 +254,81 @@ class ConversationHandlerMixin:
                 )
                 return []
             except OSError as os_err:
-                logger.warning("Failed to read transcript file %s: %s", transcript_path, os_err)
+                logger.warning(
+                    "Failed to read transcript file %s: %s", transcript_path, os_err
+                )
                 return []
 
         except Exception as e:
             logger.error("Failed to load transcript file: %s", e)
             return []
+
+    def _handle_existing_user_entry(
+        self,
+        last_entry: Dict[str, str],
+        llm_response: str,
+        session_id: str,
+    ) -> None:
+        """Handle case where last entry has same user message.
+
+        Issue #620.
+
+        Args:
+            last_entry: The last entry in conversation history
+            llm_response: New LLM response to merge
+            session_id: Session identifier for logging
+        """
+        existing_response = last_entry.get("assistant", "")
+        if not existing_response:
+            last_entry["assistant"] = llm_response
+            logger.debug(
+                "[_persist_conversation] Filled placeholder entry for session %s",
+                session_id,
+            )
+        elif llm_response not in existing_response:
+            last_entry["assistant"] = f"{existing_response}\n\n{llm_response}"
+            logger.debug(
+                "[_persist_conversation] Appended to existing entry for session %s (deduplication)",
+                session_id,
+            )
+        else:
+            logger.debug(
+                "[_persist_conversation] Skipped duplicate response for session %s",
+                session_id,
+            )
+
+    def _update_conversation_history(
+        self,
+        session: WorkflowSession,
+        message: str,
+        llm_response: str,
+        session_id: str,
+    ) -> None:
+        """Update session conversation history with deduplication.
+
+        Issue #620.
+
+        Args:
+            session: Workflow session object
+            message: User message
+            llm_response: LLM response
+            session_id: Session identifier for logging
+        """
+        if session.conversation_history:
+            last_entry = session.conversation_history[-1]
+            if last_entry.get("user") == message:
+                self._handle_existing_user_entry(last_entry, llm_response, session_id)
+            else:
+                session.conversation_history.append(
+                    {"user": message, "assistant": llm_response}
+                )
+        else:
+            session.conversation_history.append(
+                {"user": message, "assistant": llm_response}
+            )
+
+        if len(session.conversation_history) > 10:
+            session.conversation_history = session.conversation_history[-10:]
 
     async def _persist_conversation(
         self,
@@ -262,11 +337,9 @@ class ConversationHandlerMixin:
         message: str,
         llm_response: str,
     ):
-        """
-        Persist conversation to Redis cache and file storage.
+        """Persist conversation to Redis cache and file storage.
 
-        Handles deduplication: if the last entry has the same user message,
-        appends the new response to avoid duplicate entries (Issue #177).
+        Issue #620.
 
         Args:
             session_id: Session identifier
@@ -274,49 +347,8 @@ class ConversationHandlerMixin:
             message: User message
             llm_response: LLM response
         """
-        # DEDUPLICATION FIX (Issue #177): Check if last entry has same user message
-        # This prevents duplicate entries when both terminal service and chat flow persist
-        # Issue #715: Also handles updating placeholder entries from _register_user_message_in_history
-        if session.conversation_history:
-            last_entry = session.conversation_history[-1]
-            if last_entry.get("user") == message:
-                existing_response = last_entry.get("assistant", "")
-                if not existing_response:
-                    # Issue #715: Empty placeholder from _register_user_message_in_history
-                    # Just set the response directly
-                    last_entry["assistant"] = llm_response
-                    logger.debug(
-                        f"[_persist_conversation] Filled placeholder entry for session "
-                        f"{session_id}"
-                    )
-                elif llm_response not in existing_response:
-                    # Same user message with existing response - append new response
-                    last_entry["assistant"] = f"{existing_response}\n\n{llm_response}"
-                    logger.debug(
-                        f"[_persist_conversation] Appended to existing entry for session "
-                        f"{session_id} (deduplication)"
-                    )
-                else:
-                    logger.debug(
-                        f"[_persist_conversation] Skipped duplicate response for session "
-                        f"{session_id}"
-                    )
-            else:
-                # Different user message - append as new entry
-                session.conversation_history.append(
-                    {"user": message, "assistant": llm_response}
-                )
-        else:
-            # Empty history - append as new entry
-            session.conversation_history.append(
-                {"user": message, "assistant": llm_response}
-            )
+        self._update_conversation_history(session, message, llm_response, session_id)
 
-        # Keep history manageable (max 10 exchanges)
-        if len(session.conversation_history) > 10:
-            session.conversation_history = session.conversation_history[-10:]
-
-        # Issue #379: Persist to both Redis and file in parallel
         await asyncio.gather(
             self._save_conversation_history(session_id, session.conversation_history),
             self._append_to_transcript(session_id, message, llm_response),
@@ -353,11 +385,14 @@ class ConversationHandlerMixin:
 
         # Add user message with empty placeholder for assistant response
         # The placeholder will be filled by _persist_conversation
-        session.conversation_history.append({
-            "user": message,
-            "assistant": ""  # Placeholder, will be updated when response is ready
-        })
+        session.conversation_history.append(
+            {
+                "user": message,
+                "assistant": "",  # Placeholder, will be updated when response is ready
+            }
+        )
         logger.debug(
             "[_register_user_message] Registered user message in history "
-            "(history length: %d)", len(session.conversation_history)
+            "(history length: %d)",
+            len(session.conversation_history),
         )

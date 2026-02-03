@@ -59,73 +59,86 @@ class PromptManager:
         # Load all prompts on initialization
         self.load_all_prompts()
 
+    def _restore_from_cache(self, cached_data: Dict) -> bool:
+        """
+        Restore prompts and templates from cached data.
+
+        Recreates Jinja2 templates from cached prompt content. Issue #620.
+
+        Args:
+            cached_data: Dictionary containing cached prompts
+
+        Returns:
+            True if restoration successful, False otherwise
+        """
+        if not cached_data or "prompts" not in cached_data:
+            return False
+
+        self.prompts = cached_data["prompts"]
+        for key, content in self.prompts.items():
+            self.templates[key] = self.jinja_env.from_string(content)
+        logger.info("Loaded %d prompts from Redis cache (FAST)", len(self.prompts))
+        return True
+
+    def _load_prompt_file(self, file_path: Path) -> None:
+        """
+        Load a single prompt file into the prompts and templates dictionaries.
+
+        Generates a dot-notation key from the file path and stores both
+        raw content and Jinja2 template. Issue #620.
+
+        Args:
+            file_path: Path to the prompt file to load
+        """
+        try:
+            relative_path = file_path.relative_to(self.prompts_dir)
+            prompt_key = self._path_to_key(relative_path)
+            content = file_path.read_text(encoding="utf-8").strip()
+
+            self.prompts[prompt_key] = content
+            self.templates[prompt_key] = self.jinja_env.from_string(content)
+            logger.debug("Loaded prompt: %s from %s", prompt_key, file_path)
+        except Exception as e:
+            logger.error("Error loading prompt from %s: %s", file_path, e)
+
     def load_all_prompts(self) -> None:
         """
         Discover and load all prompt files from the prompts directory.
-        Supports .md, .txt, and .prompt files.
-        Uses Redis caching for faster loading.
+        Supports .md, .txt, and .prompt files. Uses Redis caching for faster loading.
         """
         if not self.prompts_dir.exists():
             logger.warning("Prompts directory '%s' not found", self.prompts_dir)
             return
 
-        # Check if prompts need updating based on file changes
         needs_update, changed_files = self._check_prompt_changes()
 
+        # Try Redis cache if no updates needed (Issue #620: uses helper)
         if not needs_update:
-            # Try Redis cache first
             cache_key = self._get_cache_key()
-            cached_data = self._load_from_redis_cache(cache_key)
-
-            if cached_data:
-                self.prompts = cached_data["prompts"]
-                # Recreate templates from cached prompts
-                for key, content in self.prompts.items():
-                    self.templates[key] = self.jinja_env.from_string(content)
-                logger.info(
-                    f"Loaded {len(self.prompts)} prompts from Redis cache (FAST)"
-                )
+            if self._restore_from_cache(self._load_from_redis_cache(cache_key)):
                 return
 
         if changed_files:
             logger.info(
-                f"Detected prompt changes in {len(changed_files)} files: {changed_files[:3]}{'...' if len(changed_files) > 3 else ''}"
+                "Detected prompt changes in %d files: %s%s",
+                len(changed_files),
+                changed_files[:3],
+                "..." if len(changed_files) > 3 else "",
             )
 
-        # Fallback to file loading
-        # Issue #380: Use module-level constant for O(1) lookup
+        # Load from files (Issue #620: uses helper)
         for file_path in self.prompts_dir.rglob("*"):
-            if file_path.is_file() and file_path.suffix in _SUPPORTED_PROMPT_EXTENSIONS:
-                # Skip hidden files and special files
-                if file_path.name.startswith(".") or file_path.name.startswith("_"):
-                    continue
+            if not file_path.is_file():
+                continue
+            if file_path.suffix not in _SUPPORTED_PROMPT_EXTENSIONS:
+                continue
+            if file_path.name.startswith(".") or file_path.name.startswith("_"):
+                continue
+            self._load_prompt_file(file_path)
 
-                try:
-                    # Generate prompt key from file path
-                    # e.g., prompts/orchestrator/system_prompt.md ->
-                    # orchestrator.system_prompt
-                    relative_path = file_path.relative_to(self.prompts_dir)
-                    prompt_key = self._path_to_key(relative_path)
-
-                    # Load content
-                    content = file_path.read_text(encoding="utf-8").strip()
-
-                    # Store both raw content and as Jinja2 template
-                    self.prompts[prompt_key] = content
-                    self.templates[prompt_key] = self.jinja_env.from_string(content)
-
-                    logger.debug("Loaded prompt: %s from %s", prompt_key, file_path)
-
-                except Exception as e:
-                    logger.error("Error loading prompt from %s: %s", file_path, e)
-
-        # Cache to Redis for next time
-        cache_key = self._get_cache_key()
-        self._save_to_redis_cache(cache_key, {"prompts": self.prompts})
-
-        # Update change tracking cache
+        # Cache and finalize
+        self._save_to_redis_cache(self._get_cache_key(), {"prompts": self.prompts})
         self._update_prompt_change_cache()
-
         logger.info("Loaded %s prompts from %s", len(self.prompts), self.prompts_dir)
 
     def _path_to_key(self, path: Path) -> str:
@@ -524,6 +537,54 @@ def get_prompt(prompt_key: str, **kwargs) -> str:
     return prompt_manager.get(prompt_key, **kwargs)
 
 
+def _build_dynamic_context(
+    session_id: Optional[str],
+    user_name: Optional[str],
+    user_role: Optional[str],
+    available_tools: Optional[List[str]],
+    recent_context: Optional[str],
+    additional_params: Optional[Dict],
+) -> str:
+    """
+    Build dynamic context section for optimized prompts.
+
+    Renders the dynamic context template with session-specific variables.
+    Falls back to minimal context if template not found. Issue #620.
+
+    Args:
+        session_id: Current session identifier
+        user_name: User's display name
+        user_role: User's role/permissions
+        available_tools: List of available tool names
+        recent_context: Recent conversation context or task history
+        additional_params: Additional dynamic parameters
+
+    Returns:
+        Rendered dynamic context string
+    """
+    try:
+        dynamic_template_key = "default.agent.system.dynamic_context"
+        return prompt_manager.get(
+            dynamic_template_key,
+            session_id=session_id or "N/A",
+            current_date=datetime.now().strftime("%Y-%m-%d"),
+            current_time=datetime.now().strftime("%H:%M:%S"),
+            user_name=user_name,
+            user_role=user_role,
+            available_tools=available_tools or [],
+            recent_context=recent_context or "",
+            additional_params=additional_params or {},
+        )
+    except KeyError:
+        logger.warning(
+            "Dynamic context template not found, using minimal dynamic section"
+        )
+        return (
+            f"\n\n## Session Context\nSession ID: {session_id or 'N/A'}\nDate:"
+            f"{datetime.now().strftime('%Y-%m-%d')}"
+        )
+
+
 def get_optimized_prompt(
     base_prompt_key: str,
     session_id: Optional[str] = None,
@@ -551,47 +612,21 @@ def get_optimized_prompt(
 
     Returns:
         Combined prompt with static prefix + dynamic suffix
-
-    Example:
-        >>> prompt = get_optimized_prompt(
-        ...     base_prompt_key='default.agent.system.main',
-        ...     session_id='abc123',
-        ...     user_name='Alice',
-        ...     available_tools=['file_read', 'file_write']
-        ... )
-        # Returns: [Static 12,800 tokens] + [Dynamic 200 tokens]
-        # vLLM will cache the first 12,800 tokens for 3-4x speedup!
     """
     # Get static base prompt with includes rendered (will be cached by vLLM)
-    # Use get() without kwargs to render Jinja2 includes but no dynamic variables
     base_prompt = prompt_manager.get(base_prompt_key)
 
-    # Get dynamic context template
-    try:
-        dynamic_template_key = "default.agent.system.dynamic_context"
-        dynamic_context = prompt_manager.get(
-            dynamic_template_key,
-            session_id=session_id or "N/A",
-            current_date=datetime.now().strftime("%Y-%m-%d"),
-            current_time=datetime.now().strftime("%H:%M:%S"),
-            user_name=user_name,
-            user_role=user_role,
-            available_tools=available_tools or [],
-            recent_context=recent_context or "",
-            additional_params=additional_params or {},
-        )
-    except KeyError:
-        # Fallback if dynamic template not found
-        logger.warning(
-            "Dynamic context template not found, using minimal dynamic section"
-        ),
-        dynamic_context = (
-            f"\n\n## Session Context\nSession ID: {session_id or 'N/A'}\nDate:"
-            f"{datetime.now().strftime('%Y-%m-%d')}"
-        )
+    # Build dynamic context section (Issue #620: extracted helper)
+    dynamic_context = _build_dynamic_context(
+        session_id,
+        user_name,
+        user_role,
+        available_tools,
+        recent_context,
+        additional_params,
+    )
 
-    # Combine: static prefix + dynamic suffix
-    # This ordering is CRITICAL for vLLM prefix caching
+    # Combine: static prefix + dynamic suffix (CRITICAL for vLLM prefix caching)
     return f"{base_prompt}\n\n{dynamic_context}"
 
 

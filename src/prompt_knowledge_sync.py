@@ -33,6 +33,67 @@ PROMPT_TYPE_KEYWORDS = [
     ("memory", "memory_pattern"),
 ]
 
+# Issue #620: Extracted from __init__ to reduce function length
+# Define categories for importing prompts to knowledge base
+_IMPORT_CATEGORIES = {
+    "tool_patterns": {
+        "patterns": [r".*\.tool\..*\.md$", r".*tools\.md$"],
+        "collection": "Tool Usage Patterns",
+        "description": "Tool-specific usage patterns and best practices",
+    },
+    "error_recovery": {
+        "patterns": [
+            r".*fw\.error.*\.md$",
+            r".*fw\.code.*\.md$",
+            r".*fw\.tool.*\.md$",
+            r".*fw\.runtime.*\.md$",
+        ],
+        "collection": "Error Recovery Intelligence",
+        "description": "Error handling and recovery strategies",
+    },
+    "behavioral_intelligence": {
+        "patterns": [
+            r".*behaviour.*\.md$",
+            r".*solving\.md$",
+            r".*tips\.md$",
+            r".*communication\.md$",
+        ],
+        "collection": "Behavioral Intelligence",
+        "description": "Agent behavioral patterns and communication strategies",
+    },
+    "framework_responses": {
+        "patterns": [r".*fw\..*\.md$"],
+        "collection": "Framework Response Patterns",
+        "description": "Standardized framework response templates",
+    },
+    "domain_expertise": {
+        "patterns": [
+            r"developer/.*\.md$",
+            r"hacker/.*\.md$",
+            r"researcher/.*\.md$",
+            r"reflection/.*\.md$",
+        ],
+        "collection": "Domain Expertise",
+        "description": "Domain-specific operational knowledge",
+    },
+    "memory_patterns": {
+        "patterns": [r".*memory.*\.md$", r".*memories.*\.md$"],
+        "collection": "Memory Management Patterns",
+        "description": "Memory and learning pattern guidance",
+    },
+}
+
+# Issue #620: Extracted from __init__ to reduce function length
+# Patterns for prompts that should NOT be imported to knowledge base
+_EXCLUDE_PATTERNS = [
+    r".*main\.role\.md$",  # Core agent identity
+    r".*main\.environment\.md$",  # System environment
+    r"orchestrator/system_prompt\.md$",  # System orchestration
+    r".*_context\.md$",  # Template files
+    r".*\.txt$",  # Legacy text files
+    r".*:Zone\.Identifier$",  # Windows file system artifacts
+]
+
 
 class PromptKnowledgeSync:
     """
@@ -41,68 +102,20 @@ class PromptKnowledgeSync:
     """
 
     def __init__(self, knowledge_base: KnowledgeBase):
-        """Initialize prompt-knowledge synchronizer with KB and import categories."""
+        """
+        Initialize prompt-knowledge synchronizer with KB and import categories.
+
+        Issue #620: Uses module-level constants for import/exclude patterns.
+
+        Args:
+            knowledge_base: KnowledgeBase instance for storing prompts
+        """
         self.knowledge_base = knowledge_base
         self.prompt_manager = prompt_manager
 
-        # Define what to import vs exclude
-        self.IMPORT_CATEGORIES = {
-            "tool_patterns": {
-                "patterns": [r".*\.tool\..*\.md$", r".*tools\.md$"],
-                "collection": "Tool Usage Patterns",
-                "description": "Tool-specific usage patterns and best practices",
-            },
-            "error_recovery": {
-                "patterns": [
-                    r".*fw\.error.*\.md$",
-                    r".*fw\.code.*\.md$",
-                    r".*fw\.tool.*\.md$",
-                    r".*fw\.runtime.*\.md$",
-                ],
-                "collection": "Error Recovery Intelligence",
-                "description": "Error handling and recovery strategies",
-            },
-            "behavioral_intelligence": {
-                "patterns": [
-                    r".*behaviour.*\.md$",
-                    r".*solving\.md$",
-                    r".*tips\.md$",
-                    r".*communication\.md$",
-                ],
-                "collection": "Behavioral Intelligence",
-                "description": "Agent behavioral patterns and communication strategies",
-            },
-            "framework_responses": {
-                "patterns": [r".*fw\..*\.md$"],
-                "collection": "Framework Response Patterns",
-                "description": "Standardized framework response templates",
-            },
-            "domain_expertise": {
-                "patterns": [
-                    r"developer/.*\.md$",
-                    r"hacker/.*\.md$",
-                    r"researcher/.*\.md$",
-                    r"reflection/.*\.md$",
-                ],
-                "collection": "Domain Expertise",
-                "description": "Domain-specific operational knowledge",
-            },
-            "memory_patterns": {
-                "patterns": [r".*memory.*\.md$", r".*memories.*\.md$"],
-                "collection": "Memory Management Patterns",
-                "description": "Memory and learning pattern guidance",
-            },
-        }
-
-        # Exclude core system prompts that should stay in prompt manager
-        self.EXCLUDE_PATTERNS = [
-            r".*main\.role\.md$",  # Core agent identity
-            r".*main\.environment\.md$",  # System environment
-            r"orchestrator/system_prompt\.md$",  # System orchestration
-            r".*_context\.md$",  # Template files
-            r".*\.txt$",  # Legacy text files
-            r".*:Zone\.Identifier$",  # Windows file system artifacts
-        ]
+        # Issue #620: Use module-level constants (extracted for reduced __init__ length)
+        self.IMPORT_CATEGORIES = _IMPORT_CATEGORIES
+        self.EXCLUDE_PATTERNS = _EXCLUDE_PATTERNS
 
     def should_import_prompt(
         self, prompt_key: str, file_path: str
@@ -138,7 +151,9 @@ class PromptKnowledgeSync:
         Extract metadata from prompt content and file information.
         """
         # Generate content hash for change detection
-        content_hash = hashlib.md5(content.encode("utf-8"), usedforsecurity=False).hexdigest()
+        content_hash = hashlib.md5(
+            content.encode("utf-8"), usedforsecurity=False
+        ).hexdigest()
 
         # Extract tags from filename and content
         tags = self._generate_tags(prompt_key, content, category)
@@ -281,13 +296,61 @@ class PromptKnowledgeSync:
                 results["errors"] += 1
                 logger.error("Failed to import prompt: %s", prompt_key)
 
+    async def _process_single_prompt(
+        self,
+        prompt_key: str,
+        force_update: bool,
+        results: Dict[str, Any],
+    ) -> None:
+        """
+        Process a single prompt for knowledge base synchronization.
+
+        Handles import decision, metadata extraction, and storage. Issue #620.
+
+        Args:
+            prompt_key: Prompt identifier to process
+            force_update: Whether to force update regardless of changes
+            results: Results dictionary to update with counters
+        """
+        file_path = prompt_key.replace(".", "/") + ".md"
+        should_import, category, collection_name = self.should_import_prompt(
+            prompt_key, file_path
+        )
+
+        if not should_import:
+            results["skipped"] += 1
+            return
+
+        category = category or "uncategorized"
+        collection_name = collection_name or "Uncategorized"
+
+        content = self.prompt_manager.get_raw(prompt_key)
+        metadata = self.extract_prompt_metadata(
+            prompt_key, content, file_path, category, collection_name
+        )
+
+        existing_entries = await self._find_existing_prompt_entry(prompt_key)
+
+        if self._should_skip_unchanged(existing_entries, metadata, force_update):
+            results["skipped"] += 1
+            return
+
+        await self._store_or_update_prompt(
+            prompt_key, content, metadata, existing_entries, results
+        )
+
+        # Track by category
+        if category not in results["categories"]:
+            results["categories"][category] = 0
+        results["categories"][category] += 1
+
     async def sync_prompts_to_knowledge(
         self, force_update: bool = False
     ) -> Dict[str, Any]:
         """
         Synchronize selected prompts from prompt manager to knowledge base.
 
-        Issue #281: Refactored from 111 lines to use extracted helper methods.
+        Issue #620: Further refactored to use _process_single_prompt helper.
 
         Args:
             force_update: If True, update all prompts regardless of changes
@@ -312,41 +375,7 @@ class PromptKnowledgeSync:
 
         for prompt_key in available_prompts:
             try:
-                file_path = prompt_key.replace(".", "/") + ".md"
-
-                should_import, category, collection_name = self.should_import_prompt(
-                    prompt_key, file_path
-                )
-
-                if not should_import:
-                    results["skipped"] += 1
-                    continue
-
-                category = category or "uncategorized"
-                collection_name = collection_name or "Uncategorized"
-
-                content = self.prompt_manager.get_raw(prompt_key)
-                metadata = self.extract_prompt_metadata(
-                    prompt_key, content, file_path, category, collection_name
-                )
-
-                existing_entries = await self._find_existing_prompt_entry(prompt_key)
-
-                # Issue #281: uses helper
-                if self._should_skip_unchanged(existing_entries, metadata, force_update):
-                    results["skipped"] += 1
-                    continue
-
-                # Issue #281: uses helper
-                await self._store_or_update_prompt(
-                    prompt_key, content, metadata, existing_entries, results
-                )
-
-                # Track by category
-                if category not in results["categories"]:
-                    results["categories"][category] = 0
-                results["categories"][category] += 1
-
+                await self._process_single_prompt(prompt_key, force_update, results)
             except Exception as e:
                 results["errors"] += 1
                 error_detail = f"Error processing {prompt_key}: {str(e)}"
@@ -354,9 +383,11 @@ class PromptKnowledgeSync:
                 logger.error(error_detail)
 
         logger.info(
-            f"Prompt sync completed: {results['imported']} imported, "
-            f"{results['updated']} updated, {results['skipped']} skipped, "
-            f"{results['errors']} errors"
+            "Prompt sync completed: %d imported, %d updated, %d skipped, %d errors",
+            results["imported"],
+            results["updated"],
+            results["skipped"],
+            results["errors"],
         )
         return results
 
@@ -381,7 +412,9 @@ class PromptKnowledgeSync:
 
             return exact_matches
         except Exception as e:
-            logger.warning("Error finding existing prompt entry for %s: %s", prompt_key, e)
+            logger.warning(
+                "Error finding existing prompt entry for %s: %s", prompt_key, e
+            )
             return []
 
     async def remove_prompt_knowledge(self, prompt_key: str) -> bool:
