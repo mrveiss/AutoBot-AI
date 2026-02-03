@@ -300,20 +300,23 @@ class PerformanceAnalyzer:
         
         if nested_loops >= 2:
             return PerformanceIssue(
-                file_path=file_path,
-                line_number=node.lineno,
-                function_name=self._get_containing_function(node),
-                issue_type="inefficient_loop",
-                description=f"Deeply nested loop (depth {nested_loops + 1}) - potential O(n^{nested_loops + 1}) complexity",
-                severity="high" if nested_loops >= 3 else "medium",
-                code_snippet=self._get_code_snippet(lines, node.lineno, 5),
-                suggestion="Consider using list comprehensions, vectorized operations, or algorithm optimization",
-                estimated_impact="high"
-            )
+    file_path=file_path,
+    line_number=node.lineno,
+    function_name=self._get_containing_function(node),
+    issue_type="inefficient_loop",
+    description=f"Deeply nested loop (depth {nested_loops + 1}) - potential O(n^{nested_loops + 1}) complexity",
+    severity="high" if nested_loops >= 3 else "medium",
+    code_snippet=self._get_code_snippet(
+        lines,
+        node.lineno,
+        5),
+        suggestion="Consider using list comprehensions, vectorized operations, or algorithm optimization",
+         estimated_impact="high" )
         
         return None
     
-    def _analyze_async_function(self, node: ast.AsyncFunctionDef, file_path: str, lines: List[str]) -> List[PerformanceIssue]:
+    def _analyze_async_function(self, node: ast.AsyncFunctionDef, file_path: str,
+                                lines: List[str]) -> List[PerformanceIssue]:
         """Analyze async function for blocking operations"""
         
         issues = []
@@ -484,7 +487,8 @@ class PerformanceAnalyzer:
         
         return categories
     
-    async def _generate_optimization_recommendations(self, categorized: Dict[str, List[PerformanceIssue]]) -> List[PerformanceRecommendation]:
+    async def _generate_optimization_recommendations(
+        self, categorized: Dict[str, List[PerformanceIssue]]) -> List[PerformanceRecommendation]:
         """Generate optimization recommendations"""
         
         recommendations = []
@@ -515,23 +519,18 @@ class PerformanceAnalyzer:
         examples = []
         
         example_templates = {
-            'memory_leaks': {
-                'before': 'f = open("file.txt", "r")\ndata = f.read()',
-                'after': 'with open("file.txt", "r") as f:\n    data = f.read()'
-            },
-            'blocking_calls': {
-                'before': 'async def func():\n    time.sleep(1)',
-                'after': 'async def func():\n    await asyncio.sleep(1)'
-            },
+    'memory_leaks': {
+        'before': 'f = open("file.txt", "r")\ndata = f.read()',
+        'after': 'with open("file.txt", "r") as f:\n    data = f.read()' },
+        'blocking_calls': {
+            'before': 'async def func():\n    time.sleep(1)',
+            'after': 'async def func():\n    await asyncio.sleep(1)' },
             'inefficient_loops': {
                 'before': 'result = []\nfor item in items:\n    if condition(item):\n        result.append(transform(item))',
-                'after': 'result = [transform(item) for item in items if condition(item)]'
-            },
-            'database_issues': {
-                'before': 'for user in users:\n    profile = db.get_profile(user.id)',
-                'after': 'profiles = db.get_profiles_bulk([u.id for u in users])'
-            }
-        }
+                'after': 'result = [transform(item) for item in items if condition(item)]' },
+                'database_issues': {
+                    'before': 'for user in users:\n    profile = db.get_profile(user.id)',
+                     'after': 'profiles = db.get_profiles_bulk([u.id for u in users])' } }
         
         template = example_templates.get(category)
         if template:

@@ -45,6 +45,7 @@ async def _get_memory_integration():
                     from src.services.security_memory_integration import (
                         get_security_memory_integration,
                     )
+
                     _memory_integration = await get_security_memory_integration()
                 except Exception as e:
                     logger.warning("Memory integration not available: %s", e)
@@ -221,12 +222,16 @@ class SecurityAssessment:
             "name": self.name,
             "target": self.target,
             "scope": self.scope,
-            "phase": self.phase.value if isinstance(self.phase, AssessmentPhase) else self.phase,
+            "phase": self.phase.value
+            if isinstance(self.phase, AssessmentPhase)
+            else self.phase,
             "training_mode": self.training_mode,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "phase_history": self.phase_history,
-            "hosts": [h.to_dict() if isinstance(h, TargetHost) else h for h in self.hosts],
+            "hosts": [
+                h.to_dict() if isinstance(h, TargetHost) else h for h in self.hosts
+            ],
             "findings": self.findings,
             "actions_taken": self.actions_taken,
             "error_message": self.error_message,
@@ -362,7 +367,13 @@ class SecurityWorkflowManager:
         # Persist to Redis
         await self._save_assessment(assessment)
 
-        logger.info("Created security assessment: id=%s, name=%s, target=%s, training_mode=%s", assessment_id, name, target, training_mode)
+        logger.info(
+            "Created security assessment: id=%s, name=%s, target=%s, training_mode=%s",
+            assessment_id,
+            name,
+            target,
+            training_mode,
+        )
 
         # Create Memory MCP entity for the assessment
         try:
@@ -429,7 +440,9 @@ class SecurityWorkflowManager:
             logger.error("Failed to get assessment %s: %s", assessment_id, e)
             raise RuntimeError(f"Failed to get assessment: {e}")
 
-    def _parse_assessment_data(self, aid: str, data: dict) -> Optional[SecurityAssessment]:
+    def _parse_assessment_data(
+        self, aid: str, data: dict
+    ) -> Optional[SecurityAssessment]:
         """Parse raw Redis data into SecurityAssessment (Issue #315: extracted helper).
 
         Args:
@@ -525,7 +538,12 @@ class SecurityWorkflowManager:
         # Determine target phase
         if target_phase:
             if target_phase not in valid_next:
-                logger.error("Invalid transition: %s -> %s. Valid: %s", current_phase, target_phase, valid_next)
+                logger.error(
+                    "Invalid transition: %s -> %s. Valid: %s",
+                    current_phase,
+                    target_phase,
+                    valid_next,
+                )
                 return None
             next_phase = target_phase
         else:
@@ -560,7 +578,9 @@ class SecurityWorkflowManager:
 
         await self._save_assessment(assessment)
 
-        logger.info("Assessment %s: %s -> %s ", assessment_id, current_phase, next_phase)
+        logger.info(
+            "Assessment %s: %s -> %s ", assessment_id, current_phase, next_phase
+        )
 
         return assessment
 
@@ -696,8 +716,15 @@ class SecurityWorkflowManager:
 
         # Issue #398: Create Memory MCP entities (uses extracted helper)
         await self._create_port_memory_entity(
-            assessment_id, host_ip, is_new_host, port, protocol, state,
-            service, version, product
+            assessment_id,
+            host_ip,
+            is_new_host,
+            port,
+            protocol,
+            state,
+            service,
+            version,
+            product,
         )
 
         return assessment
@@ -806,13 +833,26 @@ class SecurityWorkflowManager:
         assessment.findings.append(finding)
 
         await self._save_assessment(assessment)
-        logger.info("Added vulnerability %s to %s in assessment %s", cve_id or title, host_ip, assessment_id)
+        logger.info(
+            "Added vulnerability %s to %s in assessment %s",
+            cve_id or title,
+            host_ip,
+            assessment_id,
+        )
 
         # Issue #398: Create Memory MCP entities (uses extracted helper)
         await self._create_vulnerability_memory_entity(
-            assessment_id, host_ip, is_new_host, cve_id, title,
-            severity, description, affected_port, affected_service,
-            references, metadata
+            assessment_id,
+            host_ip,
+            is_new_host,
+            cve_id,
+            title,
+            severity,
+            description,
+            affected_port,
+            affected_service,
+            references,
+            metadata,
         )
 
         return assessment
@@ -887,7 +927,9 @@ class SecurityWorkflowManager:
         assessment.findings.append(finding)
 
         await self._save_assessment(assessment)
-        logger.info("Added finding to assessment %s: %s", assessment_id, finding.get('type'))
+        logger.info(
+            "Added finding to assessment %s: %s", assessment_id, finding.get("type")
+        )
 
         return assessment
 
@@ -958,15 +1000,19 @@ class SecurityWorkflowManager:
         assessment.error_message = error_message
 
         now = datetime.now(timezone.utc).isoformat()
-        assessment.phase_history.append({
-            "from_phase": previous_phase,
-            "to_phase": "ERROR",
-            "timestamp": now,
-            "reason": error_message,
-        })
+        assessment.phase_history.append(
+            {
+                "from_phase": previous_phase,
+                "to_phase": "ERROR",
+                "timestamp": now,
+                "reason": error_message,
+            }
+        )
 
         await self._save_assessment(assessment)
-        logger.error("Assessment %s entered ERROR state: %s", assessment_id, error_message)
+        logger.error(
+            "Assessment %s entered ERROR state: %s", assessment_id, error_message
+        )
 
         return assessment
 
@@ -1004,12 +1050,14 @@ class SecurityWorkflowManager:
         assessment.error_message = None
 
         now = datetime.now(timezone.utc).isoformat()
-        assessment.phase_history.append({
-            "from_phase": "ERROR",
-            "to_phase": target_phase,
-            "timestamp": now,
-            "reason": reason,
-        })
+        assessment.phase_history.append(
+            {
+                "from_phase": "ERROR",
+                "to_phase": target_phase,
+                "timestamp": now,
+                "reason": reason,
+            }
+        )
 
         await self._save_assessment(assessment)
         logger.info("Assessment %s recovered to %s", assessment_id, target_phase)
@@ -1060,9 +1108,9 @@ class SecurityWorkflowManager:
             return None
 
         # Count findings by type
-        vuln_count = len([
-            f for f in assessment.findings if f.get("type") == "vulnerability"
-        ])
+        vuln_count = len(
+            [f for f in assessment.findings if f.get("type") == "vulnerability"]
+        )
         host_count = len(assessment.hosts)
         port_count = sum(len(h.ports) for h in assessment.hosts)
         service_count = sum(len(h.services) for h in assessment.hosts)
@@ -1079,9 +1127,9 @@ class SecurityWorkflowManager:
             "name": assessment.name,
             "target": assessment.target,
             "phase": assessment.phase.value,
-            "phase_description": PHASE_DESCRIPTIONS.get(
-                assessment.phase.value, {}
-            ).get("description", ""),
+            "phase_description": PHASE_DESCRIPTIONS.get(assessment.phase.value, {}).get(
+                "description", ""
+            ),
             "training_mode": assessment.training_mode,
             "stats": {
                 "hosts": host_count,
@@ -1091,9 +1139,9 @@ class SecurityWorkflowManager:
                 "severity_distribution": severity_counts,
                 "actions_taken": len(assessment.actions_taken),
             },
-            "next_actions": PHASE_DESCRIPTIONS.get(
-                assessment.phase.value, {}
-            ).get("actions", []),
+            "next_actions": PHASE_DESCRIPTIONS.get(assessment.phase.value, {}).get(
+                "actions", []
+            ),
             "created_at": assessment.created_at,
             "updated_at": assessment.updated_at,
         }

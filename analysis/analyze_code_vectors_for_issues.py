@@ -623,7 +623,8 @@ async def main():
 
         # Save report - use project-relative path
         project_root = Path(__file__).parent.parent
-        report_path = project_root / "tests" / "results" / f"code_analysis_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+        report_path = project_root / "tests" / "results" / \
+            f"code_analysis_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
         report_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Issue #666: Use asyncio.to_thread to avoid blocking the event loop

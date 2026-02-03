@@ -417,9 +417,15 @@ Respond in JSON: {{"score": 0.0-1.0, "reasoning": "...", "recommendation": "stor
     def _build_fallback_assessment(self, content_data: Dict[str, Any], error_msg: str = None) -> Dict[str, Any]:
         """Build fallback assessment (Issue #398: extracted)."""
         if error_msg:
-            return {"score": 0.3, "reasoning": f"Error during assessment: {error_msg}",
-                    "recommendation": "review", "key_topics": [],
-                    "reliability_factors": {"trusted_domain": False, "content_quality": "unknown", "information_density": "unknown"}}
+            return {
+    "score": 0.3,
+    "reasoning": f"Error during assessment: {error_msg}",
+    "recommendation": "review",
+    "key_topics": [],
+    "reliability_factors": {
+        "trusted_domain": False,
+        "content_quality": "unknown",
+         "information_density": "unknown"}}
         return {"score": 0.6 if content_data.get("is_trusted") else 0.4,
                 "reasoning": "Automatic assessment - LLM response could not be parsed",
                 "recommendation": "review", "key_topics": [],

@@ -222,7 +222,11 @@ class CodeChunker:
                 # Save previous chunk if it exists (Issue #665: uses helper)
                 if current_chunk:
                     self._append_chunk_if_valid(
-                        chunks, current_chunk, current_chunk_type, i - len(current_chunk) + 1, i
+                        chunks,
+                        current_chunk,
+                        current_chunk_type,
+                        i - len(current_chunk) + 1,
+                        i,
                     )
 
                 # Start new chunk and collect entire definition block
@@ -230,7 +234,9 @@ class CodeChunker:
                 current_indent = len(line) - len(line.lstrip())
 
                 # Collect block using helper (Issue #665)
-                block_lines, i = self._collect_definition_block(lines, i + 1, current_indent)
+                block_lines, i = self._collect_definition_block(
+                    lines, i + 1, current_indent
+                )
                 full_block = [line] + block_lines
 
                 # Save the function/class chunk (Issue #665: uses helper)
@@ -248,14 +254,22 @@ class CodeChunker:
             # Check if chunk is too large (Issue #665: uses helper)
             if len("\n".join(current_chunk)) > self.max_chunk_size:
                 self._append_chunk_if_valid(
-                    chunks, current_chunk, current_chunk_type, i - len(current_chunk) + 1, i
+                    chunks,
+                    current_chunk,
+                    current_chunk_type,
+                    i - len(current_chunk) + 1,
+                    i,
                 )
                 current_chunk = []
 
         # Save final chunk (Issue #665: uses helper)
         if current_chunk:
             self._append_chunk_if_valid(
-                chunks, current_chunk, current_chunk_type, len(lines) - len(current_chunk) + 1, len(lines)
+                chunks,
+                current_chunk,
+                current_chunk_type,
+                len(lines) - len(current_chunk) + 1,
+                len(lines),
             )
 
         return chunks
@@ -692,14 +706,29 @@ class CodebaseIndexingService:
                     result = await knowledge_base.store_fact(chunk["content"], metadata)
                     if result and result.get("status") == "success":
                         stored_count += 1
-                        logger.debug("Stored chunk %s/%s for %s", i+1, len(chunks), file_info.relative_path)
+                        logger.debug(
+                            "Stored chunk %s/%s for %s",
+                            i + 1,
+                            len(chunks),
+                            file_info.relative_path,
+                        )
                     else:
-                        logger.warning("Failed to store chunk %s for %s: %s", i+1, file_info.relative_path, result)
+                        logger.warning(
+                            "Failed to store chunk %s for %s: %s",
+                            i + 1,
+                            file_info.relative_path,
+                            result,
+                        )
                 else:
                     logger.warning("Knowledge base does not support store_fact method")
 
             except Exception as e:
-                logger.error("Error storing chunk %s for %s: %s", i+1, file_info.relative_path, e)
+                logger.error(
+                    "Error storing chunk %s for %s: %s",
+                    i + 1,
+                    file_info.relative_path,
+                    e,
+                )
                 self.progress.errors.append(
                     f"Chunk storage error in {file_info.relative_path}[{i+1}]: {str(e)}"
                 )
@@ -740,7 +769,9 @@ class CodebaseIndexingService:
 
             if stored_count > 0:
                 self.progress.successful_files += 1
-                logger.info("Indexed %s: %s chunks", file_info.relative_path, stored_count)
+                logger.info(
+                    "Indexed %s: %s chunks", file_info.relative_path, stored_count
+                )
             else:
                 self.progress.failed_files += 1
                 self.progress.errors.append(
@@ -777,15 +808,16 @@ class CodebaseIndexingService:
             batch = category_files[i : i + batch_size]
 
             tasks = [
-                self.index_single_file(file_info, knowledge_base)
-                for file_info in batch
+                self.index_single_file(file_info, knowledge_base) for file_info in batch
             ]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             successful_in_batch = sum(1 for r in results if r is True)
             logger.info(
                 "Batch %s: %s/%s files indexed successfully",
-                i // batch_size + 1, successful_in_batch, len(batch)
+                i // batch_size + 1,
+                successful_in_batch,
+                len(batch),
             )
 
             await asyncio.sleep(TimingConstants.MICRO_DELAY)
@@ -795,7 +827,8 @@ class CodebaseIndexingService:
         logger.info("Codebase indexing completed!")
         logger.info(
             "Results: %s successful, %s failed",
-            self.progress.successful_files, self.progress.failed_files
+            self.progress.successful_files,
+            self.progress.failed_files,
         )
         logger.info("Total chunks created: %s", self.progress.total_chunks)
 
@@ -830,8 +863,12 @@ class CodebaseIndexingService:
             files_by_category = self._group_files_by_category(files)
 
             for category, category_files in files_by_category.items():
-                logger.info("Processing %s files in category: %s", len(category_files), category)
-                await self._process_category_batches(category_files, batch_size, knowledge_base)
+                logger.info(
+                    "Processing %s files in category: %s", len(category_files), category
+                )
+                await self._process_category_batches(
+                    category_files, batch_size, knowledge_base
+                )
 
             self.progress.end_time = datetime.now()
             self._log_indexing_completion()
@@ -888,13 +925,23 @@ class CodebaseIndexingService:
 
                 # Log batch progress
                 successful_in_batch = sum(1 for r in results if r is True)
-                logger.info("Category %s batch %s: %s/%s files indexed", category, i//batch_size + 1, successful_in_batch, len(batch))
+                logger.info(
+                    "Category %s batch %s: %s/%s files indexed",
+                    category,
+                    i // batch_size + 1,
+                    successful_in_batch,
+                    len(batch),
+                )
 
                 # Small delay between batches to prevent system overload
                 await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
             self.progress.end_time = datetime.now()
-            logger.info("Category %s reindexing completed: %s successful", category, self.progress.successful_files)
+            logger.info(
+                "Category %s reindexing completed: %s successful",
+                category,
+                self.progress.successful_files,
+            )
 
             return self.progress
 

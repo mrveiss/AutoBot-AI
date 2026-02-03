@@ -21,7 +21,6 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
-
 # Add project root to path for imports
 sys.path.insert(
     0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -538,7 +537,9 @@ class AgentCommunicationProtocol:
                 # Check all channels for incoming messages (Issue #376 - use constants)
                 for channel_id, channel in list(self.channels.items()):
                     try:
-                        message = await channel.receive(timeout=TimingConstants.MICRO_DELAY)
+                        message = await channel.receive(
+                            timeout=TimingConstants.MICRO_DELAY
+                        )
                         if message:
                             await self._handle_message(message, channel_id)
                     except Exception as e:
@@ -547,7 +548,8 @@ class AgentCommunicationProtocol:
                         )
 
                 # Small delay to prevent busy waiting
-                await asyncio.sleep(TimingConstants.POLL_INTERVAL)  # 10ms - intentionally short for responsive message processing
+                # 10ms - intentionally short for responsive message processing
+                await asyncio.sleep(TimingConstants.POLL_INTERVAL)
 
             except asyncio.CancelledError:
                 break
@@ -828,7 +830,7 @@ if __name__ == "__main__":
             "test_agent_1", "test_agent_2", {"message": "Hello from Agent 1!"}
         )
 
-        logger.info("Response received: {response}")
+        logger.info("Response received: %s", response)
 
         # Test broadcast
         logger.info("\nTesting broadcast communication...")
@@ -836,7 +838,7 @@ if __name__ == "__main__":
             "test_agent_1", {"broadcast": "Hello everyone!"}
         )
 
-        logger.info("Broadcast sent to {broadcast_count} channels")
+        logger.info("Broadcast sent to %s channels", broadcast_count)
 
         # Cleanup
         await manager.shutdown_all()

@@ -69,6 +69,7 @@ def _update_warmup_cache(client: Any, warmup_time: float) -> None:
     global _npu_warmup_complete, _npu_warmup_time_ms
     global _npu_client_cache, _npu_available_cache, _npu_cache_timestamp
     import time
+
     _npu_warmup_time_ms = warmup_time
     _npu_warmup_complete = True
     _npu_client_cache = client
@@ -81,17 +82,25 @@ async def _build_warmup_success_result(
 ) -> Dict[str, Any]:
     """Issue #665: Extracted from warmup_npu_connection to reduce function length."""
     result = {
-        "status": "success", "npu_available": True, "warmup_time_ms": warmup_time,
+        "status": "success",
+        "npu_available": True,
+        "warmup_time_ms": warmup_time,
         "embedding_dimensions": len(embedding),
         "message": f"NPU connection warmed up in {warmup_time:.1f}ms",
     }
     try:
         device_info = await client.get_device_info()
         if device_info:
-            result.update(device=device_info.device_name, is_npu=device_info.is_npu, is_gpu=device_info.is_gpu)
+            result.update(
+                device=device_info.device_name,
+                is_npu=device_info.is_npu,
+                is_gpu=device_info.is_gpu,
+            )
     except Exception:
         pass  # Non-critical device info
-    logger.info("NPU warmup complete: %d dimensions in %.1fms", len(embedding), warmup_time)
+    logger.info(
+        "NPU warmup complete: %d dimensions in %.1fms", len(embedding), warmup_time
+    )
     return result
 
 
@@ -106,28 +115,42 @@ async def warmup_npu_connection() -> Dict[str, Any]:
         Dict with warmup status and timing information
     """
     import time
+
     start_time = time.time()
     result = _init_warmup_result()
 
     try:
         from backend.services.npu_client import get_npu_client
+
         client = get_npu_client()
         if not await client.is_available(force_check=True):
-            result.update(status="npu_unavailable", message="NPU worker not available, will use fallback")
+            result.update(
+                status="npu_unavailable",
+                message="NPU worker not available, will use fallback",
+            )
             logger.info("NPU warmup: Worker not available")
             return result
 
-        embedding = await client.generate_embedding("NPU warmup test embedding for connection initialization")
+        embedding = await client.generate_embedding(
+            "NPU warmup test embedding for connection initialization"
+        )
         warmup_time = (time.time() - start_time) * 1000
         _update_warmup_cache(client, warmup_time)
 
         if embedding and len(embedding) > 0:
             result = await _build_warmup_success_result(embedding, warmup_time, client)
         else:
-            result.update(status="empty_embedding", message="NPU returned empty embedding during warmup")
+            result.update(
+                status="empty_embedding",
+                message="NPU returned empty embedding during warmup",
+            )
             logger.warning("NPU warmup returned empty embedding")
     except Exception as e:
-        result.update(status="error", warmup_time_ms=(time.time() - start_time) * 1000, message=f"NPU warmup failed: {e}")
+        result.update(
+            status="error",
+            warmup_time_ms=(time.time() - start_time) * 1000,
+            message=f"NPU warmup failed: {e}",
+        )
         logger.warning("NPU warmup failed: %s", e)
 
     return result
@@ -161,6 +184,7 @@ async def _get_npu_client_cached() -> tuple:
     global _npu_client_cache, _npu_available_cache, _npu_cache_timestamp
 
     import time
+
     current_time = time.time()
 
     # Check if cache is still valid
@@ -174,6 +198,7 @@ async def _get_npu_client_cached() -> tuple:
     # Refresh cache
     try:
         from backend.services.npu_client import get_npu_client
+
         _npu_client_cache = get_npu_client()
         _npu_available_cache = await _npu_client_cache.is_available()
         _npu_cache_timestamp = current_time
@@ -234,9 +259,7 @@ async def _generate_embedding_with_npu_fallback(text: str) -> List[float]:
     # Fallback to LlamaIndex embed_model
     from llama_index.core import Settings
 
-    embedding = await asyncio.to_thread(
-        Settings.embed_model.get_text_embedding, text
-    )
+    embedding = await asyncio.to_thread(Settings.embed_model.get_text_embedding, text)
     _fallback_embedding_count += 1
     logger.debug("Generated embedding via LlamaIndex fallback")
     return embedding
@@ -276,7 +299,8 @@ async def _generate_embeddings_batch_with_npu_fallback(
                 _npu_embedding_count += len(texts)
                 logger.info(
                     "Generated %d embeddings via NPU worker in %.2fms",
-                    len(texts), result.processing_time_ms
+                    len(texts),
+                    result.processing_time_ms,
                 )
                 return result.embeddings
             logger.warning("NPU batch returned incomplete results, falling back")
@@ -506,9 +530,7 @@ class FactsMixin:
         # Store unique_key mapping if provided
         if "unique_key" in metadata:
             unique_key_name = "unique_key:man_page:%s" % metadata["unique_key"]
-            await asyncio.to_thread(
-                self.redis_client.set, unique_key_name, fact_id
-            )
+            await asyncio.to_thread(self.redis_client.set, unique_key_name, fact_id)
 
         # Issue #547: Track session-fact relationship for orphan cleanup
         source_session_id = metadata.get("source_session_id")
@@ -545,9 +567,7 @@ class FactsMixin:
         embedding = await _generate_embedding_with_npu_fallback(content)
 
         # Create Document for LlamaIndex with embedding
-        doc = Document(
-            text=content, doc_id=fact_id, metadata=sanitized_metadata
-        )
+        doc = Document(text=content, doc_id=fact_id, metadata=sanitized_metadata)
         doc.embedding = embedding
 
         # Add to vector store
@@ -715,7 +735,11 @@ class FactsMixin:
             return None
 
         # Extract fact_id from key
-        fact_id = key.split(":")[-1] if isinstance(key, str) else key.decode("utf-8").split(":")[-1]
+        fact_id = (
+            key.split(":")[-1]
+            if isinstance(key, str)
+            else key.decode("utf-8").split(":")[-1]
+        )
 
         # Decode data using helper
         decoded = _decode_redis_hash(fact_data)
@@ -841,15 +865,19 @@ class FactsMixin:
             current_metadata["updated_at"] = datetime.now().isoformat()
 
             await asyncio.to_thread(
-                self.redis_client.hset, fact_key, mapping={
+                self.redis_client.hset,
+                fact_key,
+                mapping={
                     "content": decoded["content"],
                     "metadata": json.dumps(current_metadata),
                     "timestamp": decoded.get("timestamp", ""),
-                }
+                },
             )
 
             if content is not None and self.vector_store:
-                await self._revectorize_fact(fact_id, decoded["content"], current_metadata)
+                await self._revectorize_fact(
+                    fact_id, decoded["content"], current_metadata
+                )
 
             return {"status": "success", "fact_id": fact_id, "action": "updated"}
 
@@ -912,7 +940,9 @@ class FactsMixin:
                 try:
                     await asyncio.to_thread(self.vector_store.delete, fact_id)
                 except Exception as e:
-                    logger.warning("Could not delete vector for fact %s: %s", fact_id, e)
+                    logger.warning(
+                        "Could not delete vector for fact %s: %s", fact_id, e
+                    )
 
             # Issue #379: Decrement stats counters in parallel (Issue #71)
             await asyncio.gather(
@@ -967,27 +997,26 @@ class FactsMixin:
         try:
             # Add fact to session's fact set
             await asyncio.to_thread(
-                self.redis_client.sadd,
-                "session:facts:%s" % session_id,
-                fact_id
+                self.redis_client.sadd, "session:facts:%s" % session_id, fact_id
             )
 
             # Store reverse lookup (fact -> session)
             await asyncio.to_thread(
-                self.redis_client.set,
-                "fact:origin:session:%s" % fact_id,
-                session_id
+                self.redis_client.set, "fact:origin:session:%s" % fact_id, session_id
             )
 
             logger.debug(
                 "Tracked session-fact relationship: session=%s, fact=%s",
-                session_id, fact_id
+                session_id,
+                fact_id,
             )
 
         except Exception as e:
             logger.warning(
                 "Failed to track session-fact relationship: session=%s, fact=%s, error=%s",
-                session_id, fact_id, e
+                session_id,
+                fact_id,
+                e,
             )
 
     async def get_facts_by_session(self, session_id: str) -> List[str]:
@@ -1004,8 +1033,7 @@ class FactsMixin:
         """
         try:
             fact_ids = await asyncio.to_thread(
-                self.redis_client.smembers,
-                "session:facts:%s" % session_id
+                self.redis_client.smembers, "session:facts:%s" % session_id
             )
 
             # Decode bytes to strings
@@ -1032,21 +1060,22 @@ class FactsMixin:
         """
         try:
             session_id = await asyncio.to_thread(
-                self.redis_client.get,
-                "fact:origin:session:%s" % fact_id
+                self.redis_client.get, "fact:origin:session:%s" % fact_id
             )
 
             if session_id:
-                return session_id.decode("utf-8") if isinstance(session_id, bytes) else session_id
+                return (
+                    session_id.decode("utf-8")
+                    if isinstance(session_id, bytes)
+                    else session_id
+                )
             return None
 
         except Exception as e:
             logger.error("Failed to get session for fact %s: %s", fact_id, e)
             return None
 
-    async def _batch_check_important_facts(
-        self, fact_ids: List[str]
-    ) -> set:
+    async def _batch_check_important_facts(self, fact_ids: List[str]) -> set:
         """
         Batch check which facts are marked as important/preserve.
 
@@ -1106,8 +1135,7 @@ class FactsMixin:
             # Check if fact should be preserved
             if preserve_important and fact_id in important_ids:
                 logger.debug(
-                    "Preserving important fact %s from session %s",
-                    fact_id, session_id
+                    "Preserving important fact %s from session %s", fact_id, session_id
                 )
                 result["preserved_count"] += 1
                 return
@@ -1118,16 +1146,15 @@ class FactsMixin:
             if delete_result.get("status") == "success":
                 result["deleted_count"] += 1
             else:
-                result["errors"].append({
-                    "fact_id": fact_id,
-                    "error": delete_result.get("message", "Unknown error")
-                })
+                result["errors"].append(
+                    {
+                        "fact_id": fact_id,
+                        "error": delete_result.get("message", "Unknown error"),
+                    }
+                )
 
         except Exception as e:
-            result["errors"].append({
-                "fact_id": fact_id,
-                "error": str(e)
-            })
+            result["errors"].append({"fact_id": fact_id, "error": str(e)})
 
     async def delete_facts_by_session(
         self, session_id: str, preserve_important: bool = True
@@ -1162,7 +1189,9 @@ class FactsMixin:
 
             logger.info(
                 "Cleaning up %d facts for session %s (preserve_important=%s)",
-                len(fact_ids), session_id, preserve_important
+                len(fact_ids),
+                session_id,
+                preserve_important,
             )
 
             # Batch check important facts
@@ -1184,7 +1213,7 @@ class FactsMixin:
                 session_id,
                 result["deleted_count"],
                 result["preserved_count"],
-                len(result["errors"])
+                len(result["errors"]),
             )
 
             return result
@@ -1209,21 +1238,18 @@ class FactsMixin:
         try:
             # Delete the session's fact set
             await asyncio.to_thread(
-                self.redis_client.delete,
-                "session:facts:%s" % session_id
+                self.redis_client.delete, "session:facts:%s" % session_id
             )
 
             # Delete reverse lookup keys for each fact
             for fact_id in fact_ids:
                 await asyncio.to_thread(
-                    self.redis_client.delete,
-                    "fact:origin:session:%s" % fact_id
+                    self.redis_client.delete, "fact:origin:session:%s" % fact_id
                 )
 
             logger.debug("Cleaned up tracking for session %s", session_id)
 
         except Exception as e:
             logger.warning(
-                "Failed to cleanup session tracking for %s: %s",
-                session_id, e
+                "Failed to cleanup session tracking for %s: %s", session_id, e
             )

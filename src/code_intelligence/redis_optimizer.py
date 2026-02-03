@@ -685,7 +685,8 @@ class RedisOptimizer:
                 ))
         return results
 
-    def _detect_inefficient_keys_usage(self, file_path: str, operations: List[RedisOperation]) -> List[OptimizationResult]:
+    def _detect_inefficient_keys_usage(self, file_path: str,
+                                       operations: List[RedisOperation]) -> List[OptimizationResult]:
         """Detect KEYS command usage that should use SCAN instead."""
         results = []
         for op in operations:
@@ -749,19 +750,24 @@ class RedisOptimizer:
         pattern = r"redis\.Redis\s*\("
         for match in re.finditer(pattern, source):
             line_number = source[: match.start()].count("\n") + 1
-            results.append(OptimizationResult(
-                optimization_type=OptimizationType.CONNECTION_PER_REQUEST,
-                severity=OptimizationSeverity.HIGH,
-                file_path=file_path,
-                line_start=line_number,
-                line_end=line_number,
-                description="Direct redis.Redis() instantiation - violates canonical pattern",
-                suggestion="Use get_redis_client() from src.utils.redis_client. Provides pooling and monitoring.",
-                estimated_improvement="Connection reuse, automatic retry, health monitoring",
-                current_code=self._get_code_range(source_lines, line_number, line_number + 2),
-                optimized_code="from src.utils.redis_client import get_redis_client\nredis = get_redis_client(database='main')",
-                metrics={"violates_canonical_pattern": True},
-            ))
+            results.append(
+    OptimizationResult(
+        optimization_type=OptimizationType.CONNECTION_PER_REQUEST,
+        severity=OptimizationSeverity.HIGH,
+        file_path=file_path,
+        line_start=line_number,
+        line_end=line_number,
+        description="Direct redis.Redis() instantiation - violates canonical pattern",
+        suggestion="Use get_redis_client() from src.utils.redis_client. Provides pooling and monitoring.",
+        estimated_improvement="Connection reuse, automatic retry, health monitoring",
+        current_code=self._get_code_range(
+            source_lines,
+            line_number,
+            line_number + 2),
+            optimized_code="from src.utils.redis_client import get_redis_client\nredis = get_redis_client(database='main')",
+            metrics={
+                "violates_canonical_pattern": True},
+                 ))
         return results
 
     def _detect_blocking_in_async(self, file_path: str, source: str) -> List[OptimizationResult]:

@@ -207,20 +207,28 @@ class ProjectStateManager:
         """Get Phase 1 Core Foundation capabilities."""
         return [
             PhaseCapability(
-                "basic_llm_interface", "LLM Interface for chat functionality",
-                "file_exists", "src/llm_interface.py",
+                "basic_llm_interface",
+                "LLM Interface for chat functionality",
+                "file_exists",
+                "src/llm_interface.py",
             ),
             PhaseCapability(
-                "knowledge_base", "Vector database for knowledge storage",
-                "file_exists", "src/knowledge_base.py",
+                "knowledge_base",
+                "Vector database for knowledge storage",
+                "file_exists",
+                "src/knowledge_base.py",
             ),
             PhaseCapability(
-                "chat_api", "REST API for chat functionality",
-                "api_endpoint", get_service_url("backend", "/api/chats"),
+                "chat_api",
+                "REST API for chat functionality",
+                "api_endpoint",
+                get_service_url("backend", "/api/chats"),
             ),
             PhaseCapability(
-                "web_interface", "Vue.js frontend application",
-                "file_exists", "autobot-vue/src/App.vue",
+                "web_interface",
+                "Vue.js frontend application",
+                "file_exists",
+                "autobot-vue/src/App.vue",
             ),
         ]
 
@@ -228,16 +236,22 @@ class ProjectStateManager:
         """Get Phase 2 Multi-Agent Orchestration capabilities."""
         return [
             PhaseCapability(
-                "orchestrator", "Main orchestration engine",
-                "file_exists", "src/orchestrator.py",
+                "orchestrator",
+                "Main orchestration engine",
+                "file_exists",
+                "src/orchestrator.py",
             ),
             PhaseCapability(
-                "worker_node", "Distributed task execution",
-                "file_exists", "src/worker_node.py",
+                "worker_node",
+                "Distributed task execution",
+                "file_exists",
+                "src/worker_node.py",
             ),
             PhaseCapability(
-                "redis_integration", "Redis for task queuing",
-                "api_endpoint", get_service_url("backend", "/api/redis/config"),
+                "redis_integration",
+                "Redis for task queuing",
+                "api_endpoint",
+                get_service_url("backend", "/api/redis/config"),
             ),
         ]
 
@@ -245,34 +259,50 @@ class ProjectStateManager:
         """Get Phase 3 Security Layer capabilities."""
         return [
             PhaseCapability(
-                "security_layer", "Command security and validation",
-                "file_exists", "src/enhanced_security_layer.py",
+                "security_layer",
+                "Command security and validation",
+                "file_exists",
+                "src/enhanced_security_layer.py",
             ),
             PhaseCapability(
-                "secure_executor", "Secure command execution",
-                "file_exists", "src/secure_command_executor.py",
+                "secure_executor",
+                "Secure command execution",
+                "file_exists",
+                "src/secure_command_executor.py",
             ),
             PhaseCapability(
-                "audit_logging", "Security audit trail",
-                "file_exists", "data/audit.log",
+                "audit_logging",
+                "Security audit trail",
+                "file_exists",
+                "data/audit.log",
             ),
         ]
 
     def _get_phase4_capabilities(self) -> List[PhaseCapability]:
         """Get Phase 4 System Integration capabilities."""
-        ws_url = get_service_url("backend", "/ws").replace("http://", "ws://").replace("https://", "wss://")
+        ws_url = (
+            get_service_url("backend", "/ws")
+            .replace("http://", "ws://")
+            .replace("https://", "wss://")
+        )
         return [
             PhaseCapability(
-                "terminal_integration", "Full terminal functionality",
-                "api_endpoint", get_service_url("backend", "/api/terminal/sessions"),
+                "terminal_integration",
+                "Full terminal functionality",
+                "api_endpoint",
+                get_service_url("backend", "/api/terminal/sessions"),
             ),
             PhaseCapability(
-                "file_management", "File upload/download system",
-                "api_endpoint", get_service_url("backend", "/api/files/stats"),
+                "file_management",
+                "File upload/download system",
+                "api_endpoint",
+                get_service_url("backend", "/api/files/stats"),
             ),
             PhaseCapability(
-                "websocket_support", "Real-time communication",
-                "websocket_endpoint", ws_url,
+                "websocket_support",
+                "Real-time communication",
+                "websocket_endpoint",
+                ws_url,
             ),
         ]
 
@@ -280,16 +310,22 @@ class ProjectStateManager:
         """Get Phase 5 Enhanced Orchestrator capabilities."""
         return [
             PhaseCapability(
-                "workflow_orchestration", "Multi-agent workflow system",
-                "api_endpoint", get_service_url("backend", "/api/workflow/workflows"),
+                "workflow_orchestration",
+                "Multi-agent workflow system",
+                "api_endpoint",
+                get_service_url("backend", "/api/workflow/workflows"),
             ),
             PhaseCapability(
-                "session_takeover", "Human-in-the-loop control",
-                "file_exists", "autobot-vue/src/components/AdvancedStepConfirmationModal.vue",
+                "session_takeover",
+                "Human-in-the-loop control",
+                "file_exists",
+                "autobot-vue/src/components/AdvancedStepConfirmationModal.vue",
             ),
             PhaseCapability(
-                "chat_knowledge", "Context-aware chat system",
-                "api_endpoint", get_service_url("backend", "/api/chat_knowledge/health"),
+                "chat_knowledge",
+                "Context-aware chat system",
+                "api_endpoint",
+                get_service_url("backend", "/api/chat_knowledge/health"),
             ),
         ]
 
@@ -297,20 +333,28 @@ class ProjectStateManager:
         """Get Phase 6 Self-Awareness capabilities."""
         return [
             PhaseCapability(
-                "state_tracking", "Project state management system",
-                "file_exists", "src/project_state_manager.py",
+                "state_tracking",
+                "Project state management system",
+                "file_exists",
+                "src/project_state_manager.py",
             ),
             PhaseCapability(
-                "phase_validation", "Automated validation system",
-                "function_test", "validate_all_phases",
+                "phase_validation",
+                "Automated validation system",
+                "function_test",
+                "validate_all_phases",
             ),
             PhaseCapability(
-                "visual_indicators", "Phase status in Web UI",
-                "file_exists", "autobot-vue/src/components/PhaseStatusIndicator.vue",
+                "visual_indicators",
+                "Phase status in Web UI",
+                "file_exists",
+                "autobot-vue/src/components/PhaseStatusIndicator.vue",
             ),
             PhaseCapability(
-                "automated_progression", "Phase progression logic",
-                "function_test", "check_phase_completion",
+                "automated_progression",
+                "Phase progression logic",
+                "function_test",
+                "check_phase_completion",
             ),
         ]
 
@@ -318,36 +362,42 @@ class ProjectStateManager:
         """Define all development phases and their capabilities"""
         self.phases = {
             DevelopmentPhase.PHASE_1_CORE: DevelopmentPhaseInfo(
-                DevelopmentPhase.PHASE_1_CORE, "Core Foundation",
+                DevelopmentPhase.PHASE_1_CORE,
+                "Core Foundation",
                 "Basic LLM interface, knowledge base, and web frontend",
                 self._get_phase1_capabilities(),
             ),
             DevelopmentPhase.PHASE_2_ORCHESTRATION: DevelopmentPhaseInfo(
-                DevelopmentPhase.PHASE_2_ORCHESTRATION, "Multi-Agent Orchestration",
+                DevelopmentPhase.PHASE_2_ORCHESTRATION,
+                "Multi-Agent Orchestration",
                 "Task orchestration and distributed worker nodes",
                 self._get_phase2_capabilities(),
                 prerequisites=[DevelopmentPhase.PHASE_1_CORE],
             ),
             DevelopmentPhase.PHASE_3_SECURITY: DevelopmentPhaseInfo(
-                DevelopmentPhase.PHASE_3_SECURITY, "Security Layer",
+                DevelopmentPhase.PHASE_3_SECURITY,
+                "Security Layer",
                 "Command security, validation, and audit logging",
                 self._get_phase3_capabilities(),
                 prerequisites=[DevelopmentPhase.PHASE_2_ORCHESTRATION],
             ),
             DevelopmentPhase.PHASE_4_INTEGRATION: DevelopmentPhaseInfo(
-                DevelopmentPhase.PHASE_4_INTEGRATION, "System Integration",
+                DevelopmentPhase.PHASE_4_INTEGRATION,
+                "System Integration",
                 "Terminal, file management, and WebSocket integration",
                 self._get_phase4_capabilities(),
                 prerequisites=[DevelopmentPhase.PHASE_3_SECURITY],
             ),
             DevelopmentPhase.PHASE_5_ORCHESTRATOR: DevelopmentPhaseInfo(
-                DevelopmentPhase.PHASE_5_ORCHESTRATOR, "Enhanced Orchestrator",
+                DevelopmentPhase.PHASE_5_ORCHESTRATOR,
+                "Enhanced Orchestrator",
                 "Advanced workflow orchestration and session takeover",
                 self._get_phase5_capabilities(),
                 prerequisites=[DevelopmentPhase.PHASE_4_INTEGRATION],
             ),
             DevelopmentPhase.PHASE_6_SELF_AWARENESS: DevelopmentPhaseInfo(
-                DevelopmentPhase.PHASE_6_SELF_AWARENESS, "Self-Awareness & State Management",
+                DevelopmentPhase.PHASE_6_SELF_AWARENESS,
+                "Self-Awareness & State Management",
                 "Project state tracking and automated phase validation",
                 self._get_phase6_capabilities(),
                 prerequisites=[DevelopmentPhase.PHASE_5_ORCHESTRATOR],
@@ -399,7 +449,12 @@ class ProjectStateManager:
             ("current_phase", self.current_phase.value, datetime.now()),
         )
 
-    def _save_phase_info(self, cursor: sqlite3.Cursor, phase: DevelopmentPhase, info: DevelopmentPhaseInfo) -> None:
+    def _save_phase_info(
+        self,
+        cursor: sqlite3.Cursor,
+        phase: DevelopmentPhase,
+        info: DevelopmentPhaseInfo,
+    ) -> None:
         """Save a single phase's information to database."""
         cursor.execute(
             """
@@ -407,13 +462,28 @@ class ProjectStateManager:
             (phase_id, name, description, completion_percentage, is_active, is_completed, last_validated, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
-            (phase.value, info.name, info.description, info.completion_percentage,
-             info.is_active, info.is_completed, info.last_validated, datetime.now()),
+            (
+                phase.value,
+                info.name,
+                info.description,
+                info.completion_percentage,
+                info.is_active,
+                info.is_completed,
+                info.last_validated,
+                datetime.now(),
+            ),
         )
 
-    def _save_phase_capabilities(self, cursor: sqlite3.Cursor, phase: DevelopmentPhase, info: DevelopmentPhaseInfo) -> None:
+    def _save_phase_capabilities(
+        self,
+        cursor: sqlite3.Cursor,
+        phase: DevelopmentPhase,
+        info: DevelopmentPhaseInfo,
+    ) -> None:
         """Save a phase's capabilities to database."""
-        cursor.execute("DELETE FROM phase_capabilities WHERE phase_id = ?", (phase.value,))
+        cursor.execute(
+            "DELETE FROM phase_capabilities WHERE phase_id = ?", (phase.value,)
+        )
         for capability in info.capabilities:
             cursor.execute(
                 """
@@ -422,9 +492,17 @@ class ProjectStateManager:
                  required, implemented, last_validated, validation_details)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-                (phase.value, capability.name, capability.description, capability.validation_method,
-                 capability.validation_target, capability.required, capability.implemented,
-                 capability.last_validated, capability.validation_details),
+                (
+                    phase.value,
+                    capability.name,
+                    capability.description,
+                    capability.validation_method,
+                    capability.validation_target,
+                    capability.required,
+                    capability.implemented,
+                    capability.last_validated,
+                    capability.validation_details,
+                ),
             )
 
     def save_state(self):
@@ -448,14 +526,18 @@ class ProjectStateManager:
         """
         await asyncio.to_thread(self.save_state)
 
-    async def validate_all_phases_async(self) -> Dict[DevelopmentPhase, List[ValidationResult]]:
+    async def validate_all_phases_async(
+        self,
+    ) -> Dict[DevelopmentPhase, List[ValidationResult]]:
         """Validate all defined phases asynchronously.
 
         Issue #357: Async wrapper for non-blocking validation operations.
         """
         return await asyncio.to_thread(self.validate_all_phases)
 
-    async def validate_phase_async(self, phase: DevelopmentPhase) -> List[ValidationResult]:
+    async def validate_phase_async(
+        self, phase: DevelopmentPhase
+    ) -> List[ValidationResult]:
         """Validate all capabilities in a phase asynchronously.
 
         Issue #357: Async wrapper for non-blocking validation operations.
@@ -490,16 +572,26 @@ class ProjectStateManager:
     def _validate_api_endpoint(self, capability: PhaseCapability) -> ValidationResult:
         """Validate API endpoint (Issue #315)."""
         # URGENT FIX: Prevent circular dependency deadlock for self-referential endpoints
-        backend_url = f"{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-        backend_localhost = f"{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}"
+        backend_url = (
+            f"{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+        )
+        backend_localhost = (
+            f"{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}"
+        )
 
-        if backend_url in capability.validation_target or backend_localhost in capability.validation_target:
+        if (
+            backend_url in capability.validation_target
+            or backend_localhost in capability.validation_target
+        ):
             return ValidationResult(
-                capability.name, ValidationStatus.PASSED, 1.0,
+                capability.name,
+                ValidationStatus.PASSED,
+                1.0,
                 "Self-referential endpoint validation skipped to prevent deadlock",
             )
 
         import requests
+
         try:
             response = requests.get(capability.validation_target, timeout=5)
             success = response.status_code < 400
@@ -511,14 +603,20 @@ class ProjectStateManager:
             )
         except Exception as e:
             return ValidationResult(
-                capability.name, ValidationStatus.FAILED, 0.0,
+                capability.name,
+                ValidationStatus.FAILED,
+                0.0,
                 f"API endpoint failed: {str(e)}",
             )
 
-    def _validate_websocket_endpoint(self, capability: PhaseCapability) -> ValidationResult:
+    def _validate_websocket_endpoint(
+        self, capability: PhaseCapability
+    ) -> ValidationResult:
         """Validate WebSocket endpoint (Issue #315)."""
         return ValidationResult(
-            capability.name, ValidationStatus.PASSED, 1.0,
+            capability.name,
+            ValidationStatus.PASSED,
+            1.0,
             "WebSocket endpoint validation not implemented yet",
         )
 
@@ -534,32 +632,46 @@ class ProjectStateManager:
             return handler(capability)
 
         return ValidationResult(
-            capability.name, ValidationStatus.PENDING, 0.5,
+            capability.name,
+            ValidationStatus.PENDING,
+            0.5,
             f"Function test '{capability.validation_target}' not implemented",
         )
 
-    def _validate_all_phases_test(self, capability: PhaseCapability) -> ValidationResult:
+    def _validate_all_phases_test(
+        self, capability: PhaseCapability
+    ) -> ValidationResult:
         """Self-referential validation test (Issue #315)."""
         return ValidationResult(
-            capability.name, ValidationStatus.PASSED, 1.0,
+            capability.name,
+            ValidationStatus.PASSED,
+            1.0,
             "Phase validation system is operational",
         )
 
-    def _validate_phase_completion_test(self, capability: PhaseCapability) -> ValidationResult:
+    def _validate_phase_completion_test(
+        self, capability: PhaseCapability
+    ) -> ValidationResult:
         """Validate phase completion logic (Issue #315)."""
         try:
             test_results = []
             for test_phase in self.phases:
                 result = self.check_phase_completion(test_phase)
-                test_results.append(f"{test_phase.value}: {'Complete' if result else 'Incomplete'}")
+                test_results.append(
+                    f"{test_phase.value}: {'Complete' if result else 'Incomplete'}"
+                )
 
             return ValidationResult(
-                capability.name, ValidationStatus.PASSED, 1.0,
+                capability.name,
+                ValidationStatus.PASSED,
+                1.0,
                 f"Automated phase progression logic operational - {len(test_results)} phases tested",
             )
         except Exception as e:
             return ValidationResult(
-                capability.name, ValidationStatus.FAILED, 0.0,
+                capability.name,
+                ValidationStatus.FAILED,
+                0.0,
                 f"Phase progression logic test failed: {str(e)}",
             )
 
@@ -578,13 +690,17 @@ class ProjectStateManager:
                 return handler(capability)
 
             return ValidationResult(
-                capability.name, ValidationStatus.SKIPPED, 0.0,
+                capability.name,
+                ValidationStatus.SKIPPED,
+                0.0,
                 f"Unknown validation method: {capability.validation_method}",
             )
 
         except Exception as e:
             return ValidationResult(
-                capability.name, ValidationStatus.FAILED, 0.0,
+                capability.name,
+                ValidationStatus.FAILED,
+                0.0,
                 f"Validation error: {str(e)}",
             )
 
@@ -731,14 +847,17 @@ class ProjectStateManager:
         current_time = time.time()
         if (
             _project_status_cache["data"]
-            and current_time - _project_status_cache["timestamp"] < _project_status_cache["ttl"]
+            and current_time - _project_status_cache["timestamp"]
+            < _project_status_cache["ttl"]
         ):
             return _project_status_cache["data"]
         return None
 
     def _get_last_validation_time(self) -> Optional[datetime]:
         """Get the most recent validation timestamp across all phases."""
-        validated_times = [info.last_validated for info in self.phases.values() if info.last_validated]
+        validated_times = [
+            info.last_validated for info in self.phases.values() if info.last_validated
+        ]
         return max(validated_times, default=None) if validated_times else None
 
     def _build_phase_details(self) -> Dict[str, Dict[str, Any]]:
@@ -750,7 +869,9 @@ class ProjectStateManager:
                 "is_active": info.is_active,
                 "is_completed": info.is_completed,
                 "capabilities": len(info.capabilities),
-                "implemented_capabilities": sum(1 for c in info.capabilities if c.implemented),
+                "implemented_capabilities": sum(
+                    1 for c in info.capabilities if c.implemented
+                ),
             }
             for phase, info in self.phases.items()
         }
@@ -766,9 +887,14 @@ class ProjectStateManager:
         status_data = {
             "current_phase": self.current_phase.value,
             "total_phases": total_phases,
-            "completed_phases": sum(1 for info in self.phases.values() if info.is_completed),
+            "completed_phases": sum(
+                1 for info in self.phases.values() if info.is_completed
+            ),
             "active_phases": sum(1 for info in self.phases.values() if info.is_active),
-            "overall_completion": sum(info.completion_percentage for info in self.phases.values()) / total_phases,
+            "overall_completion": sum(
+                info.completion_percentage for info in self.phases.values()
+            )
+            / total_phases,
             "next_suggested_phase": self.suggest_next_phase(),
             "last_validation": self._get_last_validation_time(),
             "phases": self._build_phase_details(),
@@ -799,7 +925,12 @@ class ProjectStateManager:
         # Calculate real completion from stored phase info
         completed_phases = sum(1 for info in self.phases.values() if info.is_completed)
         active_phases = sum(1 for info in self.phases.values() if info.is_active)
-        overall_completion = sum(info.completion_percentage for info in self.phases.values()) / total_phases if total_phases > 0 else 0.0
+        overall_completion = (
+            sum(info.completion_percentage for info in self.phases.values())
+            / total_phases
+            if total_phases > 0
+            else 0.0
+        )
 
         return {
             "current_phase": self.current_phase.value,
@@ -816,7 +947,9 @@ class ProjectStateManager:
                     "is_active": info.is_active,
                     "is_completed": info.is_completed,
                     "capabilities": len(info.capabilities),
-                    "implemented_capabilities": sum(1 for cap in info.capabilities if cap.implemented),
+                    "implemented_capabilities": sum(
+                        1 for cap in info.capabilities if cap.implemented
+                    ),
                 }
                 for phase, info in self.phases.items()
             },

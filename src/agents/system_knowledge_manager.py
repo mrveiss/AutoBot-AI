@@ -60,8 +60,10 @@ class SystemKnowledgeManager:
             return
 
         if changed_files:
+            ellipsis = "..." if len(changed_files) > 3 else ""
             logger.info(
-                f"Detected changes in {len(changed_files)} files: {changed_files[:3]}{'...' if len(changed_files) > 3 else ''}"
+                f"Detected changes in {len(changed_files)} files: "
+                f"{changed_files[:3]}{ellipsis}"
             )
 
         # Import all system knowledge
@@ -130,7 +132,9 @@ class SystemKnowledgeManager:
                 # Get file content hash
                 async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
                     content = await f.read()
-                file_hash = hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()
+                file_hash = hashlib.md5(
+                    content.encode(), usedforsecurity=False
+                ).hexdigest()
 
                 # Use relative path as key
                 relative_path = str(file_path.relative_to(self.system_knowledge_dir))
@@ -210,9 +214,7 @@ class SystemKnowledgeManager:
         """Mark system knowledge as imported (legacy method)"""
         marker_file = self.runtime_knowledge_dir / ".imported"
         try:
-            async with aiofiles.open(
-                marker_file, "w", encoding="utf-8"
-            ) as f:
+            async with aiofiles.open(marker_file, "w", encoding="utf-8") as f:
                 await f.write(
                     json.dumps(
                         {"imported_at": datetime.now().isoformat(), "version": "1.0.0"},
@@ -233,7 +235,9 @@ class SystemKnowledgeManager:
 
         dir_exists = await asyncio.to_thread(self.runtime_knowledge_dir.exists)
         if dir_exists:
-            await asyncio.to_thread(shutil.copytree, self.runtime_knowledge_dir, backup_path)
+            await asyncio.to_thread(
+                shutil.copytree, self.runtime_knowledge_dir, backup_path
+            )
             logger.info("Backed up system knowledge to %s", backup_path)
 
     async def _clear_system_knowledge(self):
@@ -277,20 +281,49 @@ class SystemKnowledgeManager:
             "name": "steghide",
             "type": "steganography",
             "purpose": "Extract and embed hidden data in image and audio files",
-            "installation": {"apt": "sudo apt-get install steghide", "yum": "sudo yum install steghide", "pacman": "sudo pacman -S steghide"},
-            "usage": {"extract": "steghide extract -sf {image_file}", "info": "steghide info {image_file}", "embed": "steghide embed -cf {cover_file} -ef {data_file}"},
+            "installation": {
+                "apt": "sudo apt-get install steghide",
+                "yum": "sudo yum install steghide",
+                "pacman": "sudo pacman -S steghide",
+            },
+            "usage": {
+                "extract": "steghide extract -sf {image_file}",
+                "info": "steghide info {image_file}",
+                "embed": "steghide embed -cf {cover_file} -ef {data_file}",
+            },
             "common_examples": [
-                {"description": "Extract hidden data from image", "command": "steghide extract -sf suspicious.jpg", "expected_output": "Enter passphrase: (if password protected)"},
-                {"description": "Check image capacity for hidden data", "command": "steghide info suspicious.jpg", "expected_output": "capacity: 57.8% (can hide data)"},
+                {
+                    "description": "Extract hidden data from image",
+                    "command": "steghide extract -sf suspicious.jpg",
+                    "expected_output": "Enter passphrase: (if password protected)",
+                },
+                {
+                    "description": "Check image capacity for hidden data",
+                    "command": "steghide info suspicious.jpg",
+                    "expected_output": "capacity: 57.8% (can hide data)",
+                },
             ],
             "troubleshooting": [
-                {"problem": "could not extract any data with that passphrase", "solution": "Try empty passphrase or common passwords"},
-                {"problem": "file format is not supported", "solution": "Convert to JPEG or BMP format first"},
+                {
+                    "problem": "could not extract any data with that passphrase",
+                    "solution": "Try empty passphrase or common passwords",
+                },
+                {
+                    "problem": "file format is not supported",
+                    "solution": "Convert to JPEG or BMP format first",
+                },
             ],
-            "security_notes": ["Use strong passphrases for embedding", "Steganography can be detected by analysis tools", "Consider using multiple tools to avoid detection"],
+            "security_notes": [
+                "Use strong passphrases for embedding",
+                "Steganography can be detected by analysis tools",
+                "Consider using multiple tools to avoid detection",
+            ],
             "related_tools": ["binwalk", "outguess", "jsteg", "zsteg"],
             "output_formats": ["original file format", "text output for info"],
-            "limitations": ["Only supports JPEG, BMP, WAV, AU formats", "Cannot process encrypted or corrupted images"],
+            "limitations": [
+                "Only supports JPEG, BMP, WAV, AU formats",
+                "Cannot process encrypted or corrupted images",
+            ],
         }
 
     def _get_binwalk_tool_definition(self) -> Dict[str, Any]:
@@ -299,11 +332,27 @@ class SystemKnowledgeManager:
             "name": "binwalk",
             "type": "file_analysis",
             "purpose": "Analyze and extract files from binary images",
-            "installation": {"apt": "sudo apt-get install binwalk", "yum": "sudo yum install binwalk", "pacman": "sudo pacman -S binwalk"},
-            "usage": {"analyze": "binwalk {file}", "extract": "binwalk -e {file}", "signature": "binwalk --signature {file}"},
+            "installation": {
+                "apt": "sudo apt-get install binwalk",
+                "yum": "sudo yum install binwalk",
+                "pacman": "sudo pacman -S binwalk",
+            },
+            "usage": {
+                "analyze": "binwalk {file}",
+                "extract": "binwalk -e {file}",
+                "signature": "binwalk --signature {file}",
+            },
             "common_examples": [
-                {"description": "Scan for embedded files", "command": "binwalk suspicious.jpg", "expected_output": "List of detected file signatures and offsets"},
-                {"description": "Extract all found files", "command": "binwalk -e suspicious.jpg", "expected_output": "Creates _suspicious.jpg.extracted/ directory"},
+                {
+                    "description": "Scan for embedded files",
+                    "command": "binwalk suspicious.jpg",
+                    "expected_output": "List of detected file signatures and offsets",
+                },
+                {
+                    "description": "Extract all found files",
+                    "command": "binwalk -e suspicious.jpg",
+                    "expected_output": "Creates _suspicious.jpg.extracted/ directory",
+                },
             ],
             "related_tools": ["foremost", "scalpel", "photorec"],
             "output_formats": ["extracted files", "signature analysis text"],
@@ -312,35 +361,119 @@ class SystemKnowledgeManager:
     def _get_steganography_tools_data(self) -> Dict[str, Any]:
         """Get steganography tools knowledge data."""
         return {
-            "metadata": {"category": "steganography", "description": "Tools for steganography analysis and detection", "last_updated": datetime.now().isoformat(), "version": "1.0.0"},
-            "tools": [self._get_steghide_tool_definition(), self._get_binwalk_tool_definition()],
+            "metadata": {
+                "category": "steganography",
+                "description": "Tools for steganography analysis and detection",
+                "last_updated": datetime.now().isoformat(),
+                "version": "1.0.0",
+            },
+            "tools": [
+                self._get_steghide_tool_definition(),
+                self._get_binwalk_tool_definition(),
+            ],
         }
 
     def _get_image_forensics_workflow_data(self) -> Dict[str, Any]:
         """Get image forensics workflow data."""
         return {
-            "metadata": {"name": "Image Steganography Analysis", "category": "forensics", "complexity": "medium", "estimated_time": "10-30 minutes", "version": "1.0.0"},
-            "objective": "Analyze images for hidden files, steganographic content, and embedded data",
-            "prerequisites": ["Target image file(s)", "Basic understanding of steganography techniques", "Sufficient disk space for extracted files"],
+            "metadata": {
+                "name": "Image Steganography Analysis",
+                "category": "forensics",
+                "complexity": "medium",
+                "estimated_time": "10-30 minutes",
+                "version": "1.0.0",
+            },
+            "objective": (
+                "Analyze images for hidden files, steganographic content, "
+                "and embedded data"
+            ),
+            "prerequisites": [
+                "Target image file(s)",
+                "Basic understanding of steganography techniques",
+                "Sufficient disk space for extracted files",
+            ],
             "required_tools": [
-                {"name": "steghide", "purpose": "Extract hidden data from images", "optional": False},
-                {"name": "binwalk", "purpose": "Detect and extract embedded files", "optional": False},
-                {"name": "exiftool", "purpose": "Analyze image metadata", "optional": True},
+                {
+                    "name": "steghide",
+                    "purpose": "Extract hidden data from images",
+                    "optional": False,
+                },
+                {
+                    "name": "binwalk",
+                    "purpose": "Detect and extract embedded files",
+                    "optional": False,
+                },
+                {
+                    "name": "exiftool",
+                    "purpose": "Analyze image metadata",
+                    "optional": True,
+                },
             ],
             "workflow_steps": [
-                {"step": 1, "action": "Initial image analysis", "details": "Gather basic information about the target image", "commands": ["file {image_file}", "ls -la {image_file}", "identify {image_file}"], "expected_output": "Image format, size, and basic properties"},
-                {"step": 2, "action": "Metadata examination", "details": "Check for hidden information in image metadata", "commands": ["exiftool {image_file}", "strings {image_file} | head -20"], "expected_output": "EXIF data, embedded comments, text strings"},
-                {"step": 3, "action": "Steganography detection", "details": "Check for steganographic content using steghide", "commands": ["steghide info {image_file}"], "expected_output": "Capacity information or error if no hidden data"},
-                {"step": 4, "action": "File signature analysis", "details": "Look for embedded files using binwalk", "commands": ["binwalk {image_file}", "binwalk -e {image_file}"], "expected_output": "List of detected files and extraction results"},
+                {
+                    "step": 1,
+                    "action": "Initial image analysis",
+                    "details": "Gather basic information about the target image",
+                    "commands": [
+                        "file {image_file}",
+                        "ls -la {image_file}",
+                        "identify {image_file}",
+                    ],
+                    "expected_output": "Image format, size, and basic properties",
+                },
+                {
+                    "step": 2,
+                    "action": "Metadata examination",
+                    "details": "Check for hidden information in image metadata",
+                    "commands": [
+                        "exiftool {image_file}",
+                        "strings {image_file} | head -20",
+                    ],
+                    "expected_output": "EXIF data, embedded comments, text strings",
+                },
+                {
+                    "step": 3,
+                    "action": "Steganography detection",
+                    "details": "Check for steganographic content using steghide",
+                    "commands": ["steghide info {image_file}"],
+                    "expected_output": (
+                        "Capacity information or error if no hidden data"
+                    ),
+                },
+                {
+                    "step": 4,
+                    "action": "File signature analysis",
+                    "details": "Look for embedded files using binwalk",
+                    "commands": ["binwalk {image_file}", "binwalk -e {image_file}"],
+                    "expected_output": "List of detected files and extraction results",
+                },
             ],
             "decision_points": [
-                {"condition": "steghide reports capacity > 0", "if_true": "Attempt extraction with common passwords", "if_false": "Move to alternative steganography tools"},
-                {"condition": "binwalk finds embedded files", "if_true": "Extract and analyze each file", "if_false": "Check for other steganography methods"},
+                {
+                    "condition": "steghide reports capacity > 0",
+                    "if_true": "Attempt extraction with common passwords",
+                    "if_false": "Move to alternative steganography tools",
+                },
+                {
+                    "condition": "binwalk finds embedded files",
+                    "if_true": "Extract and analyze each file",
+                    "if_false": "Check for other steganography methods",
+                },
             ],
-            "quality_checks": ["Verify extracted files are not corrupted", "Check that original image wasn't modified during analysis", "Confirm all potential hiding methods were tested"],
+            "quality_checks": [
+                "Verify extracted files are not corrupted",
+                "Check that original image wasn't modified during analysis",
+                "Confirm all potential hiding methods were tested",
+            ],
             "common_pitfalls": [
-                {"issue": "Assuming empty passphrase when extraction fails", "prevention": "Try common passwords and dictionary attacks"},
-                {"issue": "Missing hidden data due to format limitations", "prevention": "Test with multiple steganography tools"},
+                {
+                    "issue": "Assuming empty passphrase when extraction fails",
+                    "prevention": "Try common passwords and dictionary attacks",
+                },
+                {
+                    "issue": "Missing hidden data due to format limitations",
+                    "prevention": "Test with multiple steganography tools",
+                },
             ],
         }
 
@@ -370,8 +503,13 @@ class SystemKnowledgeManager:
 
         # Save steganography tools and workflow in parallel
         await asyncio.gather(
-            self._save_yaml_file(tools_dir / "steganography.yaml", self._get_steganography_tools_data()),
-            self._save_yaml_file(workflows_dir / "image_forensics.yaml", self._get_image_forensics_workflow_data()),
+            self._save_yaml_file(
+                tools_dir / "steganography.yaml", self._get_steganography_tools_data()
+            ),
+            self._save_yaml_file(
+                workflows_dir / "image_forensics.yaml",
+                self._get_image_forensics_workflow_data(),
+            ),
         )
 
         logger.info("Default system knowledge templates created")
@@ -389,9 +527,7 @@ class SystemKnowledgeManager:
             logger.info("Importing tools from %s", yaml_file)
 
             try:
-                async with aiofiles.open(
-                    yaml_file, "r", encoding="utf-8"
-                ) as f:
+                async with aiofiles.open(yaml_file, "r", encoding="utf-8") as f:
                     content = await f.read()
                     tools_data = yaml.safe_load(content)
             except OSError as e:
@@ -400,7 +536,9 @@ class SystemKnowledgeManager:
 
             # Copy to runtime directory
             runtime_file = self.runtime_knowledge_dir / "tools" / yaml_file.name
-            await asyncio.to_thread(runtime_file.parent.mkdir, parents=True, exist_ok=True)
+            await asyncio.to_thread(
+                runtime_file.parent.mkdir, parents=True, exist_ok=True
+            )
             await asyncio.to_thread(shutil.copy2, yaml_file, runtime_file)
 
             # Import tools into knowledge base
@@ -486,9 +624,7 @@ class SystemKnowledgeManager:
             logger.info("Importing workflow from %s", yaml_file)
 
             try:
-                async with aiofiles.open(
-                    yaml_file, "r", encoding="utf-8"
-                ) as f:
+                async with aiofiles.open(yaml_file, "r", encoding="utf-8") as f:
                     content = await f.read()
                     workflow_data = yaml.safe_load(content)
             except OSError as e:
@@ -497,7 +633,9 @@ class SystemKnowledgeManager:
 
             # Copy to runtime directory
             runtime_file = self.runtime_knowledge_dir / "workflows" / yaml_file.name
-            await asyncio.to_thread(runtime_file.parent.mkdir, parents=True, exist_ok=True)
+            await asyncio.to_thread(
+                runtime_file.parent.mkdir, parents=True, exist_ok=True
+            )
             await asyncio.to_thread(shutil.copy2, yaml_file, runtime_file)
 
             # Import workflow into knowledge base
@@ -549,14 +687,14 @@ class SystemKnowledgeManager:
             return
 
         # Issue #358 - wrap glob in lambda to avoid blocking
-        yaml_files = await asyncio.to_thread(lambda: list(procedures_dir.glob("*.yaml")))
+        yaml_files = await asyncio.to_thread(
+            lambda: list(procedures_dir.glob("*.yaml"))
+        )
         for yaml_file in yaml_files:
             logger.info("Importing procedure from %s", yaml_file)
 
             try:
-                async with aiofiles.open(
-                    yaml_file, "r", encoding="utf-8"
-                ) as f:
+                async with aiofiles.open(yaml_file, "r", encoding="utf-8") as f:
                     content = await f.read()
                     procedure_data = yaml.safe_load(content)
             except OSError as e:
@@ -565,7 +703,9 @@ class SystemKnowledgeManager:
 
             # Copy to runtime directory
             runtime_file = self.runtime_knowledge_dir / "procedures" / yaml_file.name
-            await asyncio.to_thread(runtime_file.parent.mkdir, parents=True, exist_ok=True)
+            await asyncio.to_thread(
+                runtime_file.parent.mkdir, parents=True, exist_ok=True
+            )
             await asyncio.to_thread(shutil.copy2, yaml_file, runtime_file)
 
             # Import procedure into knowledge base
@@ -653,7 +793,9 @@ class SystemKnowledgeManager:
         procedures_dir = self.runtime_knowledge_dir / "procedures"
         if not await asyncio.to_thread(procedures_dir.exists):
             return
-        yaml_files = await asyncio.to_thread(lambda: list(procedures_dir.glob("*.yaml")))
+        yaml_files = await asyncio.to_thread(
+            lambda: list(procedures_dir.glob("*.yaml"))
+        )
         for yaml_file in yaml_files:
             try:
                 async with aiofiles.open(yaml_file, "r", encoding="utf-8") as f:

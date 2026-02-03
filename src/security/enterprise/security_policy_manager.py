@@ -308,10 +308,34 @@ class SecurityPolicyManager:
             "description": "Defines password strength and lifecycle requirements",
             "policy_type": PolicyType.PASSWORD_POLICY,
             "rules": [
-                {"name": "minimum_length", "value": 12, "description": "Passwords must be at least 12 characters long"},
-                {"name": "complexity_requirements", "value": {"uppercase": True, "lowercase": True, "numbers": True, "special_chars": True}, "description": "Passwords must contain uppercase, lowercase, numbers, and special characters"},
-                {"name": "password_history", "value": 12, "description": "Cannot reuse last 12 passwords"},
-                {"name": "max_age_days", "value": 90, "description": "Passwords must be changed every 90 days"},
+                {
+                    "name": "minimum_length",
+                    "value": 12,
+                    "description": "Passwords must be at least 12 characters long",
+                },
+                {
+                    "name": "complexity_requirements",
+                    "value": {
+                        "uppercase": True,
+                        "lowercase": True,
+                        "numbers": True,
+                        "special_chars": True,
+                    },
+                    "description": (
+                        "Passwords must contain uppercase, lowercase, numbers, "
+                        "and special characters"
+                    ),
+                },
+                {
+                    "name": "password_history",
+                    "value": 12,
+                    "description": "Cannot reuse last 12 passwords",
+                },
+                {
+                    "name": "max_age_days",
+                    "value": 90,
+                    "description": "Passwords must be changed every 90 days",
+                },
             ],
         }
 
@@ -322,10 +346,26 @@ class SecurityPolicyManager:
             "description": "Defines session timeout and security requirements",
             "policy_type": PolicyType.SESSION_MANAGEMENT,
             "rules": [
-                {"name": "idle_timeout_minutes", "value": 30, "description": "Sessions timeout after 30 minutes of inactivity"},
-                {"name": "absolute_timeout_hours", "value": 8, "description": "Sessions must be renewed every 8 hours"},
-                {"name": "concurrent_sessions", "value": 3, "description": "Maximum 3 concurrent sessions per user"},
-                {"name": "secure_cookies", "value": True, "description": "All session cookies must be secure"},
+                {
+                    "name": "idle_timeout_minutes",
+                    "value": 30,
+                    "description": "Sessions timeout after 30 minutes of inactivity",
+                },
+                {
+                    "name": "absolute_timeout_hours",
+                    "value": 8,
+                    "description": "Sessions must be renewed every 8 hours",
+                },
+                {
+                    "name": "concurrent_sessions",
+                    "value": 3,
+                    "description": "Maximum 3 concurrent sessions per user",
+                },
+                {
+                    "name": "secure_cookies",
+                    "value": True,
+                    "description": "All session cookies must be secure",
+                },
             ],
         }
 
@@ -336,10 +376,32 @@ class SecurityPolicyManager:
             "description": "Defines data classification and protection requirements",
             "policy_type": PolicyType.DATA_PROTECTION,
             "rules": [
-                {"name": "encryption_at_rest", "value": True, "description": "All sensitive data must be encrypted at rest"},
-                {"name": "encryption_in_transit", "value": True, "description": "All data transmission must be encrypted"},
-                {"name": "data_retention_days", "value": 2555, "description": "Data retention period for compliance (7 years)"},
-                {"name": "pii_handling", "value": {"detection_required": True, "anonymization_required": True, "consent_tracking": True}, "description": "PII must be detected, anonymized, and consent tracked"},
+                {
+                    "name": "encryption_at_rest",
+                    "value": True,
+                    "description": "All sensitive data must be encrypted at rest",
+                },
+                {
+                    "name": "encryption_in_transit",
+                    "value": True,
+                    "description": "All data transmission must be encrypted",
+                },
+                {
+                    "name": "data_retention_days",
+                    "value": 2555,
+                    "description": "Data retention period for compliance (7 years)",
+                },
+                {
+                    "name": "pii_handling",
+                    "value": {
+                        "detection_required": True,
+                        "anonymization_required": True,
+                        "consent_tracking": True,
+                    },
+                    "description": (
+                        "PII must be detected, anonymized, and consent tracked"
+                    ),
+                },
             ],
         }
 
@@ -350,10 +412,26 @@ class SecurityPolicyManager:
             "description": "Defines user access and authorization requirements",
             "policy_type": PolicyType.ACCESS_CONTROL,
             "rules": [
-                {"name": "principle_of_least_privilege", "value": True, "description": "Users granted minimum necessary access"},
-                {"name": "role_based_access", "value": True, "description": "Access controlled through role assignments"},
-                {"name": "access_review_frequency_days", "value": 90, "description": "Access permissions reviewed quarterly"},
-                {"name": "admin_access_approval", "value": True, "description": "Administrative access requires approval"},
+                {
+                    "name": "principle_of_least_privilege",
+                    "value": True,
+                    "description": "Users granted minimum necessary access",
+                },
+                {
+                    "name": "role_based_access",
+                    "value": True,
+                    "description": "Access controlled through role assignments",
+                },
+                {
+                    "name": "access_review_frequency_days",
+                    "value": 90,
+                    "description": "Access permissions reviewed quarterly",
+                },
+                {
+                    "name": "admin_access_approval",
+                    "value": True,
+                    "description": "Administrative access requires approval",
+                },
             ],
         }
 
@@ -364,11 +442,31 @@ class SecurityPolicyManager:
             "description": "Defines audit logging and monitoring requirements",
             "policy_type": PolicyType.AUDIT_LOGGING,
             "rules": [
-                {"name": "log_authentication_events", "value": True, "description": "All authentication events must be logged"},
-                {"name": "log_authorization_events", "value": True, "description": "All authorization events must be logged"},
-                {"name": "log_data_access", "value": True, "description": "All data access events must be logged"},
-                {"name": "log_retention_days", "value": 2555, "description": "Audit logs retained for 7 years"},
-                {"name": "log_integrity_protection", "value": True, "description": "Audit logs must be protected from tampering"},
+                {
+                    "name": "log_authentication_events",
+                    "value": True,
+                    "description": "All authentication events must be logged",
+                },
+                {
+                    "name": "log_authorization_events",
+                    "value": True,
+                    "description": "All authorization events must be logged",
+                },
+                {
+                    "name": "log_data_access",
+                    "value": True,
+                    "description": "All data access events must be logged",
+                },
+                {
+                    "name": "log_retention_days",
+                    "value": 2555,
+                    "description": "Audit logs retained for 7 years",
+                },
+                {
+                    "name": "log_integrity_protection",
+                    "value": True,
+                    "description": "Audit logs must be protected from tampering",
+                },
             ],
         }
 
@@ -543,7 +641,10 @@ class SecurityPolicyManager:
         )
 
     def _apply_enforcement_mode(
-        self, enforcement_result: Dict, policy: "SecurityPolicy", violation: "PolicyViolation"
+        self,
+        enforcement_result: Dict,
+        policy: "SecurityPolicy",
+        violation: "PolicyViolation",
     ):
         """Apply enforcement mode to result (Issue #315 - extracted helper)."""
         mode_actions = {
@@ -551,7 +652,9 @@ class SecurityPolicyManager:
                 enforcement_result.update({"allowed": False}),
                 enforcement_result["violations"].append(violation),
             ),
-            EnforcementMode.WARN: lambda: enforcement_result["warnings"].append(violation),
+            EnforcementMode.WARN: lambda: enforcement_result["warnings"].append(
+                violation
+            ),
             EnforcementMode.MONITOR: lambda: None,  # Log only, no action
         }
         action = mode_actions.get(policy.enforcement_mode)
@@ -568,7 +671,8 @@ class SecurityPolicyManager:
         }
 
         active_policies = [
-            p for p in self.policies.values()
+            p
+            for p in self.policies.values()
             if p.policy_type == policy_type and p.status == PolicyStatus.ACTIVE
         ]
 
@@ -617,13 +721,19 @@ class SecurityPolicyManager:
 
         return result
 
-    def _check_password_complexity(self, password: str, requirements: Dict, result: Dict) -> None:
+    def _check_password_complexity(
+        self, password: str, requirements: Dict, result: Dict
+    ) -> None:
         """Check password complexity requirements."""
         checks = [
             ("uppercase", lambda p: any(c.isupper() for c in p), "uppercase_letter"),
             ("lowercase", lambda p: any(c.islower() for c in p), "lowercase_letter"),
             ("numbers", lambda p: any(c.isdigit() for c in p), "number"),
-            ("special_chars", lambda p: any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in p), "special_character"),
+            (
+                "special_chars",
+                lambda p: any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in p),
+                "special_character",
+            ),
         ]
         for req_key, check_fn, missing_type in checks:
             if requirements.get(req_key) and not check_fn(password):
@@ -761,7 +871,14 @@ class SecurityPolicyManager:
             self.stats["violations_by_type"].get(violation_type, 0) + 1
         )
 
-        logger.warning("POLICY VIOLATION: %s | Policy: %s | User: %s | Severity: %s | Resource: %s", violation.violation_type, violation.policy_id, violation.user_id, violation.severity, violation.resource)
+        logger.warning(
+            "POLICY VIOLATION: %s | Policy: %s | User: %s | Severity: %s | Resource: %s",
+            violation.violation_type,
+            violation.policy_id,
+            violation.user_id,
+            violation.severity,
+            violation.resource,
+        )
 
     def get_policy(self, policy_id: str) -> Optional[SecurityPolicy]:
         """Get a specific policy by ID"""
@@ -796,14 +913,17 @@ class SecurityPolicyManager:
         for policy_type_str, controls in framework_mappings.items():
             policy_type = PolicyType(policy_type_str)
             active_policies = [
-                p for p in self.policies.values()
+                p
+                for p in self.policies.values()
                 if p.policy_type == policy_type and p.status == PolicyStatus.ACTIVE
             ]
             coverage[policy_type_str] = {
                 "required_controls": controls,
                 "active_policies": len(active_policies),
                 "policy_names": [p.name for p in active_policies],
-                "coverage_percentage": len(active_policies) / len(controls) * 100 if controls else 100,
+                "coverage_percentage": len(active_policies) / len(controls) * 100
+                if controls
+                else 100,
             }
         return coverage
 
@@ -821,7 +941,9 @@ class SecurityPolicyManager:
         """Calculate overall compliance score."""
         if not policy_coverage:
             return 0.0
-        total_coverage = sum(pc["coverage_percentage"] for pc in policy_coverage.values())
+        total_coverage = sum(
+            pc["coverage_percentage"] for pc in policy_coverage.values()
+        )
         avg_coverage = total_coverage / len(policy_coverage)
         violation_penalty = min(20, len(self.policy_violations[-30:]))
         return max(0, (avg_coverage - violation_penalty) / 100)
@@ -837,7 +959,8 @@ class SecurityPolicyManager:
             for policy_type_str, coverage in policy_coverage.items():
                 if coverage["coverage_percentage"] < 100:
                     recommendations.append(
-                        f"Implement policies for {policy_type_str} to cover required controls: {coverage['required_controls']}"
+                        f"Implement policies for {policy_type_str} to cover "
+                        f"required controls: {coverage['required_controls']}"
                     )
 
         return {

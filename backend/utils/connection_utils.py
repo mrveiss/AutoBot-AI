@@ -464,7 +464,7 @@ class ConnectionTester:
 
 class ModelManager:
     """Centralized model management for LLM services"""
-    
+
     # Rate limiting for warnings to prevent log spam
     _last_ollama_warning = 0
     _warning_interval = 60  # Only warn once per minute

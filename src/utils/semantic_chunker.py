@@ -11,7 +11,6 @@ segmentation.
 
 import os
 
-
 # CRITICAL FIX: Force tf-keras usage before importing transformers/sentence-transformers
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
 os.environ["KERAS_BACKEND"] = "tensorflow"
@@ -250,7 +249,9 @@ class AutoBotSemanticChunker:
         try:
             param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
             if param_count == 0:
-                logger.warning("Model parameters not properly loaded, skipping precision conversion")
+                logger.warning(
+                    "Model parameters not properly loaded, skipping precision conversion"
+                )
                 return model
 
             has_meta_tensors = any(p.device.type == "meta" for p in model.parameters())
@@ -294,16 +295,27 @@ class AutoBotSemanticChunker:
 
             except Exception as load_error:
                 error_str = str(load_error).lower()
-                is_rate_limit = "429" in error_str or "rate limit" in error_str or "http error" in error_str
+                is_rate_limit = (
+                    "429" in error_str
+                    or "rate limit" in error_str
+                    or "http error" in error_str
+                )
 
                 if not is_rate_limit:
                     raise
 
                 if attempt >= max_retries - 1:
-                    logger.error("Max retries exceeded for HuggingFace rate limiting: %s", load_error)
+                    logger.error(
+                        "Max retries exceeded for HuggingFace rate limiting: %s",
+                        load_error,
+                    )
                     raise
 
-                logger.warning("HuggingFace rate limit hit (attempt %d), retrying in %ds...", attempt + 1, retry_delay)
+                logger.warning(
+                    "HuggingFace rate limit hit (attempt %d), retrying in %ds...",
+                    attempt + 1,
+                    retry_delay,
+                )
 
         raise RuntimeError("Model loading failed after retries")
 
@@ -313,13 +325,22 @@ class AutoBotSemanticChunker:
 
         try:
             actual_device = next(model.parameters()).device
-            logger.info("Embedding model '%s' loaded on device: %s", self.embedding_model_name, actual_device)
+            logger.info(
+                "Embedding model '%s' loaded on device: %s",
+                self.embedding_model_name,
+                actual_device,
+            )
 
             model = self._apply_gpu_precision(model, device)
             return model
 
         except Exception as model_load_error:
-            logger.warning("Failed to optimize model '%s' on %s: %s", self.embedding_model_name, device, model_load_error)
+            logger.warning(
+                "Failed to optimize model '%s' on %s: %s",
+                self.embedding_model_name,
+                device,
+                model_load_error,
+            )
 
             if device != "cpu":
                 logger.info("Attempting fallback to CPU...")
@@ -344,12 +365,17 @@ class AutoBotSemanticChunker:
 
             loop = asyncio.get_event_loop()
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                logger.info("Loading embedding model '%s' in background thread...", self.embedding_model_name)
+                logger.info(
+                    "Loading embedding model '%s' in background thread...",
+                    self.embedding_model_name,
+                )
                 self._embedding_model = await loop.run_in_executor(executor, load_model)
                 logger.info("Embedding model loading completed")
 
         except Exception as e:
-            logger.error("Failed to load embedding model %s: %s", self.embedding_model_name, e)
+            logger.error(
+                "Failed to load embedding model %s: %s", self.embedding_model_name, e
+            )
             await self._try_fallback_models()
 
     async def _try_fallback_models(self):
@@ -365,7 +391,9 @@ class AutoBotSemanticChunker:
                 logger.warning("Fallback to %s embedding model on CPU", model_name)
                 return
             except Exception as fallback_error:
-                logger.error("Failed to load fallback model %s: %s", model_name, fallback_error)
+                logger.error(
+                    "Failed to load fallback model %s: %s", model_name, fallback_error
+                )
 
         raise RuntimeError("Could not initialize any embedding model")
 
@@ -381,11 +409,15 @@ class AutoBotSemanticChunker:
                     p.device.type == "meta" for p in self._embedding_model.parameters()
                 )
                 if has_meta_tensors:
-                    self._embedding_model = self._embedding_model.to_empty(device=device)
+                    self._embedding_model = self._embedding_model.to_empty(
+                        device=device
+                    )
                 else:
                     self._embedding_model = self._embedding_model.to(device)
             except Exception as device_error:
-                logger.warning("Failed to move model to GPU: %s, using CPU", device_error)
+                logger.warning(
+                    "Failed to move model to GPU: %s, using CPU", device_error
+                )
                 device = "cpu"
 
         logger.warning("Fallback to all-mpnet-base-v2 embedding model on %s", device)
@@ -399,17 +431,28 @@ class AutoBotSemanticChunker:
             from sentence_transformers import SentenceTransformer
 
             device = self._detect_device()
-            self._embedding_model = SentenceTransformer(self.embedding_model_name, device=device)
+            self._embedding_model = SentenceTransformer(
+                self.embedding_model_name, device=device
+            )
 
             actual_device = next(self._embedding_model.parameters()).device
-            logger.info("Embedding model '%s' loaded on device: %s", self.embedding_model_name, actual_device)
+            logger.info(
+                "Embedding model '%s' loaded on device: %s",
+                self.embedding_model_name,
+                actual_device,
+            )
 
-            self._embedding_model = self._apply_gpu_precision(self._embedding_model, device)
+            self._embedding_model = self._apply_gpu_precision(
+                self._embedding_model, device
+            )
 
         except Exception as e:
-            logger.error("Failed to load embedding model %s: %s", self.embedding_model_name, e)
+            logger.error(
+                "Failed to load embedding model %s: %s", self.embedding_model_name, e
+            )
             try:
                 import torch
+
                 device = "cuda" if torch.cuda.is_available() else "cpu"
                 self._sync_try_fallback_models(device)
             except Exception as fallback_error:

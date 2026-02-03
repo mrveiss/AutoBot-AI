@@ -492,7 +492,8 @@ class DecisionEngine:
             metadata={"algorithm": "escalation_urgency_analysis"},
         )
 
-    def _create_continue_autonomous_decision(self, context: DecisionContext, escalation_actions: List[Dict]) -> Decision:
+    def _create_continue_autonomous_decision(self, context: DecisionContext,
+                                             escalation_actions: List[Dict]) -> Decision:
         """Create decision to continue autonomous operation (Issue #398: extracted)."""
         continue_action = {
             "action_type": "monitoring",

@@ -13,7 +13,6 @@ import time
 from datetime import datetime
 from typing import Any, Dict, FrozenSet, Optional
 
-
 from ..agents.web_research_integration import ResearchType, WebResearchIntegration
 from .domain_security import DomainSecurityConfig, DomainSecurityManager
 from .input_validator import WebResearchInputValidator
@@ -80,20 +79,28 @@ class SecureWebResearch:
 
         # Domain validation
         if result_url and self.enable_domain_validation:
-            domain_validation = await self.domain_security.validate_domain_safety(result_url)
+            domain_validation = await self.domain_security.validate_domain_safety(
+                result_url
+            )
 
             self.security_stats["domains_checked"] += 1
-            research_result["security"]["domain_checks"].append({
-                "url": result_url,
-                "safe": domain_validation["safe"],
-                "reason": domain_validation["reason"],
-                "reputation_score": domain_validation["reputation_score"],
-            })
+            research_result["security"]["domain_checks"].append(
+                {
+                    "url": result_url,
+                    "safe": domain_validation["safe"],
+                    "reason": domain_validation["reason"],
+                    "reputation_score": domain_validation["reputation_score"],
+                }
+            )
 
             if not domain_validation["safe"]:
-                logger.warning("Domain blocked: %s - %s", result_url, domain_validation['reason'])
+                logger.warning(
+                    "Domain blocked: %s - %s", result_url, domain_validation["reason"]
+                )
                 self.security_stats["domains_blocked"] += 1
-                self.security_stats["threats_detected"] += len(domain_validation["threats_detected"])
+                self.security_stats["threats_detected"] += len(
+                    domain_validation["threats_detected"]
+                )
                 return None
 
         # Content filtering
@@ -135,7 +142,10 @@ class SecureWebResearch:
         }
 
     def _validate_query(
-        self, query: str, research_result: Dict[str, Any], require_user_confirmation: bool
+        self,
+        query: str,
+        research_result: Dict[str, Any],
+        require_user_confirmation: bool,
     ) -> tuple:
         """Validate query and return (sanitized_query, early_return_result or None)."""
         if not self.enable_query_validation:
@@ -148,31 +158,43 @@ class SecureWebResearch:
         research_result["security"]["query_validation"] = query_validation
 
         if not query_validation["safe"]:
-            logger.warning("Query blocked due to security concerns: %s", query_validation['threats_detected'])
+            logger.warning(
+                "Query blocked due to security concerns: %s",
+                query_validation["threats_detected"],
+            )
             self.security_stats["queries_blocked"] += 1
-            self.security_stats["threats_detected"] += len(query_validation["threats_detected"])
+            self.security_stats["threats_detected"] += len(
+                query_validation["threats_detected"]
+            )
 
-            research_result.update({
-                "status": "blocked_unsafe_query",
-                "message": f"Query blocked for security: {', '.join(query_validation['threats_detected'])}",
-                "security": {
-                    **research_result["security"],
-                    "threats_detected": query_validation["threats_detected"],
-                    "risk_level": query_validation["risk_level"],
-                },
-            })
+            research_result.update(
+                {
+                    "status": "blocked_unsafe_query",
+                    "message": f"Query blocked for security: {', '.join(query_validation['threats_detected'])}",
+                    "security": {
+                        **research_result["security"],
+                        "threats_detected": query_validation["threats_detected"],
+                        "risk_level": query_validation["risk_level"],
+                    },
+                }
+            )
             return None, research_result
 
         research_result["security"]["warnings"] = query_validation["warnings"]
         research_result["security"]["risk_level"] = query_validation["risk_level"]
 
-        if require_user_confirmation and query_validation["risk_level"] in _CONFIRMATION_REQUIRED_RISK_LEVELS:
-            research_result.update({
-                "status": "requires_confirmation",
-                "message": f"Query requires user confirmation due to {query_validation['risk_level']} risk level",
-                "confirmation_required": True,
-                "risk_factors": query_validation.get("warnings", []),
-            })
+        if (
+            require_user_confirmation
+            and query_validation["risk_level"] in _CONFIRMATION_REQUIRED_RISK_LEVELS
+        ):
+            research_result.update(
+                {
+                    "status": "requires_confirmation",
+                    "message": f"Query requires user confirmation due to {query_validation['risk_level']} risk level",
+                    "confirmation_required": True,
+                    "risk_factors": query_validation.get("warnings", []),
+                }
+            )
             return None, research_result
 
         return query_validation["sanitized_query"], None
@@ -182,30 +204,36 @@ class SecureWebResearch:
     ) -> None:
         """Process raw results with security validation."""
         if raw_results.get("status") != "success" or not raw_results.get("results"):
-            research_result.update({
-                "status": raw_results.get("status", "failed"),
-                "message": raw_results.get("message", "Research failed"),
-                "results": [],
-            })
+            research_result.update(
+                {
+                    "status": raw_results.get("status", "failed"),
+                    "message": raw_results.get("message", "Research failed"),
+                    "results": [],
+                }
+            )
             return
 
         secure_results = []
         for idx, result in enumerate(raw_results["results"]):
             try:
-                validated = await self._validate_result_security(result, research_result)
+                validated = await self._validate_result_security(
+                    result, research_result
+                )
                 if validated:
                     secure_results.append(validated)
             except Exception as e:
                 logger.error("Error validating result %s: %s", idx, e)
                 continue
 
-        research_result.update({
-            "status": "success",
-            "message": f"Secure research completed with {len(secure_results)} validated results",
-            "results": secure_results,
-            "total_results_found": len(raw_results["results"]),
-            "results_filtered": len(raw_results["results"]) - len(secure_results),
-        })
+        research_result.update(
+            {
+                "status": "success",
+                "message": f"Secure research completed with {len(secure_results)} validated results",
+                "results": secure_results,
+                "total_results_found": len(raw_results["results"]),
+                "results_filtered": len(raw_results["results"]) - len(secure_results),
+            }
+        )
 
     def _add_performance_metrics(
         self, research_result: Dict[str, Any], processing_time: float
@@ -213,13 +241,15 @@ class SecureWebResearch:
         """Add performance metrics to research result."""
         research_result["performance"] = {
             "processing_time_seconds": round(processing_time, 2),
-            "security_checks_performed": sum([
-                1 if self.enable_query_validation else 0,
-                self.security_stats["domains_checked"]
-                - (research_result.get("total_results_found", 0) or 0)
-                + len(research_result["results"]),
-                1 if self.enable_content_filtering else 0,
-            ]),
+            "security_checks_performed": sum(
+                [
+                    1 if self.enable_query_validation else 0,
+                    self.security_stats["domains_checked"]
+                    - (research_result.get("total_results_found", 0) or 0)
+                    + len(research_result["results"]),
+                    1 if self.enable_content_filtering else 0,
+                ]
+            ),
             "results_per_second": (
                 round(len(research_result["results"]) / processing_time, 2)
                 if processing_time > 0
@@ -266,7 +296,9 @@ class SecureWebResearch:
                 return early_return
 
             # Step 2: Execute Research
-            logger.info("Executing secure research for query: %s...", sanitized_query[:50])
+            logger.info(
+                "Executing secure research for query: %s...", sanitized_query[:50]
+            )
             raw_results = await self.research_integration.conduct_research(
                 query=sanitized_query,
                 research_type=research_type,
@@ -281,7 +313,11 @@ class SecureWebResearch:
             processing_time = time.time() - start_time
             self._add_performance_metrics(research_result, processing_time)
 
-            logger.info("Secure research completed: %s results, %.2fs", len(research_result['results']), processing_time)
+            logger.info(
+                "Secure research completed: %s results, %.2fs",
+                len(research_result["results"]),
+                processing_time,
+            )
             return research_result
 
         except Exception as e:

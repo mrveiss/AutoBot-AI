@@ -206,15 +206,14 @@ class VueSpecificFixAgent:
 
             if not has_cleanup:
                 issues.append(
-                    {
-                        "line": add_listener["line"],
-                        "content": add_listener["content"],
-                        "event": add_listener["event"],
-                        "handler": add_listener["handler"],
-                        "issue_type": "missing_event_cleanup",
-                        "suggested_cleanup": f"removeEventListener('{add_listener['event']}', {add_listener['handler']})",
-                    }
-                )
+    {
+        "line": add_listener["line"],
+        "content": add_listener["content"],
+        "event": add_listener["event"],
+        "handler": add_listener["handler"],
+        "issue_type": "missing_event_cleanup",
+        "suggested_cleanup": f"removeEventListener('{add_listener['event']}', {add_listener['handler']})",
+         } )
 
         return issues
 

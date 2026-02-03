@@ -187,7 +187,11 @@ class GraphRAGService:
         # Result deduplication cache
         self._seen_content: Set[str] = set()
 
-        logger.info("GraphRAGService initialized (graph_weight=%s, entity_extraction=%s)", graph_weight, enable_entity_extraction)
+        logger.info(
+            "GraphRAGService initialized (graph_weight=%s, entity_extraction=%s)",
+            graph_weight,
+            enable_entity_extraction,
+        )
 
     @error_boundary(
         component="graph_rag_service",
@@ -238,7 +242,11 @@ class GraphRAGService:
             final_results = await self._deduplicate_and_rank(all_results, max_results)
             metrics.finalize(len(final_results), time.perf_counter() - start_time)
 
-            logger.info("Graph-RAG search complete: %s results, %s", len(final_results), metrics.get_timing_summary())
+            logger.info(
+                "Graph-RAG search complete: %s results, %s",
+                len(final_results),
+                metrics.get_timing_summary(),
+            )
             return final_results, metrics
 
         except asyncio.TimeoutError:
@@ -303,7 +311,11 @@ class GraphRAGService:
         expanded_results = []
         start_points = self._get_graph_starting_points(start_entity, entity_matches)
 
-        logger.info("Graph expansion from %s starting points (max_depth=%s)", len(start_points), max_depth)
+        logger.info(
+            "Graph expansion from %s starting points (max_depth=%s)",
+            len(start_points),
+            max_depth,
+        )
 
         # Traverse graph from all starting points in parallel
         all_related_results = await asyncio.gather(
@@ -319,17 +331,26 @@ class GraphRAGService:
             return_exceptions=True,
         )
 
-        for (entity_name, base_score), related in zip(start_points, all_related_results):
+        for (entity_name, base_score), related in zip(
+            start_points, all_related_results
+        ):
             if isinstance(related, Exception):
-                logger.warning("Graph traversal failed for '%s': %s", entity_name, related)
+                logger.warning(
+                    "Graph traversal failed for '%s': %s", entity_name, related
+                )
                 continue
 
-            logger.debug("Found %s related entities for '%s'", len(related), entity_name)
+            logger.debug(
+                "Found %s related entities for '%s'", len(related), entity_name
+            )
 
             for item in related:
                 result = self._create_search_result_from_entity(
-                    item["entity"], item["relation"], item["direction"],
-                    base_score, max_depth
+                    item["entity"],
+                    item["relation"],
+                    item["direction"],
+                    base_score,
+                    max_depth,
                 )
                 if result:
                     expanded_results.append(result)
@@ -383,7 +404,12 @@ class GraphRAGService:
         for idx, result in enumerate(deduplicated[:max_results]):
             result.relevance_rank = idx + 1
 
-        logger.info("Deduplication: %s → %s → %s results", len(results), len(deduplicated), min(len(deduplicated), max_results))
+        logger.info(
+            "Deduplication: %s → %s → %s results",
+            len(results),
+            len(deduplicated),
+            min(len(deduplicated), max_results),
+        )
 
         return deduplicated[:max_results]
 
@@ -412,7 +438,11 @@ class GraphRAGService:
         )
 
         metrics.copy_from_rag_metrics(rag_metrics)
-        logger.info("Initial RAG search: %s results in %.3fs", len(rag_results), rag_metrics.total_time)
+        logger.info(
+            "Initial RAG search: %s results in %.3fs",
+            len(rag_results),
+            rag_metrics.total_time,
+        )
         return rag_results
 
     async def _extract_and_expand_graph(
@@ -458,9 +488,7 @@ class GraphRAGService:
         logger.info("No graph expansion (no start entity or matches)")
         return rag_results
 
-    def _collect_entity_refs_from_result(
-        self, result: SearchResult
-    ) -> List[str]:
+    def _collect_entity_refs_from_result(self, result: SearchResult) -> List[str]:
         """
         Collect entity references from a single search result.
 
@@ -508,7 +536,9 @@ class GraphRAGService:
                         relationship_path=[],
                     )
                 )
-                logger.debug("Matched entity: %s (relevance=%.2f)", entity_ref, relevance)
+                logger.debug(
+                    "Matched entity: %s (relevance=%.2f)", entity_ref, relevance
+                )
 
         return matches
 
@@ -556,9 +586,8 @@ class GraphRAGService:
         proximity_score = base_score * relationship_strength
 
         hybrid_score = (
-            (1.0 - self.graph_weight) * base_score
-            + self.graph_weight * proximity_score
-        )
+            1.0 - self.graph_weight
+        ) * base_score + self.graph_weight * proximity_score
 
         return SearchResult(
             content=content,
@@ -586,7 +615,9 @@ class GraphRAGService:
         Returns:
             Dictionary with service metrics including RAG and graph statistics
         """
-        rag_stats = await self.rag.get_metrics() if hasattr(self.rag, "get_metrics") else {}
+        rag_stats = (
+            await self.rag.get_metrics() if hasattr(self.rag, "get_metrics") else {}
+        )
 
         return {
             "service": "GraphRAGService",

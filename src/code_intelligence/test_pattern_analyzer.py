@@ -525,15 +525,16 @@ class TestPatternAnalyzer:
 
         if assertions > self.MAX_ASSERTIONS_PER_TEST:
             return TestAntiPatternResult(
-                pattern_type=TestAntiPatternType.MULTIPLE_ASSERTIONS,
-                severity=TestPatternSeverity.LOW,
-                file_path=file_path,
-                line_number=func.lineno,
-                test_name=func.name,
-                description=f"Test '{func.name}' has {assertions} assertions (max recommended: {self.MAX_ASSERTIONS_PER_TEST})",
-                suggestion="Consider splitting into multiple focused tests",
-                metrics={"assertion_count": assertions},
-            )
+    pattern_type=TestAntiPatternType.MULTIPLE_ASSERTIONS,
+    severity=TestPatternSeverity.LOW,
+    file_path=file_path,
+    line_number=func.lineno,
+    test_name=func.name,
+    description=f"Test '{func.name}' has {assertions} assertions (max recommended: {self.MAX_ASSERTIONS_PER_TEST})",
+    suggestion="Consider splitting into multiple focused tests",
+    metrics={
+        "assertion_count": assertions},
+         )
         return None
 
     def _detect_flaky_patterns(

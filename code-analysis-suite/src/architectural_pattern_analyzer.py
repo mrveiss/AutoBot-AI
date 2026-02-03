@@ -245,7 +245,8 @@ class ArchitecturalPatternAnalyzer:
         
         return components
     
-    def _analyze_class_component(self, node: ast.ClassDef, file_path: str, content: str) -> Optional[ArchitecturalComponent]:
+    def _analyze_class_component(self, node: ast.ClassDef, file_path: str,
+                                 content: str) -> Optional[ArchitecturalComponent]:
         """Analyze a class as an architectural component"""
         
         try:
@@ -288,7 +289,8 @@ class ArchitecturalPatternAnalyzer:
             logger.error(f"Error analyzing class {node.name}: {e}")
             return None
     
-    def _analyze_function_component(self, node: ast.FunctionDef, file_path: str, content: str) -> Optional[ArchitecturalComponent]:
+    def _analyze_function_component(self, node: ast.FunctionDef, file_path: str,
+                                    content: str) -> Optional[ArchitecturalComponent]:
         """Analyze a function as an architectural component"""
         
         try:
@@ -316,7 +318,8 @@ class ArchitecturalPatternAnalyzer:
             logger.error(f"Error analyzing function {node.name}: {e}")
             return None
     
-    def _analyze_module_component(self, file_path: str, tree: ast.AST, content: str) -> Optional[ArchitecturalComponent]:
+    def _analyze_module_component(self, file_path: str, tree: ast.AST,
+                                  content: str) -> Optional[ArchitecturalComponent]:
         """Analyze a module as an architectural component"""
         
         try:
@@ -648,7 +651,8 @@ class ArchitecturalPatternAnalyzer:
         
         # Average cohesion
         class_components = [c for c in components if c.component_type == "class"]
-        avg_cohesion = sum(c.cohesion_score for c in class_components) / len(class_components) if class_components else 0
+        avg_cohesion = sum(c.cohesion_score for c in class_components) / \
+                           len(class_components) if class_components else 0
         cohesion_score = avg_cohesion * 100
         
         # Pattern adherence (fewer issues = better adherence)

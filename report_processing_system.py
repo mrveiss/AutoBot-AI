@@ -21,7 +21,8 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] [%(name)s] %(message)s',
     handlers=[
-        logging.FileHandler(f"/home/kali/Desktop/AutoBot/report_processing_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"),
+        logging.FileHandler(
+            f"/home/kali/Desktop/AutoBot/report_processing_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"),
         logging.StreamHandler()
     ]
 )
@@ -542,7 +543,8 @@ class ReportProcessingCoordinator:
                 f"🟡 WARNING: {len(analysis_results['warnings'])} files have warnings that should be reviewed"
             )
         
-        if len(analysis_results['clean_files']) > len(analysis_results['critical_errors']) + len(analysis_results['warnings']):
+        if len(analysis_results['clean_files']) > len(
+            analysis_results['critical_errors']) + len(analysis_results['warnings']):
             recommendations.append(
                 f"🟢 POSITIVE: {len(analysis_results['clean_files'])} files are clean and ready for production"
             )

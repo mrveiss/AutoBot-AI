@@ -557,25 +557,27 @@ class ShellAnalyzer(BaseLanguageAnalyzer):
                         continue
 
                     self.issues.append(
-                        AnalysisIssue(
-                            issue_id=self._generate_issue_id("unquoted-var"),
-                            category=IssueCategory.SECURITY,
-                            severity=IssueSeverity.MEDIUM,
-                            language=Language.SHELL,
-                            file_path=self.file_path,
-                            line_start=line_num,
-                            line_end=line_num,
-                            title=f"Unquoted variable ${var_name} in {cmd}",
-                            description="Unquoted variable expansion can cause issues with spaces or special characters",
-                            recommendation=f'Quote the variable: "${var_name}" or "${{var_name}}"',
-                            current_code=line.strip(),
-                            confidence=0.85,
-                            potential_false_positive=True,
-                            false_positive_reason="Variable may be known to never contain spaces",
-                            rule_id="SHELL-SEC030",
-                            tags=["shell", "security", "quoting"],
-                        )
-                    )
+    AnalysisIssue(
+        issue_id=self._generate_issue_id("unquoted-var"),
+        category=IssueCategory.SECURITY,
+        severity=IssueSeverity.MEDIUM,
+        language=Language.SHELL,
+        file_path=self.file_path,
+        line_start=line_num,
+        line_end=line_num,
+        title=f"Unquoted variable ${var_name} in {cmd}",
+        description="Unquoted variable expansion can cause issues with spaces or special characters",
+        recommendation=f'Quote the variable: "${var_name}" or "${{var_name}}"',
+        current_code=line.strip(),
+        confidence=0.85,
+        potential_false_positive=True,
+        false_positive_reason="Variable may be known to never contain spaces",
+        rule_id="SHELL-SEC030",
+        tags=[
+            "shell",
+            "security",
+            "quoting"],
+             ) )
 
 
 # Create singleton instance

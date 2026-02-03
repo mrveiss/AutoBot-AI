@@ -52,7 +52,8 @@ async def main():
             keys = connections[db].keys("*")
             print(f"  DB{db}: {len(keys)} keys")
             if len(keys) <= 20:  # Show details for small databases
-                key_examples = [k.decode('utf-8', errors='ignore') if isinstance(k, bytes) else str(k) for k in keys[:10]]
+                key_examples = [k.decode('utf-8', errors='ignore') if isinstance(k, bytes)
+                                         else str(k) for k in keys[:10]]
                 print(f"    Examples: {key_examples}")
 
         # Step 1: Backup critical data from DB0

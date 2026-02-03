@@ -15,9 +15,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
+from src.config import config_manager
 from src.models.atomic_fact import AtomicFact, FactType, TemporalType
 from src.services.fact_extraction_service import FactExtractionService
-from src.config import config_manager
 from src.utils.logging_manager import get_llm_logger
 from src.utils.redis_client import get_redis_client
 
@@ -228,7 +228,11 @@ class TemporalInvalidationService:
             # Store updated rules
             await self._store_invalidation_rules(existing_rules)
 
-            logger.info("Invalidation rules initialized: %s total, %s added", len(existing_rules), rules_added)
+            logger.info(
+                "Invalidation rules initialized: %s total, %s added",
+                len(existing_rules),
+                rules_added,
+            )
 
             return {
                 "status": "success",
@@ -410,8 +414,10 @@ class TemporalInvalidationService:
         return rules, all_facts
 
     async def _execute_invalidation(
-        self, dry_run: bool, facts_to_invalidate: List[AtomicFact],
-        invalidation_reasons: Dict[str, Dict[str, Any]]
+        self,
+        dry_run: bool,
+        facts_to_invalidate: List[AtomicFact],
+        invalidation_reasons: Dict[str, Dict[str, Any]],
     ) -> int:
         """
         Execute invalidation of facts if not dry run.
@@ -486,13 +492,17 @@ class TemporalInvalidationService:
 
         try:
             if not self.fact_extraction_service:
-                return self._build_sweep_error_response("Fact extraction service not available")
+                return self._build_sweep_error_response(
+                    "Fact extraction service not available"
+                )
 
             # Load rules and facts (Issue #665: uses helper)
             rules, all_facts = await self._load_rules_and_facts(source_filter)
 
             if not rules:
-                return self._build_sweep_error_response("No invalidation rules available")
+                return self._build_sweep_error_response(
+                    "No invalidation rules available"
+                )
 
             enabled_rules = {k: v for k, v in rules.items() if v.enabled}
             logger.info("Using %s enabled invalidation rules", len(enabled_rules))
@@ -503,9 +513,11 @@ class TemporalInvalidationService:
             logger.info("Processing %s active facts", len(all_facts))
 
             # Process facts against rules (Issue #281: uses helper)
-            facts_to_invalidate, invalidation_reasons, rule_statistics = (
-                self._process_facts_against_rules(all_facts, enabled_rules)
-            )
+            (
+                facts_to_invalidate,
+                invalidation_reasons,
+                rule_statistics,
+            ) = self._process_facts_against_rules(all_facts, enabled_rules)
 
             processing_time = (datetime.now() - start_time).total_seconds()
 
@@ -538,7 +550,11 @@ class TemporalInvalidationService:
                 invalidation_reasons=invalidation_reasons,
             )
 
-            logger.info("Invalidation sweep completed: %s/%s facts invalidated", invalidated_count, len(facts_to_invalidate))
+            logger.info(
+                "Invalidation sweep completed: %s/%s facts invalidated",
+                invalidated_count,
+                len(facts_to_invalidate),
+            )
             return result
 
         except Exception as e:
@@ -564,8 +580,7 @@ class TemporalInvalidationService:
 
             # Update fact data using model method (Issue #372 - reduces feature envy)
             fact.mark_invalidated(
-                reason=reasons.get(fact.fact_id, {}),
-                service="temporal_invalidation"
+                reason=reasons.get(fact.fact_id, {}), service="temporal_invalidation"
             )
 
             # Store updated fact
@@ -581,7 +596,9 @@ class TemporalInvalidationService:
                 pipe.srem(index_key, fact.fact_id)
             return True
         except Exception as e:
-            logger.error("Error preparing fact %s for invalidation: %s", fact.fact_id, e)
+            logger.error(
+                "Error preparing fact %s for invalidation: %s", fact.fact_id, e
+            )
             return False
 
     async def _invalidate_facts(
@@ -722,13 +739,17 @@ class TemporalInvalidationService:
                     "message": "Fact extraction service not available",
                 }
 
-            logger.info("Checking for contradictions with new fact: %s", new_fact.fact_id)
+            logger.info(
+                "Checking for contradictions with new fact: %s", new_fact.fact_id
+            )
 
             similar_facts = await self.fact_extraction_service.get_facts_by_criteria(
                 active_only=True, limit=1000
             )
 
-            contradictory_facts = self._find_contradictory_facts(new_fact, similar_facts)
+            contradictory_facts = self._find_contradictory_facts(
+                new_fact, similar_facts
+            )
 
             invalidated_count = 0
             if contradictory_facts:
@@ -737,7 +758,9 @@ class TemporalInvalidationService:
                 ]
 
                 if high_confidence:
-                    reasons = self._build_contradiction_reasons(new_fact, high_confidence)
+                    reasons = self._build_contradiction_reasons(
+                        new_fact, high_confidence
+                    )
                     invalidated_count = await self._invalidate_facts(
                         high_confidence, reasons
                     )
@@ -858,7 +881,10 @@ class TemporalInvalidationService:
             logger.info("Auto invalidation disabled")
             return
 
-        logger.info("Scheduling periodic invalidation every %s hours", self.invalidation_interval_hours)
+        logger.info(
+            "Scheduling periodic invalidation every %s hours",
+            self.invalidation_interval_hours,
+        )
 
         while True:
             try:

@@ -32,7 +32,8 @@ class ConversationFilesMigration:
     VERSION = "001"
     DESCRIPTION = "Create conversation_files database and schema"
 
-    def __init__(self, data_dir: Optional[Path] = None, schema_dir: Optional[Path] = None, db_path: Optional[Path] = None):
+    def __init__(self, data_dir: Optional[Path] = None, schema_dir: Optional[Path]
+                 = None, db_path: Optional[Path] = None):
         """
         Initialize migration with configurable paths.
 

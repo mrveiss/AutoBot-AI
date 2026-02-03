@@ -476,7 +476,8 @@ class TestingCoverageAnalyzer:
         
         return any(indicator in function_content.lower() for indicator in edge_case_indicators)
     
-    async def _analyze_coverage_gaps(self, functions: List[CodeFunction], tests: List[TestFunction]) -> List[CoverageGap]:
+    async def _analyze_coverage_gaps(self, functions: List[CodeFunction],
+                                     tests: List[TestFunction]) -> List[CoverageGap]:
         """Analyze coverage gaps between functions and tests"""
         
         gaps = []
@@ -527,14 +528,14 @@ class TestingCoverageAnalyzer:
         integration_tests = [t for t in tests if t.test_type == 'integration']
         
         if len(functions_needing_integration_tests) > len(integration_tests):
-            gaps.append(CoverageGap(
-                gap_type='missing_integration_tests',
-                severity='high',
-                description=f"Missing integration tests for {len(functions_needing_integration_tests)} functions with external dependencies",
-                affected_functions=functions_needing_integration_tests,
-                suggested_tests=self._suggest_integration_tests(functions_needing_integration_tests),
-                priority_score=75
-            ))
+            gaps.append(
+    CoverageGap(
+        gap_type='missing_integration_tests',
+        severity='high',
+        description=f"Missing integration tests for {len(functions_needing_integration_tests)} functions with external dependencies",
+        affected_functions=functions_needing_integration_tests,
+        suggested_tests=self._suggest_integration_tests(functions_needing_integration_tests),
+         priority_score=75 ))
         
         # Check for missing edge case tests
         complex_functions = [f for f in functions if f.complexity > 5 and f.is_public]
@@ -676,7 +677,8 @@ class TestingCoverageAnalyzer:
         
         for gap in gaps:
             if gap.gap_type == 'critical_untested_functions':
-                recommendations.append(f"HIGH PRIORITY: Write unit tests for {len(gap.affected_functions)} critical functions")
+                recommendations.append(
+                    f"HIGH PRIORITY: Write unit tests for {len(gap.affected_functions)} critical functions")
             
             elif gap.gap_type == 'missing_integration_tests':
                 recommendations.append(f"Add integration tests for functions with external dependencies")

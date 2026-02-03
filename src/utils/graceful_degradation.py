@@ -245,31 +245,42 @@ class TemplateResponseStrategy(FallbackStrategy):
             "code_analysis": {
                 "patterns": ["analyze", "review", "check", "code", "function", "class"],
                 "template": (
-                    "I'm currently unable to perform detailed code analysis due to service issues. For code review, please check for:\n- Syntax errors\n- Logic issues\n- Performance concerns\n- Security vulnerabilities\nPlease try again later for detailed analysis."
+                    "I'm currently unable to perform detailed code analysis due to "
+                    "service issues. For code review, please check for:\n"
+                    "- Syntax errors\n- Logic issues\n- Performance concerns\n"
+                    "- Security vulnerabilities\nPlease try again later for detailed analysis."
                 ),
             },
             "explanation": {
                 "patterns": ["explain", "what is", "how does", "define", "describe"],
                 "template": (
-                    "I'm currently experiencing service issues and cannot provide detailed explanations. Please refer to documentation or try again later for comprehensive information."
+                    "I'm currently experiencing service issues and cannot provide "
+                    "detailed explanations. Please refer to documentation or try "
+                    "again later for comprehensive information."
                 ),
             },
             "troubleshooting": {
                 "patterns": ["error", "problem", "issue", "bug", "fix", "troubleshoot"],
                 "template": (
-                    "I'm currently unable to provide detailed troubleshooting due to service issues. Common steps to try:\n1. Check logs for error messages\n2. Verify configuration settings\n3. Restart the service\n4. Check network connectivity\nPlease try again later for specific guidance."
+                    "I'm currently unable to provide detailed troubleshooting due to "
+                    "service issues. Common steps to try:\n"
+                    "1. Check logs for error messages\n2. Verify configuration settings\n"
+                    "3. Restart the service\n4. Check network connectivity\n"
+                    "Please try again later for specific guidance."
                 ),
             },
             "file_operations": {
                 "patterns": ["file", "read", "write", "create", "directory", "path"],
                 "template": (
-                    "I'm currently unable to perform file operations due to service issues. Please use standard file management tools or try again later."
+                    "I'm currently unable to perform file operations due to service "
+                    "issues. Please use standard file management tools or try again later."
                 ),
             },
             "general": {
                 "patterns": [],
                 "template": (
-                    "I'm currently experiencing service issues and unable to provide detailed responses. Please try again later."
+                    "I'm currently experiencing service issues and unable to provide "
+                    "detailed responses. Please try again later."
                 ),
             },
         }

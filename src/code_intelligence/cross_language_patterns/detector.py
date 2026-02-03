@@ -423,12 +423,18 @@ class CrossLanguagePatternDetector:
             ))
 
         for field_name in ts_only:
-            mismatches.append(self._create_dto_mismatch(
-                name, py_dto, ts_dto, field_name, "missing_in_backend",
-                frontend_definition=str(ts_fields[field_name]),
-                severity=PatternSeverity.MEDIUM,
-                recommendation=f"Consider adding field '{field_name}' to backend model '{name}' or remove from frontend",
-            ))
+            mismatches.append(
+    self._create_dto_mismatch(
+        name,
+        py_dto,
+        ts_dto,
+        field_name,
+        "missing_in_backend",
+        frontend_definition=str(
+            ts_fields[field_name]),
+            severity=PatternSeverity.MEDIUM,
+            recommendation=f"Consider adding field '{field_name}' to backend model '{name}' or remove from frontend",
+             ))
 
         # Check for type mismatches in common fields
         common_fields = set(py_fields.keys()) & set(ts_fields.keys())

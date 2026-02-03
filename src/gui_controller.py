@@ -151,7 +151,7 @@ async def main():
     # Test the GUIController
     controller = GUIController()
     if controller.virtual_display:
-        logger.debug("%s", 
+        logger.debug("%s",
             "Running in virtual display. GUI operations will be performed in the background."
         )
         # Give Xvfb a moment to start

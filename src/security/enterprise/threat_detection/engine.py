@@ -346,7 +346,9 @@ class ThreatDetectionEngine:
         """Periodic cleanup of old data and statistics"""
         while True:
             try:
-                await asyncio.sleep(TimingConstants.HOURLY_INTERVAL)  # Cleanup every hour
+                await asyncio.sleep(
+                    TimingConstants.HOURLY_INTERVAL
+                )  # Cleanup every hour
                 await self._cleanup_old_data()
             except Exception as e:
                 logger.error("Error in periodic cleanup: %s", e)
@@ -436,10 +438,26 @@ class ThreatDetectionEngine:
     def _get_response_action_handler(self, action: str, threat: ThreatEvent):
         """Get handler and config key for action type (Issue #315 - dispatch table)."""
         action_handlers = {
-            "block_ip": (self._block_ip_address, "auto_block_critical", threat.source_ip),
-            "quarantine_file": (self._quarantine_file, "auto_quarantine_files", threat.resource),
-            "rate_limit_user": (self._apply_rate_limiting, "rate_limit_suspicious_ips", (threat.user_id, threat.source_ip)),
-            "alert_security_team": (self._send_security_alert, "alert_security_team", threat),
+            "block_ip": (
+                self._block_ip_address,
+                "auto_block_critical",
+                threat.source_ip,
+            ),
+            "quarantine_file": (
+                self._quarantine_file,
+                "auto_quarantine_files",
+                threat.resource,
+            ),
+            "rate_limit_user": (
+                self._apply_rate_limiting,
+                "rate_limit_suspicious_ips",
+                (threat.user_id, threat.source_ip),
+            ),
+            "alert_security_team": (
+                self._send_security_alert,
+                "alert_security_team",
+                threat,
+            ),
         }
         return action_handlers.get(action)
 
@@ -474,19 +492,32 @@ class ThreatDetectionEngine:
 
     async def _apply_rate_limiting(self, user_id: str, ip_address: str):
         """Apply rate limiting to user/IP"""
-        logger.warning("SECURITY ACTION: Rate limiting user %s from IP %s", user_id, ip_address)
+        logger.warning(
+            "SECURITY ACTION: Rate limiting user %s from IP %s", user_id, ip_address
+        )
         # Implementation would update rate limiting rules
 
     async def _send_security_alert(self, threat: ThreatEvent):
         """Send security alert to security team"""
-        logger.critical("SECURITY THREAT DETECTED: %s | Level: %s | User: %s | Confidence: %.2f | IP: %s", threat.threat_category.value, threat.threat_level.value, threat.user_id, threat.confidence_score, threat.source_ip)
+        logger.critical(
+            "SECURITY THREAT DETECTED: %s | Level: %s | User: %s | Confidence: %.2f | IP: %s",
+            threat.threat_category.value,
+            threat.threat_level.value,
+            threat.user_id,
+            threat.confidence_score,
+            threat.source_ip,
+        )
 
     async def _retrain_models(self):
         """Retrain ML models with new data"""
         min_samples = self.config.get("ml_models", {}).get("min_training_samples", 1000)
 
         if len(self.recent_events) < min_samples:
-            logger.info("Insufficient data for model training: %s < %s", len(self.recent_events), min_samples)
+            logger.info(
+                "Insufficient data for model training: %s < %s",
+                len(self.recent_events),
+                min_samples,
+            )
             return
 
         try:
@@ -553,7 +584,9 @@ class ThreatDetectionEngine:
                 self.stats["threats_by_category"] = defaultdict(int)
                 self.stats["threats_by_level"] = defaultdict(int)
 
-            logger.debug("Cleanup completed: removed %s expired sessions", len(expired_sessions))
+            logger.debug(
+                "Cleanup completed: removed %s expired sessions", len(expired_sessions)
+            )
 
         except Exception as e:
             logger.error("Error during cleanup: %s", e)

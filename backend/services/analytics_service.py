@@ -190,22 +190,26 @@ class AnalyticsService:
             ),
             "top_performers": [
                 m.agent_id
-                for m in sorted(agent_metrics, key=lambda x: x.success_rate, reverse=True)[:3]
+                for m in sorted(
+                    agent_metrics, key=lambda x: x.success_rate, reverse=True
+                )[:3]
             ],
         }
 
-    def _build_maintenance_section(
-        self, maintenance_recs: List[Any]
-    ) -> Dict[str, Any]:
+    def _build_maintenance_section(self, maintenance_recs: List[Any]) -> Dict[str, Any]:
         """Build maintenance section for unified dashboard (Issue #665: extracted helper)."""
         return {
             "total_recommendations": len(maintenance_recs),
             "critical_count": sum(
-                1 for r in maintenance_recs if r.priority == MaintenancePriority.CRITICAL
+                1
+                for r in maintenance_recs
+                if r.priority == MaintenancePriority.CRITICAL
             ),
             "high_priority": [
-                r.to_dict() for r in maintenance_recs
-                if r.priority in [MaintenancePriority.CRITICAL, MaintenancePriority.HIGH]
+                r.to_dict()
+                for r in maintenance_recs
+                if r.priority
+                in [MaintenancePriority.CRITICAL, MaintenancePriority.HIGH]
             ][:5],
         }
 
@@ -260,7 +264,9 @@ class AnalyticsService:
             },
             "agents": self._build_agents_section(agent_metrics),
             "engagement": {
-                "total_sessions": engagement.get("metrics", {}).get("total_sessions", 0),
+                "total_sessions": engagement.get("metrics", {}).get(
+                    "total_sessions", 0
+                ),
                 "page_views": engagement.get("metrics", {}).get("total_page_views", 0),
                 "most_popular": engagement.get("most_popular_feature"),
             },
@@ -288,7 +294,9 @@ class AnalyticsService:
 
         # Agent health (success rate)
         if agent_metrics:
-            agent_score = sum(m.success_rate for m in agent_metrics) / len(agent_metrics)
+            agent_score = sum(m.success_rate for m in agent_metrics) / len(
+                agent_metrics
+            )
             scores.append(agent_score)
 
         # Engagement health (based on session activity)
@@ -320,7 +328,9 @@ class AnalyticsService:
             return "warning"
         return "critical"
 
-    def _sum_savings(self, recommendations: List[ResourceOptimization]) -> Dict[str, float]:
+    def _sum_savings(
+        self, recommendations: List[ResourceOptimization]
+    ) -> Dict[str, float]:
         """Sum up expected savings from optimization recommendations."""
         savings = {"cost_usd": 0, "performance_percent": 0}
         for rec in recommendations:
@@ -375,14 +385,19 @@ class AnalyticsService:
                         id=f"agent-error-{agent.agent_id}",
                         title=f"High Error Rate: {agent.agent_id}",
                         description=f"Agent {agent.agent_id} has an error rate of {agent.error_rate:.1f}%",
-                        priority=MaintenancePriority.HIGH if agent.error_rate > 30 else MaintenancePriority.MEDIUM,
+                        priority=MaintenancePriority.HIGH
+                        if agent.error_rate > 30
+                        else MaintenancePriority.MEDIUM,
                         category="agent_performance",
                         affected_component=f"agent:{agent.agent_id}",
                         predicted_issue="Continued degradation may lead to task failures",
                         confidence=min(0.9, agent.error_rate / 100 + 0.3),
                         recommended_action="Review agent logs, check for pattern issues, consider retraining",
                         estimated_impact=f"Affects {agent.total_tasks} tasks",
-                        metadata={"error_rate": agent.error_rate, "agent_type": agent.agent_type},
+                        metadata={
+                            "error_rate": agent.error_rate,
+                            "agent_type": agent.agent_type,
+                        },
                     )
                 )
 
@@ -420,7 +435,10 @@ class AnalyticsService:
                             confidence=0.85,
                             recommended_action="Increase timeout limits, optimize task complexity, check resources",
                             estimated_impact=f"{agent.timeout_tasks} tasks affected",
-                            metadata={"timeout_tasks": agent.timeout_tasks, "timeout_rate": timeout_rate},
+                            metadata={
+                                "timeout_tasks": agent.timeout_tasks,
+                                "timeout_rate": timeout_rate,
+                            },
                         )
                     )
 
@@ -439,13 +457,18 @@ class AnalyticsService:
                     id="cost-growth-alert",
                     title="Rapid Cost Increase Detected",
                     description=f"LLM costs are increasing at {growth_rate:.1f}% rate",
-                    priority=MaintenancePriority.HIGH if growth_rate > 50 else MaintenancePriority.MEDIUM,
+                    priority=MaintenancePriority.HIGH
+                    if growth_rate > 50
+                    else MaintenancePriority.MEDIUM,
                     category="cost_management",
                     affected_component="llm_provider",
                     predicted_issue="Budget may be exceeded if trend continues",
                     confidence=0.85,
                     recommended_action="Review usage patterns, implement cost controls, optimize prompts",
-                    estimated_impact=f"Projected cost increase of ${trends.get('total_cost_usd', 0) * growth_rate / 100:.2f}",
+                    estimated_impact=(
+                        f"Projected cost increase of "
+                        f"${trends.get('total_cost_usd', 0) * growth_rate / 100:.2f}"
+                    ),
                     metadata={"growth_rate": growth_rate, "trend": trends.get("trend")},
                 )
             )
@@ -472,14 +495,22 @@ class AnalyticsService:
                             id="redis-memory-high",
                             title="High Redis Memory Usage",
                             description=f"Redis is using {memory_pct:.1f}% of allocated memory",
-                            priority=MaintenancePriority.HIGH if memory_pct > 90 else MaintenancePriority.MEDIUM,
+                            priority=MaintenancePriority.HIGH
+                            if memory_pct > 90
+                            else MaintenancePriority.MEDIUM,
                             category="infrastructure",
                             affected_component="redis",
                             predicted_issue="Memory exhaustion may cause cache evictions or failures",
                             confidence=0.9,
-                            recommended_action="Clean up old data, increase memory allocation, review retention policies",
+                            recommended_action=(
+                                "Clean up old data, increase memory allocation, "
+                                "review retention policies"
+                            ),
                             estimated_impact="May affect caching and real-time features",
-                            metadata={"used_memory_mb": used_memory / 1024 / 1024, "memory_percent": memory_pct},
+                            metadata={
+                                "used_memory_mb": used_memory / 1024 / 1024,
+                                "memory_percent": memory_pct,
+                            },
                         )
                     )
         except Exception as e:
@@ -617,7 +648,8 @@ class AnalyticsService:
                             },
                             recommended_change="Improve error handling and task validation",
                             expected_savings={
-                                "cost_usd": wasted_tasks * 0.01,  # Estimate $0.01 per task
+                                "cost_usd": wasted_tasks
+                                * 0.01,  # Estimate $0.01 per task
                                 "performance_percent": 10,
                             },
                             implementation_effort="medium",
@@ -645,7 +677,10 @@ class AnalyticsService:
                         },
                         implementation_effort="high",
                         priority=MaintenancePriority.LOW,
-                        details=f"Reducing {agent.avg_duration_ms}ms to 2000ms would save {(agent.avg_duration_ms - 2000) * agent.total_tasks / 1000}s",
+                        details=(
+                            f"Reducing {agent.avg_duration_ms}ms to 2000ms would save "
+                            f"{(agent.avg_duration_ms - 2000) * agent.total_tasks / 1000}s"
+                        ),
                     )
                 )
 
@@ -786,7 +821,9 @@ class AnalyticsService:
         agent_data = sections.get("agents", {})
         if agent_data.get("summary"):
             avg_success = agent_data["summary"].get("avg_success_rate", 0)
-            summary["highlights"].append(f"Average agent success rate: {avg_success:.1f}%")
+            summary["highlights"].append(
+                f"Average agent success rate: {avg_success:.1f}%"
+            )
             if avg_success < 80:
                 summary["concerns"].append("Agent success rate below 80% target")
 
@@ -794,12 +831,16 @@ class AnalyticsService:
         maintenance = sections.get("maintenance", [])
         critical_count = sum(1 for m in maintenance if m.get("priority") == "critical")
         if critical_count > 0:
-            summary["concerns"].append(f"{critical_count} critical maintenance items require attention")
+            summary["concerns"].append(
+                f"{critical_count} critical maintenance items require attention"
+            )
 
         # Optimization opportunities
         optimization = sections.get("optimization", [])
         if optimization:
-            total_savings = sum(o.get("expected_savings", {}).get("cost_usd", 0) for o in optimization)
+            total_savings = sum(
+                o.get("expected_savings", {}).get("cost_usd", 0) for o in optimization
+            )
             if total_savings > 0:
                 summary["recommendations"].append(
                     f"Potential cost savings of ${total_savings:.2f} identified"

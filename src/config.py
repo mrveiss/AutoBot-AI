@@ -22,6 +22,7 @@ def _get_ssot_ollama_url() -> str:
     """Get Ollama URL from SSOT config with fallback."""
     try:
         from src.config.ssot_config import get_config
+
         return get_config().ollama_url
     except Exception:
         return os.getenv("AUTOBOT_OLLAMA_HOST", "http://127.0.0.1:11434")
@@ -35,6 +36,7 @@ def _get_ssot_ollama_endpoint() -> str:
 def _get_ssot_ollama_embedding_endpoint() -> str:
     """Get Ollama embedding endpoint from SSOT config with fallback."""
     return f"{_get_ssot_ollama_url()}/api/embeddings"
+
 
 # GLOBAL PROTECTION: Monkey-patch yaml.dump to always filter prompts when
 # writing config files
@@ -292,7 +294,9 @@ class ConfigManager:
 
         # URGENT FIX: Skip auto-detection during startup to prevent blocking
         # Auto-detection will be handled asynchronously after startup
-        logger.info("UNIFIED CONFIG: Skipping Ollama auto-detection during startup to prevent blocking")
+        logger.info(
+            "UNIFIED CONFIG: Skipping Ollama auto-detection during startup to prevent blocking"
+        )
 
         # Fallback to hardcoded default - use available model
         return "llama3.2:3b"
@@ -719,12 +723,14 @@ class ConfigManager:
                 ):
                     if "ollama_model" in backend:
                         logger.info(
-                            "YAML CONFIG SAVE: Removing legacy ollama_model field - now managed by backend.llm.local.providers.ollama.selected_model"
+                            "YAML CONFIG SAVE: Removing legacy ollama_model field - "
+                            "now managed by backend.llm.local.providers.ollama.selected_model"
                         )
                         del backend["ollama_model"]
                     if "ollama_endpoint" in backend:
                         logger.info(
-                            "YAML CONFIG SAVE: Removing legacy ollama_endpoint field - now managed by backend.llm.local.providers.ollama.endpoint"
+                            "YAML CONFIG SAVE: Removing legacy ollama_endpoint field - "
+                            "now managed by backend.llm.local.providers.ollama.endpoint"
                         )
                         del backend["ollama_endpoint"]
 

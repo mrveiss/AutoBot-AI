@@ -58,6 +58,7 @@ class TrayIconManager(QObject):
         """Hide tray icon"""
         self.tray_icon.hide()
 
-    def show_message(self, title: str, message: str, icon=QSystemTrayIcon.MessageIcon.Information, duration: int = 2000):
+    def show_message(self, title: str, message: str,
+                     icon=QSystemTrayIcon.MessageIcon.Information, duration: int = 2000):
         """Show tray notification"""
         self.tray_icon.showMessage(title, message, icon, duration)

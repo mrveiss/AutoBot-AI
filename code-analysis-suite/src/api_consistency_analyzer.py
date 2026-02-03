@@ -187,7 +187,8 @@ class APIConsistencyAnalyzer:
         
         return endpoints
     
-    async def _extract_endpoints_from_ast(self, file_path: str, tree: ast.AST, content: str, lines: List[str]) -> List[APIEndpoint]:
+    async def _extract_endpoints_from_ast(self, file_path: str, tree: ast.AST,
+                                          content: str, lines: List[str]) -> List[APIEndpoint]:
         """Extract endpoints using AST analysis"""
         
         endpoints = []
@@ -509,19 +510,17 @@ class APIConsistencyAnalyzer:
         endpoints_without_error_handling = [ep for ep in endpoints if not ep.has_error_handling]
         
         if endpoints_without_error_handling:
-            return [APIInconsistency(
-                issue_type='missing_error_handling',
-                severity='high',
-                description=f"{len(endpoints_without_error_handling)} endpoints lack proper error handling",
-                affected_endpoints=endpoints_without_error_handling,
-                suggestion="Implement consistent error handling with try/catch blocks and proper HTTP status codes",
-                examples=[
-                    {
-                        'bad': 'def get_user(id): return db.get_user(id)',
-                        'good': 'def get_user(id): try: return db.get_user(id) except NotFound: raise HTTPException(404)'
-                    }
-                ]
-            )]
+            return [
+    APIInconsistency(
+        issue_type='missing_error_handling',
+        severity='high',
+        description=f"{len(endpoints_without_error_handling)} endpoints lack proper error handling",
+        affected_endpoints=endpoints_without_error_handling,
+        suggestion="Implement consistent error handling with try/catch blocks and proper HTTP status codes",
+        examples=[
+            {
+                'bad': 'def get_user(id): return db.get_user(id)',
+                 'good': 'def get_user(id): try: return db.get_user(id) except NotFound: raise HTTPException(404)' } ] )]
         
         return []
     
@@ -610,7 +609,8 @@ class APIConsistencyAnalyzer:
         
         return False
     
-    def _calculate_api_metrics(self, endpoints: List[APIEndpoint], inconsistencies: List[APIInconsistency]) -> APIMetrics:
+    def _calculate_api_metrics(self, endpoints: List[APIEndpoint],
+                               inconsistencies: List[APIInconsistency]) -> APIMetrics:
         """Calculate API consistency metrics"""
         
         if not endpoints:
@@ -639,14 +639,16 @@ class APIConsistencyAnalyzer:
             auth_pattern_consistency=round(auth_pattern_score, 2)
         )
     
-    def _calculate_naming_consistency_score(self, endpoints: List[APIEndpoint], inconsistencies: List[APIInconsistency]) -> float:
+    def _calculate_naming_consistency_score(
+        self, endpoints: List[APIEndpoint], inconsistencies: List[APIInconsistency]) -> float:
         """Calculate naming consistency score"""
         naming_issues = [inc for inc in inconsistencies if inc.issue_type == 'naming_inconsistency']
         affected_count = sum(len(inc.affected_endpoints) for inc in naming_issues)
         
         return max(0, (len(endpoints) - affected_count) / len(endpoints) * 100)
     
-    def _calculate_response_format_score(self, endpoints: List[APIEndpoint], inconsistencies: List[APIInconsistency]) -> float:
+    def _calculate_response_format_score(
+        self, endpoints: List[APIEndpoint], inconsistencies: List[APIInconsistency]) -> float:
         """Calculate response format consistency score"""
         format_issues = [inc for inc in inconsistencies if inc.issue_type == 'response_format_inconsistency']
         affected_count = sum(len(inc.affected_endpoints) for inc in format_issues)
@@ -658,7 +660,8 @@ class APIConsistencyAnalyzer:
         endpoints_with_error_handling = len([ep for ep in endpoints if ep.has_error_handling])
         return (endpoints_with_error_handling / len(endpoints) * 100) if endpoints else 0
     
-    def _calculate_auth_pattern_score(self, endpoints: List[APIEndpoint], inconsistencies: List[APIInconsistency]) -> float:
+    def _calculate_auth_pattern_score(
+        self, endpoints: List[APIEndpoint], inconsistencies: List[APIInconsistency]) -> float:
         """Calculate auth pattern consistency score"""
         auth_issues = [inc for inc in inconsistencies if inc.issue_type == 'missing_authentication']
         affected_count = sum(len(inc.affected_endpoints) for inc in auth_issues)

@@ -24,13 +24,28 @@ from typing import Dict, List, Pattern, Union
 
 # Issue #380: Pre-compiled dangerous patterns for command validation
 _DANGEROUS_PATTERNS: List[Pattern] = [
-    re.compile(pattern, re.IGNORECASE) for pattern in [
-        r"rm\s+-r", r"rm\s.*/", r";\s*rm", r"&&\s*rm", r"\|\s*rm",  # rm patterns
-        r">\s*/dev/", r"curl.*\|\s*sh", r"wget.*\|\s*sh",  # Dangerous redirects/downloads
-        r"eval\s*\(", r"exec\s*\(", r"system\s*\(",  # Dangerous function calls
-        r"`.*`", r"\$\(",  # Command substitution
-        r">\s*/etc/", r">\s*/usr/", r">\s*/var/",  # System directory writes
-        r"chmod.*777", r"chown.*root", r"sudo\s+", r"su\s+",  # Privilege changes
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in [
+        r"rm\s+-r",
+        r"rm\s.*/",
+        r";\s*rm",
+        r"&&\s*rm",
+        r"\|\s*rm",  # rm patterns
+        r">\s*/dev/",
+        r"curl.*\|\s*sh",
+        r"wget.*\|\s*sh",  # Dangerous redirects/downloads
+        r"eval\s*\(",
+        r"exec\s*\(",
+        r"system\s*\(",  # Dangerous function calls
+        r"`.*`",
+        r"\$\(",  # Command substitution
+        r">\s*/etc/",
+        r">\s*/usr/",
+        r">\s*/var/",  # System directory writes
+        r"chmod.*777",
+        r"chown.*root",
+        r"sudo\s+",
+        r"su\s+",  # Privilege changes
     ]
 ]
 
@@ -61,33 +76,158 @@ class CommandValidator:
     def _get_system_commands(self) -> Dict[str, CommandPattern]:
         """Get system information command patterns."""
         return {
-            "ps": CommandPattern(command="ps", allowed_args=["aux", "e", "-e", "-aux", "axf"], arg_patterns={"aux": r"^aux$", "e": r"^-?ef$", "ax": r"^axf$"}, max_args=1, description="Process status listing"),
-            "ls": CommandPattern(command="ls", allowed_args=["-l", "-la", "-al", "-a", "--all", "-h", "--human-readable"], arg_patterns={"-l": r"^-l$", "-la": r"^-la$", "-al": r"^-al$", "-a": r"^-a$", "--all": r"^--all$", "-h": r"^-h$", "--human-readable": r"^--human-readable$"}, max_args=3, description="Directory listing"),
-            "pwd": CommandPattern(command="pwd", allowed_args=[], arg_patterns={}, max_args=0, description="Print working directory"),
-            "whoami": CommandPattern(command="whoami", allowed_args=[], arg_patterns={}, max_args=0, description="Current user identification"),
-            "id": CommandPattern(command="id", allowed_args=["-u", "-g", "-G"], arg_patterns={"-u": r"^-u$", "-g": r"^-g$", "-G": r"^-G$"}, max_args=1, description="User and group ID information"),
-            "uname": CommandPattern(command="uname", allowed_args=["-a", "-r", "-s"], arg_patterns={"-a": r"^-a$", "-r": r"^-r$", "-s": r"^-s$"}, max_args=1, description="System information"),
-            "uptime": CommandPattern(command="uptime", allowed_args=[], arg_patterns={}, max_args=0, description="System uptime and load"),
-            "date": CommandPattern(command="date", allowed_args=[], arg_patterns={}, max_args=0, description="Current date and time"),
-            "d": CommandPattern(command="d", allowed_args=["-h", "--human-readable"], arg_patterns={"-h": r"^-h$", "--human-readable": r"^--human-readable$"}, max_args=1, description="Disk space usage"),
-            "free": CommandPattern(command="free", allowed_args=["-h", "-m"], arg_patterns={"-h": r"^-h$", "-m": r"^-m$"}, max_args=1, description="Memory usage information"),
+            "ps": CommandPattern(
+                command="ps",
+                allowed_args=["aux", "e", "-e", "-aux", "axf"],
+                arg_patterns={"aux": r"^aux$", "e": r"^-?ef$", "ax": r"^axf$"},
+                max_args=1,
+                description="Process status listing",
+            ),
+            "ls": CommandPattern(
+                command="ls",
+                allowed_args=[
+                    "-l",
+                    "-la",
+                    "-al",
+                    "-a",
+                    "--all",
+                    "-h",
+                    "--human-readable",
+                ],
+                arg_patterns={
+                    "-l": r"^-l$",
+                    "-la": r"^-la$",
+                    "-al": r"^-al$",
+                    "-a": r"^-a$",
+                    "--all": r"^--all$",
+                    "-h": r"^-h$",
+                    "--human-readable": r"^--human-readable$",
+                },
+                max_args=3,
+                description="Directory listing",
+            ),
+            "pwd": CommandPattern(
+                command="pwd",
+                allowed_args=[],
+                arg_patterns={},
+                max_args=0,
+                description="Print working directory",
+            ),
+            "whoami": CommandPattern(
+                command="whoami",
+                allowed_args=[],
+                arg_patterns={},
+                max_args=0,
+                description="Current user identification",
+            ),
+            "id": CommandPattern(
+                command="id",
+                allowed_args=["-u", "-g", "-G"],
+                arg_patterns={"-u": r"^-u$", "-g": r"^-g$", "-G": r"^-G$"},
+                max_args=1,
+                description="User and group ID information",
+            ),
+            "uname": CommandPattern(
+                command="uname",
+                allowed_args=["-a", "-r", "-s"],
+                arg_patterns={"-a": r"^-a$", "-r": r"^-r$", "-s": r"^-s$"},
+                max_args=1,
+                description="System information",
+            ),
+            "uptime": CommandPattern(
+                command="uptime",
+                allowed_args=[],
+                arg_patterns={},
+                max_args=0,
+                description="System uptime and load",
+            ),
+            "date": CommandPattern(
+                command="date",
+                allowed_args=[],
+                arg_patterns={},
+                max_args=0,
+                description="Current date and time",
+            ),
+            "d": CommandPattern(
+                command="d",
+                allowed_args=["-h", "--human-readable"],
+                arg_patterns={"-h": r"^-h$", "--human-readable": r"^--human-readable$"},
+                max_args=1,
+                description="Disk space usage",
+            ),
+            "free": CommandPattern(
+                command="free",
+                allowed_args=["-h", "-m"],
+                arg_patterns={"-h": r"^-h$", "-m": r"^-m$"},
+                max_args=1,
+                description="Memory usage information",
+            ),
         }
 
     def _get_network_commands(self) -> Dict[str, CommandPattern]:
         """Get network information command patterns."""
         return {
-            "ifconfig": CommandPattern(command="ifconfig", allowed_args=[], arg_patterns={}, max_args=0, description="Network interface configuration"),
-            "ip": CommandPattern(command="ip", allowed_args=["addr", "show", "route"], arg_patterns={"addr": r"^addr$", "show": r"^show$", "route": r"^route$"}, max_args=2, description="Network configuration tool"),
-            "netstat": CommandPattern(command="netstat", allowed_args=["-tuln", "-rn"], arg_patterns={"-tuln": r"^-tuln$", "-rn": r"^-rn$"}, max_args=1, description="Network connections and routing"),
-            "ss": CommandPattern(command="ss", allowed_args=["-tuln", "-rn"], arg_patterns={"-tuln": r"^-tuln$", "-rn": r"^-rn$"}, max_args=1, description="Socket statistics"),
+            "ifconfig": CommandPattern(
+                command="ifconfig",
+                allowed_args=[],
+                arg_patterns={},
+                max_args=0,
+                description="Network interface configuration",
+            ),
+            "ip": CommandPattern(
+                command="ip",
+                allowed_args=["addr", "show", "route"],
+                arg_patterns={
+                    "addr": r"^addr$",
+                    "show": r"^show$",
+                    "route": r"^route$",
+                },
+                max_args=2,
+                description="Network configuration tool",
+            ),
+            "netstat": CommandPattern(
+                command="netstat",
+                allowed_args=["-tuln", "-rn"],
+                arg_patterns={"-tuln": r"^-tuln$", "-rn": r"^-rn$"},
+                max_args=1,
+                description="Network connections and routing",
+            ),
+            "ss": CommandPattern(
+                command="ss",
+                allowed_args=["-tuln", "-rn"],
+                arg_patterns={"-tuln": r"^-tuln$", "-rn": r"^-rn$"},
+                max_args=1,
+                description="Socket statistics",
+            ),
         }
 
     def _get_file_commands(self) -> Dict[str, CommandPattern]:
         """Get safe file operation command patterns."""
         return {
-            "cat": CommandPattern(command="cat", allowed_args=[], arg_patterns={}, max_args=1, description="Display file contents", shell_required=True),
-            "head": CommandPattern(command="head", allowed_args=["-n"], arg_patterns={"-n": r"^-n$"}, max_args=3, description="Display first lines of file", shell_required=True),
-            "tail": CommandPattern(command="tail", allowed_args=["-n"], arg_patterns={"-n": r"^-n$"}, max_args=3, description="Display last lines of file", shell_required=True),
+            "cat": CommandPattern(
+                command="cat",
+                allowed_args=[],
+                arg_patterns={},
+                max_args=1,
+                description="Display file contents",
+                shell_required=True,
+            ),
+            "head": CommandPattern(
+                command="head",
+                allowed_args=["-n"],
+                arg_patterns={"-n": r"^-n$"},
+                max_args=3,
+                description="Display first lines of file",
+                shell_required=True,
+            ),
+            "tail": CommandPattern(
+                command="tail",
+                allowed_args=["-n"],
+                arg_patterns={"-n": r"^-n$"},
+                max_args=3,
+                description="Display last lines of file",
+                shell_required=True,
+            ),
         }
 
     def _init_whitelist(self) -> None:
@@ -99,7 +239,12 @@ class CommandValidator:
 
     def _invalid_result(self, reason: str) -> Dict[str, Union[bool, str, List[str]]]:
         """Create an invalid validation result."""
-        return {"valid": False, "reason": reason, "parsed_command": [], "use_shell": False}
+        return {
+            "valid": False,
+            "reason": reason,
+            "parsed_command": [],
+            "use_shell": False,
+        }
 
     def _parse_command(self, command_string: str) -> tuple:
         """Parse command string safely. Returns (command_parts, error_result or None)."""
@@ -111,13 +256,13 @@ class CommandValidator:
             return [], self._invalid_result("Empty command")
         return command_parts, None
 
-    def _validate_whitelist_and_args(
-        self, command_parts: List[str]
-    ) -> tuple:
+    def _validate_whitelist_and_args(self, command_parts: List[str]) -> tuple:
         """Validate command against whitelist and check arguments. Returns (pattern, error_result or None)."""
         base_command = command_parts[0]
         if base_command not in self.whitelist:
-            return None, self._invalid_result(f"Command '{base_command}' not in whitelist")
+            return None, self._invalid_result(
+                f"Command '{base_command}' not in whitelist"
+            )
 
         pattern = self.whitelist[base_command]
         args = command_parts[1:] if len(command_parts) > 1 else []
@@ -133,13 +278,17 @@ class CommandValidator:
 
         return pattern, None
 
-    def validate_command(self, command_string: str) -> Dict[str, Union[bool, str, List[str]]]:
+    def validate_command(
+        self, command_string: str
+    ) -> Dict[str, Union[bool, str, List[str]]]:
         """Validate a command string against security policies."""
         try:
             # Check for dangerous patterns
             dangerous_check = self._check_dangerous_patterns(command_string)
             if not dangerous_check["safe"]:
-                return self._invalid_result(f"Dangerous pattern detected: {dangerous_check['pattern']}")
+                return self._invalid_result(
+                    f"Dangerous pattern detected: {dangerous_check['pattern']}"
+                )
 
             # Parse command
             command_parts, error = self._parse_command(command_string)
@@ -152,7 +301,11 @@ class CommandValidator:
                 return error
 
             # Success
-            self.logger.info("Command validated successfully: %s with %s args", command_parts[0], len(command_parts) - 1)
+            self.logger.info(
+                "Command validated successfully: %s with %s args",
+                command_parts[0],
+                len(command_parts) - 1,
+            )
             return {
                 "valid": True,
                 "reason": f"Command '{command_parts[0]}' validated successfully",
@@ -170,7 +323,8 @@ class CommandValidator:
         for compiled_pattern in _DANGEROUS_PATTERNS:
             if compiled_pattern.search(command):
                 self.logger.warning(
-                    f"Dangerous pattern detected: {compiled_pattern.pattern} in command: " f"{command}"
+                    f"Dangerous pattern detected: {compiled_pattern.pattern} in command: "
+                    f"{command}"
                 )
                 return {"safe": False, "pattern": compiled_pattern.pattern}
         return {"safe": True, "pattern": ""}

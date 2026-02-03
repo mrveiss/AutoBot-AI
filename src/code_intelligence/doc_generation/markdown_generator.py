@@ -13,12 +13,7 @@ Part of god class refactoring initiative.
 import re
 from typing import List, Pattern
 
-from src.code_intelligence.doc_generation.types import (
-    DiagramType,
-    DocCompleteness,
-    DocFormat,
-    DocSection,
-)
+from src.code_intelligence.doc_generation.helpers import SKIP_INHERITANCE_BASES
 from src.code_intelligence.doc_generation.models import (
     ClassDoc,
     DiagramSpec,
@@ -26,8 +21,12 @@ from src.code_intelligence.doc_generation.models import (
     GeneratedDoc,
     ModuleDoc,
 )
-from src.code_intelligence.doc_generation.helpers import SKIP_INHERITANCE_BASES
-
+from src.code_intelligence.doc_generation.types import (
+    DiagramType,
+    DocCompleteness,
+    DocFormat,
+    DocSection,
+)
 
 # Pre-compiled regex patterns for markdown-to-HTML conversion
 _MD_H5_RE: Pattern[str] = re.compile(r"^##### (.+)$", re.MULTILINE)
@@ -65,7 +64,9 @@ def _calculate_avg_completeness(modules: List[ModuleDoc]) -> float:
     if not modules:
         return 0
     all_completeness = [m.completeness for m in modules]
-    return sum(_COMPLETENESS_SCORES[c] for c in all_completeness) / len(all_completeness)
+    return sum(_COMPLETENESS_SCORES[c] for c in all_completeness) / len(
+        all_completeness
+    )
 
 
 def _generate_module_header_lines(module: ModuleDoc) -> List[str]:
@@ -144,7 +145,9 @@ class MarkdownGenerator:
                 modules, title, include_toc, include_diagrams
             )
         elif format == DocFormat.HTML:
-            return self._generate_html_api(modules, title, include_toc, include_diagrams)
+            return self._generate_html_api(
+                modules, title, include_toc, include_diagrams
+            )
         else:
             # Default to markdown
             return self._generate_markdown_api(
@@ -179,10 +182,16 @@ class MarkdownGenerator:
             if include_diagrams and module.classes:
                 diagram = self._generate_class_diagram(module)
                 diagrams.append(diagram)
-                lines.extend([
-                    "### Class Diagram", "",
-                    "```mermaid", diagram.to_mermaid(), "```", ""
-                ])
+                lines.extend(
+                    [
+                        "### Class Diagram",
+                        "",
+                        "```mermaid",
+                        diagram.to_mermaid(),
+                        "```",
+                        "",
+                    ]
+                )
 
             # Classes and functions
             for class_doc in module.classes:
@@ -285,13 +294,15 @@ class MarkdownGenerator:
 
         return lines
 
-    def _generate_function_markdown(
-        self, func_doc: FunctionDoc, is_property: bool = False
+    def _generate_function_header(
+        self, func_doc: FunctionDoc, is_property: bool
     ) -> List[str]:
-        """Generate Markdown documentation for a function/method."""
-        lines = []
+        """
+        Generate function header with async/decorator info.
 
-        # Header
+        Issue #620: Extracted from _generate_function_markdown.
+        """
+        lines = []
         prefix = "async " if func_doc.is_async else ""
         decorator_info = ""
         if func_doc.is_static:
@@ -303,32 +314,44 @@ class MarkdownGenerator:
 
         lines.append(f"##### `{prefix}{func_doc.name}`{decorator_info}")
         lines.append("")
-
-        # Signature
         lines.append("```python")
         lines.append(f"def {func_doc.name}{func_doc.signature}")
         lines.append("```")
         lines.append("")
 
-        # Description
         if func_doc.description:
             lines.append(func_doc.description)
             lines.append("")
+        return lines
 
-        # Parameters
-        if func_doc.parameters:
-            lines.append("**Parameters:**")
-            lines.append("")
-            for param in func_doc.parameters:
-                type_info = f": `{param.type_hint}`" if param.type_hint else ""
-                default_info = (
-                    f" (default: `{param.default_value}`)" if param.default_value else ""
-                )
-                desc = f" - {param.description}" if param.description else ""
-                lines.append(f"- `{param.name}`{type_info}{default_info}{desc}")
-            lines.append("")
+    def _generate_parameters_section(self, func_doc: FunctionDoc) -> List[str]:
+        """
+        Generate parameters documentation section.
 
-        # Returns
+        Issue #620: Extracted from _generate_function_markdown.
+        """
+        if not func_doc.parameters:
+            return []
+
+        lines = ["**Parameters:**", ""]
+        for param in func_doc.parameters:
+            type_info = f": `{param.type_hint}`" if param.type_hint else ""
+            default_info = (
+                f" (default: `{param.default_value}`)" if param.default_value else ""
+            )
+            desc = f" - {param.description}" if param.description else ""
+            lines.append(f"- `{param.name}`{type_info}{default_info}{desc}")
+        lines.append("")
+        return lines
+
+    def _generate_returns_and_exceptions(self, func_doc: FunctionDoc) -> List[str]:
+        """
+        Generate returns and exceptions documentation sections.
+
+        Issue #620: Extracted from _generate_function_markdown.
+        """
+        lines = []
+
         if func_doc.returns:
             type_info = (
                 f"`{func_doc.returns.type_hint}`" if func_doc.returns.type_hint else ""
@@ -341,7 +364,6 @@ class MarkdownGenerator:
             lines.append(f"**Returns:** {type_info}{desc}")
             lines.append("")
 
-        # Exceptions
         if func_doc.exceptions:
             lines.append("**Raises:**")
             lines.append("")
@@ -349,6 +371,23 @@ class MarkdownGenerator:
                 desc = f": {exc.description}" if exc.description else ""
                 lines.append(f"- `{exc.exception_type}`{desc}")
             lines.append("")
+
+        return lines
+
+    def _generate_function_markdown(
+        self, func_doc: FunctionDoc, is_property: bool = False
+    ) -> List[str]:
+        """
+        Generate Markdown documentation for a function/method.
+
+        Issue #620: Refactored to use helper methods.
+        """
+        lines = []
+
+        # Issue #620: Use helpers for each section
+        lines.extend(self._generate_function_header(func_doc, is_property))
+        lines.extend(self._generate_parameters_section(func_doc))
+        lines.extend(self._generate_returns_and_exceptions(func_doc))
 
         # Examples
         if func_doc.examples:
@@ -393,7 +432,9 @@ class MarkdownGenerator:
     ) -> GeneratedDoc:
         """Generate HTML API documentation."""
         # First generate markdown, then convert to HTML
-        md_doc = self._generate_markdown_api(modules, title, include_toc, include_diagrams)
+        md_doc = self._generate_markdown_api(
+            modules, title, include_toc, include_diagrams
+        )
 
         # Simple markdown to HTML conversion
         html_content = self._markdown_to_html(md_doc.content)
@@ -405,7 +446,10 @@ class MarkdownGenerator:
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{title}</title>
     <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; max-width: 900px; margin: 0 auto; padding: 20px; }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6; max-width: 900px; margin: 0 auto; padding: 20px;
+        }}
         code {{ background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }}
         pre {{ background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto; }}
         pre code {{ background: none; padding: 0; }}

@@ -730,6 +730,73 @@ async def read_media_file_mcp(
         )
 
 
+async def _read_single_file_for_batch(path: str) -> dict:
+    """
+    Read a single file for batch operation with graceful error handling.
+
+    Issue #620: Extracted from read_multiple_files_mcp to reduce function length.
+
+    Args:
+        path: File path to read
+
+    Returns:
+        Dict with either 'result' or 'error' key
+    """
+    try:
+        if not is_path_allowed(path):
+            return {"error": {"path": path, "error": "Access denied"}}
+
+        path_exists = await run_in_file_executor(os.path.exists, path)
+        if not path_exists:
+            return {"error": {"path": path, "error": "File not found"}}
+
+        is_file = await run_in_file_executor(os.path.isfile, path)
+        if not is_file:
+            return {"error": {"path": path, "error": "Not a file"}}
+
+        file_size = await run_in_file_executor(os.path.getsize, path)
+        if file_size > MAX_FILE_SIZE:
+            return {
+                "error": {
+                    "path": path,
+                    "error": f"File too large ({file_size} bytes)",
+                }
+            }
+
+        async with aiofiles.open(path, "r", encoding="utf-8") as f:
+            content = await f.read()
+
+        return {"result": {"path": path, "content": content, "size_bytes": file_size}}
+    except OSError as e:
+        return {"error": {"path": path, "error": f"Failed to read file: {str(e)}"}}
+    except Exception as e:
+        return {"error": {"path": path, "error": str(e)}}
+
+
+def _separate_batch_read_results(all_results: list) -> tuple:
+    """
+    Separate batch read results into successes and errors.
+
+    Issue #620: Extracted from read_multiple_files_mcp to reduce function length.
+
+    Args:
+        all_results: List of results from asyncio.gather
+
+    Returns:
+        Tuple of (results_list, errors_list)
+    """
+    results = []
+    errors = []
+    for item in all_results:
+        if isinstance(item, Exception):
+            errors.append({"path": "unknown", "error": str(item)})
+        elif "result" in item:
+            results.append(item["result"])
+        elif "error" in item:
+            errors.append(item["error"])
+    return results, errors
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="read_multiple_files_mcp",
@@ -741,60 +808,19 @@ async def read_multiple_files_mcp(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Metadata:
     """
-    Batch read multiple files with graceful error handling
+    Batch read multiple files with graceful error handling.
 
     Issue #744: Requires admin authentication.
+    Issue #620: Refactored to use helper functions.
     """
-
-    async def read_single_file(path: str) -> dict:
-        """Read a single file and return result or error dict"""
-        try:
-            if not is_path_allowed(path):
-                return {"error": {"path": path, "error": "Access denied"}}
-
-            path_exists = await run_in_file_executor(os.path.exists, path)
-            if not path_exists:
-                return {"error": {"path": path, "error": "File not found"}}
-
-            is_file = await run_in_file_executor(os.path.isfile, path)
-            if not is_file:
-                return {"error": {"path": path, "error": "Not a file"}}
-
-            file_size = await run_in_file_executor(os.path.getsize, path)
-            if file_size > MAX_FILE_SIZE:
-                return {
-                    "error": {
-                        "path": path,
-                        "error": f"File too large ({file_size} bytes)",
-                    }
-                }
-
-            async with aiofiles.open(path, "r", encoding="utf-8") as f:
-                content = await f.read()
-
-            return {
-                "result": {"path": path, "content": content, "size_bytes": file_size}
-            }
-        except OSError as e:
-            return {"error": {"path": path, "error": f"Failed to read file: {str(e)}"}}
-        except Exception as e:
-            return {"error": {"path": path, "error": str(e)}}
-
     # Read all files in parallel - eliminates N+1 sequential I/O
     all_results = await asyncio.gather(
-        *[read_single_file(path) for path in request.paths], return_exceptions=True
+        *[_read_single_file_for_batch(path) for path in request.paths],
+        return_exceptions=True,
     )
 
-    # Separate results and errors
-    results = []
-    errors = []
-    for item in all_results:
-        if isinstance(item, Exception):
-            errors.append({"path": "unknown", "error": str(item)})
-        elif "result" in item:
-            results.append(item["result"])
-        elif "error" in item:
-            errors.append(item["error"])
+    # Separate results and errors using helper
+    results, errors = _separate_batch_read_results(all_results)
 
     return {
         "success": True,

@@ -303,13 +303,17 @@ class ReconcilerService:
             )
             # Create event for human attention
             event = NodeEvent(
-                event_id=str(uuid.uuid4())[:16],
-                node_id=node_id,
-                event_type=EventType.REMEDIATION_COMPLETED.value,
-                severity=EventSeverity.WARNING.value,
-                message=f"Node {node.hostname} requires human intervention after {MAX_REMEDIATION_ATTEMPTS} failed remediation attempts",
-                details={"attempts": tracker["count"], "action_required": "manual_review"},
-            )
+    event_id=str(
+        uuid.uuid4())[
+            :16],
+            node_id=node_id,
+            event_type=EventType.REMEDIATION_COMPLETED.value,
+            severity=EventSeverity.WARNING.value,
+            message=f"Node {node.hostname} requires human intervention after {MAX_REMEDIATION_ATTEMPTS} failed remediation attempts",
+            details={
+                "attempts": tracker["count"],
+                "action_required": "manual_review"},
+                 )
             db.add(event)
             await db.commit()
             return False

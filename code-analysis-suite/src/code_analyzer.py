@@ -429,7 +429,8 @@ from src.utils.{module_name}_utils import {func.name}
         
         return differences
     
-    def _calculate_metrics(self, functions: List[CodeFunction], duplicate_groups: List[DuplicateGroup]) -> Dict[str, Any]:
+    def _calculate_metrics(self, functions: List[CodeFunction],
+                           duplicate_groups: List[DuplicateGroup]) -> Dict[str, Any]:
         """Calculate code quality metrics"""
         
         total_lines = sum(f.end_line - f.start_line for f in functions)

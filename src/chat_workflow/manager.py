@@ -19,10 +19,7 @@ from typing import Any, Dict, FrozenSet, List, Optional
 
 from src.async_chat_workflow import WorkflowMessage
 from src.slash_command_handler import get_slash_command_handler
-from src.utils.error_boundaries import (
-    error_boundary,
-    get_error_boundary_manager,
-)
+from src.utils.error_boundaries import error_boundary, get_error_boundary_manager
 from src.utils.redis_client import get_redis_client as get_redis_manager
 
 from .conversation import ConversationHandlerMixin
@@ -34,9 +31,9 @@ from .tool_handler import ToolHandlerMixin
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level frozenset for terminal message types
-_TERMINAL_MESSAGE_TYPES: FrozenSet[str] = frozenset({
-    "terminal_command", "terminal_output", "error"
-})
+_TERMINAL_MESSAGE_TYPES: FrozenSet[str] = frozenset(
+    {"terminal_command", "terminal_output", "error"}
+)
 
 # Issue #380: Module-level frozenset for block content types
 _BLOCK_CONTENT_TYPES: FrozenSet[str] = frozenset({"thought", "planning"})
@@ -52,10 +49,18 @@ _TOOL_CALL_COMPLETE_RE = re.compile(r"</\s*tool_?\s*call\s*>", re.IGNORECASE)
 # Issue #716: Patterns for internal prompts that should not be shown to users
 # These are continuation instructions that LLM sometimes echoes back
 _INTERNAL_PROMPT_PATTERNS = [
-    re.compile(r"\*\*CRITICAL MULTI-STEP TASK INSTRUCTIONS.*?\*\*YOUR RESPONSE:\*\*", re.DOTALL | re.IGNORECASE),
-    re.compile(r"User is in the middle of a multi-step task\. \d+ step\(s\) have been completed\."),
+    re.compile(
+        r"\*\*CRITICAL MULTI-STEP TASK INSTRUCTIONS.*?\*\*YOUR RESPONSE:\*\*",
+        re.DOTALL | re.IGNORECASE,
+    ),
+    re.compile(
+        r"User is in the middle of a multi-step task\. \d+ step\(s\) have been completed\."
+    ),
     re.compile(r"\*\*ORIGINAL USER REQUEST \(analyze this.*?\)\:\*\*"),
-    re.compile(r"\*\*DECISION PROCESS:\*\*.*?\*\*IF TASK IS COMPLETE\*\*.*?TOOL_CALL", re.DOTALL | re.IGNORECASE),
+    re.compile(
+        r"\*\*DECISION PROCESS:\*\*.*?\*\*IF TASK IS COMPLETE\*\*.*?TOOL_CALL",
+        re.DOTALL | re.IGNORECASE,
+    ),
     re.compile(r"\*\*IF MORE STEPS NEEDED\*\*.*?`<TOOL_CALL", re.DOTALL),
 ]
 
@@ -100,10 +105,15 @@ class ChatWorkflowManager(
     async def _init_redis_client(self) -> None:
         """Initialize Redis client for conversation history."""
         try:
-            self.redis_client = await get_redis_manager(async_client=True, database="main")
+            self.redis_client = await get_redis_manager(
+                async_client=True, database="main"
+            )
             logger.info("✅ Redis client initialized for conversation history")
         except Exception as redis_error:
-            logger.warning("⚠️ Redis initialization failed: %s - continuing without persistence", redis_error)
+            logger.warning(
+                "⚠️ Redis initialization failed: %s - continuing without persistence",
+                redis_error,
+            )
             self.redis_client = None
 
     async def _init_knowledge_service(self) -> None:
@@ -122,7 +132,10 @@ class ChatWorkflowManager(
             else:
                 logger.warning("⚠️ Knowledge base not available - RAG disabled")
         except Exception as kb_error:
-            logger.warning("⚠️ Knowledge service initialization failed: %s - continuing without RAG", kb_error)
+            logger.warning(
+                "⚠️ Knowledge service initialization failed: %s - continuing without RAG",
+                kb_error,
+            )
             self.knowledge_service = None
 
     @error_boundary(component="chat_workflow_manager", function="initialize")
@@ -136,6 +149,7 @@ class ChatWorkflowManager(
                 await self._init_redis_client()
 
                 from src.async_chat_workflow import AsyncChatWorkflow
+
                 self.default_workflow = AsyncChatWorkflow()
 
                 await self._init_knowledge_service()
@@ -187,14 +201,20 @@ class ChatWorkflowManager(
             logger.debug(
                 "[Issue #716] Filtered internal prompts from LLM response "
                 "(original: %d chars, filtered: %d chars)",
-                len(text), len(filtered)
+                len(text),
+                len(filtered),
             )
 
         return filtered.strip()
 
     def _find_last_tag_positions(self, content: str) -> Dict[str, int]:
         """Find last occurrence positions of thought/planning tags."""
-        positions = {"thought_start": -1, "thought_end": -1, "planning_start": -1, "planning_end": -1}
+        positions = {
+            "thought_start": -1,
+            "thought_end": -1,
+            "planning_start": -1,
+            "planning_end": -1,
+        }
 
         for match in self.THOUGHT_TAG_PATTERN.finditer(content):
             positions["thought_start"] = match.start()
@@ -207,9 +227,7 @@ class ChatWorkflowManager(
 
         return positions
 
-    def _detect_content_type(
-        self, content: str, current_type: str = "response"
-    ) -> str:
+    def _detect_content_type(self, content: str, current_type: str = "response") -> str:
         """Detect message type from content tags (Issue #351 Fix)."""
         positions = self._find_last_tag_positions(content)
         thought_start = positions["thought_start"]
@@ -274,7 +292,8 @@ class ChatWorkflowManager(
         if detected_type in _BLOCK_CONTENT_TYPES:
             logger.info(
                 "[Issue #352] Detected message type: %s (accumulated len: %d)",
-                detected_type, len(accumulated_content)
+                detected_type,
+                len(accumulated_content),
             )
 
         return WorkflowMessage(
@@ -333,7 +352,8 @@ class ChatWorkflowManager(
             # Issue #680: Find content after closing tag [/THOUGHT] or [/PLANNING]
             logger.info(
                 "[Issue #352] Message type transition: %s → %s",
-                current_message_type, new_type
+                current_message_type,
+                new_type,
             )
             # Find content after the closing tag
             new_segment_start = self._find_new_segment_start(
@@ -400,10 +420,11 @@ class ChatWorkflowManager(
 
         if match:
             # Return content after the tag
-            content_after_tag = llm_response[match.end():]
+            content_after_tag = llm_response[match.end() :]
             logger.debug(
                 "[Issue #680] New segment for %s starts after tag: '%s...'",
-                new_type, content_after_tag[:50] if content_after_tag else "(empty)"
+                new_type,
+                content_after_tag[:50] if content_after_tag else "(empty)",
             )
             return content_after_tag
 
@@ -447,12 +468,13 @@ class ChatWorkflowManager(
         if has_thought or has_planning:
             logger.info(
                 "[Issue #352] LLM response contains: THOUGHT=%s, PLANNING=%s",
-                has_thought, has_planning
+                has_thought,
+                has_planning,
             )
         else:
             logger.debug(
                 "[Issue #352] LLM response (no thought/planning tags): %s...",
-                llm_response[:200]
+                llm_response[:200],
             )
 
     def _init_streaming_message(
@@ -469,12 +491,14 @@ class ChatWorkflowManager(
         Issue #665: Extracted from _stream_llm_response to reduce function length.
         """
         streaming_msg = StreamingMessage(type=message_type)
-        streaming_msg.merge_metadata({
-            "model": selected_model,
-            "terminal_session_id": terminal_session_id,
-            "used_knowledge": used_knowledge,
-            "citations": rag_citations if used_knowledge else [],
-        })
+        streaming_msg.merge_metadata(
+            {
+                "model": selected_model,
+                "terminal_session_id": terminal_session_id,
+                "used_knowledge": used_knowledge,
+                "citations": rag_citations if used_knowledge else [],
+            }
+        )
         return streaming_msg
 
     def _process_chunk_and_detect_type(
@@ -524,7 +548,11 @@ class ChatWorkflowManager(
         if complete_msg or new_segment is not None:
             # Issue #656: Create new StreamingMessage for new type
             streaming_msg = self._init_streaming_message(
-                new_type, selected_model, terminal_session_id, used_knowledge, rag_citations
+                new_type,
+                selected_model,
+                terminal_session_id,
+                used_knowledge,
+                rag_citations,
             )
             return (streaming_msg, new_segment, new_type, True, new_segment)
         return (None, None, new_type, False, None)
@@ -553,7 +581,11 @@ class ChatWorkflowManager(
 
         # Issue #656: Use StreamingMessage for stable identity
         streaming_msg = self._init_streaming_message(
-            "response", selected_model, terminal_session_id, used_knowledge, rag_citations
+            "response",
+            selected_model,
+            terminal_session_id,
+            used_knowledge,
+            rag_citations,
         )
 
         async for line in response.content:
@@ -561,7 +593,12 @@ class ChatWorkflowManager(
             if not chunk_data:
                 continue
 
-            chunk_text, llm_response, current_segment, new_type = self._process_chunk_and_detect_type(
+            (
+                chunk_text,
+                llm_response,
+                current_segment,
+                new_type,
+            ) = self._process_chunk_and_detect_type(
                 chunk_data, llm_response, current_segment, current_message_type
             )
 
@@ -573,7 +610,7 @@ class ChatWorkflowManager(
                 logger.info(
                     "[Issue #727] Tool call completion detected - stopping frontend streaming "
                     "to prevent hallucination display. Response length: %d",
-                    len(llm_response)
+                    len(llm_response),
                 )
 
             # Issue #727: Skip yielding to frontend after tool call is complete
@@ -587,15 +624,35 @@ class ChatWorkflowManager(
 
             if chunk_text:
                 # Handle type transitions
-                complete_msg, new_id, new_segment, new_type = self._handle_type_transition(
-                    new_type, current_message_type, streaming_msg.id,
-                    selected_model, llm_response, chunk_text
+                (
+                    complete_msg,
+                    new_id,
+                    new_segment,
+                    new_type,
+                ) = self._handle_type_transition(
+                    new_type,
+                    current_message_type,
+                    streaming_msg.id,
+                    selected_model,
+                    llm_response,
+                    chunk_text,
                 )
 
                 # Apply transition if needed
-                new_msg, new_segment_val, new_type, just_transitioned, transition_content = self._apply_type_transition(
-                    complete_msg, new_segment, new_type, selected_model,
-                    terminal_session_id, used_knowledge, rag_citations
+                (
+                    new_msg,
+                    new_segment_val,
+                    new_type,
+                    just_transitioned,
+                    transition_content,
+                ) = self._apply_type_transition(
+                    complete_msg,
+                    new_segment,
+                    new_type,
+                    selected_model,
+                    terminal_session_id,
+                    used_knowledge,
+                    rag_citations,
                 )
 
                 if complete_msg:
@@ -645,7 +702,9 @@ class ChatWorkflowManager(
 
         return f"**Step {step_num}:** `{cmd}`\n- Status: {status}\n- Output:\n```\n{output_text}\n```"
 
-    def _get_continuation_instructions(self, original_message: str, steps_completed: int) -> str:
+    def _get_continuation_instructions(
+        self, original_message: str, steps_completed: int
+    ) -> str:
         """Get the critical instructions for continuation prompts.
 
         Issue #651: Enhanced instructions to prevent premature task completion.
@@ -672,7 +731,9 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
 - Provide a summary of what was accomplished
 - Do NOT generate any TOOL_CALL
 
-**IMPORTANT**: Look at the original request. If it mentions multiple actions (e.g., "create X, then do Y, then do Z"), ensure ALL actions are complete before summarizing.
+**IMPORTANT**: Look at the original request. If it mentions multiple actions
+(e.g., "create X, then do Y, then do Z"), ensure ALL actions are complete
+before summarizing.
 
 **YOUR RESPONSE:**"""
 
@@ -692,7 +753,9 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         ]
         history_text = "\n\n".join(history_parts)
         steps_completed = len(execution_history)
-        instructions = self._get_continuation_instructions(original_message, steps_completed)
+        instructions = self._get_continuation_instructions(
+            original_message, steps_completed
+        )
 
         return f"""{system_prompt}
 
@@ -705,7 +768,9 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
 ---
 {instructions}"""
 
-    def _get_llm_request_payload(self, selected_model: str, current_prompt: str) -> dict:
+    def _get_llm_request_payload(
+        self, selected_model: str, current_prompt: str
+    ) -> dict:
         """Build LLM request payload."""
         return {
             "model": selected_model,
@@ -737,38 +802,63 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
             async with await http_client.post(
                 ollama_endpoint, json=payload, timeout=aiohttp.ClientTimeout(total=60.0)
             ) as response:
-                logger.info("[ChatWorkflowManager] Ollama response status: %s", response.status)
+                logger.info(
+                    "[ChatWorkflowManager] Ollama response status: %s", response.status
+                )
 
                 if response.status != 200:
-                    logger.error("[ChatWorkflowManager] Ollama request failed: %s", response.status)
-                    yield WorkflowMessage(type="error", content=f"LLM service error: {response.status}", metadata={"error": True})
+                    logger.error(
+                        "[ChatWorkflowManager] Ollama request failed: %s",
+                        response.status,
+                    )
+                    yield WorkflowMessage(
+                        type="error",
+                        content=f"LLM service error: {response.status}",
+                        metadata={"error": True},
+                    )
                     yield (None, None)
                     return
 
                 async for chunk_msg, llm_response, is_done, is_segment_complete in self._stream_llm_response(
-                    response, selected_model, terminal_session_id, used_knowledge, rag_citations
+                    response,
+                    selected_model,
+                    terminal_session_id,
+                    used_knowledge,
+                    rag_citations,
                 ):
                     if chunk_msg:
                         yield chunk_msg
                     if is_done:
                         break
 
-                logger.info("[ChatWorkflowManager] Full LLM response length: %d characters (iteration %d)", len(llm_response), iteration)
+                logger.info(
+                    "[ChatWorkflowManager] Full LLM response length: %d characters (iteration %d)",
+                    len(llm_response),
+                    iteration,
+                )
         finally:
             # Issue #680: Decrement active request count after streaming is complete
             await http_client.decrement_active()
 
         # Issue #651: Log response snippet to debug multi-step issues
-        has_tool_call_tag = '<TOOL_CALL' in llm_response or '<tool_call' in llm_response
+        has_tool_call_tag = "<TOOL_CALL" in llm_response or "<tool_call" in llm_response
         logger.info(
             "[Issue #651] Iteration %d: Response has TOOL_CALL tag: %s, snippet: %s",
-            iteration, has_tool_call_tag, llm_response[:500].replace('\n', ' ')
+            iteration,
+            has_tool_call_tag,
+            llm_response[:500].replace("\n", " "),
         )
         # Issue #716: Pass iteration info for plan-first execution
         # On first iteration, if there's a planning block, defer tool execution to show plan first
-        is_first_iteration = (iteration == 1)
-        tool_calls = self._parse_tool_calls(llm_response, is_first_iteration=is_first_iteration)
-        logger.info("[Issue #352] Iteration %d: Parsed %d tool calls", iteration, len(tool_calls))
+        is_first_iteration = iteration == 1
+        tool_calls = self._parse_tool_calls(
+            llm_response, is_first_iteration=is_first_iteration
+        )
+        logger.info(
+            "[Issue #352] Iteration %d: Parsed %d tool calls",
+            iteration,
+            len(tool_calls),
+        )
         yield (llm_response, tool_calls)
 
     def _handle_break_loop_tuple(self, tool_msg: Any) -> tuple:
@@ -805,7 +895,7 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         if not hasattr(tool_msg, "type"):
             logger.warning(
                 "[Issue #680] tool_msg missing 'type' attribute: %s - skipping",
-                type(tool_msg).__name__
+                type(tool_msg).__name__,
             )
             return False
 
@@ -830,7 +920,8 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
             execution_history.extend(new_results)
             logger.info(
                 "[Issue #651] Collected %d execution results (total history: %d)",
-                len(new_results), len(execution_history)
+                len(new_results),
+                len(execution_history),
             )
             return True
         return False
@@ -851,7 +942,9 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
 
         if tool_msg.type == "command_approval_request":
             has_pending_approval = True
-            logger.info("[Issue #651] Command requires approval - will wait for resolution")
+            logger.info(
+                "[Issue #651] Command requires approval - will wait for resolution"
+            )
 
         if tool_msg.type in _TERMINAL_MESSAGE_TYPES:
             workflow_messages.append(tool_msg)
@@ -859,7 +952,7 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         if tool_msg.type == "error":
             logger.warning(
                 "[Issue #651] Tool processing error: %s - LLM will decide next action",
-                tool_msg.content[:100]
+                tool_msg.content[:100],
             )
 
         return (has_pending_approval, True)
@@ -897,7 +990,9 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
             if not self._validate_tool_message(tool_msg):
                 continue
 
-            if self._handle_execution_summary(tool_msg, new_execution_results, execution_history):
+            if self._handle_execution_summary(
+                tool_msg, new_execution_results, execution_history
+            ):
                 continue
 
             pending, _ = self._handle_tool_message_types(tool_msg, workflow_messages)
@@ -907,7 +1002,9 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
 
         logger.info(
             "[Issue #654] Tool results: exec_results=%d, pending_approval=%s, break_loop_requested=%s",
-            len(new_execution_results), has_pending_approval, break_loop_requested
+            len(new_execution_results),
+            has_pending_approval,
+            break_loop_requested,
         )
 
         yield (new_execution_results, has_pending_approval, False, break_loop_requested)
@@ -928,17 +1025,22 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         tool_calls = None
 
         async for item in self._process_single_llm_iteration(
-            http_client, ctx.ollama_endpoint, ctx.selected_model, current_prompt,
-            ctx.terminal_session_id, ctx.used_knowledge, ctx.rag_citations, iteration
+            http_client,
+            ctx.ollama_endpoint,
+            ctx.selected_model,
+            current_prompt,
+            ctx.terminal_session_id,
+            ctx.used_knowledge,
+            ctx.rag_citations,
+            iteration,
         ):
             if isinstance(item, tuple):
                 llm_response, tool_calls = item
             else:
                 # Don't persist streaming chunks - they're for live display only
                 # The final complete response is persisted in _persist_workflow_messages
-                is_streaming_chunk = (
-                    hasattr(item, 'metadata') and
-                    item.metadata.get('streaming', False)
+                is_streaming_chunk = hasattr(item, "metadata") and item.metadata.get(
+                    "streaming", False
                 )
                 if not is_streaming_chunk:
                     ctx.workflow_messages.append(item)
@@ -973,14 +1075,17 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
                 yield item
 
         if llm_response is None:
-            logger.warning("[Issue #651] Iteration %d: No LLM response - stopping", iteration)
+            logger.warning(
+                "[Issue #651] Iteration %d: No LLM response - stopping", iteration
+            )
             yield (None, None, True)
             return
 
         if not tool_calls:
             logger.info(
                 "[Issue #651] Iteration %d: No tool calls in response - task complete after %d step(s)",
-                iteration, len(ctx.execution_history)
+                iteration,
+                len(ctx.execution_history),
             )
             yield (llm_response, tool_calls, True)
             return
@@ -1003,7 +1108,8 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         """
         logger.info(
             "[Issue #651] Iteration %d: Processing %d tool call(s)",
-            iteration, len(tool_calls)
+            iteration,
+            len(tool_calls),
         )
 
         new_results = []
@@ -1012,13 +1118,23 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         break_loop_requested = False
 
         async for item in self._process_tool_results(
-            tool_calls, ctx.session_id, ctx.terminal_session_id, ctx.ollama_endpoint,
-            ctx.selected_model, ctx.execution_history, ctx.workflow_messages
+            tool_calls,
+            ctx.session_id,
+            ctx.terminal_session_id,
+            ctx.ollama_endpoint,
+            ctx.selected_model,
+            ctx.execution_history,
+            ctx.workflow_messages,
         ):
             if isinstance(item, tuple):
                 # Issue #654: Now returns 4-tuple (results, has_pending_approval, should_break, break_loop_requested)
                 if len(item) == 4:
-                    new_results, has_pending_approval, should_break, break_loop_requested = item
+                    (
+                        new_results,
+                        has_pending_approval,
+                        should_break,
+                        break_loop_requested,
+                    ) = item
                 elif len(item) == 3:
                     # Backwards compatibility for 3-tuple
                     new_results, has_pending_approval, should_break = item
@@ -1052,7 +1168,7 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         if break_loop_requested:
             logger.info(
                 "[Issue #654] Iteration %d: Respond tool signaled task completion (break_loop=True)",
-                iteration
+                iteration,
             )
             return False
 
@@ -1060,14 +1176,16 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         if should_break:
             logger.warning(
                 "[Issue #651] Iteration %d: Catastrophic tool failure - stopping continuation",
-                iteration
+                iteration,
             )
             return False
 
         # Issue #651: Log decision to continue
         logger.info(
             "[Issue #651] Iteration %d: Completed with %d new result(s), pending_approval=%s - continuing to next iteration",
-            iteration, len(new_results), has_pending_approval
+            iteration,
+            len(new_results),
+            has_pending_approval,
         )
         return True
 
@@ -1088,7 +1206,8 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         """
         logger.info(
             "[Issue #651] Starting iteration %d - execution history has %d entries",
-            iteration, len(ctx.execution_history)
+            iteration,
+            len(ctx.execution_history),
         )
 
         llm_response = None
@@ -1116,12 +1235,21 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
             tool_calls, iteration, ctx
         ):
             if isinstance(item, tuple) and len(item) == 4:
-                new_results, has_pending_approval, should_break, break_loop_requested = item
+                (
+                    new_results,
+                    has_pending_approval,
+                    should_break,
+                    break_loop_requested,
+                ) = item
             else:
                 yield item
 
         should_continue = self._check_continuation_decision(
-            iteration, break_loop_requested, should_break, new_results, has_pending_approval
+            iteration,
+            break_loop_requested,
+            should_break,
+            new_results,
+            has_pending_approval,
         )
 
         yield (llm_response, tool_calls, should_continue)
@@ -1153,7 +1281,8 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         """
         logger.info(
             "[ChatWorkflowManager] Continuation iteration %d/%d",
-            iteration, self.MAX_CONTINUATION_ITERATIONS
+            iteration,
+            self.MAX_CONTINUATION_ITERATIONS,
         )
 
         llm_response = None
@@ -1176,7 +1305,8 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         """
         logger.info(
             "[Issue #651] Starting multi-step task loop. Max iterations: %d, Original message: '%s'",
-            self.MAX_CONTINUATION_ITERATIONS, ctx.message[:100] if ctx.message else "None"
+            self.MAX_CONTINUATION_ITERATIONS,
+            ctx.message[:100] if ctx.message else "None",
         )
 
     def _log_iteration_complete(
@@ -1192,7 +1322,10 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         """
         logger.info(
             "[Issue #651] Iteration %d complete: should_continue=%s, total_responses=%d, execution_history=%d",
-            iteration, should_continue, all_responses_count, history_count
+            iteration,
+            should_continue,
+            all_responses_count,
+            history_count,
         )
 
     def _build_and_log_continuation_prompt(
@@ -1209,13 +1342,16 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         )
         logger.info(
             "[Issue #651] Built continuation prompt: %d chars, %d executed steps",
-            len(current_prompt), len(execution_history)
+            len(current_prompt),
+            len(execution_history),
         )
         instructions_start = current_prompt.find("MULTI-STEP TASK CONTINUATION")
         if instructions_start > -1:
             logger.debug(
                 "[Issue #651] Continuation prompt instructions: %s",
-                current_prompt[instructions_start:instructions_start+1500].replace('\n', ' | ')
+                current_prompt[instructions_start : instructions_start + 1500].replace(
+                    "\n", " | "
+                ),
             )
         return current_prompt
 
@@ -1223,7 +1359,8 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         """Issue #665: Extracted from _run_llm_iterations to reduce function length."""
         logger.info(
             "[Issue #651] Task complete after %d iteration(s). Executed %d command(s) total.",
-            iteration, history_count
+            iteration,
+            history_count,
         )
 
     def _log_max_iterations_warning(self, iteration: int) -> None:
@@ -1231,7 +1368,7 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         if iteration >= self.MAX_CONTINUATION_ITERATIONS:
             logger.warning(
                 "[Issue #651] Reached max continuation iterations (%d) - stopping loop",
-                self.MAX_CONTINUATION_ITERATIONS
+                self.MAX_CONTINUATION_ITERATIONS,
             )
 
     async def _run_llm_iterations(
@@ -1264,18 +1401,27 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
                     yield item
 
             if llm_response is None:
-                logger.warning("[Issue #651] No LLM response in iteration %d - aborting", iteration)
+                logger.warning(
+                    "[Issue #651] No LLM response in iteration %d - aborting", iteration
+                )
                 yield ([], [], None)
                 return
 
             all_llm_responses.append(llm_response)
-            self._log_iteration_complete(iteration, should_continue, len(all_llm_responses), len(execution_history))
+            self._log_iteration_complete(
+                iteration,
+                should_continue,
+                len(all_llm_responses),
+                len(execution_history),
+            )
 
             if not should_continue:
                 self._log_task_complete(iteration, len(execution_history))
                 break
 
-            current_prompt = self._build_and_log_continuation_prompt(ctx, execution_history)
+            current_prompt = self._build_and_log_continuation_prompt(
+                ctx, execution_history
+            )
 
         self._log_max_iterations_warning(iteration)
         yield (all_llm_responses, execution_history, None)
@@ -1290,6 +1436,7 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         Issue #375: Uses LLMIterationContext to reduce parameter count from 10 to 1.
         """
         import aiohttp
+
         from src.utils.http_client import get_http_client
 
         try:
@@ -1333,7 +1480,8 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
                 )
                 logger.debug(
                     "Persisted WorkflowMessage to chat history: type=%s, session=%s",
-                    message_type, session_id
+                    message_type,
+                    session_id,
                 )
 
             # Persist final assistant response
@@ -1345,7 +1493,8 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
             )
             logger.info(
                 "✅ Persisted complete conversation to chat history: session=%s, workflow_messages=%d",
-                session_id, len(workflow_messages)
+                session_id,
+                len(workflow_messages),
             )
 
         except Exception as persist_error:
@@ -1355,9 +1504,7 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
                 exc_info=True,
             )
 
-    async def _persist_user_message(
-        self, session_id: str, message: str
-    ) -> None:
+    async def _persist_user_message(self, session_id: str, message: str) -> None:
         """Persist user message immediately to prevent data loss on restart."""
         from src.chat_history import ChatHistoryManager
 
@@ -1371,7 +1518,9 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
             )
             logger.debug("✅ Persisted user message immediately: session=%s", session_id)
         except Exception as persist_error:
-            logger.error("Failed to persist user message immediately: %s", persist_error)
+            logger.error(
+                "Failed to persist user message immediately: %s", persist_error
+            )
 
     async def _handle_exit_intent(
         self, session_id: str, workflow_messages: List[WorkflowMessage]
@@ -1380,7 +1529,8 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         from src.chat_history import ChatHistoryManager
 
         logger.info(
-            "[ChatWorkflowManager] User explicitly requested to exit conversation: %s", session_id
+            "[ChatWorkflowManager] User explicitly requested to exit conversation: %s",
+            session_id,
         )
         exit_msg = WorkflowMessage(
             type="response",
@@ -1462,7 +1612,8 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
         used_knowledge = llm_params.get("used_knowledge", False)
 
         logger.info(
-            "[ChatWorkflowManager] Initial prompt length: %d characters", len(current_prompt)
+            "[ChatWorkflowManager] Initial prompt length: %d characters",
+            len(current_prompt),
         )
 
         # Stage 3: Continuation loop for multi-step tasks (Issue #375: use context object)
@@ -1489,10 +1640,14 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
 
         # Stage 5: Persist conversation
         combined_response = "\n\n".join(all_llm_responses)
-        await self._persist_conversation(session_id, session, message, combined_response)
+        await self._persist_conversation(
+            session_id, session, message, combined_response
+        )
 
         # Stage 6: Persist WorkflowMessages
-        await self._persist_workflow_messages(session_id, workflow_messages, combined_response)
+        await self._persist_workflow_messages(
+            session_id, workflow_messages, combined_response
+        )
 
     @error_boundary(component="chat_workflow_manager", function="process_message")
     async def process_message(
@@ -1516,16 +1671,20 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
 
         try:
             # Stage 1: Initialize session and check for exit intent
-            session, terminal_session_id, user_wants_exit = (
-                await self._initialize_chat_session(session_id, message)
-            )
+            (
+                session,
+                terminal_session_id,
+                user_wants_exit,
+            ) = await self._initialize_chat_session(session_id, message)
 
             # Persist user message immediately to prevent data loss
             await self._persist_user_message(session_id, message)
 
             # Handle exit intent
             if user_wants_exit:
-                async for msg in self._handle_exit_intent(session_id, workflow_messages):
+                async for msg in self._handle_exit_intent(
+                    session_id, workflow_messages
+                ):
                     yield msg
                 return
 
@@ -1540,15 +1699,20 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
 
             # Execute main LLM workflow
             async for msg in self._execute_llm_workflow(
-                session_id, session, message, context,
-                terminal_session_id, workflow_messages
+                session_id,
+                session,
+                message,
+                context,
+                terminal_session_id,
+                workflow_messages,
             ):
                 yield msg
 
         except Exception as e:
             logger.error(
                 "❌ Error processing message for session %s: %s",
-                session_id, e,
+                session_id,
+                e,
                 exc_info=True,
             )
             error_msg = WorkflowMessage(
@@ -1572,7 +1736,8 @@ You are in the middle of a multi-step task. {steps_completed} step(s) have been 
                 self._initialized = False
 
                 logger.info(
-                    "✅ ChatWorkflowManager shutdown complete, cleaned up %d sessions", session_count
+                    "✅ ChatWorkflowManager shutdown complete, cleaned up %d sessions",
+                    session_count,
                 )
 
         except Exception as e:

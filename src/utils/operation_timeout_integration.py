@@ -217,7 +217,8 @@ class OperationIntegrationManager:
         try:
             operation = self.operation_manager.get_operation(operation_id)
             if operation:
-                await websocket.send_json({"type": "current_progress", "data": self._convert_operation_to_response(operation).dict()})
+                response_data = self._convert_operation_to_response(operation).dict()
+                await websocket.send_json({"type": "current_progress", "data": response_data})
             while True:
                 try:
                     await asyncio.wait_for(websocket.receive_text(), timeout=TimingConstants.SHORT_TIMEOUT)
@@ -238,8 +239,14 @@ class OperationIntegrationManager:
             if not checkpoints:
                 raise_not_found_error("API_0002", "No checkpoints found for operation")
             latest_checkpoint = checkpoints[-1]
-            new_operation_id = await self.operation_manager.resume_operation(latest_checkpoint.checkpoint_id)
-            return {"status": "resumed", "new_operation_id": new_operation_id, "resumed_from": latest_checkpoint.checkpoint_id}
+            new_operation_id = await self.operation_manager.resume_operation(
+                latest_checkpoint.checkpoint_id
+            )
+            return {
+                "status": "resumed",
+                "new_operation_id": new_operation_id,
+                "resumed_from": latest_checkpoint.checkpoint_id,
+            }
         except Exception as e:
             logger.error("Failed to resume operation: %s", e)
             raise_server_error("API_0003", str(e))
@@ -255,7 +262,9 @@ class OperationIntegrationManager:
             request.total_items, request.performance_metrics, request.status_message)
         return {"status": "updated"}
 
-    async def _handle_start_indexing(self, codebase_path: str, file_patterns: Optional[List[str]] = None) -> Dict[str, str]:
+    async def _handle_start_indexing(
+        self, codebase_path: str, file_patterns: Optional[List[str]] = None
+    ) -> Dict[str, str]:
         """Handle start codebase indexing request."""
         try:
             operation_id = await execute_codebase_indexing(codebase_path, self.operation_manager, file_patterns)
@@ -264,10 +273,14 @@ class OperationIntegrationManager:
             logger.error("Failed to start codebase indexing: %s", e)
             raise_server_error("API_0003", str(e))
 
-    async def _handle_start_testing(self, test_suite_path: str, test_patterns: Optional[List[str]] = None) -> Dict[str, str]:
+    async def _handle_start_testing(
+        self, test_suite_path: str, test_patterns: Optional[List[str]] = None
+    ) -> Dict[str, str]:
         """Handle start comprehensive testing request."""
         try:
-            operation_id = await execute_comprehensive_test_suite(test_suite_path, self.operation_manager, test_patterns)
+            operation_id = await execute_comprehensive_test_suite(
+                test_suite_path, self.operation_manager, test_patterns
+            )
             return {"operation_id": operation_id, "status": "started"}
         except Exception as e:
             logger.error("Failed to start comprehensive testing: %s", e)
@@ -297,7 +310,13 @@ class OperationIntegrationManager:
             operations = self.operation_manager.list_operations(status_filter, type_filter)[:limit]
             operation_responses = [self._convert_operation_to_response(op) for op in operations]
             total, active, completed, failed = self._calculate_operation_stats()
-            return OperationListResponse(operations=operation_responses, total_count=total, active_count=active, completed_count=completed, failed_count=failed)
+            return OperationListResponse(
+                operations=operation_responses,
+                total_count=total,
+                active_count=active,
+                completed_count=completed,
+                failed_count=failed,
+            )
 
         @self.router.post("/{operation_id}/cancel")
         async def cancel_operation(operation_id: str):
@@ -322,12 +341,20 @@ class OperationIntegrationManager:
             await self._handle_websocket_connection(websocket, operation_id)
 
         @self.router.post("/codebase/index")
-        async def start_codebase_indexing(codebase_path: str, file_patterns: Optional[List[str]] = None, background_tasks: BackgroundTasks = None):
+        async def start_codebase_indexing(
+            codebase_path: str,
+            file_patterns: Optional[List[str]] = None,
+            background_tasks: BackgroundTasks = None,
+        ):
             """Start a codebase indexing operation."""
             return await self._handle_start_indexing(codebase_path, file_patterns)
 
         @self.router.post("/testing/comprehensive")
-        async def start_comprehensive_testing(test_suite_path: str, test_patterns: Optional[List[str]] = None, background_tasks: BackgroundTasks = None):
+        async def start_comprehensive_testing(
+            test_suite_path: str,
+            test_patterns: Optional[List[str]] = None,
+            background_tasks: BackgroundTasks = None,
+        ):
             """Start a comprehensive testing operation."""
             return await self._handle_start_testing(test_suite_path, test_patterns)
 

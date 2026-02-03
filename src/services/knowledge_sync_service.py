@@ -111,7 +111,9 @@ class KnowledgeSyncService:
                 except Exception as e:
                     logger.error("Background sync error: %s", e)
                     # Continue running despite errors
-                    await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Wait 1 minute before retry
+                    await asyncio.sleep(
+                        TimingConstants.STANDARD_TIMEOUT
+                    )  # Wait 1 minute before retry
 
         finally:
             self.is_running = False
@@ -163,7 +165,10 @@ class KnowledgeSyncService:
 
             # Log results
             if metrics.files_changed + metrics.files_added + metrics.files_removed > 0:
-                logger.info("Background sync completed: %s files processed", metrics.files_changed + metrics.files_added)
+                logger.info(
+                    "Background sync completed: %s files processed",
+                    metrics.files_changed + metrics.files_added,
+                )
             else:
                 logger.debug("Background sync: no changes detected")
 

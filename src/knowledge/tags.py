@@ -520,10 +520,12 @@ class TagsMixin:
             logger.info("Merged tags %s into '%s', updated %d facts", existing_source_tags, target_tag, updated_count)
 
             return {
-                "success": True, "source_tags": existing_source_tags,
-                "target_tag": target_tag, "affected_count": updated_count,
-                "message": f"Merged {len(existing_source_tags)} tags into '{target_tag}', {updated_count} facts updated",
-            }
+    "success": True,
+    "source_tags": existing_source_tags,
+    "target_tag": target_tag,
+    "affected_count": updated_count,
+    "message": f"Merged {len(existing_source_tags)} tags into '{target_tag}', {updated_count} facts updated",
+     }
 
         except Exception as e:
             logger.error("Failed to merge tags into '%s': %s", target_tag, e)

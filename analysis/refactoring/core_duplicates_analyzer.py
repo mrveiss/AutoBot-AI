@@ -127,7 +127,8 @@ def _print_top_duplicates(sorted_funcs: list, sorted_configs: list, sorted_strin
     # Top config duplicates
     print("\n🔧 TOP CORE CONFIG DUPLICATES:")
     for i, dup in enumerate(sorted_configs[:5]):
-        pattern = dup['patterns'][0]['pattern'][:60] + "..." if len(dup['patterns'][0]['pattern']) > 60 else dup['patterns'][0]['pattern']
+        pattern = dup['patterns'][0]['pattern'][:60] + \
+            "..." if len(dup['patterns'][0]['pattern']) > 60 else dup['patterns'][0]['pattern']
         print(f"   {i+1}. {dup['count']} occurrences: {pattern}")
         for pat in dup['patterns']:
             print(f"      - {pat['file']}:{pat['line']}")

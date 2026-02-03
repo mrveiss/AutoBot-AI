@@ -1,6 +1,8 @@
 """
 Comprehensive Code Quality Dashboard
-Integrates all analyzers: duplicates, environment variables, performance, security, API consistency, testing coverage, and architectural patterns
+
+Integrates all analyzers: duplicates, environment variables, performance,
+security, API consistency, testing coverage, and architectural patterns.
 """
 
 import asyncio
@@ -518,7 +520,8 @@ class CodeQualityDashboard:
         if analysis_results.get('duplication'):
             total_groups = analysis_results['duplication'].get('total_duplicate_groups', 0)
             if total_groups > 50:
-                recommendations.append(f"📊 High code duplication detected ({total_groups} groups) - consider major refactoring")
+                recommendations.append(
+                    f"📊 High code duplication detected ({total_groups} groups) - consider major refactoring")
         
         # Add general best practices
         recommendations.extend([

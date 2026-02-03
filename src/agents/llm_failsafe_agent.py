@@ -113,11 +113,18 @@ class LLMFailsafeAgent:
                 "Greetings! I'm ready to help with your tasks.",
             ],
             r"help|assist|support": [
-                "I can help with: System automation, Research, File operations, Development.\nWhat specifically would you like help with?",
-                "I'm here to assist! You can ask me to help with automation, research, coding, or system tasks.",
+                (
+                    "I can help with: System automation, Research, File operations, "
+                    "Development.\nWhat specifically would you like help with?"
+                ),
+                "I'm here to assist! You can ask me to help with automation, "
+                "research, coding, or system tasks.",
             ],
             r"status|health|working": [
-                "I'm operational and ready to help! Primary LLM systems may be experiencing issues, but I can still assist you.",
+                (
+                    "I'm operational and ready to help! Primary LLM systems may be "
+                    "experiencing issues, but I can still assist you."
+                ),
                 "System status: Basic operations functional. How can I help you today?",
             ],
         }
@@ -134,17 +141,30 @@ class LLMFailsafeAgent:
                 "For mathematical calculations, please specify the exact computation you need.",
             ],
             r"file|directory|folder|list.*files": [
-                "I can help with file operations including listing, reading, writing, and organizing files. What specific file task do you need?",
-                "File operations available: list files, read content, create files, organize directories. What would you like to do?",
+                (
+                    "I can help with file operations including listing, reading, "
+                    "writing, and organizing files. What specific file task do you need?"
+                ),
+                "File operations available: list files, read content, create files, "
+                "organize directories. What would you like to do?",
             ],
             r"system|install|configure|setup": [
-                "I can assist with system configuration, software installation, and setup tasks. Please specify what you'd like to install or configure.",
-                "System operations available. What specific system task or installation do you need help with?",
+                (
+                    "I can assist with system configuration, software installation, "
+                    "and setup tasks. Please specify what you'd like to install or configure."
+                ),
+                "System operations available. What specific system task or installation "
+                "do you need help with?",
             ],
             r".*": [
-                "I understand you need assistance. Due to system limitations, I'm operating in basic mode. Can you please rephrase your request more specifically?",
-                "I'm currently in basic operation mode. Please provide a clear, specific request and I'll do my best to help.",
-                "I'm here to help! Could you please be more specific about what you need assistance with?",
+                (
+                    "I understand you need assistance. Due to system limitations, I'm "
+                    "operating in basic mode. Can you please rephrase your request more specifically?"
+                ),
+                "I'm currently in basic operation mode. Please provide a clear, "
+                "specific request and I'll do my best to help.",
+                "I'm here to help! Could you please be more specific about what "
+                "you need assistance with?",
             ],
         }
 

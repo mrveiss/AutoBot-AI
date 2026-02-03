@@ -32,9 +32,15 @@ def get_replacement_map() -> Dict[str, str]:
     # Get service-specific hosts from configuration
     frontend_host = services_config.get("frontend", {}).get("host") or system_defaults.get("frontend_host", "localhost")
     frontend_port = services_config.get("frontend", {}).get("port") or system_defaults.get("frontend_port", 5173)
-    npu_worker_host = services_config.get("npu_worker", {}).get("host") or system_defaults.get("npu_worker_host", "localhost")
+    npu_worker_host = services_config.get(
+    "npu_worker", {}).get("host") or system_defaults.get(
+        "npu_worker_host", "localhost")
     ai_stack_host = services_config.get("ai_stack", {}).get("host") or system_defaults.get("ai_stack_host", "localhost")
-    browser_host = services_config.get("browser_service", {}).get("host") or system_defaults.get("browser_service_host", "localhost")
+    browser_host = services_config.get(
+    "browser_service",
+    {}).get("host") or system_defaults.get(
+        "browser_service_host",
+         "localhost")
     ollama_config = services_config.get("ollama", {})
     ollama_port = ollama_config.get("port") or system_defaults.get("ollama_port", 11434)
 

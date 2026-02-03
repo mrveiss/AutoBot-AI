@@ -28,7 +28,8 @@ def _decode_command_ids(command_ids: set) -> List[str]:
     return [cid.decode("utf-8") for cid in command_ids]
 
 
-def _parse_command_data_safe(command_data: bytes, state_filter: Optional[CommandState] = None) -> Optional[CommandExecution]:
+def _parse_command_data_safe(command_data: bytes,
+                             state_filter: Optional[CommandState] = None) -> Optional[CommandExecution]:
     """Parse command JSON data safely. (Issue #315 - extracted)"""
     if not command_data:
         return None

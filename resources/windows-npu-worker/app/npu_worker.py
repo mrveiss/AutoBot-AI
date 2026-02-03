@@ -892,17 +892,24 @@ class ONNXModelManager:
             )
 
             info = {
-                "selected_device": self._selected_device or "Unknown",
-                "selected_device_full_name": selected_full_name,
-                "openvino_device": self._openvino_device,
-                "available_providers": self._available_providers,
-                "device_priority": ["OpenVINOExecutionProvider (NPU)", "OpenVINOExecutionProvider (GPU)", "DmlExecutionProvider", "CPUExecutionProvider"],
-                "is_npu": self._selected_device == "NPU" or self._openvino_device == "NPU",
-                "is_gpu": self._selected_device in ["GPU", "DirectML", "CUDA"] or self._openvino_device == "GPU",
-                "is_cpu": self._selected_device == "CPU" and self._openvino_device == "CPU",
-                "backend": "ONNX Runtime + OpenVINO EP",
-                "device_full_names": self._device_full_names,
-            }
+    "selected_device": self._selected_device or "Unknown",
+    "selected_device_full_name": selected_full_name,
+    "openvino_device": self._openvino_device,
+    "available_providers": self._available_providers,
+    "device_priority": [
+        "OpenVINOExecutionProvider (NPU)",
+        "OpenVINOExecutionProvider (GPU)",
+        "DmlExecutionProvider",
+        "CPUExecutionProvider"],
+        "is_npu": self._selected_device == "NPU" or self._openvino_device == "NPU",
+        "is_gpu": self._selected_device in [
+            "GPU",
+            "DirectML",
+            "CUDA"] or self._openvino_device == "GPU",
+            "is_cpu": self._selected_device == "CPU" and self._openvino_device == "CPU",
+            "backend": "ONNX Runtime + OpenVINO EP",
+            "device_full_names": self._device_full_names,
+             }
 
             # Check OpenVINO EP availability
             if "OpenVINOExecutionProvider" in self._available_providers:
@@ -1198,12 +1205,16 @@ class WindowsNPUWorker:
             Uses ONNX Runtime + OpenVINO EP for proper Intel NPU support.
             """
             info = {
-                "worker_id": self.worker_id,
-                "npu_available": self.npu_available,
-                "real_inference_enabled": self._use_real_inference,
-                "backend": "ONNX Runtime + OpenVINO EP",
-                "device_priority": ["OpenVINOExecutionProvider (NPU)", "OpenVINOExecutionProvider (GPU)", "DmlExecutionProvider", "CPUExecutionProvider"],
-            }
+    "worker_id": self.worker_id,
+    "npu_available": self.npu_available,
+    "real_inference_enabled": self._use_real_inference,
+    "backend": "ONNX Runtime + OpenVINO EP",
+    "device_priority": [
+        "OpenVINOExecutionProvider (NPU)",
+        "OpenVINOExecutionProvider (GPU)",
+        "DmlExecutionProvider",
+        "CPUExecutionProvider"],
+         }
 
             if self._model_manager is not None:
                 try:
@@ -2108,7 +2119,11 @@ def main():
 
     # TLS Configuration - Issue #725 Phase 5
     tls_config = config.get('tls', {})
-    tls_enabled = tls_config.get('enabled', False) or os.environ.get("NPU_WORKER_TLS_ENABLED", "false").lower() == "true"
+    tls_enabled = tls_config.get(
+    'enabled',
+    False) or os.environ.get(
+        "NPU_WORKER_TLS_ENABLED",
+         "false").lower() == "true"
     ssl_keyfile = None
     ssl_certfile = None
 

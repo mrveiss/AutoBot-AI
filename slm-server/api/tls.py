@@ -502,15 +502,19 @@ async def rotate_tls_certificate(
         )
 
         return {
-            "success": True,
-            "message": "Certificate rotated successfully",
-            "old_credential_id": credential_id,
-            "old_deactivated": deactivate_old and deployment_result.get("success", False) if deployment_result else False,
-            "new_credential_id": new_credential.credential_id,
-            "expires_at": new_credential.tls_expires_at.isoformat() if new_credential.tls_expires_at else None,
-            "deployed": deployment_result.get("success", False) if deployment_result else False,
+    "success": True,
+    "message": "Certificate rotated successfully",
+    "old_credential_id": credential_id,
+    "old_deactivated": deactivate_old and deployment_result.get(
+        "success",
+        False) if deployment_result else False,
+        "new_credential_id": new_credential.credential_id,
+        "expires_at": new_credential.tls_expires_at.isoformat() if new_credential.tls_expires_at else None,
+        "deployed": deployment_result.get(
+            "success",
+            False) if deployment_result else False,
             "deployment_message": deployment_result.get("message") if deployment_result else None,
-        }
+             }
 
     except Exception as e:
         logger.error("Failed to rotate TLS certificate %s: %s", credential_id, e)

@@ -633,14 +633,18 @@ class ReplicationService:
             auth_prefix = f"REDISCLI_AUTH='{redis_password}'"
 
         cmd = [
-            "/usr/bin/ssh",
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "ConnectTimeout=10",
-            "-p", str(ssh_port),
-            f"{ssh_user}@{host}",
-            f"{auth_prefix} redis-cli INFO keyspace && {auth_prefix} redis-cli DBSIZE && {auth_prefix} redis-cli INFO memory",
-        ]
+    "/usr/bin/ssh",
+    "-o",
+    "StrictHostKeyChecking=no",
+    "-o",
+    "UserKnownHostsFile=/dev/null",
+    "-o",
+    "ConnectTimeout=10",
+    "-p",
+    str(ssh_port),
+    f"{ssh_user}@{host}",
+    f"{auth_prefix} redis-cli INFO keyspace && {auth_prefix} redis-cli DBSIZE && {auth_prefix} redis-cli INFO memory",
+     ]
 
         try:
             process = await asyncio.create_subprocess_exec(

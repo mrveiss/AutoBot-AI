@@ -287,9 +287,7 @@ def optimized_transform(text: str) -> str:
             estimated_effort="Low",
             confidence=pattern.confidence,
             benefits=benefits,
-            requires_changes_in=[
-                loc.file_path for loc in pattern.locations
-            ],
+            requires_changes_in=[loc.file_path for loc in pattern.locations],
         )
 
     def _handle_complexity(
@@ -384,7 +382,9 @@ class {pattern.pattern_name.replace(' ', '')}Handler:
             suggested_name=pattern.suggested_module,
             suggested_interface=pattern.suggested_interface,
             code_template=code_template,
-            estimated_loc_reduction=pattern.total_lines * (len(pattern.repeated_in_files) - 1) // len(pattern.repeated_in_files),
+            estimated_loc_reduction=pattern.total_lines
+            * (len(pattern.repeated_in_files) - 1)
+            // len(pattern.repeated_in_files),
             estimated_effort="Medium",
             confidence=pattern.confidence,
             benefits=pattern.benefits,

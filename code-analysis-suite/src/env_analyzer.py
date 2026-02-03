@@ -199,7 +199,8 @@ class EnvironmentAnalyzer:
         
         return hardcoded_values
     
-    async def _scan_ast_for_hardcoded_values(self, file_path: str, tree: ast.AST, lines: List[str]) -> List[HardcodedValue]:
+    async def _scan_ast_for_hardcoded_values(self, file_path: str, tree: ast.AST,
+                                             lines: List[str]) -> List[HardcodedValue]:
         """Scan AST for hardcoded values with context"""
         
         hardcoded_values = []
@@ -302,7 +303,15 @@ class EnvironmentAnalyzer:
             value.endswith(('.log', '.db', '.json', '.yaml', '.yml', '.conf', '.cfg', '.ini')),
             
             # URLs and network
-            value.startswith(('http://', 'https://', 'ws://', 'wss://', 'ftp://', 'redis://', 'postgresql://', 'mysql://')),
+            value.startswith(
+    ('http://',
+    'https://',
+    'ws://',
+    'wss://',
+    'ftp://',
+    'redis://',
+    'postgresql://',
+     'mysql://')),
             value in ['localhost', '127.0.0.1', '0.0.0.0'],
             
             # API keys and tokens (basic heuristics)
@@ -404,7 +413,8 @@ class EnvironmentAnalyzer:
         
         return categories
     
-    async def _generate_recommendations(self, categorized: Dict[str, List[HardcodedValue]]) -> List[ConfigRecommendation]:
+    async def _generate_recommendations(
+        self, categorized: Dict[str, List[HardcodedValue]]) -> List[ConfigRecommendation]:
         """Generate configuration recommendations"""
         
         recommendations = []

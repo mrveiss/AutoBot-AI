@@ -46,11 +46,10 @@ def refactor_print_header_script(file_path: Path):
         # Replace the print_header method implementation
         print_header_pattern = r'    def print_header\(self, title: str\):\s*"""[^"]*"""\s*print\(f"\\n\{\'=\' \* 60\}"\)\s*print\(f"  \{title\}"\)\s*print\("=" \* 60\)'
         content = re.sub(
-            print_header_pattern,
-            '    def print_header(self, title: str):\n        """Print formatted header."""\n        ScriptFormatter.print_header(title)',
-            content,
-            flags=re.MULTILINE | re.DOTALL
-        )
+    print_header_pattern,
+    '    def print_header(self, title: str):\n        """Print formatted header."""\n        ScriptFormatter.print_header(title)',
+    content,
+     flags=re.MULTILINE | re.DOTALL )
 
         # Replace print_step method implementation
         print_step_pattern = r'    def print_step\(self, step: str, status: str = "info"\):\s*"""[^"]*"""\s*status_icons = \{[^}]+\}\s*icon = status_icons\.get\(status, "[^"]*"\)\s*print\(f"\{icon\} \{step\}"\)'

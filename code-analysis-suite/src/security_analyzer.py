@@ -101,7 +101,10 @@ class SecurityAnalyzer:
             ],
             'information_disclosure': [
                 (r'print\s*\([^)]*(?:password|secret|key|token)[^)]*\)', 'Secret in print statement', 'CWE-209'),
-                (r'log(?:ger)?\.(?:debug|info|warning|error)\s*\([^)]*(?:password|secret|key|token)', 'Secret in logs', 'CWE-209'),
+                (
+    r'log(?:ger)?\.(?:debug|info|warning|error)\s*\([^)]*(?:password|secret|key|token)',
+    'Secret in logs',
+     'CWE-209'),
                 (r'traceback\.print_exc\s*\(\s*\)', 'Stack trace disclosure', 'CWE-209'),
                 (r'app\.debug\s*=\s*True', 'Debug mode in production', 'CWE-489'),
             ],
@@ -279,7 +282,8 @@ class SecurityAnalyzer:
         
         return vulnerabilities
     
-    def _analyze_dangerous_call(self, node: ast.Call, file_path: str, lines: List[str]) -> Optional[SecurityVulnerability]:
+    def _analyze_dangerous_call(self, node: ast.Call, file_path: str,
+                                lines: List[str]) -> Optional[SecurityVulnerability]:
         """Analyze function calls for security issues"""
         
         call_name = self._get_call_name(node)
@@ -309,7 +313,8 @@ class SecurityAnalyzer:
         
         return None
     
-    def _analyze_insecure_assignment(self, node: ast.Assign, file_path: str, lines: List[str]) -> Optional[SecurityVulnerability]:
+    def _analyze_insecure_assignment(self, node: ast.Assign, file_path: str,
+                                     lines: List[str]) -> Optional[SecurityVulnerability]:
         """Analyze assignments for security issues"""
         
         # Check for hardcoded secrets in assignments
@@ -337,7 +342,8 @@ class SecurityAnalyzer:
         
         return None
     
-    def _analyze_dangerous_import(self, node: ast.AST, file_path: str, lines: List[str]) -> Optional[SecurityVulnerability]:
+    def _analyze_dangerous_import(self, node: ast.AST, file_path: str,
+                                  lines: List[str]) -> Optional[SecurityVulnerability]:
         """Analyze imports for security concerns"""
         
         dangerous_modules = {
@@ -473,7 +479,8 @@ class SecurityAnalyzer:
         # This would require maintaining parent references in AST
         return None
     
-    async def _categorize_vulnerabilities(self, vulnerabilities: List[SecurityVulnerability]) -> Dict[str, List[SecurityVulnerability]]:
+    async def _categorize_vulnerabilities(
+        self, vulnerabilities: List[SecurityVulnerability]) -> Dict[str, List[SecurityVulnerability]]:
         """Categorize vulnerabilities"""
         
         categories = {}
@@ -484,7 +491,8 @@ class SecurityAnalyzer:
         
         return categories
     
-    async def _generate_security_recommendations(self, categorized: Dict[str, List[SecurityVulnerability]]) -> List[SecurityRecommendation]:
+    async def _generate_security_recommendations(
+        self, categorized: Dict[str, List[SecurityVulnerability]]) -> List[SecurityRecommendation]:
         """Generate security recommendations"""
         
         recommendations = []
@@ -562,7 +570,8 @@ class SecurityAnalyzer:
         file_counts = len(set(v.file_path for v in vulnerabilities))
         
         # Calculate security score (0-100, higher is better)
-        total_weight = severity_counts['critical'] * 10 + severity_counts['high'] * 5 + severity_counts['medium'] * 2 + severity_counts['low']
+        total_weight = severity_counts['critical'] * 10 + severity_counts['high'] * \
+            5 + severity_counts['medium'] * 2 + severity_counts['low']
         max_possible = len(vulnerabilities) * 10 if vulnerabilities else 1
         security_score = max(0, 100 - (total_weight / max_possible * 100))
         

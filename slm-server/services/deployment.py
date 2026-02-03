@@ -347,14 +347,19 @@ class DeploymentService:
         ansible_cmd = self._find_ansible_playbook()
         roles_str = ",".join(roles)
         cmd = [
-            ansible_cmd,
-            str(playbook_path),
-            "-i", f"{host},",
-            "-e", f"target_roles={roles_str}",
-            "-e", f"target_host={host}",
-            "-e", "ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ControlPath=none'",
-            "-e", "ansible_ssh_pipelining=false",
-        ]
+    ansible_cmd,
+    str(playbook_path),
+    "-i",
+    f"{host},",
+    "-e",
+    f"target_roles={roles_str}",
+    "-e",
+    f"target_host={host}",
+    "-e",
+    "ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ControlPath=none'",
+    "-e",
+    "ansible_ssh_pipelining=false",
+     ]
 
         # Add SSH user if provided
         if ssh_user:
@@ -511,18 +516,27 @@ class DeploymentService:
         # Always skip host key checking for automated enrollment
         # Use ControlPath=none to avoid PTY issues when running from uvicorn
         cmd = [
-            ansible_cmd,
-            str(playbook_path),
-            "-i", f"{host},",
-            "-e", f"ansible_host={host}",
-            "-e", f"ansible_user={ssh_user}",
-            "-e", f"ansible_port={ssh_port}",
-            "-e", f"slm_node_id={node_id}",
-            "-e", f"slm_admin_url={admin_url}",
-            "-e", f"slm_heartbeat_interval={settings.heartbeat_interval}",
-            "-e", "ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ControlPath=none'",
-            "-e", "ansible_ssh_pipelining=false",
-        ]
+    ansible_cmd,
+    str(playbook_path),
+    "-i",
+    f"{host},",
+    "-e",
+    f"ansible_host={host}",
+    "-e",
+    f"ansible_user={ssh_user}",
+    "-e",
+    f"ansible_port={ssh_port}",
+    "-e",
+    f"slm_node_id={node_id}",
+    "-e",
+    f"slm_admin_url={admin_url}",
+    "-e",
+    f"slm_heartbeat_interval={settings.heartbeat_interval}",
+    "-e",
+    "ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ControlPath=none'",
+    "-e",
+    "ansible_ssh_pipelining=false",
+     ]
 
         # Add password authentication if provided
         if ssh_password:
