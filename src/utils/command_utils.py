@@ -2,15 +2,14 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 import asyncio
-import re
 from datetime import datetime
 from typing import Any, Dict
 
+# Issue #765: Use centralized strip_ansi_codes from encoding_utils
+from src.utils.encoding_utils import strip_ansi_codes
 
-def strip_ansi_codes(text: str) -> str:
-    """Removes ANSI escape codes from a string."""
-    ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
-    return ansi_escape.sub("", text)
+# Re-export for backward compatibility
+__all__ = ["strip_ansi_codes", "get_timestamp", "execute_shell_command"]
 
 
 def get_timestamp() -> str:
@@ -35,8 +34,9 @@ async def execute_shell_command(command: str) -> Dict[str, Any]:
 
         stdout, stderr = await process.communicate()
 
-        stdout_str = strip_ansi_codes(stdout.decode()).strip()
-        stderr_str = strip_ansi_codes(stderr.decode()).strip()
+        # Issue #765: Use explicit UTF-8 encoding with error handling
+        stdout_str = strip_ansi_codes(stdout.decode("utf-8", errors="replace")).strip()
+        stderr_str = strip_ansi_codes(stderr.decode("utf-8", errors="replace")).strip()
         return_code = process.returncode
 
         status = "success" if return_code == 0 else "error"

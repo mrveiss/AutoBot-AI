@@ -13,29 +13,25 @@ Provides detailed logging of terminal commands with:
 
 import asyncio
 import logging
-import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, FrozenSet, List, Optional
 
 import aiofiles
 
+# Issue #765: Use centralized strip_ansi_codes from encoding_utils
+from src.utils.encoding_utils import strip_ansi_codes
 
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level frozenset for command statuses requiring command display
-_COMMAND_DISPLAY_STATUSES: FrozenSet[str] = frozenset({
-    "EXECUTING", "PENDING_APPROVAL", "SUCCESS", "ERROR"
-})
+_COMMAND_DISPLAY_STATUSES: FrozenSet[str] = frozenset(
+    {"EXECUTING", "PENDING_APPROVAL", "SUCCESS", "ERROR"}
+)
 
 # Issue #380: Module-level frozensets for status matching (case-insensitive)
 _SUCCESS_STATUSES: FrozenSet[str] = frozenset({"success", "SUCCESS"})
 _ERROR_STATUSES: FrozenSet[str] = frozenset({"error", "ERROR"})
-
-# ANSI escape code regex pattern
-ANSI_ESCAPE_PATTERN = re.compile(
-    r"\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b\][^\a]*\a|\x1b[=>]|\x1b\?[0-9]+[hl]"
-)
 
 
 class TerminalLogger:
@@ -94,15 +90,11 @@ class TerminalLogger:
             }
 
             try:
-                async with aiofiles.open(
-                    chat_file, "w", encoding="utf-8"
-                ) as f:
+                async with aiofiles.open(chat_file, "w", encoding="utf-8") as f:
                     await f.write(json.dumps(chat_data, indent=2))
                 logger.info("✅ Created chat.json for terminal session: %s", session_id)
             except OSError as e:
-                logger.error(
-                    f"❌ Failed to write chat.json file {chat_file}: {e}"
-                )
+                logger.error(f"❌ Failed to write chat.json file {chat_file}: {e}")
                 raise
             except Exception as e:
                 logger.error(
@@ -176,10 +168,13 @@ class TerminalLogger:
 
     @staticmethod
     def _strip_ansi_codes(text: str) -> str:
-        """Remove ANSI escape codes from text."""
+        """Remove ANSI escape codes from text.
+
+        Issue #765: Delegates to centralized strip_ansi_codes function.
+        """
         if not text:
             return text
-        return ANSI_ESCAPE_PATTERN.sub("", text)
+        return strip_ansi_codes(text)
 
     def _format_log_line(self, entry: Dict[str, Any]) -> str:
         """Format log entry as a readable log line (with ANSI codes stripped)."""
@@ -399,9 +394,7 @@ class TerminalLogger:
         success_count = sum(
             1 for cmd in commands if cmd.get("status") in _SUCCESS_STATUSES
         )
-        error_count = sum(
-            1 for cmd in commands if cmd.get("status") in _ERROR_STATUSES
-        )
+        error_count = sum(1 for cmd in commands if cmd.get("status") in _ERROR_STATUSES)
 
         return {
             "total_commands": len(commands),
@@ -441,5 +434,7 @@ class TerminalLogger:
             return True
 
         except Exception as e:
-            logger.error("Failed to clear terminal logs for session %s: %s", session_id, e)
+            logger.error(
+                "Failed to clear terminal logs for session %s: %s", session_id, e
+            )
             return False
